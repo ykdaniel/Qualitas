@@ -52,6 +52,8 @@ const translations: Record<Language, Record<string, string>> = {
     'common.date': 'Date',
     'common.updatedDate': 'Updated Date',
     'common.createdDate': 'Created Date',
+    'common.createdAt': 'Created At',
+    'common.actions': 'Actions',
     'common.remark': 'Remark',
     'common.description': 'Description',
     'common.viewDetails': 'View Details →',
@@ -82,6 +84,10 @@ const translations: Record<Language, Record<string, string>> = {
     'common.notGenerated': 'Not Generated',
     'common.selected': 'selected',
     'common.status.open': 'Open',
+    'common.statistics': 'Statistics',
+    'common.passRate': 'Pass Rate',
+    'common.activity': 'Activity',
+    'common.package': 'Package',
 
     // Home
     'home.welcome': 'Welcome',
@@ -275,13 +281,27 @@ const translations: Record<Language, Record<string, string>> = {
     'itr.selectNOI': 'Select NOI',
     'itr.confirmDelete': 'Are you sure you want to delete this ITR item?',
     'itr.saveError': 'ITR save failed, please ensure backend is running and try again.',
+    'itr.relatedITP': 'Related ITP',
+    'itr.selectITP': 'Select ITP',
+    'itr.sectionDrawings': 'Latest Drawings',
+    'itr.sectionCertificates': 'Calibration Certificates',
+    'itr.sectionLinkedChecklists': 'Linked Checklists',
+    'itr.noLinkedChecklists': 'No checklists linked to this ITR yet.',
+    'itr.validation.noiRequired': 'Please select an NOI Number.',
+    'itr.confirmLinkChecklist': 'Are you sure you want to link this checklist to the current ITR?',
+    'itr.confirmUnlinkChecklist': 'Are you sure you want to unlink this checklist?',
 
     // Checklist
-    'checklist.title': 'Checklist',
+    'checklist.title': 'Checklist List',
     'checklist.listTitle': 'Checklist Records',
     'checklist.addNew': 'New Checklist',
-    'checklist.status.pass': 'Pass',
+    'checklist.addOrLink': 'Checklist',
+    'checklist.createNew': 'Create New...',
+    'checklist.searchPlaceholder': 'Search Checklist...',
+    'checklist.recordNotFound': 'Record not found',
+    'checklist.selectNoi': 'Select NOI',
     'checklist.status.ongoing': 'Ongoing',
+    'checklist.status.pass': 'Pass',
     'checklist.status.fail': 'Fail',
 
     // NCR
@@ -462,7 +482,7 @@ const translations: Record<Language, Record<string, string>> = {
     'contractors.editContractor': 'Edit Contractor',
     'contractors.package': 'Package',
     'contractors.abbreviation': 'Vendor Code',
-    'contractors.name': 'Contractor Name',
+    'contractors.name': 'Contractor',
     'contractors.scope': 'Scope',
     'contractors.contactPerson': 'Contact Person',
     'contractors.contact': 'Contact Person',
@@ -524,10 +544,19 @@ const translations: Record<Language, Record<string, string>> = {
     'kpi.trend': 'Trend',
     'kpi.variance': 'Variance',
 
-    // KM
     'km.title': 'Knowledge Management (KM)',
     'km.systemTitle': 'Knowledge Management System',
     'km.description': 'This module manages organizational knowledge assets, documents, best practices, and experience sharing.',
+    'km.listTitle': 'Knowledge Library',
+    'km.addNew': 'Add Article',
+    'km.articleNo': 'Article No.',
+    'km.titleField': 'Title',
+    'km.category': 'Category',
+    'km.tags': 'Tags',
+    'km.content': 'Content',
+    'km.create': 'Create Article',
+    'km.edit': 'Edit Article',
+    'km.documentDetails': 'Document Details',
 
     // IAM
     'iam.title': 'Identity and Access Management (IAM)',
@@ -580,6 +609,7 @@ const translations: Record<Language, Record<string, string>> = {
     'iam.roleName': 'Role Name',
     'iam.saveRoleError': 'Failed to save role',
     'iam.saveUserError': 'Failed to save user',
+    'iam.auditReason': 'Change Reason (Audit)',
 
     // ITP
     'itp.title': 'ITP List',
@@ -713,9 +743,39 @@ const translations: Record<Language, Record<string, string>> = {
     'reject': 'Reject',
     'resample': 'Resample',
     'common.total': 'Total',
+    'itp.tab.generalInfo': 'General Information',
+    'itp.tab.inspectionPlan': 'Inspection Plan',
+    // Checklist Snapshot
+    'itr.checklistSnapshotWarning': 'Editing this list does not affect standard templates.',
+    'checklist.editSnapshot': 'Edit Checklist Snapshot',
+    'checklist.snapshotEditNote': 'You are editing a snapshot of the checklist attached to this ITR. Changes here do not affect the original checklist template.',
+    'checklist.tabGeneral': 'General Information',
+    'checklist.tabItems': 'Checklist Items',
+    'checklist.noItems': 'No items found in this checklist.',
+    'checklist.item': 'Item',
+    'checklist.criteria': 'Criteria',
+    'checklist.situation': 'Situation',
+    'checklist.result': 'Result',
+    'checklist.activityPlaceholder': 'Enter Activity Name...',
+
+
   },
 
   zh: {
+    // ... (existing keys) ...
+    // Checklist Snapshot
+    'checklist.editSnapshot': '編輯檢查表快照',
+    'checklist.snapshotEditNote': '您正在編輯此 ITR 附帶的檢查表快照。此處的更改不會影響原始檢查表範本。',
+    'checklist.tabGeneral': '基本資訊',
+    'checklist.tabItems': '檢查項目',
+    'checklist.noItems': '此檢查表中沒有項目。',
+    'checklist.item': '檢查項目',
+    'checklist.criteria': '驗收標準',
+    'checklist.situation': '實際狀況',
+    'checklist.result': '結果',
+    'checklist.activityPlaceholder': '輸入活動名稱...',
+
+
     // Login
     'login.welcome': '歡迎回來',
     'login.subtitle': '輸入您的憑證以登入 Qualitas',
@@ -755,6 +815,8 @@ const translations: Record<Language, Record<string, string>> = {
     'common.date': '日期',
     'common.updatedDate': '更新日期',
     'common.createdDate': '建立日期',
+    'common.createdAt': '建立時間',
+    'common.actions': '操作',
     'common.remark': '備註',
     'common.description': '描述',
     'common.viewDetails': '查看詳情 →',
@@ -785,6 +847,10 @@ const translations: Record<Language, Record<string, string>> = {
     'common.notGenerated': '未產生',
     'common.selected': '已選擇',
     'common.status.open': '開啟',
+    'common.statistics': '統計數據',
+    'common.passRate': '合格率',
+    'common.activity': '施工作業',
+    'common.package': '分包項目',
 
     // Form
     'form.requiredHint': '打*的欄位為必填',
@@ -973,12 +1039,16 @@ const translations: Record<Language, Record<string, string>> = {
     'itr.reInspectionNo': '複檢編號',
     'itr.photo.defect': '缺失照片',
     'itr.photo.improvement': '改善照片',
+    'itr.confirmUnlinkChecklist': '您確定要解除連結此檢查表嗎？',
     'itr.photo.upload': '上傳照片',
     'itr.revCustom': 'Rev5.0 以上（手動輸入）',
     'itr.revCustomPlaceholder': '請輸入 Rev5.0 以上版本，例如 Rev5.0',
     'itr.selectNOI': '選擇 NOI',
     'itr.confirmDelete': '確定要刪除此 ITR 項目嗎？',
     'itr.saveError': 'ITR 儲存失敗，請確認後端已啟動並稍後再試。',
+    'itr.sectionLinkedChecklists': '關聯檢查表',
+    'itr.noLinkedChecklists': '尚無任何關聯檢查表。',
+    'itr.validation.noiRequired': '請選擇一個 NOI 編號。',
 
     // NCR
     'ncr.title': 'NCR 列表',
@@ -1157,12 +1227,17 @@ const translations: Record<Language, Record<string, string>> = {
     'status.void': '廢止',
 
     // Checklist
-    'checklist.title': 'Checklist',
-    'checklist.listTitle': 'Checklist Records',
-    'checklist.addNew': 'New Checklist',
-    'checklist.status.pass': 'Pass',
-    'checklist.status.ongoing': 'Ongoing',
-    'checklist.status.fail': 'Fail',
+    'checklist.title': '檢查表列表',
+    'checklist.listTitle': '檢查表紀錄',
+    'checklist.addNew': '新增檢查表',
+    'checklist.addOrLink': '檢查表',
+    'checklist.createNew': '建立新檢查表...',
+    'checklist.searchPlaceholder': '搜尋檢查表...',
+    'checklist.recordNotFound': '找不到紀錄',
+    'checklist.selectNoi': '選擇 NOI',
+    'checklist.status.ongoing': '進行中',
+    'checklist.status.pass': '合格',
+    'checklist.status.fail': '不合格',
 
     // ITP
     'itp.title': 'ITP 列表',
@@ -1289,6 +1364,8 @@ const translations: Record<Language, Record<string, string>> = {
     'itp.detail.saveErrorGeneric': '儲存失敗，請稍後再試。',
     'itp.detail.missingId': '無法儲存：缺少 ITP 編號',
     'common.total': '合計',
+    'itp.tab.generalInfo': '基本資訊',
+    'itp.tab.inspectionPlan': '檢驗計畫',
     'audit.total': '總計',
     'audit.schedule': '稽核排程',
     'audit.totalAudits': '稽核總數',
@@ -1332,6 +1409,16 @@ const translations: Record<Language, Record<string, string>> = {
     'km.title': '知識管理 (KM)',
     'km.systemTitle': '知識管理系統',
     'km.description': '此模組用於管理組織的知識資產、文件、最佳實踐和經驗分享。',
+    'km.listTitle': '知識庫列表',
+    'km.addNew': '新增文章',
+    'km.articleNo': '文章編號',
+    'km.titleField': '標題',
+    'km.category': '分類',
+    'km.tags': '標籤',
+    'km.content': '內容',
+    'km.create': '建立文章',
+    'km.edit': '編輯文章',
+    'km.documentDetails': '文件內容',
 
     // IAM
     'iam.title': '身份與權限管理 (IAM)',
@@ -1384,6 +1471,8 @@ const translations: Record<Language, Record<string, string>> = {
     'iam.roleName': '角色名稱',
     'iam.saveRoleError': '儲存角色失敗',
     'iam.saveUserError': '儲存用戶失敗',
+    'iam.auditReason': '變更原因 (稽核)',
+
   }, // Close zh
 }; // Close translations
 

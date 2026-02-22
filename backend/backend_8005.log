@@ -1,0 +1,39 @@
+INFO:     Started server process [25516]
+INFO:     Waiting for application startup.
+2026-02-14 20:46:56,758 - main - INFO - Background scheduler started.
+2026-02-14 20:46:56,759 - scheduler - INFO - [Scheduler] Starting scheduler loop...
+2026-02-14 20:46:56,759 - scheduler - INFO - [Scheduler] Next run at 2026-02-15 08:00:00 (waiting 40383 seconds)
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8005 (Press CTRL+C to quit)
+Running database migrations...
+Migrations completed.
+Running database seeding...
+DEBUG: Found 0 items in existing record.
+Items already empty.
+Updating existing Rebar ITP: QTS-RKS-HL-ITP-000001
+Rebar ITP seeded successfully.
+Seeding completed.
+INFO:     127.0.0.1:49892 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49893 - "POST /api/itp/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49894 - "PUT /api/itp/6f36cab9-b1f8-40d4-94ae-d5c0ca17e336 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49895 - "DELETE /api/itp/6f36cab9-b1f8-40d4-94ae-d5c0ca17e336 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49896 - "POST /api/ncr/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49897 - "PUT /api/ncr/62f18046-9a01-47cc-ba74-14bee86fb9e5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49898 - "DELETE /api/ncr/62f18046-9a01-47cc-ba74-14bee86fb9e5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49899 - "POST /api/noi/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49900 - "PUT /api/noi/1d6cc379-46db-4fa3-8cb1-4679cc34757c HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:49901 - "POST /api/checklist/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49902 - "PUT /api/checklist/96d03583-aab4-4b2b-b253-6302c1cc8df4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49905 - "DELETE /api/checklist/96d03583-aab4-4b2b-b253-6302c1cc8df4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54177 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54178 - "POST /api/itp/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54179 - "PUT /api/itp/6e0c093d-0cff-4742-8ca7-24463f2ef5ee HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54180 - "DELETE /api/itp/6e0c093d-0cff-4742-8ca7-24463f2ef5ee HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54181 - "POST /api/ncr/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54182 - "PUT /api/ncr/157ef9e6-db87-42a8-95c9-0fca8f936a7e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54183 - "DELETE /api/ncr/157ef9e6-db87-42a8-95c9-0fca8f936a7e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54184 - "POST /api/noi/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54185 - "PUT /api/noi/d45b1216-5355-4693-9fec-3784d91f4ed6 HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:54186 - "POST /api/checklist/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54187 - "PUT /api/checklist/9058122b-425e-4d97-b297-ff098013b6d3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54188 - "DELETE /api/checklist/9058122b-425e-4d97-b297-ff098013b6d3 HTTP/1.1" 200 OK

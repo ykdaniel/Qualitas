@@ -1,27 +1,41 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React, { Suspense } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { Toaster } from 'sonner';
 import { useAuth } from './context/AuthContext';
-import Login from './components/Login/Login';
-import Home from './components/Home/Home';
-import Dashboard from './components/Dashboard/Dashboard';
-import IAM from './components/IAM/IAM';
-import ITP from './components/ITP/ITP';
-import ITPDetail from './components/ITP/ITPDetail';
-import NOI from './components/NOI/NOI';
-import Contractors from './components/Contractors/Contractors';
-import KM from './components/KM/KM';
-import OBS from './components/OBS/OBS';
-import NCR from './components/NCR/NCR';
-import ITR from './components/ITR/ITR';
-import FAT from './components/FAT/FAT';
-import Audit from './components/Audit/Audit';
-import OwnerPerformance from './components/OwnerPerformance/OwnerPerformance';
-import FollowUpIssue from './components/FollowUpIssue/FollowUpIssue';
-import PQP from './components/PQP/PQP';
-import KPI from './components/KPI/KPI';
-import DocumentNamingRules from './components/DocumentNamingRules/DocumentNamingRules';
-import OSD from './components/OSD/OSD';
-import Checklist from './components/Checklist/Checklist';
+import { AppProviders } from './components/Shared/AppProviders';
 import './App.css';
+
+// --- Lazy loaded components ---
+const Login = React.lazy(() => import('./components/Login/Login'));
+const Home = React.lazy(() => import('./components/Home/Home'));
+const Dashboard = React.lazy(() => import('./components/Dashboard/Dashboard'));
+const IAM = React.lazy(() => import('./components/IAM/IAM'));
+const ITP = React.lazy(() => import('./components/ITP/ITP'));
+const ITPDetail = React.lazy(() => import('./components/ITP/ITPDetail'));
+const NOI = React.lazy(() => import('./components/NOI/NOI'));
+const Contractors = React.lazy(() => import('./components/Contractors/Contractors'));
+const KM = React.lazy(() => import('./components/KM/KM'));
+const OBS = React.lazy(() => import('./components/OBS/OBS'));
+const NCR = React.lazy(() => import('./components/NCR/NCR'));
+const ITR = React.lazy(() => import('./components/ITR/ITR'));
+const FAT = React.lazy(() => import('./components/FAT/FAT'));
+const Audit = React.lazy(() => import('./components/Audit/Audit'));
+const OwnerPerformance = React.lazy(() => import('./components/OwnerPerformance/OwnerPerformance'));
+const FollowUpIssue = React.lazy(() => import('./components/FollowUpIssue/FollowUpIssue'));
+const PQP = React.lazy(() => import('./components/PQP/PQP'));
+const KPI = React.lazy(() => import('./components/KPI/KPI'));
+const DocumentNamingRules = React.lazy(() => import('./components/DocumentNamingRules/DocumentNamingRules'));
+const OSD = React.lazy(() => import('./components/OSD/OSD'));
+const Checklist = React.lazy(() => import('./components/Checklist/Checklist'));
+
+// --- Loading fallback ---
+const PageLoader = () => (
+  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', flexDirection: 'column', gap: '16px' }}>
+    <div className="spinner" style={{ width: '40px', height: '40px', border: '4px solid rgba(0,0,0,0.1)', borderTopColor: '#0056b3', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+    <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+    <div style={{ color: '#555', fontFamily: 'sans-serif' }}>載入中...</div>
+  </div>
+);
 
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated } = useAuth();
@@ -31,169 +45,42 @@ const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route
-          path="/"
-          element={
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+
+          {/* Protected Routes with Data Providers */}
+          <Route element={
             <PrivateRoute>
-              <Home />
+              <AppProviders>
+                <Outlet />
+              </AppProviders>
             </PrivateRoute>
-          }
-        />
-        <Route
-          path="/dashboard"
-          element={
-            <PrivateRoute>
-              <Dashboard />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/kpi"
-          element={
-            <PrivateRoute>
-              <KPI />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/iam"
-          element={
-            <PrivateRoute>
-              <IAM />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/followup"
-          element={
-            <PrivateRoute>
-              <FollowUpIssue />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/pqp"
-          element={
-            <PrivateRoute>
-              <PQP />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/itp"
-          element={
-            <PrivateRoute>
-              <ITP />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/itp/:id"
-          element={
-            <PrivateRoute>
-              <ITPDetail />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/noi"
-          element={
-            <PrivateRoute>
-              <NOI />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/contractors"
-          element={
-            <PrivateRoute>
-              <Contractors />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/km"
-          element={
-            <PrivateRoute>
-              <KM />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/osd"
-          element={
-            <PrivateRoute>
-              <OSD />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/obs"
-          element={
-            <PrivateRoute>
-              <OBS />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/ncr"
-          element={
-            <PrivateRoute>
-              <NCR />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/itr"
-          element={
-            <PrivateRoute>
-              <ITR />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/fat"
-          element={
-            <PrivateRoute>
-              <FAT />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/audit"
-          element={
-            <PrivateRoute>
-              <Audit />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/owner-performance"
-          element={
-            <PrivateRoute>
-              <OwnerPerformance />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/document-naming-rules"
-          element={
-            <PrivateRoute>
-              <DocumentNamingRules />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/checklist"
-          element={
-            <PrivateRoute>
-              <Checklist />
-            </PrivateRoute>
-          }
-        />
-      </Routes>
+          }>
+            <Route path="/" element={<Home />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/kpi" element={<KPI />} />
+            <Route path="/iam" element={<IAM />} />
+            <Route path="/followup" element={<FollowUpIssue />} />
+            <Route path="/pqp" element={<PQP />} />
+            <Route path="/itp" element={<ITP />} />
+            <Route path="/itp/:id" element={<ITPDetail />} />
+            <Route path="/noi" element={<NOI />} />
+            <Route path="/contractors" element={<Contractors />} />
+            <Route path="/km" element={<KM />} />
+            <Route path="/osd" element={<OSD />} />
+            <Route path="/obs" element={<OBS />} />
+            <Route path="/ncr" element={<NCR />} />
+            <Route path="/itr" element={<ITR />} />
+            <Route path="/fat" element={<FAT />} />
+            <Route path="/audit" element={<Audit />} />
+            <Route path="/owner-performance" element={<OwnerPerformance />} />
+            <Route path="/document-naming-rules" element={<DocumentNamingRules />} />
+            <Route path="/checklist" element={<Checklist />} />
+          </Route>
+        </Routes>
+      </Suspense>
+      <Toaster position="top-center" richColors />
     </BrowserRouter>
   );
 }

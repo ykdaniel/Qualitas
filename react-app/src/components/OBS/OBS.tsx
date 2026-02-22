@@ -1,14 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
-import { useContractors } from '../../context/ContractorsContext';
-import { useOBS } from '../../context/OBSContext';
-import type { OBSItem as ContextOBSItem } from '../../context/OBSContext';
+import { useContractorsStore } from '../../store/contractorsStore';
+import { useOBSStore } from '../../store/obsStore';
+import type { OBSItem as ContextOBSItem } from '../../store/obsStore';
 import styles from './OBS.module.css';
 import ConfirmModal from '../Shared/ConfirmModal';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { OBSDetailModal, OBSDetailsViewModal, OBSItem, OBSDetailData } from './OBSModals';
+import { useDebounce } from '../../hooks/useDebounce';
 
 
 type SortKey = keyof OBSItem;
@@ -22,12 +23,18 @@ interface SortConfig {
 const OBS: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const { getActiveContractors } = useContractors();
-  const { obsList, loading, error, addOBS, updateOBS, deleteOBS } = useOBS();
+  const { getActiveContractors } = useContractorsStore();
+  const { obsList, loading, error, refetch, addOBS, updateOBS, deleteOBS } = useOBSStore();
 
 
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 500);
+
+  // Trigger server-side refetch when debounced search changes
+  React.useEffect(() => {
+    refetch({ search: debouncedSearch });
+  }, [debouncedSearch, refetch]);
 
   // Modal States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -42,25 +49,10 @@ const OBS: React.FC = () => {
     message: '',
   });
 
-  // Filter by Date Range and Global Search
+  // Data is now primarily filtered by backend.
   const filteredList = useMemo(() => {
-    let result = [...obsList];
-
-
-    // Global Search
-    if (searchQuery) {
-      const lowerQuery = searchQuery.toLowerCase();
-      result = result.filter(item =>
-        (item.documentNumber && item.documentNumber.toLowerCase().includes(lowerQuery)) ||
-        (item.vendor && item.vendor.toLowerCase().includes(lowerQuery)) ||
-        (item.description && item.description.toLowerCase().includes(lowerQuery)) ||
-        (item.status && item.status.toLowerCase().includes(lowerQuery)) ||
-        (item.subject && item.subject.toLowerCase().includes(lowerQuery))
-      );
-    }
-
-    return result;
-  }, [obsList, searchQuery]);
+    return obsList;
+  }, [obsList]);
 
   // ... (statistics logic)
   const statistics = useMemo(() => {
@@ -88,14 +80,10 @@ const OBS: React.FC = () => {
     };
   }, [obsList]);
 
-  // ... (handlers)
+
+
   const handleAdd = (id: string) => {
     navigate(`/obs/${id}`);
-  };
-
-  const handleViewDetails = (id: string) => {
-    setViewingObsId(id);
-    setIsDetailsModalOpen(true);
   };
 
   const handleEdit = (id: string) => {
@@ -139,11 +127,12 @@ const OBS: React.FC = () => {
       } else {
         await updateOBS(currentObsId, payload);
       }
-    } catch (err) {
-      console.error('Failed to save OBS:', err);
+      setIsEditModalOpen(false);
+      setCurrentObsId(null);
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail || t('common.saveFailed') || 'Save failed';
+      alert(detail);
     }
-    setIsEditModalOpen(false);
-    setCurrentObsId(null);
   };
 
   const confirmDelete = (id: string) => {
@@ -153,6 +142,9 @@ const OBS: React.FC = () => {
       message: t('common.deleteConfirmMessage', { item: 'OBS' }),
     });
   };
+
+  // Columns memoization
+  const columns = useMemo(() => createColumns(handleEdit, confirmDelete, t, getActiveContractors), [t, getActiveContractors]);
 
   const handleDelete = async () => {
     if (deleteModal.id) {
@@ -260,7 +252,7 @@ const OBS: React.FC = () => {
               {t('obs.addNew')}
             </button>
           }
-          columns={createColumns(handleEdit, handleViewDetails, confirmDelete, t, getActiveContractors)}
+          columns={columns}
           data={filteredList}
           searchKey=""
           searchPlaceholder={t('obs.searchPlaceholder')}
@@ -269,6 +261,7 @@ const OBS: React.FC = () => {
               ? 'bg-emerald-100/50 text-gray-500 hover:bg-emerald-200/50'
               : ''
           }
+          onRowClick={(row) => handleEdit(row.id)}
         />
       </div>
 

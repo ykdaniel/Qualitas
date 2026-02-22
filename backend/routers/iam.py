@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
@@ -6,7 +5,9 @@ from passlib.context import CryptContext
 import schemas
 import crud
 from database import get_db
-from middleware.auth import PermissionChecker, Permission
+from core.dependencies import RoleChecker
+from core.security import get_current_user
+from core.perms import USER_VIEW, USER_MANAGE, ROLE_VIEW, ROLE_MANAGE
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -15,29 +16,37 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 router = APIRouter(
+    prefix="/iam",
     tags=["iam"],
     responses={404: {"description": "Not found"}},
 )
 
 # === Users ===
-# 讀取操作 - 無需認證（允許前端在登入前取得必要資料）
-@router.get("/users", response_model=List[schemas.User])
-def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+@router.get("/users/", response_model=List[schemas.User])
+def read_users(
+    skip: int = 0, 
+    limit: int = 100, 
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(RoleChecker(USER_VIEW))
+):
     return crud.get_users(db, skip=skip, limit=limit)
 
-@router.get("/users/{user_id}", response_model=schemas.User)
-def read_user(user_id: int, db: Session = Depends(get_db)):
+@router.get("/users/{user_id}/", response_model=schemas.User)
+def read_user(
+    user_id: int, 
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(RoleChecker(USER_VIEW))
+):
     db_user = crud.get_user(db, user_id=user_id)
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return db_user
 
-# 寫入操作 - 需要管理使用者權限
-@router.post("/users", response_model=schemas.User)
+@router.post("/users/", response_model=schemas.User)
 def create_user(
     user: schemas.UserCreate, 
     db: Session = Depends(get_db),
-    _: bool = Depends(PermissionChecker([Permission.WRITE, Permission.MANAGE_USERS]))
+    current_user: schemas.User = Depends(RoleChecker(USER_MANAGE))
 ):
     db_user = crud.get_user_by_email(db, email=user.email)
     if db_user:
@@ -47,76 +56,100 @@ def create_user(
         raise HTTPException(status_code=400, detail="Username already registered")
     
     hashed_password = get_password_hash(user.password)
-    return crud.create_user(db=db, user=user, hashed_password=hashed_password)
+    return crud.create_user(db=db, user=user, hashed_password=hashed_password, 
+                            current_user_id=current_user.id, current_username=current_user.username)
 
-@router.put("/users/{user_id}", response_model=schemas.User)
+@router.put("/users/{user_id}/", response_model=schemas.User)
 def update_user(
     user_id: int, 
     user: schemas.UserUpdate, 
     db: Session = Depends(get_db),
-    _: bool = Depends(PermissionChecker([Permission.WRITE, Permission.MANAGE_USERS]))
+    current_user: schemas.User = Depends(RoleChecker(USER_MANAGE))
 ):
     hashed_password = get_password_hash(user.password) if user.password else None
-    db_user = crud.update_user(db, user_id=user_id, user=user, hashed_password=hashed_password)
+    db_user = crud.update_user(db, user_id=user_id, user=user, hashed_password=hashed_password,
+                               current_user_id=current_user.id, current_username=current_user.username)
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return db_user
 
-@router.delete("/users/{user_id}")
+@router.delete("/users/{user_id}/")
 def delete_user(
     user_id: int, 
+    reason: str = None,
     db: Session = Depends(get_db),
-    _: bool = Depends(PermissionChecker([Permission.DELETE, Permission.MANAGE_USERS]))
+    current_user: schemas.User = Depends(RoleChecker(USER_MANAGE))
 ):
-    db_user = crud.delete_user(db, user_id=user_id)
+    db_user = crud.delete_user(db, user_id=user_id, current_user_id=current_user.id, 
+                               current_username=current_user.username, reason=reason)
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return {"ok": True}
 
 # === Roles ===
-# 讀取操作 - 無需認證（允許前端在登入前取得必要資料）
-@router.get("/roles", response_model=List[schemas.Role])
-def read_roles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+@router.get("/roles/", response_model=List[schemas.Role])
+def read_roles(
+    skip: int = 0, 
+    limit: int = 100, 
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(RoleChecker(ROLE_VIEW))
+):
     return crud.get_roles(db, skip=skip, limit=limit)
 
-@router.get("/roles/{role_id}", response_model=schemas.Role)
-def read_role(role_id: int, db: Session = Depends(get_db)):
+@router.get("/roles/{role_id}/", response_model=schemas.Role)
+def read_role(
+    role_id: int, 
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(RoleChecker(ROLE_VIEW))
+):
     db_role = crud.get_role(db, role_id=role_id)
     if db_role is None:
         raise HTTPException(status_code=404, detail="Role not found")
     return db_role
 
-# 寫入操作 - 需要管理角色權限
-@router.post("/roles", response_model=schemas.Role)
+@router.post("/roles/", response_model=schemas.Role)
 def create_role(
     role: schemas.RoleCreate, 
     db: Session = Depends(get_db),
-    _: bool = Depends(PermissionChecker([Permission.WRITE, Permission.MANAGE_ROLES]))
+    current_user: schemas.User = Depends(RoleChecker(ROLE_MANAGE))
 ):
     db_role = crud.get_role_by_name(db, name=role.name)
     if db_role:
         raise HTTPException(status_code=400, detail="Role already exists")
-    return crud.create_role(db=db, role=role)
+    return crud.create_role(db=db, role=role, current_user_id=current_user.id, current_username=current_user.username)
 
-@router.put("/roles/{role_id}", response_model=schemas.Role)
+@router.put("/roles/{role_id}/", response_model=schemas.Role)
 def update_role(
     role_id: int, 
     role: schemas.RoleUpdate, 
     db: Session = Depends(get_db),
-    _: bool = Depends(PermissionChecker([Permission.WRITE, Permission.MANAGE_ROLES]))
+    current_user: schemas.User = Depends(RoleChecker(ROLE_MANAGE))
 ):
-    db_role = crud.update_role(db, role_id=role_id, role=role)
+    db_role = crud.update_role(db, role_id=role_id, role=role, current_user_id=current_user.id, current_username=current_user.username)
     if db_role is None:
         raise HTTPException(status_code=404, detail="Role not found")
     return db_role
 
-@router.delete("/roles/{role_id}")
+@router.delete("/roles/{role_id}/")
 def delete_role(
     role_id: int, 
+    reason: str = None,
     db: Session = Depends(get_db),
-    _: bool = Depends(PermissionChecker([Permission.DELETE, Permission.MANAGE_ROLES]))
+    current_user: schemas.User = Depends(RoleChecker(ROLE_MANAGE))
 ):
-    db_role = crud.delete_role(db, role_id=role_id)
+    db_role = crud.delete_role(db, role_id=role_id, current_user_id=current_user.id, current_username=current_user.username, reason=reason)
     if db_role is None:
         raise HTTPException(status_code=404, detail="Role not found")
     return {"ok": True}
+
+@router.get("/permissions/", response_model=List[schemas.Permission])
+def read_permissions(
+    skip: int = 0, 
+    limit: int = 100, 
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(RoleChecker(ROLE_VIEW))
+):
+    """
+    獲取系統中定義的所有權限
+    """
+    return crud.get_permissions(db, skip=skip, limit=limit)

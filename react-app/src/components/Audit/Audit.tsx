@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
-import { useContractors } from '../../context/ContractorsContext';
-import { useAudit, AuditItem } from '../../context/AuditContext';
+import { useContractorsStore } from '../../store/contractorsStore';
+import { useAuditStore } from '../../store/auditStore';
+import type { AuditItem } from '../../store/auditStore';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './Audit.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
@@ -13,11 +14,11 @@ import { BackButton } from '@/components/ui/BackButton';
 const Audit: React.FC = () => {
     const navigate = useNavigate();
     const { t } = useLanguage();
-    const { auditList, loading, error, addAudit, updateAudit, deleteAudit } = useAudit();
+    const { auditList, loading, error, addAudit, updateAudit, deleteAudit } = useAuditStore();
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [currentAuditId, setCurrentAuditId] = useState<string | null>(null);
-    const { getActiveContractors } = useContractors();
+    const { getActiveContractors } = useContractorsStore();
     const [selectedVendorFilter, setSelectedVendorFilter] = useState<string | null>(null);
 
     // Get active contractors
@@ -143,10 +144,8 @@ const Audit: React.FC = () => {
                 await updateAudit(currentAuditId, updates);
             } else {
                 // 新增項目
-                const contractor = updates.contractor || '';
-                const abbrev = contractor.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase() || 'XXX';
                 const newItem: Omit<AuditItem, 'id'> = {
-                    auditNo: updates.auditNo || `QTS-RKS-${abbrev}-AUD-${String(auditList.length + 1).padStart(6, '0')}`,
+                    auditNo: updates.auditNo || '', // 讓後端自動依規則產生
                     title: updates.title || '',
                     date: updates.date || '',
                     auditor: updates.auditor || '',
@@ -366,6 +365,7 @@ const Audit: React.FC = () => {
                     searchKey=""
                     getRowClassName={() => styles.normalRow}
                     getRowId={(row) => row.id}
+                    onRowClick={(row) => handleEdit(row.id)}
                 />
             </div>
 

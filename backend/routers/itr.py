@@ -1,11 +1,12 @@
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 import schemas
 import crud
 from database import get_db
-from middleware.auth import PermissionChecker, Permission
+from middleware.auth import get_current_user, PermissionChecker, Permission
+from core.dependencies import RoleChecker
+from core.perms import ITR_VIEW, ITR_CREATE, ITR_UPDATE, ITR_DELETE
 
 router = APIRouter(
     prefix="/itr",
@@ -13,13 +14,31 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
-# 讀取操作 - 無需認證
+# 讀取操作 - 需要 ITR_VIEW
 @router.get("/", response_model=List[schemas.ITR])
-def read_itrs(skip: int = 0, limit: int = 500, db: Session = Depends(get_db)):
-    return crud.get_itrs(db, skip=skip, limit=limit)
+def read_itrs(
+    skip: int = 0, 
+    limit: int = 500, 
+    search: str = None,
+    status: str = None,
+    start_date: str = None,
+    end_date: str = None,
+
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(RoleChecker(ITR_VIEW))
+):
+    return crud.get_itrs(
+        db, 
+        skip=skip, 
+        limit=limit, 
+        search=search, 
+        status=status, 
+        start_date=start_date, 
+        end_date=end_date
+    )
 
 @router.get("/{itr_id}", response_model=schemas.ITR)
-def read_itr(itr_id: str, db: Session = Depends(get_db)):
+def read_itr(itr_id: str, db: Session = Depends(get_db), current_user: schemas.User = Depends(RoleChecker(ITR_VIEW))):
     db_itr = crud.get_itr(db, itr_id=itr_id)
     if db_itr is None:
         raise HTTPException(status_code=404, detail="ITR not found")
@@ -30,18 +49,21 @@ def read_itr(itr_id: str, db: Session = Depends(get_db)):
 def create_itr(
     itr: schemas.ITRCreate, 
     db: Session = Depends(get_db),
-    _: bool = Depends(PermissionChecker([Permission.WRITE]))
+    current_user: schemas.User = Depends(RoleChecker(ITR_CREATE))
 ):
-    return crud.create_itr(db=db, itr=itr)
+    return crud.create_itr(db=db, itr=itr, user_id=current_user.id, username=current_user.username)
 
 @router.put("/{itr_id}", response_model=schemas.ITR)
 def update_itr(
     itr_id: str, 
     itr: schemas.ITRUpdate, 
     db: Session = Depends(get_db),
-    _: bool = Depends(PermissionChecker([Permission.WRITE]))
+    current_user: schemas.User = Depends(RoleChecker(ITR_UPDATE))
 ):
-    db_itr = crud.update_itr(db, itr_id=itr_id, itr=itr)
+    try:
+        db_itr = crud.update_itr(db, itr_id=itr_id, itr=itr, user_id=current_user.id, username=current_user.username)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if db_itr is None:
         raise HTTPException(status_code=404, detail="ITR not found")
     return db_itr
@@ -50,8 +72,8 @@ def update_itr(
 def delete_itr(
     itr_id: str, 
     db: Session = Depends(get_db),
-    _: bool = Depends(PermissionChecker([Permission.DELETE]))
+    current_user: schemas.User = Depends(RoleChecker(ITR_DELETE))
 ):
-    if crud.delete_itr(db, itr_id=itr_id) is None:
+    if crud.delete_itr(db, itr_id=itr_id, user_id=current_user.id, username=current_user.username) is None:
         raise HTTPException(status_code=404, detail="ITR not found")
     return {"ok": True}

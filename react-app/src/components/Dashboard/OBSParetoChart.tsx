@@ -1,20 +1,20 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Line, LineChart, LabelList } from 'recharts';
-import { useOBS } from '../../context/OBSContext';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Line, LabelList } from 'recharts';
+import React, { useMemo } from 'react';
+import { useOBSStore } from '../../store/obsStore';
 import { useDashboardFilter } from '../../context/DashboardFilterContext';
-import { useMemo } from 'react';
 import styles from './Dashboard.module.css';
 
-const OBSParetoChart: React.FC = () => {
-  const { obsList } = useOBS();
+const OBSParetoChart: React.FC = React.memo(() => {
+  const obsList = useOBSStore(state => state.obsList);
   const { selectedVendor } = useDashboardFilter();
 
   // 计算按承包商分组的OBS统计数据
   const paretoData = useMemo(() => {
     // 根据选中的厂商过滤数据
-    const filteredList = selectedVendor === 'all' 
-      ? obsList 
+    const filteredList = selectedVendor === 'all'
+      ? obsList
       : obsList.filter(item => item.vendor === selectedVendor);
-    
+
     // 按承包商分组统计
     const contractorStats: Record<string, { total: number; open: number; closed: number }> = {};
 
@@ -65,25 +65,25 @@ const OBSParetoChart: React.FC = () => {
       <ResponsiveContainer width="100%" height={400}>
         <ComposedChart data={paretoData} margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis 
-            dataKey="contractor" 
+          <XAxis
+            dataKey="contractor"
             angle={-45}
             textAnchor="end"
             height={80}
             interval={0}
             dy={10}
           />
-          <YAxis 
+          <YAxis
             yAxisId="left"
             label={{ value: 'OBS Count', angle: -90, position: 'insideLeft' }}
           />
-          <YAxis 
+          <YAxis
             yAxisId="right"
             orientation="right"
             domain={[0, 100]}
             label={{ value: 'Cumulative %', angle: 90, position: 'insideRight' }}
           />
-          <Tooltip 
+          <Tooltip
             formatter={(value: any, name: string) => {
               if (name === 'cumulativePercent') {
                 return [`${value}%`, 'Cumulative %'];
@@ -93,13 +93,13 @@ const OBSParetoChart: React.FC = () => {
           />
           <Legend />
           <Bar yAxisId="left" dataKey="closed" stackId="a" fill="#10b981" name="Closed">
-            <LabelList 
-              dataKey="closed" 
+            <LabelList
+              dataKey="closed"
               position="inside"
               formatter={(value: number) => value > 0 ? value : ''}
-              style={{ 
-                fill: '#ffffff', 
-                fontSize: 12, 
+              style={{
+                fill: '#ffffff',
+                fontSize: 12,
                 fontWeight: 600,
                 textAnchor: 'middle',
                 dominantBaseline: 'middle'
@@ -107,30 +107,30 @@ const OBSParetoChart: React.FC = () => {
             />
           </Bar>
           <Bar yAxisId="left" dataKey="open" stackId="a" fill="#f59e0b" name="Open">
-            <LabelList 
-              dataKey="open" 
+            <LabelList
+              dataKey="open"
               position="inside"
               formatter={(value: number) => value > 0 ? value : ''}
-              style={{ 
-                fill: '#1f2937', 
-                fontSize: 12, 
+              style={{
+                fill: '#1f2937',
+                fontSize: 12,
                 fontWeight: 600,
                 textAnchor: 'middle',
                 dominantBaseline: 'middle'
               }}
             />
           </Bar>
-          <Line 
-            yAxisId="right" 
-            type="monotone" 
-            dataKey="cumulativePercent" 
-            stroke="#fbbf24" 
+          <Line
+            yAxisId="right"
+            type="monotone"
+            dataKey="cumulativePercent"
+            stroke="#fbbf24"
             strokeWidth={2}
             dot={{ fill: '#fbbf24', r: 4 }}
             name="Cumulative %"
           >
-            <LabelList 
-              dataKey="cumulativePercent" 
+            <LabelList
+              dataKey="cumulativePercent"
               position="top"
               formatter={(value: number) => `${value}%`}
               style={{ fill: '#fbbf24', fontSize: 12, fontWeight: 600 }}
@@ -140,6 +140,6 @@ const OBSParetoChart: React.FC = () => {
       </ResponsiveContainer>
     </div>
   );
-};
+});
 
 export default OBSParetoChart;

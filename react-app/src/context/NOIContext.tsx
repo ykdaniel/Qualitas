@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useMemo, useEffect, useCallback, ReactNode } from 'react';
 import api from '../services/api';
 import { useErrorHandler } from '../hooks/useErrorHandler';
+import { useAuth } from './AuthContext';
 
 export interface NOIItem {
   id: string;
@@ -22,13 +23,16 @@ export interface NOIItem {
   closeoutDate?: string;
   attachments?: string[];
   ncrNumber?: string;  // 若此 NOI 是針對 NCR 的重新檢驗
+  dueDate?: string;
 }
+
+import { FilterParams } from '../types/api';
 
 interface NOIContextType {
   noiList: NOIItem[];
   loading: boolean;
   error: string | null;
-  refetch: () => Promise<void>;
+  refetch: (params?: FilterParams) => Promise<void>;
   addNOI: (noi: Omit<NOIItem, 'id'>, id?: string) => Promise<NOIItem>;
   addBulkNOI: (nois: Omit<NOIItem, 'id'>[]) => Promise<NOIItem[]>;
   updateNOI: (id: string, noi: Partial<NOIItem>) => Promise<void>;
@@ -45,11 +49,11 @@ export const NOIProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const { handleError } = useErrorHandler();
 
-  const fetchNOIs = React.useCallback(async () => {
+  const fetchNOIs = React.useCallback(async (params?: FilterParams) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.get('/noi/');
+      const response = await api.get('/noi/', { params });
       setNoiList(response.data || []);
     } catch (err) {
       const msg = handleError(err, 'Failed to fetch NOIs');
@@ -59,9 +63,14 @@ export const NOIProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [handleError]);
 
+  const { isAuthenticated } = useAuth();
+
   useEffect(() => {
-    fetchNOIs();
-  }, [fetchNOIs]);
+    if (isAuthenticated) {
+      fetchNOIs();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   const addNOI = async (noi: Omit<NOIItem, 'id'>, id?: string): Promise<NOIItem> => {
     try {
@@ -89,7 +98,7 @@ export const NOIProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const updateNOI = async (id: string, updates: Partial<NOIItem>) => {
     try {
-      const response = await api.put(`/noi/${id}`, updates);
+      const response = await api.put(`/noi/${id}/`, updates);
       setNoiList(prev => prev.map(n => (n.id === id ? response.data : n)));
     } catch (error) {
       handleError(error, 'Failed to update NOI');
@@ -99,7 +108,7 @@ export const NOIProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const deleteNOI = async (id: string) => {
     try {
-      await api.delete(`/noi/${id}`);
+      await api.delete(`/noi/${id}/`);
       setNoiList(prev => prev.filter(n => n.id !== id));
     } catch (error) {
       handleError(error, 'Failed to delete NOI');

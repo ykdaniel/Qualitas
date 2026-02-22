@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { getNextRevision } from '../../utils/revision';
 import { useLanguage } from '../../context/LanguageContext';
-import { useContractors } from '../../context/ContractorsContext';
+import { useContractorsStore } from '../../store/contractorsStore';
 import FileAttachment from '../Shared/FileAttachment';
 import styles from './OBS.module.css';
 
@@ -34,6 +35,7 @@ export interface OBSItem {
 
 export interface OBSDetailData {
     obsNumber: string;
+    rev: string;
     status: string;
     raiseDate: string;
     closeoutDate: string;
@@ -57,6 +59,7 @@ export interface OBSDetailData {
     finalProductIntegrityStatement: string;
     reInspectionNumber: string;
     noiNumber: string;
+    itrNumber: string;
     projectQualityManager: string;
     defectPhotos: string[];
     improvementPhotos: string[];
@@ -74,16 +77,17 @@ export interface OBSDetailModalProps {
 
 export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId, existingData, existingItem, onSave, onClose }) => {
     const { t } = useLanguage();
-    const { getActiveContractors } = useContractors();
+    const { getActiveContractors } = useContractorsStore();
 
     // Initialize form data from existing data or existing item
     const getInitialData = (): OBSDetailData => {
         if (existingData) {
-            return existingData;
+            return { ...existingData, rev: existingData.rev || '' };
         }
         if (existingItem) {
             return {
                 obsNumber: existingItem.documentNumber || '',
+                rev: existingItem.rev || '',
                 status: existingItem.status || 'Open',
                 raiseDate: existingItem.raiseDate || '',
                 closeoutDate: existingItem.closeoutDate || '',
@@ -107,6 +111,7 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId, existingD
                 finalProductIntegrityStatement: '',
                 reInspectionNumber: '',
                 noiNumber: '',
+                itrNumber: '',
                 projectQualityManager: '',
                 defectPhotos: existingItem.defectPhotos || [],
                 improvementPhotos: existingItem.improvementPhotos || [],
@@ -116,6 +121,7 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId, existingD
         }
         return {
             obsNumber: '',
+            rev: '',
             status: 'Open',
             raiseDate: '',
             closeoutDate: '',
@@ -139,6 +145,7 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId, existingD
             finalProductIntegrityStatement: '',
             reInspectionNumber: '',
             noiNumber: '',
+            itrNumber: '',
             projectQualityManager: '',
             defectPhotos: [],
             improvementPhotos: [],
@@ -240,6 +247,18 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId, existingD
         window.print();
     };
 
+    const handlePublish = () => {
+        const nextRev = getNextRevision(formData.rev);
+        if (window.confirm(`Are you sure you want to publish as Revision ${nextRev}?`)) {
+            onSave({
+                ...formData,
+                rev: nextRev,
+                // status: 'Closed' // Optional: similar to NCR, keep status manual or as is.
+            });
+            onClose();
+        }
+    };
+
     return (
         <div className={styles.modalOverlay}>
             <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
@@ -265,12 +284,43 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId, existingD
                                     />
                                 </div>
                                 <div className={styles.formGroup}>
+                                    <label>Rev</label>
+                                    <input
+                                        type="text"
+                                        className={styles.formInput}
+                                        value={formData.rev}
+                                        readOnly
+                                        placeholder="-"
+                                        style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
+                                    />
+                                </div>
+                                <div className={styles.formGroup}>
                                     <label>{t('obs.subject')}</label>
                                     <input
                                         type="text"
                                         className={styles.formInput}
                                         value={formData.subject}
                                         onChange={(e) => handleFieldChange('subject', e.target.value)}
+                                    />
+                                </div>
+                                <div className={styles.formGroup}>
+                                    <label>{t('ncr.noiNo')}</label>
+                                    <input
+                                        type="text"
+                                        className={styles.formInput}
+                                        value={formData.noiNumber || ''}
+                                        onChange={(e) => handleFieldChange('noiNumber', e.target.value)}
+                                        placeholder="Optionally link to NOI"
+                                    />
+                                </div>
+                                <div className={styles.formGroup}>
+                                    <label>{t('ncr.itrNo')}</label>
+                                    <input
+                                        type="text"
+                                        className={styles.formInput}
+                                        value={formData.itrNumber || ''}
+                                        onChange={(e) => handleFieldChange('itrNumber', e.target.value)}
+                                        placeholder="Optionally link to ITR"
                                     />
                                 </div>
 
@@ -551,7 +601,16 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId, existingD
                     </div>
                 </div>
                 <div className={styles.modalActions}>
-                    <button type="button" className={styles.saveButton} onClick={handleSave}>
+                    <button
+                        type="button"
+                        className={styles.saveButton}
+                        onClick={handlePublish}
+                        style={{ backgroundColor: '#4f46e5' }}
+                        title="Publish as next revision"
+                    >
+                        Publish
+                    </button>
+                    <button type="button" className={styles.saveButton} onClick={handleSave} style={{ marginLeft: '12px' }}>
                         {t('common.save')}
                     </button>
                     <button type="button" className={styles.printButton} onClick={handlePrint}>
@@ -597,6 +656,20 @@ export const OBSDetailsViewModal: React.FC<OBSDetailsViewModalProps> = ({ obsIte
                                 <div className={styles.formGroup}><label>{t('obs.foundBy')}</label><div className={styles.readOnlyField}>{obsItem.foundBy || '-'}</div></div>
                                 <div className={styles.formGroup}><label>{t('obs.raisedBy')}</label><div className={styles.readOnlyField}>{obsItem.raisedBy || '-'}</div></div>
                                 <div className={styles.formGroup}><label>{t('obs.productDisposition')}</label><div className={styles.readOnlyField}>{obsItem.productDisposition || '-'}</div></div>
+                            </div>
+                        </div>
+                        {/* 關聯追溯 */}
+                        <div className={styles.formSection}>
+                            <h3 className={styles.sectionTitle}>{t('ncr.sectionReinspection') || 'Related Links'}</h3>
+                            <div className={styles.formGrid}>
+                                <div className={styles.formGroup}>
+                                    <label>{t('ncr.noiNo')}</label>
+                                    <div className={styles.readOnlyField}>{(obsItem as any).noiNumber || '-'}</div>
+                                </div>
+                                <div className={styles.formGroup}>
+                                    <label>{t('ncr.itrNo')}</label>
+                                    <div className={styles.readOnlyField}>{(obsItem as any).itrNumber || '-'}</div>
+                                </div>
                             </div>
                         </div>
                     </div>

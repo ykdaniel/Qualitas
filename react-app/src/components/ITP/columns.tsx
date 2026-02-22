@@ -1,7 +1,7 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "../Shared/DataTable/DataTableColumnHeader";
-import { ITPItem } from "../../context/ITPContext";
-import { Edit, FileText, Trash2, CheckSquare, Link } from "lucide-react";
+import { ITPItem } from "../../store/itpStore";
+import { Edit, Trash2, Link, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -19,8 +19,6 @@ const getLocalizedStatus = (status: string, t: (key: string) => string) => {
 
 export const createColumns = (
     handleEdit: (id: string) => void,
-    handleViewDetails: (id: string) => void,
-    handleAdd: (id: string) => void, // This was "Review" button in ITP.tsx (named handleAdd but calls addITP logic or navigate?) -> It navigates to /itp/:id
     handleDelete: (id: string) => void,
     navigate: (path: string) => void,
     t: (key: string) => string,
@@ -165,24 +163,6 @@ export const createColumns = (
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0 text-purple-500 hover:text-white hover:bg-purple-500"
-                            onClick={() => handleViewDetails(itp.id)}
-                            title={t('itp.tooltip.details')}
-                        >
-                            <FileText className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 text-indigo-500 hover:text-white hover:bg-indigo-500"
-                            onClick={() => handleAdd(itp.id)}
-                            title={t('itp.tooltip.review')}
-                        >
-                            <CheckSquare className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
                             className={cn(
                                 "h-auto px-2 py-1 text-xs gap-1",
                                 relatedNoiCount > 0
@@ -196,6 +176,7 @@ export const createColumns = (
                             <Link className="h-3 w-3" />
                             {relatedNoiCount}
                         </Button>
+
                         <Button
                             variant="ghost"
                             size="sm"

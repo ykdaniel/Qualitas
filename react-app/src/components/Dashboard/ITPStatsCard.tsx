@@ -1,19 +1,19 @@
-import { useITP } from '../../context/ITPContext';
+import { useITPStore } from '../../store/itpStore';
 import { useDashboardFilter } from '../../context/DashboardFilterContext';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './Dashboard.module.css';
 
 const ITPStatsCard: React.FC = () => {
-  const { itpList } = useITP();
+  const itpList = useITPStore(state => state.itpList);
   const { selectedVendor } = useDashboardFilter();
   const navigate = useNavigate();
 
   const stats = useMemo(() => {
-    const filteredList = selectedVendor === 'all' 
-      ? itpList 
+    const filteredList = selectedVendor === 'all'
+      ? itpList
       : itpList.filter(item => item.vendor === selectedVendor);
-    
+
     const total = filteredList.filter(item => item.status.toLowerCase() !== 'void').length;
     const submitted = filteredList.filter(item => {
       const status = item.status.toLowerCase();

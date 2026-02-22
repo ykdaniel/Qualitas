@@ -15,7 +15,8 @@ env/
 .env
 
 # IDEs
-.vscode/
+.vscode/*
+!.vscode/extensions.json
 .idea/
 *.swp
 *.swo
@@ -23,3 +24,25 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+# Database
+*.db
+
+# Experimental Scripts
+comprehensive_dump.py
+db_complete_dump.txt
+deep_search_db.py
+dump_db_data.py
+raw_dump.py
+search_partial_db.py
+token.json
+nul
+
+# Specific files to include
+!backend/requirements.txt
+!react-app/package.json
+!react-app/package-lock.json
+
+# Ignore other text files in root or general spots if needed, 
+# but be careful with global *.txt
+*.log

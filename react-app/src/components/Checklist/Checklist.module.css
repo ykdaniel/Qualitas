@@ -181,16 +181,326 @@
     background: #059669;
 }
 
+/* Tabs Styles */
+.tabsContainer {
+    display: flex;
+    border-bottom: 2px solid #e5e7eb;
+    margin-bottom: 24px;
+    padding: 0 32px;
+    background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+}
+
+.tabButton {
+    padding: 12px 24px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-size: 15px;
+    font-weight: 600;
+    color: #6b7280;
+    cursor: pointer;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+}
+
+.tabButton:hover {
+    color: #374151;
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.activeTab {
+    color: #2563eb;
+    border-bottom-color: #2563eb;
+}
+
+/* --- Modern Web UI Styles --- */
+.webEditor {
+    width: 100%;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.webHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+}
+
+.webHeaderLeft h1 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 4px 0;
+}
+
+.webHeaderLeft p {
+    font-size: 13px;
+    color: #64748b;
+    margin: 0;
+}
+
+.webHeaderRight {
+    display: flex;
+    gap: 12px;
+}
+
+.card {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+}
+
+.cardHeader {
+    padding: 16px 24px;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cardHeader h2 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #334155;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cardContent {
+    padding: 24px;
+}
+
+.grid3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+}
+
+.grid2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+}
+
+.formGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.formGroup label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748b;
+}
+
+.modernInput,
+.modernSelect {
+    width: 100%;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 14px;
+    color: #1e293b;
+    background: #fff;
+    transition: all 0.2s;
+}
+
+.modernInput:focus,
+.modernSelect:focus {
+    outline: none;
+    background: #fff;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.criteriaBox {
+    background: #f8faff;
+    border: 1px solid #eef4ff;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    color: #475569;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+}
+
+.underlineInput {
+    width: 100%;
+    border: none;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 8px 0;
+    font-size: 14px;
+    background: transparent;
+    transition: all 0.2s;
+}
+
+.underlineInput:focus {
+    outline: none;
+    border-bottom-color: #3b82f6;
+}
+
+.webTable {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.webTable th {
+    background: #fff;
+    padding: 16px 24px;
+    text-align: left;
+    font-size: 14px;
+    font-weight: 600;
+    color: #475569;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.webTable td {
+    padding: 16px 24px;
+    border-bottom: 1px solid #f8fafc;
+    vertical-align: middle;
+}
+
+.webItemNo {
+    font-size: 13px;
+    color: #94a3b8;
+    padding-top: 10px;
+}
+
+.webItemText {
+    font-weight: 600;
+    color: #334155;
+}
+
+.webCriteria {
+    font-size: 13px;
+    color: #64748b;
+}
+
+.statusChip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 90px;
+}
+
+.chipPass {
+    background: #e8f9f1;
+    color: #10b981;
+}
+
+.chipPass:hover {
+    background: #d1f4e4;
+}
+
+.chipFail {
+    background: #fff1f2;
+    color: #f43f5e;
+}
+
+.chipFail:hover {
+    background: #ffe4e6;
+}
+
+.chipNA {
+    background: #f8fafc;
+    color: #94a3b8;
+}
+
+.cardFooter {
+    padding: 16px 24px;
+    background: #f8fafc;
+    border-top: 1px solid #f1f5f9;
+    display: flex;
+    justify-content: flex-end;
+    gap: 24px;
+}
+
+.checkOption {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+    cursor: pointer;
+}
+
+.signatureGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.signatureCard {
+    border: 1px dashed #e2e8f0;
+    border-radius: 12px;
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: #fcfdfe;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.signatureCard:hover {
+    border-color: #3b82f6;
+    background: #f8fafc;
+}
+
+.signatureIcon {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    background: #f1f5f9;
+    border-radius: 50%;
+    padding: 8px;
+}
+
+.signatureTitle {
+    font-size: 14px;
+    font-weight: 700;
+    color: #475569;
+}
+
+.signatureHelper {
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+/* --- End of Modern UI --- */
+
 .editorWrapper {
     width: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 40px 0;
-    transform-origin: top center;
-    transform: scale(1.15);
-    margin-bottom: 120px;
-    /* 補償縮放後的下方留白 */
+    padding: 0;
+    margin-bottom: 40px;
 }
 
 /* 列印區域容器，模擬 A4 */
@@ -204,68 +514,119 @@
     color: #000;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     position: relative;
+    display: none;
+    /* Hide by default, show only in print */
+}
+
+@page {
+    size: auto;
+    margin: 0mm;
 }
 
 @media print {
-    .printablePage {
-        width: 210mm;
-        height: 297mm;
-        padding: 10mm;
-        box-shadow: none;
-        margin: 0;
-    }
 
-    .printHidden {
+    /* Hide the main application */
+    :global(#root) {
         display: none !important;
     }
+
+    :global(body) {
+        margin: 0 !important;
+        padding: 0 !important;
+        visibility: visible !important;
+    }
+
+    /* Style the portal root for printing */
+    :global(#checklist-print-root) {
+        display: block !important;
+        position: static !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 10mm !important;
+        /* Adjust padding as needed */
+        visibility: visible !important;
+        background: white !important;
+        color: black !important;
+        z-index: 9999;
+    }
+
+    /* Ensure table inputs are clean for printing */
+    .tableInput,
+    .infoValue textarea,
+    .infoValue input {
+        background: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+        resize: none !important;
+        box-shadow: none !important;
+    }
 }
 
-/* 表頭樣式 */
-.formHeader {
+/* 表頭專業佈局 (3欄) */
+.headerTable {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1pt solid #000;
+    margin-bottom: 0;
+}
+
+.headerTable td {
+    border: 1pt solid #000;
+    padding: 10px;
+    vertical-align: middle;
+}
+
+.headerCompanyCol {
+    width: 25%;
+    text-align: left;
+}
+
+.headerTitleCol {
+    width: 50%;
     text-align: center;
-    margin-bottom: 5px;
-    padding-top: 15px;
-    padding-bottom: 15px;
-    position: relative;
 }
 
-.formHeader h1 {
-    font-size: 28px;
-    font-weight: 500;
-    margin: 0;
+.headerInfoCol {
+    width: 25%;
+    padding: 0 !important;
 }
 
-.formHeader h2 {
-    font-size: 32px;
-    font-weight: 900;
-    margin: 6px 0;
-}
-
-.formNo {
-    position: absolute;
-    bottom: 0;
-    right: 5px;
+.headerInfoRow {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 8px;
     font-size: 11px;
+}
+
+.headerInfoRow:not(:last-child) {
+    border-bottom: 1pt solid #000;
+}
+
+.headerInfoLabel {
     font-weight: bold;
 }
 
-.linkedItp {
-    font-size: 11px;
-    color: #64748b;
+.headerInfoValue {
+    font-family: tabular-nums;
 }
 
 /* 格狀資訊區塊 */
 .infoGrid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    border: 2px solid #000;
-    margin-bottom: 20px;
+    border: 1pt solid #000;
+    border-top: none;
+    /* Already has table border above */
+    margin-bottom: 0;
+    /* Removed margin */
 }
 
 .infoItem {
     display: grid;
     grid-template-columns: 140px 1fr;
-    border-bottom: 1px solid #000;
+    border-bottom: 1pt solid #000;
 }
 
 /* 移除最後一行的下邊框 */
@@ -275,14 +636,16 @@
 
 /* 左側垂直邊框 */
 .infoGrid>div:nth-child(even) {
-    border-left: 1px solid #000;
+    border-left: 1pt solid #000;
 }
 
 .infoLabel {
-    padding: 10px;
+    padding: 6px 10px;
+    /* Reduced from 10px */
     background: #fff;
-    border-right: 1px solid #000;
-    font-size: 14px;
+    border-right: 1pt solid #000;
+    font-size: 13px;
+    /* Reduced from 14px */
     font-weight: bold;
     display: flex;
     flex-direction: column;
@@ -290,8 +653,10 @@
 }
 
 .infoValue {
-    padding: 10px;
-    font-size: 15px;
+    padding: 6px 10px;
+    /* Reduced from 10px */
+    font-size: 14px;
+    /* Reduced from 15px */
     display: flex;
     align-items: center;
     font-weight: 500;
@@ -299,7 +664,7 @@
 
 .infoValue textarea {
     width: 100%;
-    border: 1px solid #e2e8f0;
+    border: 1pt solid #e2e8f0;
     outline: none;
     font-size: 13px;
     background: #f8fafc;
@@ -325,7 +690,7 @@
 .infoValue input,
 .reInspectionItem input {
     width: 100%;
-    border: 1px solid #e2e8f0;
+    border: 1pt solid #e2e8f0;
     outline: none;
     font-size: 13px;
     background: #f8fafc;
@@ -370,14 +735,17 @@
 .itemsTable {
     width: 100%;
     border-collapse: collapse;
-    border: 2px solid #000;
-    margin-bottom: 10px;
+    border: 1pt solid #000;
+    margin-bottom: 0;
+    /* Removed margin to close gap with footer */
     table-layout: fixed;
+    margin-top: -1pt;
+    /* Overlap with infoGrid */
 }
 
 .itemsTable th,
 .itemsTable td {
-    border: 1px solid #000;
+    border: 1pt solid #000;
     padding: 8px 10px;
     font-size: 13px;
     word-wrap: break-word;
@@ -391,7 +759,7 @@
 
 .tableInput {
     width: 100%;
-    border: 1px solid #e2e8f0;
+    border: 1pt solid #e2e8f0;
     background: #f8fafc;
     border-radius: 4px;
     padding: 6px;
@@ -436,83 +804,150 @@
 
 /* 底部聲明與簽名 */
 .footerSection {
-    margin-top: 10px;
+    margin-top: -1pt;
+    /* Overlap with itemsTable */
 }
 
 .statementBox {
-    border: 2px solid #000;
-    padding: 8px;
-    margin-bottom: 10px;
+    border: 1pt solid #000;
+    padding: 6px 10px;
+    /* Reduced padding */
+    margin-bottom: 0;
+    /* Removed gap with signature table */
     font-size: 12px;
 }
 
-.reInspectionGrid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    border: 2px solid #000;
-    border-bottom: none;
-}
-
-.reInspectionItem {
-    display: grid;
-    grid-template-columns: 180px 1fr;
-    border-right: 1px solid #000;
-}
-
-.reInspectionItem:last-child {
-    border-right: none;
-}
-
-.signatureGrid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    border: 2px solid #000;
-}
-
-.signatureBlock {
+/* Signature Table Styles */
+/* Bottom Layout */
+.bottomLayout {
     display: flex;
-    flex-direction: column;
-    border-right: 1px solid #000;
-    border-bottom: 1px solid #000;
+    border: 1pt solid #000;
+    margin-top: -1pt;
+    /* Changed from 10px to overlap */
 }
 
-.signatureBlock:last-child {
-    border-right: none;
+/* Signature Table Styles */
+.signatureTable {
+    flex: 1;
+    border-collapse: collapse;
+    border: none;
+    /* Border handled by container */
+    margin-bottom: 0;
+    table-layout: fixed;
 }
 
-.signatureLabel {
-    padding: 4px;
-    border-bottom: 1px solid #000;
-    background: #fff;
-    font-weight: bold;
-    font-size: 11px;
+.signatureTable td {
+    border: 1pt solid #000;
+    padding: 6px;
+    /* Reduced from 8px */
+    vertical-align: middle;
+}
+
+.signatureLabelCell {
+    font-weight: 700;
+    font-size: 14px;
+    background-color: #fff;
+    white-space: nowrap;
+    padding: 8px;
+    /* Reset padding */
+    text-align: center;
+    /* Center align */
+}
+
+/* Specific column widths for the top 4-column layout */
+.signatureTable tr td:nth-child(1).signatureLabelCell {
+    width: 25%;
+    /* Re-inspection Label (Reduced from 35%) */
+}
+
+.signatureTable tr td:nth-child(2).signatureValueCell {
+    width: 25%;
+    /* Re-inspection Value */
+}
+
+.signatureTable tr td:nth-child(3).signatureLabelCell {
+    width: 15%;
+    /* NCR Label */
+}
+
+.signatureTable tr td:nth-child(4).signatureValueCell {
+    width: 35%;
+    /* NCR Value (Increased to balance) */
+}
+
+.signatureValueCell {
+    position: relative;
+    padding: 0;
+}
+
+.signatureValueCell input {
+    width: 100%;
+    height: 100%;
+    border: none;
+    outline: none;
+    background: transparent;
+    padding: 8px;
+    font-size: 14px;
     text-align: center;
 }
 
-.signatureContent {
-    flex: 1;
-    padding: 10px;
+.signatureHeaderCell {
+    font-weight: 700;
+    font-size: 13px;
+    text-align: center;
+    background-color: #fff;
+    padding: 6px;
+    border-bottom: 1pt solid #000;
+}
+
+.signatureSignCell {
+    height: 60px;
+    /* Reduced from 80px for compactness */
+}
+
+.signatureDateCell {
+    height: 60px;
+    /* Reduced from 80px */
+    text-align: center;
     font-family: "KaiTi", "BiauKai", serif;
-    font-size: 26px;
+    font-size: 24px;
+    /* Slightly reduced */
     color: #1e40af;
     font-style: italic;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 50px;
+    vertical-align: middle;
 }
 
 .remarkSection {
+    width: 250px;
+    /* Adjusted width */
+    border-right: 1pt solid #000;
     padding: 8px;
-    border-right: 1px solid #000;
     font-size: 10px;
     color: #444;
+    display: flex;
+    flex-direction: column;
 }
 
 .watermark {
-    margin-top: 20px;
     text-align: center;
     font-style: italic;
     color: #cbd5e1;
     font-size: 10px;
+}
+
+/* Fix double borders in signature section */
+.bottomLayout .signatureTable tr td:last-child {
+    border-right: none;
+}
+
+.bottomLayout .signatureTable tr:last-child td {
+    border-bottom: none;
+}
+
+.bottomLayout .signatureTable tr:first-child td {
+    border-top: none;
+}
+
+.bottomLayout .signatureTable tr td:first-child {
+    border-left: none;
 }

@@ -33,7 +33,7 @@ def test_iam_flow():
         "description": "Quality Inspector",
         "permissions": ["read_ncr", "write_ncr"]
     }
-    response = requests.post(f"{BASE_URL}/roles", json=role_data, headers=headers)
+    response = requests.post(f"{BASE_URL}/iam/roles", json=role_data, headers=headers)
     if response.status_code == 200:
         role = response.json()
         print(f"   [PASS] Role created: {role['id']} - {role['name']}")
@@ -41,7 +41,7 @@ def test_iam_flow():
     elif response.status_code == 400 and "already exists" in response.text:
          print("   [INFO] Role 'Inspector' already exists. Fetching it...")
          # Fetch to get ID
-         r = requests.get(f"{BASE_URL}/roles", headers=headers)
+         r = requests.get(f"{BASE_URL}/iam/roles", headers=headers)
          for item in r.json():
              if item['name'] == "Inspector":
                  role_id = item['id']
@@ -60,7 +60,7 @@ def test_iam_flow():
         "full_name": "John Doe",
         "role_id": role_id
     }
-    response = requests.post(f"{BASE_URL}/users", json=user_data, headers=headers)
+    response = requests.post(f"{BASE_URL}/iam/users", json=user_data, headers=headers)
     if response.status_code == 200:
         user = response.json()
         print(f"   [PASS] User created: {user['id']} - {user['username']}")

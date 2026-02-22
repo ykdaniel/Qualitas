@@ -4,28 +4,14 @@ import { DataTableColumnHeader } from "../Shared/DataTable/DataTableColumnHeader
 // It is defined in FAT.tsx but not exported. I should probably export it or redefine it.
 // To avoid circular dependency or editing FAT.tsx just for export before refactor, 
 // I will define a matching interface here since I will eventually update FAT.tsx to use this.
-export interface FATItem {
-    id: string;
-    equipment: string;
-    supplier: string;
-    procedure: string;
-    location: string;
-    startDate: string;
-    endDate: string;
-    deliveryFrom: string;
-    deliveryTo: string;
-    siteReadiness: string;
-    moveInDate: string;
-    hasDetails?: boolean;
-}
+import { FATItem } from "../../store/fatStore";
 
-import { Edit, FileText, Trash2, PlusSquare } from "lucide-react";
+import { Edit, Trash2, PlusSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export const createColumns = (
     handleEdit: (id: string) => void,
-    handleViewDetails: (id: string) => void,
     handleAddDetails: (id: string) => void,
     handleDelete: (id: string) => void,
     t: (key: string) => string,
@@ -132,15 +118,7 @@ export const createColumns = (
                         >
                             <Edit className="h-4 w-4" />
                         </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 text-purple-500 hover:text-white hover:bg-purple-500"
-                            onClick={() => handleViewDetails(fat.id)}
-                            title={t('fat.tooltip.details')}
-                        >
-                            <FileText className="h-4 w-4" />
-                        </Button>
+
                         <Button
                             variant="ghost"
                             size="sm"

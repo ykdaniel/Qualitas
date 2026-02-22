@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
-import { useContractors } from '../../context/ContractorsContext';
+import { useContractorsStore } from '../../store/contractorsStore';
 import styles from './Audit.module.css';
 
 export interface AuditItem {
@@ -24,7 +24,7 @@ interface AuditEditModalProps {
 
 export const AuditEditModal: React.FC<AuditEditModalProps> = ({ auditId, existingItem, onSave, onClose }) => {
     const { t } = useLanguage();
-    const { getActiveContractors } = useContractors();
+    const { getActiveContractors } = useContractorsStore();
     const activeContractors = getActiveContractors();
 
     const [formData, setFormData] = useState<Partial<AuditItem>>({

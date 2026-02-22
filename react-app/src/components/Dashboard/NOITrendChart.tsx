@@ -25,7 +25,7 @@ interface NOITrendChartProps {
     selectedVendor?: string;
 }
 
-const NOITrendChart: React.FC<NOITrendChartProps> = ({
+const NOITrendChart: React.FC<NOITrendChartProps> = React.memo(({
     noiList,
     months = 6,
     filterByVendor = false,
@@ -105,6 +105,6 @@ const NOITrendChart: React.FC<NOITrendChartProps> = ({
             </ResponsiveContainer>
         </div>
     );
-};
+});
 
 export default NOITrendChart;

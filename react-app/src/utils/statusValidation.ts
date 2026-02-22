@@ -107,3 +107,66 @@ export const checkRelatedStatusConsistency = (
 
   return { consistent: true };
 };
+
+/**
+ * 欄位驗證規則介面
+ */
+export interface FieldValidationRule {
+  field: string;
+  required: boolean;
+  requiredIfStatus?: string[]; // 只有在這些狀態下才必填
+  excludedIfStatus?: string[]; // 在這些狀態下不必填（優先權高於 required）
+  message: string; // 錯誤訊息 Key 或文字
+}
+
+/**
+ * 驗證欄位是否符合規則
+ */
+export const validateRequiredFields = (
+  data: any,
+  status: string,
+  rules: FieldValidationRule[]
+): { valid: boolean; message?: string } => {
+  for (const rule of rules) {
+    // 檢查是否應該忽略此規則
+    if (rule.excludedIfStatus && rule.excludedIfStatus.map(s => s.toLowerCase()).includes(status.toLowerCase())) {
+      continue;
+    }
+
+    // 檢查是否符合必填條件
+    let isRequired = rule.required;
+    if (rule.requiredIfStatus) {
+      isRequired = rule.required || rule.requiredIfStatus.map(s => s.toLowerCase()).includes(status.toLowerCase());
+    }
+
+    if (isRequired) {
+      const value = data[rule.field];
+      if (value === undefined || value === null || value === '') {
+        return { valid: false, message: rule.message };
+      }
+    }
+  }
+  return { valid: true };
+};
+
+/**
+ * NOI 欄位驗證規則 configuration
+ */
+export const NOIValidationRules: FieldValidationRule[] = [
+  {
+    field: 'contractor',
+    required: true,
+    message: 'common.selectContractor'
+  },
+  {
+    field: 'issueDate',
+    required: true,
+    message: 'common.selectDate'
+  },
+  {
+    field: 'itpNo',
+    required: true,
+    excludedIfStatus: ['Reject'], // 拒絕狀態下不強制要求 ITP
+    message: 'noi.validation.missingITP'
+  }
+];

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useMemo, useEffect, useCallback, ReactNode } from 'react';
 import api from '../services/api';
 import { useErrorHandler } from '../hooks/useErrorHandler';
+import { useAuth } from './AuthContext';
 
 export interface FATItem {
     id: string;
@@ -42,74 +43,8 @@ interface FATContextType {
     saveFATDetails: (fatId: string, details: FATDetailItem[]) => Promise<void>;
 }
 
+// 移除 Mock 資料與 localStorage 邏輯
 const FATContext = createContext<FATContextType | undefined>(undefined);
-
-const STORAGE_KEY_LIST = 'qualitas_fat_list';
-const STORAGE_KEY_DETAILS = 'qualitas_fat_details';
-
-const defaultFatList: FATItem[] = [{
-    id: '1',
-    equipment: 'Equipment A',
-    supplier: '廠商A',
-    procedure: 'Procedure 1',
-    location: 'Location A',
-    startDate: '2026-01-01',
-    endDate: '2026-01-31',
-    deliveryFrom: 'Factory A',
-    deliveryTo: 'Site A',
-    siteReadiness: 'Ready',
-    moveInDate: '2026-02-01',
-    hasDetails: true,
-}];
-
-const defaultFatDetails: { [key: string]: FATDetailItem[] } = {
-    '1': [{
-        id: '1-1',
-        sNo: '1',
-        itemName: 'Item 1',
-        specification: 'Spec 1',
-        qty: '10',
-        unit: 'pcs',
-        acceptanceCriteria: 'Standard A',
-        fatActualValue: '9.8',
-        fatJudgment: 'Pass',
-        remarks: 'Test passed',
-    }],
-};
-
-const loadListFromStorage = (): FATItem[] => {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEY_LIST);
-        if (raw) {
-            const parsed = JSON.parse(raw) as FATItem[];
-            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-    } catch (_) { }
-    return defaultFatList;
-};
-
-const loadDetailsFromStorage = (): { [key: string]: FATDetailItem[] } => {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEY_DETAILS);
-        if (raw) {
-            const parsed = JSON.parse(raw) as { [key: string]: FATDetailItem[] };
-            if (parsed && typeof parsed === 'object') return parsed;
-        }
-    } catch (_) { }
-    return defaultFatDetails;
-};
-
-const saveListToStorage = (list: FATItem[]) => {
-    try {
-        localStorage.setItem(STORAGE_KEY_LIST, JSON.stringify(list));
-    } catch (_) { }
-};
-
-const saveDetailsToStorage = (details: { [key: string]: FATDetailItem[] }) => {
-    try {
-        localStorage.setItem(STORAGE_KEY_DETAILS, JSON.stringify(details));
-    } catch (_) { }
-};
 
 export const FATProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [fatList, setFatList] = useState<FATItem[]>([]);
@@ -123,39 +58,33 @@ export const FATProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setError(null);
         try {
             const response = await api.get('/fat/');
-            setFatList(response.data || []);
-            // 嘗試載入詳細資料
-            try {
-                const detailsResponse = await api.get('/fat/details/');
-                setFatDetails(detailsResponse.data || {});
-            } catch (_) {
-                setFatDetails(loadDetailsFromStorage());
-            }
+            const list = response.data;
+            setFatList(list);
+
+            // 從後端回應中解析 detail_data 並填入 fatDetails
+            const detailsMap: { [key: string]: FATDetailItem[] } = {};
+            list.forEach((item: any) => {
+                if (item.detail_data) {
+                    detailsMap[item.id] = item.detail_data;
+                }
+            });
+            setFatDetails(detailsMap);
         } catch (err: unknown) {
-            // API 不存在時使用 localStorage 備援
-            setFatList(loadListFromStorage());
-            setFatDetails(loadDetailsFromStorage());
+            handleError(err, 'Failed to fetch FAT list');
+            setError('Failed to fetch FAT list');
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [handleError]);
+
+    const { isAuthenticated } = useAuth();
 
     useEffect(() => {
-        fetchFATs();
-    }, [fetchFATs]);
-
-    // 同步到 localStorage
-    useEffect(() => {
-        if (!loading && fatList.length > 0) {
-            saveListToStorage(fatList);
+        if (isAuthenticated) {
+            fetchFATs();
         }
-    }, [fatList, loading]);
-
-    useEffect(() => {
-        if (!loading && Object.keys(fatDetails).length > 0) {
-            saveDetailsToStorage(fatDetails);
-        }
-    }, [fatDetails, loading]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isAuthenticated]);
 
     const addFAT = useCallback(async (fat: Omit<FATItem, 'id'>): Promise<FATItem> => {
         try {
@@ -164,28 +93,24 @@ export const FATProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setFatList(prev => [...prev, newFAT]);
             return newFAT;
         } catch (err: unknown) {
-            const newFAT: FATItem = {
-                ...fat,
-                id: String(Date.now()),
-            };
-            setFatList(prev => [...prev, newFAT]);
-            setFatDetails(prev => ({ ...prev, [newFAT.id]: [] }));
-            return newFAT;
+            handleError(err, 'Failed to add FAT');
+            throw err;
         }
-    }, []);
+    }, [handleError]);
 
     const updateFAT = useCallback(async (id: string, updates: Partial<FATItem>) => {
         try {
-            const response = await api.put(`/fat/${id}`, updates);
+            const response = await api.put(`/fat/${id}/`, updates);
             setFatList(prev => prev.map(f => (f.id === id ? response.data : f)));
         } catch (err: unknown) {
-            setFatList(prev => prev.map(f => (f.id === id ? { ...f, ...updates } : f)));
+            handleError(err, 'Failed to update FAT');
+            throw err;
         }
-    }, []);
+    }, [handleError]);
 
     const deleteFAT = useCallback(async (id: string) => {
         try {
-            await api.delete(`/fat/${id}`);
+            await api.delete(`/fat/${id}/`);
             setFatList(prev => prev.filter(f => f.id !== id));
             setFatDetails(prev => {
                 const newDetails = { ...prev };
@@ -193,30 +118,24 @@ export const FATProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 return newDetails;
             });
         } catch (err: unknown) {
-            setFatList(prev => prev.filter(f => f.id !== id));
-            setFatDetails(prev => {
-                const newDetails = { ...prev };
-                delete newDetails[id];
-                return newDetails;
-            });
+            handleError(err, 'Failed to delete FAT');
+            throw err;
         }
-    }, []);
+    }, [handleError]);
 
     const saveFATDetails = useCallback(async (fatId: string, details: FATDetailItem[]) => {
         try {
-            await api.put(`/fat/${fatId}/details`, details);
+            const response = await api.put(`/fat/${fatId}/details/`, details); // 注意：後端 API 接收 list body
             setFatDetails(prev => ({ ...prev, [fatId]: details }));
+            // 更新 list 中的 hasDetails 狀態 (後端應該會回傳更新後的 FAT 物件)
             setFatList(prev => prev.map(f =>
                 f.id === fatId ? { ...f, hasDetails: details.length > 0 } : f
             ));
         } catch (err: unknown) {
-            // API 失敗時使用本地更新
-            setFatDetails(prev => ({ ...prev, [fatId]: details }));
-            setFatList(prev => prev.map(f =>
-                f.id === fatId ? { ...f, hasDetails: details.length > 0 } : f
-            ));
+            handleError(err, 'Failed to save FAT details');
+            throw err;
         }
-    }, []);
+    }, [handleError]);
 
     const value = useMemo(
         () => ({ fatList, fatDetails, loading, error, refetch: fetchFATs, addFAT, updateFAT, deleteFAT, saveFATDetails }),

@@ -1,0 +1,902 @@
+.container {
+    min-height: 100vh;
+    background: #f3f4f6;
+    padding: 24px;
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.headerLeft {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.headerRight {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.header h1 {
+    font-size: 28px;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0;
+}
+
+.searchInput {
+    padding: 10px 16px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    width: 300px;
+    background: white;
+    color: #1f2937;
+    transition: border-color 0.2s;
+}
+
+.searchInput:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.searchInput::placeholder {
+    color: #9ca3af;
+}
+
+.summarySection {
+    background: white;
+    border-radius: 12px;
+    padding: 28px 32px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+    margin-bottom: 24px;
+    border: 1px solid #e5e7eb;
+    transition: box-shadow 0.2s ease;
+}
+
+.summarySection:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+.summaryTitle {
+    font-size: 22px;
+    font-weight: 700;
+    color: #111827;
+    margin: 0 0 24px 0;
+    letter-spacing: -0.02em;
+}
+
+.statsContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.statusStatsGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+.statItem {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.statIcon {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.statIcon svg {
+    width: 24px;
+    height: 24px;
+    stroke-width: 2;
+}
+
+.greenIcon {
+    color: #10b981;
+}
+
+.yellowIcon {
+    color: #f59e0b;
+}
+
+.pinkIcon {
+    color: #ec4899;
+}
+
+.orangeIcon {
+    color: #f97316;
+}
+
+.grayIcon {
+    color: #6b7280;
+}
+
+.blueIcon {
+    color: #3b82f6;
+}
+
+.statContent {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.statLabel {
+    font-size: 13px;
+    font-weight: 500;
+    color: #6b7280;
+    line-height: 1.4;
+}
+
+.statValue {
+    font-size: 24px;
+    font-weight: 600;
+    color: #111827;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+}
+
+.content {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    overflow-x: auto;
+}
+
+.addNewButton {
+    padding: 10px 20px;
+    background: #10b981;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.addNewButton:hover {
+    background: #059669;
+}
+
+/* --- Modern Web UI Styles --- */
+.webEditor {
+    width: 100%;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.webHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+}
+
+.webHeaderLeft h1 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 4px 0;
+}
+
+.webHeaderLeft p {
+    font-size: 13px;
+    color: #64748b;
+    margin: 0;
+}
+
+.webHeaderRight {
+    display: flex;
+    gap: 12px;
+}
+
+.card {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+}
+
+.cardHeader {
+    padding: 16px 24px;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cardHeader h2 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #334155;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cardContent {
+    padding: 24px;
+}
+
+.grid3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+}
+
+.grid2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+}
+
+.formGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.formGroup label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748b;
+}
+
+.modernInput,
+.modernSelect {
+    width: 100%;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 14px;
+    color: #1e293b;
+    background: #fff;
+    transition: all 0.2s;
+}
+
+.modernInput:focus,
+.modernSelect:focus {
+    outline: none;
+    background: #fff;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.criteriaBox {
+    background: #f8faff;
+    border: 1px solid #eef4ff;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    color: #475569;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+}
+
+.underlineInput {
+    width: 100%;
+    border: none;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 8px 0;
+    font-size: 14px;
+    background: transparent;
+    transition: all 0.2s;
+}
+
+.underlineInput:focus {
+    outline: none;
+    border-bottom-color: #3b82f6;
+}
+
+.webTable {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.webTable th {
+    background: #fff;
+    padding: 16px 24px;
+    text-align: left;
+    font-size: 14px;
+    font-weight: 600;
+    color: #475569;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.webTable td {
+    padding: 16px 24px;
+    border-bottom: 1px solid #f8fafc;
+    vertical-align: middle;
+}
+
+.webItemNo {
+    font-size: 13px;
+    color: #94a3b8;
+    padding-top: 10px;
+}
+
+.webItemText {
+    font-weight: 600;
+    color: #334155;
+}
+
+.webCriteria {
+    font-size: 13px;
+    color: #64748b;
+}
+
+.statusChip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 90px;
+}
+
+.chipPass {
+    background: #e8f9f1;
+    color: #10b981;
+}
+
+.chipPass:hover {
+    background: #d1f4e4;
+}
+
+.chipFail {
+    background: #fff1f2;
+    color: #f43f5e;
+}
+
+.chipFail:hover {
+    background: #ffe4e6;
+}
+
+.chipNA {
+    background: #f8fafc;
+    color: #94a3b8;
+}
+
+.cardFooter {
+    padding: 16px 24px;
+    background: #f8fafc;
+    border-top: 1px solid #f1f5f9;
+    display: flex;
+    justify-content: flex-end;
+    gap: 24px;
+}
+
+.checkOption {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+    cursor: pointer;
+}
+
+.signatureGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.signatureCard {
+    border: 1px dashed #e2e8f0;
+    border-radius: 12px;
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: #fcfdfe;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.signatureCard:hover {
+    border-color: #3b82f6;
+    background: #f8fafc;
+}
+
+.signatureIcon {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    background: #f1f5f9;
+    border-radius: 50%;
+    padding: 8px;
+}
+
+.signatureTitle {
+    font-size: 14px;
+    font-weight: 700;
+    color: #475569;
+}
+
+.signatureHelper {
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+/* --- End of Modern UI --- */
+
+.editorWrapper {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0;
+    margin-bottom: 40px;
+}
+
+/* 列印區域容器，模擬 A4 */
+.printablePage {
+    background: white;
+    width: 210mm;
+    min-height: 297mm;
+    padding: 15mm;
+    box-sizing: border-box;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+    color: #000;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    position: relative;
+}
+
+@media print {
+    :global(body) {
+        visibility: hidden;
+    }
+
+    .printablePage {
+        visibility: visible;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 210mm;
+        height: auto;
+        min-height: 297mm;
+        padding: 10mm;
+        margin: 0;
+        box-shadow: none;
+        background: white;
+        z-index: 9999;
+    }
+
+    .printablePage * {
+        visibility: visible;
+    }
+
+    .printHidden {
+        display: none !important;
+    }
+}
+
+/* 表頭專業佈局 (3欄) */
+.headerTable {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1pt solid #000;
+    margin-bottom: 0;
+}
+
+.headerTable td {
+    border: 1pt solid #000;
+    padding: 10px;
+    vertical-align: middle;
+}
+
+.headerCompanyCol {
+    width: 25%;
+    text-align: left;
+}
+
+.headerTitleCol {
+    width: 50%;
+    text-align: center;
+}
+
+.headerInfoCol {
+    width: 25%;
+    padding: 0 !important;
+}
+
+.headerInfoRow {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 8px;
+    font-size: 11px;
+}
+
+.headerInfoRow:not(:last-child) {
+    border-bottom: 1pt solid #000;
+}
+
+.headerInfoLabel {
+    font-weight: bold;
+}
+
+.headerInfoValue {
+    font-family: tabular-nums;
+}
+
+/* 格狀資訊區塊 */
+.infoGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 1pt solid #000;
+    border-top: none;
+    /* Already has table border above */
+    margin-bottom: 0;
+    /* Removed margin */
+}
+
+.infoItem {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    border-bottom: 1pt solid #000;
+}
+
+/* 移除最後一行的下邊框 */
+.infoGrid>div:nth-last-child(-n+2) {
+    border-bottom: none;
+}
+
+/* 左側垂直邊框 */
+.infoGrid>div:nth-child(even) {
+    border-left: 1pt solid #000;
+}
+
+.infoLabel {
+    padding: 6px 10px;
+    /* Reduced from 10px */
+    background: #fff;
+    border-right: 1pt solid #000;
+    font-size: 13px;
+    /* Reduced from 14px */
+    font-weight: bold;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.infoValue {
+    padding: 6px 10px;
+    /* Reduced from 10px */
+    font-size: 14px;
+    /* Reduced from 15px */
+    display: flex;
+    align-items: center;
+    font-weight: 500;
+}
+
+.infoValue textarea {
+    width: 100%;
+    border: 1pt solid #e2e8f0;
+    outline: none;
+    font-size: 13px;
+    background: #f8fafc;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-family: inherit;
+    resize: none;
+    transition: all 0.2s;
+    line-height: 1.5;
+}
+
+.infoValue textarea:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+.infoValue textarea:focus {
+    background: #fff;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.infoValue input,
+.reInspectionItem input {
+    width: 100%;
+    border: 1pt solid #e2e8f0;
+    outline: none;
+    font-size: 13px;
+    background: #f8fafc;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.infoValue input {
+    padding: 4px 8px;
+}
+
+.reInspectionItem input {
+    padding: 6px 12px;
+}
+
+.infoValue input:hover,
+.reInspectionItem input:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+.infoValue input:focus,
+.reInspectionItem input:focus {
+    background: #fff;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+@media print {
+
+    .infoValue input,
+    .infoValue textarea,
+    .reInspectionItem input {
+        background: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+        resize: none !important;
+    }
+}
+
+/* 查驗明細表 */
+.itemsTable {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1pt solid #000;
+    margin-bottom: 0;
+    /* Removed margin to close gap with footer */
+    table-layout: fixed;
+    margin-top: -1pt;
+    /* Overlap with infoGrid */
+}
+
+.itemsTable th,
+.itemsTable td {
+    border: 1pt solid #000;
+    padding: 8px 10px;
+    font-size: 13px;
+    word-wrap: break-word;
+}
+
+.itemsTable thead th {
+    background: #f8fafc;
+    font-weight: bold;
+    text-align: center;
+}
+
+.tableInput {
+    width: 100%;
+    border: 1pt solid #e2e8f0;
+    background: #f8fafc;
+    border-radius: 4px;
+    padding: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    resize: vertical;
+    outline: none;
+    transition: all 0.2s;
+    display: block;
+}
+
+.tableInput:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+.tableInput:focus {
+    background: #fff;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+@media print {
+    .tableInput {
+        background: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+        resize: none !important;
+    }
+}
+
+/* 查驗結果按紐樣式 */
+.resultBtn {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    border: none;
+    font-size: 18px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+/* 底部聲明與簽名 */
+.footerSection {
+    margin-top: -1pt;
+    /* Overlap with itemsTable */
+}
+
+.statementBox {
+    border: 1pt solid #000;
+    padding: 6px 10px;
+    /* Reduced padding */
+    margin-bottom: 0;
+    /* Removed gap with signature table */
+    font-size: 12px;
+}
+
+/* Signature Table Styles */
+/* Bottom Layout */
+.bottomLayout {
+    display: flex;
+    border: 1pt solid #000;
+    margin-top: -1pt;
+    /* Changed from 10px to overlap */
+}
+
+/* Signature Table Styles */
+.signatureTable {
+    flex: 1;
+    border-collapse: collapse;
+    border: none;
+    /* Border handled by container */
+    margin-bottom: 0;
+    table-layout: fixed;
+}
+
+.signatureTable td {
+    border: 1pt solid #000;
+    padding: 6px;
+    /* Reduced from 8px */
+    vertical-align: middle;
+}
+
+.signatureLabelCell {
+    font-weight: 700;
+    font-size: 14px;
+    background-color: #fff;
+    white-space: nowrap;
+    padding: 8px;
+    /* Reset padding */
+    text-align: center;
+    /* Center align */
+}
+
+/* Specific column widths for the top 4-column layout */
+.signatureTable tr td:nth-child(1).signatureLabelCell {
+    width: 25%;
+    /* Re-inspection Label (Reduced from 35%) */
+}
+
+.signatureTable tr td:nth-child(2).signatureValueCell {
+    width: 25%;
+    /* Re-inspection Value */
+}
+
+.signatureTable tr td:nth-child(3).signatureLabelCell {
+    width: 15%;
+    /* NCR Label */
+}
+
+.signatureTable tr td:nth-child(4).signatureValueCell {
+    width: 35%;
+    /* NCR Value (Increased to balance) */
+}
+
+.signatureValueCell {
+    position: relative;
+    padding: 0;
+}
+
+.signatureValueCell input {
+    width: 100%;
+    height: 100%;
+    border: none;
+    outline: none;
+    background: transparent;
+    padding: 8px;
+    font-size: 14px;
+    text-align: center;
+}
+
+.signatureHeaderCell {
+    font-weight: 700;
+    font-size: 13px;
+    text-align: center;
+    background-color: #fff;
+    padding: 6px;
+    border-bottom: 1pt solid #000;
+}
+
+.signatureSignCell {
+    height: 60px;
+    /* Reduced from 80px for compactness */
+}
+
+.signatureDateCell {
+    height: 60px;
+    /* Reduced from 80px */
+    text-align: center;
+    font-family: "KaiTi", "BiauKai", serif;
+    font-size: 24px;
+    /* Slightly reduced */
+    color: #1e40af;
+    font-style: italic;
+    vertical-align: middle;
+}
+
+.remarkSection {
+    width: 250px;
+    /* Adjusted width */
+    border-right: 1pt solid #000;
+    padding: 8px;
+    font-size: 10px;
+    color: #444;
+    display: flex;
+    flex-direction: column;
+}
+
+.watermark {
+    text-align: center;
+    font-style: italic;
+    color: #cbd5e1;
+    font-size: 10px;
+}
+
+/* Fix double borders in signature section */
+.bottomLayout .signatureTable tr td:last-child {
+    border-right: none;
+}
+
+.bottomLayout .signatureTable tr:last-child td {
+    border-bottom: none;
+}
+
+.bottomLayout .signatureTable tr:first-child td {
+    border-top: none;
+}
+
+.bottomLayout .signatureTable tr td:first-child {
+    border-left: none;
+}

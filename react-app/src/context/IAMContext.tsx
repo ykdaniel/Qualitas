@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useMemo, useEffect, useCallback, ReactNode } from 'react';
+import { AxiosError } from 'axios';
 import api, * as apiService from '../services/api';
+import { useAuth } from './AuthContext';
 import { useErrorHandler } from '../hooks/useErrorHandler';
 import { getErrorMessage } from '../utils/errorUtils';
 
@@ -35,14 +37,13 @@ interface IAMContextType {
 
 const IAMContext = createContext<IAMContextType | undefined>(undefined);
 
-// NOTE: localStorage 備援已移除，API 錯誤會直接顯示給使用者
-
 export const IAMProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [users, setUsers] = useState<User[]>([]);
     const [roles, setRoles] = useState<Role[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const { handleError } = useErrorHandler();
+    const { isAuthenticated } = useAuth();
 
     const fetchData = useCallback(async () => {
         setLoading(true);
@@ -53,8 +54,6 @@ export const IAMProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 apiService.getRoles(),
             ]);
 
-            // Transform API data to match Context interfaces
-            // API User: id (number), Context User: id (string)
             const formattedUsers: User[] = usersData.map(u => ({
                 id: String(u.id),
                 name: u.full_name || u.username,
@@ -76,6 +75,12 @@ export const IAMProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         } catch (err: unknown) {
             const errorMsg = getErrorMessage(err, 'Failed to fetch IAM data');
             setError(errorMsg);
+
+            // Skip alert toast for 401 errors during background fetch or refresh
+            if (err instanceof AxiosError && err.response?.status === 401) {
+                return;
+            }
+
             handleError(err, 'iam.fetchError');
         } finally {
             setLoading(false);
@@ -83,22 +88,21 @@ export const IAMProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, [handleError]);
 
     useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+        if (isAuthenticated) {
+            fetchData();
+        }
+    }, [fetchData, isAuthenticated]);
 
     // User CRUD
     const addUser = useCallback(async (user: Omit<User, 'id'>): Promise<User> => {
         try {
-            // Find role_id from role name
             const roleObj = roles.find(r => r.name === user.role);
-            const roleId = roleObj ? Number(roleObj.id) : 2; // Default to user role if not found
+            const roleId = roleObj ? Number(roleObj.id) : 2;
 
-            // NOTE: IAM.tsx 使用直接 API 調用處理密碼，此函式為備用
-            // 此函式產生臨時密碼，適用於自動化或批次建立使用者的情境
             const payload: apiService.CreateUserPayload = {
                 username: user.name,
                 email: user.email,
-                password: `User_${Date.now()}`, // 臨時密碼
+                password: `User_${Date.now()}`,
                 role_id: roleId,
                 is_active: user.status === 'active',
             };
@@ -123,8 +127,6 @@ export const IAMProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const updateUser = useCallback(async (id: string, updates: Partial<User>) => {
         try {
-            // We need full payload for update usually, or partial. API supports partial.
-            // But we need to map frontend fields to backend
             const currentUser = users.find(u => u.id === id);
             if (!currentUser) return;
 
@@ -132,7 +134,7 @@ export const IAMProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const roleId = roleObj ? Number(roleObj.id) : undefined;
 
             const payload: apiService.UpdateUserPayload = {};
-            if (updates.name) payload.username = updates.name; // or full_name?
+            if (updates.name) payload.username = updates.name;
             if (updates.email) payload.email = updates.email;
             if (updates.status) payload.is_active = updates.status === 'active';
             if (roleId) payload.role_id = roleId;
@@ -144,26 +146,25 @@ export const IAMProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 ...updates,
                 name: res.full_name || res.username,
                 email: res.email,
-                role: res.role_name || currentUser.role, // Backend might not return role_name on update
+                role: res.role_name || currentUser.role,
                 status: res.is_active ? 'active' : 'inactive'
             };
 
             setUsers(prev => prev.map(u => (u.id === id ? updatedUser : u)));
         } catch (err: unknown) {
-            // Silently fail for update errors - state rollback not implemented
+            handleError(err, 'iam.updateUserError');
         }
-    }, [users, roles]);
+    }, [users, roles, handleError]);
 
     const deleteUser = useCallback(async (id: string) => {
         try {
             await apiService.deleteUser(Number(id));
             setUsers(prev => prev.filter(u => u.id !== id));
         } catch (err: unknown) {
-            // Silently fail for delete errors
+            handleError(err, 'iam.deleteUserError');
         }
-    }, []);
+    }, [handleError]);
 
-    // Role CRUD
     const addRole = useCallback(async (role: Omit<Role, 'id'>): Promise<Role> => {
         try {
             const payload: apiService.CreateRolePayload = {
@@ -181,9 +182,10 @@ export const IAMProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setRoles(prev => [...prev, newRole]);
             return newRole;
         } catch (err: unknown) {
+            handleError(err, 'iam.saveRoleError');
             throw err;
         }
-    }, []);
+    }, [handleError]);
 
     const updateRole = useCallback(async (id: string, updates: Partial<Role>) => {
         try {
@@ -201,18 +203,18 @@ export const IAMProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 permissions: res.permissions
             } : r)));
         } catch (err: unknown) {
-            // Silently fail for update errors
+            handleError(err, 'iam.updateRoleError');
         }
-    }, []);
+    }, [handleError]);
 
     const deleteRole = useCallback(async (id: string) => {
         try {
             await apiService.deleteRole(Number(id));
             setRoles(prev => prev.filter(r => r.id !== id));
         } catch (err: unknown) {
-            // Silently fail for delete errors
+            handleError(err, 'iam.deleteRoleError');
         }
-    }, []);
+    }, [handleError]);
 
     const value = useMemo(
         () => ({ users, roles, loading, error, refetch: fetchData, addUser, updateUser, deleteUser, addRole, updateRole, deleteRole }),

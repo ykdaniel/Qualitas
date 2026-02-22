@@ -3,6 +3,7 @@
 提供 API 路由的權限驗證功能
 """
 import os
+import logging
 from functools import wraps
 from typing import List, Optional
 from fastapi import Depends, HTTPException, status
@@ -12,17 +13,10 @@ from sqlalchemy.orm import Session
 from database import get_db
 import crud
 
-# JWT 設定 - 從環境變數讀取
-SECRET_KEY = os.getenv("SECRET_KEY")
-if not SECRET_KEY:
-    import warnings
-    warnings.warn(
-        "SECRET_KEY 未設定，使用預設值。請在 .env 檔案中設定 SECRET_KEY。",
-        UserWarning
-    )
-    SECRET_KEY = "qualitas-dev-secret-key-change-in-production"  # 與 main.py 保持一致
+logger = logging.getLogger(__name__)
 
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
+# JWT 設定 - 使用 core.config.settings
+# SECRET_KEY and ALGORITHM are now accessed via settings.SECRET_KEY and settings.ALGORITHM
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
@@ -33,14 +27,19 @@ class Permission:
     DELETE = "delete"
     MANAGE_USERS = "manage_users"
     MANAGE_ROLES = "manage_roles"
+    MANAGE_SETTINGS = "manage_settings"
 
+
+from core.config import settings
+
+# ...
 
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
 ):
     """
-    從 JWT token 解析當前使用者
+    從 JWT token 解析當前使用者並驗證
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -48,15 +47,19 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("user_id")
-        if user_id is None:
+        # 使用 jose 解析 token
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
             raise credentials_exception
-    except JWTError:
+    except JWTError as e:
+        logger.debug(f"JWT Error: {str(e)}")
         raise credentials_exception
     
-    user = crud.get_user(db, user_id)
+    # 從資料庫獲取代碼
+    user = crud.get_user_by_username(db, username=username)
     if user is None:
+        logger.debug(f"User not found for username: {username}")
         raise credentials_exception
     return user
 
@@ -76,16 +79,10 @@ async def get_user_permissions(
     if not role:
         return []
     
-    # 解析權限（可能是 JSON 字串或列表）
-    permissions = role.permissions
-    if isinstance(permissions, str):
-        import json
-        try:
-            permissions = json.loads(permissions)
-        except json.JSONDecodeError:
-            permissions = []
-    
-    return permissions or []
+    # 解析權限
+    # Fix: Role model uses permissions_rel relationship, incorrectly named 'permissions' in some legacy code
+    # We directly access the relationship to get Permission objects and extract their codes
+    return [p.code for p in role.permissions_rel]
 
 
 def require_permissions(required_permissions: List[str]):

@@ -285,6 +285,7 @@
     border-right: 2px solid #cbd5e1;
     border-bottom: 1px solid #e2e8f0;
     min-width: 150px;
+    height: 100%;
     font-weight: 600;
     color: #334155;
 }
@@ -309,6 +310,10 @@
     color: #1e293b;
 }
 
+.matrixRow {
+    height: 100%;
+}
+
 .matrixRow:hover .vendorStickyCell {
     background: #f0fdf4;
 }
@@ -318,12 +323,10 @@
     border-right: 1px solid #e2e8f0;
     border-bottom: 1px solid #e2e8f0;
     min-width: 60px;
-    height: 60px;
+    height: 100%;
     background: #ffffff;
     transition: background-color 0.1s;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    vertical-align: middle;
 }
 
 .matrixCell:hover {
@@ -344,10 +347,11 @@
     border-radius: 8px;
     cursor: pointer;
     transition: transform 0.1s, background-color 0.2s;
-    display: flex;
+    display: inline-flex;
     justify-content: center;
     align-items: center;
     border: 1px solid transparent;
+    margin: 0 auto;
 }
 
 .auditIndicator:hover {

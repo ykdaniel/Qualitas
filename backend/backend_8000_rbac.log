@@ -1,0 +1,20 @@
+C:\Users\YUKAI\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\pydantic\_internal\_config.py:383: UserWarning: Valid config keys have changed in V2:
+* 'orm_mode' has been renamed to 'from_attributes'
+  warnings.warn(message, UserWarning)
+INFO:     Started server process [14136]
+INFO:     Waiting for application startup.
+2026-02-14 21:32:22,391 - main - INFO - Background scheduler started.
+2026-02-14 21:32:22,392 - scheduler - INFO - [Scheduler] Starting scheduler loop...
+2026-02-14 21:32:22,392 - scheduler - INFO - [Scheduler] Next run at 2026-02-15 08:00:00 (waiting 37658 seconds)
+INFO:     Application startup complete.
+ERROR:    [Errno 10048] error while attempting to bind on address ('127.0.0.1', 8000): [winerror 10048] 一次只能用一個通訊端位址 (通訊協定/網路位址/連接埠)。
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+Running database migrations...
+Migrations completed.
+Running database seeding...
+DEBUG: Found 0 items in existing record.
+Items already empty.
+Updating existing Rebar ITP: QTS-RKS-HL-ITP-000001
+Rebar ITP seeded successfully.
+Seeding completed.

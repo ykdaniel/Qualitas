@@ -23,7 +23,6 @@ export interface FollowUpIssueItem {
 
 export const createColumns = (
     handleEdit: (id: string) => void,
-    handleViewDetails: (id: string) => void,
     handleDeleteClick: (id: string) => void,
     navigate: (path: string) => void,
     t: (key: string, params?: Record<string, string | number>) => string
@@ -220,15 +219,7 @@ export const createColumns = (
                         >
                             <Edit2 className="h-4 w-4" />
                         </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleViewDetails(issue.id)}
-                            title={t('common.details')}
-                            className="text-gray-500 hover:text-gray-700"
-                        >
-                            <Eye className="h-4 w-4" />
-                        </Button>
+
                         <Button
                             variant="ghost"
                             size="sm"

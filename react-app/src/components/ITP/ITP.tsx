@@ -1,54 +1,45 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
-import { useContractors } from '../../context/ContractorsContext';
-import { useITP, ITPItem } from '../../context/ITPContext';
-import { useNOI } from '../../context/NOIContext';
+import { useContractorsStore } from '../../store/contractorsStore';
+import { useITPStore } from '../../store/itpStore';
+import type { ITPItem } from '../../store/itpStore';
+import { useNOIStore } from '../../store/noiStore';
 import { checkITPReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
 import { getErrorMessage } from '../../utils/errorUtils';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './ITP.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
-import { ITPDetailModal, ITPDetailsViewModal } from './ITPModals';
+import { ITPDetailModal } from './ITPModals';
 import { BackButton } from '@/components/ui/BackButton';
+import { useDebounce } from '../../hooks/useDebounce';
 
 const ITP: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const { getActiveContractors } = useContractors();
-  const { itpList, loading, error, refetch, addITP, updateITP, deleteITP } = useITP();
-  const { noiList } = useNOI();
+  const { getActiveContractors } = useContractorsStore();
+  const { itpList, loading, error, refetch, addITP, updateITP, updateITPDetail, deleteITP } = useITPStore();
+  const noiList = useNOIStore(state => state.noiList);
 
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState<string>('');
-  // Vendor and Status filters are now handled by DataTable
+  const debouncedSearch = useDebounce(searchQuery, 500);
+
+  // Trigger server-side refetch when debounced search changes
+  React.useEffect(() => {
+    refetch({ search: debouncedSearch });
+  }, [debouncedSearch, refetch]);
 
 
-  // Pre-filter data by Date Range and Global Search
+  // Data is now primarily filtered by backend.
   const processedData = useMemo(() => {
-    let filtered = [...itpList];
-
-
-    // Global Search (if search query exists)
-    if (searchQuery) {
-      const lowerQuery = searchQuery.toLowerCase();
-      filtered = filtered.filter(item =>
-        (item.referenceNo && item.referenceNo.toLowerCase().includes(lowerQuery)) ||
-        (item.vendor && item.vendor.toLowerCase().includes(lowerQuery)) ||
-        (item.description && item.description.toLowerCase().includes(lowerQuery)) ||
-        (item.status && item.status.toLowerCase().includes(lowerQuery))
-      );
-    }
-
-    return filtered;
-  }, [itpList, searchQuery]);
+    return itpList;
+  }, [itpList]);
 
   // Modal States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [currentItpId, setCurrentItpId] = useState<string | null>(null);
-  const [viewingItpId, setViewingItpId] = useState<string | null>(null);
 
   // Delete Confirmation State
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null; message: string }>({
@@ -104,15 +95,6 @@ const ITP: React.FC = () => {
     };
   }, [itpList]);
 
-  const handleAdd = (id: string) => {
-    navigate(`/itp/${id}`);
-  };
-
-  const handleViewDetails = (id: string) => {
-    setViewingItpId(id);
-    setIsDetailsModalOpen(true);
-  };
-
   const handleEdit = (id: string) => {
     setCurrentItpId(id);
     setIsEditModalOpen(true);
@@ -133,7 +115,8 @@ const ITP: React.FC = () => {
       } as Omit<ITPItem, 'id'>);
       setCurrentItpId(newItem.id);
       setIsEditModalOpen(true);
-    } catch (err: unknown) {
+    } catch (err: any) {
+      if (err?.response?.status === 401) return;
       const msg = getErrorMessage(err, t('itp.addError'));
       alert(t('itp.addError') + '：' + msg);
     }
@@ -159,11 +142,22 @@ const ITP: React.FC = () => {
       try {
         await deleteITP(deleteModal.id);
         setDeleteModal({ isOpen: false, id: null, message: '' });
-      } catch (error) {
+      } catch (error: any) {
+        if (error?.response?.status === 401) return;
         alert(t('itp.deleteError'));
       }
     }
   };
+
+  // Memoize columns to prevent DataTable from unnecessarily re-rendering
+  const columns = useMemo(() => createColumns(
+    handleEdit,
+    confirmDelete,
+    navigate,
+    t,
+    getActiveContractors(),
+    noiList
+  ), [t, getActiveContractors, noiList, navigate]);
 
   return (
     <div className={styles.container}>
@@ -347,13 +341,14 @@ const ITP: React.FC = () => {
                   </button>
                 </div>
               }
-              columns={createColumns(handleEdit, handleViewDetails, handleAdd, confirmDelete, navigate, t, getActiveContractors(), noiList)}
+              columns={columns}
               data={processedData}
               searchKey=""
               getRowClassName={(row) =>
                 row.status.toLowerCase() === 'void' ? styles.voidRow : ''
               }
               getRowId={(row) => row.id}
+              onRowClick={(row) => handleEdit(row.id)}
             />
           </>
         )}
@@ -373,13 +368,18 @@ const ITP: React.FC = () => {
         <ITPDetailModal
           itpId={currentItpId}
           existingItem={itpList.find(item => item.id === currentItpId)}
-          onSave={async (updates) => {
+          onSave={async (updates, details) => {
             try {
               await updateITP(currentItpId, updates);
+              if (details) {
+                await updateITPDetail(currentItpId, details);
+              }
               setIsEditModalOpen(false);
               setCurrentItpId(null);
-            } catch (error) {
-              alert(t('itp.updateError'));
+            } catch (error: any) {
+              if (error?.response?.status === 401) return;
+              const detail = error?.response?.data?.detail || t('itp.updateError');
+              alert(detail);
             }
           }}
           onClose={() => {
@@ -389,16 +389,7 @@ const ITP: React.FC = () => {
         />
       )}
 
-      {isDetailsModalOpen && viewingItpId && (
-        <ITPDetailsViewModal
-          itpId={viewingItpId}
-          itpItem={itpList.find(item => item.id === viewingItpId)}
-          onClose={() => {
-            setIsDetailsModalOpen(false);
-            setViewingItpId(null);
-          }}
-        />
-      )}
+
     </div>
   );
 };

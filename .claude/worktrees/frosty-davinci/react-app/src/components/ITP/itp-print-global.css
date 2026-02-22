@@ -1,0 +1,4 @@
+/* Base style to hide the portal in normal view */
+#itp-print-root {
+    display: none;
+}

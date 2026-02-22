@@ -11,7 +11,9 @@ def inspect_db():
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    tables = ["itp", "noi", "itr", "ncr", "obs", "pqp", "document_naming_rules"]
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('checklist', 'checklists');")
+    tables = [row[0] for row in cursor.fetchall()]
+
     
     for table in tables:
         print(f"\n--- Schema for table: {table} ---")

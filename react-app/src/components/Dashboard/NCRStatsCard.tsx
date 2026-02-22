@@ -1,18 +1,18 @@
-import { useNCR } from '../../context/NCRContext';
+import { useNCRStore } from '../../store/ncrStore';
 import { useDashboardFilter } from '../../context/DashboardFilterContext';
 import { useMemo } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import styles from './Dashboard.module.css';
 
 const NCRStatsCard: React.FC = () => {
-  const { ncrList } = useNCR();
+  const ncrList = useNCRStore(state => state.ncrList);
   const { selectedVendor } = useDashboardFilter();
 
   const stats = useMemo(() => {
-    const filteredList = selectedVendor === 'all' 
-      ? ncrList 
+    const filteredList = selectedVendor === 'all'
+      ? ncrList
       : ncrList.filter(item => item.vendor === selectedVendor);
-    
+
     const total = filteredList.length;
     const open = filteredList.filter(item => {
       const status = (item.status || '').toLowerCase();
@@ -82,7 +82,7 @@ const NCRStatsCard: React.FC = () => {
               </PieChart>
             </ResponsiveContainer>
           </div>
-          
+
           {/* 自定义图例 */}
           <div className={styles.ncrChartLegend}>
             {pieData.map((entry, index) => (

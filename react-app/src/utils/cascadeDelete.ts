@@ -1,6 +1,6 @@
-import { NOIItem } from '../context/NOIContext';
-import { NCRItem } from '../context/NCRContext';
-import { ITRItem } from '../context/ITRContext';
+import { NOIItem } from '../store/noiStore';
+import { NCRItem } from '../store/ncrStore';
+import { ITRItem } from '../store/itrStore';
 
 // FATItem interface for type checking
 interface FATItem {

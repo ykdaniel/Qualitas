@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useMemo, useEffect, useCallback, ReactNode } from 'react';
 import api from '../services/api';
 import { useErrorHandler } from '../hooks/useErrorHandler';
+import { useAuth } from './AuthContext';
 
 export interface FollowUpIssueItem {
     id: string;
@@ -51,9 +52,14 @@ export const FollowUpProvider: React.FC<{ children: ReactNode }> = ({ children }
         }
     }, [handleError]);
 
+    const { isAuthenticated } = useAuth();
+
     useEffect(() => {
-        fetchFollowUps();
-    }, [fetchFollowUps]);
+        if (isAuthenticated) {
+            fetchFollowUps();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isAuthenticated]);
 
     const addFollowUp = useCallback(async (item: Partial<FollowUpIssueItem>): Promise<FollowUpIssueItem> => {
         try {
@@ -69,7 +75,7 @@ export const FollowUpProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     const updateFollowUp = useCallback(async (id: string, updates: Partial<FollowUpIssueItem>) => {
         try {
-            const response = await api.put(`/followup/${id}`, updates);
+            const response = await api.put(`/followup/${id}/`, updates);
             setFollowUpList(prev => prev.map(f => (f.id === id ? response.data : f)));
         } catch (error) {
             handleError(error, 'Failed to update Follow-up Issue');
@@ -79,7 +85,7 @@ export const FollowUpProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     const deleteFollowUp = useCallback(async (id: string) => {
         try {
-            await api.delete(`/followup/${id}`);
+            await api.delete(`/followup/${id}/`);
             setFollowUpList(prev => prev.filter(f => f.id !== id));
         } catch (error) {
             handleError(error, 'Failed to delete Follow-up Issue');

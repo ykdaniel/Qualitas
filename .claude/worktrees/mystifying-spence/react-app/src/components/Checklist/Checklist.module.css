@@ -1,0 +1,518 @@
+.container {
+    min-height: 100vh;
+    background: #f3f4f6;
+    padding: 24px;
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.headerLeft {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.headerRight {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.header h1 {
+    font-size: 28px;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0;
+}
+
+.searchInput {
+    padding: 10px 16px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    width: 300px;
+    background: white;
+    color: #1f2937;
+    transition: border-color 0.2s;
+}
+
+.searchInput:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.searchInput::placeholder {
+    color: #9ca3af;
+}
+
+.summarySection {
+    background: white;
+    border-radius: 12px;
+    padding: 28px 32px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+    margin-bottom: 24px;
+    border: 1px solid #e5e7eb;
+    transition: box-shadow 0.2s ease;
+}
+
+.summarySection:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+.summaryTitle {
+    font-size: 22px;
+    font-weight: 700;
+    color: #111827;
+    margin: 0 0 24px 0;
+    letter-spacing: -0.02em;
+}
+
+.statsContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.statusStatsGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+.statItem {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.statIcon {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.statIcon svg {
+    width: 24px;
+    height: 24px;
+    stroke-width: 2;
+}
+
+.greenIcon {
+    color: #10b981;
+}
+
+.yellowIcon {
+    color: #f59e0b;
+}
+
+.pinkIcon {
+    color: #ec4899;
+}
+
+.orangeIcon {
+    color: #f97316;
+}
+
+.grayIcon {
+    color: #6b7280;
+}
+
+.blueIcon {
+    color: #3b82f6;
+}
+
+.statContent {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.statLabel {
+    font-size: 13px;
+    font-weight: 500;
+    color: #6b7280;
+    line-height: 1.4;
+}
+
+.statValue {
+    font-size: 24px;
+    font-weight: 600;
+    color: #111827;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+}
+
+.content {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    overflow-x: auto;
+}
+
+.addNewButton {
+    padding: 10px 20px;
+    background: #10b981;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.addNewButton:hover {
+    background: #059669;
+}
+
+.editorWrapper {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 0;
+    transform-origin: top center;
+    transform: scale(1.15);
+    margin-bottom: 120px;
+    /* 補償縮放後的下方留白 */
+}
+
+/* 列印區域容器，模擬 A4 */
+.printablePage {
+    background: white;
+    width: 210mm;
+    min-height: 297mm;
+    padding: 15mm;
+    box-sizing: border-box;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+    color: #000;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    position: relative;
+}
+
+@media print {
+    .printablePage {
+        width: 210mm;
+        height: 297mm;
+        padding: 10mm;
+        box-shadow: none;
+        margin: 0;
+    }
+
+    .printHidden {
+        display: none !important;
+    }
+}
+
+/* 表頭樣式 */
+.formHeader {
+    text-align: center;
+    margin-bottom: 5px;
+    padding-top: 15px;
+    padding-bottom: 15px;
+    position: relative;
+}
+
+.formHeader h1 {
+    font-size: 28px;
+    font-weight: 500;
+    margin: 0;
+}
+
+.formHeader h2 {
+    font-size: 32px;
+    font-weight: 900;
+    margin: 6px 0;
+}
+
+.formNo {
+    position: absolute;
+    bottom: 0;
+    right: 5px;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.linkedItp {
+    font-size: 11px;
+    color: #64748b;
+}
+
+/* 格狀資訊區塊 */
+.infoGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 2px solid #000;
+    margin-bottom: 20px;
+}
+
+.infoItem {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    border-bottom: 1px solid #000;
+}
+
+/* 移除最後一行的下邊框 */
+.infoGrid>div:nth-last-child(-n+2) {
+    border-bottom: none;
+}
+
+/* 左側垂直邊框 */
+.infoGrid>div:nth-child(even) {
+    border-left: 1px solid #000;
+}
+
+.infoLabel {
+    padding: 10px;
+    background: #fff;
+    border-right: 1px solid #000;
+    font-size: 14px;
+    font-weight: bold;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.infoValue {
+    padding: 10px;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    font-weight: 500;
+}
+
+.infoValue textarea {
+    width: 100%;
+    border: 1px solid #e2e8f0;
+    outline: none;
+    font-size: 13px;
+    background: #f8fafc;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-family: inherit;
+    resize: none;
+    transition: all 0.2s;
+    line-height: 1.5;
+}
+
+.infoValue textarea:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+.infoValue textarea:focus {
+    background: #fff;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.infoValue input,
+.reInspectionItem input {
+    width: 100%;
+    border: 1px solid #e2e8f0;
+    outline: none;
+    font-size: 13px;
+    background: #f8fafc;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.infoValue input {
+    padding: 4px 8px;
+}
+
+.reInspectionItem input {
+    padding: 6px 12px;
+}
+
+.infoValue input:hover,
+.reInspectionItem input:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+.infoValue input:focus,
+.reInspectionItem input:focus {
+    background: #fff;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+@media print {
+
+    .infoValue input,
+    .infoValue textarea,
+    .reInspectionItem input {
+        background: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+        resize: none !important;
+    }
+}
+
+/* 查驗明細表 */
+.itemsTable {
+    width: 100%;
+    border-collapse: collapse;
+    border: 2px solid #000;
+    margin-bottom: 10px;
+    table-layout: fixed;
+}
+
+.itemsTable th,
+.itemsTable td {
+    border: 1px solid #000;
+    padding: 8px 10px;
+    font-size: 13px;
+    word-wrap: break-word;
+}
+
+.itemsTable thead th {
+    background: #f8fafc;
+    font-weight: bold;
+    text-align: center;
+}
+
+.tableInput {
+    width: 100%;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    border-radius: 4px;
+    padding: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    resize: vertical;
+    outline: none;
+    transition: all 0.2s;
+    display: block;
+}
+
+.tableInput:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+.tableInput:focus {
+    background: #fff;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+@media print {
+    .tableInput {
+        background: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+        resize: none !important;
+    }
+}
+
+/* 查驗結果按紐樣式 */
+.resultBtn {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    border: none;
+    font-size: 18px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+/* 底部聲明與簽名 */
+.footerSection {
+    margin-top: 10px;
+}
+
+.statementBox {
+    border: 2px solid #000;
+    padding: 8px;
+    margin-bottom: 10px;
+    font-size: 12px;
+}
+
+.reInspectionGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 2px solid #000;
+    border-bottom: none;
+}
+
+.reInspectionItem {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    border-right: 1px solid #000;
+}
+
+.reInspectionItem:last-child {
+    border-right: none;
+}
+
+.signatureGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 2px solid #000;
+}
+
+.signatureBlock {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #000;
+    border-bottom: 1px solid #000;
+}
+
+.signatureBlock:last-child {
+    border-right: none;
+}
+
+.signatureLabel {
+    padding: 4px;
+    border-bottom: 1px solid #000;
+    background: #fff;
+    font-weight: bold;
+    font-size: 11px;
+    text-align: center;
+}
+
+.signatureContent {
+    flex: 1;
+    padding: 10px;
+    font-family: "KaiTi", "BiauKai", serif;
+    font-size: 26px;
+    color: #1e40af;
+    font-style: italic;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 50px;
+}
+
+.remarkSection {
+    padding: 8px;
+    border-right: 1px solid #000;
+    font-size: 10px;
+    color: #444;
+}
+
+.watermark {
+    margin-top: 20px;
+    text-align: center;
+    font-style: italic;
+    color: #cbd5e1;
+    font-size: 10px;
+}

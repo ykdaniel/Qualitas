@@ -77,31 +77,22 @@ export const getLocalizedStatus = (
 ): string => {
     const s = (status || 'Open').toLowerCase();
 
-    // 優先使用模組專屬翻譯
-    const statusMap: Record<string, string> = {
-        'open': `${prefix}.status.open`,
-        'closed': `${prefix}.status.closed`,
-        'under review': `${prefix}.status.underReview`,
-        'reject': `${prefix}.status.reject`,
-        'approved': `${prefix}.status.approved`,
-        'pending': `${prefix}.status.pending`,
-        'in progress': `${prefix}.status.inProgress`,
-        'planned': `${prefix}.status.planned`,
-        'completed': `${prefix}.status.completed`,
-    };
+    // 優先嘗試使用模組專屬翻譯 key
+    // 例如 noi.status.open, ncr.status.closed
+    const moduleKey = `${prefix}.status.${s.replace(/\s+/g, '')}`;
+    const moduleTranslated = t(moduleKey);
 
-    const key = statusMap[s];
-    if (key) {
-        const translated = t(key);
-        // 如果翻譯失敗（返回原 key），嘗試使用 common 前綴
-        if (translated !== key) return translated;
+    // 如果翻譯結果不等於 key，表示翻譯存在
+    if (moduleTranslated !== moduleKey) return moduleTranslated;
 
-        const commonKey = `common.status.${s.replace(' ', '')}`;
-        const commonTranslated = t(commonKey);
-        if (commonTranslated !== commonKey) return commonTranslated;
-    }
+    // 備用：使用 common 翻譯
+    // common.status.open
+    const commonKey = `common.status.${s.replace(/\s+/g, '')}`;
+    const commonTranslated = t(commonKey);
+    if (commonTranslated !== commonKey) return commonTranslated;
 
-    return status || t('common.status.open') || 'Open';
+    // 最後備用：回傳原始文字 (首字大寫)
+    return status || 'Open';
 };
 
 /**
@@ -128,6 +119,21 @@ export const truncateText = (text: string, maxLength: number): string => {
  * @param str - 要檢查的字串
  * @returns 是否為空
  */
-export const isEmpty = (str: string | undefined | null): boolean => {
-    return !str || str.trim().length === 0;
+
+/**
+ * 格式化角色名稱
+ * @param name - 原始角色名稱 (如 "QA_MANAGER", "admin")
+ * @returns 格式化後的角色名稱 (如 "QA Manager", "Admin")
+ */
+export const formatRoleName = (name: string): string => {
+    if (!name) return '';
+    return name
+        .replace(/_/g, ' ')
+        .toLowerCase()
+        .split(' ')
+        .map(word => {
+            if (['qa', 'qc', 'it', 'hse', 'ncr', 'fat', 'pqp', 'obs', 'noi', 'itr'].includes(word)) return word.toUpperCase();
+            return word.charAt(0).toUpperCase() + word.slice(1);
+        })
+        .join(' ');
 };

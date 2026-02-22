@@ -1,4 +1,4 @@
-import { Contractor } from '../context/ContractorsContext';
+import { Contractor } from '../store/contractorsStore';
 
 /**
  * 統一的編號生成工具函數

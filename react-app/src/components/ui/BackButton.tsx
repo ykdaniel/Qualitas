@@ -29,7 +29,7 @@ export const BackButton = React.forwardRef<HTMLButtonElement, BackButtonProps>(
                 type="button"
                 variant="default"
                 className={cn(
-                    "bg-[#11998e] hover:bg-[#0d7a72] text-white flex items-center gap-2 px-4 py-2 rounded-md transition-colors",
+                    "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 shadow-sm hover:shadow hover:-translate-y-0.5",
                     className
                 )}
                 onClick={handleClick}

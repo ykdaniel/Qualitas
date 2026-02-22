@@ -1,13 +1,13 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
-import { useContractors } from '../../context/ContractorsContext';
-import { useNCR } from '../../context/NCRContext';
-import { useOBS } from '../../context/OBSContext';
-import { useNOI } from '../../context/NOIContext';
-import { useITR } from '../../context/ITRContext';
-import { useITP } from '../../context/ITPContext';
-import { usePQP } from '../../context/PQPContext';
+import { useContractorsStore } from '../../store/contractorsStore';
+import { useNCRStore } from '../../store/ncrStore';
+import { useOBSStore } from '../../store/obsStore';
+import { useNOIStore } from '../../store/noiStore';
+import { useITRStore } from '../../store/itrStore';
+import { useITPStore } from '../../store/itpStore';
+import { usePQPStore } from '../../store/pqpStore';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './FollowUpIssue.module.css';
@@ -41,12 +41,12 @@ const FollowUpIssue: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   // 引入其他模組資料
-  const { ncrList } = useNCR();
-  const { obsList } = useOBS();
-  const { noiList } = useNOI();
-  const { itrList } = useITR();
-  const { itpList } = useITP();
-  const { pqpList } = usePQP();
+  const ncrList = useNCRStore(state => state.ncrList);
+  const obsList = useOBSStore(state => state.obsList);
+  const noiList = useNOIStore(state => state.noiList);
+  const itrList = useITRStore(state => state.itrList);
+  const itpList = useITPStore(state => state.itpList);
+  const pqpList = usePQPStore(state => state.pqpList);
 
   const fetchManualIssues = async () => {
     setLoading(true);
@@ -265,10 +265,7 @@ const FollowUpIssue: React.FC = () => {
     setIsEditModalOpen(true);
   };
 
-  const handleViewDetails = (id: string) => {
-    setViewingIssueId(id);
-    setIsDetailsModalOpen(true);
-  };
+
 
   const handleAddNew = () => {
     setCurrentIssueId(null);
@@ -462,7 +459,7 @@ const FollowUpIssue: React.FC = () => {
               {t('followup.addNew')}
             </button>
           }
-          columns={createColumns(handleEdit, handleViewDetails, handleDeleteClick, navigate, t)}
+          columns={createColumns(handleEdit, handleDeleteClick, navigate, t)}
           data={filteredList}
           searchKey=""
           searchPlaceholder={t('common.search')}
@@ -471,6 +468,7 @@ const FollowUpIssue: React.FC = () => {
               ? 'bg-emerald-100/50 text-gray-500 hover:bg-emerald-200/50'
               : ''
           }
+          onRowClick={(row) => handleEdit(row.id)}
         />
       </div>
 
@@ -519,7 +517,7 @@ interface FollowUpIssueDetailModalProps {
 
 const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ issueId, existingItem, onSave, onClose }) => {
   const { t } = useLanguage();
-  const { getActiveContractors } = useContractors();
+  const { getActiveContractors } = useContractorsStore();
   const contractors = getActiveContractors();
   const [formData, setFormData] = useState<Partial<FollowUpIssueItem>>({
     issueNo: existingItem?.issueNo || '',

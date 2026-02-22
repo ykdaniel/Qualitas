@@ -12,11 +12,11 @@ import {
   LabelList,
 } from 'recharts';
 import { useLanguage } from '../../context/LanguageContext';
-import { useContractors } from '../../context/ContractorsContext';
-import { usePQP } from '../../context/PQPContext';
-import { useITP } from '../../context/ITPContext';
-import { useOBS } from '../../context/OBSContext';
-import { useNCR } from '../../context/NCRContext';
+import { useContractorsStore } from '../../store/contractorsStore';
+import { usePQPStore } from '../../store/pqpStore';
+import { useITPStore } from '../../store/itpStore';
+import { useOBSStore } from '../../store/obsStore';
+import { useNCRStore } from '../../store/ncrStore';
 import styles from './KPI.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns, KPIItem } from './columns';
@@ -40,11 +40,11 @@ const DEFAULT_WEIGHTS = { pqp: 0.25, itp: 0.25, obs: 0.25, ncr: 0.25 };
 const KPI: React.FC = () => {
   const navigate = useNavigate();
   const { t, language } = useLanguage();
-  const { getActiveContractors } = useContractors();
-  const { pqpList } = usePQP();
-  const { itpList } = useITP();
-  const { obsList } = useOBS();
-  const { ncrList } = useNCR();
+  const { getActiveContractors } = useContractorsStore();
+  const pqpList = usePQPStore(state => state.pqpList);
+  const itpList = useITPStore(state => state.itpList);
+  const obsList = useOBSStore(state => state.obsList);
+  const ncrList = useNCRStore(state => state.ncrList);
 
   const [weights, setWeights] = useState(DEFAULT_WEIGHTS);
   const [showWeights, setShowWeights] = useState(false);
@@ -398,7 +398,7 @@ const KPI: React.FC = () => {
               </select>
             </label>
           }
-          columns={createColumns(sortedMonths, t, language)}
+          columns={useMemo(() => createColumns(sortedMonths, t, language), [sortedMonths, t, language])}
           data={filteredTableRows}
           searchKey=""
           getRowId={(row) => row.vendor}

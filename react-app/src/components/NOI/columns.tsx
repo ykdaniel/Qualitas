@@ -1,15 +1,15 @@
 import { ColumnDef } from "@tanstack/react-table";
-import { NOIItem } from "../../context/NOIContext";
+import { NOIItem } from "../../store/noiStore";
 import { DataTableColumnHeader } from "@/components/Shared/DataTable/DataTableColumnHeader";
 import { Button } from "@/components/ui/button";
-import { Eye, Pencil, Trash2 } from "lucide-react";
-import { formatTime24h, getLocalizedStatus } from "../../utils/formatters";
+import { Pencil, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { StatusBadge } from "@/components/Shared/StatusBadge";
+import { formatTime24h, getLocalizedStatus, formatDateLocale } from "../../utils/formatters";
 import styles from "./NOI.module.css";
 
 export const createColumns = (
     handleEdit: (id: string) => void,
-    handleViewDetails: (id: string) => void,
     handleDeleteClick: (id: string) => void,
     t: (key: string) => string
 ): ColumnDef<NOIItem>[] => [
@@ -68,8 +68,11 @@ export const createColumns = (
                 />
             ),
             cell: ({ row }) => (
-                <div className="text-center">
-                    {getLocalizedStatus(row.getValue("status"), t)}
+                <div className="flex justify-center">
+                    <StatusBadge
+                        status={row.getValue("status")}
+                        label={getLocalizedStatus(row.getValue("status"), t)}
+                    />
                 </div>
             ),
             filterFn: (row, id, value) => {
@@ -109,14 +112,14 @@ export const createColumns = (
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title={t('noi.issueDate')} />
             ),
-            cell: ({ row }) => <div className="text-center">{row.getValue("issueDate")}</div>,
+            cell: ({ row }) => <div className="text-center">{formatDateLocale(row.getValue("issueDate"))}</div>,
         },
         {
             accessorKey: "inspectionDate",
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title={t('noi.inspectionDate')} />
             ),
-            cell: ({ row }) => <div className="text-center">{row.getValue("inspectionDate")}</div>,
+            cell: ({ row }) => <div className="text-center">{formatDateLocale(row.getValue("inspectionDate"))}</div>,
         },
         {
             accessorKey: "inspectionTime",
@@ -155,15 +158,7 @@ export const createColumns = (
                         >
                             <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-blue-500 hover:text-blue-600 hover:bg-blue-100"
-                            onClick={() => handleViewDetails(noi.id)}
-                            title={t('noi.tooltip.details')}
-                        >
-                            <Eye className="h-4 w-4" />
-                        </Button>
+
                         <Button
                             variant="ghost"
                             size="icon"

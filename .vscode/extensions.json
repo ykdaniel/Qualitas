@@ -1,5 +1,13 @@
 {
     "recommendations": [
-        "dwtexe.cursor-stats"
+        "dwtexe.cursor-stats",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "eamodio.gitlens",
+        "usernamehw.errorlens",
+        "antfu.vite"
     ]
 }

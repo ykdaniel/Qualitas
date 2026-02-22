@@ -1,0 +1,7 @@
+INFO:     Started server process [8912]
+INFO:     Waiting for application startup.
+2026-02-14 20:45:31,879 - main - INFO - Background scheduler started.
+2026-02-14 20:45:31,880 - scheduler - INFO - [Scheduler] Starting scheduler loop...
+2026-02-14 20:45:31,880 - scheduler - INFO - [Scheduler] Next run at 2026-02-15 08:00:00 (waiting 40468 seconds)
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8004 (Press CTRL+C to quit)

@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
-import { useContractors } from '../../context/ContractorsContext';
-import { useNOI } from '../../context/NOIContext';
-import { useNCR, NCRItem } from '../../context/NCRContext';
-import { useITR } from '../../context/ITRContext';
+import { useContractorsStore } from '../../store/contractorsStore';
+import { useNOIStore } from '../../store/noiStore';
+import { useNCRStore } from '../../store/ncrStore';
+import type { NCRItem } from '../../store/ncrStore';
+import { useITRStore } from '../../store/itrStore';
 import { checkNCRReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './NCR.module.css';
@@ -12,37 +13,28 @@ import { NCRDetailModal, NCRDetailsViewModal, NCRDetailData } from './NCRModals'
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { BackButton } from '@/components/ui/BackButton';
+import { useDebounce } from '../../hooks/useDebounce';
 
 const NCR: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const { getActiveContractors } = useContractors();
-  const { ncrList, loading, error, refetch, addNCR, updateNCR, deleteNCR } = useNCR();
-  const { itrList } = useITR();
+  const { getActiveContractors } = useContractorsStore();
+  const { ncrList, loading, error, refetch, addNCR, updateNCR, deleteNCR } = useNCRStore();
+  const itrList = useITRStore(state => state.itrList);
 
   // Search & Filter States
-
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 500);
 
-  // Pre-filter data by Date Range and Global Search
+  // Trigger server-side refetch when debounced search changes
+  React.useEffect(() => {
+    refetch({ search: debouncedSearch });
+  }, [debouncedSearch, refetch]);
+
+  // Data is now primarily filtered by backend.
   const filteredList = useMemo(() => {
-    let filtered = [...ncrList];
-
-
-    // Global Search
-    if (searchQuery) {
-      const lowerQuery = searchQuery.toLowerCase();
-      filtered = filtered.filter(item =>
-        (item.documentNumber && item.documentNumber.toLowerCase().includes(lowerQuery)) ||
-        (item.vendor && item.vendor.toLowerCase().includes(lowerQuery)) ||
-        (item.description && item.description.toLowerCase().includes(lowerQuery)) ||
-        (item.status && item.status.toLowerCase().includes(lowerQuery)) ||
-        (item.subject && item.subject.toLowerCase().includes(lowerQuery))
-      );
-    }
-
-    return filtered;
-  }, [ncrList, searchQuery]);
+    return ncrList;
+  }, [ncrList]);
 
   // Modal States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -85,11 +77,6 @@ const NCR: React.FC = () => {
 
   const handleAdd = (id: string) => {
     navigate(`/ncr/${id}`);
-  };
-
-  const handleViewDetails = (id: string) => {
-    setViewingNcrId(id);
-    setIsDetailsModalOpen(true);
   };
 
   const handleEdit = (id: string) => {
@@ -135,19 +122,24 @@ const NCR: React.FC = () => {
         attachments: details.attachments,
       };
 
-      if (existingItem) {
-        await updateNCR(currentNcrId, updatedItem);
-      } else {
-        const newNCR = await addNCR(updatedItem as Omit<NCRItem, 'id'>);
-        setNcrDetails(prev => {
-          const newDetails = { ...prev };
-          newDetails[newNCR.id] = details;
-          return newDetails;
-        });
+      try {
+        if (existingItem) {
+          await updateNCR(currentNcrId, updatedItem);
+        } else {
+          const newNCR = await addNCR(updatedItem as Omit<NCRItem, 'id'>);
+          setNcrDetails(prev => {
+            const newDetails = { ...prev };
+            newDetails[newNCR.id] = details;
+            return newDetails;
+          });
+        }
+        setIsEditModalOpen(false);
+        setCurrentNcrId(null);
+      } catch (error: any) {
+        const detail = error?.response?.data?.detail || t('common.saveFailed') || 'Save failed';
+        alert(detail);
       }
     }
-    setIsEditModalOpen(false);
-    setCurrentNcrId(null);
   };
 
   const confirmDelete = (id: string) => {
@@ -170,6 +162,9 @@ const NCR: React.FC = () => {
       setDeleteModal({ isOpen: false, id: null, message: '' });
     }
   };
+
+  // Columns memoization
+  const columns = useMemo(() => createColumns(handleEdit, confirmDelete, t), [t]);
 
   return (
     <div className={styles.container}>
@@ -263,7 +258,7 @@ const NCR: React.FC = () => {
                   {t('ncr.addNew')}
                 </button>
               }
-              columns={createColumns(handleEdit, handleViewDetails, confirmDelete, t)}
+              columns={columns}
               data={filteredList}
               searchKey=""
               searchPlaceholder={t('ncr.searchPlaceholder')}
@@ -272,6 +267,7 @@ const NCR: React.FC = () => {
                   ? 'bg-emerald-100/50 text-gray-500 hover:bg-emerald-200/50'
                   : ''
               }
+              onRowClick={(row) => handleEdit(row.id)}
             />
           </>
         )}

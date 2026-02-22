@@ -4,13 +4,13 @@ const http = require('http');
 const rateLimit = require('express-rate-limit');
 
 const app = express();
-const PORT = 3001;
-const PYTHON_API = 'http://localhost:8000';
+const PORT = 3002;
+const PYTHON_API = 'http://127.0.0.1:8000';
 
 // Security: Rate Limiting - 防止暴力破解和 DoS
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 分鐘
-    max: 10, // 每個 IP 最多 10 次登入嘗試
+    max: 100, // 放寬限制：每個 IP 最多 100 次登入嘗試
     message: { detail: 'Too many login attempts, please try again later' },
     standardHeaders: true,
     legacyHeaders: false,
@@ -18,7 +18,7 @@ const authLimiter = rateLimit({
 
 const apiLimiter = rateLimit({
     windowMs: 1 * 60 * 1000, // 1 分鐘
-    max: 500, // 每個 IP 每分鐘 500 次請求（放寬限制以適應前端同時載入多個模組）
+    max: 1000, // 放寬限制：每個 IP 每分鐘 1000 次請求
     message: { detail: 'Too many requests, please try again later' },
     standardHeaders: true,
     legacyHeaders: false,
@@ -45,6 +45,11 @@ const ENABLE_MOCK_AUTH = process.env.ENABLE_MOCK_AUTH === 'true';
 // Token 過期時間（毫秒）
 const TOKEN_EXPIRY_MS = 30 * 60 * 1000; // 30 分鐘
 const tokenStore = new Map(); // 儲存 token 和過期時間
+
+// Mock Users for development/fallback
+const users = [
+    { id: '1', name: 'System Administrator', email: 'admin@example.com', role: 'admin' }
+];
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -83,9 +88,11 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
             console.log('[Backend] Python backend unavailable, using mock auth');
             // Mock 認證邏輯（僅開發用）
             if (username === 'admin@example.com' && password === 'admin') {
-                const tokenId = `mock_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                const userId = '1';
+                // Generates token format matched by /api/user/profile: mock_access_token_{userId}_{random}
+                const tokenId = `mock_access_token_${userId}_${Date.now()}`;
                 const expiresAt = Date.now() + TOKEN_EXPIRY_MS;
-                tokenStore.set(tokenId, { userId: '1', expiresAt });
+                tokenStore.set(tokenId, { userId, expiresAt });
 
                 return res.json({
                     access_token: tokenId,
@@ -126,7 +133,9 @@ app.get('/api/auth/verify', (req, res) => {
     }
 
     // 嘗試代理到 Python 後端驗證
-    return createCrudProxy('/api/auth')(req, res);
+    // 注意：app.get 路由中 req.url 是完整路徑，需要直接使用空前綴
+    const verifyProxy = createCrudProxy('');
+    return verifyProxy(req, res);
 });
 
 // User profile endpoint
@@ -153,38 +162,65 @@ app.get('/api/user/profile', (req, res) => {
         }
     }
 
-    return res.status(401).json({ detail: 'Invalid token' });
+    // 真實 JWT token → 轉發到 Python 後端
+    const profileProxy = createCrudProxy('');
+    return profileProxy(req, res);
 });
 
 // Proxy CRUD paths to Python FastAPI backend (port 8000)
 function createCrudProxy(pathPrefix) {
     return (req, res) => {
-        const opts = {
-            hostname: '127.0.0.1',
-            port: 8000,
-            path: pathPrefix + (req.url || ''),
-            method: req.method,
-            headers: {
-                'Content-Type': req.headers['content-type'] || 'application/json',
-                'Authorization': req.headers['authorization'] || ''
-            }
-        };
-        const body = req.method !== 'GET' && req.method !== 'HEAD' && req.body !== undefined
-            ? (typeof req.body === 'string' ? req.body : JSON.stringify(req.body))
-            : null;
-        if (body) opts.headers['Content-Length'] = Buffer.byteLength(body);
-        const proxyReq = http.request(opts, (proxyRes) => {
-            res.status(proxyRes.statusCode);
-            Object.keys(proxyRes.headers).forEach(k => res.setHeader(k, proxyRes.headers[k]));
-            proxyRes.pipe(res);
-        });
-        proxyReq.on('error', (err) => {
-            console.error('[Backend] Proxy error for ' + pathPrefix + ':', err.message);
-            res.status(502).json({ detail: 'Service unavailable. Start Python backend: cd backend && python -m uvicorn main:app --reload --port 8000' });
-        });
-        if (body) proxyReq.write(body);
-        proxyReq.end();
+        const targetPath = pathPrefix + (req.url || '');
+        _proxyRequest(req, res, targetPath, req.method, req.headers, req.body, pathPrefix);
     };
+}
+
+function _proxyRequest(originalReq, res, path, method, headers, body, pathPrefix, redirectCount) {
+    redirectCount = redirectCount || 0;
+    if (redirectCount > 3) {
+        return res.status(502).json({ detail: 'Too many redirects from backend' });
+    }
+    const opts = {
+        hostname: '127.0.0.1',
+        port: 8000,
+        path: path,
+        method: method,
+        headers: {
+            'Content-Type': headers['content-type'] || 'application/json',
+            'Authorization': headers['authorization'] || ''
+        }
+    };
+    const bodyData = (method !== 'GET' && method !== 'HEAD' && body !== undefined)
+        ? (typeof body === 'string' ? body : JSON.stringify(body))
+        : null;
+    if (bodyData) opts.headers['Content-Length'] = Buffer.byteLength(bodyData);
+    const proxyReq = http.request(opts, (proxyRes) => {
+        // Follow 307/308 redirects internally instead of passing to browser
+        if ((proxyRes.statusCode === 307 || proxyRes.statusCode === 308) && proxyRes.headers.location) {
+            try {
+                const redirectUrl = new URL(proxyRes.headers.location);
+                const newPath = redirectUrl.pathname + (redirectUrl.search || '');
+                return _proxyRequest(originalReq, res, newPath, method, headers, body, pathPrefix, redirectCount + 1);
+            } catch (e) {
+                // If Location is a relative path
+                return _proxyRequest(originalReq, res, proxyRes.headers.location, method, headers, body, pathPrefix, redirectCount + 1);
+            }
+        }
+        res.status(proxyRes.statusCode);
+        // Forward headers but remove location pointing to internal URLs
+        Object.keys(proxyRes.headers).forEach(k => {
+            if (k.toLowerCase() !== 'location') {
+                res.setHeader(k, proxyRes.headers[k]);
+            }
+        });
+        proxyRes.pipe(res);
+    });
+    proxyReq.on('error', (err) => {
+        console.error('[Backend] Proxy error for ' + (pathPrefix || path) + ':', err.message);
+        res.status(502).json({ detail: 'Service unavailable. Start Python backend: cd backend && python -m uvicorn main:app --reload --port 8000' });
+    });
+    if (bodyData) proxyReq.write(bodyData);
+    proxyReq.end();
 }
 const cron = require('node-cron');
 const axios = require('axios');
@@ -195,7 +231,7 @@ const { sendEmailNotification } = require('./mailService');
 // Proxy CRUD paths to Python FastAPI backend (port 8000)
 // ...
 
-['/itp', '/ncr', '/noi', '/itr', '/pqp', '/obs', '/contractors', '/settings', '/followup', '/users', '/roles', '/permissions', '/checklist', '/audit'].forEach(p => app.use('/api' + p, createCrudProxy('/api' + p)));
+['/itp', '/ncr', '/noi', '/itr', '/pqp', '/obs', '/contractors', '/settings', '/followup', '/users', '/roles', '/permissions', '/checklist', '/audit', '/fat', '/kpi', '/files'].forEach(p => app.use('/api' + p, createCrudProxy('/api' + p)));
 
 /**
  * 自動提醒邏輯：檢查 3 天後到期的案件
@@ -212,49 +248,51 @@ async function checkAndSendReminders() {
 
         // 1. Fetch NCRs
         const ncrsResp = await axios.get(`${PYTHON_API}/api/ncr/`);
-        const openNcrs = ncrsResp.data.filter(n =>
+        const openNcrs = Array.isArray(ncrsResp.data) ? ncrsResp.data.filter(n =>
             n.status !== 'Closed' && n.status !== '結案' && n.dueDate === targetDateStr
-        );
+        ) : [];
 
         // 2. Fetch FollowUp Issues
         const followupsResp = await axios.get(`${PYTHON_API}/api/followup/`);
-        const openFollowups = followupsResp.data.filter(f =>
+        const openFollowups = Array.isArray(followupsResp.data) ? followupsResp.data.filter(f =>
             f.status !== 'Closed' && f.status !== '結案' && f.dueDate === targetDateStr
-        );
+        ) : [];
 
-        // 3. Process NCR Reminders
+        // 3. Fetch Contractors (Optimized: Fetch once)
+        const contractorsResp = await axios.get(`${PYTHON_API}/api/contractors/`);
+        const contractors = Array.isArray(contractorsResp.data) ? contractorsResp.data : [];
+
+        // 4. Process NCR Reminders
         for (const ncr of openNcrs) {
             // Find contractor email
-            const contractorsResp = await axios.get(`${PYTHON_API}/api/contractors/`);
-            const contractor = contractorsResp.data.find(c => c.name === ncr.vendor);
+            const contractor = contractors.find(c => c.name === ncr.vendor);
             const email = contractor ? contractor.email : 'admin@example.com';
 
             await sendEmailNotification(email, `NCR: ${ncr.documentNumber}`, 'NCR', ncr.dueDate);
         }
 
-        // 4. Process FollowUp Reminders
+        // 5. Process FollowUp Reminders
         for (const f of openFollowups) {
             // Priority: Check if vendor email exists, otherwise assignedTo or admin
             let email = 'admin@example.com';
             if (f.vendor) {
-                const contractorsResp = await axios.get(`${PYTHON_API}/api/contractors/`);
-                const contractor = contractorsResp.data.find(c => c.name === f.vendor);
+                const contractor = contractors.find(c => c.name === f.vendor);
                 if (contractor) email = contractor.email;
             }
 
             await sendEmailNotification(email, `Follow-up Issue: ${f.issueNo} - ${f.title}`, 'Follow-up Issue', f.dueDate);
         }
 
-        console.log(`[Cron] Reminders process finished. Sent ${openNcrs.length + openFollowups.data?.length || 0} notifications.`);
+        console.log(`[Cron] Reminders process finished. Sent ${(openNcrs.length + openFollowups.length) || 0} notifications.`);
     } catch (error) {
         console.error('[Cron] Error during reminder process:', error.message);
     }
 }
 
-// 排程任務：每天早上 08:00 執行
-cron.schedule('0 8 * * *', () => {
-    checkAndSendReminders();
-});
+// 排程任務：每天早上 08:00 執行 (已由 Python Backend 取代，故停用)
+// cron.schedule('0 8 * * *', () => {
+//     checkAndSendReminders();
+// });
 
 // 手動觸發提醒測試端點
 app.post('/api/remind/test', async (req, res) => {

@@ -2,11 +2,12 @@ import React, { useState, useMemo, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
-import { useContractors } from '../../context/ContractorsContext';
-import { useNOI, NOIItem } from '../../context/NOIContext';
-import { useITP } from '../../context/ITPContext';
-import { useNCR } from '../../context/NCRContext';
-import { useITR } from '../../context/ITRContext';
+import { useContractorsStore } from '../../store/contractorsStore';
+import { useNOIStore } from '../../store/noiStore';
+import type { NOIItem } from '../../store/noiStore';
+import { useITPStore } from '../../store/itpStore';
+import { useNCRStore } from '../../store/ncrStore';
+import { useITRStore } from '../../store/itrStore';
 import { checkNOIReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
 import { formatTime24h, getLocalizedStatus } from '../../utils/formatters';
 import ConfirmModal from '../Shared/ConfirmModal';
@@ -15,10 +16,10 @@ import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { RowSelectionState } from '@tanstack/react-table';
 import { BackButton } from '@/components/ui/BackButton';
+import { useDebounce } from '../../hooks/useDebounce';
 
 import {
   NOIDetailModal,
-  NOIDetailsViewModal,
   NOIBulkAddModal,
   NOIDetailData
 } from './NOIModals';
@@ -26,48 +27,34 @@ import {
 const NOI: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const { getActiveContractors } = useContractors();
-  const { noiList, loading, error, refetch, addNOI, addBulkNOI, updateNOI, deleteNOI } = useNOI();
-  const { ncrList } = useNCR();
-  const { itrList } = useITR();
+  const { getActiveContractors } = useContractorsStore();
+  const { noiList, loading, error, refetch, addNOI, addBulkNOI, updateNOI, deleteNOI } = useNOIStore();
+  const ncrList = useNCRStore(state => state.ncrList);
+  const itrList = useITRStore(state => state.itrList);
 
   // Search and Filter States
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const debouncedSearch = useDebounce(searchQuery, 500);
+
+  // Trigger server-side refetch when debounced search or status filter changes
+  useEffect(() => {
+    refetch({
+      search: debouncedSearch,
+      status: statusFilter === 'all' ? undefined : statusFilter
+    });
+  }, [debouncedSearch, statusFilter, refetch]);
 
 
-  // 套用篩選後的資料
+  // Data is now primarily filtered by backend.
   const filteredData = useMemo(() => {
-    let data = [...noiList];
-
-    // 狀態篩選
-    if (statusFilter !== 'all') {
-      data = data.filter(item =>
-        (item.status || 'Open').toLowerCase() === statusFilter.toLowerCase()
-      );
-    }
-
-
-    // Global Search
-    if (searchQuery) {
-      const lowerQuery = searchQuery.toLowerCase();
-      data = data.filter(item =>
-        (item.referenceNo && item.referenceNo.toLowerCase().includes(lowerQuery)) ||
-        (item.contractor && item.contractor.toLowerCase().includes(lowerQuery)) ||
-        (item.package && item.package.toLowerCase().includes(lowerQuery)) ||
-        (item.itpNo && item.itpNo.toLowerCase().includes(lowerQuery))
-      );
-    }
-
-    return data;
-  }, [noiList, statusFilter, searchQuery]);
+    return noiList;
+  }, [noiList]);
 
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [currentNoiId, setCurrentNoiId] = useState<string | null>(null);
-  const [viewingNoiId, setViewingNoiId] = useState<string | null>(null);
   const [noiDetails, setNoiDetails] = useState<{ [key: string]: NOIDetailData }>({});
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null; message: string }>({
     isOpen: false,
@@ -168,11 +155,6 @@ const NOI: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleViewDetails = (id: string) => {
-    setViewingNoiId(id);
-    setIsDetailsModalOpen(true);
-  };
-
   const handleAddNew = () => {
     const newId = String(Date.now());
     setCurrentNoiId(newId);
@@ -203,16 +185,24 @@ const NOI: React.FC = () => {
         status: details.status || 'Open',
         attachments: details.attachments || [],
         ncrNumber: details.ncrNumber || '',
+        remark: details.remark || '',
+        closeoutDate: details.closeoutDate || '',
+        dueDate: details.dueDate || '',
       };
 
-      if (existingItem) {
-        await updateNOI(currentNoiId, updatedItem);
-      } else {
-        await addNOI(updatedItem, currentNoiId);
+      try {
+        if (existingItem) {
+          await updateNOI(currentNoiId, updatedItem);
+        } else {
+          await addNOI(updatedItem, currentNoiId);
+        }
+        setIsModalOpen(false);
+        setCurrentNoiId(null);
+      } catch (error: any) {
+        const detail = error?.response?.data?.detail || t('common.saveFailed') || 'Save failed';
+        alert(detail);
       }
     }
-    setIsModalOpen(false);
-    setCurrentNoiId(null);
   };
 
   const handleDeleteClick = (id: string) => {
@@ -229,6 +219,9 @@ const NOI: React.FC = () => {
       setDeleteModal({ isOpen: false, id: null, message: '' });
     }
   };
+
+  // Columns memoization
+  const columns = useMemo(() => createColumns(handleEdit, handleDeleteClick, t), [t]);
 
   return (
     <div className={styles.container}>
@@ -362,7 +355,7 @@ const NOI: React.FC = () => {
                   </button>
                 </div>
               }
-              columns={createColumns(handleEdit, handleViewDetails, handleDeleteClick, t)}
+              columns={columns}
               data={filteredData}
               searchKey=""
               searchPlaceholder={t('noi.searchPlaceholder')}
@@ -374,6 +367,7 @@ const NOI: React.FC = () => {
               rowSelection={rowSelection}
               onRowSelectionChange={setRowSelection}
               getRowId={(row) => row.id}
+              onRowClick={(row) => handleEdit(row.id)}
             />
           </>
         )}
@@ -390,25 +384,16 @@ const NOI: React.FC = () => {
             setIsModalOpen(false);
             setCurrentNoiId(null);
           }}
-        />
-      )}
-
-      {isDetailsModalOpen && viewingNoiId && (
-        <NOIDetailsViewModal
-          noiId={viewingNoiId}
-          noiItem={noiList.find(item => item.id === viewingNoiId)}
-          noiDetailData={noiDetails[viewingNoiId]}
-          onClose={() => {
-            setIsDetailsModalOpen(false);
-            setViewingNoiId(null);
-          }}
           onPrint={(data) => {
-            // Convert NOIDetailData back to NOIItem for the print logic
-            const printItem: NOIItem = {
-              ...data,
-              id: viewingNoiId,
-            } as NOIItem;
-            handleSinglePrint(printItem);
+            if (currentNoiId) {
+              const item = noiList.find(i => i.id === currentNoiId);
+              const printItem: NOIItem = {
+                ...item,
+                ...data,
+                id: currentNoiId,
+              } as NOIItem;
+              handleSinglePrint(printItem);
+            }
           }}
         />
       )}
@@ -530,8 +515,9 @@ const NOI: React.FC = () => {
             try {
               await addBulkNOI(nois);
               setIsBulkModalOpen(false);
-            } catch (err) {
-              alert('批次新增失敗：' + (err instanceof Error ? err.message : '未知錯誤'));
+            } catch (err: any) {
+              const msg = err instanceof Error ? err.message : (t('common.unknownError') || 'Unknown Error');
+              alert(`${t('noi.bulkAddFailed') || 'Bulk add failed'}: ${msg}`);
             }
           }}
           onClose={() => setIsBulkModalOpen(false)}

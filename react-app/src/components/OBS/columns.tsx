@@ -1,12 +1,11 @@
 import { ColumnDef } from "@tanstack/react-table";
-import { OBSItem } from "../../context/OBSContext";
+import { OBSItem } from "../../store/obsStore";
 import { DataTableColumnHeader } from "@/components/Shared/DataTable/DataTableColumnHeader";
 import { Button } from "@/components/ui/button";
-import { Eye, Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 
 export const createColumns = (
     handleEdit: (id: string) => void,
-    handleViewDetails: (id: string) => void,
     confirmDelete: (id: string) => void,
     t: (key: string) => string,
     getActiveContractors: () => { name: string }[]
@@ -135,15 +134,7 @@ export const createColumns = (
                         >
                             <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-blue-500 hover:text-blue-600 hover:bg-blue-100"
-                            onClick={() => handleViewDetails(obs.id)}
-                            title={t('common.details')}
-                        >
-                            <Eye className="h-4 w-4" />
-                        </Button>
+
                         <Button
                             variant="ghost"
                             size="icon"

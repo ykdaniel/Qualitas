@@ -1,8 +1,8 @@
 import React from 'react';
-import { useNOI } from '../context/NOIContext';
-import { useITP } from '../context/ITPContext';
-import { useNCR } from '../context/NCRContext';
-import { useITR } from '../context/ITRContext';
+import { useNOIStore } from '../store/noiStore';
+import { useITPStore } from '../store/itpStore';
+import { useNCRStore } from '../store/ncrStore';
+import { useITRStore } from '../store/itrStore';
 
 /**
  * 跨模組查詢工具組件
@@ -15,15 +15,17 @@ interface RelatedRecordsProps {
   onNavigate?: (module: string, id: string) => void;
 }
 
-export const RelatedRecordsButton: React.FC<RelatedRecordsProps> = ({ 
-  type, 
-  referenceValue, 
-  onNavigate 
+export const RelatedRecordsButton: React.FC<RelatedRecordsProps> = ({
+  type,
+  referenceValue,
+  onNavigate
 }) => {
-  const { noiList } = useNOI();
-  const { itpList } = useITP();
-  const { ncrList } = useNCR();
-  const { itrList, getITRByNOI, getITRByNCR } = useITR();
+  const noiList = useNOIStore(state => state.noiList);
+  const itpList = useITPStore(state => state.itpList);
+  const ncrList = useNCRStore(state => state.ncrList);
+  const itrList = useITRStore(state => state.itrList);
+  const getITRByNOI = useITRStore(state => state.getITRByNOI);
+  const getITRByNCR = useITRStore(state => state.getITRByNCR);
 
   const getRelatedRecords = () => {
     switch (type) {
@@ -31,24 +33,24 @@ export const RelatedRecordsButton: React.FC<RelatedRecordsProps> = ({
         // Find NOIs that reference this ITP
         const noiRefs = noiList.filter(noi => noi.itpNo === referenceValue);
         return { type: 'NOI', records: noiRefs };
-      
+
       case 'NOI':
         // Find ITRs that reference this NOI
         const itrRefs = getITRByNOI(referenceValue);
         return { type: 'ITR', records: itrRefs };
-      
+
       case 'NCR':
         // Find ITRs that reference this NCR
         const itrNcrRefs = getITRByNCR(referenceValue);
         return { type: 'ITR', records: itrNcrRefs };
-      
+
       default:
         return { type: '', records: [] };
     }
   };
 
   const related = getRelatedRecords();
-  
+
   if (related.records.length === 0) {
     return null;
   }
@@ -81,29 +83,31 @@ export const RelatedRecordsButton: React.FC<RelatedRecordsProps> = ({
  * 獲取關聯記錄的統計信息
  */
 export const useRelatedRecordsStats = (type: string, referenceValue: string) => {
-  const { noiList } = useNOI();
-  const { itrList, getITRByNOI, getITRByNCR } = useITR();
-  const { ncrList } = useNCR();
+  const noiList = useNOIStore(state => state.noiList);
+  const itrList = useITRStore(state => state.itrList);
+  const getITRByNOI = useITRStore(state => state.getITRByNOI);
+  const getITRByNCR = useITRStore(state => state.getITRByNCR);
+  const ncrList = useNCRStore(state => state.ncrList);
 
   const stats = React.useMemo(() => {
     switch (type) {
       case 'ITP':
         const noiCount = noiList.filter(noi => noi.itpNo === referenceValue).length;
         return { NOI: noiCount };
-      
+
       case 'NOI':
         const itrCount = getITRByNOI(referenceValue).length;
         return { ITR: itrCount };
-      
+
       case 'NCR':
         const itrNcrCount = getITRByNCR(referenceValue).length;
         return { ITR: itrNcrCount };
-      
+
       case 'FAT':
         // 目前沒有其他模組引用 FAT
         // 未來如果有模組引用 FAT，可以在這裡添加統計
         return {};
-      
+
       default:
         return {};
     }

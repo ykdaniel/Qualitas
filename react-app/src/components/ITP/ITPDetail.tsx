@@ -1,130 +1,87 @@
 import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api';
-import { useITR } from '../../context/ITRContext';
-import { ITRDetailsViewModal } from '../ITR/ITRModals';
+import { useITRStore } from '../../store/itrStore';
+
 import {
   FileText, Printer, Filter, PenTool, LayoutTemplate, Layers, X, Save, AlertCircle, Plus,
-  ArrowLeft, CheckCircle2, ChevronDown, Calendar, Hash, Tag, FileCheck, ShieldCheck, HardHat, User, Building2, Trash2, ArrowDown
+  CheckCircle2, ChevronDown, Calendar, Hash, Tag, FileCheck, ShieldCheck, HardHat, User, Building2, Trash2, ArrowDown
 } from 'lucide-react';
+import { BackButton } from '../ui/BackButton';
+import { toast } from 'sonner';
+import { InspectionItem } from '../../types/itp';
+import { PHASES, EMPTY_ITEM } from '../../constants/itp';
+import { getNextRevision } from '../../utils/revision';
+import VPBadge from './VPBadge';
+import './ITPDetail.print.css';
+import './itp-print-global.css';
 
-// --- 定義施工階段結構 ---
-const PHASES = [
-  { code: "A", title: "A. Before Construction (施工前)", color: "bg-slate-200" },
-  { code: "B", title: "B. During Construction (施工中)", color: "bg-blue-100" },
-  { code: "C", title: "C. After Construction (施工後)", color: "bg-emerald-100" }
-];
 
-// --- 初始資料庫數據 ---
-const INITIAL_ITEMS = [
-  // --- Phase A ---
-  {
-    phase: "A", id: "A1", activity: { en: "Length", ch: "長度" }, standard: "CNS 2602", criteria: "22m ±0.3% / 25m ±0.3%",
-    checkTime: { en: "Deliver to site", ch: "運抵工地" }, method: { en: "Tape measure", ch: "捲尺" }, frequency: "-",
-    vp: { sub: "", teco: "", employer: "", hse: "" }, record: "-"
-  },
-  {
-    phase: "A", id: "A2", activity: { en: "Thickness", ch: "厚度" }, standard: "CNS 2602", criteria: "100mm -2/+40mm",
-    checkTime: { en: "Deliver to site", ch: "運抵工地" }, method: { en: "Tape measure", ch: "捲尺" }, frequency: "-",
-    vp: { sub: "", teco: "", employer: "", hse: "" }, record: "-"
-  },
-  {
-    phase: "A", id: "A3", activity: { en: "Outer Diameter", ch: "外徑" }, standard: "CNS 2602", criteria: "600mm -4/+7mm",
-    checkTime: { en: "Deliver to site", ch: "運抵工地" }, method: { en: "Tape measure", ch: "捲尺" }, frequency: "-",
-    vp: { sub: "", teco: "", employer: "", hse: "" }, record: "-"
-  },
-  {
-    phase: "A", id: "A4", activity: { en: "Quantity", ch: "數量" }, standard: "Shipping Order", criteria: "Meet shipping order",
-    checkTime: { en: "Deliver to site", ch: "運抵工地" }, method: { en: "Visual", ch: "目視檢查" }, frequency: "Each Time",
-    vp: { sub: "H", teco: "W", employer: "R", hse: "" }, record: "ITP-PL-01"
-  },
-  {
-    phase: "A", id: "A5", activity: { en: "Stakeout", ch: "放樣" }, standard: "HL-ONS-TECO-STR-DWG-02000", criteria: "Meet design req.",
-    checkTime: { en: "Before construction", ch: "施工前" }, method: { en: "Tape Measure", ch: "捲尺" }, frequency: "Each Time",
-    vp: { sub: "H", teco: "H", employer: "H", hse: "" }, record: "ITP-SV-01"
-  },
-  // --- Phase B ---
-  {
-    phase: "B", id: "B1", activity: { en: "Foundation piling position", ch: "基礎打設座標" }, standard: "HL-ONS-TECO-STR-DWG-02000", criteria: "Tolerance ± 7.5 cm",
-    checkTime: { en: "During Piling", ch: "打樁時" }, method: { en: "Total Station", ch: "全站儀" }, frequency: "Each Pile",
-    vp: { sub: "H", teco: "H", employer: "H", hse: "" }, record: "ITP-PL-02&03"
-  },
-  {
-    phase: "B", id: "B2", activity: { en: "Pile Elevation", ch: "基礎高程" }, standard: "HL-ONS-TECO-GEO-DWG-08000", criteria: "Tolerance ± 7.5 cm",
-    checkTime: { en: "After Piling", ch: "打樁後" }, method: { en: "Total Station", ch: "全站儀" }, frequency: "Each Pile",
-    vp: { sub: "H", teco: "W", employer: "R", hse: "" }, record: "ITP-PL-04"
-  },
-  {
-    phase: "B", id: "B3", activity: { en: "Pile Joint", ch: "樁頭檢查" }, standard: "CNS 2602", criteria: "No Oil, Rust, Dust",
-    checkTime: { en: "Before Welding", ch: "焊接前" }, method: { en: "Visual", ch: "目視" }, frequency: "Each Pile",
-    vp: { sub: "H", teco: "W", employer: "W", hse: "※" }, record: "ITP-PL-02"
-  },
-  {
-    phase: "B", id: "B4", activity: { en: "Welding", ch: "焊接" }, standard: "CNS 13341", criteria: "No Defect (無缺失)",
-    checkTime: { en: "After Welding", ch: "焊接後" }, method: { en: "NDT - MT", ch: "MT 檢測" }, frequency: "1/50 pcs",
-    vp: { sub: "H", teco: "W", employer: "W", hse: "※" }, record: "ITP-PL-02"
-  },
-  {
-    phase: "B", id: "B5", activity: { en: "Verticality of Pile", ch: "基礎垂直度" }, standard: "HL-ONS-TECO-GEO-DWG-08000", criteria: "< 1/75",
-    checkTime: { en: "During Piling", ch: "打樁時" }, method: { en: "Spirit Level Ruler", ch: "水平尺" }, frequency: "Each Pile",
-    vp: { sub: "H", teco: "W", employer: "W", hse: "" }, record: "ITP-PL-02&04"
-  },
-  {
-    phase: "B", id: "B6", activity: { en: "Hit number of hammers", ch: "打擊次數" }, standard: "HL-ONS-TECO-ENG-PLN-00005", criteria: "< 2000 hits",
-    checkTime: { en: "During Piling", ch: "打樁時" }, method: { en: "Visual", ch: "目視" }, frequency: "Each Pile",
-    vp: { sub: "H", teco: "W", employer: "W", hse: "" }, record: "ITP-PL-02&04"
-  },
-  // --- Phase C ---
-  {
-    phase: "C", id: "C1", activity: { en: "Pile Position", ch: "樁位複測" }, standard: "HL-ONS-TECO-STR-", criteria: "Tolerance < 7.5cm",
-    checkTime: { en: "After Piling", ch: "打樁後" }, method: { en: "Total Station", ch: "全站儀" }, frequency: "Each Pile",
-    vp: { sub: "H", teco: "W", employer: "W", hse: "" }, record: "ITP-PL-03"
-  }
-];
-
-// --- 空白項目模板 ---
-const EMPTY_ITEM = {
-  phase: "B",
-  id: "",
-  activity: { en: "", ch: "" },
-  standard: "",
-  criteria: "",
-  checkTime: { en: "", ch: "" },
-  method: { en: "", ch: "" },
-  frequency: "",
-  vp: { sub: "", teco: "", employer: "", hse: "" },
-  record: "-"
-};
-
-// --- VP 標籤元件 ---
-const VPBadge = ({ type }: { type: string }) => {
-  const styles: { [key: string]: string } = {
-    H: "bg-rose-100 text-rose-700 border-rose-200 font-bold ring-1 ring-rose-200 shadow-sm",
-    W: "bg-amber-100 text-amber-700 border-amber-200 font-bold ring-1 ring-amber-200 shadow-sm",
-    R: "bg-sky-100 text-sky-700 border-sky-200 font-bold ring-1 ring-sky-200 shadow-sm",
-    "※": "bg-slate-100 text-slate-600 border-slate-200 font-medium ring-1 ring-slate-200"
-  };
-
-  if (!type) return <span className="text-slate-200 font-light">-</span>;
-
-  return (
-    <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg text-sm transition-all ${styles[type] || ""}`}>
-      {type}
-    </span>
-  );
-};
 
 const ITPDetail: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { itrList } = useITR();
-  const [items, setItems] = useState<any[]>(INITIAL_ITEMS);
-  const [editingItem, setEditingItem] = useState<any | null>(null);
-  const [workTitle, setWorkTitle] = useState("Piling Work"); // 工項標題狀態
+  const itrList = useITRStore(state => state.itrList);
+  // NOTE: 初始為空陣列，避免所有 ITP 顯示相同的硬編碼資料
+  const [items, setItems] = useState<InspectionItem[]>([]);
+  const [editingItem, setEditingItem] = useState<InspectionItem | null>(null);
+  const [workTitle, setWorkTitle] = useState(""); // 工項標題狀態
   const [referenceNo, setReferenceNo] = useState(""); // Form No.
-  const [viewingItrItem, setViewingItrItem] = useState<any | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [rev, setRev] = useState("");
+
+  const handlePublish = async () => {
+    if (!id) return;
+    const nextRev = getNextRevision(rev);
+    if (!window.confirm(`Are you sure you want to publish this ITP as Revision ${nextRev}?`)) return;
+
+    setSaving(true);
+    try {
+      // 1. Update Revision & Title
+      await api.put(`/itp/${id}/`, {
+        description: workTitle,
+        rev: nextRev,
+        status: 'Approved' // Optional: set status to Approved on publish
+      });
+      setRev(nextRev); // Update local state immediately
+
+      // 2. Update Details (same as save)
+      const payload = {
+        a: items.filter(i => i.phase === 'A').map(({ phase, ...rest }) => rest),
+        b: items.filter(i => i.phase === 'B').map(({ phase, ...rest }) => rest),
+        c: items.filter(i => i.phase === 'C').map(({ phase, ...rest }) => rest),
+        checklist: [],
+        self_inspection: null
+      };
+      await api.put(`/itp/${id}/detail`, payload);
+      toast.success(`Published successfully as Revision ${nextRev}!`);
+    } catch (error) {
+      console.error("Failed to publish ITP:", error);
+      toast.error("Failed to publish document.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isPrinting) {
+      const timer = setTimeout(() => {
+        window.print();
+      }, 500); // Wait for portal to render
+
+      const onAfterPrint = () => setIsPrinting(false);
+      window.addEventListener('afterprint', onAfterPrint);
+
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener('afterprint', onAfterPrint);
+      };
+    }
+  }, [isPrinting]);
 
   // Fetch data on mount
   useEffect(() => {
@@ -132,11 +89,12 @@ const ITPDetail: React.FC = () => {
       if (!id) return;
       setLoading(true);
       try {
-        const response = await api.get(`/itp/${id}`);
+        const response = await api.get(`/itp/${id}/`);
         const data = response.data;
         if (data) {
           if (data.description) setWorkTitle(data.description);
           if (data.referenceNo) setReferenceNo(data.referenceNo);
+          if (data.rev) setRev(data.rev);
 
           let details: any = {};
           if (typeof data.detail_data === 'string') {
@@ -149,14 +107,16 @@ const ITPDetail: React.FC = () => {
             details = data.detail_data;
           }
 
+          // 從後端載入檢查項目；若 detail_data 為空則保持空陣列
           if (details && (details.a || details.b || details.c)) {
-            const loadedItems = [
+            const loadedItems: InspectionItem[] = [
               ...(details.a || []).map((i: any, index: number) => ({ ...i, phase: 'A', id: `A${index + 1}` })),
               ...(details.b || []).map((i: any, index: number) => ({ ...i, phase: 'B', id: `B${index + 1}` })),
               ...(details.c || []).map((i: any, index: number) => ({ ...i, phase: 'C', id: `C${index + 1}` })),
             ];
             setItems(loadedItems);
           }
+          // 若無 detail_data，items 維持空陣列，使用者可透過「Add Item」新增
         }
       } catch (error) {
         console.error("Failed to fetch ITP:", error);
@@ -168,13 +128,14 @@ const ITPDetail: React.FC = () => {
     fetchITP();
   }, [id]);
 
+
   // Save changes to backend
   const saveToBackend = async () => {
     if (!id) return;
     setSaving(true);
     try {
       // 1. Update Title (Description)
-      await api.put(`/itp/${id}`, { description: workTitle });
+      await api.put(`/itp/${id}/`, { description: workTitle });
 
       // 2. Update Details
       const payload = {
@@ -186,10 +147,10 @@ const ITPDetail: React.FC = () => {
       };
 
       await api.put(`/itp/${id}/detail`, payload);
-      alert("Saved successfully!");
+      toast.success("Saved successfully!");
     } catch (error) {
       console.error("Failed to save ITP:", error);
-      alert("Failed to save document.");
+      toast.error("Failed to save document.");
     } finally {
       setSaving(false);
     }
@@ -210,7 +171,7 @@ const ITPDetail: React.FC = () => {
   };
 
   // 開啟編輯模式 (Existing Item)
-  const handleEditClick = (item: any) => {
+  const handleEditClick = (item: InspectionItem) => {
     setEditingItem({ ...item, isNew: false });
   };
 
@@ -259,11 +220,21 @@ const ITPDetail: React.FC = () => {
     setEditingItem(null);
   };
 
-  const handleChange = (field: string, value: string, subField: string | null = null) => {
-    if (subField) {
-      setEditingItem((prev: any) => ({ ...prev, [field]: { ...prev[field], [subField]: value } }));
+  const handleChange = (field: keyof InspectionItem, value: string, subField: string | null = null) => {
+    if (subField && editingItem) {
+      setEditingItem((prev: InspectionItem | null) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          [field]: {
+            ...(prev[field as keyof InspectionItem] as any),
+            [subField]: value
+          }
+        };
+      });
     } else {
-      setEditingItem((prev: any) => {
+      setEditingItem((prev: InspectionItem | null) => {
+        if (!prev) return null;
         const updated = { ...prev, [field]: value };
         // 如果變更 Phase 或 Insert Position，自動更新 ID
         if (prev.isNew) {
@@ -279,7 +250,10 @@ const ITPDetail: React.FC = () => {
   };
 
   const handleVPChange = (role: string, value: string) => {
-    setEditingItem((prev: any) => ({ ...prev, vp: { ...prev.vp, [role]: value } }));
+    setEditingItem((prev: InspectionItem | null) => {
+      if (!prev) return null;
+      return { ...prev, vp: { ...prev.vp, [role]: value } as any };
+    });
   };
 
   const handleDelete = (itemId: string) => {
@@ -290,75 +264,21 @@ const ITPDetail: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50/50 font-sans text-slate-800 p-4 md:p-8 overflow-x-auto relative selection:bg-blue-100 selection:text-blue-900">
-      <style>
-        {`
-          @media print {
-            @page {
-              size: landscape;
-              margin: 1cm;
-            }
-            
-            /* Hide non-print elements */
-            .no-print {
-              display: none !important;
-            }
-
-            /* Reset body and container for printing */
-            body {
-              background: white !important;
-              color: black !important;
-              margin: 0 !important;
-              padding: 0 !important;
-            }
-
-            .print-container {
-              width: 100% !important;
-              max-width: none !important;
-              margin: 0 !important;
-              padding: 0 !important;
-              box-shadow: none !important;
-              border: none !important;
-              display: block !important;
-            }
-
-            /* Force black borders for table */
-            table, th, td {
-              border: 1px solid black !important;
-              border-collapse: collapse !important;
-            }
-
-            /* Ensure all cells are visible */
-            th, td {
-              overflow: visible !important;
-              white-space: normal !important;
-            }
-
-            /* Avoid page breaks inside rows */
-            tr {
-              page-break-inside: avoid;
-              break-inside: avoid;
-            }
-
-            /* Ensure the blue top bar prints (if desired) or remove it */
-            .bg-gradient-to-r {
-              print-color-adjust: exact;
-              -webkit-print-color-adjust: exact;
-            }
-          }
-        `}
-      </style>
-
       {/* Back Button & Toolbar */}
       <div className="max-w-[1400px] min-w-[1024px] mx-auto mb-6 flex items-center justify-between no-print">
-        <button
-          onClick={() => navigate(-1)}
-          className="group flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide hover:bg-slate-50 hover:text-slate-900 shadow-sm transition-all"
-        >
-          <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
-          Back to List
-        </button>
+        <BackButton
+          label="Back to List"
+          onClick={() => navigate('/itp')}
+        />
 
         <div className="flex gap-3">
+          <button
+            onClick={handlePublish}
+            disabled={saving}
+            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide hover:bg-indigo-700 shadow-sm hover:shadow active:scale-95 transition-all disabled:opacity-50"
+          >
+            <ShieldCheck size={14} strokeWidth={3} /> Publish
+          </button>
           <button
             onClick={saveToBackend}
             disabled={saving}
@@ -371,7 +291,7 @@ const ITPDetail: React.FC = () => {
             <Plus size={14} strokeWidth={3} /> Add New Item
           </button>
           <button
-            onClick={() => window.print()}
+            onClick={() => setIsPrinting(true)}
             className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide hover:bg-slate-50 hover:text-slate-900 shadow-sm transition-all"
           >
             <Printer size={14} /> Print / PDF
@@ -528,7 +448,7 @@ const ITPDetail: React.FC = () => {
                   </div>
                   <div>
                     <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2 ml-1">
-                      <FileCheck size={14} className="text-emerald-600" /> ITR No.
+                      <FileCheck size={14} className="text-emerald-600" /> Records
                     </label>
                     <div className="relative">
                       <input
@@ -537,7 +457,7 @@ const ITPDetail: React.FC = () => {
                         list="itr-options"
                         value={editingItem.record}
                         onChange={(e) => handleChange('record', e.target.value)}
-                        placeholder="Select or enter ITR No."
+                        placeholder="Select or enter Record No."
                       />
                       <Tag className="absolute left-3 top-3 text-slate-400" size={16} />
                       <datalist id="itr-options">
@@ -629,7 +549,10 @@ const ITPDetail: React.FC = () => {
           </div>
 
           {/* Form No. - Inside Header, Bottom Right */}
-          <div className="flex justify-end mt-1">
+          <div className="flex justify-end mt-1 gap-4">
+            <div className="text-xs font-bold text-slate-700">
+              Rev: {rev || '-'}
+            </div>
             <div className="text-xs font-bold text-slate-700">
               {referenceNo}
             </div>
@@ -647,7 +570,7 @@ const ITPDetail: React.FC = () => {
                 <th rowSpan={2} className="px-5 py-4 w-40 border-r border-black bg-slate-800 text-center">Check Time</th>
                 <th rowSpan={2} className="px-5 py-4 w-40 border-r border-black text-center">Method</th>
                 <th rowSpan={2} className="px-5 py-4 w-28 border-r border-black text-center">Frequency</th>
-                <th rowSpan={2} className="px-5 py-4 w-32 border-r border-black bg-slate-800 text-center">ITR No.</th>
+                <th rowSpan={2} className="px-5 py-4 w-32 border-r border-black bg-slate-800 text-center">Records</th>
                 <th colSpan={4} className="px-2 py-3 text-center border-b border-black bg-slate-800">Verification Point</th>
                 <th rowSpan={2} className="px-5 py-4 text-center w-32 bg-slate-800 sticky right-0 z-10 shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)] border-l border-black no-print">Operation</th>
               </tr>
@@ -696,16 +619,14 @@ const ITPDetail: React.FC = () => {
                         {item.record !== '-' ? (
                           <button
                             onClick={() => {
-                              const found = itrList.find(itr => itr.documentNumber === item.record);
-                              if (found) {
-                                setViewingItrItem(found);
-                              } else {
-                                // Fallback: if not found in context (might be manually entered or not synced), 
-                                // we could still show a basic view or alert
-                                alert('ITR document data not found in current list.');
+                              if (item.record.includes('CHK') || item.record.startsWith('QTS')) {
+                                navigate(`/checklist?recordNo=${item.record}&from=itp`);
+                                return;
                               }
+                              navigate('/itr');
+                              toast.info(`Please find ITR ${item.record} in the ITR list.`);
                             }}
-                            className="inline-flex items-center px-2.5 py-1.5 rounded-md bg-white text-blue-600 hover:text-blue-800 hover:bg-blue-50 transition-colors font-mono text-xs font-bold border border-blue-200 hover:border-blue-400 whitespace-nowrap shadow-sm group/itr"
+                            className="inline-flex items-center px-2.5 py-1.5 rounded-md bg-white text-slate-900 hover:text-blue-800 hover:bg-blue-50 transition-colors font-mono text-xs font-bold border border-slate-300 hover:border-blue-400 whitespace-nowrap shadow-sm group/itr"
                           >
                             <FileText size={12} className="mr-1.5 opacity-70 group-hover/itr:opacity-100" />{item.record}
                           </button>
@@ -747,15 +668,125 @@ const ITPDetail: React.FC = () => {
         </div>
       </div>
 
-      {/* Viewing ITR Details Modal */}
-      {viewingItrItem && (
-        <ITRDetailsViewModal
-          itrId={viewingItrItem.id}
-          itrItem={viewingItrItem}
-          onPrint={() => window.print()}
-          onClose={() => setViewingItrItem(null)}
-        />
+      {/* --- Print View (Portal) --- */}
+      {/* Always render portal but hide via CSS to support Ctrl+P */}
+      {ReactDOM.createPortal(
+        <div id="itp-print-root">
+          <div className="max-w-[1400px] min-w-[1024px] mx-auto bg-white rounded-xl shadow-lg border-x-0 border-t-0 overflow-hidden print-container">
+            {/* Document Header Section - Duplicated for Print */}
+            <div className="bg-white px-8 pt-8 pb-2 border-b border-slate-200 relative">
+              <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600"></div>
+              <div className="flex justify-between items-center mb-1 pt-2">
+                <div className="w-48 opacity-40">
+                  {/* Logo Placeholder */}
+                  <div className="h-12 w-32 bg-slate-100 rounded flex items-center justify-center text-xs text-slate-400 font-medium border border-dashed border-slate-300">
+                    Logo Area
+                  </div>
+                </div>
+                <div className="flex-1 text-center">
+                  <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tight flex flex-col items-center gap-2">
+                    Inspection & Test Plan
+                  </h1>
+                  <div className="mt-2 text-xl font-bold text-slate-700">
+                    <span className="border-b-2 border-dashed border-slate-300 px-2 py-0.5 min-w-[200px] inline-block">
+                      {workTitle}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-end mt-1 gap-4">
+                <div className="text-xs font-bold text-slate-700">
+                  Rev: {rev || '-'}
+                </div>
+                <div className="text-xs font-bold text-slate-700">
+                  {referenceNo}
+                </div>
+              </div>
+            </div>
+
+            {/* Table Content - Duplicated for Print */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm border-collapse border border-black border-t-2">
+                <thead className="bg-slate-800 text-white font-bold text-xs uppercase tracking-wider border-b-2 border-black leading-tight">
+                  <tr>
+                    <th rowSpan={2} className="px-5 py-4 w-16 border-r border-black bg-slate-800 text-center">Event No.</th>
+                    <th rowSpan={2} className="px-5 py-4 w-64 border-r border-black text-center">Inspection Activity</th>
+                    <th rowSpan={2} className="px-5 py-4 w-56 border-r border-black text-center">Standard / Criteria</th>
+                    <th rowSpan={2} className="px-5 py-4 w-40 border-r border-black bg-slate-800 text-center">Check Time</th>
+                    <th rowSpan={2} className="px-5 py-4 w-40 border-r border-black text-center">Method</th>
+                    <th rowSpan={2} className="px-5 py-4 w-28 border-r border-black text-center">Frequency</th>
+                    <th rowSpan={2} className="px-5 py-4 w-32 border-r border-black bg-slate-800 text-center">Records</th>
+                    <th colSpan={4} className="px-2 py-3 text-center border-b border-black bg-slate-800">Verification Point</th>
+                  </tr>
+                  <tr>
+                    <th className="px-2 py-2 text-center border-r border-black w-12 bg-slate-800 text-[11px] font-bold">Sub.</th>
+                    <th className="px-2 py-2 text-center border-r border-black w-12 bg-slate-800 text-[11px] font-bold">TECO</th>
+                    <th className="px-2 py-2 text-center border-r border-black w-12 bg-slate-800 text-[11px] font-bold">Emp.</th>
+                    <th className="px-2 py-2 text-center w-12 bg-slate-800 text-[11px] font-bold">HSE</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-black">
+                  {PHASES.map((phase) => (
+                    <React.Fragment key={phase.code}>
+                      <tr className="border-y border-black">
+                        <td colSpan={11} className={`px-0 py-0 border-b border-black ${phase.color}`}>
+                          <div className="px-6 py-3 font-bold text-sm flex items-center gap-2 uppercase tracking-wide w-full text-black">
+                            {phase.title}
+                          </div>
+                        </td>
+                      </tr>
+                      {items.filter(item => item.phase === phase.code).map((item) => (
+                        <tr key={item.id} className="border-b border-black last:border-0 relative">
+                          <td className="px-5 py-4 font-mono text-slate-900 font-bold border-r border-black bg-slate-50/30 align-top pt-5">
+                            {item.id}
+                          </td>
+                          <td className="px-5 py-4 border-r border-black align-top text-slate-800">
+                            <div className="font-bold text-sm mb-1">{item.activity.en}</div>
+                            <div className="text-slate-600 text-xs font-medium">{item.activity.ch}</div>
+                          </td>
+                          <td className="px-5 py-4 border-r border-black align-top">
+                            <div className="inline-block bg-slate-100 text-slate-600 text-[11px] font-mono px-2 py-0.5 rounded mb-2 border border-black">
+                              {item.standard}
+                            </div>
+                            <div className="text-slate-800 text-sm leading-relaxed font-medium">{item.criteria}</div>
+                          </td>
+                          <td className="px-5 py-4 border-r border-black bg-slate-50 align-top">
+                            <div className="text-black text-sm font-medium">{item.checkTime.en}</div>
+                            <div className="text-slate-500 text-xs mt-1">{item.checkTime.ch}</div>
+                          </td>
+                          <td className="px-5 py-4 border-r border-black align-top">
+                            <div className="text-black text-sm">{item.method.en}</div>
+                            <div className="text-slate-500 text-xs mt-1">{item.method.ch}</div>
+                          </td>
+                          <td className="px-5 py-4 border-r border-black align-top"><div className="text-slate-800 text-xs">{item.frequency}</div></td>
+                          <td className="px-5 py-4 border-r border-black bg-slate-50 align-top">
+                            {item.record !== '-' ? (
+                              <span className="font-mono text-xs font-bold text-slate-900">{item.record}</span>
+                            ) : <span className="text-slate-400 text-xs pl-2">-</span>}
+                          </td>
+                          <td className="px-2 py-4 text-center border-r border-black align-middle"><VPBadge type={item.vp.sub} /></td>
+                          <td className="px-2 py-4 text-center border-r border-black align-middle"><VPBadge type={item.vp.teco} /></td>
+                          <td className="px-2 py-4 text-center border-r border-black align-middle"><VPBadge type={item.vp.employer} /></td>
+                          <td className="px-2 py-4 text-center align-middle"><VPBadge type={item.vp.hse} /></td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Footer info */}
+            <div className="bg-slate-50 border-t border-black p-4 text-center text-xs text-slate-500 font-medium">
+              End of Document - Total {items.length} Inspection Items
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
+
+      {/* Viewing ITR Details Modal */}
+
     </div>
   );
 };

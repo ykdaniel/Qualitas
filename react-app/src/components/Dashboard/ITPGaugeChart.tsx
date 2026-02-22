@@ -1,3 +1,4 @@
+import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import styles from './Dashboard.module.css';
 
@@ -7,7 +8,7 @@ interface ITPGaugeChartProps {
   maturity: number;
 }
 
-const ITPGaugeChart: React.FC<ITPGaugeChartProps> = ({ approved, total, maturity }) => {
+const ITPGaugeChart: React.FC<ITPGaugeChartProps> = React.memo(({ approved, total, maturity }) => {
   // 创建gauge数据 - 使用180度的半圆，分成三段
   // 40% 橙色 (0-40%), 40% 蓝色 (40-80%), 20% 绿色 (80-100%)
   const gaugeData = [
@@ -35,14 +36,14 @@ const ITPGaugeChart: React.FC<ITPGaugeChartProps> = ({ approved, total, maturity
     if (maturity < 50) return '#f59e0b'; // 橙色（警告色）
     return '#10b981'; // 绿色（50%以上）
   };
-  
+
   const valueColor = getValueColor();
 
   return (
     <div className={styles.gaugeChartContainer}>
       <h3 className={styles.gaugeTitle}>ITP Approved or with comment (Qty & %)</h3>
       <div className={styles.gaugeWrapper}>
-        <ResponsiveContainer width="100%" height={260}>
+        <ResponsiveContainer width="100%" height={160}>
           <PieChart>
             <Pie
               data={gaugeData}
@@ -50,8 +51,8 @@ const ITPGaugeChart: React.FC<ITPGaugeChartProps> = ({ approved, total, maturity
               cy="100%"
               startAngle={180}
               endAngle={0}
-              innerRadius={100}
-              outerRadius={150}
+              innerRadius={80}
+              outerRadius={120}
               paddingAngle={0}
               dataKey="value"
             >
@@ -61,9 +62,9 @@ const ITPGaugeChart: React.FC<ITPGaugeChartProps> = ({ approved, total, maturity
             </Pie>
           </PieChart>
         </ResponsiveContainer>
-        
+
         {/* 指针 */}
-        <div 
+        <div
           className={styles.gaugeNeedle}
           style={{
             transform: `translateX(-50%) rotate(${needleAngle}deg)`,
@@ -72,7 +73,7 @@ const ITPGaugeChart: React.FC<ITPGaugeChartProps> = ({ approved, total, maturity
           <div className={styles.needleLineRed}></div>
         </div>
       </div>
-      
+
       {/* 数值显示 - 放在仪表盘下方 */}
       <div className={styles.gaugeValue}>
         <span className={styles.gaugeNumber} style={{ color: valueColor }}>{approved}</span>
@@ -80,6 +81,6 @@ const ITPGaugeChart: React.FC<ITPGaugeChartProps> = ({ approved, total, maturity
       </div>
     </div>
   );
-};
+});
 
 export default ITPGaugeChart;

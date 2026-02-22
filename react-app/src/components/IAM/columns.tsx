@@ -3,33 +3,13 @@ import { DataTableColumnHeader } from "../Shared/DataTable/DataTableColumnHeader
 import { Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-
-// User Interface (Mirrors the one in IAM.tsx, or export it from IAM.tsx if possible, but duplication for columns is fine for now if not exported)
-// Actually better to export interfaces from IAM.tsx or move to types.
-// For now I'll define them here loosely or import if I can. 
-// IAM.tsx defines interfaces internally. I should probably move them or redefine.
-// I will redefine for column usage to be safe/quick.
-
-export interface User {
-    id: string;
-    name: string;
-    email: string;
-    role: string;
-    status: 'active' | 'inactive';
-    createdAt: string;
-}
-
-export interface Role {
-    id: string;
-    name: string;
-    description: string;
-    permissions: string[];
-}
+import { User, Role } from "../../store/iamStore";
+import { formatRoleName } from "@/utils/formatters";
 
 export const createUserColumns = (
     handleEdit: (user: User) => void,
     handleDelete: (id: string) => void,
-    availableRoles: { id: string; name: string }[] = [],
+    availableRoles: Role[] = [],
     t: (key: string) => string
 ): ColumnDef<User>[] => [
         {
@@ -52,14 +32,14 @@ export const createUserColumns = (
                 <DataTableColumnHeader
                     column={column}
                     title={t('iam.role')}
-                    filterOptions={availableRoles.map(r => ({ label: r.name, value: r.name }))}
+                    filterOptions={availableRoles.map(r => ({ label: formatRoleName(r.name), value: r.name }))}
                 />
             ),
             cell: ({ row }) => {
                 return (
                     <div className="flex justify-center">
                         <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-xl text-xs font-semibold">
-                            {row.getValue("role")}
+                            {formatRoleName(row.getValue("role"))}
                         </span>
                     </div>
                 );
@@ -101,11 +81,11 @@ export const createUserColumns = (
             },
         },
         {
-            accessorKey: "createdAt",
+            accessorKey: "created_at",
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title={t('iam.createdDate')} />
             ),
-            cell: ({ row }) => <div className="text-center">{row.getValue("createdAt")}</div>,
+            cell: ({ row }) => <div className="text-center">{row.getValue("created_at")}</div>,
         },
         {
             id: "actions",
@@ -144,7 +124,7 @@ export const createUserColumns = (
 export const createRoleColumns = (
     handleEdit: (role: Role) => void,
     handleDelete: (id: string) => void,
-    availablePermissions: { id: string; label: string }[],
+    permissionsList: { code: string; description: string }[] = [],
     t: (key: string) => string
 ): ColumnDef<Role>[] => [
         {
@@ -155,7 +135,7 @@ export const createRoleColumns = (
             cell: ({ row }) => (
                 <div className="flex justify-center">
                     <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-xl text-xs font-semibold">
-                        {row.getValue("name")}
+                        {formatRoleName(row.getValue("name"))}
                     </span>
                 </div>
             ),
@@ -176,11 +156,19 @@ export const createRoleColumns = (
                 const perms = row.original.permissions;
                 return (
                     <div className="flex flex-wrap gap-1">
-                        {perms.map(p => (
-                            <span key={p} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
-                                {availablePermissions.find(ap => ap.id === p)?.label || p}
+                        {perms.slice(0, 3).map(p => {
+                            const permDesc = permissionsList.find(ap => ap.code === p)?.description || p;
+                            return (
+                                <span key={p} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                                    {permDesc}
+                                </span>
+                            );
+                        })}
+                        {perms.length > 3 && (
+                            <span className="px-2 py-0.5 bg-gray-200 text-gray-600 rounded text-xs">
+                                +{perms.length - 3}
                             </span>
-                        ))}
+                        )}
                     </div>
                 );
             }
@@ -197,7 +185,7 @@ export const createRoleColumns = (
                             size="sm"
                             className="h-8 w-8 p-0 text-blue-600 hover:text-white hover:bg-blue-600"
                             onClick={() => handleEdit(item)}
-                            title="編輯"
+                            title={t('common.edit')}
                         >
                             <Edit className="h-4 w-4" />
                         </Button>
@@ -206,7 +194,7 @@ export const createRoleColumns = (
                             size="sm"
                             className="h-8 w-8 p-0 text-red-500 hover:text-white hover:bg-red-500"
                             onClick={() => handleDelete(item.id)}
-                            title="刪除"
+                            title={t('common.delete')}
                         >
                             <Trash2 className="h-4 w-4" />
                         </Button>

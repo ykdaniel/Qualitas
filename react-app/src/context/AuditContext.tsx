@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useMemo, useEffect, useCallback, ReactNode } from 'react';
 import api from '../services/api';
 import { useErrorHandler } from '../hooks/useErrorHandler';
+import { useAuth } from './AuthContext';
 
 export interface AuditItem {
     id: string;
@@ -90,9 +91,14 @@ export const AuditProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }
     }, []);
 
+    const { isAuthenticated } = useAuth();
+
     useEffect(() => {
-        fetchAudits();
-    }, [fetchAudits]);
+        if (isAuthenticated) {
+            fetchAudits();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isAuthenticated]);
 
     // 當清單變更時，同步到 localStorage（作為備用）
     useEffect(() => {
@@ -121,7 +127,7 @@ export const AuditProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     const updateAudit = useCallback(async (id: string, updates: Partial<AuditItem>) => {
         try {
-            const response = await api.put(`/audit/${id}`, updates);
+            const response = await api.put(`/audit/${id}/`, updates);
             setAuditList(prev => prev.map(a => (a.id === id ? response.data : a)));
         } catch (err: unknown) {
             // API 失敗時使用本地更新
@@ -131,7 +137,7 @@ export const AuditProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     const deleteAudit = useCallback(async (id: string) => {
         try {
-            await api.delete(`/audit/${id}`);
+            await api.delete(`/audit/${id}/`);
             setAuditList(prev => prev.filter(a => a.id !== id));
         } catch (err: unknown) {
             // API 失敗時使用本地刪除

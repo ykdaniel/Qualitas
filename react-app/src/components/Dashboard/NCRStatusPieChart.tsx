@@ -31,7 +31,7 @@ const STATUS_COLORS: { [key: string]: string } = {
     'under review': '#3b82f6',
 };
 
-const NCRStatusPieChart: React.FC<NCRStatusPieChartProps> = ({
+const NCRStatusPieChart: React.FC<NCRStatusPieChartProps> = React.memo(({
     ncrList,
     filterByVendor = false,
     selectedVendor = ''
@@ -95,6 +95,6 @@ const NCRStatusPieChart: React.FC<NCRStatusPieChartProps> = ({
             </ResponsiveContainer>
         </div>
     );
-};
+});
 
 export default NCRStatusPieChart;

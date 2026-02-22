@@ -1,8 +1,8 @@
 import { ColumnDef } from "@tanstack/react-table";
-import { PQPItem } from "../../context/PQPContext";
+import { PQPItem } from "../../store/pqpStore";
 import { DataTableColumnHeader } from "@/components/Shared/DataTable/DataTableColumnHeader";
 import { Button } from "@/components/ui/button";
-import { Eye, Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import styles from "./PQP.module.css";
 
 const getLocalizedStatus = (status: string, t: (key: string) => string) => {
@@ -16,7 +16,6 @@ const getLocalizedStatus = (status: string, t: (key: string) => string) => {
 
 export const createColumns = (
     handleEdit: (id: string) => void,
-    handleViewDetails: (id: string) => void,
     confirmDelete: (id: string) => void,
     t: (key: string) => string,
     getActiveContractors: () => { name: string }[]
@@ -124,15 +123,7 @@ export const createColumns = (
                         >
                             <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-blue-500 hover:text-blue-600 hover:bg-blue-100"
-                            onClick={() => handleViewDetails(pqp.id)}
-                            title={t('pqp.tooltip.details')}
-                        >
-                            <Eye className="h-4 w-4" />
-                        </Button>
+
                         <Button
                             variant="ghost"
                             size="icon"

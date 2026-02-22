@@ -1,16 +1,16 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth, User } from '../../context/AuthContext';
-import { useITP } from '../../context/ITPContext';
-import { useNCR } from '../../context/NCRContext';
-import { useNOI } from '../../context/NOIContext';
-import { useITR } from '../../context/ITRContext';
-import { usePQP } from '../../context/PQPContext';
-import { useOBS } from '../../context/OBSContext';
-import { useContractors, Contractor } from '../../context/ContractorsContext';
+import { useITPStore } from '../../store/itpStore';
+import { useNCRStore } from '../../store/ncrStore';
+import { useNOIStore } from '../../store/noiStore';
+import { useITRStore } from '../../store/itrStore';
+import { usePQPStore } from '../../store/pqpStore';
+import { useOBSStore } from '../../store/obsStore';
+import { useContractorsStore, Contractor } from '../../store/contractorsStore';
 import { DashboardFilterProvider, useDashboardFilter } from '../../context/DashboardFilterContext';
 import { useLanguage } from '../../context/LanguageContext';
-import { useFollowUp } from '../../context/FollowUpContext';
-import { useChecklist } from '../../context/ChecklistContext';
+import { useFollowUpStore } from '../../store/followUpStore';
+import { useChecklistStore } from '../../store/checklistStore';
 import { useMemo, useState } from 'react';
 import ITPGaugeChart from './ITPGaugeChart';
 import ITPStatsCard from './ITPStatsCard';
@@ -27,7 +27,7 @@ import styles from './Dashboard.module.css';
 const Dashboard = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { getActiveContractors } = useContractors();
+  const { getActiveContractors } = useContractorsStore();
 
   return (
     <DashboardFilterProvider>
@@ -48,14 +48,14 @@ const DashboardContent: React.FC<{
   const [kpiCollapsed, setKpiCollapsed] = useState(false);
   const { selectedVendor, setSelectedVendor } = useDashboardFilter();
   const { t } = useLanguage();
-  const { itpList } = useITP();
-  const { ncrList } = useNCR();
-  const { noiList } = useNOI();
-  const { itrList } = useITR();
-  const { pqpList } = usePQP();
-  const { obsList } = useOBS();
-  const { followUpList } = useFollowUp();
-  const { records: checklistRecords } = useChecklist();
+  const itpList = useITPStore(state => state.itpList);
+  const ncrList = useNCRStore(state => state.ncrList);
+  const noiList = useNOIStore(state => state.noiList);
+  const itrList = useITRStore(state => state.itrList);
+  const pqpList = usePQPStore(state => state.pqpList);
+  const obsList = useOBSStore(state => state.obsList);
+  const followUpList = useFollowUpStore(state => state.followUpList);
+  const checklistRecords = useChecklistStore(state => state.records);
 
   // Upcoming Tasks Calculation
   // ... (previous logic)
@@ -223,7 +223,7 @@ const DashboardContent: React.FC<{
         passRate: checklistPassRate,
       },
     };
-  }, [itpList, ncrList, noiList, itrList, pqpList, obsList, selectedVendor]);
+  }, [itpList, ncrList, noiList, itrList, pqpList, obsList, checklistRecords, selectedVendor]);
   return (
     <div className={styles.container}>
       <div className={styles.header}>

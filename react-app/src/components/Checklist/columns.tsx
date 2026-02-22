@@ -1,12 +1,14 @@
 import { ColumnDef } from "@tanstack/react-table";
-import { ChecklistRecord } from "../../context/ChecklistContext";
+import { ChecklistRecord } from "../../store/checklistStore";
 import { Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DataTableColumnHeader } from "@/components/Shared/DataTable/DataTableColumnHeader";
 import styles from "./Checklist.module.css";
 
 export const createColumns = (
     onEdit: (record: ChecklistRecord) => void,
-    onDelete: (id: string) => void
+    onDelete: (id: string) => void,
+    t: (key: string) => string
 ): ColumnDef<ChecklistRecord>[] => [
         {
             id: "index",
@@ -16,25 +18,35 @@ export const createColumns = (
         },
         {
             accessorKey: "recordsNo",
-            header: "Record No",
-            cell: ({ row }) => <span className="font-mono font-bold text-slate-700">{row.original.recordsNo}</span>
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title={t('common.referenceNo')} />
+            ),
+            cell: ({ row }) => <span className="font-mono text-xs text-slate-900">{row.original.recordsNo}</span>
         },
         {
             accessorKey: "activity",
-            header: "Activity",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title={t('common.activity')} />
+            ),
             cell: ({ row }) => <span className="font-medium">{row.original.activity}</span>
         },
         {
             accessorKey: "packageName",
-            header: "Package",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title={t('common.package')} />
+            ),
         },
         {
             accessorKey: "date",
-            header: "Date",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title={t('common.date')} />
+            ),
         },
         {
             accessorKey: "status",
-            header: "Version",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title={t('common.version')} />
+            ),
             cell: ({ row }) => {
                 const rev = row.original.revision ?? 0;
                 return (
@@ -46,7 +58,7 @@ export const createColumns = (
         },
         {
             id: "actions",
-            header: "Operation",
+            header: t('common.operations'),
             cell: ({ row }) => (
                 <div className="flex items-center justify-center space-x-2">
                     <Button

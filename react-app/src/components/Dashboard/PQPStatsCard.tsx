@@ -1,19 +1,19 @@
-import { usePQP } from '../../context/PQPContext';
+import { usePQPStore } from '../../store/pqpStore';
 import { useDashboardFilter } from '../../context/DashboardFilterContext';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './Dashboard.module.css';
 
 const PQPStatsCard: React.FC = () => {
-  const { pqpList } = usePQP();
+  const pqpList = usePQPStore(state => state.pqpList);
   const { selectedVendor } = useDashboardFilter();
   const navigate = useNavigate();
 
   const stats = useMemo(() => {
-    const filteredList = selectedVendor === 'all' 
-      ? pqpList 
+    const filteredList = selectedVendor === 'all'
+      ? pqpList
       : pqpList.filter(item => item.vendor === selectedVendor);
-    
+
     const total = filteredList.length;
     const approved = filteredList.filter(item => {
       const status = (item.status || '').toLowerCase();

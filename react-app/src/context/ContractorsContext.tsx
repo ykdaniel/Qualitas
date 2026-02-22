@@ -8,6 +8,7 @@ import {
   CreateContractorPayload
 } from '../services/api';
 import { useErrorHandler } from '../hooks/useErrorHandler';
+import { useAuth } from './AuthContext';
 
 // Keep the internal interface consistent with UI usage, or refactor UI to match API.
 // Refactoring UI to match API (snake_case from backend) might be too much change.
@@ -69,6 +70,7 @@ export const ContractorsProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [contractors, setContractors] = useState<Contractor[]>([]);
   const [error, setError] = useState<string | null>(null);
   const { handleError } = useErrorHandler();
+  const { isAuthenticated } = useAuth();
 
   const fetchContractors = async () => {
     try {
@@ -81,8 +83,11 @@ export const ContractorsProvider: React.FC<{ children: ReactNode }> = ({ childre
   };
 
   useEffect(() => {
-    fetchContractors();
-  }, [handleError]);
+    if (isAuthenticated) {
+      fetchContractors();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   const addContractor = async (contractor: Omit<Contractor, 'id'>) => {
     try {

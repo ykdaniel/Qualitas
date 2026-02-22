@@ -1,0 +1,40 @@
+C:\Users\YUKAI\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\pydantic\_internal\_config.py:383: UserWarning: Valid config keys have changed in V2:
+* 'orm_mode' has been renamed to 'from_attributes'
+  warnings.warn(message, UserWarning)
+INFO:     Started server process [22084]
+INFO:     Waiting for application startup.
+2026-02-14 21:05:32,880 - main - INFO - Background scheduler started.
+2026-02-14 21:05:32,881 - scheduler - INFO - [Scheduler] Starting scheduler loop...
+2026-02-14 21:05:32,881 - scheduler - INFO - [Scheduler] Next run at 2026-02-15 08:00:00 (waiting 39267 seconds)
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8010 (Press CTRL+C to quit)
+Running database migrations...
+Migrations completed.
+Running database seeding...
+DEBUG: Found 0 items in existing record.
+Items already empty.
+Updating existing Rebar ITP: QTS-RKS-HL-ITP-000001
+Rebar ITP seeded successfully.
+Seeding completed.
+INFO:     127.0.0.1:49963 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49964 - "POST /api/itp/ HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:49965 - "POST /api/ncr/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49966 - "PUT /api/ncr/6baadf48-a5b8-48e9-882c-5a9f2a4d54a4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49967 - "DELETE /api/ncr/6baadf48-a5b8-48e9-882c-5a9f2a4d54a4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49968 - "POST /api/noi/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49969 - "PUT /api/noi/53b17435-6561-487c-ab3c-afc3889027b2 HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:49970 - "POST /api/checklist/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49971 - "PUT /api/checklist/242ca646-c8dd-4d66-94b4-6e76c79e4f0b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49972 - "DELETE /api/checklist/242ca646-c8dd-4d66-94b4-6e76c79e4f0b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49990 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49991 - "POST /api/itp/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49992 - "PUT /api/itp/bc73e7cd-e9ac-4710-ad93-b1c6a4c5446c HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49993 - "DELETE /api/itp/bc73e7cd-e9ac-4710-ad93-b1c6a4c5446c HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49994 - "POST /api/ncr/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49995 - "PUT /api/ncr/821f4cf6-6701-4cfa-a758-171fd16682ee HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "DELETE /api/ncr/821f4cf6-6701-4cfa-a758-171fd16682ee HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49997 - "POST /api/noi/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49998 - "PUT /api/noi/4d83be8d-4f4d-41e9-b2b9-94c7b0247ec2 HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:49999 - "POST /api/checklist/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50061 - "PUT /api/checklist/ce19e278-9e67-4dd2-a4d7-c9ff19839440 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50062 - "DELETE /api/checklist/ce19e278-9e67-4dd2-a4d7-c9ff19839440 HTTP/1.1" 200 OK

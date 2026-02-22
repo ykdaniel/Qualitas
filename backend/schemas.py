@@ -15,7 +15,7 @@ def validate_date_format(v: str) -> str:
     return v
 
 class ITPBase(BaseModel):
-    vendor: str
+    vendor: Optional[str] = None
     referenceNo: Optional[str] = None  # 由後端自動產生
     description: Optional[constr(max_length=MAX_TEXT_LENGTH)] = ''
     rev: Optional[constr(max_length=MAX_SHORT_LENGTH)] = ''
@@ -24,7 +24,7 @@ class ITPBase(BaseModel):
     remark: Optional[str] = None
     hasDetails: Optional[bool] = False
     submissionDate: Optional[str] = None
-    detail_data: Optional[str] = None
+    detail_data: Optional[Any] = None  # Allow List/Dict/Any
     attachments: Optional[List[str]] = []
     last_reminded_at: Optional[str] = None
     dueDate: Optional[str] = None
@@ -34,9 +34,9 @@ class ITPBase(BaseModel):
     def check_dates(cls, v):
         return validate_date_format(v)
 
-    @field_validator('attachments', mode='before')
+    @field_validator('detail_data', 'attachments', mode='before')
     @classmethod
-    def parse_attachments(cls, v):
+    def parse_json_fields(cls, v):
         if isinstance(v, str):
             try:
                 return json.loads(v)
@@ -44,8 +44,15 @@ class ITPBase(BaseModel):
                 return []
         return v
 
+
 class ITPCreate(ITPBase):
     id: Optional[str] = None
+class ITPDetailBody(BaseModel):
+    a: List[Any] = []
+    b: List[Any] = []
+    c: List[Any] = []
+    checklist: List[Any] = []
+    self_inspection: Optional[Any] = None
 
 class ITPUpdate(BaseModel):
     """ITP 更新用 schema，referenceNo 不可更新"""
@@ -58,29 +65,20 @@ class ITPUpdate(BaseModel):
     remark: Optional[str] = None
     hasDetails: Optional[bool] = None
     submissionDate: Optional[str] = None
-    detail_data: Optional[str] = None
+    detail_data: Optional[Any] = None
     attachments: Optional[List[str]] = None
     last_reminded_at: Optional[str] = None
     dueDate: Optional[str] = None
 
+
 class ITP(ITPBase):
     id: str
-
     class Config:
         from_attributes = True
 
-
-class ITPDetailBody(BaseModel):
-    a: List[Any] = []
-    b: List[Any] = []
-    c: List[Any] = []
-    checklist: List[Any] = []
-    self_inspection: Optional[Any] = None  # 自主檢查表
-
-
 # NCR
 class NCRBase(BaseModel):
-    vendor: str
+    vendor: Optional[str] = None
     documentNumber: Optional[str] = None  # 由後端自動產生
     description: constr(max_length=MAX_TEXT_LENGTH)
     rev: constr(max_length=MAX_SHORT_LENGTH)
@@ -170,7 +168,7 @@ class NOIBase(BaseModel):
     checkpoint: Optional[str] = None
     inspectionDate: str
     type: str
-    contractor: str
+    contractor: Optional[str] = None
     contacts: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
@@ -230,7 +228,7 @@ class NOI(NOIBase):
 
 # ITR
 class ITRBase(BaseModel):
-    vendor: str
+    vendor: Optional[str] = None
     documentNumber: Optional[str] = None  # 由後端自動產生
     description: str
     rev: str
@@ -251,6 +249,7 @@ class ITRBase(BaseModel):
     checkpoint: Optional[str] = None
     defectPhotos: Optional[Any] = None
     improvementPhotos: Optional[Any] = None
+    detail_data: Optional[str] = None  # JSON string for extended data
     attachments: Optional[List[str]] = []
 
     @field_validator('raiseDate', 'closeoutDate', mode='before')
@@ -294,6 +293,7 @@ class ITRUpdate(BaseModel):
     defectPhotos: Optional[Any] = None
     defectPhotos: Optional[Any] = None
     improvementPhotos: Optional[Any] = None
+    detail_data: Optional[str] = None
     attachments: Optional[List[str]] = None
 
 class ITR(ITRBase):
@@ -307,7 +307,7 @@ class PQPBase(BaseModel):
     pqpNo: Optional[str] = None  # 由後端自動產生
     title: str
     description: str
-    vendor: str
+    vendor: Optional[str] = None
     status: str
     version: str
     createdAt: str
@@ -354,7 +354,7 @@ class PQP(PQPBase):
 
 # OBS
 class OBSBase(BaseModel):
-    vendor: str
+    vendor: Optional[str] = None
     documentNumber: Optional[str] = None  # 由後端自動產生
     description: str
     rev: str
@@ -413,6 +413,8 @@ class OBSUpdate(BaseModel):
     attachments: Optional[Any] = None
     last_reminded_at: Optional[str] = None
     dueDate: Optional[str] = None
+    noiNumber: Optional[str] = None
+    itrNumber: Optional[str] = None
 
 class OBS(OBSBase):
     id: str
@@ -530,14 +532,26 @@ class RoleBase(BaseModel):
         return v
 
 class RoleCreate(RoleBase):
-    pass
+    reason: Optional[str] = None
 
 class RoleUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     permissions: Optional[List[str]] = None
+    reason: Optional[str] = None
 
 class Role(RoleBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+# Permission
+class PermissionBase(BaseModel):
+    code: str
+    description: Optional[str] = None
+
+class Permission(PermissionBase):
     id: int
 
     class Config:
@@ -546,13 +560,21 @@ class Role(RoleBase):
 # User
 class ChecklistBase(BaseModel):
     recordsNo: Optional[str] = None  # 改為 Optional 以支援後端自動產生
-    activity: str
+    activity: Optional[str] = None
     date: str
     status: str
-    packageName: str
+    packageName: Optional[str] = None
     location: Optional[str] = None
-    itpIndex: int
+    itpIndex: Optional[int] = 0
     detail_data: Optional[str] = None
+    noiNumber: Optional[str] = None
+    contractor: Optional[str] = None
+    itpId: Optional[str] = None
+    itpVersion: Optional[str] = None
+    passCount: Optional[int] = 0
+    failCount: Optional[int] = 0
+    itrId: Optional[str] = None
+    itrNumber: Optional[str] = None
 
 class ChecklistCreate(ChecklistBase):
     pass
@@ -567,6 +589,14 @@ class ChecklistUpdate(BaseModel):
     location: Optional[str] = None
     itpIndex: Optional[int] = None
     detail_data: Optional[str] = None
+    noiNumber: Optional[str] = None
+    contractor: Optional[str] = None
+    itpId: Optional[str] = None
+    itpVersion: Optional[str] = None
+    passCount: Optional[int] = None
+    failCount: Optional[int] = None
+    itrId: Optional[str] = None
+    itrNumber: Optional[str] = None
 
 class Checklist(ChecklistBase):
     id: str
@@ -580,10 +610,10 @@ class UserBase(BaseModel):
     full_name: Optional[str] = None
     is_active: Optional[bool] = True
     role_id: Optional[int] = None
-    created_at: Optional[str] = None  # ISO date string
 
 class UserCreate(UserBase):
     password: str
+    reason: Optional[str] = None
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None
@@ -592,10 +622,12 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
     role_id: Optional[int] = None
     password: Optional[str] = None
+    reason: Optional[str] = None
 
 class User(UserBase):
     id: int
-    role_name: Optional[str] = None # For UI convenience
+    role_name: Optional[str] = None
+    created_at: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -631,5 +663,217 @@ class AuditUpdate(BaseModel):
 
 class Audit(AuditBase):
     id: str
+    class Config:
+        from_attributes = True
+
+
+# --- KPI & Performance Schemas ---
+class KPIWeightBase(BaseModel):
+    pqp_weight: int = 25
+    itp_weight: int = 25
+    obs_weight: int = 25
+    ncr_weight: int = 25
+
+class KPIWeightUpdate(KPIWeightBase):
+    pass
+
+class KPIWeight(KPIWeightBase):
+    id: int
+    updated_at: Optional[str] = None
+    class Config:
+        from_attributes = True
+
+class OwnerPerformanceBase(BaseModel):
+    owner_name: str
+    month: str
+    score: int = 0
+    details: Optional[str] = None
+
+class OwnerPerformanceCreate(OwnerPerformanceBase):
+    id: Optional[str] = None
+
+class OwnerPerformanceUpdate(BaseModel):
+    owner_name: Optional[str] = None
+    month: Optional[str] = None
+    score: Optional[int] = None
+    details: Optional[str] = None
+
+class OwnerPerformance(OwnerPerformanceBase):
+    id: str
+    updated_at: Optional[str] = None
+    class Config:
+        from_attributes = True
+
+
+# --- Attachment (File Management) Schemas ---
+
+class AttachmentResponse(BaseModel):
+    """附件回傳 schema — 前端用於顯示與管理檔案"""
+    id: str
+    entity_type: str
+    entity_id: str
+    file_name: str
+    file_url: str            # 由 API 動態組裝的完整存取 URL
+    file_size: Optional[int] = None
+    mime_type: Optional[str] = None
+    category: str = "attachment"
+    uploaded_by: Optional[str] = None
+    uploaded_at: str
+
+    class Config:
+        from_attributes = True
+
+# --- Auth Schemas ---
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+
+
+# --- FAT Schemas ---
+
+class FATDetailItem(BaseModel):
+    id: str
+    sNo: Optional[str] = ''
+    itemName: Optional[str] = ''
+    specification: Optional[str] = ''
+    qty: Optional[str] = ''
+    unit: Optional[str] = ''
+    acceptanceCriteria: Optional[str] = ''
+    fatActualValue: Optional[str] = ''
+    fatJudgment: Optional[str] = ''
+    remarks: Optional[str] = ''
+
+class FATBase(BaseModel):
+    equipment: str
+    supplier: str
+    procedure: Optional[str] = None
+    location: Optional[str] = None
+    startDate: str
+    endDate: str
+    deliveryFrom: Optional[str] = None
+    deliveryTo: Optional[str] = None
+    siteReadiness: Optional[str] = None
+    moveInDate: Optional[str] = None
+    status: Optional[str] = "Scheduled"
+    hasDetails: Optional[bool] = False
+    detail_data: Optional[List[FATDetailItem]] = None
+    attachments: Optional[List[str]] = []
+
+    @field_validator('startDate', 'endDate', 'moveInDate', mode='before')
+    @classmethod
+    def check_dates(cls, v):
+        return validate_date_format(v)
+
+    @field_validator('detail_data', 'attachments', mode='before')
+    @classmethod
+    def parse_json(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return []
+        return v
+
+class FATCreate(FATBase):
+    id: Optional[str] = None
+
+class FATUpdate(BaseModel):
+    equipment: Optional[str] = None
+    supplier: Optional[str] = None
+    procedure: Optional[str] = None
+    location: Optional[str] = None
+    startDate: Optional[str] = None
+    endDate: Optional[str] = None
+    deliveryFrom: Optional[str] = None
+    deliveryTo: Optional[str] = None
+    siteReadiness: Optional[str] = None
+    moveInDate: Optional[str] = None
+    status: Optional[str] = None
+    hasDetails: Optional[bool] = None
+    detail_data: Optional[List[FATDetailItem]] = None
+    attachments: Optional[List[str]] = None
+
+class FAT(FATBase):
+    id: str
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+# --- KM Schemas ---
+class KMAttachment(BaseModel):
+    name: str
+    filename: Optional[str] = None
+    size: Optional[str] = None
+    url: Optional[str] = None
+
+class KMArticleBase(BaseModel):
+    articleNo: Optional[str] = None
+    title: str
+    content: str
+    category: Optional[str] = None
+    tags: Optional[str] = None
+    status: Optional[str] = "Published"
+    attachments: Optional[List[KMAttachment]] = None
+    parent_id: Optional[str] = None
+    chapter_no: Optional[str] = None
+    change_summary: Optional[str] = None
+
+    @field_validator('attachments', mode='before')
+    @classmethod
+    def parse_attachments(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return []
+        return v
+
+class KMArticleCreate(KMArticleBase):
+    id: Optional[str] = None
+
+class KMArticleUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    category: Optional[str] = None
+    tags: Optional[str] = None
+    status: Optional[str] = None
+    attachments: Optional[List[KMAttachment]] = None
+    parent_id: Optional[str] = None
+    chapter_no: Optional[str] = None
+    change_summary: Optional[str] = None
+
+class KMArticle(KMArticleBase):
+    id: str
+    author_id: Optional[int] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    version_no: Optional[int] = 1
+
+    class Config:
+        from_attributes = True
+
+class KMArticleHistory(BaseModel):
+    id: str
+    article_id: str
+    version_no: int
+    title: str
+    content: str
+    category: Optional[str] = None
+    tags: Optional[str] = None
+    status: Optional[str] = None
+    author_id: Optional[int] = None
+    attachments: Optional[str] = None
+    parent_id: Optional[str] = None
+    chapter_no: Optional[str] = None
+    change_summary: Optional[str] = None
+    created_at: str
+
+
+    
     class Config:
         from_attributes = True

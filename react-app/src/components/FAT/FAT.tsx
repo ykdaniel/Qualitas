@@ -1,10 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
-import { useContractors } from '../../context/ContractorsContext';
+import { useContractorsStore } from '../../store/contractorsStore';
 import { checkFATReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
-import { createColumns, FATItem } from './columns';
+import { createColumns } from './columns';
+import { useFATStore } from '../../store/fatStore';
+import type { FATItem, FATDetailItem } from '../../store/fatStore';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './FAT.module.css';
 import { BackButton } from '@/components/ui/BackButton';
@@ -12,83 +14,13 @@ import { BackButton } from '@/components/ui/BackButton';
 // ... (keep constants and interfaces that are NOT FATItem if any, or move them)
 // FATDetailItem is used in FAT.tsx. Keep it.
 
-const STORAGE_KEY_FAT_LIST = 'qualitas_fat_list';
-const STORAGE_KEY_FAT_DETAILS = 'qualitas_fat_details';
 
-interface FATDetailItem {
-  id: string;
-  sNo: string;
-  itemName: string;
-  specification: string;
-  qty: string;
-  unit: string;
-  acceptanceCriteria: string;
-  fatActualValue: string;
-  fatJudgment: string;
-  remarks: string;
-}
-
-const defaultFatList: FATItem[] = [
-  {
-    id: '1',
-    equipment: 'Equipment A',
-    supplier: '廠商A',
-    procedure: 'Procedure 1',
-    location: 'Location A',
-    startDate: '2026-01-01',
-    endDate: '2026-01-31',
-    deliveryFrom: 'Factory A',
-    deliveryTo: 'Site A',
-    siteReadiness: 'Ready',
-    moveInDate: '2026-02-01',
-    hasDetails: true,
-  },
-];
-
-const defaultFatDetails: { [key: string]: FATDetailItem[] } = {
-  '1': [
-    {
-      id: '1-1',
-      sNo: '1',
-      itemName: 'Item 1',
-      specification: 'Spec 1',
-      qty: '10',
-      unit: 'pcs',
-      acceptanceCriteria: 'Standard A',
-      fatActualValue: '9.8',
-      fatJudgment: 'Pass',
-      remarks: 'Test passed',
-    },
-  ],
-};
-
-function loadFatListFromStorage(): FATItem[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_FAT_LIST);
-    if (raw) {
-      const parsed = JSON.parse(raw) as FATItem[];
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch (_) { }
-  return defaultFatList;
-}
-
-function loadFatDetailsFromStorage(): { [key: string]: FATDetailItem[] } {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_FAT_DETAILS);
-    if (raw) {
-      const parsed = JSON.parse(raw) as { [key: string]: FATDetailItem[] };
-      if (parsed && typeof parsed === 'object') return parsed;
-    }
-  } catch (_) { }
-  return defaultFatDetails;
-}
 
 const FAT: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const { getActiveContractors } = useContractors();
-  const [fatList, setFatList] = useState<FATItem[]>(loadFatListFromStorage);
+  const { getActiveContractors } = useContractorsStore();
+  const { fatList, loading, addFAT, updateFAT, deleteFAT, saveFATDetails, fatDetails } = useFATStore();
   const [searchQuery, setSearchQuery] = useState<string>('');
   // Vendor filter removed (handled by DataTable)
 
@@ -97,24 +29,11 @@ const FAT: React.FC = () => {
   const [isDetailsEditModalOpen, setIsDetailsEditModalOpen] = useState(false);
   const [currentFatId, setCurrentFatId] = useState<string | null>(null);
   const [viewingFatId, setViewingFatId] = useState<string | null>(null);
-  const [fatDetails, setFatDetails] = useState<{ [key: string]: FATDetailItem[] }>(loadFatDetailsFromStorage);
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null; message: string }>({
     isOpen: false,
     id: null,
     message: '',
   });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_FAT_LIST, JSON.stringify(fatList));
-    } catch (_) { }
-  }, [fatList]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_FAT_DETAILS, JSON.stringify(fatDetails));
-    } catch (_) { }
-  }, [fatDetails]);
 
   // Only handle Global Search here. Column filters are handled by DataTable.
   const filteredFatList = useMemo(() => {
@@ -149,25 +68,18 @@ const FAT: React.FC = () => {
   }, [fatList]);
 
   const handleAddNew = () => {
-    const newId = String(Date.now());
-    setCurrentFatId(newId);
+    setCurrentFatId(null);
     setIsEditModalOpen(true);
   };
 
-  const handleSaveFATDetails = (updates: Partial<FATItem>) => {
-    if (currentFatId) {
-      const existingItem = fatList.find(item => item.id === currentFatId);
-      if (existingItem) {
-        setFatList(prevList =>
-          prevList.map(item =>
-            item.id === currentFatId ? { ...item, ...updates } : item
-          )
-        );
+  const handleSaveFATDetails = async (updates: Partial<FATItem>) => {
+    try {
+      if (currentFatId) {
+        await updateFAT(currentFatId, updates);
       } else {
         const activeContractors = getActiveContractors();
         const defaultSupplier = activeContractors.length > 0 ? activeContractors[0].name : '';
-        const newItem: FATItem = {
-          id: currentFatId,
+        const newItem: Omit<FATItem, 'id'> = {
           equipment: updates.equipment || '',
           supplier: updates.supplier || defaultSupplier,
           procedure: updates.procedure || '',
@@ -178,11 +90,14 @@ const FAT: React.FC = () => {
           deliveryTo: updates.deliveryTo || '',
           siteReadiness: updates.siteReadiness || '',
           moveInDate: updates.moveInDate || '',
-          hasDetails: false, // Default
-        } as FATItem; // Cast because 'hasDetails' might be missing in updates
-        setFatList(prevList => [...prevList, newItem]);
-        setFatDetails(prev => ({ ...prev, [currentFatId]: [] }));
+          hasDetails: false,
+        } as any; // safe cast for omit id
+        await addFAT(newItem);
       }
+      setIsEditModalOpen(false);
+      setCurrentFatId(null);
+    } catch (e) {
+      // Error handled in context
     }
   };
 
@@ -191,22 +106,16 @@ const FAT: React.FC = () => {
     setIsDetailsEditModalOpen(true);
   };
 
-  const handleViewDetails = (id: string) => {
-    setViewingFatId(id);
-    setIsDetailsModalOpen(true);
-  };
-
-  const handleSaveDetails = (details: FATDetailItem[]) => {
+  const handleSaveDetails = async (details: FATDetailItem[]) => {
     if (currentFatId) {
-      setFatDetails(prev => ({ ...prev, [currentFatId]: details }));
-      setFatList(prevList =>
-        prevList.map(item =>
-          item.id === currentFatId ? { ...item, hasDetails: details.length > 0 } : item
-        )
-      );
+      try {
+        await saveFATDetails(currentFatId, details);
+        setIsDetailsEditModalOpen(false);
+        setCurrentFatId(null);
+      } catch (e) {
+        // Error handled in context
+      }
     }
-    setIsDetailsEditModalOpen(false);
-    setCurrentFatId(null);
   };
 
   const handleEdit = (id: string) => {
@@ -223,15 +132,14 @@ const FAT: React.FC = () => {
     setDeleteModal({ isOpen: true, id, message });
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (deleteModal.id) {
-      setFatList(prevList => prevList.filter(item => item.id !== deleteModal.id));
-      setFatDetails(prev => {
-        const newDetails = { ...prev };
-        delete newDetails[deleteModal.id!];
-        return newDetails;
-      });
-      setDeleteModal({ isOpen: false, id: null, message: '' });
+      try {
+        await deleteFAT(deleteModal.id);
+        setDeleteModal({ isOpen: false, id: null, message: '' });
+      } catch (e) {
+        // Error handled in context
+      }
     }
   };
 
@@ -307,11 +215,12 @@ const FAT: React.FC = () => {
               {t('fat.addNew')}
             </button>
           }
-          columns={createColumns(handleEdit, handleViewDetails, handleAddDetails, handleDeleteClick, t, getActiveContractors())}
+          columns={createColumns(handleEdit, handleAddDetails, handleDeleteClick, t, getActiveContractors())}
           data={filteredFatList}
           searchKey=""
           searchPlaceholder={t('fat.searchPlaceholder')}
           getRowId={(row) => row.id}
+          onRowClick={(row) => handleEdit(row.id)}
         />
       </div>
 
@@ -577,7 +486,7 @@ interface FATEditModalProps {
 
 const FATEditModal: React.FC<FATEditModalProps> = ({ fatId, existingItem, onSave, onClose }) => {
   const { t } = useLanguage();
-  const { getActiveContractors } = useContractors();
+  const { getActiveContractors } = useContractorsStore();
   const [formData, setFormData] = useState<Partial<FATItem>>({
     equipment: existingItem?.equipment || '',
     supplier: existingItem?.supplier || '',

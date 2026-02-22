@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
-import { useContractors, Contractor } from '../../context/ContractorsContext';
+import { useContractorsStore, Contractor } from '../../store/contractorsStore';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './Contractors.module.css';
 
@@ -13,7 +13,7 @@ import { BackButton } from '@/components/ui/BackButton';
 const Contractors: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const { contractors, addContractor, updateContractor, deleteContractor } = useContractors();
+  const { contractors, addContractor, updateContractor, deleteContractor } = useContractorsStore();
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -130,6 +130,7 @@ const Contractors: React.FC = () => {
           data={filteredContractors}
           searchKey=""
           getRowId={(row) => row.id.toString()} // Convert number to string for DataTable row ID if needed
+          onRowClick={(row) => handleEdit(row)}
         />
       </div>
 

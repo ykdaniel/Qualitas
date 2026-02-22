@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useMemo, useEffect, useCall
 import api from '../services/api';
 import { parseJsonFields } from '../utils/normalizeApiItem';
 import { useErrorHandler } from '../hooks/useErrorHandler';
+import { useAuth } from './AuthContext';
 
 export interface OBSItem {
   id: string;
@@ -35,10 +36,13 @@ function normalizeItem(item: unknown): OBSItem {
   return parseJsonFields(record, ['defectPhotos', 'improvementPhotos', 'attachments']) as unknown as OBSItem;
 }
 
+import { FilterParams } from '../types/api';
+
 interface OBSContextType {
   obsList: OBSItem[];
   loading: boolean;
   error: string | null;
+  refetch: (params?: FilterParams) => Promise<void>;
   addOBS: (obs: Omit<OBSItem, 'id'>) => Promise<OBSItem>;
   updateOBS: (id: string, obs: Partial<OBSItem>) => Promise<void>;
   deleteOBS: (id: string) => Promise<void>;
@@ -54,22 +58,28 @@ export const OBSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [error, setError] = useState<string | null>(null);
   const { handleError } = useErrorHandler();
 
-  useEffect(() => {
-    const fetchOBSs = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await api.get('/obs/');
-        setObsList((response.data || []).map(normalizeItem));
-      } catch (err) {
-        const msg = handleError(err, 'Failed to fetch OBSs');
-        setError(msg);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchOBSs();
+  const fetchOBSs = useCallback(async (params?: FilterParams) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await api.get('/obs/', { params });
+      setObsList((response.data || []).map(normalizeItem));
+    } catch (err) {
+      const msg = handleError(err, 'Failed to fetch OBSs');
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
   }, [handleError]);
+
+  const { isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchOBSs();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   const addOBS = useCallback(async (obs: Omit<OBSItem, 'id'>): Promise<OBSItem> => {
     try {
@@ -85,7 +95,7 @@ export const OBSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const updateOBS = useCallback(async (id: string, updates: Partial<OBSItem>) => {
     try {
-      const response = await api.put(`/obs/${id}`, updates);
+      const response = await api.put(`/obs/${id}/`, updates);
       const updated = normalizeItem(response.data);
       setObsList(prev => prev.map(o => (o.id === id ? updated : o)));
     } catch (error) {
@@ -96,7 +106,7 @@ export const OBSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const deleteOBS = useCallback(async (id: string) => {
     try {
-      await api.delete(`/obs/${id}`);
+      await api.delete(`/obs/${id}/`);
       setObsList(prev => prev.filter(o => o.id !== id));
     } catch (error) {
       handleError(error, 'Failed to delete OBS');
@@ -108,8 +118,8 @@ export const OBSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const getOBSByVendor = (vendor: string) => obsList.filter(obs => obs.vendor === vendor);
 
   const value = useMemo(
-    () => ({ obsList, loading, error, addOBS, updateOBS, deleteOBS, getOBSList, getOBSByVendor }),
-    [obsList, loading, error, addOBS, updateOBS, deleteOBS]
+    () => ({ obsList, loading, error, refetch: fetchOBSs, addOBS, updateOBS, deleteOBS, getOBSList, getOBSByVendor }),
+    [obsList, loading, error, fetchOBSs]
   );
 
   return (

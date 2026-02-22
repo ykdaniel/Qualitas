@@ -1,18 +1,18 @@
-import { useOBS } from '../../context/OBSContext';
+import { useOBSStore } from '../../store/obsStore';
 import { useDashboardFilter } from '../../context/DashboardFilterContext';
 import { useMemo } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from 'recharts';
 import styles from './Dashboard.module.css';
 
 const OBSStatsCard: React.FC = () => {
-  const { obsList } = useOBS();
+  const obsList = useOBSStore(state => state.obsList);
   const { selectedVendor } = useDashboardFilter();
 
   const stats = useMemo(() => {
-    const filteredList = selectedVendor === 'all' 
-      ? obsList 
+    const filteredList = selectedVendor === 'all'
+      ? obsList
       : obsList.filter(item => item.vendor === selectedVendor);
-    
+
     const total = filteredList.length;
     const open = filteredList.filter(item => {
       const status = (item.status || '').toLowerCase();
@@ -59,7 +59,7 @@ const OBSStatsCard: React.FC = () => {
             {stats.closed} ({stats.closedPercent}%)
           </span>
         </div>
-        
+
         {/* Open/Closed 圆环图 */}
         <div className={styles.obsPieChartContainer}>
           <div style={{ width: '100%', height: 220 }}>
@@ -82,7 +82,7 @@ const OBSStatsCard: React.FC = () => {
               </PieChart>
             </ResponsiveContainer>
           </div>
-          
+
           {/* 自定义图例 */}
           <div className={styles.obsChartLegend}>
             {pieData.map((entry, index) => (
