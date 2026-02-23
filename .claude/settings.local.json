@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(taskkill:*)",
+      "Bash(curl:*)",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInVzZXJfaWQiOjEsImV4cCI6MTc3MTAwODQ5OX0.lzAlkDK7VjsIz05RKuv1tUmGCbZ0VXzo_-702dyHhOQ\")",
+      "Bash(node:*)",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)",
+      "Bash(netstat:*)",
+      "Bash(git log:*)",
+      "Bash(powershell:*)",
+      "Bash(timeout:*)",
+      "Bash(npm run dev:*)"
+    ]
+  }
+}
