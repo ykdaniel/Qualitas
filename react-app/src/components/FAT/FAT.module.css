@@ -550,10 +550,11 @@
 
 .modalActions {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-top: 20px;
-  border-top: 1px solid #e5e7eb;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px 24px;
+  border-top: 2px solid #e5e7eb;
+  background: #f9fafb;
 }
 
 .addRowButton {
@@ -566,48 +567,13 @@
   font-weight: 500;
   cursor: pointer;
   transition: background-color 0.2s;
+  margin-right: auto;
 }
 
 .addRowButton:hover {
   background: #1d4ed8;
 }
 
-.actionButtons {
-  display: flex;
-  gap: 12px;
-}
-
-.actionButtons .saveButton {
-  padding: 10px 24px;
-  background: #10b981;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.actionButtons .saveButton:hover {
-  background: #059669;
-}
-
-.actionButtons .cancelButton {
-  padding: 10px 24px;
-  background: #6b7280;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.actionButtons .cancelButton:hover {
-  background: #4b5563;
-}
 
 .formSections {
   display: flex;

@@ -20,9 +20,14 @@ const FAT: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const { getActiveContractors } = useContractorsStore();
-  const { fatList, loading, addFAT, updateFAT, deleteFAT, saveFATDetails, fatDetails } = useFATStore();
+  const { fatList, loading, addFAT, updateFAT, deleteFAT, saveFATDetails, fatDetails, fetchFATs } = useFATStore();
   const [searchQuery, setSearchQuery] = useState<string>('');
   // Vendor filter removed (handled by DataTable)
+
+  // Fetch FATs on component mount
+  useEffect(() => {
+    fetchFATs();
+  }, [fetchFATs]);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
@@ -224,10 +229,10 @@ const FAT: React.FC = () => {
         />
       </div>
 
-      {isEditModalOpen && currentFatId && (
+      {isEditModalOpen && (
         <FATEditModal
-          fatId={currentFatId}
-          existingItem={fatList.find(item => item.id === currentFatId)}
+          fatId={currentFatId || 'new'}
+          existingItem={currentFatId ? fatList.find(item => item.id === currentFatId) : undefined}
           onSave={handleSaveFATDetails}
           onClose={() => {
             setIsEditModalOpen(false);
@@ -462,14 +467,12 @@ const FATDetailModal: React.FC<FATDetailModalProps> = ({ fatId, details, onSave,
             <button className={styles.addRowButton} onClick={handleAddRow}>
               {t('fat.addRow')}
             </button>
-            <div className={styles.actionButtons}>
-              <button className={styles.saveButton} onClick={handleSave}>
-                {t('common.save')}
-              </button>
-              <button className={styles.cancelButton} onClick={onClose}>
-                {t('common.cancel')}
-              </button>
-            </div>
+            <button className={styles.saveButton} onClick={handleSave}>
+              {t('common.save')}
+            </button>
+            <button className={styles.cancelButton} onClick={onClose}>
+              {t('common.cancel')}
+            </button>
           </div>
         </div>
       </div>

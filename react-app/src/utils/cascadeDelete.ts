@@ -75,6 +75,88 @@ export const checkNCRReferences = (
 };
 
 /**
+ * 檢查刪除 ITP 時是否被 Checklist 引用
+ * TODO: 需要完整實作 Checklist 引用檢查
+ */
+export const checkITPChecklistReferences = (
+  itpId: string,
+  // checklistList: ChecklistItem[]
+): {
+  hasReferences: boolean;
+  references: { type: string; count: number }[];
+} => {
+  // TODO: Implement checklist reference checking
+  // const checklistReferences = checklistList.filter(item => item.itpId === itpId);
+  return {
+    hasReferences: false,
+    references: [{ type: 'Checklist', count: 0 }]
+  };
+};
+
+/**
+ * 檢查刪除 ITR 時是否被 Checklist 引用
+ * TODO: 需要完整實作 Checklist 引用檢查
+ */
+export const checkITRChecklistReferences = (
+  itrId: string,
+  // checklistList: ChecklistItem[]
+): {
+  hasReferences: boolean;
+  references: { type: string; count: number }[];
+} => {
+  // TODO: Implement checklist reference checking
+  // const checklistReferences = checklistList.filter(item => item.itrId === itrId);
+  return {
+    hasReferences: false,
+    references: [{ type: 'Checklist', count: 0 }]
+  };
+};
+
+/**
+ * 檢查刪除 Contractor 時的關聯數據
+ * Contractor 被多個模組引用，需全面檢查
+ * TODO: 需要完整實作所有模組的引用檢查
+ */
+export const checkContractorReferences = (
+  contractorId: string,
+  contractorName: string,
+  // Lists from all modules that reference contractors:
+  // itpList: ITPItem[],
+  // ncrList: NCRItem[],
+  // noiList: NOIItem[],
+  // itrList: ITRItem[],
+  // pqpList: PQPItem[],
+  // obsList: OBSItem[],
+  // fatList: FATItem[],
+  // followupList: FollowUpItem[],
+  // auditList: AuditItem[]
+): {
+  hasReferences: boolean;
+  references: { type: string; count: number }[];
+} => {
+  // TODO: Implement comprehensive contractor reference checking across all modules
+  // Example implementation (needs actual store data):
+  // const itpReferences = itpList.filter(item => item.vendor === contractorName);
+  // const ncrReferences = ncrList.filter(item => item.vendor === contractorName);
+  // ... check all other modules
+
+  return {
+    hasReferences: false,
+    references: [
+      { type: 'ITP', count: 0 },
+      { type: 'NCR', count: 0 },
+      { type: 'NOI', count: 0 },
+      { type: 'ITR', count: 0 },
+      { type: 'PQP', count: 0 },
+      { type: 'OBS', count: 0 },
+      { type: 'FAT', count: 0 },
+      { type: 'FollowUp', count: 0 },
+      { type: 'Audit', count: 0 }
+    ]
+  };
+};
+
+/**
  * 檢查刪除 FAT 時的關聯數據
  * 目前沒有其他模組引用 FAT，但保留此函數以保持一致性
  * 未來如果有模組引用 FAT，可以在這裡添加檢查邏輯
