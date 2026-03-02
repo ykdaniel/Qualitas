@@ -464,13 +464,23 @@ class OBSBase(BaseModel):
     impactToOM: str | None = None
     defectPhotos: Any | None = None
     improvementPhotos: Any | None = None
-    attachments: Any | None = None
+    attachments: list[str] | None = None
     dueDate: str | None = None
 
     @field_validator('raiseDate', 'closeoutDate', 'dueDate', mode='before')
     @classmethod
     def check_dates(cls, v):
         return validate_date_format(v)
+
+    @field_validator('defectPhotos', 'improvementPhotos', 'attachments', mode='before')
+    @classmethod
+    def parse_photos(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return []
+        return v
 
     @model_validator(mode='after')
     def check_date_ranges(self):
