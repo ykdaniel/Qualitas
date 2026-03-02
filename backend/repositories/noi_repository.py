@@ -8,6 +8,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session, joinedload
 
 import models
+from core.utils import sanitize_search_term
 
 
 class NOIRepository:
@@ -54,12 +55,13 @@ class NOIRepository:
 
         # Search filter (referenceNo, package, checkpoint)
         if filters.get('search'):
-            search_term = filters['search']
-            query = query.filter(
-                (models.NOI.referenceNo.ilike(f"%{search_term}%")) |
-                (models.NOI.package.ilike(f"%{search_term}%")) |
-                (models.NOI.checkpoint.ilike(f"%{search_term}%"))
-            )
+            search_term = sanitize_search_term(filters['search'])
+            if search_term:
+                query = query.filter(
+                    (models.NOI.referenceNo.ilike(f"%{search_term}%")) |
+                    (models.NOI.package.ilike(f"%{search_term}%")) |
+                    (models.NOI.checkpoint.ilike(f"%{search_term}%"))
+                )
 
         # Status filter
         if filters.get('status'):

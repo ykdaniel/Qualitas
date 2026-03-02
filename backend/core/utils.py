@@ -52,6 +52,38 @@ def sanitize_pagination(skip: int, limit: int) -> tuple[int, int]:
     return skip, limit
 
 
+def sanitize_search_term(search: str | None) -> str | None:
+    """
+    Sanitize search terms for SQL LIKE/ILIKE queries by escaping special characters
+
+    Prevents wildcard injection where user input like "100%" would match "100A", "100B", etc.
+
+    Args:
+        search: Raw search string from user input
+
+    Returns:
+        Sanitized search string with escaped SQL wildcards, or None if input is None
+
+    Examples:
+        >>> sanitize_search_term("100%")
+        "100\\%"
+        >>> sanitize_search_term("test_value")
+        "test\\_value"
+        >>> sanitize_search_term("normal search")
+        "normal search"
+    """
+    if search is None:
+        return None
+
+    # Escape backslashes first to prevent double-escaping
+    search = search.replace('\\', '\\\\')
+    # Escape SQL LIKE wildcards
+    search = search.replace('%', '\\%')
+    search = search.replace('_', '\\_')
+
+    return search
+
+
 def _json_serialize(d: dict, list_fields: list) -> dict:
     """
     Serialize specified fields to JSON strings
