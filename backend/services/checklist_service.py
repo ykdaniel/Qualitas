@@ -19,6 +19,7 @@ from core.utils import (
     log_audit,
     WorkflowEngine
 )
+from core import validators
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,22 @@ class ChecklistService:
                 if contractor_name:
                     data['contractor_id'] = _resolve_vendor_id(self.repo.db, contractor_name)
 
+            # Validate references to other modules
+            if data.get('itpId'):
+                # Validate ITP exists by ID (since itpId is UUID, not referenceNo)
+                itp = self.repo.db.query(models.ITP).filter(models.ITP.id == data['itpId']).first()
+                if not itp:
+                    raise ValueError(f"ITP with ID '{data['itpId']}' not found")
+
+            if data.get('noiNumber'):
+                validators.validate_noi_reference(self.repo.db, data['noiNumber'])
+
+            if data.get('itrId'):
+                validators.validate_itr_by_id(self.repo.db, data['itrId'])
+
+            if data.get('itrNumber'):
+                validators.validate_itr_reference(self.repo.db, data['itrNumber'])
+
             # Create Checklist object
             db_checklist = models.Checklist(**data)
             if not db_checklist.id:
@@ -186,6 +203,21 @@ class ChecklistService:
                 contractor_name = d.pop('contractor')
                 if contractor_name:
                     d['contractor_id'] = _resolve_vendor_id(self.repo.db, contractor_name)
+
+            # Validate references to other modules if being updated
+            if 'itpId' in d and d['itpId']:
+                itp = self.repo.db.query(models.ITP).filter(models.ITP.id == d['itpId']).first()
+                if not itp:
+                    raise ValueError(f"ITP with ID '{d['itpId']}' not found")
+
+            if 'noiNumber' in d and d['noiNumber']:
+                validators.validate_noi_reference(self.repo.db, d['noiNumber'])
+
+            if 'itrId' in d and d['itrId']:
+                validators.validate_itr_by_id(self.repo.db, d['itrId'])
+
+            if 'itrNumber' in d and d['itrNumber']:
+                validators.validate_itr_reference(self.repo.db, d['itrNumber'])
 
             # Update the record
             updated = self.repo.update(db_checklist, d)

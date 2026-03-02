@@ -84,6 +84,20 @@ def validate_ncr_reference(db: Session, ncr_number: str):
     )
 
 
+def validate_itr_reference(db: Session, itr_number: str):
+    """Validate ITR reference exists by document number."""
+    return validate_reference_exists(
+        db, models.ITR, 'documentNumber', itr_number, 'ITR', 'document number'
+    )
+
+
+def validate_itr_by_id(db: Session, itr_id: str):
+    """Validate ITR reference exists by ID."""
+    return validate_reference_exists(
+        db, models.ITR, 'id', itr_id, 'ITR', 'ID'
+    )
+
+
 # ============================================================================
 # Cascade Delete Protection
 # ============================================================================
