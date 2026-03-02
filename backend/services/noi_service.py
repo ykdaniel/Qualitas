@@ -19,6 +19,7 @@ from core.utils import (
     WorkflowEngine
 )
 from core import error_messages
+from core import validators
 
 logger = logging.getLogger(__name__)
 
@@ -98,11 +99,7 @@ class NOIService:
 
             # Validate itpNo exists
             if data.get('itpNo'):
-                itp = self.repo.db.query(models.ITP).filter(
-                    models.ITP.referenceNo == data['itpNo']
-                ).first()
-                if not itp:
-                    raise ValueError(error_messages.reference_not_found("ITP", "reference number", data['itpNo']))
+                validators.validate_itp_reference(self.repo.db, data['itpNo'])
 
             # Create NOI object
             db_noi = models.NOI(**data)
@@ -216,24 +213,7 @@ class NOIService:
                 return False
 
             # Check for references before deletion
-            references = []
-
-            # Check NCR references
-            ncr_count = self.repo.db.query(models.NCR).filter(
-                models.NCR.noiNumber == db_noi.referenceNo
-            ).count()
-            if ncr_count > 0:
-                references.append(f"{ncr_count} NCR record(s)")
-
-            # Check ITR references
-            itr_count = self.repo.db.query(models.ITR).filter(
-                models.ITR.noiNumber == db_noi.referenceNo
-            ).count()
-            if itr_count > 0:
-                references.append(f"{itr_count} ITR record(s)")
-
-            if references:
-                raise ValueError(error_messages.cannot_delete_has_references("NOI", db_noi.referenceNo, references))
+            validators.check_noi_references(self.repo.db, db_noi.referenceNo)
 
             # Capture old values for audit
             old_val = {c.name: getattr(db_noi, c.name) for c in db_noi.__table__.columns}

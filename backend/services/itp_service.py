@@ -7,6 +7,7 @@ import schemas
 from repositories.itp_repository import ITPRepository
 from core.utils import _json_serialize, _resolve_vendor_id, generate_reference_no, log_audit, WorkflowEngine
 from core import error_messages
+from core import validators
 
 logger = logging.getLogger(__name__)
 
@@ -90,13 +91,7 @@ class ITPService:
                 return False
 
             # Check for NOI references before deletion
-            noi_count = self.repo.db.query(models.NOI).filter(
-                models.NOI.itpNo == db_itp.referenceNo
-            ).count()
-            if noi_count > 0:
-                raise ValueError(error_messages.cannot_delete_has_references(
-                    "ITP", db_itp.referenceNo, [f"{noi_count} NOI record(s)"]
-                ))
+            validators.check_itp_references(self.repo.db, db_itp.id, db_itp.referenceNo)
 
             old_val = {c.name: getattr(db_itp, c.name) for c in db_itp.__table__.columns}
 
