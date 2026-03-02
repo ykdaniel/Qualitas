@@ -16,6 +16,7 @@ from core.utils import (
     generate_reference_no,
     log_audit
 )
+from core import validators
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,13 @@ class FollowUpService:
             vendor_name = data.pop('vendor', None)
             if vendor_name:
                 data['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
+
+            # Validate source reference exists if provided
+            validators.validate_followup_source_reference(
+                self.repo.db,
+                data.get('sourceModule'),
+                data.get('sourceReferenceNo')
+            )
 
             if not data.get('issueNo'):
                 data['issueNo'] = generate_reference_no(
@@ -79,6 +87,16 @@ class FollowUpService:
             if 'vendor' in data:
                 vendor_name = data.pop('vendor')
                 data['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
+
+            # Validate source reference if being updated
+            # Use updated values if provided, otherwise use existing values
+            source_module = data.get('sourceModule', db_followup.sourceModule)
+            source_ref_no = data.get('sourceReferenceNo', db_followup.sourceReferenceNo)
+            validators.validate_followup_source_reference(
+                self.repo.db,
+                source_module,
+                source_ref_no
+            )
 
             updated = self.repo.update(db_followup, data)
 

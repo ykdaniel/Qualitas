@@ -216,3 +216,93 @@ def check_ncr_references(db: Session, ncr_document_number: str) -> None:
             (models.ITR, 'ncrNumber', ncr_document_number, 'ITR'),
         ]
     )
+
+
+# ============================================================================
+# FollowUp Source Reference Validation
+# ============================================================================
+
+def validate_followup_source_reference(
+    db: Session,
+    source_module: str,
+    source_reference_no: str
+) -> None:
+    """
+    Validate that a FollowUp's source reference exists in the appropriate module.
+
+    FollowUp records can reference multiple different module types through
+    sourceModule and sourceReferenceNo fields. This function validates that
+    the referenced record actually exists based on the module type.
+
+    Args:
+        db: Database session
+        source_module: Type of source module (e.g., "NCR", "NOI", "ITR", "OBS", "ITP")
+        source_reference_no: Reference number/document number in the source module
+
+    Raises:
+        ValueError: If source module is invalid or reference not found
+
+    Example:
+        validate_followup_source_reference(db, "NCR", "QTS-ABC-NCR-000001")
+        validate_followup_source_reference(db, "NOI", "QTS-ABC-NOI-000005")
+    """
+    if not source_module or not source_reference_no:
+        # Both fields must be provided together or both empty
+        if source_module or source_reference_no:
+            raise ValueError(
+                "Both sourceModule and sourceReferenceNo must be provided together"
+            )
+        return  # Both empty is allowed
+
+    # Normalize source module to uppercase for comparison
+    source_module = source_module.upper().strip()
+
+    # Validate based on source module type
+    if source_module == "NCR":
+        validate_reference_exists(
+            db, models.NCR, 'documentNumber', source_reference_no,
+            'NCR', 'document number'
+        )
+    elif source_module == "NOI":
+        validate_reference_exists(
+            db, models.NOI, 'referenceNo', source_reference_no,
+            'NOI', 'reference number'
+        )
+    elif source_module == "ITR":
+        validate_reference_exists(
+            db, models.ITR, 'documentNumber', source_reference_no,
+            'ITR', 'document number'
+        )
+    elif source_module == "ITP":
+        validate_reference_exists(
+            db, models.ITP, 'referenceNo', source_reference_no,
+            'ITP', 'reference number'
+        )
+    elif source_module == "OBS":
+        validate_reference_exists(
+            db, models.OBS, 'documentNumber', source_reference_no,
+            'OBS', 'document number'
+        )
+    elif source_module == "PQP":
+        validate_reference_exists(
+            db, models.PQP, 'pqpNo', source_reference_no,
+            'PQP', 'PQP number'
+        )
+    elif source_module == "FAT":
+        # FAT uses equipment name as the identifier
+        validate_reference_exists(
+            db, models.FAT, 'equipment', source_reference_no,
+            'FAT', 'equipment name'
+        )
+    elif source_module == "AUDIT":
+        validate_reference_exists(
+            db, models.Audit, 'auditNo', source_reference_no,
+            'Audit', 'audit number'
+        )
+    else:
+        # Invalid source module type
+        valid_modules = ["NCR", "NOI", "ITR", "ITP", "OBS", "PQP", "FAT", "AUDIT"]
+        raise ValueError(
+            f"Invalid sourceModule '{source_module}'. "
+            f"Must be one of: {', '.join(valid_modules)}"
+        )
