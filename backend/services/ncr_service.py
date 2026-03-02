@@ -94,6 +94,14 @@ class NCRService:
                     self.repo.db, vendor_name or '', 'NCR'
                 )
 
+            # Validate noiNumber exists if provided
+            if data.get('noiNumber'):
+                noi = self.repo.db.query(models.NOI).filter(
+                    models.NOI.referenceNo == data['noiNumber']
+                ).first()
+                if not noi:
+                    raise ValueError(f"NOI with reference number '{data['noiNumber']}' not found")
+
             # Create NCR object
             db_ncr = models.NCR(**data)
             if not db_ncr.id:
@@ -161,6 +169,14 @@ class NCRService:
             if 'vendor' in d:
                 vendor_name = d.pop('vendor')
                 d['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
+
+            # Validate noiNumber exists if being updated
+            if 'noiNumber' in d and d['noiNumber']:
+                noi = self.repo.db.query(models.NOI).filter(
+                    models.NOI.referenceNo == d['noiNumber']
+                ).first()
+                if not noi:
+                    raise ValueError(f"NOI with reference number '{d['noiNumber']}' not found")
 
             # Update the record
             updated = self.repo.update(db_ncr, d)

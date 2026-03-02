@@ -106,6 +106,22 @@ class ITRService:
                     self.repo.db, vendor_name or '', 'ITR'
                 )
 
+            # Validate noiNumber exists if provided
+            if data.get('noiNumber'):
+                noi = self.repo.db.query(models.NOI).filter(
+                    models.NOI.referenceNo == data['noiNumber']
+                ).first()
+                if not noi:
+                    raise ValueError(f"NOI with reference number '{data['noiNumber']}' not found")
+
+            # Validate ncrNumber exists if provided
+            if data.get('ncrNumber'):
+                ncr = self.repo.db.query(models.NCR).filter(
+                    models.NCR.documentNumber == data['ncrNumber']
+                ).first()
+                if not ncr:
+                    raise ValueError(f"NCR with document number '{data['ncrNumber']}' not found")
+
             # Create ITR object
             db_itr = models.ITR(**data)
             if not db_itr.id:
@@ -173,6 +189,22 @@ class ITRService:
             if 'vendor' in d:
                 vendor_name = d.pop('vendor')
                 d['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
+
+            # Validate noiNumber exists if being updated
+            if 'noiNumber' in d and d['noiNumber']:
+                noi = self.repo.db.query(models.NOI).filter(
+                    models.NOI.referenceNo == d['noiNumber']
+                ).first()
+                if not noi:
+                    raise ValueError(f"NOI with reference number '{d['noiNumber']}' not found")
+
+            # Validate ncrNumber exists if being updated
+            if 'ncrNumber' in d and d['ncrNumber']:
+                ncr = self.repo.db.query(models.NCR).filter(
+                    models.NCR.documentNumber == d['ncrNumber']
+                ).first()
+                if not ncr:
+                    raise ValueError(f"NCR with document number '{d['ncrNumber']}' not found")
 
             # Update the record
             updated = self.repo.update(db_itr, d)

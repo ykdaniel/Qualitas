@@ -95,6 +95,14 @@ class NOIService:
             if not data.get('status'):
                 data['status'] = "Draft"
 
+            # Validate itpNo exists
+            if data.get('itpNo'):
+                itp = self.repo.db.query(models.ITP).filter(
+                    models.ITP.referenceNo == data['itpNo']
+                ).first()
+                if not itp:
+                    raise ValueError(f"ITP with reference number '{data['itpNo']}' not found")
+
             # Create NOI object
             db_noi = models.NOI(**data)
             if not db_noi.id:
@@ -162,6 +170,14 @@ class NOIService:
             if 'contractor' in d:
                 vendor_name = d.pop('contractor')
                 d['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
+
+            # Validate itpNo exists if being updated
+            if 'itpNo' in d and d['itpNo']:
+                itp = self.repo.db.query(models.ITP).filter(
+                    models.ITP.referenceNo == d['itpNo']
+                ).first()
+                if not itp:
+                    raise ValueError(f"ITP with reference number '{d['itpNo']}' not found")
 
             # Update the record
             updated = self.repo.update(db_noi, d)
