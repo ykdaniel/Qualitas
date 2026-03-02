@@ -217,7 +217,7 @@ const Audit: React.FC = () => {
                     margin: '16px 24px',
                     padding: '12px 16px',
                     backgroundColor: '#DBEAFE',
-                    border: '1px solid: '#93C5FD',
+                    border: '1px solid #93C5FD',
                     borderRadius: '8px',
                     textAlign: 'center',
                     color: '#1E40AF',
