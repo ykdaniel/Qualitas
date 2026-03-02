@@ -1,7 +1,7 @@
 from typing import Optional, List
 from sqlalchemy.orm import Session, joinedload
 import models
-from core.utils import sanitize_pagination
+from core.utils import sanitize_pagination, sanitize_search_term
 
 class ITPRepository:
     def __init__(self, db: Session):
@@ -16,10 +16,12 @@ class ITPRepository:
 
         query = self.db.query(models.ITP).options(joinedload(models.ITP.vendor_ref))
         if search:
-            query = query.filter(
-                (models.ITP.referenceNo.ilike(f"%{search}%")) |
-                (models.ITP.description.ilike(f"%{search}%"))
-            )
+            search = sanitize_search_term(search)
+            if search:
+                query = query.filter(
+                    (models.ITP.referenceNo.ilike(f"%{search}%")) |
+                    (models.ITP.description.ilike(f"%{search}%"))
+                )
         if status:
             query = query.filter(models.ITP.status == status)
         if start_date:

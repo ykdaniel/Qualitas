@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 
 import models
 import schemas
-from core.utils import sanitize_pagination
+from core.utils import sanitize_pagination, sanitize_search_term
 
 
 class KMRepository:
@@ -50,7 +50,9 @@ class KMRepository:
         if category:
             query = query.filter(models.KMArticle.category == category)
         if search:
-            query = query.filter(models.KMArticle.title.ilike(f"%{search}%"))
+            search = sanitize_search_term(search)
+            if search:
+                query = query.filter(models.KMArticle.title.ilike(f"%{search}%"))
         return query.offset(skip).limit(limit).all()
 
     def get_by_id(self, id: str) -> models.KMArticle | None:

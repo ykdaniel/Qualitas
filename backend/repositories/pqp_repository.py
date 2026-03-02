@@ -8,6 +8,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session, joinedload
 
 import models
+from core.utils import sanitize_search_term
 
 
 class PQPRepository:
@@ -28,11 +29,12 @@ class PQPRepository:
         query = self.db.query(models.PQP).options(joinedload(models.PQP.vendor_ref))
 
         if filters.get('search'):
-            search_term = filters['search']
-            query = query.filter(
-                (models.PQP.pqpNo.ilike(f"%{search_term}%")) |
-                (models.PQP.title.ilike(f"%{search_term}%"))
-            )
+            search_term = sanitize_search_term(filters['search'])
+            if search_term:
+                query = query.filter(
+                    (models.PQP.pqpNo.ilike(f"%{search_term}%")) |
+                    (models.PQP.title.ilike(f"%{search_term}%"))
+                )
         if filters.get('status'):
             query = query.filter(models.PQP.status == filters['status'])
         if filters.get('start_date'):

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from loguru import logger
 
 import models
+from core.utils import sanitize_search_term
 
 class FATRepository:
     """Repository for FAT entity"""
@@ -34,11 +35,13 @@ class FATRepository:
         # Fuzzy search across multiple string columns
         search_term = filters.get('search')
         if search_term:
-            query = query.filter(
-                (models.FAT.equipment.ilike(f"%{search_term}%")) |
-                (models.FAT.supplier.ilike(f"%{search_term}%")) |
-                (models.FAT.procedure.ilike(f"%{search_term}%"))
-            )
+            search_term = sanitize_search_term(search_term)
+            if search_term:
+                query = query.filter(
+                    (models.FAT.equipment.ilike(f"%{search_term}%")) |
+                    (models.FAT.supplier.ilike(f"%{search_term}%")) |
+                    (models.FAT.procedure.ilike(f"%{search_term}%"))
+                )
 
         # Date range filtering
         start_date = filters.get('start_date')
