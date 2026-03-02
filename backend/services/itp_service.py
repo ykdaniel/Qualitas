@@ -87,9 +87,16 @@ class ITPService:
             db_itp = self.repo.get_by_id(itp_id)
             if not db_itp:
                 return False
-            
+
+            # Check for NOI references before deletion
+            noi_count = self.repo.db.query(models.NOI).filter(
+                models.NOI.itpNo == db_itp.referenceNo
+            ).count()
+            if noi_count > 0:
+                raise ValueError(f"Cannot delete ITP '{db_itp.referenceNo}': referenced by {noi_count} NOI record(s)")
+
             old_val = {c.name: getattr(db_itp, c.name) for c in db_itp.__table__.columns}
-            
+
             self.repo.delete(db_itp)
             
             log_audit(

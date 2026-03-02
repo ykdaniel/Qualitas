@@ -215,6 +215,13 @@ class NCRService:
             if not db_ncr:
                 return False
 
+            # Check for ITR references before deletion
+            itr_count = self.repo.db.query(models.ITR).filter(
+                models.ITR.ncrNumber == db_ncr.documentNumber
+            ).count()
+            if itr_count > 0:
+                raise ValueError(f"Cannot delete NCR '{db_ncr.documentNumber}': referenced by {itr_count} ITR record(s)")
+
             # Capture old values for audit
             old_val = {c.name: getattr(db_ncr, c.name) for c in db_ncr.__table__.columns}
 

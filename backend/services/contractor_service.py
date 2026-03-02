@@ -146,6 +146,57 @@ class ContractorService:
             if not db_contractor:
                 return False
 
+            # Check for references before deletion
+            references = []
+
+            # Check ITP references
+            itp_count = self.repo.db.query(models.ITP).filter(models.ITP.vendor_id == contractor_id).count()
+            if itp_count > 0:
+                references.append(f"{itp_count} ITP record(s)")
+
+            # Check NCR references
+            ncr_count = self.repo.db.query(models.NCR).filter(models.NCR.vendor_id == contractor_id).count()
+            if ncr_count > 0:
+                references.append(f"{ncr_count} NCR record(s)")
+
+            # Check NOI references
+            noi_count = self.repo.db.query(models.NOI).filter(models.NOI.vendor_id == contractor_id).count()
+            if noi_count > 0:
+                references.append(f"{noi_count} NOI record(s)")
+
+            # Check ITR references
+            itr_count = self.repo.db.query(models.ITR).filter(models.ITR.vendor_id == contractor_id).count()
+            if itr_count > 0:
+                references.append(f"{itr_count} ITR record(s)")
+
+            # Check PQP references
+            pqp_count = self.repo.db.query(models.PQP).filter(models.PQP.vendor_id == contractor_id).count()
+            if pqp_count > 0:
+                references.append(f"{pqp_count} PQP record(s)")
+
+            # Check OBS references
+            obs_count = self.repo.db.query(models.OBS).filter(models.OBS.vendor_id == contractor_id).count()
+            if obs_count > 0:
+                references.append(f"{obs_count} OBS record(s)")
+
+            # Check FAT references
+            fat_count = self.repo.db.query(models.FAT).filter(models.FAT.vendor_id == contractor_id).count()
+            if fat_count > 0:
+                references.append(f"{fat_count} FAT record(s)")
+
+            # Check FollowUp references
+            followup_count = self.repo.db.query(models.FollowUp).filter(models.FollowUp.vendor_id == contractor_id).count()
+            if followup_count > 0:
+                references.append(f"{followup_count} FollowUp record(s)")
+
+            # Check Audit references
+            audit_count = self.repo.db.query(models.Audit).filter(models.Audit.vendor_id == contractor_id).count()
+            if audit_count > 0:
+                references.append(f"{audit_count} Audit record(s)")
+
+            if references:
+                raise ValueError(f"Cannot delete contractor '{db_contractor.name}': referenced by {', '.join(references)}")
+
             # Capture old values for audit
             old_val = {c.name: getattr(db_contractor, c.name) for c in db_contractor.__table__.columns}
 

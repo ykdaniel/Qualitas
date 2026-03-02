@@ -216,6 +216,26 @@ class NOIService:
             if not db_noi:
                 return False
 
+            # Check for references before deletion
+            references = []
+
+            # Check NCR references
+            ncr_count = self.repo.db.query(models.NCR).filter(
+                models.NCR.noiNumber == db_noi.referenceNo
+            ).count()
+            if ncr_count > 0:
+                references.append(f"{ncr_count} NCR record(s)")
+
+            # Check ITR references
+            itr_count = self.repo.db.query(models.ITR).filter(
+                models.ITR.noiNumber == db_noi.referenceNo
+            ).count()
+            if itr_count > 0:
+                references.append(f"{itr_count} ITR record(s)")
+
+            if references:
+                raise ValueError(f"Cannot delete NOI '{db_noi.referenceNo}': referenced by {', '.join(references)}")
+
             # Capture old values for audit
             old_val = {c.name: getattr(db_noi, c.name) for c in db_noi.__table__.columns}
 
