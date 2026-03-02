@@ -243,6 +243,47 @@ def log_audit(db: Session, action: str, entity_type: str, entity_id: str,
         logger.error(f"Error logging audit: {e}", exc_info=True)
 
 
+def log_status_change(db: Session, entity_type: str, entity_id: str, entity_name: str,
+                      old_status: str, new_status: str, user_id: int = None,
+                      username: str = None, reason: str = None):
+    """
+    Log status change operations with enhanced tracking.
+
+    This is a convenience wrapper around log_audit specifically for status changes,
+    which are critical workflow transitions that need special tracking.
+
+    Args:
+        db: Database session
+        entity_type: Type of entity (ITP, NCR, NOI, ITR, etc.)
+        entity_id: ID of the entity
+        entity_name: Name/reference number of the entity
+        old_status: Previous status
+        new_status: New status
+        user_id: ID of user performing the change
+        username: Username of user performing the change
+        reason: Reason for the status change
+
+    Example:
+        log_status_change(
+            db, "ITP", itp.id, itp.referenceNo,
+            "Draft", "Pending", user_id=1, username="admin",
+            reason="Submitted for review"
+        )
+    """
+    log_audit(
+        db,
+        action="STATUS_CHANGE",
+        entity_type=entity_type,
+        entity_id=entity_id,
+        entity_name=entity_name,
+        old_value={"status": old_status},
+        new_value={"status": new_status},
+        user_id=user_id,
+        username=username,
+        reason=reason or f"Status changed from '{old_status}' to '{new_status}'"
+    )
+
+
 def get_contractor_abbreviation(db: Session, vendor_name: str) -> str:
     """
     根據廠商名稱取得縮寫
