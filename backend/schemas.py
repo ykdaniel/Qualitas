@@ -2,7 +2,7 @@ import json
 import re
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, constr, field_validator
+from pydantic import BaseModel, EmailStr, constr, field_validator, model_validator
 
 # 輸入驗證常數
 MAX_TEXT_LENGTH = 10000  # 一般文字欄位最大長度
@@ -44,6 +44,13 @@ class ITPBase(BaseModel):
             except Exception:
                 return []
         return v
+
+    @model_validator(mode='after')
+    def check_date_ranges(self):
+        if self.submissionDate and self.dueDate:
+            if self.submissionDate > self.dueDate:
+                raise ValueError('Submission date must be before or equal to due date')
+        return self
 
 
 class ITPCreate(ITPBase):
@@ -130,6 +137,19 @@ class NCRBase(BaseModel):
                 return []
         return v
 
+    @model_validator(mode='after')
+    def check_date_ranges(self):
+        if self.raiseDate and self.closeoutDate:
+            if self.raiseDate > self.closeoutDate:
+                raise ValueError('Raise date must be before or equal to closeout date')
+        if self.raiseDate and self.dueDate:
+            if self.raiseDate > self.dueDate:
+                raise ValueError('Raise date must be before or equal to due date')
+        if self.closeoutDate and self.dueDate:
+            if self.closeoutDate > self.dueDate:
+                raise ValueError('Closeout date must be before or equal to due date')
+        return self
+
 class NCRCreate(NCRBase):
     id: str | None = None
 
@@ -214,6 +234,22 @@ class NOIBase(BaseModel):
                 return []
         return v
 
+    @model_validator(mode='after')
+    def check_date_ranges(self):
+        if self.issueDate and self.inspectionDate:
+            if self.issueDate > self.inspectionDate:
+                raise ValueError('Issue date must be before or equal to inspection date')
+        if self.issueDate and self.closeoutDate:
+            if self.issueDate > self.closeoutDate:
+                raise ValueError('Issue date must be before or equal to closeout date')
+        if self.issueDate and self.dueDate:
+            if self.issueDate > self.dueDate:
+                raise ValueError('Issue date must be before or equal to due date')
+        if self.inspectionDate and self.closeoutDate:
+            if self.inspectionDate > self.closeoutDate:
+                raise ValueError('Inspection date must be before or equal to closeout date')
+        return self
+
 class NOICreate(NOIBase):
     id: str | None = None
 
@@ -230,7 +266,7 @@ class NOIUpdate(BaseModel):
     contractor: str | None = None
     contacts: str | None = None
     phone: str | None = None
-    email: str | None = None
+    email: EmailStr | None = None
     status: str | None = None
     remark: str | None = None
     closeoutDate: str | None = None
@@ -295,6 +331,13 @@ class ITRBase(BaseModel):
                 return []
         return v
 
+    @model_validator(mode='after')
+    def check_date_ranges(self):
+        if self.raiseDate and self.closeoutDate:
+            if self.raiseDate > self.closeoutDate:
+                raise ValueError('Raise date must be before or equal to closeout date')
+        return self
+
 class ITRCreate(ITRBase):
     id: str | None = None
 
@@ -319,12 +362,11 @@ class ITRUpdate(BaseModel):
     eventNumber: str | None = None
     checkpoint: str | None = None
     defectPhotos: Any | None = None
-    defectPhotos: Any | None = None
     improvementPhotos: Any | None = None
     detail_data: str | None = None
     attachments: list[str] | None = None
 
-    @field_validator('defectPhotos', 'improvementPhotos', 'attachments', mode='before')
+    @field_validator('defectPhotos', 'improvementPhotos', 'attachments', 'detail_data', mode='before')
     @classmethod
     def parse_photos(cls, v):
         if isinstance(v, str):
@@ -383,6 +425,16 @@ class PQPUpdate(BaseModel):
     updatedAt: str | None = None
     attachments: list[str] | None = None
 
+    @field_validator('attachments', mode='before')
+    @classmethod
+    def parse_attachments(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return []
+        return v
+
 class PQP(PQPBase):
     id: str
     model_config = {"from_attributes": True}
@@ -419,6 +471,19 @@ class OBSBase(BaseModel):
     @classmethod
     def check_dates(cls, v):
         return validate_date_format(v)
+
+    @model_validator(mode='after')
+    def check_date_ranges(self):
+        if self.raiseDate and self.closeoutDate:
+            if self.raiseDate > self.closeoutDate:
+                raise ValueError('Raise date must be before or equal to closeout date')
+        if self.raiseDate and self.dueDate:
+            if self.raiseDate > self.dueDate:
+                raise ValueError('Raise date must be before or equal to due date')
+        if self.closeoutDate and self.dueDate:
+            if self.closeoutDate > self.dueDate:
+                raise ValueError('Closeout date must be before or equal to due date')
+        return self
 
 class OBSCreate(OBSBase):
     id: str | None = None
@@ -488,7 +553,7 @@ class ContractorUpdate(BaseModel):
     abbreviation: str | None = None
     scope: str | None = None
     contactPerson: str | None = None
-    email: str | None = None
+    email: EmailStr | None = None
     phone: str | None = None
     address: str | None = None
     status: str | None = None
@@ -656,7 +721,7 @@ class UserCreate(UserBase):
 
 class UserUpdate(BaseModel):
     username: str | None = None
-    email: str | None = None
+    email: EmailStr | None = None
     full_name: str | None = None
     is_active: bool | None = None
     role_id: int | None = None
@@ -704,6 +769,13 @@ class AuditBase(BaseModel):
             except Exception:
                 return []
         return v
+
+    @model_validator(mode='after')
+    def check_date_ranges(self):
+        if self.date and self.end_date:
+            if self.date > self.end_date:
+                raise ValueError('Start date must be before or equal to end date')
+        return self
 
 class AuditCreate(AuditBase):
     id: str | None = None
@@ -851,6 +923,16 @@ class FATBase(BaseModel):
                 return []
         return v
 
+    @model_validator(mode='after')
+    def check_date_ranges(self):
+        if self.startDate and self.endDate:
+            if self.startDate > self.endDate:
+                raise ValueError('Start date must be before or equal to end date')
+        if self.endDate and self.moveInDate:
+            if self.endDate > self.moveInDate:
+                raise ValueError('End date must be before or equal to move-in date')
+        return self
+
 class FATCreate(FATBase):
     id: str | None = None
 
@@ -929,6 +1011,19 @@ class KMArticleUpdate(BaseModel):
     parent_id: str | None = None
     chapter_no: str | None = None
     change_summary: str | None = None
+
+    @field_validator('attachments', mode='before')
+    @classmethod
+    def parse_attachments(cls, v):
+        if isinstance(v, str):
+            try:
+                data = json.loads(v)
+                if isinstance(data, list):
+                    return [KMAttachment(**item) if isinstance(item, dict) else item for item in data]
+                return []
+            except Exception:
+                return []
+        return v
 
 class KMArticle(KMArticleBase):
     id: str

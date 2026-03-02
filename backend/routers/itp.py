@@ -121,7 +121,7 @@ def update_itp_detail(
     itp_id: str,
     body: schemas.ITPDetailBody,
     itp_service: ITPService = Depends(get_itp_service),
-    current_user: schemas.User = Depends(get_current_user)
+    current_user: schemas.User = Depends(RoleChecker(ITP_UPDATE))
 ):
     db_itp = itp_service.update_itp_detail(itp_id=itp_id, detail_body=body.dict(), user_id=current_user.id, username=current_user.username)
     if db_itp is None:
