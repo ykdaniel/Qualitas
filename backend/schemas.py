@@ -727,6 +727,16 @@ class AuditUpdate(BaseModel):
     selected_templates: list[str] | None = None
     custom_check_items: Any | None = None
 
+    @field_validator('selected_templates', 'custom_check_items', mode='before')
+    @classmethod
+    def parse_json_fields(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return []
+        return v
+
 class Audit(AuditBase):
     id: str
     vendor_id: str | None = None
