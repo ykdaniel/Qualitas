@@ -18,6 +18,7 @@ from core.utils import (
     log_audit,
     WorkflowEngine
 )
+from core import error_messages
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +102,7 @@ class NOIService:
                     models.ITP.referenceNo == data['itpNo']
                 ).first()
                 if not itp:
-                    raise ValueError(f"ITP with reference number '{data['itpNo']}' not found")
+                    raise ValueError(error_messages.reference_not_found("ITP", "reference number", data['itpNo']))
 
             # Create NOI object
             db_noi = models.NOI(**data)
@@ -155,9 +156,7 @@ class NOIService:
             if noi_update.status and not WorkflowEngine.validate_transition(
                 "NOI", db_noi.status, noi_update.status
             ):
-                raise ValueError(
-                    f"Invalid status transition from {db_noi.status} to {noi_update.status}"
-                )
+                raise ValueError(error_messages.invalid_status_transition("NOI", db_noi.status, noi_update.status))
 
             # Capture old values for audit
             old_val = {c.name: getattr(db_noi, c.name) for c in db_noi.__table__.columns}
@@ -177,7 +176,7 @@ class NOIService:
                     models.ITP.referenceNo == d['itpNo']
                 ).first()
                 if not itp:
-                    raise ValueError(f"ITP with reference number '{d['itpNo']}' not found")
+                    raise ValueError(error_messages.reference_not_found("ITP", "reference number", d['itpNo']))
 
             # Update the record
             updated = self.repo.update(db_noi, d)
@@ -234,7 +233,7 @@ class NOIService:
                 references.append(f"{itr_count} ITR record(s)")
 
             if references:
-                raise ValueError(f"Cannot delete NOI '{db_noi.referenceNo}': referenced by {', '.join(references)}")
+                raise ValueError(error_messages.cannot_delete_has_references("NOI", db_noi.referenceNo, references))
 
             # Capture old values for audit
             old_val = {c.name: getattr(db_noi, c.name) for c in db_noi.__table__.columns}

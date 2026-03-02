@@ -6,6 +6,7 @@ import models
 import schemas
 from repositories.itp_repository import ITPRepository
 from core.utils import _json_serialize, _resolve_vendor_id, generate_reference_no, log_audit, WorkflowEngine
+from core import error_messages
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ class ITPService:
 
             # State transition check
             if itp_update.status and not WorkflowEngine.validate_transition("ITP", db_itp.status, itp_update.status):
-                raise ValueError(f"Invalid status transition from {db_itp.status} to {itp_update.status}")
+                raise ValueError(error_messages.invalid_status_transition("ITP", db_itp.status, itp_update.status))
 
             old_val = {c.name: getattr(db_itp, c.name) for c in db_itp.__table__.columns}
             d = itp_update.dict(exclude_unset=True)
@@ -93,7 +94,9 @@ class ITPService:
                 models.NOI.itpNo == db_itp.referenceNo
             ).count()
             if noi_count > 0:
-                raise ValueError(f"Cannot delete ITP '{db_itp.referenceNo}': referenced by {noi_count} NOI record(s)")
+                raise ValueError(error_messages.cannot_delete_has_references(
+                    "ITP", db_itp.referenceNo, [f"{noi_count} NOI record(s)"]
+                ))
 
             old_val = {c.name: getattr(db_itp, c.name) for c in db_itp.__table__.columns}
 

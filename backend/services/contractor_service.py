@@ -12,6 +12,7 @@ import models
 import schemas
 from repositories.contractor_repository import ContractorRepository
 from core.utils import log_audit
+from core import error_messages
 
 logger = logging.getLogger(__name__)
 
@@ -195,7 +196,7 @@ class ContractorService:
                 references.append(f"{audit_count} Audit record(s)")
 
             if references:
-                raise ValueError(f"Cannot delete contractor '{db_contractor.name}': referenced by {', '.join(references)}")
+                raise ValueError(error_messages.cannot_delete_has_references("contractor", db_contractor.name, references))
 
             # Capture old values for audit
             old_val = {c.name: getattr(db_contractor, c.name) for c in db_contractor.__table__.columns}
