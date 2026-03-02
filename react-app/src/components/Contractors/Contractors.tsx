@@ -32,9 +32,9 @@ const Contractors: React.FC = () => {
   const itrList = useITRStore(state => state.itrList);
   const pqpList = usePQPStore(state => state.pqpList);
   const obsList = useOBSStore(state => state.obsList);
-  const fatList = useFATStore(state => state.fats);
-  const followUpList = useFollowUpStore(state => state.followUps);
-  const auditList = useAuditStore(state => state.audits);
+  const fatList = useFATStore(state => state.fatList);
+  const followUpList = useFollowUpStore(state => state.followUpList);
+  const auditList = useAuditStore(state => state.auditList);
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);

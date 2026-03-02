@@ -169,7 +169,7 @@ export const checkContractorReferences = (
   // Check all modules that reference contractors by vendor field
   const itpReferences = itpList.filter(item => item.vendor === contractorName);
   const ncrReferences = ncrList.filter(item => item.vendor === contractorName);
-  const noiReferences = noiList.filter(item => item.vendor === contractorName);
+  const noiReferences = noiList.filter(item => item.contractor === contractorName);
   const itrReferences = itrList.filter(item => item.vendor === contractorName);
   const pqpReferences = pqpList.filter(item => item.vendor === contractorName);
   const obsReferences = obsList.filter(item => item.vendor === contractorName);
