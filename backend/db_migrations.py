@@ -1,6 +1,10 @@
+import logging
+
 from sqlalchemy import text
 
 from database import engine
+
+logger = logging.getLogger(__name__)
 
 # Migration: Add unique indexes on reference/document number columns for each table
 ALLOWED_INDEX_CONFIGS = {
@@ -26,20 +30,20 @@ def add_unique_index_if_not_exists(conn, table: str, column: str) -> None:
         # 使用預定義的安全值，因為已通過白名單驗證
         conn.execute(text(f"CREATE UNIQUE INDEX IF NOT EXISTS ix_{table}_{column}_unique ON {table} ({column})"))
         conn.commit()
-    except Exception:
-        pass  # index may already exist or column has duplicates
+    except Exception as e:
+        logger.warning(f"Index creation skipped for {table}.{column} (may already exist or has duplicates): {e}")
 
 def run_migrations():
     """Run all database migrations"""
-    print("Running database migrations...")
+    logger.info("Running database migrations...")
 
     # 1. Add unique constraint to reference_sequences
     try:
         with engine.connect() as conn:
             conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_ref_seq_unique ON reference_sequences (project, vendor, doc)"))
             conn.commit()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Index creation skipped for reference_sequences (may already exist): {e}")
 
     # 2. Add unique indexes
     with engine.connect() as conn:
@@ -52,7 +56,7 @@ def run_migrations():
     # 4. Create document_naming_rules
     _create_naming_rules_table()
 
-    print("Migrations completed.")
+    logger.info("Migrations completed.")
 
 def _add_missing_columns():
     try:
@@ -103,7 +107,7 @@ def _add_missing_columns():
 
             conn.commit()
     except Exception as e:
-        print(f"Migration warning: {e}")
+        logger.warning(f"Migration warning: {e}")
 
 def _add_column_if_missing(conn, table, column, type_def):
     try:
@@ -111,8 +115,8 @@ def _add_column_if_missing(conn, table, column, type_def):
         columns = [row[1] for row in result]
         if column not in columns:
             conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {type_def}"))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Column addition skipped for {table}.{column} (may already exist): {e}")
 
 def _create_naming_rules_table():
     try:
@@ -127,5 +131,5 @@ def _create_naming_rules_table():
             """))
             conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_document_naming_rules_doc_type ON document_naming_rules (doc_type)"))
             conn.commit()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Naming rules table creation skipped (may already exist): {e}")

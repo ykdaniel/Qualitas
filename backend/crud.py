@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import uuid
 from datetime import datetime
@@ -7,6 +8,8 @@ from sqlalchemy.orm import Session, joinedload
 
 import models
 import schemas
+
+logger = logging.getLogger(__name__)
 from models import (
     FAT,
     ITP,
@@ -148,8 +151,8 @@ def log_audit(db: Session, action: str, entity_type: str, entity_id: str,
         )
         db.add(audit_log)
     except Exception as e:
-        # 日誌記錄失敗不應中斷主流程，僅列印錯誤
-        print(f"Error logging audit: {e}")
+        # 日誌記錄失敗不應中斷主流程，僅記錄錯誤
+        logger.error(f"Error logging audit: {e}")
 
 
 def get_contractor_abbreviation(db: Session, vendor_name: str) -> str:

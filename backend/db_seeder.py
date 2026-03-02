@@ -1,4 +1,5 @@
 import json
+import logging
 import uuid
 from datetime import datetime
 
@@ -8,6 +9,8 @@ import crud
 import models
 import schemas
 from database import SessionLocal
+
+logger = logging.getLogger(__name__)
 
 # Import configuration if needed, but schemas/models usually suffice
 # from core.config import settings
@@ -19,7 +22,7 @@ def get_password_hash(password):
 
 def run_seeding():
     """Run all database seeding"""
-    print("Running database seeding...")
+    logger.info("Running database seeding...")
     import database
     # Ensure tables exist
     models.Base.metadata.create_all(bind=database.engine)
@@ -28,7 +31,7 @@ def run_seeding():
     seed_default_pqp()
     seed_initial_data()
     seed_rebar_itp()
-    print("Seeding completed.")
+    logger.info("Seeding completed.")
 
 def seed_default_contractors():
     db = SessionLocal()
@@ -44,7 +47,7 @@ def seed_default_contractors():
                     obj.id = str(uuid.uuid4())
                 db.add(obj)
             db.commit()
-            print("Seeded default contractors.")
+            logger.info("Seeded default contractors.")
     finally:
         db.close()
 
@@ -69,7 +72,7 @@ def seed_default_pqp():
             )
             db.add(db_pqp)
             db.commit()
-            print("Seeded default PQP.")
+            logger.info("Seeded default PQP.")
     finally:
         db.close()
 
@@ -80,7 +83,7 @@ def seed_initial_data():
     db = SessionLocal()
     try:
         # 1. Seed Permissions table from core.perms
-        print("Seeding permissions...")
+        logger.info("Seeding permissions...")
         for p_data in ALL_PERMISSIONS:
             existing_p = db.query(models.Permission).filter(models.Permission.code == p_data["code"]).first()
             if not existing_p:
@@ -100,7 +103,7 @@ def seed_initial_data():
                 description="Administrator with full access",
                 permissions=all_codes
             ))
-            print("Seeded admin role.")
+            logger.info("Seeded admin role.")
         else:
             # Sync permissions for existing admin role
             all_codes = [p["code"] for p in ALL_PERMISSIONS]
@@ -109,7 +112,7 @@ def seed_initial_data():
             ).all()
             admin_role.permissions_rel = perms
             db.commit()
-            print(f"Synced admin role permissions ({len(perms)} perms).")
+            logger.info(f"Synced admin role permissions ({len(perms)} perms).")
 
         # 3. Create User Role if not exists
         user_role = crud.get_role_by_name(db, "USER")
@@ -119,7 +122,7 @@ def seed_initial_data():
                 description="Standard user",
                 permissions=[USER_VIEW] # Minimal permissions
             ))
-            print("Seeded user role.")
+            logger.info("Seeded user role.")
 
         # 4. Create Admin User if not exists
         admin_user = crud.get_user_by_email(db, "admin@example.com")
@@ -131,13 +134,13 @@ def seed_initial_data():
                 full_name="System Administrator",
                 role_id=admin_role.id
             ), hashed_password=get_password_hash("admin"))
-            print("Seeded admin user.")
+            logger.info("Seeded admin user.")
         else:
             # Always ensure admin user has the admin role
             if admin_user.role_id != admin_role.id:
                 admin_user.role_id = admin_role.id
                 db.commit()
-                print(f"Updated admin user role_id to {admin_role.id}.")
+                logger.info(f"Updated admin user role_id to {admin_role.id}.")
 
         # 4. Create Seed Checklist Records if none exists
         if db.query(models.Checklist).count() == 0:
@@ -175,26 +178,26 @@ def seed_initial_data():
             db_chk.id = str(uuid.uuid4())
             db.add(db_chk)
             db.commit()
-            print("Seeded initial Checklist record.")
+            logger.info("Seeded initial Checklist record.")
 
         # 5. [CLEANUP] Update existing Checklist record if it contains old default items
         existing_record = db.query(models.Checklist).filter(models.Checklist.recordsNo == "QTS-RKS-HL-CHK-000001").first()
         if existing_record and existing_record.detail_data:
             detail = json.loads(existing_record.detail_data)
             items = detail.get("items", [])
-            print(f"DEBUG: Found {len(items)} items in existing record.")
+            logger.info(f"DEBUG: Found {len(items)} items in existing record.")
             # Force cleanup regardless of content match
             if items:
-                print("Forcing cleanup of existing record items...")
+                logger.info("Forcing cleanup of existing record items...")
                 detail["items"] = [] # Clear items
                 existing_record.detail_data = json.dumps(detail)
                 db.commit()
-                print("Existing record items cleared.")
+                logger.info("Existing record items cleared.")
             else:
-                print("Items already empty.")
+                logger.info("Items already empty.")
 
     except Exception as e:
-        print(f"Error seeding data: {e}")
+        logger.info(f"Error seeding data: {e}")
     finally:
         db.close()
 
@@ -247,19 +250,19 @@ def seed_rebar_itp():
         }
 
         if existing:
-            print(f"Updating existing Rebar ITP: {ref_no}")
+            logger.info(f"Updating existing Rebar ITP: {ref_no}")
             for key, value in itp_data.items():
                 setattr(existing, key, value)
         else:
-            print(f"Creating new Rebar ITP: {ref_no}")
+            logger.info(f"Creating new Rebar ITP: {ref_no}")
             new_itp = models.ITP(**itp_data, id=str(uuid.uuid4()))
             db.add(new_itp)
 
         db.commit()
-        print("Rebar ITP seeded successfully.")
+        logger.info("Rebar ITP seeded successfully.")
 
     except Exception as e:
-        print(f"Error seeding Rebar ITP: {e}")
+        logger.info(f"Error seeding Rebar ITP: {e}")
         db.rollback()
     finally:
         db.close()
@@ -311,19 +314,19 @@ def seed_piling_itp():
         }
 
         if existing:
-            print(f"Updating existing Piling ITP: {ref_no}")
+            logger.info(f"Updating existing Piling ITP: {ref_no}")
             for key, value in itp_data.items():
                 setattr(existing, key, value)
         else:
-            print(f"Creating new Piling ITP: {ref_no}")
+            logger.info(f"Creating new Piling ITP: {ref_no}")
             new_itp = models.ITP(**itp_data, id=str(uuid.uuid4()))
             db.add(new_itp)
 
         db.commit()
-        print("Piling ITP seeded successfully.")
+        logger.info("Piling ITP seeded successfully.")
 
     except Exception as e:
-        print(f"Error seeding Piling ITP: {e}")
+        logger.info(f"Error seeding Piling ITP: {e}")
         db.rollback()
     finally:
         db.close()

@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
@@ -9,6 +11,8 @@ from core.perms import ITP_CREATE, ITP_DELETE, ITP_UPDATE, ITP_VIEW
 from database import get_db
 from middleware.auth import get_current_user
 from services.itp_service import ITPService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/itp",
@@ -57,15 +61,15 @@ def read_itps(
             except Exception as e:
                 import traceback
                 error_msg = f"Serialization Error on ITP ID: {itp_obj.id}, Ref: {itp_obj.referenceNo}\nError: {e}\n"
-                print(error_msg) # Print to console
-                print(traceback.format_exc())
+                logger.error(error_msg)
+                logger.error(traceback.format_exc())
                 continue
 
         return JSONResponse(content=validated_itps)
     except Exception as e:
         import traceback
-        print(f"Error in read_itps: {str(e)}\n")
-        print(traceback.format_exc())
+        logger.error(f"Error in read_itps: {str(e)}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{itp_id}/", response_model=schemas.ITP)
@@ -86,15 +90,15 @@ def update_itp(
     itp_service: ITPService = Depends(get_itp_service),
     current_user: schemas.User = Depends(RoleChecker(ITP_UPDATE))
 ):
-    print(f"DEBUG: update_itp called for ID {itp_id} by user {current_user.username}")
+    logger.debug(f"update_itp called for ID {itp_id} by user {current_user.username}")
     try:
         db_itp = itp_service.update_itp(itp_id=itp_id, itp_update=itp, user_id=current_user.id, username=current_user.username)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         import traceback
-        print(f"Error updating ITP {itp_id}: {str(e)}\n")
-        print(traceback.format_exc())
+        logger.error(f"Error updating ITP {itp_id}: {str(e)}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
     if db_itp is None:

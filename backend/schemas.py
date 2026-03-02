@@ -71,6 +71,16 @@ class ITPUpdate(BaseModel):
     last_reminded_at: str | None = None
     dueDate: str | None = None
 
+    @field_validator('detail_data', 'attachments', mode='before')
+    @classmethod
+    def parse_json_fields(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return []
+        return v
+
 
 class ITP(ITPBase):
     id: str
@@ -151,6 +161,16 @@ class NCRUpdate(BaseModel):
     attachments: list[str] | None = None
     last_reminded_at: str | None = None
 
+    @field_validator('defectPhotos', 'improvementPhotos', 'attachments', mode='before')
+    @classmethod
+    def parse_photos(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return []
+        return v
+
 class NCR(NCRBase):
     id: str
     model_config = {"from_attributes": True}
@@ -218,6 +238,16 @@ class NOIUpdate(BaseModel):
     ncrNumber: str | None = None
     last_reminded_at: str | None = None
     dueDate: str | None = None
+
+    @field_validator('attachments', mode='before')
+    @classmethod
+    def parse_attachments(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return []
+        return v
 
 class NOI(NOIBase):
     id: str
@@ -293,6 +323,16 @@ class ITRUpdate(BaseModel):
     improvementPhotos: Any | None = None
     detail_data: str | None = None
     attachments: list[str] | None = None
+
+    @field_validator('defectPhotos', 'improvementPhotos', 'attachments', mode='before')
+    @classmethod
+    def parse_photos(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return []
+        return v
 
 class ITR(ITRBase):
     id: str
@@ -406,11 +446,21 @@ class OBSUpdate(BaseModel):
     impactToOM: str | None = None
     defectPhotos: Any | None = None
     improvementPhotos: Any | None = None
-    attachments: Any | None = None
+    attachments: list[str] | None = None
     last_reminded_at: str | None = None
     dueDate: str | None = None
     noiNumber: str | None = None
     itrNumber: str | None = None
+
+    @field_validator('defectPhotos', 'improvementPhotos', 'attachments', mode='before')
+    @classmethod
+    def parse_photos(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return []
+        return v
 
 class OBS(OBSBase):
     id: str
@@ -809,6 +859,16 @@ class FATUpdate(BaseModel):
     hasDetails: bool | None = None
     detail_data: list[FATDetailItem] | None = None
     attachments: list[str] | None = None
+
+    @field_validator('detail_data', 'attachments', mode='before')
+    @classmethod
+    def parse_json_fields(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return []
+        return v
 
 class FAT(FATBase):
     id: str

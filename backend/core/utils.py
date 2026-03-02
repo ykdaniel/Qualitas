@@ -20,11 +20,36 @@ from sqlalchemy.orm import Session
 
 import models
 from models import AuditLog, Contractor, DocumentNamingRule, ReferenceSequence
+from core.constants import PROJECT_CODE, MAX_PAGE_LIMIT, DEFAULT_PAGE_LIMIT
 
 logger = logging.getLogger(__name__)
 
-# 固定專案代碼
-PROJECT_CODE = "QTS"
+
+def sanitize_pagination(skip: int, limit: int) -> tuple[int, int]:
+    """
+    驗證和規範化分頁參數，防止惡意查詢
+
+    Args:
+        skip: 要跳過的記錄數
+        limit: 要返回的最大記錄數
+
+    Returns:
+        tuple[int, int]: 規範化後的 (skip, limit)
+
+    Examples:
+        >>> sanitize_pagination(-10, 1000)
+        (0, 500)
+        >>> sanitize_pagination(20, 50)
+        (20, 50)
+    """
+    # skip 不能為負數
+    skip = max(skip, 0)
+
+    # limit 必須在合理範圍內
+    limit = max(limit, 1)  # 至少返回 1 條
+    limit = min(limit, MAX_PAGE_LIMIT)  # 最多返回 MAX_PAGE_LIMIT 條
+
+    return skip, limit
 
 
 def _json_serialize(d: dict, list_fields: list) -> dict:

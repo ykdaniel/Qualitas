@@ -15,7 +15,11 @@ class Settings:
     VERSION: str = "1.0.0"
 
     # Environment
-    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "dev")  # dev, production
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")  # development, staging, production
+
+    # Logging
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+    LOG_DIR: str = os.getenv("LOG_DIR", "logs")
 
     # Security
     SECRET_KEY: str = os.getenv("SECRET_KEY", _DEFAULT_SECRET_KEY)
@@ -37,6 +41,28 @@ class Settings:
 
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./qualitas.db")
+    DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "10"))
+    DB_MAX_OVERFLOW: int = int(os.getenv("DB_MAX_OVERFLOW", "20"))
+
+    # File Upload
+    MAX_UPLOAD_SIZE_MB: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))
+    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "uploads")
+
+    # Email (郵件服務設定 - 用於通知功能)
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587")) if os.getenv("SMTP_PORT") else 587
+    SMTP_USER: str = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    SMTP_FROM: str = os.getenv("SMTP_FROM", "noreply@qualitas-erp.com")
+
+    # Rate Limiting
+    RATE_LIMIT_PER_MINUTE: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
+
+    # Timezone
+    TIMEZONE: str = os.getenv("TIMEZONE", "Asia/Taipei")
+
+    # Debug
+    DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
 
 settings = Settings()
 

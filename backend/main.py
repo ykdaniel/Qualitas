@@ -35,24 +35,54 @@ from routers import settings as settings_router
 from scheduler import start_scheduler
 
 # Setup Logger with rotation
-# Max 10MB per file, keep 5 backup files
-rotating_handler = RotatingFileHandler(
-    "backend_error.log",
+# 使用環境變數配置日誌級別和目錄
+LOG_DIR = settings.LOG_DIR
+LOG_LEVEL = settings.LOG_LEVEL
+
+# 創建日誌目錄
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# 設置不同級別的日誌處理器
+# 1. INFO 級別以上的日誌（包含 INFO, WARNING, ERROR, CRITICAL）
+info_handler = RotatingFileHandler(
+    os.path.join(LOG_DIR, "app.log"),
+    mode='a',
+    maxBytes=50*1024*1024,  # 50MB
+    backupCount=10,
+    encoding='utf-8'
+)
+info_handler.setLevel(logging.INFO)
+
+# 2. ERROR 級別以上的日誌（只包含 ERROR, CRITICAL）
+error_handler = RotatingFileHandler(
+    os.path.join(LOG_DIR, "error.log"),
     mode='a',
     maxBytes=10*1024*1024,  # 10MB
     backupCount=5,
     encoding='utf-8'
 )
+error_handler.setLevel(logging.ERROR)
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        rotating_handler
-    ]
+# 3. 終端輸出
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.DEBUG if settings.DEBUG else logging.INFO)
+
+# 設定格式
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+info_handler.setFormatter(formatter)
+error_handler.setFormatter(formatter)
+console_handler.setFormatter(formatter)
+
+# 配置根 logger
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL.upper(), logging.INFO),
+    handlers=[console_handler, info_handler, error_handler]
+)
+
 logger = logging.getLogger(__name__)
+logger.info(f"日誌系統已啟動 - 級別: {LOG_LEVEL}, 目錄: {LOG_DIR}")
 
 # Create tables
 models.Base.metadata.create_all(bind=engine)

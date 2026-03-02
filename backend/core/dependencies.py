@@ -1,17 +1,45 @@
 import logging
 
 from fastapi import Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
 import models
 from core.security import get_current_user
-from sqlalchemy.orm import Session
 from database import get_db
+
+# Repositories
 from repositories.user_repository import UserRepository
-from services.user_service import UserService
 from repositories.itp_repository import ITPRepository
-from services.itp_service import ITPService
 from repositories.km_repository import KMRepository
+from repositories.noi_repository import NOIRepository
+from repositories.ncr_repository import NCRRepository
+from repositories.itr_repository import ITRRepository
+from repositories.pqp_repository import PQPRepository
+from repositories.obs_repository import OBSRepository
+from repositories.followup_repository import FollowUpRepository
+from repositories.checklist_repository import ChecklistRepository
+from repositories.contractor_repository import ContractorRepository
+from repositories.audit_repository import AuditRepository
+from repositories.fat_repository import FATRepository
+from repositories.kpi_repository import KPIRepository
+
+# Services
+from services.user_service import UserService
+from services.itp_service import ITPService
 from services.km_service import KMService
+from services.noi_service import NOIService
+from services.ncr_service import NCRService
+from services.itr_service import ITRService
+from services.pqp_service import PQPService
+from services.obs_service import OBSService
+from services.followup_service import FollowUpService
+from services.checklist_service import ChecklistService
+from services.contractor_service import ContractorService
+from services.audit_service import AuditService
+from services.fat_service import FATService
+from services.kpi_service import KPIService
+
+logger = logging.getLogger(__name__)
 
 def get_user_service(db: Session = Depends(get_db)) -> UserService:
     repo = UserRepository(db)
@@ -25,76 +53,49 @@ def get_km_service(db: Session = Depends(get_db)) -> KMService:
     repo = KMRepository(db)
     return KMService(repo)
 
-# Note: The following services will be added as modules are refactored in Phases 1-3
-# Uncomment each function as the corresponding repository and service are created
-
-def get_noi_service(db: Session = Depends(get_db)):
-    from repositories.noi_repository import NOIRepository
-    from services.noi_service import NOIService
+def get_noi_service(db: Session = Depends(get_db)) -> NOIService:
     repo = NOIRepository(db)
     return NOIService(repo)
 
-def get_ncr_service(db: Session = Depends(get_db)):
-    from repositories.ncr_repository import NCRRepository
-    from services.ncr_service import NCRService
+def get_ncr_service(db: Session = Depends(get_db)) -> NCRService:
     repo = NCRRepository(db)
     return NCRService(repo)
 
-def get_itr_service(db: Session = Depends(get_db)):
-    from repositories.itr_repository import ITRRepository
-    from services.itr_service import ITRService
+def get_itr_service(db: Session = Depends(get_db)) -> ITRService:
     repo = ITRRepository(db)
     return ITRService(repo)
 
-def get_pqp_service(db: Session = Depends(get_db)):
-    from repositories.pqp_repository import PQPRepository
-    from services.pqp_service import PQPService
+def get_pqp_service(db: Session = Depends(get_db)) -> PQPService:
     repo = PQPRepository(db)
     return PQPService(repo)
 
-def get_obs_service(db: Session = Depends(get_db)):
-    from repositories.obs_repository import OBSRepository
-    from services.obs_service import OBSService
+def get_obs_service(db: Session = Depends(get_db)) -> OBSService:
     repo = OBSRepository(db)
     return OBSService(repo)
 
-def get_followup_service(db: Session = Depends(get_db)):
-    from repositories.followup_repository import FollowUpRepository
-    from services.followup_service import FollowUpService
+def get_followup_service(db: Session = Depends(get_db)) -> FollowUpService:
     repo = FollowUpRepository(db)
     return FollowUpService(repo)
 
-def get_checklist_service(db: Session = Depends(get_db)):
-    from repositories.checklist_repository import ChecklistRepository
-    from services.checklist_service import ChecklistService
+def get_checklist_service(db: Session = Depends(get_db)) -> ChecklistService:
     repo = ChecklistRepository(db)
     return ChecklistService(repo)
 
-def get_contractor_service(db: Session = Depends(get_db)):
-    from repositories.contractor_repository import ContractorRepository
-    from services.contractor_service import ContractorService
+def get_contractor_service(db: Session = Depends(get_db)) -> ContractorService:
     repo = ContractorRepository(db)
     return ContractorService(repo)
 
-def get_audit_service(db: Session = Depends(get_db)):
-    from repositories.audit_repository import AuditRepository
-    from services.audit_service import AuditService
+def get_audit_service(db: Session = Depends(get_db)) -> AuditService:
     repo = AuditRepository(db)
     return AuditService(repo)
 
-def get_fat_service(db: Session = Depends(get_db)):
-    from repositories.fat_repository import FATRepository
-    from services.fat_service import FATService
+def get_fat_service(db: Session = Depends(get_db)) -> FATService:
     repo = FATRepository(db)
     return FATService(repo)
 
-def get_kpi_service(db: Session = Depends(get_db)):
-    from repositories.kpi_repository import KPIRepository
-    from services.kpi_service import KPIService
+def get_kpi_service(db: Session = Depends(get_db)) -> KPIService:
     repo = KPIRepository(db)
     return KPIService(repo)
-
-logger = logging.getLogger(__name__)
 
 class RoleChecker:
     def __init__(self, required_permission: str):

@@ -28,6 +28,10 @@ Thumbs.db
 # Database
 *.db
 
+# Logs
+logs/
+*.log
+
 # Experimental Scripts
 comprehensive_dump.py
 db_complete_dump.txt

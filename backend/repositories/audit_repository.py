@@ -8,6 +8,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 
 import models
+from core.utils import sanitize_pagination
 
 
 class AuditRepository:
@@ -41,6 +42,7 @@ class AuditRepository:
         Returns:
             List of Audit objects
         """
+        skip, limit = sanitize_pagination(skip, limit)
         return self.db.query(models.Audit).offset(skip).limit(limit).all()
 
     def create(self, audit_data: Dict[str, Any]) -> models.Audit:

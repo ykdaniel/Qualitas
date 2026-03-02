@@ -2,10 +2,11 @@ import json
 import uuid
 from datetime import datetime
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 import models
 import schemas
+from core.utils import sanitize_pagination
 
 
 class KMRepository:
@@ -40,7 +41,12 @@ class KMRepository:
         return f"{prefix}{str(seq_record.last_seq).zfill(digits)}"
 
     def get_all(self, skip: int = 0, limit: int = 100, category: str | None = None, search: str | None = None) -> list[models.KMArticle]:
-        query = self.db.query(models.KMArticle)
+        # 驗證分頁參數
+        skip, limit = sanitize_pagination(skip, limit)
+
+        query = self.db.query(models.KMArticle).options(
+            joinedload(models.KMArticle.author)
+        )
         if category:
             query = query.filter(models.KMArticle.category == category)
         if search:
@@ -48,10 +54,14 @@ class KMRepository:
         return query.offset(skip).limit(limit).all()
 
     def get_by_id(self, id: str) -> models.KMArticle | None:
-        return self.db.query(models.KMArticle).filter(models.KMArticle.id == id).first()
+        return self.db.query(models.KMArticle).options(
+            joinedload(models.KMArticle.author)
+        ).filter(models.KMArticle.id == id).first()
 
     def get_children(self, parent_id: str) -> list[models.KMArticle]:
-        return self.db.query(models.KMArticle).filter(models.KMArticle.parent_id == parent_id).all()
+        return self.db.query(models.KMArticle).options(
+            joinedload(models.KMArticle.author)
+        ).filter(models.KMArticle.parent_id == parent_id).all()
 
     def create(self, article: schemas.KMArticleCreate, author_id: int) -> models.KMArticle:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

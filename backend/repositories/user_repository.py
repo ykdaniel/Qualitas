@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 import models
 import schemas
+from core.utils import sanitize_pagination
 
 class UserRepository:
     def __init__(self, db: Session):
@@ -19,6 +20,7 @@ class UserRepository:
         return self.db.query(models.User).filter(models.User.username == username).first()
 
     def get_all(self, skip: int = 0, limit: int = 100) -> List[models.User]:
+        skip, limit = sanitize_pagination(skip, limit)
         return self.db.query(models.User).offset(skip).limit(limit).all()
 
     def count_active_admins(self) -> int:
@@ -52,6 +54,7 @@ class UserRepository:
         return self.db.query(models.Role).filter(func.lower(models.Role.name) == func.lower(name)).first()
 
     def get_all_roles(self, skip: int = 0, limit: int = 100) -> List[models.Role]:
+        skip, limit = sanitize_pagination(skip, limit)
         return self.db.query(models.Role).offset(skip).limit(limit).all()
 
     def create_role(self, role: models.Role) -> models.Role:
@@ -76,4 +79,5 @@ class UserRepository:
         return self.db.query(models.Permission).filter(models.Permission.code.in_(permission_codes)).all()
 
     def get_all_permissions(self, skip: int = 0, limit: int = 100) -> List[models.Permission]:
+        skip, limit = sanitize_pagination(skip, limit)
         return self.db.query(models.Permission).offset(skip).limit(limit).all()
