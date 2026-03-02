@@ -1,12 +1,48 @@
 import { NOIItem } from '../store/noiStore';
 import { NCRItem } from '../store/ncrStore';
 import { ITRItem } from '../store/itrStore';
+import { ChecklistRecord } from '../store/checklistStore';
 
 // FATItem interface for type checking
 interface FATItem {
   id: string;
   equipment: string;
   supplier: string;
+  [key: string]: any;
+}
+
+// ITPItem interface for type checking
+interface ITPItem {
+  id: string;
+  vendor: string;
+  [key: string]: any;
+}
+
+// PQPItem interface for type checking
+interface PQPItem {
+  id: string;
+  vendor?: string;
+  [key: string]: any;
+}
+
+// OBSItem interface for type checking
+interface OBSItem {
+  id: string;
+  vendor?: string;
+  [key: string]: any;
+}
+
+// FollowUpItem interface for type checking
+interface FollowUpItem {
+  id: string;
+  vendor?: string;
+  [key: string]: any;
+}
+
+// AuditItem interface for type checking
+interface AuditItem {
+  id: string;
+  vendor?: string;
   [key: string]: any;
 }
 
@@ -76,83 +112,88 @@ export const checkNCRReferences = (
 
 /**
  * 檢查刪除 ITP 時是否被 Checklist 引用
- * TODO: 需要完整實作 Checklist 引用檢查
  */
 export const checkITPChecklistReferences = (
   itpId: string,
-  // checklistList: ChecklistItem[]
+  checklistList: ChecklistRecord[]
 ): {
   hasReferences: boolean;
   references: { type: string; count: number }[];
 } => {
-  // TODO: Implement checklist reference checking
-  // const checklistReferences = checklistList.filter(item => item.itpId === itpId);
+  const checklistReferences = checklistList.filter(item => item.itpId === itpId);
+
   return {
-    hasReferences: false,
-    references: [{ type: 'Checklist', count: 0 }]
+    hasReferences: checklistReferences.length > 0,
+    references: [{ type: 'Checklist', count: checklistReferences.length }]
   };
 };
 
 /**
  * 檢查刪除 ITR 時是否被 Checklist 引用
- * TODO: 需要完整實作 Checklist 引用檢查
  */
 export const checkITRChecklistReferences = (
   itrId: string,
-  // checklistList: ChecklistItem[]
+  checklistList: ChecklistRecord[]
 ): {
   hasReferences: boolean;
   references: { type: string; count: number }[];
 } => {
-  // TODO: Implement checklist reference checking
-  // const checklistReferences = checklistList.filter(item => item.itrId === itrId);
+  const checklistReferences = checklistList.filter(item => item.itrId === itrId);
+
   return {
-    hasReferences: false,
-    references: [{ type: 'Checklist', count: 0 }]
+    hasReferences: checklistReferences.length > 0,
+    references: [{ type: 'Checklist', count: checklistReferences.length }]
   };
 };
 
 /**
  * 檢查刪除 Contractor 時的關聯數據
  * Contractor 被多個模組引用，需全面檢查
- * TODO: 需要完整實作所有模組的引用檢查
  */
 export const checkContractorReferences = (
   contractorId: string,
   contractorName: string,
-  // Lists from all modules that reference contractors:
-  // itpList: ITPItem[],
-  // ncrList: NCRItem[],
-  // noiList: NOIItem[],
-  // itrList: ITRItem[],
-  // pqpList: PQPItem[],
-  // obsList: OBSItem[],
-  // fatList: FATItem[],
-  // followupList: FollowUpItem[],
-  // auditList: AuditItem[]
+  itpList: ITPItem[],
+  ncrList: NCRItem[],
+  noiList: NOIItem[],
+  itrList: ITRItem[],
+  pqpList: PQPItem[],
+  obsList: OBSItem[],
+  fatList: FATItem[],
+  followupList: FollowUpItem[],
+  auditList: AuditItem[]
 ): {
   hasReferences: boolean;
   references: { type: string; count: number }[];
 } => {
-  // TODO: Implement comprehensive contractor reference checking across all modules
-  // Example implementation (needs actual store data):
-  // const itpReferences = itpList.filter(item => item.vendor === contractorName);
-  // const ncrReferences = ncrList.filter(item => item.vendor === contractorName);
-  // ... check all other modules
+  // Check all modules that reference contractors by vendor field
+  const itpReferences = itpList.filter(item => item.vendor === contractorName);
+  const ncrReferences = ncrList.filter(item => item.vendor === contractorName);
+  const noiReferences = noiList.filter(item => item.vendor === contractorName);
+  const itrReferences = itrList.filter(item => item.vendor === contractorName);
+  const pqpReferences = pqpList.filter(item => item.vendor === contractorName);
+  const obsReferences = obsList.filter(item => item.vendor === contractorName);
+  const fatReferences = fatList.filter(item => item.supplier === contractorName); // FAT uses 'supplier' instead of 'vendor'
+  const followupReferences = followupList.filter(item => item.vendor === contractorName);
+  const auditReferences = auditList.filter(item => item.vendor === contractorName);
+
+  const references = [
+    { type: 'ITP', count: itpReferences.length },
+    { type: 'NCR', count: ncrReferences.length },
+    { type: 'NOI', count: noiReferences.length },
+    { type: 'ITR', count: itrReferences.length },
+    { type: 'PQP', count: pqpReferences.length },
+    { type: 'OBS', count: obsReferences.length },
+    { type: 'FAT', count: fatReferences.length },
+    { type: 'FollowUp', count: followupReferences.length },
+    { type: 'Audit', count: auditReferences.length }
+  ];
+
+  const hasReferences = references.some(ref => ref.count > 0);
 
   return {
-    hasReferences: false,
-    references: [
-      { type: 'ITP', count: 0 },
-      { type: 'NCR', count: 0 },
-      { type: 'NOI', count: 0 },
-      { type: 'ITR', count: 0 },
-      { type: 'PQP', count: 0 },
-      { type: 'OBS', count: 0 },
-      { type: 'FAT', count: 0 },
-      { type: 'FollowUp', count: 0 },
-      { type: 'Audit', count: 0 }
-    ]
+    hasReferences,
+    references
   };
 };
 

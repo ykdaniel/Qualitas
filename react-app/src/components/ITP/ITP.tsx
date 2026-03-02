@@ -5,7 +5,8 @@ import { useContractorsStore } from '../../store/contractorsStore';
 import { useITPStore } from '../../store/itpStore';
 import type { ITPItem } from '../../store/itpStore';
 import { useNOIStore } from '../../store/noiStore';
-import { checkITPReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
+import { useChecklistStore } from '../../store/checklistStore';
+import { checkITPReferences, checkITPChecklistReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
 import { getErrorMessage } from '../../utils/errorUtils';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './ITP.module.css';
@@ -21,6 +22,7 @@ const ITP: React.FC = () => {
   const { getActiveContractors } = useContractorsStore();
   const { itpList, loading, error, refetch, addITP, updateITP, updateITPDetail, deleteITP } = useITPStore();
   const noiList = useNOIStore(state => state.noiList);
+  const checklistList = useChecklistStore(state => state.records);
 
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -126,9 +128,17 @@ const ITP: React.FC = () => {
     const itp = itpList.find(item => item.id === id);
     if (!itp) return;
 
-    // Check for references
-    const references = checkITPReferences(id, noiList);
-    const message = generateDeleteMessage('ITP', itp.referenceNo || itp.id, references.references, t);
+    // Check for references in NOI and Checklist
+    const noiReferences = checkITPReferences(id, noiList);
+    const checklistReferences = checkITPChecklistReferences(id, checklistList);
+
+    // Combine all references
+    const allReferences = [
+      ...noiReferences.references,
+      ...checklistReferences.references
+    ];
+
+    const message = generateDeleteMessage('ITP', itp.referenceNo || itp.id, allReferences, t);
 
     setDeleteModal({
       isOpen: true,

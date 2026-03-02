@@ -2,6 +2,16 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore, Contractor } from '../../store/contractorsStore';
+import { useITPStore } from '../../store/itpStore';
+import { useNCRStore } from '../../store/ncrStore';
+import { useNOIStore } from '../../store/noiStore';
+import { useITRStore } from '../../store/itrStore';
+import { usePQPStore } from '../../store/pqpStore';
+import { useOBSStore } from '../../store/obsStore';
+import { useFATStore } from '../../store/fatStore';
+import { useFollowUpStore } from '../../store/followUpStore';
+import { useAuditStore } from '../../store/auditStore';
+import { checkContractorReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './Contractors.module.css';
 
@@ -14,6 +24,18 @@ const Contractors: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const { contractors, addContractor, updateContractor, deleteContractor } = useContractorsStore();
+
+  // Get all module lists for cascade delete checking
+  const itpList = useITPStore(state => state.itpList);
+  const ncrList = useNCRStore(state => state.ncrList);
+  const noiList = useNOIStore(state => state.noiList);
+  const itrList = useITRStore(state => state.itrList);
+  const pqpList = usePQPStore(state => state.pqpList);
+  const obsList = useOBSStore(state => state.obsList);
+  const fatList = useFATStore(state => state.fats);
+  const followUpList = useFollowUpStore(state => state.followUps);
+  const auditList = useAuditStore(state => state.audits);
+
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -75,8 +97,27 @@ const Contractors: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleDeleteClick = (id: string) => { // Changed to string
-    setDeleteModal({ isOpen: true, id, message: t('contractors.confirmDelete') });
+  const handleDeleteClick = (id: string) => {
+    const contractor = contractors.find(c => c.id === id);
+    if (!contractor) return;
+
+    // Check for references across all modules
+    const references = checkContractorReferences(
+      id,
+      contractor.name,
+      itpList,
+      ncrList,
+      noiList,
+      itrList,
+      pqpList,
+      obsList,
+      fatList,
+      followUpList,
+      auditList
+    );
+
+    const message = generateDeleteMessage('Contractor', contractor.name, references.references, t);
+    setDeleteModal({ isOpen: true, id, message });
   };
 
   const handleDeleteConfirm = async () => {

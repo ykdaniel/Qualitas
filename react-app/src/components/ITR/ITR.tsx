@@ -6,6 +6,8 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useITRStore } from '../../store/itrStore';
 import type { ITRItem } from '../../store/itrStore';
 import { useContractorsStore } from '../../store/contractorsStore';
+import { useChecklistStore } from '../../store/checklistStore';
+import { checkITRChecklistReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { ITRDetailModal, ITRDetailData } from './ITRModals';
@@ -17,6 +19,7 @@ const ITR: React.FC = () => {
     const navigate = useNavigate();
     const { itrList, loading, error, refetch, addITR, updateITR, deleteITR } = useITRStore();
     const { getActiveContractors } = useContractorsStore();
+    const checklistList = useChecklistStore(state => state.records);
 
     const [searchQuery, setSearchQuery] = useState('');
     const debouncedSearch = useDebounce(searchQuery, 500);
@@ -27,9 +30,10 @@ const ITR: React.FC = () => {
     }, [debouncedSearch, refetch]);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [currentItrId, setCurrentItrId] = useState<string | null>(null);
-    const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null }>({
+    const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null; message: string }>({
         isOpen: false,
         id: null,
+        message: '',
     });
 
     // Data is now primarily filtered by backend.
@@ -62,13 +66,20 @@ const ITR: React.FC = () => {
     };
 
     const handleDeleteClick = (id: string) => {
-        setDeleteModal({ isOpen: true, id });
+        const itr = itrList.find(item => item.id === id);
+        if (!itr) return;
+
+        // Check for checklist references
+        const checklistReferences = checkITRChecklistReferences(id, checklistList);
+        const message = generateDeleteMessage('ITR', itr.documentNumber || itr.id, checklistReferences.references, t);
+
+        setDeleteModal({ isOpen: true, id, message });
     };
 
     const handleDelete = async () => {
         if (deleteModal.id) {
             await deleteITR(deleteModal.id);
-            setDeleteModal({ isOpen: false, id: null });
+            setDeleteModal({ isOpen: false, id: null, message: '' });
         }
     };
 
@@ -231,9 +242,9 @@ const ITR: React.FC = () => {
             <ConfirmModal
                 isOpen={deleteModal.isOpen}
                 title={t('common.confirmDeleteTitle')}
-                message={t('common.confirmDeleteMsg')}
+                message={deleteModal.message || t('common.confirmDeleteMsg')}
                 onConfirm={handleDelete}
-                onCancel={() => setDeleteModal({ isOpen: false, id: null })}
+                onCancel={() => setDeleteModal({ isOpen: false, id: null, message: '' })}
                 confirmText={t('common.delete')}
                 cancelText={t('common.cancel')}
             />
