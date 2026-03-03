@@ -165,7 +165,13 @@ class NOIService:
             # Handle contractor name -> vendor_id mapping
             if 'contractor' in d:
                 vendor_name = d.pop('contractor')
-                d['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
+                new_vendor_id = _resolve_vendor_id(self.repo.db, vendor_name)
+                
+                # Regenerate reference number if contractor changed
+                if new_vendor_id and new_vendor_id != db_noi.vendor_id:
+                    d['referenceNo'] = generate_reference_no(self.repo.db, vendor_name, 'NOI')
+                
+                d['vendor_id'] = new_vendor_id
 
             # Validate itpNo exists if being updated
             if 'itpNo' in d and d['itpNo']:
