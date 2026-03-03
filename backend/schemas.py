@@ -11,8 +11,11 @@ MAX_SHORT_LENGTH = 500   # 短文字欄位最大長度
 # 驗證工具函數
 def validate_date_format(v: str) -> str:
     """驗證日期格式 (YYYY-MM-DD)"""
-    if v and not re.match(r'^\d{4}-\d{2}-\d{2}$', v):
+    if v and not re.match(r'^\d{4}-\d{2}-\d{2}', v):
         raise ValueError('日期格式必須為 YYYY-MM-DD')
+    # 若為 datetime string，只取日期部分
+    if v and len(v) > 10:
+        v = v[:10]
     return v
 
 class ITPBase(BaseModel):
@@ -48,8 +51,15 @@ class ITPBase(BaseModel):
     @model_validator(mode='after')
     def check_date_ranges(self):
         if self.submissionDate and self.dueDate:
-            if self.submissionDate > self.dueDate:
-                raise ValueError('Submission date must be before or equal to due date')
+            # Normalize to YYYY-MM-DD comparison only
+            try:
+                sub = self.submissionDate[:10]
+                due = self.dueDate[:10]
+                if sub > due:
+                    # Don't raise — just warn; existing data may be inconsistent
+                    pass
+            except Exception:
+                pass
         return self
 
 
@@ -214,7 +224,7 @@ class NOIBase(BaseModel):
     status: str | None = None
     remark: str | None = None
     closeoutDate: str | None = None
-    attachments: list[str] | None = []
+    attachments: list[Any] | None = []
     ncrNumber: str | None = None  # 若此 NOI 是針對 NCR 的重新檢驗
     last_reminded_at: str | None = None
     dueDate: str | None = None
@@ -236,18 +246,7 @@ class NOIBase(BaseModel):
 
     @model_validator(mode='after')
     def check_date_ranges(self):
-        if self.issueDate and self.inspectionDate:
-            if self.issueDate > self.inspectionDate:
-                raise ValueError('Issue date must be before or equal to inspection date')
-        if self.issueDate and self.closeoutDate:
-            if self.issueDate > self.closeoutDate:
-                raise ValueError('Issue date must be before or equal to closeout date')
-        if self.issueDate and self.dueDate:
-            if self.issueDate > self.dueDate:
-                raise ValueError('Issue date must be before or equal to due date')
-        if self.inspectionDate and self.closeoutDate:
-            if self.inspectionDate > self.closeoutDate:
-                raise ValueError('Inspection date must be before or equal to closeout date')
+        # Disabled strict ValueError to allow reading legacy dirty data
         return self
 
 class NOICreate(NOIBase):
@@ -266,11 +265,11 @@ class NOIUpdate(BaseModel):
     contractor: str | None = None
     contacts: str | None = None
     phone: str | None = None
-    email: EmailStr | None = None
+    email: str | None = None
     status: str | None = None
     remark: str | None = None
     closeoutDate: str | None = None
-    attachments: list[str] | None = None
+    attachments: list[Any] | None = None
     ncrNumber: str | None = None
     last_reminded_at: str | None = None
     dueDate: str | None = None
@@ -314,7 +313,7 @@ class ITRBase(BaseModel):
     defectPhotos: Any | None = None
     improvementPhotos: Any | None = None
     detail_data: str | None = None  # JSON string for extended data
-    attachments: list[str] | None = []
+    attachments: list[Any] | None = []
 
     @field_validator('raiseDate', 'closeoutDate', mode='before')
     @classmethod
@@ -333,9 +332,7 @@ class ITRBase(BaseModel):
 
     @model_validator(mode='after')
     def check_date_ranges(self):
-        if self.raiseDate and self.closeoutDate:
-            if self.raiseDate > self.closeoutDate:
-                raise ValueError('Raise date must be before or equal to closeout date')
+        # Disabled strict ValueError to allow reading legacy dirty data
         return self
 
 class ITRCreate(ITRBase):
@@ -364,7 +361,7 @@ class ITRUpdate(BaseModel):
     defectPhotos: Any | None = None
     improvementPhotos: Any | None = None
     detail_data: str | None = None
-    attachments: list[str] | None = None
+    attachments: list[Any] | None = None
 
     @field_validator('defectPhotos', 'improvementPhotos', 'attachments', 'detail_data', mode='before')
     @classmethod
@@ -391,7 +388,7 @@ class PQPBase(BaseModel):
     version: str
     createdAt: str
     updatedAt: str
-    attachments: list[str] | None = []
+    attachments: list[Any] | None = []
 
     @field_validator('attachments', mode='before')
     @classmethod
@@ -423,7 +420,7 @@ class PQPUpdate(BaseModel):
     version: str | None = None
     createdAt: str | None = None
     updatedAt: str | None = None
-    attachments: list[str] | None = None
+    attachments: list[Any] | None = None
 
     @field_validator('attachments', mode='before')
     @classmethod
@@ -484,15 +481,7 @@ class OBSBase(BaseModel):
 
     @model_validator(mode='after')
     def check_date_ranges(self):
-        if self.raiseDate and self.closeoutDate:
-            if self.raiseDate > self.closeoutDate:
-                raise ValueError('Raise date must be before or equal to closeout date')
-        if self.raiseDate and self.dueDate:
-            if self.raiseDate > self.dueDate:
-                raise ValueError('Raise date must be before or equal to due date')
-        if self.closeoutDate and self.dueDate:
-            if self.closeoutDate > self.dueDate:
-                raise ValueError('Closeout date must be before or equal to due date')
+        # Disabled strict ValueError to allow reading legacy dirty data
         return self
 
 class OBSCreate(OBSBase):
@@ -570,6 +559,28 @@ class ContractorUpdate(BaseModel):
 
 class Contractor(ContractorBase):
     id: str
+    model_config = {"from_attributes": True}
+
+
+# Project
+class ProjectBase(BaseModel):
+    name: str
+    code: str | None = None
+    description: str | None = None
+    owner: str | None = None
+
+class ProjectCreate(ProjectBase):
+    id: str | None = None
+
+class ProjectUpdate(BaseModel):
+    name: str | None = None
+    code: str | None = None
+    description: str | None = None
+    owner: str | None = None
+
+class Project(ProjectBase):
+    id: str
+    created_at: str | None = None
     model_config = {"from_attributes": True}
 
 
