@@ -167,8 +167,32 @@ class NOIService:
                 vendor_name = d.pop('contractor')
                 new_vendor_id = _resolve_vendor_id(self.repo.db, vendor_name)
                 
-                # Regenerate reference number if contractor changed
+                # Determine if reference number needs regeneration
+                regenerate = False
                 if new_vendor_id and new_vendor_id != db_noi.vendor_id:
+                    regenerate = True
+                elif new_vendor_id and db_noi.referenceNo:
+                    # Check if vendor abbreviation changed (e.g., vendor was renamed but ID remains the same)
+                    from core.utils import get_contractor_abbreviation
+                    from models import DocumentNamingRule
+                    from core.config import settings
+                    
+                    vendor_abbrev = get_contractor_abbreviation(self.repo.db, vendor_name)
+                    rule = self.repo.db.query(DocumentNamingRule).filter(
+                        DocumentNamingRule.doc_type == 'noi'
+                    ).first()
+                    
+                    if rule and rule.prefix:
+                        expected_prefix = rule.prefix.replace('[ABBREV]', vendor_abbrev)
+                    else:
+                        project_code = getattr(settings, 'PROJECT_CODE', 'QTS')
+                        expected_prefix = f"{project_code}-{vendor_abbrev}-NOI-"
+                        
+                    if not db_noi.referenceNo.startswith(expected_prefix):
+                        regenerate = True
+
+                if regenerate:
+                    from core.utils import generate_reference_no
                     d['referenceNo'] = generate_reference_no(self.repo.db, vendor_name, 'NOI')
                 
                 d['vendor_id'] = new_vendor_id
