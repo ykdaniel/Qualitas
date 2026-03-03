@@ -1,0 +1,13 @@
+
+C:\Users\YUKAI\Desktop\Qualitas\react-app\src\components\Checklist\Checklist.tsx
+    5:25   warning  'FileText' is defined but never used          @typescript-eslint/no-unused-vars
+    5:49   warning  'Calendar' is defined but never used          @typescript-eslint/no-unused-vars
+    5:102  warning  'Check' is defined but never used             @typescript-eslint/no-unused-vars
+   50:22   warning  'loading' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  322:11   warning  'itrList' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\YUKAI\Desktop\Qualitas\react-app\src\components\Checklist\columns.tsx
+  7:8  warning  'styles' is defined but never used  @typescript-eslint/no-unused-vars
+
+??6 problems (0 errors, 6 warnings)
+

@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useOBSStore } from '../../store/obsStore';
@@ -8,20 +7,15 @@ import styles from './OBS.module.css';
 import ConfirmModal from '../Shared/ConfirmModal';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
-import { OBSDetailModal, OBSDetailsViewModal, OBSItem, OBSDetailData } from './OBSModals';
+import { BackButton } from '@/components/ui/BackButton';
+import { OBSDetailModal, OBSDetailsViewModal, OBSDetailData, PendingUploads } from './OBSModals';
 import { useDebounce } from '../../hooks/useDebounce';
-
-
-type SortKey = keyof OBSItem;
-type SortDirection = 'asc' | 'desc';
-
-interface SortConfig {
-  key: SortKey;
-  direction: SortDirection;
-}
+import { uploadFiles, deleteFile } from '../../services/api';
+import { useOBSStats } from '../../hooks/useOBSStats';
+import { StatItem } from '../Shared/StatItem';
+import statStyles from '../Shared/StatItem.module.css';
 
 const OBS: React.FC = () => {
-  const navigate = useNavigate();
   const { t } = useLanguage();
   const { getActiveContractors } = useContractorsStore();
   const { obsList, loading, error, refetch, addOBS, updateOBS, deleteOBS } = useOBSStore();
@@ -54,49 +48,23 @@ const OBS: React.FC = () => {
     return obsList;
   }, [obsList]);
 
-  // ... (statistics logic)
-  const statistics = useMemo(() => {
-    const statusCounts = {
-      opening: 0,
-      closed: 0,
-    };
-
-    obsList.forEach((item) => {
-      const status = (item.status || '').toLowerCase();
-      if (status === 'open' || status === 'opening') {
-        statusCounts.opening++;
-      } else if (status === 'closed') {
-        statusCounts.closed++;
-      }
-    });
-
-    const total = obsList.length;
-    const openRate = total > 0 ? Math.round((statusCounts.opening / total) * 100) : 0;
-
-    return {
-      ...statusCounts,
-      total,
-      openRate,
-    };
-  }, [obsList]);
+  const statistics = useOBSStats(obsList);
 
 
 
-  const handleAdd = (id: string) => {
-    navigate(`/obs/${id}`);
-  };
 
-  const handleEdit = (id: string) => {
+
+  const handleEdit = React.useCallback((id: string) => {
     setCurrentObsId(id);
     setIsEditModalOpen(true);
-  };
+  }, []);
 
   const handleAddNew = () => {
     setCurrentObsId('new');
     setIsEditModalOpen(true);
   };
 
-  const handleSaveOBSDetails = async (details: OBSDetailData) => {
+  const handleSaveOBSDetails = async (details: OBSDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => {
     if (!currentObsId) return;
     const isNew = currentObsId === 'new';
     // documentNumber 由後端自動產生，新建時不送
@@ -122,11 +90,27 @@ const OBS: React.FC = () => {
       attachments: details.attachments,
     };
     try {
+      let targetId = '';
       if (isNew) {
-        await addOBS(payload as Omit<ContextOBSItem, 'id'>);
+        const createdObs = await addOBS(payload as Omit<ContextOBSItem, 'id'>);
+        targetId = createdObs.id;
       } else {
         await updateOBS(currentObsId, payload);
+        targetId = currentObsId;
       }
+
+      if (deletedFileIds.length > 0) {
+        await Promise.all(deletedFileIds.map(fileId => deleteFile(fileId).catch(e => console.error("Failed to delete", e))));
+      }
+
+      if (targetId) {
+        for (const { category, files } of pendingUploads) {
+          if (files.length > 0) {
+            await uploadFiles('obs', targetId, files, category).catch(e => console.error(`Failed to upload ${category}`, e));
+          }
+        }
+      }
+
       setIsEditModalOpen(false);
       setCurrentObsId(null);
     } catch (error: any) {
@@ -135,16 +119,16 @@ const OBS: React.FC = () => {
     }
   };
 
-  const confirmDelete = (id: string) => {
+  const confirmDelete = React.useCallback((id: string) => {
     setDeleteModal({
       isOpen: true,
       id,
       message: t('common.deleteConfirmMessage', { item: 'OBS' }),
     });
-  };
+  }, [t]);
 
   // Columns memoization
-  const columns = useMemo(() => createColumns(handleEdit, confirmDelete, t, getActiveContractors), [t, getActiveContractors]);
+  const columns = useMemo(() => createColumns(handleEdit, confirmDelete, t, getActiveContractors), [t, getActiveContractors, handleEdit, confirmDelete]);
 
   const handleDelete = async () => {
     if (deleteModal.id) {
@@ -162,9 +146,7 @@ const OBS: React.FC = () => {
     <div className={styles.container}>
       <div className={styles.header}>
         <div className={styles.headerLeft}>
-          <button type="button" className={styles.backButton} onClick={() => navigate('/')}>
-            ← {t('common.back') || 'Back'}
-          </button>
+          <BackButton />
           <h1>{t('home.obs.description') || 'OBS'}</h1>
         </div>
         <div className={styles.headerRight}>
@@ -191,52 +173,30 @@ const OBS: React.FC = () => {
         <h2 className={styles.summaryTitle}>{t('obs.statsTitle')}</h2>
         <div className={styles.statsContainer}>
           <div className={styles.statusStatsGrid}>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('obs.statOpen')}</div>
-                <div className={styles.statValue}>{statistics.opening}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.greenIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('obs.statClosed')}</div>
-                <div className={styles.statValue}>{statistics.closed}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.grayIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('obs.statTotal')}</div>
-                <div className={styles.statValue}>{statistics.total}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('obs.statOpenRate')}</div>
-                <div className={styles.statValue}>{statistics.opening} ({statistics.openRate}%)</div>
-              </div>
-            </div>
+            <StatItem 
+              label={t('obs.statOpen')} 
+              value={statistics.opening} 
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+              iconColorClass={statStyles.blueIcon} 
+            />
+            <StatItem 
+              label={t('obs.statClosed')} 
+              value={statistics.closed} 
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+              iconColorClass={statStyles.greenIcon} 
+            />
+            <StatItem 
+              label={t('obs.statTotal')} 
+              value={statistics.total} 
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" /><path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+              iconColorClass={statStyles.grayIcon} 
+            />
+            <StatItem 
+              label={t('obs.statOpenRate')} 
+              value={`${statistics.opening} (${statistics.openRate}%)`} 
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+              iconColorClass={statStyles.blueIcon} 
+            />
           </div>
         </div>
       </div>

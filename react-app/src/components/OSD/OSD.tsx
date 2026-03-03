@@ -1,19 +1,16 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import styles from './OSD.module.css';
+import { BackButton } from '@/components/ui/BackButton';
 
 const OSD: React.FC = () => {
-  const navigate = useNavigate();
   const { t } = useLanguage();
 
   return (
     <div className={styles.container}>
       <div className={styles.header}>
         <div className={styles.headerLeft}>
-          <button type="button" className={styles.backButton} onClick={() => navigate('/')}>
-            ← {t('common.back')}
-          </button>
+          <BackButton />
           <h1>{t('osd.title')}</h1>
         </div>
       </div>

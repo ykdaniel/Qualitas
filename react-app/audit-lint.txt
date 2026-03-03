@@ -1,0 +1,7 @@
+
+C:\Users\YUKAI\Desktop\Qualitas\react-app\src\components\Audit\AuditModals.tsx
+   1:27  warning  'useEffect' is defined but never used                                      @typescript-eslint/no-unused-vars
+  25:65  warning  'auditId' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+??2 problems (0 errors, 2 warnings)
+

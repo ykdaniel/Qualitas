@@ -1,15 +1,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
-import { useContractorsStore } from '../../store/contractorsStore';
 import { useNOIStore } from '../../store/noiStore';
 import type { NOIItem } from '../../store/noiStore';
-import { useITPStore } from '../../store/itpStore';
+
 import { useNCRStore } from '../../store/ncrStore';
 import { useITRStore } from '../../store/itrStore';
+import { uploadFiles, deleteFile } from '../../services/api';
 import { checkNOIReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
-import { formatTime24h, getLocalizedStatus } from '../../utils/formatters';
+import { formatTime24h } from '../../utils/formatters';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './NOI.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
@@ -23,11 +22,12 @@ import {
   NOIBulkAddModal,
   NOIDetailData
 } from './NOIModals';
+import { useNOIStats } from '../../hooks/useNOIStats';
+import { StatItem } from '../Shared/StatItem';
+import statStyles from '../Shared/StatItem.module.css';
 
 const NOI: React.FC = () => {
-  const navigate = useNavigate();
   const { t } = useLanguage();
-  const { getActiveContractors } = useContractorsStore();
   const { noiList, loading, error, refetch, addNOI, addBulkNOI, updateNOI, deleteNOI } = useNOIStore();
   const ncrList = useNCRStore(state => state.ncrList);
   const itrList = useITRStore(state => state.itrList);
@@ -119,41 +119,12 @@ const NOI: React.FC = () => {
     };
   }, [batchPrintData]);
 
-  const statistics = useMemo(() => {
-    const statusCounts: Record<string, number> = {
-      opening: 0,
-      closed: 0,
-      reject: 0,
-    };
+  const statistics = useNOIStats(noiList);
 
-    noiList.forEach((item) => {
-      const status = (item.status || 'Open').toLowerCase();
-      if (status === 'open') {
-        statusCounts.opening++;
-      } else if (status === 'closed') {
-        statusCounts.closed++;
-      } else if (status === 'reject') {
-        statusCounts.reject = (statusCounts.reject || 0) + 1;
-      }
-    });
-
-    const total = noiList.length;
-    const openRate = total > 0 ? Math.round((statusCounts.opening / total) * 100) : 0;
-
-    return {
-      ...statusCounts,
-      opening: statusCounts.opening,
-      closed: statusCounts.closed,
-      reject: statusCounts.reject || 0,
-      total,
-      openRate,
-    };
-  }, [noiList]);
-
-  const handleEdit = (id: string) => {
+  const handleEdit = React.useCallback((id: string) => {
     setCurrentNoiId(id);
     setIsModalOpen(true);
-  };
+  }, []);
 
   const handleAddNew = () => {
     const newId = String(Date.now());
@@ -161,7 +132,7 @@ const NOI: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleSaveNOIDetails = async (details: NOIDetailData) => {
+  const handleSaveNOIDetails = async (details: NOIDetailData, pendingUploads: File[], deletedFileIds: string[]) => {
     if (currentNoiId) {
       setNoiDetails(prev => ({ ...prev, [currentNoiId]: details }));
 
@@ -191,13 +162,27 @@ const NOI: React.FC = () => {
       };
 
       try {
+        let savedNOI;
         if (existingItem) {
           await updateNOI(currentNoiId, updatedItem);
+          savedNOI = updatedItem;
         } else {
-          await addNOI(updatedItem, currentNoiId);
+          savedNOI = await addNOI(updatedItem, currentNoiId);
         }
+
+        const finalId = savedNOI?.id || currentNoiId;
+
+        // Process file deletions and uploads
+        if (deletedFileIds && deletedFileIds.length > 0) {
+            await Promise.all(deletedFileIds.map(id => deleteFile(id).catch(e => console.error("Failed to delete file", e))));
+        }
+        if (pendingUploads && pendingUploads.length > 0 && finalId) {
+            await uploadFiles('noi', finalId, pendingUploads, 'attachment');
+        }
+
         setIsModalOpen(false);
         setCurrentNoiId(null);
+        refetch(); // Refresh to ensure attachments are updated
       } catch (error: any) {
         const detail = error?.response?.data?.detail || t('common.saveFailed') || 'Save failed';
         alert(detail);
@@ -205,13 +190,13 @@ const NOI: React.FC = () => {
     }
   };
 
-  const handleDeleteClick = (id: string) => {
+  const handleDeleteClick = React.useCallback((id: string) => {
     const noi = noiList.find(item => item.id === id);
     if (!noi) return;
     const references = checkNOIReferences(id, noi.referenceNo, itrList, ncrList);
     const message = generateDeleteMessage('NOI', noi.referenceNo, references.references, t);
     setDeleteModal({ isOpen: true, id, message });
-  };
+  }, [noiList, itrList, ncrList, t]);
 
   const handleDeleteConfirm = async () => {
     if (deleteModal.id) {
@@ -221,7 +206,7 @@ const NOI: React.FC = () => {
   };
 
   // Columns memoization
-  const columns = useMemo(() => createColumns(handleEdit, handleDeleteClick, t), [t]);
+  const columns = useMemo(() => createColumns(handleEdit, handleDeleteClick, t), [t, handleEdit, handleDeleteClick]);
 
   return (
     <div className={styles.container}>
@@ -257,63 +242,37 @@ const NOI: React.FC = () => {
         <h2 className={styles.summaryTitle}>{t('pqp.statusStats')}</h2>
         <div className={styles.statsContainer}>
           <div className={styles.statusStatsGrid}>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('noi.stats.open')}</div>
-                <div className={styles.statValue}>{statistics.opening}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.greenIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('noi.stats.closed')}</div>
-                <div className={styles.statValue}>{statistics.closed}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.redIcon}`} style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('noi.status.reject')}</div>
-                <div className={styles.statValue}>{statistics.reject}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.grayIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('noi.stats.total')}</div>
-                <div className={styles.statValue}>{statistics.total}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('noi.stats.openRate')}</div>
-                <div className={styles.statValue}>{statistics.opening} ({statistics.openRate}%)</div>
-              </div>
-            </div>
+            <StatItem 
+              label={t('noi.stats.open')} 
+              value={statistics.opening} 
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+              iconColorClass={statStyles.blueIcon} 
+            />
+            <StatItem 
+              label={t('noi.stats.closed')} 
+              value={statistics.closed} 
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+              iconColorClass={statStyles.greenIcon} 
+            />
+            <StatItem 
+              label={t('noi.status.reject')} 
+              value={statistics.reject} 
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+              iconColorClass={statStyles.redIcon} 
+              style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}
+            />
+            <StatItem 
+              label={t('noi.stats.total')} 
+              value={statistics.total} 
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" /><path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+              iconColorClass={statStyles.grayIcon} 
+            />
+            <StatItem 
+              label={t('noi.stats.openRate')} 
+              value={`${statistics.opening} (${statistics.openRate}%)`} 
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+              iconColorClass={statStyles.blueIcon} 
+            />
           </div>
         </div>
       </div>
@@ -496,7 +455,7 @@ const NOI: React.FC = () => {
                         }))
                       ).map((item, idx) => (
                         <div key={idx} className={styles.noiBatchPrintPhotoItem}>
-                          <img src={item.img} alt={item.label} className={styles.noiBatchPrintPhoto} />
+                          <img src={typeof item.img === 'string' ? item.img : item.img.file_url} alt={item.label} className={styles.noiBatchPrintPhoto} />
                           <div className={styles.noiBatchPrintPhotoLabel}>{item.label}</div>
                         </div>
                       ))}

@@ -875,3 +875,35 @@
   color: #b45309;
   font-size: 15px;
 }
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .dualChartContainer {
+    flex-direction: column;
+  }
+  
+  .obsChartWrapper,
+  .ncrChartWrapper,
+  .itpChartWrapper,
+  .pqpChartWrapper {
+    flex-direction: column;
+  }
+  
+  .verticalDivider {
+    display: none;
+  }
+  
+  .ncrStatsCard,
+  .obsStatsCard,
+  .itpStatsCard,
+  .pqpStatsCard {
+    width: 100%;
+    min-width: unset;
+  }
+}
+
+@media (max-width: 768px) {
+  .rechartsGrid {
+    grid-template-columns: 1fr;
+  }
+}

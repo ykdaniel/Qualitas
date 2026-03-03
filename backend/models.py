@@ -273,7 +273,20 @@ class ReferenceSequence(Base):
     last_seq = Column(Integer, nullable=False, default=0) # 目前已發到的最大序號
 
 
+class Project(Base):
+    """專案基本資料"""
+    __tablename__ = "projects"
+
+    id = Column(String, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False)  # 專案全名
+    code = Column(String, nullable=True)                             # 縮寫/代號
+    description = Column(String, nullable=True)                      # 描述
+    owner = Column(String, nullable=True)                            # 業主
+    created_at = Column(String, nullable=True)
+
+
 class DocumentNamingRule(Base):
+
     """
     文件命名規則：
     - 依 doc_type（模組別）定義前綴與流水號位數

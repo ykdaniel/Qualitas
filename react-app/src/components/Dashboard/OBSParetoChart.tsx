@@ -1,12 +1,12 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Line, LabelList } from 'recharts';
+import { Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Line, LabelList } from 'recharts';
 import React, { useMemo } from 'react';
 import { useOBSStore } from '../../store/obsStore';
-import { useDashboardFilter } from '../../context/DashboardFilterContext';
+import { useDashboardFilterStore } from '../../store/dashboardFilterStore';
 import styles from './Dashboard.module.css';
 
 const OBSParetoChart: React.FC = React.memo(() => {
   const obsList = useOBSStore(state => state.obsList);
-  const { selectedVendor } = useDashboardFilter();
+  const selectedVendor = useDashboardFilterStore(state => state.selectedVendor);
 
   // 计算按承包商分组的OBS统计数据
   const paretoData = useMemo(() => {
@@ -46,15 +46,18 @@ const OBSParetoChart: React.FC = React.memo(() => {
     const totalOBSs = sortedData.reduce((sum, item) => sum + item.total, 0);
 
     // 计算累积百分比
-    let cumulative = 0;
-    const dataWithCumulative = sortedData.map(item => {
-      cumulative += item.total;
-      const cumulativePercent = totalOBSs > 0 ? Math.round((cumulative / totalOBSs) * 100) : 0;
-      return {
-        ...item,
-        cumulativePercent,
-      };
-    });
+    const { result: dataWithCumulative } = sortedData.reduce(
+      (acc, item) => {
+        acc.cumulative += item.total;
+        const cumulativePercent = totalOBSs > 0 ? Math.round((acc.cumulative / totalOBSs) * 100) : 0;
+        acc.result.push({
+          ...item,
+          cumulativePercent,
+        });
+        return acc;
+      },
+      { cumulative: 0, result: [] as any[] }
+    );
 
     return dataWithCumulative;
   }, [obsList, selectedVendor]);

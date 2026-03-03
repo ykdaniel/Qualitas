@@ -1,12 +1,12 @@
 import { usePQPStore } from '../../store/pqpStore';
-import { useDashboardFilter } from '../../context/DashboardFilterContext';
+import { useDashboardFilterStore } from '../../store/dashboardFilterStore';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './Dashboard.module.css';
 
 const PQPStatsCard: React.FC = () => {
   const pqpList = usePQPStore(state => state.pqpList);
-  const { selectedVendor } = useDashboardFilter();
+  const selectedVendor = useDashboardFilterStore(state => state.selectedVendor);
   const navigate = useNavigate();
 
   const stats = useMemo(() => {

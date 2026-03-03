@@ -30,6 +30,7 @@ from routers import (
     noi,
     obs,
     pqp,
+    projects,
 )
 from routers import settings as settings_router
 from scheduler import start_scheduler
@@ -133,7 +134,7 @@ for router in [
     auth,
     settings_router,
     iam,
-    itp, ncr, noi, itr, pqp, obs, contractors, followup, audit, checklist, kpi, file_router, fat, km
+    itp, ncr, noi, itr, pqp, obs, contractors, followup, audit, checklist, kpi, file_router, fat, km, projects
 ]:
     api.include_router(router.router)
 

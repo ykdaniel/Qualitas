@@ -1,12 +1,12 @@
 import { useOBSStore } from '../../store/obsStore';
-import { useDashboardFilter } from '../../context/DashboardFilterContext';
+import { useDashboardFilterStore } from '../../store/dashboardFilterStore';
 import { useMemo } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import styles from './Dashboard.module.css';
 
 const OBSStatsCard: React.FC = () => {
   const obsList = useOBSStore(state => state.obsList);
-  const { selectedVendor } = useDashboardFilter();
+  const selectedVendor = useDashboardFilterStore(state => state.selectedVendor);
 
   const stats = useMemo(() => {
     const filteredList = selectedVendor === 'all'

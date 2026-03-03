@@ -1,0 +1,82 @@
+.statItem {
+  background-color: white;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid #f1f5f9;
+  transition: all 0.2s ease;
+}
+
+.statItem:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  border-color: #e2e8f0;
+}
+
+.statIcon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.statIcon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.statContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.statLabel {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 4px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.statValue {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.2;
+}
+
+.blueIcon {
+  background-color: #eff6ff;
+  color: #3b82f6;
+}
+.greenIcon {
+  background-color: #f0fdf4;
+  color: #22c55e;
+}
+.yellowIcon {
+  background-color: #fefce8;
+  color: #eab308;
+}
+.purpleIcon {
+  background-color: #faf5ff;
+  color: #a855f7;
+}
+.orangeIcon {
+  background-color: #fff7ed;
+  color: #f97316;
+}
+.pinkIcon {
+  background-color: #fdf2f8;
+  color: #ec4899;
+}
+.grayIcon {
+  background-color: #f8fafc;
+  color: #64748b;
+}

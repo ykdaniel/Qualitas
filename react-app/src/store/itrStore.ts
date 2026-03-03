@@ -24,12 +24,12 @@ export interface ITRItem {
     noiNumber?: string;  // 連結到產生此 ITR 的 NOI（取代舊的 itpNo）
     eventNumber?: string;
     checkpoint?: string;
-    defectPhotos?: string[];
-    improvementPhotos?: string[];
-    attachments?: string[];
+    defectPhotos?: any[];
+    improvementPhotos?: any[];
+    attachments?: any[];
     itpNo?: string;  // Related ITP Reference Number
-    drawings?: string[]; // Latest Drawings
-    certificates?: string[]; // Calibration Certificates
+    drawings?: any[]; // Latest Drawings
+    certificates?: any[]; // Calibration Certificates
     linkedChecklists?: any[]; // Snapshot of linked checklists
     detail_data?: any; // Raw detail data from backend
 }

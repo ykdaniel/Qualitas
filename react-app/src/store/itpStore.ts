@@ -27,7 +27,7 @@ export interface ITPItem {
     submissionDate?: string;
     hasDetails?: boolean;
     detail_data?: ITPInspectionItem[];
-    attachments?: string[];
+    attachments?: any[];
     dueDate?: string;
 }
 
@@ -135,7 +135,7 @@ export const useITPStore = create<ITPState>((set, get) => ({
 
     updateITPDetail: async (id: string, detail: any) => {
         try {
-            await api.put(`/itp/${id}/details/`, detail);
+            await api.put(`/itp/${id}/detail`, detail);
             // Backend doesn't return the full ITP, so fetch again to keep state synced
             await get().fetchITPs();
         } catch (error: any) {

@@ -20,7 +20,7 @@ export interface NOIItem {
     status: string;
     remark?: string;
     closeoutDate?: string;
-    attachments?: string[];
+    attachments?: any[];
     ncrNumber?: string;  // 若此 NOI 是針對 NCR 的重新檢驗
     dueDate?: string;
 }

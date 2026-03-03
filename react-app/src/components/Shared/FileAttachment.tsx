@@ -1,23 +1,24 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
-import { uploadFiles, getEntityFiles, deleteFile, AttachmentInfo } from '../../services/api';
+import { getEntityFiles, deleteFile, AttachmentInfo } from '../../services/api';
 
-interface FileAttachmentProps {
-    /** 舊格式：base64 字串陣列（向下相容） */
-    attachments?: string[];
-    /** 新格式回呼：當透過 API 上傳/刪除後，回傳最新的附件清單 */
-    onAttachmentsChange?: (attachments: AttachmentInfo[]) => void;
-    /** 舊格式回呼：僅用於向下相容的 base64 上傳 */
-    onUpload?: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    /** 舊格式回呼：僅用於向下相容的 base64 移除 */
-    onRemove?: (index: number) => void;
-    /** 實體類型，啟用新 API 模式 */
+export interface FileAttachmentProps {
+    /** 已存在於伺服器的檔案資訊 (由上層傳入或由內部抓取) */
+    attachments?: AttachmentInfo[];
+    /** 舊格式：base64 字串陣列（僅作向下相容渲染，不再用於上傳） */
+    legacyAttachments?: string[];
+    /** 當上層選擇了實體檔案時觸發，回傳待上傳的 File 陣列 */
+    onPendingFilesChange?: (files: File[]) => void;
+    /** 當刪除已存在伺服器檔案時觸發（傳遞 file_id） */
+    onDeleteExistingFile?: (fileId: string) => void;
+    /** 單純刪除 Legacy Base64 的回呼 (視需要保留) */
+    onRemoveLegacy?: (index: number) => void;
+    
+    /** 若提供此資訊，元件將自動嘗試抓取並於上傳時「自動儲存」。但在各模組 Modal 實作中，建議由上層手動處理儲存。 */
     entityType?: string;
-    /** 實體 ID，啟用新 API 模式 */
     entityId?: string;
-    /** 檔案分類 */
     category?: string;
+    
     id: string;
     title?: string;
     buttonText?: string;
@@ -26,16 +27,12 @@ interface FileAttachmentProps {
     onPreview?: (src: string, name?: string) => void;
 }
 
-/**
- * 通用附件上傳元件
- * - 當提供 entityType + entityId 時，使用新的集中式 API 上傳
- * - 否則回退到舊的 base64 模式（向下相容）
- */
 const FileAttachment: React.FC<FileAttachmentProps> = ({
-    attachments: legacyAttachments,
-    onAttachmentsChange,
-    onUpload,
-    onRemove,
+    attachments: propsAttachments,
+    legacyAttachments,
+    onPendingFilesChange,
+    onDeleteExistingFile,
+    onRemoveLegacy,
     entityType,
     entityId,
     category = 'attachment',
@@ -43,74 +40,97 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
     title,
     buttonText,
     readOnly = false,
-    accept = "image/*",
+    accept = "image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     onPreview
 }) => {
     const { t } = useLanguage();
-    const [apiAttachments, setApiAttachments] = useState<AttachmentInfo[]>([]);
-    const [uploading, setUploading] = useState(false);
+    // 儲存已從 Server 拿回來的檔案
+    const [apiAttachments, setApiAttachments] = useState<AttachmentInfo[]>(propsAttachments || []);
+    // 儲存使用者剛選取但尚未上傳至 Server 的實體 File 物件
+    const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+    // 儲存待上傳 File 所產生出的預覽用 URL (blob UI)
+    const [pendingPreviews, setPendingPreviews] = useState<string[]>([]);
+    const uploading = false;
 
-    // NOTE: 判斷是否使用新的 API 模式
-    const useApiMode = Boolean(entityType && entityId);
-
-    // 載入已有的附件（API 模式）
+    // 同步外部傳入的 API attachments
     useEffect(() => {
-        if (useApiMode && entityType && entityId) {
+        if (propsAttachments) {
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+            setApiAttachments(propsAttachments);
+        }
+    }, [propsAttachments]);
+
+    // 如果提供了實體 ID，嘗試自動抓取遠端檔案 (如果外部沒傳 propsAttachments 的話)
+    useEffect(() => {
+        if (entityType && entityId && !propsAttachments) {
             getEntityFiles(entityType, entityId, category)
                 .then(setApiAttachments)
                 .catch(err => console.error('Failed to load attachments', err));
         }
-    }, [useApiMode, entityType, entityId, category]);
+    }, [entityType, entityId, category, propsAttachments]);
 
-    // API 模式：上傳
-    const handleApiUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!entityType || !entityId) return;
+    // 清理 ObjectURL 防止記憶體洩漏
+    useEffect(() => {
+        return () => {
+            pendingPreviews.forEach(url => URL.revokeObjectURL(url));
+        };
+    }, [pendingPreviews]);
+
+    // 處理新選擇的檔案
+    const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (!files || files.length === 0) return;
 
-        setUploading(true);
-        try {
-            const newFiles = await uploadFiles(entityType, entityId, Array.from(files), category);
-            const updated = [...apiAttachments, ...newFiles];
-            setApiAttachments(updated);
-            onAttachmentsChange?.(updated);
-        } catch (err) {
-            console.error('Upload failed', err);
-            alert(t('common.saveFailed') || 'Upload failed');
-        } finally {
-            setUploading(false);
-            // 清除 input 值以允許重新選擇相同檔案
-            e.target.value = '';
-        }
-    }, [entityType, entityId, category, apiAttachments, onAttachmentsChange, t]);
+        const newFilesArray = Array.from(files);
+        
+        // 如果有傳入 entity_id 且我們採「立即上傳」策略 (但建議都由上層統一處理以避免孤兒檔案)
+        // 為了支援現有的大部分架構需求（Modal 先持有檔案，按下 Save 才建 DB+Upload）
+        // 我們將 File 存入 Pending 陣列，並拋給上層。
+        
+        const updatedPendingFiles = [...pendingFiles, ...newFilesArray];
+        setPendingFiles(updatedPendingFiles);
+        
+        // 建立 Blob URL 用於本地預覽
+        const newPreviews = newFilesArray.map(f => URL.createObjectURL(f));
+        setPendingPreviews(prev => [...prev, ...newPreviews]);
+        
+        onPendingFilesChange?.(updatedPendingFiles);
+        
+        // 清除 input 值以允許重新選擇相同檔案
+        e.target.value = '';
+    }, [pendingFiles, onPendingFilesChange]);
 
-    // API 模式：刪除
-    const handleApiRemove = useCallback(async (fileId: string) => {
-        try {
-            await deleteFile(fileId);
-            const updated = apiAttachments.filter(a => a.id !== fileId);
-            setApiAttachments(updated);
-            onAttachmentsChange?.(updated);
-        } catch (err) {
-            console.error('Delete failed', err);
-        }
-    }, [apiAttachments, onAttachmentsChange]);
+    // 移除等待上傳的檔案
+    const handleRemovePendingFile = (index: number) => {
+        const urlToRevoke = pendingPreviews[index];
+        URL.revokeObjectURL(urlToRevoke);
 
-    // 合併顯示清單：API 附件 + 舊 base64 附件
-    const displayItems: Array<{ type: 'api'; data: AttachmentInfo } | { type: 'legacy'; src: string; index: number }> = [];
+        const newPendingFiles = pendingFiles.filter((_, i) => i !== index);
+        const newPreviews = pendingPreviews.filter((_, i) => i !== index);
+        
+        setPendingFiles(newPendingFiles);
+        setPendingPreviews(newPreviews);
+        onPendingFilesChange?.(newPendingFiles);
+    };
 
-    // API 模式附件
-    apiAttachments.forEach(a => displayItems.push({ type: 'api', data: a }));
-
-    // 舊格式 base64 附件
-    if (legacyAttachments) {
-        legacyAttachments.forEach((src, index) => {
-            // 排除已在 API 附件中的項目（避免重複）
-            if (!apiAttachments.some(a => a.file_url === src)) {
-                displayItems.push({ type: 'legacy', src, index });
+    // 移除伺服器上的檔案
+    const handleRemoveApiFile = useCallback(async (fileId: string) => {
+        // 如果外部有接 onDeleteExistingFile，則單純通知外部
+        if (onDeleteExistingFile) {
+            onDeleteExistingFile(fileId);
+            // 由於外部控制，這裡就先 Optimistic Delete 畫面顯示
+            setApiAttachments(prev => prev.filter(a => a.id !== fileId));
+        } else {
+            // 否則嘗試自己呼叫 API 刪除 (舊邏輯)
+            try {
+                await deleteFile(fileId);
+                const updated = apiAttachments.filter(a => a.id !== fileId);
+                setApiAttachments(updated);
+            } catch (err) {
+                console.error('Delete failed', err);
             }
-        });
-    }
+        }
+    }, [apiAttachments, onDeleteExistingFile]);
 
     // 樣式定義
     const styles = {
@@ -165,8 +185,12 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
             color: '#fff', fontSize: '11px', textOverflow: 'ellipsis' as const,
             overflow: 'hidden', whiteSpace: 'nowrap' as const
         },
+        pendingBadge: {
+            position: 'absolute' as const, top: '4px', left: '4px',
+            background: '#f59e0b', color: '#fff', fontSize: '10px',
+            padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold'
+        },
         labelSpan: { fontSize: '14px', fontWeight: 500 },
-        // 非圖片檔案的預覽樣式
         filePlaceholder: {
             width: '100%', height: '100%',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -176,13 +200,10 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
         },
     };
 
-    /**
-     * 判斷 src 是否為圖片（base64 或 URL）
-     */
     const isImageSrc = (src: string, mime?: string): boolean => {
         if (mime?.startsWith('image/')) return true;
-        if (src.startsWith('data:image/')) return true;
-        return /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(src);
+        if (src.startsWith('data:image/') || src.startsWith('blob:')) return true;
+        return /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(src.split('?')[0]);
     };
 
     return (
@@ -198,7 +219,7 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
                             type="file"
                             accept={accept}
                             multiple
-                            onChange={useApiMode ? handleApiUpload : onUpload}
+                            onChange={handleFileSelect}
                             style={styles.photoInput}
                             id={`attachment-upload-${id}`}
                             disabled={uploading}
@@ -214,67 +235,102 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
                     </>
                 )}
 
-                {displayItems.length > 0 && (
+                {(apiAttachments.length > 0 || pendingFiles.length > 0 || (legacyAttachments && legacyAttachments.length > 0)) && (
                     <div style={styles.photoPreviewGrid}>
-                        {displayItems.map((item, idx) => {
-                            if (item.type === 'api') {
-                                const a = item.data;
-                                const isImage = isImageSrc(a.file_url, a.mime_type);
-                                return (
-                                    <div key={a.id} style={styles.photoPreviewItem}>
-                                        {isImage ? (
-                                            <img
-                                                src={a.file_url}
-                                                alt={a.file_name}
-                                                style={{ ...styles.photoPreview, cursor: onPreview ? 'pointer' : 'default' }}
-                                                onClick={() => onPreview && onPreview(a.file_url, a.file_name)}
-                                            />
-                                        ) : (
-                                            <div style={styles.filePlaceholder}>
-                                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                                    <polyline points="14 2 14 8 20 8" />
-                                                </svg>
-                                                <span>{a.file_name}</span>
-                                            </div>
-                                        )}
-                                        <div style={styles.fileName}>{a.file_name}</div>
-                                        {!readOnly && (
-                                            <button
-                                                type="button"
-                                                style={styles.photoRemoveButton}
-                                                onClick={() => handleApiRemove(a.id)}
-                                                aria-label={t('common.delete')}
-                                            >
-                                                ×
-                                            </button>
-                                        )}
-                                    </div>
-                                );
-                            } else {
-                                // 舊格式 base64 附件
-                                return (
-                                    <div key={`legacy-${item.index}`} style={styles.photoPreviewItem}>
+                        {/* 1. 顯示已存在伺服器上的檔案 */}
+                        {apiAttachments.map((a) => {
+                            const isImage = isImageSrc(a.file_url, a.mime_type);
+                            return (
+                                <div key={a.id} style={styles.photoPreviewItem}>
+                                    {isImage ? (
                                         <img
-                                            src={item.src}
-                                            alt={`Attachment ${item.index + 1}`}
+                                            src={a.file_url}
+                                            alt={a.file_name}
                                             style={{ ...styles.photoPreview, cursor: onPreview ? 'pointer' : 'default' }}
-                                            onClick={() => onPreview && onPreview(item.src, `Attachment ${item.index + 1}`)}
+                                            onClick={() => onPreview && onPreview(a.file_url, a.file_name)}
                                         />
-                                        {!readOnly && onRemove && (
-                                            <button
-                                                type="button"
-                                                style={styles.photoRemoveButton}
-                                                onClick={() => onRemove(item.index)}
-                                                aria-label={t('common.delete')}
-                                            >
-                                                ×
-                                            </button>
-                                        )}
-                                    </div>
-                                );
-                            }
+                                    ) : (
+                                        <div style={styles.filePlaceholder}>
+                                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                                <polyline points="14 2 14 8 20 8" />
+                                            </svg>
+                                            <span>{a.file_name}</span>
+                                        </div>
+                                    )}
+                                    <div style={styles.fileName} title={a.file_name}>{a.file_name}</div>
+                                    {!readOnly && (
+                                        <button
+                                            type="button"
+                                            style={styles.photoRemoveButton}
+                                            onClick={() => handleRemoveApiFile(a.id)}
+                                            aria-label={t('common.delete')}
+                                        >
+                                            ×
+                                        </button>
+                                    )}
+                                </div>
+                            );
                         })}
+
+                        {/* 2. 顯示剛剛選擇、尚未上傳的實體檔案 (Pending) */}
+                        {pendingFiles.map((file, idx) => {
+                            const isImage = file.type.startsWith('image/');
+                            const previewUrl = pendingPreviews[idx];
+                            return (
+                                <div key={`pending-${idx}`} style={styles.photoPreviewItem}>
+                                    <div style={styles.pendingBadge}>NEW</div>
+                                    {isImage ? (
+                                        <img
+                                            src={previewUrl}
+                                            alt={file.name}
+                                            style={styles.photoPreview}
+                                        />
+                                    ) : (
+                                        <div style={styles.filePlaceholder}>
+                                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                                <polyline points="14 2 14 8 20 8" />
+                                            </svg>
+                                            <span>{file.name}</span>
+                                        </div>
+                                    )}
+                                    <div style={styles.fileName} title={file.name}>{file.name}</div>
+                                    {!readOnly && (
+                                        <button
+                                            type="button"
+                                            style={styles.photoRemoveButton}
+                                            onClick={() => handleRemovePendingFile(idx)}
+                                            aria-label={t('common.delete')}
+                                        >
+                                            ×
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })}
+
+                        {/* 3. 顯示向下相容的舊資料 Base64 (Legacy) */}
+                        {legacyAttachments?.map((src, idx) => (
+                            <div key={`legacy-${idx}`} style={styles.photoPreviewItem}>
+                                <img
+                                    src={src}
+                                    alt={`Legacy Attachment ${idx + 1}`}
+                                    style={{ ...styles.photoPreview, cursor: onPreview ? 'pointer' : 'default' }}
+                                    onClick={() => onPreview && onPreview(src, `Legacy Attachment ${idx + 1}`)}
+                                />
+                                {!readOnly && onRemoveLegacy && (
+                                    <button
+                                        type="button"
+                                        style={styles.photoRemoveButton}
+                                        onClick={() => onRemoveLegacy(idx)}
+                                        aria-label={t('common.delete')}
+                                    >
+                                        ×
+                                    </button>
+                                )}
+                            </div>
+                        ))}
                     </div>
                 )}
             </div>

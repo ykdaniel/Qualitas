@@ -1,24 +1,25 @@
 import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
-import { useContractorsStore } from '../../store/contractorsStore';
-import { useNOIStore } from '../../store/noiStore';
+
 import { useNCRStore } from '../../store/ncrStore';
 import type { NCRItem } from '../../store/ncrStore';
 import { useITRStore } from '../../store/itrStore';
 import { checkNCRReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './NCR.module.css';
-import { NCRDetailModal, NCRDetailsViewModal, NCRDetailData } from './NCRModals';
+import { NCRDetailModal, NCRDetailsViewModal, NCRDetailData, PendingUploads } from './NCRModals';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { BackButton } from '@/components/ui/BackButton';
 import { useDebounce } from '../../hooks/useDebounce';
+import { uploadFiles, deleteFile } from '../../services/api';
+import { useNCRStats } from '../../hooks/useNCRStats';
+import { StatItem } from '../Shared/StatItem';
+import statStyles from '../Shared/StatItem.module.css';
 
 const NCR: React.FC = () => {
-  const navigate = useNavigate();
   const { t } = useLanguage();
-  const { getActiveContractors } = useContractorsStore();
+
   const { ncrList, loading, error, refetch, addNCR, updateNCR, deleteNCR } = useNCRStore();
   const itrList = useITRStore(state => state.itrList);
 
@@ -50,39 +51,14 @@ const NCR: React.FC = () => {
     message: '',
   });
 
-  const statistics = useMemo(() => {
-    const statusCounts = {
-      opening: 0,
-      closed: 0,
-    };
+  const statistics = useNCRStats(ncrList);
 
-    ncrList.forEach((item) => {
-      const status = (item.status || '').toLowerCase();
-      if (status === 'open' || status === 'opening') {
-        statusCounts.opening++;
-      } else if (status === 'closed') {
-        statusCounts.closed++;
-      }
-    });
 
-    const total = ncrList.length;
-    const openRate = total > 0 ? Math.round((statusCounts.opening / total) * 100) : 0;
 
-    return {
-      ...statusCounts,
-      total,
-      openRate,
-    };
-  }, [ncrList]);
-
-  const handleAdd = (id: string) => {
-    navigate(`/ncr/${id}`);
-  };
-
-  const handleEdit = (id: string) => {
+  const handleEdit = React.useCallback((id: string) => {
     setCurrentNcrId(id);
     setIsEditModalOpen(true);
-  };
+  }, []);
 
   const handleAddNew = () => {
     const newId = String(Date.now());
@@ -90,7 +66,7 @@ const NCR: React.FC = () => {
     setIsEditModalOpen(true);
   };
 
-  const handleSaveNCRDetails = async (details: NCRDetailData) => {
+  const handleSaveNCRDetails = async (details: NCRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => {
     if (currentNcrId) {
       setNcrDetails(prev => ({ ...prev, [currentNcrId]: details }));
       const existingItem = ncrList.find(item => item.id === currentNcrId);
@@ -123,16 +99,46 @@ const NCR: React.FC = () => {
       };
 
       try {
+        let targetId = currentNcrId;
         if (existingItem) {
           await updateNCR(currentNcrId, updatedItem);
         } else {
           const newNCR = await addNCR(updatedItem as Omit<NCRItem, 'id'>);
+          targetId = newNCR.id;
           setNcrDetails(prev => {
             const newDetails = { ...prev };
             newDetails[newNCR.id] = details;
             return newDetails;
           });
         }
+
+        // Process file API operations
+        if (deletedFileIds && deletedFileIds.length > 0) {
+            for (const fileId of deletedFileIds) {
+                try {
+                    await deleteFile(fileId);
+                } catch (error) {
+                    console.error('Error deleting file:', fileId, error);
+                }
+            }
+        }
+
+        if (pendingUploads && pendingUploads.length > 0) {
+            for (const uploadGroup of pendingUploads) {
+                if (uploadGroup.files.length > 0) {
+                    try {
+                        const moduleStr = 'ncr';
+                        await uploadFiles(moduleStr, targetId, uploadGroup.files, uploadGroup.category);
+                    } catch (error) {
+                        console.error(`Error uploading files for category ${uploadGroup.category}:`, error);
+                        alert(`Failed to upload some files for ${uploadGroup.category}.`);
+                    }
+                }
+            }
+        }
+
+        await refetch();
+
         setIsEditModalOpen(false);
         setCurrentNcrId(null);
       } catch (error: any) {
@@ -142,7 +148,7 @@ const NCR: React.FC = () => {
     }
   };
 
-  const confirmDelete = (id: string) => {
+  const confirmDelete = React.useCallback((id: string) => {
     const ncr = ncrList.find(item => item.id === id);
     if (!ncr) return;
 
@@ -154,7 +160,7 @@ const NCR: React.FC = () => {
       id,
       message,
     });
-  };
+  }, [ncrList, itrList, t]);
 
   const handleDelete = async () => {
     if (deleteModal.id) {
@@ -164,7 +170,7 @@ const NCR: React.FC = () => {
   };
 
   // Columns memoization
-  const columns = useMemo(() => createColumns(handleEdit, confirmDelete, t), [t]);
+  const columns = useMemo(() => createColumns(handleEdit, confirmDelete, t), [t, handleEdit, confirmDelete]);
 
   return (
     <div className={styles.container}>
@@ -188,52 +194,30 @@ const NCR: React.FC = () => {
         <h2 className={styles.summaryTitle}>{t('obs.statsTitle')}</h2>
         <div className={styles.statsContainer}>
           <div className={styles.statusStatsGrid}>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('obs.statOpen')}</div>
-                <div className={styles.statValue}>{statistics.opening}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.greenIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('obs.statClosed')}</div>
-                <div className={styles.statValue}>{statistics.closed}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.grayIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('obs.statTotal')}</div>
-                <div className={styles.statValue}>{statistics.total}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('obs.statOpenRate')}</div>
-                <div className={styles.statValue}>{statistics.opening} ({statistics.openRate}%)</div>
-              </div>
-            </div>
+            <StatItem 
+              label={t('obs.statOpen')} 
+              value={statistics.opening} 
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+              iconColorClass={statStyles.blueIcon} 
+            />
+            <StatItem 
+              label={t('obs.statClosed')} 
+              value={statistics.closed} 
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+              iconColorClass={statStyles.greenIcon} 
+            />
+            <StatItem 
+              label={t('obs.statTotal')} 
+              value={statistics.total} 
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" /><path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+              iconColorClass={statStyles.grayIcon} 
+            />
+            <StatItem 
+              label={t('obs.statOpenRate')} 
+              value={`${statistics.opening} (${statistics.openRate}%)`} 
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+              iconColorClass={statStyles.blueIcon} 
+            />
           </div>
         </div>
       </div>

@@ -10,14 +10,30 @@ export interface StatusTransition {
 }
 
 /**
- * NOI 狀態轉換規則
+ * NOI 狀態轉換規則 (aligned with backend WorkflowEngine)
+ * Backend: Open → [In Progress, Reject, Void]
+ *          In Progress → [Resolved, Reject, Void]
+ *          Resolved → [Closed, Void]
+ *          Reject → [Open, Void]
+ *          Closed → []
  */
-export const NOIStatusTransitions: StatusTransition[] = [
-  { from: 'Open', to: 'Closed', allowed: true },
-  { from: 'Closed', to: 'Open', allowed: true },
-  { from: 'Open', to: 'Reject', allowed: true },
-  { from: 'Under Review', to: 'Reject', allowed: true },
-  { from: 'Reject', to: 'Open', allowed: true },
+export const NOIStatusTransitions: Record<string, string[]> = {
+  'Open':        ['In Progress', 'Reject', 'Void'],
+  'In Progress': ['Resolved', 'Reject', 'Void'],
+  'Resolved':    ['Closed', 'Void'],
+  'Reject':      ['Open', 'Void'],
+  'Closed':      [],
+  'Void':        [],
+};
+
+// Legacy array format for validateStatusTransition helper (kept for backward compat)
+export const NOIStatusTransitionList: StatusTransition[] = [
+  { from: 'Open',        to: 'In Progress', allowed: true },
+  { from: 'Open',        to: 'Reject',      allowed: true },
+  { from: 'In Progress', to: 'Resolved',    allowed: true },
+  { from: 'In Progress', to: 'Reject',      allowed: true },
+  { from: 'Resolved',    to: 'Closed',      allowed: true },
+  { from: 'Reject',      to: 'Open',        allowed: true },
 ];
 
 /**

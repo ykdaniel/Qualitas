@@ -1,7 +1,7 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "../Shared/DataTable/DataTableColumnHeader";
 import { ITPItem } from "../../store/itpStore";
-import { Edit, Trash2, Link, FileText } from "lucide-react";
+import { Edit, Trash2, Link } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 

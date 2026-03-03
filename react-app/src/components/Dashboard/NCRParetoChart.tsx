@@ -1,12 +1,12 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Line, LabelList } from 'recharts';
+import { Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Line, LabelList } from 'recharts';
 import React, { useMemo } from 'react';
 import { useNCRStore } from '../../store/ncrStore';
-import { useDashboardFilter } from '../../context/DashboardFilterContext';
+import { useDashboardFilterStore } from '../../store/dashboardFilterStore';
 import styles from './Dashboard.module.css';
 
 const NCRParetoChart: React.FC = React.memo(() => {
   const ncrList = useNCRStore(state => state.ncrList);
-  const { selectedVendor } = useDashboardFilter();
+  const selectedVendor = useDashboardFilterStore(state => state.selectedVendor);
 
   // 计算按承包商分组的NCR统计数据
   const paretoData = useMemo(() => {
@@ -46,15 +46,18 @@ const NCRParetoChart: React.FC = React.memo(() => {
     const totalNCRs = sortedData.reduce((sum, item) => sum + item.total, 0);
 
     // 计算累积百分比
-    let cumulative = 0;
-    const dataWithCumulative = sortedData.map(item => {
-      cumulative += item.total;
-      const cumulativePercent = totalNCRs > 0 ? Math.round((cumulative / totalNCRs) * 100) : 0;
-      return {
-        ...item,
-        cumulativePercent,
-      };
-    });
+    const { result: dataWithCumulative } = sortedData.reduce(
+      (acc, item) => {
+        acc.cumulative += item.total;
+        const cumulativePercent = totalNCRs > 0 ? Math.round((acc.cumulative / totalNCRs) * 100) : 0;
+        acc.result.push({
+          ...item,
+          cumulativePercent,
+        });
+        return acc;
+      },
+      { cumulative: 0, result: [] as any[] }
+    );
 
     return dataWithCumulative;
   }, [ncrList, selectedVendor]);

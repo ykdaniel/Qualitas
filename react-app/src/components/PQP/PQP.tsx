@@ -1,19 +1,21 @@
 import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { usePQPStore } from '../../store/pqpStore';
 import type { PQPItem } from '../../store/pqpStore';
 import { useLanguage } from '../../context/LanguageContext';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './PQP.module.css';
+import { usePQPStats } from '../../hooks/usePQPStats';
+import { StatItem } from '../Shared/StatItem';
+import statStyles from '../Shared/StatItem.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { PQPDetailModal, PQPDetailsViewModal } from './PQPModals';
 import { BackButton } from '@/components/ui/BackButton';
 import { useDebounce } from '../../hooks/useDebounce';
+import { uploadFiles, deleteFile } from '../../services/api';
 
 const PQP: React.FC = () => {
-  const navigate = useNavigate();
   const { t } = useLanguage();
   const { getActiveContractors } = useContractorsStore();
   const { pqpList, loading, error, refetch, addPQP, updatePQP, deletePQP } = usePQPStore();
@@ -44,42 +46,19 @@ const PQP: React.FC = () => {
     return pqpList;
   }, [pqpList]);
 
-  const statistics = useMemo(() => {
-    const statusCounts = {
-      approved: 0,
-      reject: 0,
-    };
+  const statistics = usePQPStats(pqpList);
 
-    pqpList.forEach((item) => {
-      const status = (item.status || 'Approved').toLowerCase();
-      if (status === 'approved') {
-        statusCounts.approved++;
-      } else if (status === 'reject') {
-        statusCounts.reject++;
-      }
-    });
-
-    const total = pqpList.length;
-    const activeRate = total > 0 ? Math.round((statusCounts.approved / total) * 100) : 0;
-
-    return {
-      ...statusCounts,
-      total,
-      activeRate,
-    };
-  }, [pqpList]);
-
-  const handleEdit = (id: string) => {
+  const handleEdit = React.useCallback((id: string) => {
     setCurrentPqpId(id);
     setIsEditModalOpen(true);
-  };
+  }, []);
 
-  const confirmDelete = (id: string) => {
+  const confirmDelete = React.useCallback((id: string) => {
     setDeleteModal({ isOpen: true, id });
-  };
+  }, []);
 
   // Columns memoization
-  const columns = useMemo(() => createColumns(handleEdit, confirmDelete, t, getActiveContractors), [t, getActiveContractors]);
+  const columns = useMemo(() => createColumns(handleEdit, confirmDelete, t, getActiveContractors), [t, getActiveContractors, handleEdit, confirmDelete]);
 
 
   const handleAddNew = () => {
@@ -87,16 +66,19 @@ const PQP: React.FC = () => {
     setIsEditModalOpen(true);
   };
 
-  const handleSavePQPDetails = async (updates: Partial<PQPItem>) => {
+  const handleSavePQPDetails = async (updates: Partial<PQPItem>, pendingFiles: File[], deletedFileIds: string[]) => {
     const existingItem = currentPqpId && currentPqpId !== 'new' ? pqpList.find(item => item.id === currentPqpId) : undefined;
     const today = new Date().toISOString().split('T')[0];
     try {
+      let targetId = '';
       if (existingItem) {
         const merged = { ...existingItem, ...updates, updatedAt: today };
-        const { id: _omit, pqpNo: _pqpNo, ...payload } = merged;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { id, pqpNo, ...payload } = merged;
         await updatePQP(existingItem.id, payload);
+        targetId = existingItem.id;
       } else {
-        await addPQP({
+        const createdPqp = await addPQP({
           title: updates.title || '',
           description: updates.description || '',
           vendor: updates.vendor || '',
@@ -106,7 +88,17 @@ const PQP: React.FC = () => {
           updatedAt: today,
           attachments: updates.attachments || [],
         } as Omit<PQPItem, 'id'>);
+        targetId = createdPqp.id;
       }
+
+      // 處理實體檔案上傳與刪除
+      if (deletedFileIds.length > 0) {
+        await Promise.all(deletedFileIds.map(fileId => deleteFile(fileId).catch(e => console.error("Failed to delete file:", e))));
+      }
+      if (pendingFiles.length > 0 && targetId) {
+        await uploadFiles('pqp', targetId, pendingFiles).catch(e => console.error("Failed to upload files:", e));
+      }
+
       setIsEditModalOpen(false);
       setCurrentPqpId(null);
     } catch (error: any) {
@@ -149,51 +141,31 @@ const PQP: React.FC = () => {
         <h2 className={styles.summaryTitle}>{t('pqp.statsTitle')}</h2>
         <div className={styles.statsContainer}>
           <div className={styles.statusStatsGrid}>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('pqp.status.approved')}</div>
-                <div className={styles.statValue}>{statistics.approved}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.orangeIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('pqp.status.reject')}</div>
-                <div className={styles.statValue}>{statistics.reject}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.grayIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('pqp.statTotal') || 'Total'}</div>
-                <div className={styles.statValue}>{statistics.total}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('pqp.activeRate')}</div>
-                <div className={styles.statValue}>{statistics.approved} ({statistics.activeRate}%)</div>
-              </div>
-            </div>
+            <StatItem
+              label={t('pqp.status.approved') || 'Approved'}
+              value={statistics.approved}
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+              iconColorClass={statStyles.blueIcon}
+            />
+            <StatItem
+              label={t('pqp.status.reject') || 'Reject'}
+              value={statistics.reject}
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+              iconColorClass={statStyles.redIcon}
+              style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}
+            />
+            <StatItem
+              label={t('pqp.stats.total') || 'Total'}
+              value={statistics.total}
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" /><path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+              iconColorClass={statStyles.grayIcon}
+            />
+            <StatItem
+              label={t('pqp.stats.approvedRate') || 'Approved Rate'}
+              value={`${statistics.approved} (${statistics.activeRate}%)`}
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+              iconColorClass={statStyles.blueIcon}
+            />
           </div>
         </div>
       </div>

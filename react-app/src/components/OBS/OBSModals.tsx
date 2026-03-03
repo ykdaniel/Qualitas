@@ -67,15 +67,20 @@ export interface OBSDetailData {
     dueDate?: string;
 }
 
+export interface PendingUploads {
+    category: string;
+    files: File[];
+}
+
 export interface OBSDetailModalProps {
     obsId: string | null;
     existingData?: OBSDetailData;
     existingItem?: OBSItem;
-    onSave: (details: OBSDetailData) => void;
+    onSave: (details: OBSDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => void | Promise<void>;
     onClose: () => void;
 }
 
-export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId, existingData, existingItem, onSave, onClose }) => {
+export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, existingData, existingItem, onSave, onClose }) => {
     const { t } = useLanguage();
     const { getActiveContractors } = useContractorsStore();
 
@@ -156,49 +161,18 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId, existingD
 
     const [formData, setFormData] = useState<OBSDetailData>(getInitialData());
 
+    // File handling states
+    const [pendingDefectPhotos, setPendingDefectPhotos] = useState<File[]>([]);
+    const [pendingImprovementPhotos, setPendingImprovementPhotos] = useState<File[]>([]);
+    const [pendingAttachments, setPendingAttachments] = useState<File[]>([]);
+    const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
+    const [saving, setSaving] = useState(false);
+
     const handleFieldChange = (field: keyof OBSDetailData, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
-    const handleNAButton = (field: keyof OBSDetailData) => {
-        setFormData(prev => ({ ...prev, [field]: 'Not Applicable' }));
-    };
-
-    const handleTBCButton = (field: keyof OBSDetailData) => {
-        setFormData(prev => ({ ...prev, [field]: 'To be confirmed' }));
-    };
-
-    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, photoType: 'defect' | 'improvement') => {
-        const files = e.target.files;
-        if (files) {
-            const fileArray = Array.from(files);
-
-            fileArray.forEach((file) => {
-                if (file.type.startsWith('image/')) {
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                        const result = reader.result as string;
-                        if (photoType === 'defect') {
-                            setFormData(prev => ({
-                                ...prev,
-                                defectPhotos: [...prev.defectPhotos, result]
-                            }));
-                        } else {
-                            setFormData(prev => ({
-                                ...prev,
-                                improvementPhotos: [...prev.improvementPhotos, result]
-                            }));
-                        }
-                    };
-                    reader.readAsDataURL(file);
-                }
-            });
-        }
-        // Reset input
-        e.target.value = '';
-    };
-
-    const handleRemovePhoto = (index: number, photoType: 'defect' | 'improvement') => {
+    const handleRemoveLegacyPhoto = (index: number, photoType: 'defect' | 'improvement') => {
         if (photoType === 'defect') {
             setFormData(prev => ({
                 ...prev,
@@ -212,50 +186,48 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId, existingD
         }
     };
 
-    const handleAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (files) {
-            const fileArray = Array.from(files);
-            fileArray.forEach((file) => {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    const result = reader.result as string;
-                    setFormData(prev => ({
-                        ...prev,
-                        attachments: [...prev.attachments, result]
-                    }));
-                };
-                reader.readAsDataURL(file);
-            });
-        }
-        e.target.value = '';
-    };
-
-    const handleRemoveAttachment = (index: number) => {
+    const handleRemoveLegacyAttachment = (index: number) => {
         setFormData(prev => ({
             ...prev,
             attachments: prev.attachments.filter((_, i) => i !== index)
         }));
     };
 
-    const handleSave = () => {
-        onSave(formData);
-        onClose();
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            await onSave(formData, [
+                { category: 'defectPhoto', files: pendingDefectPhotos },
+                { category: 'improvementPhoto', files: pendingImprovementPhotos },
+                { category: 'attachment', files: pendingAttachments }
+            ], deletedFileIds);
+            onClose();
+        } finally {
+            setSaving(false);
+        }
     };
 
     const handlePrint = () => {
         window.print();
     };
 
-    const handlePublish = () => {
+    const handlePublish = async () => {
         const nextRev = getNextRevision(formData.rev);
         if (window.confirm(`Are you sure you want to publish as Revision ${nextRev}?`)) {
-            onSave({
-                ...formData,
-                rev: nextRev,
-                // status: 'Closed' // Optional: similar to NCR, keep status manual or as is.
-            });
-            onClose();
+            setSaving(true);
+            try {
+                await onSave({
+                    ...formData,
+                    rev: nextRev,
+                }, [
+                    { category: 'defectPhoto', files: pendingDefectPhotos },
+                    { category: 'improvementPhoto', files: pendingImprovementPhotos },
+                    { category: 'attachment', files: pendingAttachments }
+                ], deletedFileIds);
+                onClose();
+            } finally {
+                setSaving(false);
+            }
         }
     };
 
@@ -264,7 +236,7 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId, existingD
             <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
                 <div className={styles.modalHeader}>
                     <h2>{existingData || existingItem ? t('obs.editTitle') : t('obs.addTitle')}</h2>
-                    <button className={styles.closeButton} onClick={onClose}>×</button>
+                    <button className={styles.closeButton} onClick={onClose} disabled={saving}>×</button>
                 </div>
                 <div className={styles.modalBody}>
                     <p className={styles.formRequiredHint}>{t('form.requiredHint')}</p>
@@ -430,84 +402,46 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId, existingD
 
                         {/* 照片上傳 */}
                         <div className={styles.formSection}>
-                            <div className={styles.photoSectionContainer}>
-                                <div className={styles.photoSection}>
-                                    <h3 className={styles.sectionTitle}>{t('obs.defectPhotos')}</h3>
-                                    <div className={styles.photoUploadContainer}>
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            multiple
-                                            onChange={(e) => handlePhotoUpload(e, 'defect')}
-                                            className={styles.photoInput}
-                                            id="defect-photo-upload"
-                                        />
-                                        <label htmlFor="defect-photo-upload" className={styles.photoUploadButton}>
-                                            <span>{t('obs.uploadPhotos')}</span>
-                                        </label>
-                                        {formData.defectPhotos.length > 0 && (
-                                            <div className={styles.photoPreviewGrid}>
-                                                {formData.defectPhotos.map((photo, index) => (
-                                                    <div key={index} className={styles.photoPreviewItem}>
-                                                        <img src={photo} alt={`Defect Photo ${index + 1}`} className={styles.photoPreview} />
-                                                        <button
-                                                            type="button"
-                                                            className={styles.photoRemoveButton}
-                                                            onClick={() => handleRemovePhoto(index, 'defect')}
-                                                            aria-label="Remove photo"
-                                                        >
-                                                            ×
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className={styles.photoSection}>
-                                    <h3 className={styles.sectionTitle}>{t('obs.improvementPhotos')}</h3>
-                                    <div className={styles.photoUploadContainer}>
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            multiple
-                                            onChange={(e) => handlePhotoUpload(e, 'improvement')}
-                                            className={styles.photoInput}
-                                            id="improvement-photo-upload"
-                                        />
-                                        <label htmlFor="improvement-photo-upload" className={styles.photoUploadButton}>
-                                            <span>{t('obs.uploadPhotos')}</span>
-                                        </label>
-                                        {formData.improvementPhotos.length > 0 && (
-                                            <div className={styles.photoPreviewGrid}>
-                                                {formData.improvementPhotos.map((photo, index) => (
-                                                    <div key={index} className={styles.photoPreviewItem}>
-                                                        <img src={photo} alt={`Improvement Photo ${index + 1}`} className={styles.photoPreview} />
-                                                        <button
-                                                            type="button"
-                                                            className={styles.photoRemoveButton}
-                                                            onClick={() => handleRemovePhoto(index, 'improvement')}
-                                                            aria-label="Remove photo"
-                                                        >
-                                                            ×
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
+                            <FileAttachment
+                                id="obs-defect-photos"
+                                category="defectPhoto"
+                                entityType={existingItem ? 'obs' : undefined}
+                                entityId={existingItem?.id}
+                                title={t('obs.defectPhotos')}
+                                legacyAttachments={formData.defectPhotos}
+                                onPendingFilesChange={setPendingDefectPhotos}
+                                onDeleteExistingFile={(id) => setDeletedFileIds(prev => [...prev, id])}
+                                onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'defect')}
+                                accept="image/*"
+                            />
+                        </div>
+                        <div className={styles.formSection}>
+                            <FileAttachment
+                                id="obs-improvement-photos"
+                                category="improvementPhoto"
+                                entityType={existingItem ? 'obs' : undefined}
+                                entityId={existingItem?.id}
+                                title={t('obs.improvementPhotos')}
+                                legacyAttachments={formData.improvementPhotos}
+                                onPendingFilesChange={setPendingImprovementPhotos}
+                                onDeleteExistingFile={(id) => setDeletedFileIds(prev => [...prev, id])}
+                                onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'improvement')}
+                                accept="image/*"
+                            />
                         </div>
 
                         {/* Attachments */}
                         <div className={styles.formSection}>
                             <FileAttachment
-                                attachments={formData.attachments}
-                                onUpload={handleAttachmentUpload}
-                                onRemove={handleRemoveAttachment}
-                                id="obs"
+                                id="obs-attachments"
+                                category="attachment"
+                                entityType={existingItem ? 'obs' : undefined}
+                                entityId={existingItem?.id}
                                 title={t('obs.attachments')}
+                                legacyAttachments={formData.attachments}
+                                onPendingFilesChange={setPendingAttachments}
+                                onDeleteExistingFile={(id) => setDeletedFileIds(prev => [...prev, id])}
+                                onRemoveLegacy={handleRemoveLegacyAttachment}
                             />
                         </div>
 
@@ -607,16 +541,17 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId, existingD
                         onClick={handlePublish}
                         style={{ backgroundColor: '#4f46e5' }}
                         title="Publish as next revision"
+                        disabled={saving}
                     >
                         Publish
                     </button>
-                    <button type="button" className={styles.saveButton} onClick={handleSave} style={{ marginLeft: '12px' }}>
-                        {t('common.save')}
+                    <button type="button" className={styles.saveButton} onClick={handleSave} style={{ marginLeft: '12px' }} disabled={saving}>
+                        {saving ? t('obs.saving') : t('common.save')}
                     </button>
-                    <button type="button" className={styles.printButton} onClick={handlePrint}>
+                    <button type="button" className={styles.printButton} onClick={handlePrint} disabled={saving}>
                         {t('common.print')}
                     </button>
-                    <button type="button" className={styles.cancelButton} onClick={onClose}>
+                    <button type="button" className={styles.cancelButton} onClick={onClose} disabled={saving}>
                         {t('common.cancel')}
                     </button>
                 </div>
@@ -672,15 +607,42 @@ export const OBSDetailsViewModal: React.FC<OBSDetailsViewModalProps> = ({ obsIte
                                 </div>
                             </div>
                         </div>
+                        <div className={styles.formSection}>
+                            <FileAttachment
+                                id="obs-defect-photos-view"
+                                category="defectPhoto"
+                                entityType="obs"
+                                entityId={obsItem.id}
+                                title={t('obs.defectPhotos')}
+                                legacyAttachments={obsItem.defectPhotos || []}
+                                readOnly={true}
+                                accept="image/*"
+                            />
+                        </div>
+                        <div className={styles.formSection}>
+                            <FileAttachment
+                                id="obs-improvement-photos-view"
+                                category="improvementPhoto"
+                                entityType="obs"
+                                entityId={obsItem.id}
+                                title={t('obs.improvementPhotos')}
+                                legacyAttachments={obsItem.improvementPhotos || []}
+                                readOnly={true}
+                                accept="image/*"
+                            />
+                        </div>
+                        <div className={styles.formSection}>
+                            <FileAttachment
+                                id="obs-attachments-view"
+                                category="attachment"
+                                entityType="obs"
+                                entityId={obsItem.id}
+                                title={t('obs.attachments')}
+                                legacyAttachments={obsItem.attachments || []}
+                                readOnly={true}
+                            />
+                        </div>
                     </div>
-                    <FileAttachment
-                        attachments={obsItem.attachments || []}
-                        onUpload={() => { }}
-                        onRemove={() => { }}
-                        id="obs-view"
-                        readOnly={true}
-                        title={t('obs.attachments')}
-                    />
                 </div>
                 <div className={styles.modalActions}>
                     <button type="button" className={styles.cancelButton} onClick={onClose}>{t('common.cancel')}</button>

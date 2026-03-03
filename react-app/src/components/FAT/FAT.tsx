@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { checkFATReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
@@ -10,17 +9,17 @@ import type { FATItem, FATDetailItem } from '../../store/fatStore';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './FAT.module.css';
 import { BackButton } from '@/components/ui/BackButton';
+import { useFATStats } from '../../hooks/useFATStats';
+import { StatItem } from '../Shared/StatItem';
+import statStyles from '../Shared/StatItem.module.css';
 
 // ... (keep constants and interfaces that are NOT FATItem if any, or move them)
 // FATDetailItem is used in FAT.tsx. Keep it.
 
-
-
 const FAT: React.FC = () => {
-  const navigate = useNavigate();
   const { t } = useLanguage();
   const { getActiveContractors } = useContractorsStore();
-  const { fatList, loading, addFAT, updateFAT, deleteFAT, saveFATDetails, fatDetails, fetchFATs } = useFATStore();
+  const { fatList, addFAT, updateFAT, deleteFAT, saveFATDetails, fatDetails, fetchFATs } = useFATStore();
   const [searchQuery, setSearchQuery] = useState<string>('');
   // Vendor filter removed (handled by DataTable)
 
@@ -60,17 +59,7 @@ const FAT: React.FC = () => {
     return filtered;
   }, [fatList, searchQuery]);
 
-  const statistics = useMemo(() => {
-    const total = fatList.length;
-    const withDetails = fatList.filter(item => item.hasDetails).length;
-    const detailsRate = total > 0 ? Math.round((withDetails / total) * 100) : 0;
-
-    return {
-      total,
-      withDetails,
-      detailsRate,
-    };
-  }, [fatList]);
+  const statistics = useFATStats(filteredFatList);
 
   const handleAddNew = () => {
     setCurrentFatId(null);
@@ -101,7 +90,7 @@ const FAT: React.FC = () => {
       }
       setIsEditModalOpen(false);
       setCurrentFatId(null);
-    } catch (e) {
+    } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
       // Error handled in context
     }
   };
@@ -117,7 +106,7 @@ const FAT: React.FC = () => {
         await saveFATDetails(currentFatId, details);
         setIsDetailsEditModalOpen(false);
         setCurrentFatId(null);
-      } catch (e) {
+      } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
         // Error handled in context
       }
     }
@@ -142,7 +131,7 @@ const FAT: React.FC = () => {
       try {
         await deleteFAT(deleteModal.id);
         setDeleteModal({ isOpen: false, id: null, message: '' });
-      } catch (e) {
+      } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
         // Error handled in context
       }
     }
@@ -170,41 +159,24 @@ const FAT: React.FC = () => {
         <h2 className={styles.summaryTitle}>{t('fat.statsTitle') || '統計'}</h2>
         <div className={styles.statsContainer}>
           <div className={styles.statusStatsGrid}>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.grayIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('fat.stats.total')}</div>
-                <div className={styles.statValue}>{statistics.total}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M9 11l3 3L22 4" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('fat.stats.withDetails')}</div>
-                <div className={styles.statValue}>{statistics.withDetails}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('fat.stats.detailsRate')}</div>
-                <div className={styles.statValue}>{statistics.detailsRate}%</div>
-              </div>
-            </div>
+            <StatItem 
+              label={t('fat.stats.total')} 
+              value={statistics.total} 
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" /><path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+              iconColorClass={statStyles.grayIcon} 
+            />
+            <StatItem 
+              label={t('fat.stats.withDetails')} 
+              value={statistics.withDetails} 
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 11l3 3L22 4" strokeLinecap="round" strokeLinejoin="round" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+              iconColorClass={statStyles.blueIcon} 
+            />
+            <StatItem 
+              label={t('fat.stats.detailsRate')} 
+              value={`${statistics.detailsRate}%`} 
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+              iconColorClass={statStyles.blueIcon} 
+            />
           </div>
         </div>
       </div>
@@ -486,8 +458,7 @@ interface FATEditModalProps {
   onSave: (updates: Partial<FATItem>) => void;
   onClose: () => void;
 }
-
-const FATEditModal: React.FC<FATEditModalProps> = ({ fatId, existingItem, onSave, onClose }) => {
+const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem, onSave, onClose }) => {
   const { t } = useLanguage();
   const { getActiveContractors } = useContractorsStore();
   const [formData, setFormData] = useState<Partial<FATItem>>({
@@ -661,8 +632,7 @@ interface FATDetailsViewModalProps {
   fatDetails: FATDetailItem[];
   onClose: () => void;
 }
-
-const FATDetailsViewModal: React.FC<FATDetailsViewModalProps> = ({ fatId, fatItem, fatDetails, onClose }) => {
+const FATDetailsViewModal: React.FC<FATDetailsViewModalProps> = ({ fatId: _fatId, fatItem, fatDetails, onClose }) => {
   const { t } = useLanguage();
   const handlePrint = () => {
     window.print();

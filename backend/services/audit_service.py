@@ -12,6 +12,7 @@ from typing import List, Optional
 import models
 import schemas
 from repositories.audit_repository import AuditRepository
+from core.utils import generate_reference_no
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -68,10 +69,15 @@ class AuditService:
         # Resolve vendor_id from contractor name
         vendor_id = self._resolve_vendor_id(audit.contractor)
 
+        # Always auto-generate auditNo server-side (ignore any value from frontend)
+        audit_no = generate_reference_no(
+            self.repo.db, audit.contractor or '', 'audit'
+        )
+
         # Prepare audit data
         audit_data = {
             "id": audit.id or str(uuid.uuid4()),
-            "auditNo": audit.auditNo,
+            "auditNo": audit_no,
             "title": audit.title,
             "date": audit.date,
             "end_date": audit.end_date,
@@ -148,6 +154,16 @@ class AuditService:
         # Re-resolve vendor_id if contractor changed
         if "contractor" in update_data:
             processed_data["vendor_id"] = self._resolve_vendor_id(update_data["contractor"])
+
+            # Regenerate auditNo whenever contractor changes
+            # (covers NA → contractor, and contractor A → contractor B)
+            new_contractor = update_data["contractor"]
+            if new_contractor:
+                old_audit_no = db_audit.auditNo or ""
+                processed_data["auditNo"] = generate_reference_no(
+                    self.repo.db, new_contractor, 'audit'
+                )
+                logger.info(f"Regenerated auditNo from {old_audit_no} to {processed_data['auditNo']} due to contractor change")
 
         # Update the audit
         updated_audit = self.repo.update(audit_id, processed_data)

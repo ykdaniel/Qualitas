@@ -1,21 +1,27 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChecklistSnapshotModal } from './ChecklistSnapshotModal';
-import { ChecklistRecord, useChecklistStore } from '../../store/checklistStore';
-import { Printer, ShieldCheck, Save, LayoutTemplate, Plus, ClipboardCheck, ArrowRight, AlertCircle, Info } from 'lucide-react';
+import { useChecklistStore } from '../../store/checklistStore';
+import { ShieldCheck, ClipboardCheck, ArrowRight, AlertCircle, Info } from 'lucide-react';
 import { getNextRevision } from '../../utils/revision';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useNOIStore } from '../../store/noiStore';
 import { useNCRStore } from '../../store/ncrStore';
 import { useOBSStore } from '../../store/obsStore';
-import { useITRStore } from '../../store/itrStore';
 import type { ITRItem } from '../../store/itrStore';
 import { useITPStore } from '../../store/itpStore';
 import { validateStatusTransition, ITRStatusTransitions } from '../../utils/statusValidation';
 import { addSevenWorkingDays } from '../../utils/dateUtils';
 import { formatDateISO } from '../../utils/formatters';
+import { AttachmentInfo } from '../../services/api';
+import FileAttachment from '../Shared/FileAttachment';
 import styles from './ITR.module.css';
+
+export interface PendingUploads {
+    category: string;
+    files: File[];
+}
 
 export interface ITRDetailData {
     itrNumber: string;
@@ -42,15 +48,15 @@ export interface ITRDetailData {
     reInspectionNumber: string;
     noiNumber: string;  // 連結到產生此 ITR 的 NOI
     projectQualityManager: string;
-    defectPhotos: string[];
-    improvementPhotos: string[];
-    attachments: string[];
+    defectPhotos: (string | AttachmentInfo)[];
+    improvementPhotos: (string | AttachmentInfo)[];
+    attachments: (string | AttachmentInfo)[];
     eventNumber: string;
     checkpoint: string;
     dueDate?: string;
     itpNo: string;
-    drawings: string[];
-    certificates: string[];
+    drawings: (string | AttachmentInfo)[];
+    certificates: (string | AttachmentInfo)[];
     linkedChecklists: any[]; // Snapshot
 }
 
@@ -59,32 +65,24 @@ export interface ITRDetailModalProps {
     existingData?: ITRDetailData;
     existingItem?: ITRItem;
     itrList: ITRItem[];
-    onSave: (details: ITRDetailData) => void | Promise<void>;
+    onSave: (details: ITRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => void | Promise<void>;
     onClose: () => void;
 }
 
-export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingData, existingItem, itrList: propItrList, onSave, onClose }) => {
-    console.log("ITRDetailModal mounted", { itrId, existingItem, linkedChecklists: existingItem?.linkedChecklists });
+export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingData, existingItem, itrList: _propItrList, onSave, onClose }) => {
     const { t } = useLanguage();
-    const { getActiveContractors, contractors } = useContractorsStore();
+    const { getActiveContractors } = useContractorsStore();
     const navigate = useNavigate();
-
-    if (!itrId) {
-        return null;
-    }
+    
     const noiList = useNOIStore(state => state.noiList);
     const getNOIList = () => noiList;
     const ncrList = useNCRStore(state => state.ncrList);
     const obsList = useOBSStore(state => state.obsList);
-    const getNCRList = () => ncrList;
-    const contextItrList = useITRStore(state => state.itrList);
-    const itpList = useITPStore(state => state.itpList);
-    const getITPList = () => itpList;
+    
 
-    // Use context list if available, otherwise use prop
-    const itrList = contextItrList.length > 0 ? contextItrList : propItrList;
 
-    // Reference No (documentNumber) 由後端自動產生，前端不再處理產號邏輯
+    const allChecklists = useChecklistStore(state => state.records);
+    const [editingSnapshotIndex, setEditingSnapshotIndex] = useState<number | null>(null);
 
     // Initialize form data from existing data or existing item
     const getInitialData = (): ITRDetailData => {
@@ -172,8 +170,14 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
     const [formData, setFormData] = useState<ITRDetailData>(getInitialData());
     const [showPrintPreview, setShowPrintPreview] = useState(false);
 
-    const allChecklists = useChecklistStore(state => state.records);
-    const [editingSnapshotIndex, setEditingSnapshotIndex] = useState<number | null>(null);
+    const [pendingUploads, setPendingUploads] = useState<PendingUploads[]>([
+        { category: 'defectPhoto', files: [] },
+        { category: 'improvementPhoto', files: [] },
+        { category: 'attachment', files: [] },
+        { category: 'drawing', files: [] },
+        { category: 'certificate', files: [] },
+    ]);
+    const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
 
     const linkedChecklists = useMemo(() => {
         return formData.linkedChecklists || [];
@@ -187,6 +191,13 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         }
         return 'select';
     });
+
+    if (!itrId) {
+        return null;
+    }
+
+    // Use context list if available, otherwise use prop
+    // const itrList = contextItrList.length > 0 ? contextItrList : propItrList;
 
     // Reference No 由後端自動產生，不再於前端自動更新
 
@@ -228,45 +239,17 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         }));
     };
 
-    const handleNAButton = (field: keyof ITRDetailData) => {
-        setFormData(prev => ({ ...prev, [field]: 'Not Applicable' }));
+
+
+    const handlePendingFilesChange = (category: string, files: File[]) => {
+        setPendingUploads(prev => prev.map(p => p.category === category ? { ...p, files } : p));
     };
 
-    const handleTBCButton = (field: keyof ITRDetailData) => {
-        setFormData(prev => ({ ...prev, [field]: 'To be confirmed' }));
+    const handleDeleteExistingFile = (fileId: string) => {
+        setDeletedFileIds(prev => [...prev, fileId]);
     };
 
-    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, photoType: 'defect' | 'improvement') => {
-        const files = e.target.files;
-        if (files) {
-            const fileArray = Array.from(files);
-
-            fileArray.forEach((file) => {
-                if (file.type.startsWith('image/')) {
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                        const result = reader.result as string;
-                        if (photoType === 'defect') {
-                            setFormData(prev => ({
-                                ...prev,
-                                defectPhotos: [...prev.defectPhotos, result]
-                            }));
-                        } else {
-                            setFormData(prev => ({
-                                ...prev,
-                                improvementPhotos: [...prev.improvementPhotos, result]
-                            }));
-                        }
-                    };
-                    reader.readAsDataURL(file);
-                }
-            });
-        }
-        // Reset input
-        e.target.value = '';
-    };
-
-    const handleRemovePhoto = (index: number, photoType: 'defect' | 'improvement') => {
+    const handleRemoveLegacyPhoto = (index: number, photoType: 'defect' | 'improvement') => {
         if (photoType === 'defect') {
             setFormData(prev => ({
                 ...prev,
@@ -280,52 +263,14 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         }
     };
 
-    const handleAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (files) {
-            const fileArray = Array.from(files);
-            fileArray.forEach((file) => {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    const result = reader.result as string;
-                    setFormData(prev => ({
-                        ...prev,
-                        attachments: [...prev.attachments, result]
-                    }));
-                };
-                reader.readAsDataURL(file);
-            });
-        }
-        e.target.value = '';
-    };
-
-    const handleRemoveAttachment = (index: number) => {
+    const handleRemoveLegacyAttachment = (index: number) => {
         setFormData(prev => ({
             ...prev,
             attachments: prev.attachments.filter((_, i) => i !== index)
         }));
     };
 
-    const handleGenericUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'drawings' | 'certificates') => {
-        const files = e.target.files;
-        if (files) {
-            const fileArray = Array.from(files);
-            fileArray.forEach((file) => {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    const result = reader.result as string;
-                    setFormData(prev => ({
-                        ...prev,
-                        [field]: [...(prev[field] || []), result]
-                    }));
-                };
-                reader.readAsDataURL(file);
-            });
-        }
-        e.target.value = '';
-    };
-
-    const handleGenericRemove = (index: number, field: 'drawings' | 'certificates') => {
+    const handleRemoveLegacyGeneric = (index: number, field: 'drawings' | 'certificates') => {
         setFormData(prev => ({
             ...prev,
             [field]: (prev[field] || []).filter((_, i) => i !== index)
@@ -333,7 +278,6 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
     };
 
     const handleSave = async () => {
-        console.log("handleSave formData.linkedChecklists", formData.linkedChecklists);
         if (!formData.noiNumber) {
             alert(t('itr.validation.noiRequired') || 'Please select an NOI Number.');
             return;
@@ -352,9 +296,9 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         }
 
         try {
-            await onSave(formData);
+            await onSave(formData, pendingUploads, deletedFileIds);
             onClose();
-        } catch (_) {
+        } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
             // 錯誤已在父層 handleSaveITRDetails 以 alert 顯示，保持 modal 開啟
         }
     };
@@ -368,9 +312,9 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                     type: nextRev,
                     status: 'Approved' // ITR usually approves on publish? Or keep existing? Plan says optional.
                     // Let's keep status update optional or implicit. 
-                });
+                }, pendingUploads, deletedFileIds);
                 onClose();
-            } catch (_) {
+            } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
                 // Error handled in parent
             }
         }
@@ -497,7 +441,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                         style={formData.noiNumber ? { backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: '#000000' } : {}}
                                     >
                                         <option value="">{t('itr.selectITP') || 'Select ITP'}</option>
-                                        {getITPList().map((itp) => (
+                                        {useITPStore.getState().itpList.map((itp) => (
                                             <option key={itp.id} value={itp.referenceNo || ''}>
                                                 {itp.referenceNo || itp.description || `(${t('common.notGenerated')})`}
                                             </option>
@@ -744,69 +688,31 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                             <div className={styles.photoSectionContainer}>
                                 <div className={styles.photoSection}>
                                     <h3 className={styles.sectionTitle}>{t('itr.photo.defect')}</h3>
-                                    <div className={styles.photoUploadContainer}>
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            multiple
-                                            onChange={(e) => handlePhotoUpload(e, 'defect')}
-                                            className={styles.photoInput}
-                                            id="defect-photo-upload"
-                                        />
-                                        <label htmlFor="defect-photo-upload" className={styles.photoUploadButton}>
-                                            <span>{t('itr.photo.upload')}</span>
-                                        </label>
-                                        {formData.defectPhotos.length > 0 && (
-                                            <div className={styles.photoPreviewGrid}>
-                                                {formData.defectPhotos.map((photo, index) => (
-                                                    <div key={index} className={styles.photoPreviewItem}>
-                                                        <img src={photo} alt={`Defect Photo ${index + 1}`} className={styles.photoPreview} />
-                                                        <button
-                                                            type="button"
-                                                            className={styles.photoRemoveButton}
-                                                            onClick={() => handleRemovePhoto(index, 'defect')}
-                                                            aria-label={t('common.delete')}
-                                                        >
-                                                            ×
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
+                                    <FileAttachment
+                                        attachments={formData.defectPhotos || [] as any[]}
+                                        onPendingFilesChange={(files) => handlePendingFilesChange('defectPhoto', files)}
+                                        onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'defect')}
+                                        onDeleteExistingFile={handleDeleteExistingFile}
+                                        entityType="itr"
+                                        entityId={existingItem?.id}
+                                        category="defectPhoto"
+                                        accept="image/*"
+                                        id="defectPhoto"
+                                    />
                                 </div>
                                 <div className={styles.photoSection}>
                                     <h3 className={styles.sectionTitle}>{t('itr.photo.improvement')}</h3>
-                                    <div className={styles.photoUploadContainer}>
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            multiple
-                                            onChange={(e) => handlePhotoUpload(e, 'improvement')}
-                                            className={styles.photoInput}
-                                            id="improvement-photo-upload"
-                                        />
-                                        <label htmlFor="improvement-photo-upload" className={styles.photoUploadButton}>
-                                            <span>{t('itr.photo.upload')}</span>
-                                        </label>
-                                        {formData.improvementPhotos.length > 0 && (
-                                            <div className={styles.photoPreviewGrid}>
-                                                {formData.improvementPhotos.map((photo, index) => (
-                                                    <div key={index} className={styles.photoPreviewItem}>
-                                                        <img src={photo} alt={`Improvement Photo ${index + 1}`} className={styles.photoPreview} />
-                                                        <button
-                                                            type="button"
-                                                            className={styles.photoRemoveButton}
-                                                            onClick={() => handleRemovePhoto(index, 'improvement')}
-                                                            aria-label={t('common.delete')}
-                                                        >
-                                                            ×
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
+                                    <FileAttachment
+                                        attachments={formData.improvementPhotos || [] as any[]}
+                                        onPendingFilesChange={(files) => handlePendingFilesChange('improvementPhoto', files)}
+                                        onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'improvement')}
+                                        onDeleteExistingFile={handleDeleteExistingFile}
+                                        entityType="itr"
+                                        entityId={existingItem?.id}
+                                        category="improvementPhoto"
+                                        accept="image/*"
+                                        id="improvementPhoto"
+                                    />
                                 </div>
                             </div>
                         </div>
@@ -814,110 +720,45 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                         {/* Attachments */}
                         <div className={styles.formSection}>
                             <h3 className={styles.sectionTitle}>{t('itr.sectionDrawings') || 'Latest Drawings'}</h3>
-                            <div className={styles.photoUploadContainer}>
-                                <input
-                                    type="file"
-                                    accept="*"
-                                    multiple
-                                    onChange={(e) => handleGenericUpload(e, 'drawings')}
-                                    className={styles.photoInput}
-                                    id="drawings-upload"
-                                />
-                                <label htmlFor="drawings-upload" className={styles.photoUploadButton}>
-                                    <span>{t('obs.uploadFiles')}</span>
-                                </label>
-                                {formData.drawings && formData.drawings.length > 0 && (
-                                    <div className={styles.photoPreviewGrid}>
-                                        {formData.drawings.map((_, index) => (
-                                            <div key={index} className={styles.photoPreviewItem}>
-                                                <span style={{ fontSize: 12, wordBreak: 'break-all' }}>Drawing {index + 1}</span>
-                                                <a href={formData.drawings[index]} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, marginLeft: 4 }}>View</a>
-                                                <button
-                                                    type="button"
-                                                    className={styles.photoRemoveButton}
-                                                    onClick={() => handleGenericRemove(index, 'drawings')}
-                                                    aria-label="Remove drawing"
-                                                >
-                                                    ×
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+                            <FileAttachment
+                                attachments={formData.drawings || [] as any[]}
+                                onPendingFilesChange={(files) => handlePendingFilesChange('drawing', files)}
+                                onRemoveLegacy={(index) => handleRemoveLegacyGeneric(index, 'drawings')}
+                                onDeleteExistingFile={handleDeleteExistingFile}
+                                entityType="itr"
+                                entityId={existingItem?.id}
+                                category="drawing"
+                                id="drawing"
+                            />
                         </div>
 
                         <div className={styles.formSection}>
                             <h3 className={styles.sectionTitle}>{t('itr.sectionCertificates') || 'Calibration Certificates'}</h3>
-                            <div className={styles.photoUploadContainer}>
-                                <input
-                                    type="file"
-                                    accept="*"
-                                    multiple
-                                    onChange={(e) => handleGenericUpload(e, 'certificates')}
-                                    className={styles.photoInput}
-                                    id="certificates-upload"
-                                />
-                                <label htmlFor="certificates-upload" className={styles.photoUploadButton}>
-                                    <span>{t('obs.uploadFiles')}</span>
-                                </label>
-                                {formData.certificates && formData.certificates.length > 0 && (
-                                    <div className={styles.photoPreviewGrid}>
-                                        {formData.certificates.map((_, index) => (
-                                            <div key={index} className={styles.photoPreviewItem}>
-                                                <span style={{ fontSize: 12, wordBreak: 'break-all' }}>Cert {index + 1}</span>
-                                                <a href={formData.certificates[index]} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, marginLeft: 4 }}>View</a>
-                                                <button
-                                                    type="button"
-                                                    className={styles.photoRemoveButton}
-                                                    onClick={() => handleGenericRemove(index, 'certificates')}
-                                                    aria-label="Remove certificate"
-                                                >
-                                                    ×
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+                            <FileAttachment
+                                attachments={formData.certificates || [] as any[]}
+                                onPendingFilesChange={(files) => handlePendingFilesChange('certificate', files)}
+                                onRemoveLegacy={(index) => handleRemoveLegacyGeneric(index, 'certificates')}
+                                onDeleteExistingFile={handleDeleteExistingFile}
+                                entityType="itr"
+                                entityId={existingItem?.id}
+                                category="certificate"
+                                id="certificate"
+                            />
                         </div>
 
                         <div className={styles.formSection}>
                             <h3 className={styles.sectionTitle}>{t('common.attachments')}</h3>
-                            <div className={styles.photoUploadContainer}>
-                                <input
-                                    type="file"
-                                    accept="*"
-                                    multiple
-                                    onChange={handleAttachmentUpload}
-                                    className={styles.photoInput}
-                                    id="attachment-upload"
-                                />
-                                <label htmlFor="attachment-upload" className={styles.photoUploadButton}>
-                                    <span>{t('obs.uploadFiles')}</span>
-                                </label>
-                                {formData.attachments.length > 0 && (
-                                    <div className={styles.photoPreviewGrid}>
-                                        {formData.attachments.map((_, index) => (
-                                            <div key={index} className={styles.photoPreviewItem}>
-                                                <span style={{ fontSize: 12, wordBreak: 'break-all' }}>Attachment {index + 1}</span>
-                                                <a href={formData.attachments[index]} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, marginLeft: 4 }}>View</a>
-                                                <button
-                                                    type="button"
-                                                    className={styles.photoRemoveButton}
-                                                    onClick={() => handleRemoveAttachment(index)}
-                                                    aria-label="Remove attachment"
-                                                >
-                                                    ×
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+                            <FileAttachment
+                                attachments={formData.attachments || [] as any[]}
+                                onPendingFilesChange={(files) => handlePendingFilesChange('attachment', files)}
+                                onRemoveLegacy={handleRemoveLegacyAttachment}
+                                onDeleteExistingFile={handleDeleteExistingFile}
+                                entityType="itr"
+                                entityId={existingItem?.id}
+                                category="attachment"
+                                id="attachment"
+                            />
                         </div>
-
-
 
                         {/* 複檢資料 */}
 
@@ -1151,7 +992,7 @@ export const ITRPrintPreview: React.FC<ITRPrintPreviewProps> = ({ data: displayD
                                 <div className={styles.photoPreviewGrid}>
                                     {displayData.drawings.map((drawing, index) => (
                                         <div key={index} className={styles.photoPreviewItem}>
-                                            <a href={drawing} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13 }}>
+                                            <a href={typeof drawing === 'string' ? drawing : drawing.file_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13 }}>
                                                 Drawing {index + 1}
                                             </a>
                                         </div>
@@ -1167,7 +1008,7 @@ export const ITRPrintPreview: React.FC<ITRPrintPreviewProps> = ({ data: displayD
                                 <div className={styles.photoPreviewGrid}>
                                     {displayData.certificates.map((cert, index) => (
                                         <div key={index} className={styles.photoPreviewItem}>
-                                            <a href={cert} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13 }}>
+                                            <a href={typeof cert === 'string' ? cert : cert.file_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13 }}>
                                                 Certificate {index + 1}
                                             </a>
                                         </div>
@@ -1186,7 +1027,7 @@ export const ITRPrintPreview: React.FC<ITRPrintPreviewProps> = ({ data: displayD
                                             <div className={styles.photoPreviewGrid}>
                                                 {displayData.defectPhotos.map((photo, index) => (
                                                     <div key={index} className={styles.photoPreviewItem}>
-                                                        <img src={photo} alt={`Defect Photo ${index + 1}`} className={styles.photoPreview} />
+                                                        <img src={typeof photo === 'string' ? photo : photo.file_url} alt={`Defect Photo ${index + 1}`} className={styles.photoPreview} />
                                                     </div>
                                                 ))}
                                             </div>
@@ -1198,7 +1039,7 @@ export const ITRPrintPreview: React.FC<ITRPrintPreviewProps> = ({ data: displayD
                                             <div className={styles.photoPreviewGrid}>
                                                 {displayData.improvementPhotos.map((photo, index) => (
                                                     <div key={index} className={styles.photoPreviewItem}>
-                                                        <img src={photo} alt={`Improvement Photo ${index + 1}`} className={styles.photoPreview} />
+                                                        <img src={typeof photo === 'string' ? photo : photo.file_url} alt={`Improvement Photo ${index + 1}`} className={styles.photoPreview} />
                                                     </div>
                                                 ))}
                                             </div>
@@ -1225,7 +1066,7 @@ export const ITRPrintPreview: React.FC<ITRPrintPreviewProps> = ({ data: displayD
                                     {(displayData.attachments || []).map((attachment, index) => (
                                         <div key={index} className={styles.photoPreviewItem}>
                                             <span style={{ fontSize: 12, wordBreak: 'break-all' }}>Attachment {index + 1}</span>
-                                            <a href={attachment} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, marginLeft: 4 }}>View</a>
+                                            <a href={typeof attachment === 'string' ? attachment : attachment.file_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, marginLeft: 4 }}>View</a>
                                         </div>
                                     ))}
                                 </div>

@@ -8,7 +8,6 @@ import { FATItem } from "../../store/fatStore";
 
 import { Edit, Trash2, PlusSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
 export const createColumns = (
     handleEdit: (id: string) => void,

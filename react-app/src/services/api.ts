@@ -138,6 +138,45 @@ export const deleteContractor = async (id: string): Promise<void> => {
   await api.delete(`/contractors/${id}/`);
 };
 
+// --- Projects API ---
+
+export interface ProjectApi {
+  id: string;
+  name: string;
+  code: string | null;
+  description: string | null;
+  owner: string | null;
+  created_at: string | null;
+}
+
+export interface CreateProjectPayload {
+  name: string;
+  code?: string;
+  description?: string;
+  owner?: string;
+}
+
+export interface UpdateProjectPayload extends Partial<CreateProjectPayload> {}
+
+export const getProjects = async (): Promise<ProjectApi[]> => {
+  const response = await api.get<ProjectApi[]>('/projects/');
+  return response.data;
+};
+
+export const createProject = async (data: CreateProjectPayload): Promise<ProjectApi> => {
+  const response = await api.post<ProjectApi>('/projects/', data);
+  return response.data;
+};
+
+export const updateProject = async (id: string, data: UpdateProjectPayload): Promise<ProjectApi> => {
+  const response = await api.put<ProjectApi>(`/projects/${id}`, data);
+  return response.data;
+};
+
+export const deleteProject = async (id: string): Promise<void> => {
+  await api.delete(`/projects/${id}`);
+};
+
 // --- IAM API (Users & Roles) ---
 
 export interface User {

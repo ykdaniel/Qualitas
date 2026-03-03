@@ -1,0 +1,15 @@
+
+C:\Users\YUKAI\Desktop\Qualitas\react-app\src\components\FAT\FAT.tsx
+   20:9   warning  'navigate' is assigned a value but never used                            @typescript-eslint/no-unused-vars
+   23:20  warning  'loading' is assigned a value but never used                             @typescript-eslint/no-unused-vars
+  104:14  warning  'e' is defined but never used                                            @typescript-eslint/no-unused-vars
+  120:16  warning  'e' is defined but never used                                            @typescript-eslint/no-unused-vars
+  145:16  warning  'e' is defined but never used                                            @typescript-eslint/no-unused-vars
+  490:54  warning  'fatId' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+  665:68  warning  'fatId' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\YUKAI\Desktop\Qualitas\react-app\src\components\FAT\columns.tsx
+  11:10  warning  'cn' is defined but never used  @typescript-eslint/no-unused-vars
+
+??8 problems (0 errors, 8 warnings)
+

@@ -1,12 +1,12 @@
 import { useNCRStore } from '../../store/ncrStore';
-import { useDashboardFilter } from '../../context/DashboardFilterContext';
+import { useDashboardFilterStore } from '../../store/dashboardFilterStore';
 import { useMemo } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import styles from './Dashboard.module.css';
 
 const NCRStatsCard: React.FC = () => {
   const ncrList = useNCRStore(state => state.ncrList);
-  const { selectedVendor } = useDashboardFilter();
+  const selectedVendor = useDashboardFilterStore(state => state.selectedVendor);
 
   const stats = useMemo(() => {
     const filteredList = selectedVendor === 'all'

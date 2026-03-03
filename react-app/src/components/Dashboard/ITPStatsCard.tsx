@@ -1,12 +1,12 @@
 import { useITPStore } from '../../store/itpStore';
-import { useDashboardFilter } from '../../context/DashboardFilterContext';
+import { useDashboardFilterStore } from '../../store/dashboardFilterStore';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './Dashboard.module.css';
 
 const ITPStatsCard: React.FC = () => {
   const itpList = useITPStore(state => state.itpList);
-  const { selectedVendor } = useDashboardFilter();
+  const selectedVendor = useDashboardFilterStore(state => state.selectedVendor);
   const navigate = useNavigate();
 
   const stats = useMemo(() => {

@@ -3,22 +3,25 @@ import { useNavigate } from 'react-router-dom';
 import { BackButton } from '@/components/ui/BackButton';
 import { useDebounce } from '../../hooks/useDebounce';
 import { useLanguage } from '../../context/LanguageContext';
+import { useITRStats } from '../../hooks/useITRStats';
+import { StatItem } from '../Shared/StatItem';
+import statStyles from '../Shared/StatItem.module.css';
 import { useITRStore } from '../../store/itrStore';
 import type { ITRItem } from '../../store/itrStore';
-import { useContractorsStore } from '../../store/contractorsStore';
+
 import { useChecklistStore } from '../../store/checklistStore';
 import { checkITRChecklistReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
-import { ITRDetailModal, ITRDetailData } from './ITRModals';
+import { ITRDetailModal, ITRDetailData, PendingUploads } from './ITRModals';
 import ConfirmModal from '../Shared/ConfirmModal';
+import { uploadFiles, deleteFile } from '../../services/api';
 import styles from './ITR.module.css';
 
 const ITR: React.FC = () => {
     const { t } = useLanguage();
     const navigate = useNavigate();
     const { itrList, loading, error, refetch, addITR, updateITR, deleteITR } = useITRStore();
-    const { getActiveContractors } = useContractorsStore();
     const checklistList = useChecklistStore(state => state.records);
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -41,31 +44,19 @@ const ITR: React.FC = () => {
         return itrList;
     }, [itrList]);
 
-    const statistics = useMemo(() => {
-        const total = itrList.length;
-        const approved = itrList.filter(item => (item.status || '').toLowerCase() === 'approved').length;
-        const reject = itrList.filter(item => (item.status || '').toLowerCase() === 'reject').length;
-        const inProgress = itrList.filter(item => (item.status || '').toLowerCase() === 'in progress').length;
-        return {
-            total,
-            approved,
-            reject,
-            inProgress,
-            approvedRate: total > 0 ? Math.round((approved / total) * 100) : 0
-        };
-    }, [itrList]);
+    const statistics = useITRStats(itrList);
 
     const handleAddNew = () => {
         setCurrentItrId(null);
         setIsEditModalOpen(true);
     };
 
-    const handleEdit = (id: string) => {
+    const handleEdit = React.useCallback((id: string) => {
         setCurrentItrId(id);
         setIsEditModalOpen(true);
-    };
+    }, []);
 
-    const handleDeleteClick = (id: string) => {
+    const handleDeleteClick = React.useCallback((id: string) => {
         const itr = itrList.find(item => item.id === id);
         if (!itr) return;
 
@@ -74,7 +65,9 @@ const ITR: React.FC = () => {
         const message = generateDeleteMessage('ITR', itr.documentNumber || itr.id, checklistReferences.references, t);
 
         setDeleteModal({ isOpen: true, id, message });
-    };
+    }, [itrList, checklistList, t]);
+
+    const columns = useMemo(() => createColumns(handleEdit, handleDeleteClick, navigate, t), [handleEdit, handleDeleteClick, navigate, t]);
 
     const handleDelete = async () => {
         if (deleteModal.id) {
@@ -83,8 +76,7 @@ const ITR: React.FC = () => {
         }
     };
 
-    const handleSaveITRDetails = async (details: ITRDetailData) => {
-        console.log("handleSaveITRDetails incoming", details.linkedChecklists);
+    const handleSaveITRDetails = async (details: ITRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => {
         const itemData: Omit<ITRItem, 'id'> = {
             vendor: details.contractor || '',
             documentNumber: details.itrNumber || '',
@@ -125,11 +117,40 @@ const ITR: React.FC = () => {
         };
 
         try {
+            let targetId = currentItrId;
             if (currentItrId) {
                 await updateITR(currentItrId, itemData);
             } else {
-                await addITR(itemData);
+                const newITR = await addITR(itemData);
+                targetId = newITR.id;
             }
+
+            if (deletedFileIds && deletedFileIds.length > 0) {
+                for (const fileId of deletedFileIds) {
+                    try {
+                        await deleteFile(fileId);
+                    } catch (error) {
+                        console.error('Error deleting file:', fileId, error);
+                    }
+                }
+            }
+
+            if (pendingUploads && pendingUploads.length > 0) {
+                for (const uploadGroup of pendingUploads) {
+                    if (uploadGroup.files.length > 0) {
+                        try {
+                            const moduleStr = 'itr';
+                            await uploadFiles(moduleStr, targetId as string, uploadGroup.files, uploadGroup.category);
+                        } catch (error) {
+                            console.error(`Error uploading files for category ${uploadGroup.category}:`, error);
+                            alert(`Failed to upload some files for ${uploadGroup.category}.`);
+                        }
+                    }
+                }
+            }
+
+            await refetch();
+
             setIsEditModalOpen(false);
             setCurrentItrId(null);
         } catch (error: any) {
@@ -161,54 +182,30 @@ const ITR: React.FC = () => {
                 <h2 className={styles.summaryTitle}>{t('obs.statsTitle') || 'Statistics'}</h2>
                 <div className={styles.statsContainer}>
                     <div className={styles.statusStatsGrid}>
-                        <div className={styles.statItem}>
-                            <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <circle cx="12" cy="12" r="10" />
-                                    <path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                            </div>
-                            <div className={styles.statContent}>
-                                <div className={styles.statLabel}>{t('itr.status.inProgress')}</div>
-                                <div className={styles.statValue}>{statistics.inProgress}</div>
-                            </div>
-                        </div>
-                        <div className={styles.statItem}>
-                            <div className={`${styles.statIcon} ${styles.greenIcon}`}>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                            </div>
-                            <div className={styles.statContent}>
-                                <div className={styles.statLabel}>{t('itr.status.approved')}</div>
-                                <div className={styles.statValue}>{statistics.approved}</div>
-                            </div>
-                        </div>
-                        <div className={styles.statItem}>
-                            <div className={`${styles.statIcon} ${styles.pinkIcon}`}>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <circle cx="12" cy="12" r="10" />
-                                    <line x1="12" y1="8" x2="12" y2="12" />
-                                    <line x1="12" y1="16" x2="12.01" y2="16" />
-                                </svg>
-                            </div>
-                            <div className={styles.statContent}>
-                                <div className={styles.statLabel}>{t('itr.status.reject')}</div>
-                                <div className={styles.statValue}>{statistics.reject}</div>
-                            </div>
-                        </div>
-                        <div className={styles.statItem}>
-                            <div className={`${styles.statIcon} ${styles.grayIcon}`}>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" />
-                                    <path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                            </div>
-                            <div className={styles.statContent}>
-                                <div className={styles.statLabel}>{t('obs.statTotal')}</div>
-                                <div className={styles.statValue}>{statistics.total}</div>
-                            </div>
-                        </div>
+                        <StatItem 
+                            label={t('itr.status.inProgress')} 
+                            value={statistics.inProgress} 
+                            icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+                            iconColorClass={statStyles.blueIcon} 
+                        />
+                        <StatItem 
+                            label={t('itr.status.approved')} 
+                            value={statistics.approved} 
+                            icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+                            iconColorClass={statStyles.greenIcon} 
+                        />
+                        <StatItem 
+                            label={t('itr.status.reject')} 
+                            value={statistics.reject} 
+                            icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>} 
+                            iconColorClass={statStyles.pinkIcon} 
+                        />
+                        <StatItem 
+                            label={t('obs.statTotal')} 
+                            value={statistics.total} 
+                            icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" /><path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+                            iconColorClass={statStyles.grayIcon} 
+                        />
                     </div>
                 </div>
             </div>
@@ -229,7 +226,7 @@ const ITR: React.FC = () => {
                                 {t('itr.addNew') || '+ New ITR'}
                             </button>
                         }
-                        columns={createColumns(handleEdit, handleDeleteClick, navigate, t)}
+                        columns={columns}
                         data={filteredList}
                         searchKey=""
                         searchPlaceholder={t('itr.searchPlaceholder')}

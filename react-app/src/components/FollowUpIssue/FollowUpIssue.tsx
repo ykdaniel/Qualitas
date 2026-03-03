@@ -15,6 +15,9 @@ import api from '../../services/api';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { BackButton } from '@/components/ui/BackButton';
+import { useFollowUpIssueStats } from '../../hooks/useFollowUpIssueStats';
+import { StatItem } from '../Shared/StatItem';
+import statStyles from '../Shared/StatItem.module.css';
 
 interface FollowUpIssueItem {
   id: string;
@@ -38,7 +41,7 @@ const FollowUpIssue: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const [manualIssues, setManualIssues] = useState<FollowUpIssueItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
 
   // 引入其他模組資料
   const ncrList = useNCRStore(state => state.ncrList);
@@ -228,32 +231,7 @@ const FollowUpIssue: React.FC = () => {
     return result;
   }, [issues, searchQuery]);
 
-  const statistics = useMemo(() => {
-    const statusCounts = {
-      opening: 0,
-      closed: 0,
-    };
-
-    issues.forEach((item) => {
-      const status = (item.status || 'Open').toLowerCase();
-      if (status === 'open') {
-        statusCounts.opening++;
-      } else if (status === 'closed') {
-        statusCounts.closed++;
-      }
-    });
-
-    const total = issues.length;
-    const openRate = total > 0 ? Math.round((statusCounts.opening / total) * 100) : 0;
-    const closedRate = total > 0 ? Math.round((statusCounts.closed / total) * 100) : 0;
-
-    return {
-      ...statusCounts,
-      total,
-      openRate,
-      closedRate,
-    };
-  }, [issues]);
+  const statistics = useFollowUpIssueStats(issues);
 
   const pieData = useMemo(() => [
     { name: 'Open', value: statistics.opening, color: '#f59e0b' },
@@ -336,52 +314,30 @@ const FollowUpIssue: React.FC = () => {
         <div className={styles.summarySection}>
           <h2 className={styles.summaryTitle}>{t('followup.statsTitle')}</h2>
           <div className={styles.statusStatsGrid}>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('status.open')}</div>
-                <div className={styles.statValue}>{statistics.opening}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.grayIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('status.closed')}</div>
-                <div className={styles.statValue}>{statistics.closed}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.grayIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('common.total')}</div>
-                <div className={styles.statValue}>{statistics.total}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('noi.stats.openRate')}</div>
-                <div className={styles.statValue}>{statistics.opening} ({statistics.openRate}%)</div>
-              </div>
-            </div>
+            <StatItem 
+              label={t('status.open')} 
+              value={statistics.opening} 
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+              iconColorClass={statStyles.blueIcon} 
+            />
+            <StatItem 
+              label={t('status.closed')} 
+              value={statistics.closed} 
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+              iconColorClass={statStyles.grayIcon} 
+            />
+            <StatItem 
+              label={t('common.total')} 
+              value={statistics.total} 
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" /><path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+              iconColorClass={statStyles.grayIcon} 
+            />
+            <StatItem 
+              label={t('noi.stats.openRate')} 
+              value={`${statistics.opening} (${statistics.openRate}%)`} 
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
+              iconColorClass={statStyles.blueIcon} 
+            />
           </div>
         </div>
         <div className={styles.chartSection}>
@@ -515,10 +471,17 @@ interface FollowUpIssueDetailModalProps {
   onClose: () => void;
 }
 
-const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ issueId, existingItem, onSave, onClose }) => {
+const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ existingItem, onSave, onClose }) => {
   const { t } = useLanguage();
   const { getActiveContractors } = useContractorsStore();
   const contractors = getActiveContractors();
+
+  const ncrList = useNCRStore(state => state.ncrList);
+  const obsList = useOBSStore(state => state.obsList);
+  const noiList = useNOIStore(state => state.noiList);
+  const itrList = useITRStore(state => state.itrList);
+  const itpList = useITPStore(state => state.itpList);
+  const pqpList = usePQPStore(state => state.pqpList);
   const [formData, setFormData] = useState<Partial<FollowUpIssueItem>>({
     issueNo: existingItem?.issueNo || '',
     title: existingItem?.title || '',
@@ -581,10 +544,9 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ iss
                   <input
                     type="text"
                     className={styles.formInput}
-                    value={formData.issueNo || ''}
-                    onChange={(e) => handleFieldChange('issueNo', e.target.value)}
-                    readOnly={!!existingItem}
-                    style={existingItem ? { backgroundColor: '#f3f4f6', cursor: 'not-allowed' } : {}}
+                    value={formData.issueNo || t('form.autoGenerated')}
+                    readOnly
+                    style={{ backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: formData.issueNo ? '#000000' : '#666666' }}
                   />
                 </div>
                 <div className={styles.formGroup}>
@@ -639,13 +601,30 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ iss
                 </div>
                 <div className={styles.formGroup}>
                   <label>{t('followup.sourceRef')}</label>
-                  <input
-                    type="text"
-                    className={styles.formInput}
-                    value={formData.sourceReferenceNo || ''}
-                    onChange={(e) => handleFieldChange('sourceReferenceNo', e.target.value)}
-                    placeholder="e.g. NCR-2026-001"
-                  />
+                  {formData.sourceModule && formData.sourceModule !== 'Other' ? (
+                    <select
+                      className={styles.formSelect}
+                      value={formData.sourceReferenceNo || ''}
+                      onChange={(e) => handleFieldChange('sourceReferenceNo', e.target.value)}
+                    >
+                      <option value="">-- {t('common.selectPlaceholder')} --</option>
+                      {formData.sourceModule === 'NCR' && ncrList.map((n: any) => <option key={n.id} value={n.referenceNo || n.documentNumber}>{n.referenceNo || n.documentNumber}</option>)}
+                      {formData.sourceModule === 'OBS' && obsList.map((o: any) => <option key={o.id} value={o.referenceNo || o.documentNumber}>{o.referenceNo || o.documentNumber}</option>)}
+                      {formData.sourceModule === 'NOI' && noiList.map((n: any) => <option key={n.id} value={n.referenceNo || n.documentNumber}>{n.referenceNo || n.documentNumber}</option>)}
+                      {formData.sourceModule === 'ITR' && itrList.map((i: any) => <option key={i.id} value={i.referenceNo || i.documentNumber}>{i.referenceNo || i.documentNumber}</option>)}
+                      {formData.sourceModule === 'ITP' && itpList.map((i: any) => <option key={i.id} value={i.referenceNo || i.documentNumber}>{i.referenceNo || i.documentNumber}</option>)}
+                      {formData.sourceModule === 'PQP' && pqpList.map((p: any) => <option key={p.id} value={p.referenceNo || p.documentNumber}>{p.referenceNo || p.documentNumber}</option>)}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      className={styles.formInput}
+                      value={formData.sourceReferenceNo || ''}
+                      onChange={(e) => handleFieldChange('sourceReferenceNo', e.target.value)}
+                      placeholder={formData.sourceModule === 'Other' ? "Enter external reference..." : "Select source module first"}
+                      disabled={!formData.sourceModule}
+                    />
+                  )}
                 </div>
                 <div className={styles.formGroup}>
                   <label>{t('followup.createdDate')}</label>
@@ -744,7 +723,7 @@ interface FollowUpIssueDetailsViewModalProps {
   onClose: () => void;
 }
 
-const FollowUpIssueDetailsViewModal: React.FC<FollowUpIssueDetailsViewModalProps> = ({ issueId, issueItem, onClose }) => {
+const FollowUpIssueDetailsViewModal: React.FC<FollowUpIssueDetailsViewModalProps> = ({ issueItem, onClose }) => {
   const { t } = useLanguage();
   const handlePrint = () => {
     window.print();

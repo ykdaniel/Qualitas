@@ -1,0 +1,30 @@
+
+C:\Users\YUKAI\Desktop\Qualitas\react-app\src\components\ITR\ChecklistSnapshotModal.tsx
+  3:10  warning  'ChecklistRecord' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\YUKAI\Desktop\Qualitas\react-app\src\components\ITR\ITR.tsx
+  21:13  warning  'getActiveContractors' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  87:9   warning  Unexpected console statement                               no-console
+
+C:\Users\YUKAI\Desktop\Qualitas\react-app\src\components\ITR\ITRModals.tsx
+    1:36  warning  'useEffect' is defined but never used                 @typescript-eslint/no-unused-vars
+    4:10  warning  'ChecklistRecord' is defined but never used           @typescript-eslint/no-unused-vars
+    5:10  warning  'Printer' is defined but never used                   @typescript-eslint/no-unused-vars
+    5:32  warning  'Save' is defined but never used                      @typescript-eslint/no-unused-vars
+    5:38  warning  'LayoutTemplate' is defined but never used            @typescript-eslint/no-unused-vars
+    5:54  warning  'Plus' is defined but never used                      @typescript-eslint/no-unused-vars
+   67:5   warning  Unexpected console statement                          no-console
+   69:35  warning  'contractors' is assigned a value but never used      @typescript-eslint/no-unused-vars
+   76:11  warning  'getNCRList' is assigned a value but never used       @typescript-eslint/no-unused-vars
+  189:11  warning  'itrList' is assigned a value but never used          @typescript-eslint/no-unused-vars
+  231:11  warning  'handleNAButton' is assigned a value but never used   @typescript-eslint/no-unused-vars
+  235:11  warning  'handleTBCButton' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  336:9   warning  Unexpected console statement                          no-console
+  357:18  warning  '_' is defined but never used                         @typescript-eslint/no-unused-vars
+  373:22  warning  '_' is defined but never used                         @typescript-eslint/no-unused-vars
+
+C:\Users\YUKAI\Desktop\Qualitas\react-app\src\components\ITR\columns.tsx
+  8:10  warning  'useNavigate' is defined but never used  @typescript-eslint/no-unused-vars
+
+??19 problems (0 errors, 19 warnings)
+

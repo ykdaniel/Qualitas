@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { getNamingRules, updateNamingRules, NamingRuleApi } from '../../services/api';
 import styles from './DocumentNamingRules.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns, NamingRuleItem } from './columns';
+import { BackButton } from '@/components/ui/BackButton';
 
 export interface NamingRule {
   id: string;
@@ -30,7 +30,6 @@ const DEFAULT_RULES: NamingRule[] = [
 
 
 const DocumentNamingRules: React.FC = () => {
-  const navigate = useNavigate();
   const { t } = useLanguage();
   const [rules, setRules] = useState<NamingRuleItem[]>(DEFAULT_RULES);
   const [saved, setSaved] = useState(false);
@@ -111,9 +110,7 @@ const DocumentNamingRules: React.FC = () => {
     <div className={styles.container}>
       <div className={styles.header}>
         <div className={styles.headerLeft}>
-          <button type="button" className={styles.backButton} onClick={() => navigate('/')}>
-            ← {t('common.back')}
-          </button>
+          <BackButton />
           <h1 className={styles.title}>{t('namingRules.title')}</h1>
           <p className={styles.subtitle}>{t('namingRules.subtitle')}</p>
         </div>

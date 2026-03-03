@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PenTool, Trash2, Plus, FileText, CheckCircle2, Calendar, Filter, AlertCircle, FileCheck, Tag, X, Save, ShieldCheck, HardHat, Building2, User, ArrowDown, LayoutTemplate } from 'lucide-react';
+import { PenTool, Trash2, ArrowDown, X, Save, ShieldCheck, HardHat, Building2, User, FileText } from 'lucide-react';
 import { InspectionItem } from '../../types/itp';
 import { PHASES, EMPTY_ITEM } from '../../constants/itp';
 import { useITRStore } from '../../store/itrStore';
@@ -70,7 +70,7 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
         if (!editingItem) return;
 
         if (editingItem.isNew) {
-            const { isNew, insertAfter, ...newItem } = editingItem;
+            const { insertAfter, ...newItem } = editingItem;
             const currentPhaseItems = items.filter(i => i.phase === newItem.phase);
             const otherItems = items.filter(i => i.phase !== newItem.phase);
 

@@ -46,25 +46,27 @@ export interface NCRDetailData {
     dueDate: string;
 }
 
+export interface PendingUploads {
+    category: string;
+    files: File[];
+}
+
 export interface NCRDetailModalProps {
     ncrId: string | null;
     existingData?: NCRDetailData;
     existingItem?: NCRItem;
     ncrList: NCRItem[];
-    onSave: (details: NCRDetailData) => void;
+    onSave: (details: NCRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => void | Promise<void>;
     onClose: () => void;
 }
 
-export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId, existingData, existingItem, ncrList: propNcrList, onSave, onClose }) => {
+export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, existingData, existingItem, ncrList: propNcrList, onSave, onClose }) => {
     const { t } = useLanguage();
     const { getActiveContractors } = useContractorsStore();
     const { ncrList: contextNcrList } = useNCRStore();
     const noiList = useNOIStore(state => state.noiList);
     const getNOIList = () => noiList;
     const itrList = useITRStore(state => state.itrList);
-
-    // Use context list if available, otherwise use prop
-    const ncrList = contextNcrList.length > 0 ? contextNcrList : propNcrList;
 
     // Initialize form data from existing data or existing item
     const getInitialData = (): NCRDetailData => {
@@ -150,6 +152,13 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId, existingD
 
     const [formData, setFormData] = useState<NCRDetailData>(getInitialData());
 
+    // File handling states
+    const [pendingDefectPhotos, setPendingDefectPhotos] = useState<File[]>([]);
+    const [pendingImprovementPhotos, setPendingImprovementPhotos] = useState<File[]>([]);
+    const [pendingAttachments, setPendingAttachments] = useState<File[]>([]);
+    const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
+    const [saving, setSaving] = useState(false);
+
     const handleFieldChange = (field: keyof NCRDetailData, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
@@ -171,65 +180,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId, existingD
         setFormData(prev => ({ ...prev, [field]: 'To be confirmed' }));
     };
 
-    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, photoType: 'defect' | 'improvement') => {
-        const files = e.target.files;
-        if (files) {
-            const fileArray = Array.from(files);
-
-            fileArray.forEach((file) => {
-                if (file.type.startsWith('image/')) {
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                        const result = reader.result as string;
-                        if (photoType === 'defect') {
-                            setFormData(prev => ({
-                                ...prev,
-                                defectPhotos: [...prev.defectPhotos, result]
-                            }));
-                        } else {
-                            setFormData(prev => ({
-                                ...prev,
-                                improvementPhotos: [...prev.improvementPhotos, result]
-                            }));
-                        }
-                    };
-                    reader.readAsDataURL(file);
-                }
-            });
-        }
-        // Reset input
-        e.target.value = '';
-    };
-
-    const handleAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (files) {
-            const fileArray = Array.from(files);
-            fileArray.forEach((file) => {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    const result = reader.result as string;
-                    setFormData(prev => ({
-                        ...prev,
-                        attachments: [...prev.attachments, result]
-                    }));
-                };
-                reader.readAsDataURL(file);
-            });
-        }
-        e.target.value = '';
-    };
-
-    const handleRemoveAttachment = (index: number) => {
-        setFormData(prev => ({
-            ...prev,
-            attachments: prev.attachments.filter((_, i) => i !== index)
-        }));
-    };
-
-
-
-    const handleRemovePhoto = (index: number, photoType: 'defect' | 'improvement') => {
+    const handleRemoveLegacyPhoto = (index: number, photoType: 'defect' | 'improvement') => {
         if (photoType === 'defect') {
             setFormData(prev => ({
                 ...prev,
@@ -243,7 +194,14 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId, existingD
         }
     };
 
-    const handleSave = () => {
+    const handleRemoveLegacyAttachment = (index: number) => {
+        setFormData(prev => ({
+            ...prev,
+            attachments: prev.attachments.filter((_, i) => i !== index)
+        }));
+    };
+
+    const handleSave = async () => {
         if (!formData.itrNumber && !formData.noiNumber) {
             // Warn if no link to origin
             if (!window.confirm('This NCR is not linked to any ITR or NOI. Do you want to continue?')) {
@@ -265,22 +223,40 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId, existingD
             }
         }
 
-        onSave(formData);
-        onClose();
+        setSaving(true);
+        try {
+            await onSave(formData, [
+                { category: 'defectPhoto', files: pendingDefectPhotos },
+                { category: 'improvementPhoto', files: pendingImprovementPhotos },
+                { category: 'attachment', files: pendingAttachments }
+            ], deletedFileIds);
+            onClose();
+        } finally {
+            setSaving(false);
+        }
     };
 
-    const handlePublish = () => {
+    const handlePublish = async () => {
         const nextRev = getNextRevision(formData.rev);
         if (window.confirm(`Are you sure you want to publish as Revision ${nextRev}?`)) {
-            onSave({
-                ...formData,
-                rev: nextRev,
-                status: 'Closed' // Optional: NCR usually closes on completion, but publish might just be versioning. Let's keep status manual or ask user? 
-                // For now, mirroring ITP logic: update rev. Status is manually managed in NCR usually.
-                // Actually, for NCR, "Publish" might mean "Issue" (Open) or "Close".
-                // Let's stick to Versioning only to be safe, or default to current status.
-            });
-            onClose();
+            setSaving(true);
+            try {
+                await onSave({
+                    ...formData,
+                    rev: nextRev,
+                    status: 'Closed' // Optional: NCR usually closes on completion, but publish might just be versioning. Let's keep status manual or ask user? 
+                    // For now, mirroring ITP logic: update rev. Status is manually managed in NCR usually.
+                    // Actually, for NCR, "Publish" might mean "Issue" (Open) or "Close".
+                    // Let's stick to Versioning only to be safe, or default to current status.
+                }, [
+                    { category: 'defectPhoto', files: pendingDefectPhotos },
+                    { category: 'improvementPhoto', files: pendingImprovementPhotos },
+                    { category: 'attachment', files: pendingAttachments }
+                ], deletedFileIds);
+                onClose();
+            } finally {
+                setSaving(false);
+            }
         }
     };
 
@@ -289,7 +265,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId, existingD
             <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
                 <div className={styles.modalHeader}>
                     <h2>{existingData || existingItem ? t('ncr.editTitle') : t('ncr.addTitle')}</h2>
-                    <button className={styles.closeButton} onClick={onClose}>×</button>
+                    <button className={styles.closeButton} onClick={onClose} disabled={saving}>×</button>
                 </div>
                 <div className={styles.modalBody}>
                     <p className={styles.formRequiredHint}>{t('form.requiredHint')}</p>
@@ -434,84 +410,48 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId, existingD
 
                         {/* 照片上傳 */}
                         <div className={styles.formSection}>
-                            <div className={styles.photoSectionContainer}>
-                                <div className={styles.photoSection}>
-                                    <h3 className={styles.sectionTitle}>{t('obs.defectPhotos')}</h3>
-                                    <div className={styles.photoUploadContainer}>
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            multiple
-                                            onChange={(e) => handlePhotoUpload(e, 'defect')}
-                                            className={styles.photoInput}
-                                            id="defect-photo-upload"
-                                        />
-                                        <label htmlFor="defect-photo-upload" className={styles.photoUploadButton}>
-                                            <span>{t('obs.uploadPhotos')}</span>
-                                        </label>
-                                        {formData.defectPhotos.length > 0 && (
-                                            <div className={styles.photoPreviewGrid}>
-                                                {formData.defectPhotos.map((photo, index) => (
-                                                    <div key={index} className={styles.photoPreviewItem}>
-                                                        <img src={photo} alt={`Defect Photo ${index + 1}`} className={styles.photoPreview} />
-                                                        <button
-                                                            type="button"
-                                                            className={styles.photoRemoveButton}
-                                                            onClick={() => handleRemovePhoto(index, 'defect')}
-                                                            aria-label="Remove photo"
-                                                        >
-                                                            ×
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className={styles.photoSection}>
-                                    <h3 className={styles.sectionTitle}>{t('obs.improvementPhotos')}</h3>
-                                    <div className={styles.photoUploadContainer}>
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            multiple
-                                            onChange={(e) => handlePhotoUpload(e, 'improvement')}
-                                            className={styles.photoInput}
-                                            id="improvement-photo-upload"
-                                        />
-                                        <label htmlFor="improvement-photo-upload" className={styles.photoUploadButton}>
-                                            <span>{t('obs.uploadPhotos')}</span>
-                                        </label>
-                                        {formData.improvementPhotos.length > 0 && (
-                                            <div className={styles.photoPreviewGrid}>
-                                                {formData.improvementPhotos.map((photo, index) => (
-                                                    <div key={index} className={styles.photoPreviewItem}>
-                                                        <img src={photo} alt={`Improvement Photo ${index + 1}`} className={styles.photoPreview} />
-                                                        <button
-                                                            type="button"
-                                                            className={styles.photoRemoveButton}
-                                                            onClick={() => handleRemovePhoto(index, 'improvement')}
-                                                            aria-label="Remove photo"
-                                                        >
-                                                            ×
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
+                            <h3 className={styles.sectionTitle}>{t('obs.defectPhotos')}</h3>
+                            <FileAttachment
+                                id="ncr-defect-photos"
+                                category="defectPhoto"
+                                entityType={existingItem ? 'ncr' : undefined}
+                                entityId={existingItem?.id}
+                                title={t('obs.defectPhotos')}
+                                legacyAttachments={formData.defectPhotos}
+                                onPendingFilesChange={setPendingDefectPhotos}
+                                onDeleteExistingFile={(id) => setDeletedFileIds(prev => [...prev, id])}
+                                onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'defect')}
+                                accept="image/*"
+                            />
                         </div>
-
+                        <div className={styles.formSection}>
+                            <h3 className={styles.sectionTitle}>{t('obs.improvementPhotos')}</h3>
+                            <FileAttachment
+                                id="ncr-improvement-photos"
+                                category="improvementPhoto"
+                                entityType={existingItem ? 'ncr' : undefined}
+                                entityId={existingItem?.id}
+                                title={t('obs.improvementPhotos')}
+                                legacyAttachments={formData.improvementPhotos}
+                                onPendingFilesChange={setPendingImprovementPhotos}
+                                onDeleteExistingFile={(id) => setDeletedFileIds(prev => [...prev, id])}
+                                onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'improvement')}
+                                accept="image/*"
+                            />
+                        </div>
 
                         {/* Attachments */}
                         <div className={styles.formSection}>
                             <FileAttachment
-                                attachments={formData.attachments}
-                                onUpload={handleAttachmentUpload}
-                                onRemove={handleRemoveAttachment}
-                                id="ncr"
+                                id="ncr-attachments"
+                                category="attachment"
+                                entityType={existingItem ? 'ncr' : undefined}
+                                entityId={existingItem?.id}
+                                title={t('obs.attachments')}
+                                legacyAttachments={formData.attachments}
+                                onPendingFilesChange={setPendingAttachments}
+                                onDeleteExistingFile={(id) => setDeletedFileIds(prev => [...prev, id])}
+                                onRemoveLegacy={handleRemoveLegacyAttachment}
                             />
                         </div>
 
@@ -862,13 +802,14 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId, existingD
                             onClick={handlePublish}
                             style={{ backgroundColor: '#4f46e5' }}
                             title="Publish as next revision"
+                            disabled={saving}
                         >
                             Publish
                         </button>
-                        <button className={styles.saveButton} onClick={handleSave} style={{ marginLeft: '12px' }}>
-                            {t('common.save')}
+                        <button className={styles.saveButton} onClick={handleSave} style={{ marginLeft: '12px' }} disabled={saving}>
+                            {saving ? t('obs.saving') : t('common.save')}
                         </button>
-                        <button className={styles.cancelButton} onClick={onClose}>
+                        <button className={styles.cancelButton} onClick={onClose} disabled={saving}>
                             {t('common.cancel')}
                         </button>
                     </div>
@@ -885,7 +826,7 @@ export interface NCRDetailsViewModalProps {
     onClose: () => void;
 }
 
-export const NCRDetailsViewModal: React.FC<NCRDetailsViewModalProps> = ({ ncrId, ncrItem, ncrDetailData, onClose }) => {
+export const NCRDetailsViewModal: React.FC<NCRDetailsViewModalProps> = ({ ncrId: _ncrId, ncrItem, ncrDetailData, onClose }) => {
     const { t } = useLanguage();
     // Combine data from both sources, with detailData taking precedence
     const displayData: NCRDetailData = {
@@ -938,13 +879,6 @@ export const NCRDetailsViewModal: React.FC<NCRDetailsViewModalProps> = ({ ncrId,
                 </div>
                 <div className={styles.modalBody}>
                     <div className={styles.formSections}>
-                        <FileAttachment
-                            attachments={displayData.attachments || []}
-                            onUpload={() => { }} // Read-only
-                            onRemove={() => { }} // Read-only
-                            id="ncr-view"
-                            readOnly={true}
-                        />
                         {/* 不符合項目資訊 */}
                         <div className={styles.formSection}>
                             <h3 className={styles.sectionTitle}>{t('obs.sectionInfo')}</h3>
@@ -991,36 +925,30 @@ export const NCRDetailsViewModal: React.FC<NCRDetailsViewModalProps> = ({ ncrId,
                         </div>
 
                         {/* 照片 */}
-                        {(displayData.defectPhotos?.length > 0 || displayData.improvementPhotos?.length > 0) && (
-                            <div className={styles.formSection}>
-                                <div className={styles.photoSectionContainer}>
-                                    {displayData.defectPhotos && displayData.defectPhotos.length > 0 && (
-                                        <div className={styles.photoSection}>
-                                            <h3 className={styles.sectionTitle}>{t('obs.defectPhotos')}</h3>
-                                            <div className={styles.photoPreviewGrid}>
-                                                {displayData.defectPhotos.map((photo, index) => (
-                                                    <div key={index} className={styles.photoPreviewItem}>
-                                                        <img src={photo} alt={`Defect Photo ${index + 1}`} className={styles.photoPreview} />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                    {displayData.improvementPhotos && displayData.improvementPhotos.length > 0 && (
-                                        <div className={styles.photoSection}>
-                                            <h3 className={styles.sectionTitle}>{t('obs.improvementPhotos')}</h3>
-                                            <div className={styles.photoPreviewGrid}>
-                                                {displayData.improvementPhotos.map((photo, index) => (
-                                                    <div key={index} className={styles.photoPreviewItem}>
-                                                        <img src={photo} alt={`Improvement Photo ${index + 1}`} className={styles.photoPreview} />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
+                        <div className={styles.formSection}>
+                            <FileAttachment
+                                id="ncr-defect-photos-view"
+                                category="defectPhoto"
+                                entityType="ncr"
+                                entityId={ncrItem?.id}
+                                title={t('obs.defectPhotos')}
+                                legacyAttachments={displayData.defectPhotos || []}
+                                readOnly={true}
+                                accept="image/*"
+                            />
+                        </div>
+                        <div className={styles.formSection}>
+                            <FileAttachment
+                                id="ncr-improvement-photos-view"
+                                category="improvementPhoto"
+                                entityType="ncr"
+                                entityId={ncrItem?.id}
+                                title={t('obs.improvementPhotos')}
+                                legacyAttachments={displayData.improvementPhotos || []}
+                                readOnly={true}
+                                accept="image/*"
+                            />
+                        </div>
 
                         {/* {t('obs.sectionPersonnelLocation')} */}
                         <div className={styles.formSection}>
@@ -1132,6 +1060,18 @@ export const NCRDetailsViewModal: React.FC<NCRDetailsViewModalProps> = ({ ncrId,
                                     <div className={styles.readOnlyField}>{displayData.remark || '-'}</div>
                                 </div>
                             </div>
+                        </div>
+
+                        <div className={styles.formSection}>
+                            <FileAttachment
+                                id="ncr-attachments-view"
+                                category="attachment"
+                                entityType="ncr"
+                                entityId={ncrItem?.id}
+                                title={t('obs.attachments')}
+                                legacyAttachments={displayData.attachments || []}
+                                readOnly={true}
+                            />
                         </div>
                     </div>
                 </div>

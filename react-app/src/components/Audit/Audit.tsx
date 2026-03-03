@@ -15,11 +15,17 @@ const Audit: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [currentAuditId, setCurrentAuditId] = useState<string | null>(null);
-    const { getActiveContractors } = useContractorsStore();
+    const { getActiveContractors, contractors } = useContractorsStore();
     const [selectedVendorFilter, setSelectedVendorFilter] = useState<string | null>(null);
 
     // Get active contractors
-    const activeContractors = useMemo(() => getActiveContractors(), [getActiveContractors]);
+    const activeContractors = useMemo(() => getActiveContractors(), [contractors, getActiveContractors]);
+
+    // Fetch audits and contractors on mount
+    React.useEffect(() => {
+        useAuditStore.getState().fetchAudits();
+        useContractorsStore.getState().fetchContractors();
+    }, []);
 
     // Compute vendor stats and schedule
     // Note: This logic for the "Matrix" and "Vendor Panel" ignores Table filtering/sorting
@@ -75,42 +81,23 @@ const Audit: React.FC = () => {
                 (item.contractor && item.contractor.toLowerCase().includes(query)) ||
                 (item.status && item.status.toLowerCase().includes(query))
             );
-        } else {
-            // Default: filter by current month/year if no search query
-            data = data.filter(item => {
-                const dateObj = new Date(item.date);
-                return dateObj.getMonth() === viewDate.getMonth() &&
-                    dateObj.getFullYear() === viewDate.getFullYear();
-            });
         }
 
         return data;
-    }, [auditList, searchQuery, selectedVendorFilter, viewDate]);
+    }, [auditList, searchQuery, selectedVendorFilter]); // Removed viewDate from dependency since we are not using it to filter table anymore
 
-    // Matrix Logic (Filtered for Matrix View - which respects Search and Vendor, but crucially Month)
-    // Actually, Matrix view is explicitly a Month View.
-    // It should probably respect Vendor Filter.
-    // It should separate from Table Search?
-    // The original code used `filteredList` for Matrix, which INCLUDED SearchQuery.
-    // I will replicate that behavior by creating a specific list for Matrix.
+
     const matrixList = useMemo(() => {
-        // Matrix should ALWAYS be the viewDate month, filtered by Vendor.
-        // If Search is active, should it limit the Matrix?
-        // Original code: filteredList included date filter (if no search) OR search filter.
-        // If I search "John", I might see items from other months. The Matrix would break/be weird if it tried to show them?
-        // The Matrix Headers are derived from `matrixDates`, which comes from `filteredList`.
-        // If `filteredList` has dates outside the month (due to search), the Matrix grows horizontally.
-        // It seems safer to use `tableBaseData` for consistency, as `tableBaseData` mimics previous behavior.
-
         return tableBaseData;
     }, [tableBaseData]);
 
     const matrixDates = useMemo(() => {
-        // Extract unique dates from the FILTERED list to show only relevant columns
-        const uniqueDates = Array.from(new Set(matrixList.map(a => a.date)))
+        // Extract unique, valid dates from the FILTERED list to show only relevant columns
+        const validDates = Array.from(new Set(matrixList.map(a => a.date)))
+            .filter(dateStr => dateStr && !isNaN(new Date(dateStr).getTime()))
             .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
 
-        return uniqueDates.map(dateStr => {
+        return validDates.map(dateStr => {
             const date = new Date(dateStr);
             return {
                 date,
@@ -247,7 +234,7 @@ const Audit: React.FC = () => {
                                 <div className={styles.chartBar} style={{ width: '100%' }}></div>
                             </div>
                         </div>
-                        {activeContractors.map(vendor => {
+                        {activeContractors.filter(vendor => (vendorStats[vendor.name] || 0) > 0).map(vendor => {
                             const count = vendorStats[vendor.name] || 0;
                             const percentage = (count / maxAudits) * 100;
                             return (
@@ -312,7 +299,10 @@ const Audit: React.FC = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {(selectedVendorFilter ? activeContractors.filter(v => v.name === selectedVendorFilter) : activeContractors).map((vendor, vIdx) => (
+                                    {(selectedVendorFilter 
+                                        ? activeContractors.filter(v => v.name === selectedVendorFilter) 
+                                        : activeContractors.filter(v => (vendorStats[v.name] || 0) > 0)
+                                    ).map((vendor, vIdx) => (
                                         <tr key={vendor.id} className={styles.matrixRow}>
                                             <td className={styles.indexStickyCell}>{vIdx + 1}</td>
                                             <td className={styles.vendorStickyCell}>{vendor.name}</td>
@@ -354,6 +344,11 @@ const Audit: React.FC = () => {
                                                                     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                                                                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                                                                         <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                                                    </svg>
+                                                                ) : audit.status === 'Draft' ? (
+                                                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                                                        <path d="M12 20h9"></path>
+                                                                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
                                                                     </svg>
                                                                 ) : (
                                                                     audit.auditNo.split('-').pop()

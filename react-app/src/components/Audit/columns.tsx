@@ -1,7 +1,7 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "../Shared/DataTable/DataTableColumnHeader";
 import { AuditItem } from "../../store/auditStore";
-import { Edit, Trash2, FileText } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -77,6 +77,7 @@ export const createColumns = (
                     column={column}
                     title={t('common.status')}
                     filterOptions={[
+                        { label: 'Draft', value: 'Draft' },
                         { label: 'Planned', value: 'Planned' },
                         { label: 'In Progress', value: 'In Progress' },
                         { label: 'Completed', value: 'Completed' },
@@ -111,24 +112,6 @@ export const createColumns = (
                 const item = row.original;
                 return (
                     <div className="flex items-center justify-center gap-2">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 text-emerald-500 hover:text-white hover:bg-emerald-500"
-                            onClick={() => handleEdit(item.id)}
-                            title={t('common.edit')}
-                        >
-                            <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 text-blue-500 hover:text-white hover:bg-blue-500"
-                            onClick={() => handleReport(item.id)}
-                            title={t('audit.report')}
-                        >
-                            <FileText className="h-4 w-4" />
-                        </Button>
                         <Button
                             variant="ghost"
                             size="sm"

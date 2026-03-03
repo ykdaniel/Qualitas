@@ -18,11 +18,11 @@ const getLocalizedStatus = (status: string, t: (key: string) => string) => {
 export interface PQPDetailModalProps {
     pqpId: string;
     existingItem?: PQPItem;
-    onSave: (updates: Partial<PQPItem>) => void | Promise<void>;
+    onSave: (updates: Partial<PQPItem>, pendingFiles: File[], deletedFileIds: string[], removedAttachments?: string[]) => void | Promise<void>;
     onClose: () => void;
 }
 
-export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId, existingItem, onSave, onClose }) => {
+export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, existingItem, onSave, onClose }) => {
     const { t } = useLanguage();
     const { getActiveContractors } = useContractorsStore();
     const VERSION_OPTIONS = ['Rev1.0', 'Rev2.0', 'Rev3.0', 'Rev4.0'];
@@ -43,6 +43,8 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId, existingI
     const [errors, setErrors] = useState<{ [key: string]: string }>({});
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState('');
+    const [pendingUploads, setPendingUploads] = useState<File[]>([]);
+    const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
     const [versionMode, setVersionMode] = useState<'select' | 'custom'>(() => {
         let currentVersion = existingItem?.version;
         if (currentVersion === 'V1.0') {
@@ -71,34 +73,7 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId, existingI
         }));
     };
 
-    const handleFileAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (files && files.length > 0) {
-            const newAttachments: string[] = [];
-            Array.from(files).forEach(file => {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    if (typeof reader.result === 'string') {
-                        newAttachments.push(reader.result);
-                        if (newAttachments.length === files.length) {
-                            setFormData(prev => ({
-                                ...prev,
-                                attachments: [...(prev.attachments || []), ...newAttachments]
-                            }));
-                        }
-                    }
-                };
-                reader.readAsDataURL(file);
-            });
-        }
-    };
-
-    const handleRemoveFileAttachment = (index: number) => {
-        setFormData(prev => ({
-            ...prev,
-            attachments: (prev.attachments || []).filter((_, i) => i !== index)
-        }));
-    };
+    // Replaced by FileAttachment component props
 
     const validate = () => {
         const newErrors: { [key: string]: string } = {};
@@ -128,7 +103,7 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId, existingI
         setSaving(true);
         setSaveError('');
         try {
-            await onSave(formData);
+            await onSave(formData, pendingUploads, deletedFileIds);
             onClose();
         } catch (err) {
             setSaveError((err as Error)?.message || t('pqp.saveError'));
@@ -147,7 +122,7 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId, existingI
                     ...formData,
                     version: nextRev,
                     status: 'Approved'
-                });
+                }, pendingUploads, deletedFileIds);
                 onClose();
             } catch (err) {
                 setSaveError((err as Error)?.message || t('pqp.saveError'));
@@ -264,11 +239,14 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId, existingI
 
 
                         <div className={styles.formSection}>
+                            <h3 className={styles.sectionTitle}>{t('common.attachments')}</h3>
                             <FileAttachment
-                                attachments={formData.attachments || []}
-                                onUpload={handleFileAttachmentUpload}
-                                onRemove={handleRemoveFileAttachment}
+                                attachments={formData.attachments || [] as any[]}
+                                onPendingFilesChange={(files) => setPendingUploads(files)}
+                                onDeleteExistingFile={async (id) => setDeletedFileIds(prev => [...prev, id])}
                                 id="pqp"
+                                entityType="pqp"
+                                category="attachment"
                             />
                         </div>
 
@@ -400,10 +378,10 @@ export const PQPDetailsViewModal: React.FC<PQPDetailsViewModalProps> = ({ pqpId,
                         </div>
 
                         <FileAttachment
-                            attachments={pqpItem.attachments || []}
-                            onUpload={() => { }}
-                            onRemove={() => { }}
+                            attachments={pqpItem.attachments || [] as any[]}
                             id="pqp-view"
+                            entityType="pqp"
+                            category="attachment"
                             readOnly={true}
                         />
                     </div>

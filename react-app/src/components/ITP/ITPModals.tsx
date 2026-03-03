@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { BackButton } from '../ui/BackButton';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
-import { ITPItem, ITPInspectionItem } from '../../store/itpStore';
+import { ITPItem } from '../../store/itpStore';
 import { ITPAdvancedEditor, ITPAdvancedEditorRef } from './ITPAdvancedEditor';
 import ReactDOM from 'react-dom';
 import { ITPPrintTemplate } from './ITPPrintTemplate';
@@ -11,16 +11,15 @@ import { InspectionItem } from '../../types/itp';
 import FileAttachment from '../Shared/FileAttachment';
 import styles from './ITP.module.css';
 import { getNextRevision } from '../../utils/revision';
-import { useITRStore } from '../../store/itrStore';
+import { parseInspectionItems } from '../../utils/itpParser';
+
 
 import { Printer, ShieldCheck, Save, LayoutTemplate, Plus } from 'lucide-react';
-import { PHASES } from '../../constants/itp';
-import VPBadge from './VPBadge';
 
 export interface ITPDetailModalProps {
     itpId: string;
     existingItem?: ITPItem;
-    onSave: (updates: Partial<ITPItem>, details?: any) => Promise<void>;
+    onSave: (updates: Partial<ITPItem>, details?: any, pendingFiles?: File[], deletedFileIds?: string[]) => Promise<void>;
     onClose: () => void;
 }
 
@@ -29,7 +28,6 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
     const navigate = useNavigate();
     const { t } = useLanguage();
     const { getActiveContractors } = useContractorsStore();
-    const itrList = useITRStore(state => state.itrList);
     const REV_OPTIONS = ['Rev1.0', 'Rev2.0', 'Rev3.0', 'Rev4.0'];
 
     const [activeTab, setActiveTab] = useState<'general' | 'plan'>('general');
@@ -86,41 +84,7 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
 
     useEffect(() => {
         if (existingItem?.detail_data) {
-            let data = existingItem.detail_data as any;
-            if (typeof data === 'string') {
-                try {
-                    data = JSON.parse(data);
-                } catch (e) {
-                    console.error("Failed to parse detail_data", e);
-                    data = [];
-                }
-            }
-            let parsedItems: InspectionItem[] = [];
-
-            // Check if it is a complex object (Phases)
-            if (!Array.isArray(data) && typeof data === 'object' && ('a' in data || 'b' in data || 'c' in data)) {
-                ['a', 'b', 'c'].forEach(phaseKey => {
-                    if (Array.isArray(data[phaseKey])) {
-                        parsedItems.push(...data[phaseKey].map((item: any) => ({
-                            ...item,
-                            phase: phaseKey.toUpperCase() // Ensure phase is 'A', 'B', 'C'
-                        })));
-                    }
-                });
-            } else if (Array.isArray(data)) {
-                // Convert simple array to items, default to Phase A if missing
-                parsedItems = data.map((item: any, index: number) => ({
-                    ...item,
-                    id: item.id || `A${index + 1}`,
-                    phase: item.phase || 'A',
-                    // Ensure other required fields exist
-                    activity: typeof item.activity === 'object' ? item.activity : { en: item.activity || '', ch: '' },
-                    checkTime: typeof item.checkTime === 'object' ? item.checkTime : { en: item.checkTime || '', ch: '' },
-                    method: typeof item.method === 'object' ? item.method : { en: item.method || '', ch: '' },
-                    vp: item.vp || { sub: '', teco: '', employer: '', hse: '' }
-                }));
-            }
-            setAdvancedItems(parsedItems);
+            setAdvancedItems(parseInspectionItems(existingItem.detail_data));
         }
     }, [existingItem]);
 
@@ -160,9 +124,9 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
 
     const prepareDetailPayload = () => {
         return {
-            a: advancedItems.filter(i => i.phase === 'A').map(({ phase, ...rest }) => rest),
-            b: advancedItems.filter(i => i.phase === 'B').map(({ phase, ...rest }) => rest),
-            c: advancedItems.filter(i => i.phase === 'C').map(({ phase, ...rest }) => rest),
+            a: advancedItems.filter(i => i.phase === 'A').map(({ phase: _phase, ...rest }) => rest),
+            b: advancedItems.filter(i => i.phase === 'B').map(({ phase: _phase, ...rest }) => rest),
+            c: advancedItems.filter(i => i.phase === 'C').map(({ phase: _phase, ...rest }) => rest),
             checklist: [],
             self_inspection: null
         };
@@ -175,7 +139,7 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                 const payload = { ...formData };
                 delete payload.detail_data;
                 const detailPayload = itpId ? prepareDetailPayload() : undefined;
-                await onSave(payload, detailPayload);
+                await onSave(payload, detailPayload, pendingFiles, deletedFileIds);
             } finally {
                 setSaving(false);
             }
@@ -197,7 +161,7 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                 delete payload.detail_data;
                 const detailPayload = itpId ? prepareDetailPayload() : undefined;
 
-                await onSave(payload, detailPayload);
+                await onSave(payload, detailPayload, pendingFiles, deletedFileIds);
             } finally {
                 setSaving(false);
             }
@@ -206,26 +170,22 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
 
 
 
-    const handleAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (files) {
-            const fileArray = Array.from(files);
-            fileArray.forEach((file) => {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    const result = reader.result as string;
-                    setFormData(prev => ({
-                        ...prev,
-                        attachments: [...(prev.attachments || []), result]
-                    }));
-                };
-                reader.readAsDataURL(file);
-            });
-        }
-        e.target.value = '';
+    const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+    const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
+
+    const handlePendingFilesChange = (files: File[]) => {
+        setPendingFiles(files);
     };
 
-    const handleRemoveAttachment = (index: number) => {
+    const handleDeleteExistingFile = (fileId: string) => {
+        setDeletedFileIds(prev => [...prev, fileId]);
+        setFormData(prev => ({
+            ...prev,
+            attachments: (prev.attachments || []).filter(a => typeof a !== 'string' && a.id !== fileId)
+        }));
+    };
+
+    const handleRemoveLegacyAttachment = (index: number) => {
         setFormData(prev => ({
             ...prev,
             attachments: (prev.attachments || []).filter((_, i) => i !== index)
@@ -368,9 +328,13 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                             <div className={styles.formSection}>
                                 <FileAttachment
                                     attachments={formData.attachments || []}
-                                    onUpload={handleAttachmentUpload}
-                                    onRemove={handleRemoveAttachment}
-                                    id="itp"
+                                    onPendingFilesChange={handlePendingFilesChange}
+                                    onDeleteExistingFile={handleDeleteExistingFile}
+                                    onRemoveLegacy={handleRemoveLegacyAttachment}
+                                    entityType="itp"
+                                    entityId={existingItem?.id}
+                                    category="attachment"
+                                    id="attachment"
                                 />
                             </div>
 
@@ -417,13 +381,13 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                     )}
 
                     {activeTab === 'plan' && (
-                        <div className={`${styles.formSections} !p-0`}>
+                        <div className={`${styles.formSections} p-0!`}>
                             <ITPAdvancedEditor
                                 ref={editorRef}
                                 items={advancedItems}
 
                                 onItemsChange={setAdvancedItems}
-                                onViewRecord={(itr) => {
+                                onViewRecord={() => {
                                     navigate('/itr');
                                     // toast.info(`Please find ITR ${itr.documentNumber} in the ITR list.`);
                                 }}

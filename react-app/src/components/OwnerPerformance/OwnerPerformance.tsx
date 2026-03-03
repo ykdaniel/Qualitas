@@ -1,18 +1,15 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import styles from './OwnerPerformance.module.css';
+import { BackButton } from '@/components/ui/BackButton';
 
 const OwnerPerformance: React.FC = () => {
-    const navigate = useNavigate();
     const { t } = useLanguage();
 
     return (
         <div className={styles.container}>
             <div className={styles.header}>
-                <button type="button" className={styles.backButton} onClick={() => navigate('/')}>
-                    ← {t('common.back')}
-                </button>
+                <BackButton />
                 <h1>{t('ownerPerformance.title')}</h1>
             </div>
 

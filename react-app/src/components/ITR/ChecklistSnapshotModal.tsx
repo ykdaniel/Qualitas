@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import styles from './ITR.module.css'; // Corrected import
-import { ChecklistRecord } from '../../store/checklistStore';
+
 import { useLanguage } from '../../context/LanguageContext';
 import { CheckCircle, XCircle, HelpCircle, Trash2, Plus, AlertCircle } from 'lucide-react';
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import styles from './Audit.module.css';
@@ -22,7 +22,7 @@ interface AuditEditModalProps {
     onClose: () => void;
 }
 
-export const AuditEditModal: React.FC<AuditEditModalProps> = ({ auditId, existingItem, onSave, onClose }) => {
+export const AuditEditModal: React.FC<AuditEditModalProps> = ({ existingItem, onSave, onClose }) => {
     const { t } = useLanguage();
     const { getActiveContractors } = useContractorsStore();
     const activeContractors = getActiveContractors();
@@ -32,7 +32,7 @@ export const AuditEditModal: React.FC<AuditEditModalProps> = ({ auditId, existin
         title: existingItem?.title || '',
         date: existingItem?.date || '',
         auditor: existingItem?.auditor || '',
-        status: existingItem?.status || 'Planned',
+        status: existingItem?.status || 'Draft',
         location: existingItem?.location || '',
         findings: existingItem?.findings || '',
         contractor: existingItem?.contractor || '',
@@ -138,6 +138,7 @@ export const AuditEditModal: React.FC<AuditEditModalProps> = ({ auditId, existin
                                         value={formData.status}
                                         onChange={(e) => handleFieldChange('status', e.target.value)}
                                     >
+                                        <option value="Draft">Draft</option>
                                         <option value="Planned">Planned</option>
                                         <option value="In Progress">In Progress</option>
                                         <option value="Completed">Completed</option>

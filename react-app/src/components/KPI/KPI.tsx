@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   LineChart,
   Line,
@@ -20,6 +19,7 @@ import { useNCRStore } from '../../store/ncrStore';
 import styles from './KPI.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns, KPIItem } from './columns';
+import { BackButton } from '@/components/ui/BackButton';
 
 const VENDOR_COLORS = [
   '#3b82f6', '#f97316', '#6b7280', '#eab308', '#22d3ee', '#10b981',
@@ -38,7 +38,6 @@ function parseMonth(dateStr: string | undefined): string | null {
 const DEFAULT_WEIGHTS = { pqp: 0.25, itp: 0.25, obs: 0.25, ncr: 0.25 };
 
 const KPI: React.FC = () => {
-  const navigate = useNavigate();
   const { t, language } = useLanguage();
   const { getActiveContractors } = useContractorsStore();
   const pqpList = usePQPStore(state => state.pqpList);
@@ -219,9 +218,7 @@ const KPI: React.FC = () => {
     <div className={styles.container}>
       <div className={styles.header}>
         <div className={styles.headerLeft}>
-          <button type="button" className={styles.backButton} onClick={() => navigate('/')}>
-            ← {t('common.back') || 'Back'}
-          </button>
+          <BackButton />
           <h1 className={styles.title}>
             {t('kpi.title')}
           </h1>

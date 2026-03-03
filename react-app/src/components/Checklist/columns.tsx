@@ -4,7 +4,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTableColumnHeader } from "@/components/Shared/DataTable/DataTableColumnHeader";
 import { Link } from "react-router-dom";
-import styles from "./Checklist.module.css";
+
 
 export const createColumns = (
     onEdit: (record: ChecklistRecord) => void,

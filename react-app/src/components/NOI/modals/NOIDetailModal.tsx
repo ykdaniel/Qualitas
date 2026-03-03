@@ -5,7 +5,7 @@ import { useITPStore } from '../../../store/itpStore';
 import { useNCRStore } from '../../../store/ncrStore';
 import { useOBSStore } from '../../../store/obsStore';
 import type { NOIItem } from '../../../store/noiStore';
-import { validateStatusTransition, NOIStatusTransitions, validateRequiredFields, NOIValidationRules } from '../../../utils/statusValidation';
+import { validateStatusTransition, NOIStatusTransitions, NOIStatusTransitionList, validateRequiredFields, NOIValidationRules } from '../../../utils/statusValidation';
 import FileAttachment from '../../Shared/FileAttachment';
 import styles from '../NOI.module.css';
 import { NOIDetailData } from '../NOITypes';
@@ -15,16 +15,16 @@ export interface NOIDetailModalProps {
     existingData?: NOIDetailData;
     existingItem?: NOIItem;
     noiList: NOIItem[];
-    onSave: (details: NOIDetailData) => void;
+    onSave: (details: NOIDetailData, pendingFiles: File[], deletedFileIds: string[]) => void;
     onClose: () => void;
     onPrint?: (data: NOIDetailData) => void;
 }
 
-export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId, existingData, existingItem, noiList, onSave, onClose, onPrint }) => {
+export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, existingData, existingItem, noiList: _noiList, onSave, onClose, onPrint }) => {
     const { t } = useLanguage();
     const { getActiveContractors } = useContractorsStore();
     const itpList = useITPStore(state => state.itpList);
-    const getITPByVendor = (vendor: string) => itpList.filter(itp => itp.vendor === vendor);
+    const getITPByVendor = React.useCallback((vendor: string) => itpList.filter(itp => itp.vendor === vendor), [itpList]);
     const ncrList = useNCRStore(state => state.ncrList);
     const obsList = useOBSStore(state => state.obsList);
     const getNCRList = () => ncrList;
@@ -92,7 +92,7 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId, existingD
         setFormData(prev => {
             const updated = { ...prev, [field]: value };
             if (field === 'status' && prev.status) {
-                const validation = validateStatusTransition(prev.status, value, NOIStatusTransitions);
+                const validation = validateStatusTransition(prev.status, value, NOIStatusTransitionList);
                 if (!validation.allowed) {
                     alert(validation.message || t('common.invalidStatusTransition'));
                     return prev;
@@ -116,26 +116,26 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId, existingD
         });
     };
 
-    const handleAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (files) {
-            const fileArray = Array.from(files);
-            fileArray.forEach((file) => {
-                if (file.type.startsWith('image/')) {
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                        const result = reader.result as string;
-                        setFormData(prev => ({ ...prev, attachments: [...prev.attachments, result] }));
-                    };
-                    reader.readAsDataURL(file);
-                }
-            });
-        }
-        e.target.value = '';
+    const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+    const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
+
+    const handlePendingFilesChange = (files: File[]) => {
+        setPendingFiles(files);
     };
 
-    const handleRemoveAttachment = (index: number) => {
-        setFormData(prev => ({ ...prev, attachments: prev.attachments.filter((_, i) => i !== index) }));
+    const handleDeleteExistingFile = (fileId: string) => {
+        setDeletedFileIds(prev => [...prev, fileId]);
+        setFormData(prev => ({
+            ...prev,
+            attachments: prev.attachments.filter(a => typeof a !== 'string' && a.id !== fileId)
+        }));
+    };
+
+    const handleRemoveLegacyAttachment = (index: number) => {
+        setFormData(prev => ({
+            ...prev,
+            attachments: prev.attachments.filter((_, i) => i !== index)
+        }));
     };
 
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -168,7 +168,7 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId, existingD
             }
         }
 
-        onSave(formData);
+        onSave(formData, pendingFiles, deletedFileIds);
         onClose();
     };
 
@@ -308,10 +308,14 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId, existingD
                         <div className={styles.formSection}>
                             <FileAttachment
                                 attachments={formData.attachments}
-                                onUpload={handleAttachmentUpload}
-                                onRemove={handleRemoveAttachment}
-                                id="noi"
+                                onPendingFilesChange={handlePendingFilesChange}
+                                onRemoveLegacy={handleRemoveLegacyAttachment}
+                                onDeleteExistingFile={handleDeleteExistingFile}
                                 onPreview={handlePreview}
+                                entityType="noi"
+                                entityId={existingItem?.id}
+                                category="attachment"
+                                id="attachment"
                             />
                         </div>
                         <div className={styles.formSection}>
@@ -320,10 +324,12 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId, existingD
                                 <div className={styles.formGroup}>
                                     <label>{t('common.status')}</label>
                                     <select className={styles.formSelect} value={formData.status} onChange={(e) => handleFieldChange('status', e.target.value)}>
-                                        <option value="Open">{t('noi.status.open')}</option>
-                                        <option value="Under Review">{t('noi.status.underReview')}</option>
-                                        <option value="Closed">{t('noi.status.closed')}</option>
-                                        <option value="Reject">{t('noi.status.reject')}</option>
+                                        {/* Current status always selectable */}
+                                        <option value={formData.status}>{formData.status}</option>
+                                        {/* Only show valid next transitions */}
+                                        {(NOIStatusTransitions[formData.status] || []).map((s: string) => (
+                                            <option key={s} value={s}>{s}</option>
+                                        ))}
                                     </select>
                                 </div>
                                 <div className={styles.formGroup}>

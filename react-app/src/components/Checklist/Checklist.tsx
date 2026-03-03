@@ -12,6 +12,8 @@ import { useDebounce } from '../../hooks/useDebounce';
 import { useNOIStore } from '../../store/noiStore';
 import { useITPStore } from '../../store/itpStore';
 import { useITRStore } from '../../store/itrStore';
+import { useChecklistStats } from '../../hooks/useChecklistStats';
+import { StatItem } from '../Shared/StatItem';
 import { useContractorsStore } from '../../store/contractorsStore';
 
 // --- ITP 資料庫定義 ---
@@ -54,6 +56,14 @@ const Checklist: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const debouncedSearch = useDebounce(searchQuery, 500);
 
+    const { noiList, fetchNOIs } = useNOIStore();
+    const { itrList, fetchITRs } = useITRStore();
+
+    useEffect(() => {
+        fetchNOIs();
+        fetchITRs();
+    }, [fetchNOIs, fetchITRs]);
+
     // Trigger server-side refetch when debounced search changes
     React.useEffect(() => {
         refreshRecords({ search: debouncedSearch });
@@ -93,14 +103,7 @@ const Checklist: React.FC = () => {
     };
 
     // --- 統計數據 ---
-    const stats = useMemo(() => {
-        const total = records.length;
-        const passed = records.filter(r => r.status === 'Pass').length;
-        const ongoing = records.filter(r => r.status === 'Ongoing').length;
-        const failed = records.filter(r => r.status === 'Fail').length;
-        const passRate = total > 0 ? Math.round((passed / total) * 100) : 0;
-        return { total, passed, ongoing, failed, passRate };
-    }, [records]);
+    const stats = useChecklistStats(records);
 
     // Removed Modal State
     const [selectedItpIndex, setSelectedItpIndex] = useState(0);
@@ -192,68 +195,36 @@ const Checklist: React.FC = () => {
                         <h2 className={styles.summaryTitle}>{t('common.statistics') || 'Statistics'}</h2>
                         <div className={styles.statsContainer}>
                             <div className={styles.statusStatsGrid}>
-                                {/* Ongoing */}
-                                <div className={styles.statItem}>
-                                    <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <circle cx="12" cy="12" r="10" />
-                                            <polyline points="12 6 12 12 16 14" />
-                                        </svg>
-                                    </div>
-                                    <div className={styles.statContent}>
-                                        <div className={styles.statLabel}>{t('checklist.status.ongoing') || 'Ongoing'}</div>
-                                        <div className={styles.statValue}>{stats.ongoing}</div>
-                                    </div>
-                                </div>
-                                {/* Passed */}
-                                <div className={styles.statItem}>
-                                    <div className={`${styles.statIcon} ${styles.greenIcon}`}>
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                                        </svg>
-                                    </div>
-                                    <div className={styles.statContent}>
-                                        <div className={styles.statLabel}>{t('checklist.status.pass') || 'Pass'}</div>
-                                        <div className={styles.statValue}>{stats.passed}</div>
-                                    </div>
-                                </div>
-                                {/* Failed */}
-                                <div className={styles.statItem}>
-                                    <div className={`${styles.statIcon} ${styles.pinkIcon}`}>
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-                                        </svg>
-                                    </div>
-                                    <div className={styles.statContent}>
-                                        <div className={styles.statLabel}>{t('checklist.status.fail') || 'Fail'}</div>
-                                        <div className={styles.statValue}>{stats.failed}</div>
-                                    </div>
-                                </div>
-                                {/* Total */}
-                                <div className={styles.statItem}>
-                                    <div className={`${styles.statIcon} ${styles.grayIcon}`}>
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" />
-                                            <path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" />
-                                        </svg>
-                                    </div>
-                                    <div className={styles.statContent}>
-                                        <div className={styles.statLabel}>{t('common.total') || 'Total'}</div>
-                                        <div className={styles.statValue}>{stats.total}</div>
-                                    </div>
-                                </div>
-                                {/* Pass Rate */}
-                                <div className={styles.statItem}>
-                                    <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" />
-                                        </svg>
-                                    </div>
-                                    <div className={styles.statContent}>
-                                        <div className={styles.statLabel}>{t('common.passRate') || 'Pass Rate'}</div>
-                                        <div className={styles.statValue}>{stats.passRate}%</div>
-                                    </div>
-                                </div>
+                                <StatItem
+                                    icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>}
+                                    label={t('checklist.status.ongoing') || 'Ongoing'}
+                                    value={stats.ongoing}
+                                    iconColorClass={styles.blueIcon}
+                                />
+                                <StatItem
+                                    icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                                    label={t('checklist.status.pass') || 'Pass'}
+                                    value={stats.passed}
+                                    iconColorClass={styles.greenIcon}
+                                />
+                                <StatItem
+                                    icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                                    label={t('checklist.status.fail') || 'Fail'}
+                                    value={stats.failed}
+                                    iconColorClass={styles.pinkIcon}
+                                />
+                                <StatItem
+                                    icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" /><path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                                    label={t('common.total') || 'Total'}
+                                    value={stats.total}
+                                    iconColorClass={styles.grayIcon}
+                                />
+                                <StatItem
+                                    icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                                    label={t('common.passRate') || 'Pass Rate'}
+                                    value={`${stats.passRate}%`}
+                                    iconColorClass={styles.blueIcon}
+                                />
                             </div>
                         </div>
                     </div>
@@ -464,9 +435,9 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, selectedItpIndex, d
                             <span className="text-sm text-slate-500 font-bold uppercase">Form ID:</span>
                             <input
                                 className="text-sm font-medium text-slate-700 border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none bg-transparent transition-all w-[200px]"
-                                value={formData.recordsNo || displayNo}
-                                onChange={(e) => setFormData({ ...formData, recordsNo: e.target.value })}
-                                placeholder={displayNo}
+                                value={formData.recordsNo || displayNo || t('form.autoGenerated')}
+                                readOnly
+                                style={{ backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: formData.recordsNo ? '#000000' : '#666666' }}
                             />
                         </div>
                     </div>
@@ -549,12 +520,18 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, selectedItpIndex, d
                                 </div>
                                 <div className={styles.formGroup}>
                                     <label>ITR No.</label>
-                                    <input
-                                        className={styles.modernInput}
-                                        value={formData.referenceNo}
+                                    <select
+                                        className={styles.modernSelect}
+                                        value={formData.referenceNo || ''}
                                         onChange={e => setFormData({ ...formData, referenceNo: e.target.value })}
-                                        placeholder="Manual Entry"
-                                    />
+                                    >
+                                        <option value="">Select ITR</option>
+                                        {itrList.map((itr: any) => (
+                                            <option key={itr.id} value={itr.referenceNo || itr.documentNumber}>
+                                                {itr.referenceNo || itr.documentNumber}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div className={styles.formGroup}>
                                     <label>NOI Number</label>

@@ -15,7 +15,7 @@ export interface NOIDetailData {
     status: string;
     remark: string;
     closeoutDate: string;
-    attachments: string[];
+    attachments: any[];
     ncrNumber?: string;
     dueDate?: string;
 }

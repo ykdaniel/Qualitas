@@ -29,7 +29,7 @@ const ITPDetail: React.FC = () => {
   const [workTitle, setWorkTitle] = useState(""); // 工項標題狀態
   const [referenceNo, setReferenceNo] = useState(""); // Form No.
 
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [rev, setRev] = useState("");
@@ -51,9 +51,9 @@ const ITPDetail: React.FC = () => {
 
       // 2. Update Details (same as save)
       const payload = {
-        a: items.filter(i => i.phase === 'A').map(({ phase, ...rest }) => rest),
-        b: items.filter(i => i.phase === 'B').map(({ phase, ...rest }) => rest),
-        c: items.filter(i => i.phase === 'C').map(({ phase, ...rest }) => rest),
+        a: items.filter(i => i.phase === 'A').map(({ phase: _phase, ...rest }) => rest),
+        b: items.filter(i => i.phase === 'B').map(({ phase: _phase, ...rest }) => rest),
+        c: items.filter(i => i.phase === 'C').map(({ phase: _phase, ...rest }) => rest),
         checklist: [],
         self_inspection: null
       };
@@ -139,9 +139,9 @@ const ITPDetail: React.FC = () => {
 
       // 2. Update Details
       const payload = {
-        a: items.filter(i => i.phase === 'A').map(({ phase, ...rest }) => rest),
-        b: items.filter(i => i.phase === 'B').map(({ phase, ...rest }) => rest),
-        c: items.filter(i => i.phase === 'C').map(({ phase, ...rest }) => rest),
+        a: items.filter(i => i.phase === 'A').map(({ phase: _phase, ...rest }) => rest),
+        b: items.filter(i => i.phase === 'B').map(({ phase: _phase, ...rest }) => rest),
+        c: items.filter(i => i.phase === 'C').map(({ phase: _phase, ...rest }) => rest),
         checklist: [],
         self_inspection: null
       };
@@ -184,7 +184,7 @@ const ITPDetail: React.FC = () => {
   // 儲存修改
   const handleSave = () => {
     if (editingItem.isNew) {
-      const { isNew, insertAfter, ...newItem } = editingItem;
+      const { insertAfter, ...newItem } = editingItem;
 
       const currentPhaseItems = items.filter(i => i.phase === newItem.phase);
       const otherItems = items.filter(i => i.phase !== newItem.phase);

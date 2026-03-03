@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuditStore, AuditItem } from '../../store/auditStore';
 import { useContractorsStore } from '../../store/contractorsStore';
+import { useProjectStore } from '../../store/projectStore';
 
 // 內建 ISO 9001:2015 條文資料庫
 const ISO_CLAUSES = [
@@ -42,6 +43,8 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
   const { addAudit, updateAudit, loading } = useAuditStore();
   const { getActiveContractors } = useContractorsStore();
   const activeContractors = useMemo(() => getActiveContractors(), [getActiveContractors]);
+  const { projectList, fetchProjects } = useProjectStore();
+  React.useEffect(() => { fetchProjects(); }, [fetchProjects]);
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -237,7 +240,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
     setDraftMessage('');
 
     try {
-      const updates = prepareAuditData('Draft');
+      const updates = prepareAuditData(formData.status || 'Draft');
       if (existingItem) {
         await updateAudit(existingItem.id, updates);
       } else {
@@ -262,7 +265,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
     setSaveError('');
 
     try {
-      const updates = prepareAuditData('Planned');
+      const updates = prepareAuditData(formData.status || 'Planned');
       if (existingItem) {
         await updateAudit(existingItem.id, updates);
       } else {
@@ -390,14 +393,24 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                        <span className="text-sm font-bold text-slate-800">Audit Doc No</span>
                        <span className="text-xs font-medium text-slate-400">(稽核文件編號)</span>
                     </label>
-                    <input type="text" name="auditDocNo" value={formData.auditDocNo} onChange={handleInputChange} className="w-full md:w-1/2 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" placeholder="由系統自動產生 (若空白)" readOnly={!!existingItem?.auditNo} />
+                    <input type="text" name="auditDocNo" value={formData.auditDocNo} className="w-full md:w-1/2 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl outline-none text-slate-400 font-medium cursor-not-allowed" placeholder="系統自動產生" readOnly style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }} />
                   </div>
                   <div className="col-span-full">
                     <label className="flex items-baseline gap-2 mb-2">
                        <span className="text-sm font-bold text-slate-800">Project No / Name</span>
                        <span className="text-xs font-medium text-slate-400">(專案名稱)</span>
                     </label>
-                    <input type="text" name="projectName" value={formData.projectName} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                    <select
+                      name="projectName"
+                      value={formData.projectName}
+                      onChange={handleInputChange}
+                      className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none"
+                    >
+                      <option value="">-- 請選擇專案 --</option>
+                      {projectList.map(p => (
+                        <option key={p.id} value={p.name}>{p.code ? `[${p.code}] ` : ''}{p.name}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="col-span-full">
                     <label className="flex items-baseline gap-2 mb-2">
@@ -422,6 +435,19 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                        <span className="text-sm font-bold text-slate-800">Audit End Date</span>
                     </label>
                     <input type="date" name="auditEndDate" value={formData.auditEndDate} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                  </div>
+                  <div className="col-span-full">
+                    <label className="flex items-baseline gap-2 mb-2">
+                       <span className="text-sm font-bold text-slate-800">Status</span>
+                       <span className="text-xs font-medium text-slate-400">(稽核狀態)</span>
+                    </label>
+                    <select name="status" value={formData.status} onChange={handleInputChange} className="w-full md:w-1/3 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none">
+                      <option value="Draft">✏️ Draft（草稿）</option>
+                      <option value="Planned">📅 Planned（計畫中）</option>
+                      <option value="In Progress">👣 In Progress（進行中）</option>
+                      <option value="Completed">✅ Completed（已完成）</option>
+                      <option value="Closed">🔒 Closed（已關閉）</option>
+                    </select>
                   </div>
                 </div>
               </div>

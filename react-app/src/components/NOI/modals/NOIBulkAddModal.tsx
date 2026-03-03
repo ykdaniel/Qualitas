@@ -15,7 +15,7 @@ export const NOIBulkAddModal: React.FC<NOIBulkAddModalProps> = ({ onSave, onClos
     const { t } = useLanguage();
     const { getActiveContractors } = useContractorsStore();
     const itpList = useITPStore(state => state.itpList);
-    const getITPByVendor = (vendor: string) => itpList.filter(itp => itp.vendor === vendor);
+    const getITPByVendor = React.useCallback((vendor: string) => itpList.filter(itp => itp.vendor === vendor), [itpList]);
     const activeContractors = getActiveContractors();
 
     const [commonData, setCommonData] = useState({
