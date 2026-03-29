@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
 import * as XLSX from 'xlsx';
+import { toast } from 'sonner';
 import { useLanguage } from '../../../context/LanguageContext';
 import styles from './ExportButton.module.css';
 
@@ -32,7 +33,7 @@ function ExportButton<T extends Record<string, any>>({
 
     const handleExport = useCallback(() => {
         if (data.length === 0) {
-            alert(t('common.noDataToExport') || 'No data to export');
+            toast.warning(t('common.noDataToExport') || 'No data to export');
             return;
         }
 

@@ -2,12 +2,14 @@ import { useITPStore } from '../../store/itpStore';
 import { useDashboardFilterStore } from '../../store/dashboardFilterStore';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '../../context/LanguageContext';
 import styles from './Dashboard.module.css';
 
 const ITPStatsCard: React.FC = () => {
   const itpList = useITPStore(state => state.itpList);
   const selectedVendor = useDashboardFilterStore(state => state.selectedVendor);
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   const stats = useMemo(() => {
     const filteredList = selectedVendor === 'all'
@@ -39,24 +41,24 @@ const ITPStatsCard: React.FC = () => {
     <div className={styles.itpStatsCard}>
       <div className={styles.itpStatsContent}>
         <div className={styles.itpStatsRow}>
-          <span className={styles.itpStatsLabel}>ITP 總數</span>
-          <span className={styles.itpStatsValue} style={{ color: '#3b82f6' }}>{stats.total}</span>
+          <span className={styles.itpStatsLabel}>{t('dashboard.itpTotal') || 'ITP Total'}</span>
+          <span className={styles.itpStatsValue}>{stats.total}</span>
         </div>
         <div className={styles.itpStatsRow}>
-          <span className={styles.itpStatsLabel}>已提交</span>
-          <span className={styles.itpStatsValue} style={{ color: '#1e40af', fontSize: '20px' }}>
+          <span className={styles.itpStatsLabel}>{t('dashboard.submitted') || 'Submitted'}</span>
+          <span className={styles.itpStatsValue} style={{ color: '#1e293b', fontSize: '20px', fontWeight: '600' }}>
             {stats.submitted} ({stats.submittedPercent}%)
           </span>
         </div>
         <div className={styles.itpStatsRow}>
-          <span className={styles.itpStatsLabel}>已批准</span>
-          <span className={styles.itpStatsValue} style={{ color: '#10b981', fontSize: '20px' }}>
+          <span className={styles.itpStatsLabel}>{t('status.approved') || 'Approved'}</span>
+          <span className={styles.itpStatsValue} style={{ color: '#1e293b', fontSize: '20px', fontWeight: '600' }}>
             {stats.approved} ({stats.approvedPercent}%)
           </span>
         </div>
       </div>
       <button className={styles.itpStatsButton} onClick={() => navigate('/itp')}>
-        查看詳情 →
+        {t('common.viewDetails') || 'View Details ->'}
       </button>
     </div>
   );

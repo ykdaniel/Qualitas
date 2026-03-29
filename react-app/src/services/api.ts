@@ -68,7 +68,7 @@ export interface NamingRuleApi {
 }
 
 export const getNamingRules = async (): Promise<NamingRuleApi[]> => {
-  const res = await api.get<NamingRuleApi[]>('/settings/naming-rules/');
+  const res = await api.get<NamingRuleApi[]>('/settings/naming-rules');
   return res.data;
 };
 
@@ -81,7 +81,7 @@ export interface NamingRuleUpdatePayload {
 export const updateNamingRules = async (
   rules: NamingRuleUpdatePayload[]
 ): Promise<NamingRuleApi[]> => {
-  const response = await api.put<NamingRuleApi[]>('/settings/naming-rules/', rules);
+  const response = await api.put<NamingRuleApi[]>('/settings/naming-rules', rules);
   return response.data;
 };
 
@@ -112,7 +112,7 @@ export interface CreateContractorPayload {
   status: 'Active' | 'Inactive';
 }
 
-export interface UpdateContractorPayload extends Partial<CreateContractorPayload> { }
+export type UpdateContractorPayload = Partial<CreateContractorPayload>
 
 export const getContractors = async (): Promise<Contractor[]> => {
   const response = await api.get<Contractor[]>('/contractors/');
@@ -156,7 +156,7 @@ export interface CreateProjectPayload {
   owner?: string;
 }
 
-export interface UpdateProjectPayload extends Partial<CreateProjectPayload> {}
+export type UpdateProjectPayload = Partial<CreateProjectPayload>
 
 export const getProjects = async (): Promise<ProjectApi[]> => {
   const response = await api.get<ProjectApi[]>('/projects/');
@@ -227,7 +227,7 @@ export interface CreateUserPayload {
   is_active: boolean;
 }
 
-export interface UpdateUserPayload extends Partial<CreateUserPayload> { }
+export type UpdateUserPayload = Partial<CreateUserPayload>
 
 export const createUser = async (data: CreateUserPayload): Promise<User> => {
   const response = await api.post<User>('/iam/users/', data);
@@ -245,7 +245,7 @@ export interface CreateRolePayload {
   permissions: string[];
 }
 
-export interface UpdateRolePayload extends Partial<CreateRolePayload> { }
+export type UpdateRolePayload = Partial<CreateRolePayload>
 
 export const createRole = async (data: CreateRolePayload): Promise<Role> => {
   const response = await api.post<Role>('/iam/roles/', data);
@@ -257,12 +257,12 @@ export const updateRole = async (id: number, data: UpdateRolePayload): Promise<R
   return response.data;
 };
 
-export const deleteUser = async (id: number): Promise<void> => {
-  await api.delete(`/iam/users/${id}/`);
+export const deleteUser = async (id: number, reason?: string): Promise<void> => {
+  await api.delete(`/iam/users/${id}/`, { params: reason ? { reason } : undefined });
 };
 
-export const deleteRole = async (id: number): Promise<void> => {
-  await api.delete(`/iam/roles/${id}/`);
+export const deleteRole = async (id: number, reason?: string): Promise<void> => {
+  await api.delete(`/iam/roles/${id}/`, { params: reason ? { reason } : undefined });
 };
 
 // --- Checklist API ---
@@ -283,6 +283,7 @@ export interface ChecklistRecordApi {
   failCount?: number;
   itrId?: string;
   itrNumber?: string;
+  noiNumber?: string;
   detail_data?: string;
 }
 
@@ -301,6 +302,7 @@ export interface CreateChecklistPayload {
   failCount?: number;
   itrId?: string;
   itrNumber?: string;
+  noiNumber?: string;
   detail_data?: string;
 }
 

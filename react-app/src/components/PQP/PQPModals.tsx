@@ -9,8 +9,8 @@ import styles from './PQP.module.css';
 const getLocalizedStatus = (status: string, t: (key: string) => string) => {
     const s = (status || '').toLowerCase();
     if (s === 'approved') return t('pqp.status.approved');
-    if (s === 'reject') return t('pqp.status.reject');
-    if (s === 'not submit') return t('pqp.status.notSubmit');
+    if (s === 'reject' || s === 'rejected') return t('pqp.status.reject');
+    if (s === 'not submit' || s === 'not submitted') return t('pqp.status.notSubmitted');
     if (s === 'under review') return t('pqp.status.underReview');
     return status;
 };
@@ -31,7 +31,7 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
         title: existingItem?.title || '',
         description: existingItem?.description || '',
         vendor: existingItem?.vendor || '',
-        status: existingItem?.status || 'Approved',
+        status: existingItem?.status || 'Not Submit',
         // 將舊資料的 "V1.0" 正規化為 "Rev1.0"
         version: existingItem
             ? (existingItem.version === 'V1.0' ? 'Rev1.0' : existingItem.version)
@@ -260,7 +260,7 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
                                         value={formData.status || 'Approved'}
                                         onChange={(e) => handleFieldChange('status', e.target.value)}
                                     >
-                                        <option value="Not Submit">{t('pqp.status.notSubmit')}</option>
+                                        <option value="Not Submit">{t('pqp.status.notSubmitted')}</option>
                                         <option value="Under Review">{t('pqp.status.underReview')}</option>
                                         <option value="Approved">{t('pqp.status.approved')}</option>
                                         <option value="Reject">{t('pqp.status.reject')}</option>
@@ -318,7 +318,7 @@ export interface PQPDetailsViewModalProps {
     onClose: () => void;
 }
 
-export const PQPDetailsViewModal: React.FC<PQPDetailsViewModalProps> = ({ pqpId, pqpItem, onClose }) => {
+export const PQPDetailsViewModal: React.FC<PQPDetailsViewModalProps> = ({ pqpId: _pqpId, pqpItem, onClose }) => {
     const { t } = useLanguage();
     const handlePrint = () => {
         window.print();

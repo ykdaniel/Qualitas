@@ -10,10 +10,10 @@ export const useOBSStats = (obsList: ContextOBSItem[]) => {
 
     obsList.forEach((item) => {
       const status = (item.status || '').toLowerCase();
-      if (status === 'open' || status === 'opening') {
-        statusCounts.opening++;
-      } else if (status === 'closed') {
+      if (status === 'closed') {
         statusCounts.closed++;
+      } else if (status && status !== 'void') {
+        statusCounts.opening++;
       }
     });
 

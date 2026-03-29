@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from 'react';
+import { toast } from 'sonner';
 import { useLanguage } from '../../../context/LanguageContext';
 import { useContractorsStore } from '../../../store/contractorsStore';
 import { useITPStore } from '../../../store/itpStore';
 import { useNCRStore } from '../../../store/ncrStore';
 import { useOBSStore } from '../../../store/obsStore';
+import { useITRStore } from '../../../store/itrStore';
 import type { NOIItem } from '../../../store/noiStore';
 import { validateStatusTransition, NOIStatusTransitions, NOIStatusTransitionList, validateRequiredFields, NOIValidationRules } from '../../../utils/statusValidation';
 import FileAttachment from '../../Shared/FileAttachment';
@@ -27,6 +29,7 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, e
     const getITPByVendor = React.useCallback((vendor: string) => itpList.filter(itp => itp.vendor === vendor), [itpList]);
     const ncrList = useNCRStore(state => state.ncrList);
     const obsList = useOBSStore(state => state.obsList);
+    const itrList = useITRStore(state => state.itrList);
     const getNCRList = () => ncrList;
 
     const getInitialData = (): NOIDetailData => {
@@ -94,11 +97,11 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, e
             if (field === 'status' && prev.status) {
                 const validation = validateStatusTransition(prev.status, value, NOIStatusTransitionList);
                 if (!validation.allowed) {
-                    alert(validation.message || t('common.invalidStatusTransition'));
+                    toast.warning(validation.message || t('common.invalidStatusTransition'));
                     return prev;
                 }
                 if (value !== 'Reject' && updated.ncrNumber) {
-                    alert("NOI 含有 NCR，狀態必須為不通過（Reject）");
+                    toast.warning("NOI 含有 NCR，狀態必須為不通過（Reject）");
                     return prev;
                 }
             }
@@ -152,7 +155,7 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, e
         if (!validation.valid) {
             const msg = validation.message || 'Error';
             // 嘗試翻譯，若無法翻譯則顯示原訊息 (支援 key 或直接文字)
-            alert(t(msg) === msg && msg.includes('.') ? msg : t(msg));
+            toast.error(t(msg) === msg && msg.includes('.') ? msg : t(msg));
             return;
         }
 
@@ -163,7 +166,17 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, e
 
             if (openNcrs.length > 0 || openObs.length > 0) {
                 const totalOpen = openNcrs.length + openObs.length;
-                alert(`Cannot close NOI: There are still ${totalOpen} open NCR/OBS associated with this inspection. Please close them first.`);
+                toast.warning(`Cannot close NOI: There are still ${totalOpen} open NCR/OBS associated with this inspection. Please close them first.`);
+                return;
+            }
+
+            // 勾稽鎖定：關閉 NOI 前確認其下所有 ITR 已完結（Approved 或 Void）
+            const openItrs = itrList.filter(
+                itr => itr.noiNumber === formData.referenceNo &&
+                    itr.status !== 'Approved' && itr.status !== 'Void'
+            );
+            if (openItrs.length > 0) {
+                toast.warning(`Cannot close NOI: ${openItrs.length} ITR(s) still in progress. Please ensure all ITRs are Approved or Void first.`);
                 return;
             }
         }

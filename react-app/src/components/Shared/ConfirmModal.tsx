@@ -1,5 +1,6 @@
 import React from 'react';
 import styles from './ConfirmModal.module.css';
+import { useLanguage } from '../../context/LanguageContext';
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -17,9 +18,12 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
   message,
   onConfirm,
   onCancel,
-  confirmText = 'Delete',
-  cancelText = 'Cancel',
+  confirmText,
+  cancelText,
 }) => {
+  const { t } = useLanguage();
+  const resolvedConfirmText = confirmText ?? t('common.delete');
+  const resolvedCancelText = cancelText ?? t('common.cancel');
   if (!isOpen) return null;
 
   return (
@@ -34,10 +38,10 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
         </div>
         <div className={styles.modalActions}>
           <button type="button" className={styles.cancelButton} onClick={onCancel}>
-            {cancelText}
+            {resolvedCancelText}
           </button>
           <button type="button" className={styles.confirmButton} onClick={onConfirm}>
-            {confirmText}
+            {resolvedConfirmText}
           </button>
         </div>
       </div>

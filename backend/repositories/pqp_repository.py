@@ -5,6 +5,7 @@ Data access layer for PQP module
 """
 
 from typing import List, Optional
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 import models
@@ -36,11 +37,16 @@ class PQPRepository:
                     (models.PQP.title.ilike(f"%{search_term}%"))
                 )
         if filters.get('status'):
-            query = query.filter(models.PQP.status == filters['status'])
+            status_filter = str(filters['status']).strip().lower()
+            if status_filter == "not submitted":
+                status_filter = "not submit"
+            if status_filter == "rejected":
+                status_filter = "reject"
+            query = query.filter(func.lower(models.PQP.status) == status_filter)
         if filters.get('start_date'):
-            query = query.filter(models.PQP.created_at >= filters['start_date'])
+            query = query.filter(models.PQP.createdAt >= filters['start_date'])
         if filters.get('end_date'):
-            query = query.filter(models.PQP.created_at <= filters['end_date'])
+            query = query.filter(models.PQP.createdAt <= filters['end_date'])
 
         return query.offset(skip).limit(limit).all()
 

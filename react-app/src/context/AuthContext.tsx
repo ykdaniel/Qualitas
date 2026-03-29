@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import api, { User, setupLogoutHandler } from '../services/api';
 
 export type { User };
@@ -18,42 +18,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    // Register the logout function to be called on 401 responses
-    setupLogoutHandler(logout);
-
-    const token = localStorage.getItem('token');
-    if (token) {
-      verifyToken(token);
-    } else {
-      setLoading(false);
-    }
-  }, []);
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const verifyToken = async (_token: string) => {
-    try {
-      const response = await api.get('/auth/verify');
-      if (response.data) {
-        setIsAuthenticated(true);
-        await fetchUser();
-      }
-    } catch (error) {
-      localStorage.removeItem('token');
-      setIsAuthenticated(false);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchUser = async () => {
+  const fetchUser = useCallback(async () => {
     try {
       const response = await api.get('/user/profile');
       setUser(response.data);
     } catch (error) {
       console.error('Failed to fetch user:', error);
     }
-  };
+  }, []);
+
+  const verifyToken = useCallback(async () => {
+    try {
+      const response = await api.get('/auth/verify');
+      if (response.data) {
+        setIsAuthenticated(true);
+        await fetchUser();
+      }
+    } catch {
+      localStorage.removeItem('token');
+      setIsAuthenticated(false);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchUser]);
+
+  useEffect(() => {
+    // Register the logout function to be called on 401 responses
+    setupLogoutHandler(logout);
+
+    const token = localStorage.getItem('token');
+    if (token) {
+      verifyToken();
+    } else {
+      setLoading(false);
+    }
+  }, [verifyToken]);
 
   const login = async (accessToken: string, refreshToken: string) => {
     localStorage.setItem('token', accessToken);

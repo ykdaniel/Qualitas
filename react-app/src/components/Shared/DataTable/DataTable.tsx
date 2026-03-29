@@ -1,4 +1,5 @@
 import * as React from "react"
+import { useLanguage } from '../../../context/LanguageContext'
 import {
     ColumnDef,
     ColumnFiltersState,
@@ -55,6 +56,7 @@ const DataTableInner = <TData, TValue>({
     onRowClick,
     ...props
 }: DataTableProps<TData, TValue>) => {
+    const { t } = useLanguage()
     const [sorting, setSorting] = React.useState<SortingState>([])
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
         []
@@ -63,6 +65,7 @@ const DataTableInner = <TData, TValue>({
         React.useState<VisibilityState>({})
     const [rowSelection, setRowSelection] = React.useState({})
 
+    // eslint-disable-next-line react-hooks/incompatible-library
     const table = useReactTable({
         data,
         columns,
@@ -166,7 +169,7 @@ const DataTableInner = <TData, TValue>({
                                     colSpan={columns.length}
                                     className="h-24 text-center"
                                 >
-                                    No results.
+                                    {t('common.noData')}
                                 </TableCell>
                             </TableRow>
                         )}

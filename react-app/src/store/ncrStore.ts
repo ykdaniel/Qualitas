@@ -31,6 +31,16 @@ export interface NCRItem {
     itrNumber?: string;
     dueDate?: string;
     attachments?: string[];
+    referenceStandards?: string;
+    serialNumbers?: string;
+    repairMethodStatement?: string;
+    immediateCorrectionAction?: string;
+    rootCauseAnalysis?: string;
+    correctiveActions?: string;
+    preventiveAction?: string;
+    finalProductIntegrityStatement?: string;
+    reInspectionNumber?: string;
+    projectQualityManager?: string;
 }
 
 function normalizeItem(item: unknown): NCRItem {

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { toast } from 'sonner';
 import { useLanguage } from '../../../context/LanguageContext';
 import { useContractorsStore } from '../../../store/contractorsStore';
 import { useITPStore } from '../../../store/itpStore';
@@ -57,11 +58,11 @@ export const NOIBulkAddModal: React.FC<NOIBulkAddModalProps> = ({ onSave, onClos
     };
 
     const handleSave = async () => {
-        if (!commonData.contractor) { alert(t('common.selectContractor')); return; }
-        if (!commonData.issueDate) { alert(t('common.selectDate')); return; }
+        if (!commonData.contractor) { toast.warning(t('common.selectContractor')); return; }
+        if (!commonData.issueDate) { toast.warning(t('common.selectDate')); return; }
 
         const validRows = rows.filter(row => row.package.trim() || row.itpNo || row.checkpoint);
-        if (validRows.length === 0) { alert(t('common.fillAtLeastOne')); return; }
+        if (validRows.length === 0) { toast.warning(t('common.fillAtLeastOne')); return; }
 
         setSaving(true);
         try {

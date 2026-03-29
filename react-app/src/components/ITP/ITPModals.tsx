@@ -12,6 +12,7 @@ import FileAttachment from '../Shared/FileAttachment';
 import styles from './ITP.module.css';
 import { getNextRevision } from '../../utils/revision';
 import { parseInspectionItems } from '../../utils/itpParser';
+import ConfirmModal from '../Shared/ConfirmModal';
 
 
 import { Printer, ShieldCheck, Save, LayoutTemplate, Plus } from 'lucide-react';
@@ -20,10 +21,11 @@ export interface ITPDetailModalProps {
     itpId: string;
     existingItem?: ITPItem;
     onSave: (updates: Partial<ITPItem>, details?: any, pendingFiles?: File[], deletedFileIds?: string[]) => Promise<void>;
+    onApplyItems?: (detailPayload: any) => Promise<void>;
     onClose: () => void;
 }
 
-export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingItem, onSave, onClose }) => {
+export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingItem, onSave, onApplyItems, onClose }) => {
     const editorRef = useRef<ITPAdvancedEditorRef>(null);
     const navigate = useNavigate();
     const { t } = useLanguage();
@@ -36,6 +38,8 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
 
     const [saving, setSaving] = useState(false);
     const [isPrinting, setIsPrinting] = useState(false);
+    const [isDirty, setIsDirty] = useState(false);
+    const [closeConfirm, setCloseConfirm] = useState(false);
 
     // Print Handling
     useEffect(() => {
@@ -100,6 +104,7 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
 
     const handleFieldChange = (field: keyof ITPItem, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }));
+        setIsDirty(true);
         if (errors[field]) {
             setErrors(prev => ({ ...prev, [field]: '' }));
         }
@@ -122,14 +127,34 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
         return Object.keys(newErrors).length === 0;
     };
 
-    const prepareDetailPayload = () => {
+    const prepareDetailPayload = (src: InspectionItem[] = advancedItems) => {
         return {
-            a: advancedItems.filter(i => i.phase === 'A').map(({ phase: _phase, ...rest }) => rest),
-            b: advancedItems.filter(i => i.phase === 'B').map(({ phase: _phase, ...rest }) => rest),
-            c: advancedItems.filter(i => i.phase === 'C').map(({ phase: _phase, ...rest }) => rest),
+            a: src.filter(i => i.phase === 'A').map(({ phase: _phase, ...rest }) => rest),
+            b: src.filter(i => i.phase === 'B').map(({ phase: _phase, ...rest }) => rest),
+            c: src.filter(i => i.phase === 'C').map(({ phase: _phase, ...rest }) => rest),
             checklist: [],
             self_inspection: null
         };
+    };
+
+    const handleItemsChange = async (newItems: InspectionItem[]) => {
+        setAdvancedItems(newItems);
+        setIsDirty(true);
+        if (onApplyItems && itpId) {
+            try {
+                await onApplyItems(prepareDetailPayload(newItems));
+            } catch (_) {
+                // error handled in parent (toast shown there)
+            }
+        }
+    };
+
+    const handleClose = () => {
+        if (isDirty) {
+            setCloseConfirm(true);
+        } else {
+            onClose();
+        }
     };
 
     const handleSave = async () => {
@@ -140,6 +165,7 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                 delete payload.detail_data;
                 const detailPayload = itpId ? prepareDetailPayload() : undefined;
                 await onSave(payload, detailPayload, pendingFiles, deletedFileIds);
+                setIsDirty(false);
             } finally {
                 setSaving(false);
             }
@@ -193,14 +219,15 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
     };
 
     return (
+        <>
         <div className={styles.modalOverlay} style={{ padding: 0 }}>
             <div className={styles.modalContent} onClick={(e) => e.stopPropagation()} style={{ maxWidth: '100%', width: '100%', height: '100%', maxHeight: 'none', borderRadius: 0 }}>
                 <div className={styles.modalHeader}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <BackButton onClick={onClose} label={t('common.back')} />
+                        <BackButton onClick={handleClose} label={t('common.back')} />
                         <h2>{existingItem ? t('itp.editTitle') : t('itp.addTitle')}</h2>
                     </div>
-                    <button className={styles.closeButton} onClick={onClose}>×</button>
+                    <button className={styles.closeButton} onClick={handleClose}>×</button>
                 </div>
 
                 <div className={styles.tabsContainer}>
@@ -349,6 +376,7 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                                             value={formData.status || 'Pending'}
                                             onChange={(e) => handleFieldChange('status', e.target.value)}
                                         >
+                                            <option value="Approved">Approved</option>
                                             <option value="Approved with comments">Approved with comments</option>
                                             <option value="Revise & Resubmit">Revise & Resubmit</option>
                                             <option value="Rejected">Rejected</option>
@@ -386,7 +414,7 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                                 ref={editorRef}
                                 items={advancedItems}
 
-                                onItemsChange={setAdvancedItems}
+                                onItemsChange={handleItemsChange}
                                 onViewRecord={() => {
                                     navigate('/itr');
                                     // toast.info(`Please find ITR ${itr.documentNumber} in the ITR list.`);
@@ -433,7 +461,7 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                         {saving ? <LayoutTemplate size={16} className="animate-spin" /> : <Save size={16} />}
                         {t('common.save')}
                     </button>
-                    <button className={styles.cancelButton} onClick={onClose} disabled={saving}>
+                    <button className={styles.cancelButton} onClick={handleClose} disabled={saving}>
                         {t('common.cancel')}
                     </button>
                 </div>
@@ -452,5 +480,16 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
 
 
         </div >
+
+        <ConfirmModal
+            isOpen={closeConfirm}
+            title={t('common.unsavedChanges') || 'Unsaved Changes'}
+            message={t('itp.unsavedChangesMsg') || 'You have unsaved changes. Are you sure you want to leave? All changes will be lost.'}
+            confirmText={t('common.leave') || 'Leave'}
+            cancelText={t('common.stayAndSave') || 'Stay'}
+            onConfirm={() => { setCloseConfirm(false); onClose(); }}
+            onCancel={() => setCloseConfirm(false)}
+        />
+        </>
     );
 };

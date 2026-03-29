@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useKMStore } from '../../store/kmStore';
-import { KMArticle } from '../../types/km';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { KMModal } from './KMModals';

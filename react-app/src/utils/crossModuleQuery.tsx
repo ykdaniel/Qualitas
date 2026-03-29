@@ -1,7 +1,5 @@
 import React from 'react';
 import { useNOIStore } from '../store/noiStore';
-import { useITPStore } from '../store/itpStore';
-import { useNCRStore } from '../store/ncrStore';
 import { useITRStore } from '../store/itrStore';
 
 /**

@@ -441,11 +441,6 @@ def delete_role(db: Session, role_id: int, current_user_id: int = None, current_
         db.delete(db_role)
         db.commit()
     return db_role
-    db_role = get_role(db, role_id)
-    if db_role:
-        db.delete(db_role)
-        db.commit()
-    return db_role
 
 # ---- Audit ----
 

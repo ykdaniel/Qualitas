@@ -66,6 +66,16 @@ def _add_missing_columns():
             _add_column_if_missing(conn, "ncr", "last_reminded_at", "TEXT")
             _add_column_if_missing(conn, "ncr", "attachments", "TEXT")
             _add_column_if_missing(conn, "ncr", "noiNumber", "VARCHAR")
+            _add_column_if_missing(conn, "ncr", "referenceStandards", "TEXT")
+            _add_column_if_missing(conn, "ncr", "serialNumbers", "TEXT")
+            _add_column_if_missing(conn, "ncr", "repairMethodStatement", "TEXT")
+            _add_column_if_missing(conn, "ncr", "immediateCorrectionAction", "TEXT")
+            _add_column_if_missing(conn, "ncr", "rootCauseAnalysis", "TEXT")
+            _add_column_if_missing(conn, "ncr", "correctiveActions", "TEXT")
+            _add_column_if_missing(conn, "ncr", "preventiveAction", "TEXT")
+            _add_column_if_missing(conn, "ncr", "finalProductIntegrityStatement", "TEXT")
+            _add_column_if_missing(conn, "ncr", "reInspectionNumber", "TEXT")
+            _add_column_if_missing(conn, "ncr", "projectQualityManager", "TEXT")
 
             # NOI
             for col in ["attachments", "remark", "closeoutDate", "ncrNumber", "dueDate", "last_reminded_at"]:
@@ -96,6 +106,13 @@ def _add_missing_columns():
 
             # Checklist
             _add_column_if_missing(conn, "checklist", "noiNumber", "VARCHAR")
+
+            # FAT
+            _add_column_if_missing(conn, "fat", "last_reminded_at", "TEXT")
+
+            # Audits (additional columns)
+            _add_column_if_missing(conn, "audits", "selected_templates", "TEXT")
+            _add_column_if_missing(conn, "audits", "custom_check_items", "TEXT")
 
             # AuditLog
             _add_column_if_missing(conn, "audit_logs", "reason", "TEXT")

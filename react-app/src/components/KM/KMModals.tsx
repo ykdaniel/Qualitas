@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
 import { KMArticleCreate, KMArticleUpdate, KMArticle } from '../../types/km';
 import { useKMStore } from '../../store/kmStore';
@@ -58,7 +59,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                             // If it has content itself, convert to first chapter
                             setChapters([{ title: existingData.title, content: existingData.content, chapter_no: existingData.chapter_no || '1.0' }]);
                         }
-                    } catch (e) {
+                    } catch {
                         setChapters([{ title: existingData.title, content: existingData.content, chapter_no: existingData.chapter_no || '1.0' }]);
                     }
                 }
@@ -126,7 +127,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                 if (typeof prev.attachments === 'string') {
                     try {
                         currentAttachments = JSON.parse(prev.attachments);
-                    } catch (e) {
+                    } catch {
                         currentAttachments = [];
                     }
                 } else if (Array.isArray(prev.attachments)) {
@@ -138,8 +139,8 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                     attachments: [...currentAttachments, newAttachment]
                 };
             });
-        } catch (err) {
-            alert('File upload failed');
+        } catch {
+            toast.error('File upload failed');
         } finally {
             setLoading(false);
             e.target.value = ''; // Reset input
@@ -152,7 +153,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
             if (typeof prev.attachments === 'string') {
                 try {
                     currentAttachments = JSON.parse(prev.attachments);
-                } catch (e) {
+                } catch {
                     currentAttachments = [];
                 }
             } else if (Array.isArray(prev.attachments)) {
@@ -231,7 +232,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
             onClose();
 
         } catch (err: any) {
-            alert(err.message || 'Error saving KM article and chapters');
+            toast.error(err.message || 'Error saving KM article and chapters');
         } finally {
             setLoading(false);
         }
@@ -418,7 +419,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                         {(() => {
                             let attList: KMAttachment[] = [];
                             if (typeof formData.attachments === 'string') {
-                                try { attList = JSON.parse(formData.attachments); } catch (e) { }
+                                try { attList = JSON.parse(formData.attachments); } catch { attList = []; }
                             } else if (Array.isArray(formData.attachments)) {
                                 attList = formData.attachments;
                             }

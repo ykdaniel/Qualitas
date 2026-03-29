@@ -12,7 +12,7 @@ interface KMState {
     deleteKM: (id: string) => Promise<void>;
 }
 
-export const useKMStore = create<KMState>((set, get) => ({
+export const useKMStore = create<KMState>((set, _get) => ({
     kmList: [],
     loading: false,
     error: null,

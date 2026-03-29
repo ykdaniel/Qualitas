@@ -80,31 +80,6 @@ const PermissionMatrix: React.FC = () => {
                 </table>
             </div>
 
-            <div className={styles.summarySection}>
-                <h3>{t('iam.permissionStats')}</h3>
-                <div className={styles.summaryGrid}>
-                    {roles.map((role) => (
-                        <div key={role.id} className={styles.summaryCard}>
-                            <div className={styles.summaryHeader}>
-                                <span className={styles.roleBadge}>{formatRoleName(role.name)}</span>
-                                <span className={styles.permissionCount}>
-                                    {role.permissions.length} perms
-                                </span>
-                            </div>
-                            <div className={styles.summaryPermissions}>
-                                {role.permissions.map((permCode) => {
-                                    const perm = permissions.find(p => p.code === permCode);
-                                    return (
-                                        <span key={permCode} className={styles.permissionTag} title={permCode}>
-                                            {perm?.description || permCode}
-                                        </span>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
         </div>
     );
 };

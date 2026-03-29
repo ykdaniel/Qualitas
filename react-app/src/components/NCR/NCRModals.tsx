@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
+import { toast } from 'sonner';
 import { getNextRevision } from '../../utils/revision';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useNOIStore } from '../../store/noiStore';
 import { useITRStore } from '../../store/itrStore';
-import { useNCRStore } from '../../store/ncrStore';
 import type { NCRItem } from '../../store/ncrStore';
 import FileAttachment from '../Shared/FileAttachment';
 import styles from './NCR.module.css';
@@ -60,10 +60,9 @@ export interface NCRDetailModalProps {
     onClose: () => void;
 }
 
-export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, existingData, existingItem, ncrList: propNcrList, onSave, onClose }) => {
+export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, existingData, existingItem, ncrList: _propNcrList, onSave, onClose }) => {
     const { t } = useLanguage();
     const { getActiveContractors } = useContractorsStore();
-    const { ncrList: contextNcrList } = useNCRStore();
     const noiList = useNOIStore(state => state.noiList);
     const getNOIList = () => noiList;
     const itrList = useITRStore(state => state.itrList);
@@ -86,25 +85,25 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                 contractor: existingItem.vendor || '',
                 remark: existingItem.remark || '',
                 subject: existingItem.subject || existingItem.description || '',
-                referenceStandards: '',
+                referenceStandards: existingItem.referenceStandards || '',
                 detailsDescription: existingItem.description || '',
                 foundLocation: existingItem.foundLocation || '',
                 foundBy: existingItem.foundBy || '',
                 raisedBy: existingItem.raisedBy || '',
-                serialNumbers: '',
+                serialNumbers: existingItem.serialNumbers || '',
                 productDisposition: existingItem.productDisposition || '',
-                repairMethodStatement: '',
-                immediateCorrectionAction: '',
-                rootCauseAnalysis: '',
-                correctiveActions: '',
-                preventiveAction: '',
-                finalProductIntegrityStatement: '',
-                reInspectionNumber: '',
-                noiNumber: '',
-                productIntegrityRelated: '',
-                permanentProductDeviation: '',
-                impactToOM: '',
-                projectQualityManager: '',
+                repairMethodStatement: existingItem.repairMethodStatement || '',
+                immediateCorrectionAction: existingItem.immediateCorrectionAction || '',
+                rootCauseAnalysis: existingItem.rootCauseAnalysis || '',
+                correctiveActions: existingItem.correctiveActions || '',
+                preventiveAction: existingItem.preventiveAction || '',
+                finalProductIntegrityStatement: existingItem.finalProductIntegrityStatement || '',
+                reInspectionNumber: existingItem.reInspectionNumber || '',
+                noiNumber: existingItem.noiNumber || '',
+                productIntegrityRelated: existingItem.productIntegrityRelated || '',
+                permanentProductDeviation: existingItem.permanentProductDeviation || '',
+                impactToOM: existingItem.impactToOM || '',
+                projectQualityManager: existingItem.projectQualityManager || '',
                 defectPhotos: existingItem.defectPhotos || [],
                 improvementPhotos: existingItem.improvementPhotos || [],
                 attachments: existingItem.attachments || [],
@@ -160,6 +159,10 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
     const [saving, setSaving] = useState(false);
 
     const handleFieldChange = (field: keyof NCRDetailData, value: string) => {
+        // 勾稽聯動：NCR 關閉後提示 NOI 可轉為 Resolved
+        if (field === 'status' && value === 'Closed' && formData.noiNumber) {
+            toast.info(`NCR closed. You may now update NOI ${formData.noiNumber} status to "Resolved".`);
+        }
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
@@ -213,12 +216,12 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         if (formData.status === 'Closed') {
             // Must have Disposition
             if (!formData.productDisposition) {
-                alert("Cannot close NCR without Product Disposition.");
+                toast.warning("Cannot close NCR without Product Disposition.");
                 return;
             }
             // Must have Re-Inspection info (either number or link to new NOI)
             if (!formData.reInspectionNumber) {
-                alert("Cannot close NCR without Re-Inspection / Verification Reference (Strict QC Process).");
+                toast.warning("Cannot close NCR without Re-Inspection / Verification Reference (Strict QC Process).");
                 return;
             }
         }
@@ -724,7 +727,10 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                         onChange={(e) => handleFieldChange('status', e.target.value)}
                                     >
                                         <option value="Open">{t('status.open')}</option>
+                                        <option value="In Progress">{t('status.inProgress')}</option>
+                                        <option value="Resolved">{t('status.resolved')}</option>
                                         <option value="Closed">{t('status.closed')}</option>
+                                        <option value="Void">{t('status.void')}</option>
                                     </select>
                                 </div>
                                 <div className={styles.formGroup}>

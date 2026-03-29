@@ -41,7 +41,7 @@ export const generateDocumentNumber = (
   contractorName: string,
   contractors: Contractor[],
   existingNumbers: string[],
-  excludeId?: string
+  _excludeId?: string
 ): string => {
   const abbreviation = getContractorAbbreviation(contractorName, contractors);
 

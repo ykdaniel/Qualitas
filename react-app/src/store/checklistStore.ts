@@ -55,7 +55,7 @@ const normalizeRecord = (r: api.ChecklistRecordApi): ChecklistRecord => ({
     itrNumber: r.itrNumber,
     location: r.location || '',
     revision: safeJsonParse(r.detail_data).revision || 0,
-    noiNumber: (r as any).noiNumber,
+    noiNumber: r.noiNumber,
     data: safeJsonParse(r.detail_data),
 });
 
@@ -137,7 +137,7 @@ export const useChecklistStore = create<ChecklistState>((set, get) => ({
     updateRecord: async (id, updates) => {
         try {
             // NOTE: 優雅地過濾掉 undefined 屬性，取代冗長的 14 行 if 判斷
-            const { data: recordData, revision, noiNumber, ...restUpdates } = updates;
+            const { data: recordData, ...restUpdates } = updates;
             const payload: Record<string, any> = Object.fromEntries(
                 Object.entries(restUpdates).filter(([_, v]) => v !== undefined)
             );

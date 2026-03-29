@@ -1,45 +1,51 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useDeferredValue, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
-import { useAuditStore } from '../../store/auditStore';
+import { useAuditStore, AuditItem } from '../../store/auditStore';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './Audit.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import AuditWizard from './AuditWizard';
 import { BackButton } from '@/components/ui/BackButton';
+import VendorStatsPanel from './VendorStatsPanel';
+import ScheduleMatrix from './ScheduleMatrix';
+import { Search, Plus, AlertCircle, X } from 'lucide-react';
 
 const Audit: React.FC = () => {
     const { t } = useLanguage();
     const { auditList, deleteAudit, error, clearError, loading } = useAuditStore();
     const [searchQuery, setSearchQuery] = useState<string>('');
+    // Deferred value prevents search typing from lagging due to expensive re-renders
+    const deferredSearchQuery = useDeferredValue(searchQuery);
+
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [currentAuditId, setCurrentAuditId] = useState<string | null>(null);
-    const { getActiveContractors, contractors } = useContractorsStore();
+    const { getActiveContractors } = useContractorsStore();
     const [selectedVendorFilter, setSelectedVendorFilter] = useState<string | null>(null);
 
     // Get active contractors
-    const activeContractors = useMemo(() => getActiveContractors(), [contractors, getActiveContractors]);
+    const activeContractors = useMemo(() => getActiveContractors(), [getActiveContractors]);
 
-    // Fetch audits and contractors on mount
-    React.useEffect(() => {
+    useEffect(() => {
         useAuditStore.getState().fetchAudits();
         useContractorsStore.getState().fetchContractors();
     }, []);
 
-    // Compute vendor stats and schedule
-    // Note: This logic for the "Matrix" and "Vendor Panel" ignores Table filtering/sorting
-    // enabling "View" consistency even when Table is filtered.
-    const { vendorStats } = useMemo(() => {
+    // 1. Compute Vendor Statistics (Unaffected by SearchQuery to keep left panel stable)
+    const { vendorStats, maxAudits } = useMemo(() => {
         const stats: Record<string, number> = {};
-
         auditList.forEach(audit => {
             if (audit.contractor) {
                 stats[audit.contractor] = (stats[audit.contractor] || 0) + 1;
             }
         });
-
-        return { vendorStats: stats };
+        const counts = Object.values(stats);
+        return {
+            vendorStats: stats,
+            maxAudits: counts.length > 0 ? Math.max(...counts) : 1
+        };
     }, [auditList]);
 
     const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null; message: string }>({
@@ -51,27 +57,24 @@ const Audit: React.FC = () => {
     // Calendar logic
     const [viewDate, setViewDate] = useState(new Date());
 
-    const changeMonth = (offset: number) => {
+    const changeMonth = useCallback((offset: number) => {
         setViewDate(prev => new Date(prev.getFullYear(), prev.getMonth() + offset, 1));
-    };
+    }, []);
 
-    const maxAudits = useMemo(() => {
-        const counts = Object.values(vendorStats);
-        return counts.length > 0 ? Math.max(...counts) : 1;
-    }, [vendorStats]);
+    const setToday = useCallback(() => {
+        setViewDate(new Date());
+    }, []);
 
-    // Prepare Base Data for Table
-    // If Searching: Include all (filtered by vendor if selected)
-    // If Not Searching: Include current Month only (filtered by vendor if selected)
-    const tableBaseData = useMemo(() => {
+    // 2. Compute Filtered Data (Affected by vendor select & deferred search query)
+    const filteredData = useMemo(() => {
         let data = auditList;
 
         if (selectedVendorFilter) {
             data = data.filter(item => item.contractor === selectedVendorFilter);
         }
 
-        if (searchQuery.trim()) {
-            const query = searchQuery.toLowerCase();
+        if (deferredSearchQuery.trim()) {
+            const query = deferredSearchQuery.toLowerCase();
             data = data.filter(item =>
                 (item.auditNo && item.auditNo.toLowerCase().includes(query)) ||
                 (item.title && item.title.toLowerCase().includes(query)) ||
@@ -84,16 +87,11 @@ const Audit: React.FC = () => {
         }
 
         return data;
-    }, [auditList, searchQuery, selectedVendorFilter]); // Removed viewDate from dependency since we are not using it to filter table anymore
+    }, [auditList, deferredSearchQuery, selectedVendorFilter]);
 
-
-    const matrixList = useMemo(() => {
-        return tableBaseData;
-    }, [tableBaseData]);
-
+    // 3. Matrix Computation
     const matrixDates = useMemo(() => {
-        // Extract unique, valid dates from the FILTERED list to show only relevant columns
-        const validDates = Array.from(new Set(matrixList.map(a => a.date)))
+        const validDates = Array.from(new Set(filteredData.map(a => a.date)))
             .filter(dateStr => dateStr && !isNaN(new Date(dateStr).getTime()))
             .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
 
@@ -107,34 +105,31 @@ const Audit: React.FC = () => {
                 dateLabel: `${date.getMonth() + 1}/${date.getDate()}`
             };
         });
-    }, [matrixList]);
+    }, [filteredData]);
 
-    const getAuditForMatrix = (vendorName: string, date: Date) => {
+    const getAuditForMatrix = useCallback((vendorName: string, date: Date) => {
         const dateStr = date.toISOString().split('T')[0];
         return auditList.find(a => a.contractor === vendorName && a.date === dateStr);
-    };
+    }, [auditList]);
 
-    const handleAddNew = () => {
-        const newId = String(Date.now());
-        setCurrentAuditId(newId);
+    // Actions
+    const handleAddNew = useCallback(() => {
+        setCurrentAuditId(String(Date.now()));
         setIsEditModalOpen(true);
-    };
+    }, []);
 
-    const handleEdit = (id: string) => {
+    const handleEdit = useCallback((id: string) => {
         setCurrentAuditId(id);
         setIsEditModalOpen(true);
-    };
+    }, []);
 
-    const handleReport = (id: string) => {
-        // TODO: Navigate to Audit Report page or open report modal
-        // For now, you can navigate to a report page:
-        // navigate(`/audit/${id}/report`);
-        alert(`Audit Report for ID: ${id}`);
-    };
+    const handleReport = useCallback((id: string) => {
+        toast.info(`Audit Report for ID: ${id}`);
+    }, []);
 
-    const handleDeleteClick = (id: string) => {
+    const handleDeleteClick = useCallback((id: string) => {
         setDeleteModal({ isOpen: true, id, message: t('audit.confirmDelete') || 'Are you sure you want to delete this audit?' });
-    };
+    }, [t]);
 
     const handleDeleteConfirm = async () => {
         if (deleteModal.id) {
@@ -145,265 +140,102 @@ const Audit: React.FC = () => {
 
     return (
         <div className={styles.container}>
+            {/* Header Area */}
             <div className={styles.header}>
                 <div className={styles.headerLeft}>
                     <BackButton />
                     <h1>{t('audit.title')}</h1>
                 </div>
-                <div className={styles.headerRight}>
-                    {/* Status filter moved to TableHeader, visual vendor filter remains. */}
-                    <div className={styles.searchContainer}>
-                        <input
-                            type="text"
-                            className={styles.searchInput}
-                            placeholder={t('audit.searchPlaceholder')}
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                    </div>
+                
+                <div className={styles.searchContainer}>
+                    <Search className={styles.searchIcon} size={18} />
+                    <input
+                        type="text"
+                        className={styles.searchInput}
+                        placeholder={t('audit.searchPlaceholder')}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                    />
                 </div>
             </div>
 
-            {/* Error Message Display */}
+            {/* Error Notification Toast */}
             {error && (
-                <div style={{
-                    margin: '16px 24px',
-                    padding: '12px 16px',
-                    backgroundColor: '#FEE2E2',
-                    border: '1px solid #FCA5A5',
-                    borderRadius: '8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between'
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M10 0C4.48 0 0 4.48 0 10s4.48 10 10 10 10-4.48 10-10S15.52 0 10 0zm1 15H9v-2h2v2zm0-4H9V5h2v6z" fill="#DC2626"/>
-                        </svg>
-                        <span style={{ color: '#991B1B', fontWeight: 500 }}>{error}</span>
+                <div className={styles.errorAlert}>
+                    <div className={styles.errorContent}>
+                        <AlertCircle size={20} />
+                        <span>{error}</span>
                     </div>
-                    <button
-                        onClick={clearError}
-                        style={{
-                            background: 'none',
-                            border: 'none',
-                            color: '#DC2626',
-                            cursor: 'pointer',
-                            fontSize: '20px',
-                            padding: '0 4px'
-                        }}
-                    >
-                        ×
+                    <button onClick={clearError} className={styles.closeBtn}>
+                        <X size={20} />
                     </button>
                 </div>
             )}
 
-            {/* Loading Indicator */}
-            {loading && (
-                <div style={{
-                    margin: '16px 24px',
-                    padding: '12px 16px',
-                    backgroundColor: '#DBEAFE',
-                    border: '1px solid #93C5FD',
-                    borderRadius: '8px',
-                    textAlign: 'center',
-                    color: '#1E40AF',
-                    fontWeight: 500
-                }}>
-                    Loading audits...
-                </div>
-            )}
-
+            {/* Premium Top Section: Interactive Panels */}
             <div className={styles.topSection}>
-                {/* Left: Vendor Statistics (Visual) */}
-                <div className={styles.panel}>
-                    <div className={styles.panelTitle}>
-                        <span>{t('common.contractor') || 'Vendors'}</span>
-                        <span style={{ fontSize: '12px', fontWeight: 400 }}>{t('audit.total')}: {auditList.length}</span>
-                    </div>
-                    <div className={styles.vendorList}>
-                        <div
-                            className={`${styles.vendorItem} ${selectedVendorFilter === null ? styles.active : ''}`}
-                            onClick={() => setSelectedVendorFilter(null)}
-                        >
-                            <div className={styles.vendorHeader}>
-                                <span className={styles.vendorName}>{t('common.all')}</span>
-                                <span className={styles.auditCount}>{auditList.length}</span>
-                            </div>
-                            <div className={styles.chartTrack}>
-                                <div className={styles.chartBar} style={{ width: '100%' }}></div>
-                            </div>
-                        </div>
-                        {activeContractors.filter(vendor => (vendorStats[vendor.name] || 0) > 0).map(vendor => {
-                            const count = vendorStats[vendor.name] || 0;
-                            const percentage = (count / maxAudits) * 100;
-                            return (
-                                <div
-                                    key={vendor.id}
-                                    className={`${styles.vendorItem} ${selectedVendorFilter === vendor.name ? styles.active : ''}`}
-                                    onClick={() => setSelectedVendorFilter(vendor.name === selectedVendorFilter ? null : vendor.name)}
-                                >
-                                    <div className={styles.vendorHeader}>
-                                        <span className={styles.vendorName}>{vendor.name}</span>
-                                        <span className={styles.auditCount}>{count}</span>
-                                    </div>
-                                    <div className={styles.chartTrack}>
-                                        <div
-                                            className={styles.chartBar}
-                                            style={{
-                                                width: `${percentage}%`,
-                                                background: selectedVendorFilter === vendor.name ? 'linear-gradient(90deg, #059669, #10b981)' : ''
-                                            }}
-                                        ></div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
+                {/* Vendor Stats Glass Panel */}
+                <VendorStatsPanel 
+                    stats={vendorStats}
+                    maxAudits={maxAudits}
+                    activeContractors={activeContractors}
+                    selectedVendorFilter={selectedVendorFilter}
+                    onSelectVendor={setSelectedVendorFilter}
+                    totalAudits={auditList.length}
+                    t={t}
+                />
 
-                {/* Right: Audit Matrix View (Visual) */}
-                <div className={styles.panel}>
-                    <div className={styles.panelTitle}>
-                        <span>{t('audit.schedule')}</span>
-                        <div className={styles.navGroup}>
-                            <button className={styles.navBtn} onClick={() => changeMonth(-1)}>&lt;</button>
-                            <button className={styles.navBtn} onClick={() => setViewDate(new Date())}>{t('common.today')}</button>
-                            <button className={styles.navBtn} onClick={() => changeMonth(1)}>&gt;</button>
-                        </div>
-                    </div>
-
-                    <div className={styles.matrixContainer}>
-                        <div className={styles.matrixNav}>
-                            <div className={styles.monthDisplay}>
-                                {viewDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
-                            </div>
-                        </div>
-
-                        <div className={styles.matrixScroll}>
-                            <table className={styles.matrixTable}>
-                                <thead>
-                                    <tr>
-                                        <th className={`${styles.matrixHeaderCell} ${styles.indexCorner}`}>
-                                            #
-                                        </th>
-                                        <th className={`${styles.matrixHeaderCell} ${styles.corner}`}>
-                                            {t('common.contractor')}
-                                        </th>
-                                        {matrixDates.map((d, i) => (
-                                            <th key={i} className={`${styles.matrixHeaderCell} ${d.isToday ? styles.today : ''}`}>
-                                                <span className={styles.dayLabel}>{d.dayLabel}</span>
-                                                <span className={styles.dateLabel}>{d.dateLabel}</span>
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {(selectedVendorFilter 
-                                        ? activeContractors.filter(v => v.name === selectedVendorFilter) 
-                                        : activeContractors.filter(v => (vendorStats[v.name] || 0) > 0)
-                                    ).map((vendor, vIdx) => (
-                                        <tr key={vendor.id} className={styles.matrixRow}>
-                                            <td className={styles.indexStickyCell}>{vIdx + 1}</td>
-                                            <td className={styles.vendorStickyCell}>{vendor.name}</td>
-                                            {matrixDates.map((d, i) => {
-                                                const audit = getAuditForMatrix(vendor.name, d.date);
-                                                return (
-                                                    <td
-                                                        key={i}
-                                                        className={`${styles.matrixCell} ${d.isToday ? styles.today : ''} ${d.isWeekend ? styles.weekend : ''}`}
-                                                    >
-                                                        {audit && (
-                                                            <div
-                                                                className={`${styles.auditIndicator} ${audit.status.toLowerCase().replace(' ', '')} ${styles.iconIndicator}`}
-                                                                title={`${audit.auditNo}: ${audit.title}`}
-                                                                onClick={() => handleEdit(audit.id)}
-                                                            >
-                                                                {audit.status === 'Planned' ? (
-                                                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                                                                        <line x1="16" y1="2" x2="16" y2="6"></line>
-                                                                        <line x1="8" y1="2" x2="8" y2="6"></line>
-                                                                        <line x1="3" y1="10" x2="21" y2="10"></line>
-                                                                    </svg>
-                                                                ) : audit.status === 'In Progress' ? (
-                                                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
-                                                                        {/* Left Shoe Print */}
-                                                                        <path d="M8 5c-1.8 0-3 1.5-3 4s1.2 3.5 3 3.5 3-1 3-3.5-1.2-4-3-4z" />
-                                                                        <path d="M8 13.5c-1.2 0-2 .5-2 1.5s.8 1.5 2 1.5 2-.5 2-1.5-.8-1.5-2-1.5z" />
-
-                                                                        {/* Right Shoe Print */}
-                                                                        <path d="M16 10c-1.8 0-3 1.5-3 4s1.2 3.5 3 3.5 3-1 3-3.5-1.2-4-3-4z" />
-                                                                        <path d="M16 18.5c-1.2 0-2 .5-2 1.5s.8 1.5 2 1.5 2-.5 2-1.5-.8-1.5-2-1.5z" />
-                                                                    </svg>
-                                                                ) : audit.status === 'Completed' ? (
-                                                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                                                        <polyline points="20 6 9 17 4 12"></polyline>
-                                                                    </svg>
-                                                                ) : audit.status === 'Closed' ? (
-                                                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                                                                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                                                                    </svg>
-                                                                ) : audit.status === 'Draft' ? (
-                                                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                                                        <path d="M12 20h9"></path>
-                                                                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
-                                                                    </svg>
-                                                                ) : (
-                                                                    audit.auditNo.split('-').pop()
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                );
-                                            })}
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
+                {/* Schedule Matrix Glass Panel */}
+                <ScheduleMatrix 
+                    matrixDates={matrixDates}
+                    vendors={selectedVendorFilter 
+                        ? activeContractors.filter(v => v.name === selectedVendorFilter)
+                        : activeContractors.filter(v => (vendorStats[v.name] || 0) > 0)
+                    }
+                    getAuditForMatrix={getAuditForMatrix}
+                    viewDate={viewDate}
+                    onChangeMonth={changeMonth}
+                    onSetToday={setToday}
+                    onEditAudit={handleEdit}
+                    loading={loading}
+                    t={t}
+                />
             </div>
 
+            {/* Audit Data Table Area */}
             <div className={styles.content}>
                 <DataTable
                     title={t('audit.listTitle')}
                     actions={
-                        <button
-                            className={styles.addNewButton}
-                            onClick={handleAddNew}
-                        >
-                            {t('audit.addNew')}
+                        <button className={styles.addNewButton} onClick={handleAddNew}>
+                            <Plus size={18} />
+                            {t('audit.addNew') || 'Add New'}
                         </button>
                     }
                     columns={createColumns(handleEdit, handleDeleteClick, handleReport, t, activeContractors)}
-                    data={tableBaseData}
+                    data={filteredData}
                     searchKey=""
                     getRowClassName={() => styles.normalRow}
-                    getRowId={(row) => row.id}
-                    onRowClick={(row) => handleEdit(row.id)}
+                    getRowId={(row: AuditItem) => row.id}
+                    onRowClick={(row: AuditItem) => handleEdit(row.id)}
                 />
             </div>
 
-            {
-                isEditModalOpen && (
-                    <AuditWizard
-                        auditId={currentAuditId}
-                        existingItem={auditList.find(item => item.id === currentAuditId)}
-                        onClose={() => {
-                            setIsEditModalOpen(false);
-                            setCurrentAuditId(null);
-                        }}
-                        onSaveSuccess={() => {
-                            setIsEditModalOpen(false);
-                            setCurrentAuditId(null);
-                            // Refresh audit list might be needed, but store handles reactivity
-                        }}
-                    />
-                )
-            }
+            {/* Edit / Detail Wizard Modal */}
+            {isEditModalOpen && (
+                <AuditWizard
+                    auditId={currentAuditId}
+                    existingItem={auditList.find(item => item.id === currentAuditId)}
+                    onClose={() => {
+                        setIsEditModalOpen(false);
+                        setCurrentAuditId(null);
+                    }}
+                    onSaveSuccess={() => {
+                        setIsEditModalOpen(false);
+                        setCurrentAuditId(null);
+                    }}
+                />
+            )}
 
             <ConfirmModal
                 isOpen={deleteModal.isOpen}
@@ -414,7 +246,7 @@ const Audit: React.FC = () => {
                 confirmText={t('common.delete')}
                 cancelText={t('common.cancel')}
             />
-        </div >
+        </div>
     );
 };
 

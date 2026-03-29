@@ -1,11 +1,12 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "../Shared/DataTable/DataTableColumnHeader";
 import { Contractor } from "../../store/contractorsStore";
+import { Project } from "../../store/projectStore";
 import { Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Pencil } from "lucide-react";
 
+// ─── Contractor Columns ────────────────────────────────────────────────────────
 export const createColumns = (
     handleEdit: (contractor: Contractor) => void,
     handleDelete: (id: string) => void,
@@ -122,6 +123,84 @@ export const createColumns = (
                             size="sm"
                             className="h-8 w-8 p-0 text-red-500 hover:text-white hover:bg-red-500"
                             onClick={() => handleDelete(item.id)}
+                            title={t('common.delete')}
+                        >
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                    </div>
+                );
+            },
+            enableSorting: false,
+            enableHiding: false,
+            size: 100,
+        },
+    ];
+
+// ─── Project Columns ────────────────────────────────────────────────────────
+export const createProjectColumns = (
+    handleEdit: (project: Project) => void,
+    handleDelete: (id: string) => void,
+    t: (key: string) => string
+): ColumnDef<Project>[] => [
+        {
+            id: "serialNumber",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title={t('contractors.serialNumber') || 'No.'} />
+            ),
+            cell: ({ row }) => <div className="text-center">{row.index + 1}</div>,
+            enableSorting: false,
+            enableHiding: false,
+            size: 60,
+        },
+        {
+            accessorKey: "name",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title="Project Name" />
+            ),
+            cell: ({ row }) => <div className="text-center font-medium">{row.getValue("name")}</div>,
+        },
+        {
+            accessorKey: "code",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title="Code" />
+            ),
+            cell: ({ row }) => <div className="text-center">{row.getValue("code") || '-'}</div>,
+        },
+        {
+            accessorKey: "owner",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title="Owner" />
+            ),
+            cell: ({ row }) => <div className="text-center">{row.getValue("owner") || '-'}</div>,
+        },
+        {
+            accessorKey: "description",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title="Description" />
+            ),
+            cell: ({ row }) => <div className="text-left text-gray-500 line-clamp-1">{row.getValue("description") || '-'}</div>,
+        },
+        {
+            id: "actions",
+            header: t('contractors.operations') || 'Actions',
+            cell: ({ row }) => {
+                const item = row.original;
+                return (
+                    <div className="flex items-center justify-center gap-2">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-blue-500 hover:text-white hover:bg-blue-500"
+                            onClick={(e) => { e.stopPropagation(); handleEdit(item); }}
+                            title={t('common.edit')}
+                        >
+                            <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-red-500 hover:text-white hover:bg-red-500"
+                            onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
                             title={t('common.delete')}
                         >
                             <Trash2 className="h-4 w-4" />

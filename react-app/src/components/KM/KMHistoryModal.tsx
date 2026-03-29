@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { diff_match_patch, DIFF_INSERT, DIFF_DELETE, DIFF_EQUAL } from 'diff-match-patch';
+import React, { useCallback, useEffect, useState } from 'react';
+import { diff_match_patch, DIFF_INSERT, DIFF_DELETE } from 'diff-match-patch';
 import { KMArticleHistory } from '../../types/km';
 import { kmService } from '../../services/kmService';
 import styles from './KMHistoryModal.module.css';
@@ -57,15 +57,7 @@ export const KMHistoryModal: React.FC<KMHistoryModalProps> = ({ isOpen, onClose,
     const [loading, setLoading] = useState(false);
     const [modal, setModal] = useState<ModalState | null>(null);
 
-    useEffect(() => {
-        if (isOpen && articleId) {
-            fetchHistory();
-        } else {
-            setModal(null);
-        }
-    }, [isOpen, articleId]);
-
-    const fetchHistory = async () => {
+    const fetchHistory = useCallback(async () => {
         setLoading(true);
         try {
             const data = await kmService.getHistory(articleId);
@@ -75,7 +67,15 @@ export const KMHistoryModal: React.FC<KMHistoryModalProps> = ({ isOpen, onClose,
         } finally {
             setLoading(false);
         }
-    };
+    }, [articleId]);
+
+    useEffect(() => {
+        if (isOpen && articleId) {
+            fetchHistory();
+        } else {
+            setModal(null);
+        }
+    }, [isOpen, articleId, fetchHistory]);
 
     if (!isOpen) return null;
 

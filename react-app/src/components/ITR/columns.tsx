@@ -3,7 +3,8 @@ import { ITRItem } from "../../store/itrStore";
 import { DataTableColumnHeader } from "@/components/Shared/DataTable/DataTableColumnHeader";
 import { Button } from "@/components/ui/button";
 import { Pencil, Trash2, FileText, AlertTriangle } from "lucide-react";
-import { getLocalizedStatus } from "../../utils/formatters";
+import { getLocalizedStatus, formatDateISO } from "../../utils/formatters";
+import { addSevenWorkingDays } from "../../utils/dateUtils";
 import { Checkbox } from "@/components/ui/checkbox";
 
 
@@ -109,7 +110,12 @@ export const createColumns = (
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title={t('common.dueDate')} />
             ),
-            cell: ({ row }) => <div className="text-center">{row.getValue("dueDate") || '-'}</div>,
+            cell: ({ row }) => {
+                const stored = row.original.dueDate;
+                const raiseDate = row.original.raiseDate;
+                const computed = stored || (raiseDate ? addSevenWorkingDays(formatDateISO(raiseDate)) : null);
+                return <div className="text-center">{computed || '-'}</div>;
+            },
         },
         {
             accessorKey: "ncrNumber",

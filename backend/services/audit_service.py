@@ -155,15 +155,14 @@ class AuditService:
         if "contractor" in update_data:
             processed_data["vendor_id"] = self._resolve_vendor_id(update_data["contractor"])
 
-            # Regenerate auditNo whenever contractor changes
-            # (covers NA → contractor, and contractor A → contractor B)
+            # Only regenerate auditNo if the record has no auditNo yet
+            # (initial assignment when a contractor is first set, not on contractor changes)
             new_contractor = update_data["contractor"]
-            if new_contractor:
-                old_audit_no = db_audit.auditNo or ""
+            if new_contractor and not db_audit.auditNo:
                 processed_data["auditNo"] = generate_reference_no(
                     self.repo.db, new_contractor, 'audit'
                 )
-                logger.info(f"Regenerated auditNo from {old_audit_no} to {processed_data['auditNo']} due to contractor change")
+                logger.info(f"Assigned new auditNo {processed_data['auditNo']} (first contractor assignment)")
 
         # Update the audit
         updated_audit = self.repo.update(audit_id, processed_data)

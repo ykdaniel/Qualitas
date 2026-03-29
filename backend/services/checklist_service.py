@@ -109,7 +109,7 @@ class ChecklistService:
             # Generate recordsNo automatically if not provided or is placeholder
             if not data.get('recordsNo') or data.get('recordsNo') == "[AUTO-GENERATE]":
                 data['recordsNo'] = generate_reference_no(
-                    self.repo.db, data.get('packageName', ''), 'CHECKLIST'
+                    self.repo.db, data.get('contractor', ''), 'CHECKLIST'
                 )
 
             # Handle contractor name -> contractor_id mapping
@@ -236,7 +236,7 @@ class ChecklistService:
             logger.error(f"Error updating Checklist {checklist_id}: {e}", exc_info=True)
             raise e
 
-    def delete_checklist(self, checklist_id: str, user_id: int = None, username: str = None) -> bool:
+    def delete_checklist(self, checklist_id: str, user_id: int = None, username: str = None, reason: str = None) -> bool:
         """
         Delete a Checklist with audit logging
 
@@ -266,7 +266,7 @@ class ChecklistService:
             # Log audit trail
             log_audit(
                 self.repo.db, "DELETE", "Checklist", checklist_id, db_checklist.recordsNo,
-                old_value=old_val, user_id=user_id, username=username
+                old_value=old_val, user_id=user_id, username=username, reason=reason
             )
 
             return True

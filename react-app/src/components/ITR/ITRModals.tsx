@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { ChecklistSnapshotModal } from './ChecklistSnapshotModal';
 import { useChecklistStore } from '../../store/checklistStore';
@@ -16,6 +17,7 @@ import { addSevenWorkingDays } from '../../utils/dateUtils';
 import { formatDateISO } from '../../utils/formatters';
 import { AttachmentInfo } from '../../services/api';
 import FileAttachment from '../Shared/FileAttachment';
+import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './ITR.module.css';
 
 export interface PendingUploads {
@@ -82,6 +84,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
 
 
     const allChecklists = useChecklistStore(state => state.records);
+    const itpList = useITPStore(state => state.itpList);
     const [editingSnapshotIndex, setEditingSnapshotIndex] = useState<number | null>(null);
 
     // Initialize form data from existing data or existing item
@@ -90,6 +93,9 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
             return { ...existingData };
         }
         if (existingItem) {
+            const dd = (existingItem.detail_data && typeof existingItem.detail_data === 'object')
+                ? existingItem.detail_data as Record<string, any>
+                : {};
             return {
                 itrNumber: existingItem.documentNumber || '',  // 既有編號，顯示用
                 status: existingItem.status || 'Approved',
@@ -100,31 +106,31 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                 contractor: existingItem.vendor || '',
                 remark: existingItem.remark || '',
                 subject: existingItem.subject || existingItem.description || '',
-                referenceStandards: '',
+                referenceStandards: dd.referenceStandards || '',
                 detailsDescription: existingItem.description || '',
                 foundLocation: existingItem.foundLocation || '',
                 ncrNumber: existingItem.ncrNumber || '',
                 raisedBy: existingItem.raisedBy || '',
-                serialNumbers: '',
-                repairMethodStatement: '',
-                immediateCorrectionAction: '',
-                rootCauseAnalysis: '',
-                correctiveActions: '',
-                preventiveAction: '',
-                finalProductIntegrityStatement: '',
-                reInspectionNumber: '',
+                serialNumbers: dd.serialNumbers || '',
+                repairMethodStatement: dd.repairMethodStatement || '',
+                immediateCorrectionAction: dd.immediateCorrectionAction || '',
+                rootCauseAnalysis: dd.rootCauseAnalysis || '',
+                correctiveActions: dd.correctiveActions || '',
+                preventiveAction: dd.preventiveAction || '',
+                finalProductIntegrityStatement: dd.finalProductIntegrityStatement || '',
+                reInspectionNumber: dd.reInspectionNumber || '',
                 noiNumber: existingItem.noiNumber || '',  // 連結到產生此 ITR 的 NOI
                 eventNumber: existingItem.eventNumber || '',
                 checkpoint: existingItem.checkpoint || '',
-                projectQualityManager: '',
+                projectQualityManager: dd.projectQualityManager || '',
                 defectPhotos: existingItem.defectPhotos || [],
                 improvementPhotos: existingItem.improvementPhotos || [],
                 attachments: existingItem.attachments || [],
-                dueDate: (existingItem as any).dueDate || (existingItem.raiseDate ? addSevenWorkingDays(formatDateISO(existingItem.raiseDate)) : ''),
-                itpNo: existingItem.itpNo || '',
-                drawings: existingItem.drawings || [],
-                certificates: existingItem.certificates || [],
-                linkedChecklists: existingItem.linkedChecklists || [],
+                dueDate: existingItem.dueDate || (existingItem.raiseDate ? addSevenWorkingDays(formatDateISO(existingItem.raiseDate)) : ''),
+                itpNo: existingItem.itpNo || dd.itpNo || '',
+                drawings: dd.drawings || existingItem.drawings || [],
+                certificates: dd.certificates || existingItem.certificates || [],
+                linkedChecklists: existingItem.linkedChecklists || dd.linkedChecklists || [],
             };
         }
         // 新項目：itrNumber 留空，由後端自動產生
@@ -191,6 +197,14 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         }
         return 'select';
     });
+    const [approvalWarning, setApprovalWarning] = useState<{ show: boolean; pendingStatus: string }>({ show: false, pendingStatus: '' });
+    const [publishConfirm, setPublishConfirm] = useState<{ show: boolean; nextRev: string }>({ show: false, nextRev: '' });
+    const [unlinkConfirm, setUnlinkConfirm] = useState<{ show: boolean; index: number | null }>({ show: false, index: null });
+
+    // 勾稽鎖定：Approved/Void 後全欄鎖定，防止已批准 ITR 被竄改
+    const isLocked = formData.status === 'Approved' || formData.status === 'Void';
+    // NOI 一旦儲存後不可再更換（避免勾稽關聯斷裂）
+    const noiSaved = !!(existingItem?.noiNumber);
 
     if (!itrId) {
         return null;
@@ -202,30 +216,22 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
     // Reference No 由後端自動產生，不再於前端自動更新
 
     const handleFieldChange = (field: keyof ITRDetailData, value: string) => {
+        if (field === 'status' && formData.status) {
+            const validation = validateStatusTransition(formData.status, value, ITRStatusTransitions);
+            if (!validation.allowed) {
+                toast.warning(validation.message || t('common.invalidStatusTransition'));
+                return;
+            }
+            if (value === 'Approved' && linkedChecklists.some(c => c.status === 'Fail')) {
+                setApprovalWarning({ show: true, pendingStatus: value });
+                return;
+            }
+        }
         setFormData(prev => {
             const updated = { ...prev, [field]: value };
-
-            // Status validation
-            if (field === 'status' && prev.status) {
-                const validation = validateStatusTransition(prev.status, value, ITRStatusTransitions);
-                if (!validation.allowed) {
-                    alert(validation.message || t('common.invalidStatusTransition'));
-                    return prev;
-                }
-
-                // Checklist sync validation
-                if (value === 'Approved' && linkedChecklists.some(c => c.status === 'Fail')) {
-                    if (!window.confirm("WARNING: There are failed checklists associated with this ITR. Are you sure you want to approve it?")) {
-                        return prev;
-                    }
-                }
-            }
-
-            // Auto-calculate Due Date when Inspection Date (raiseDate) changes
             if (field === 'raiseDate') {
                 updated.dueDate = addSevenWorkingDays(value);
             }
-
             return updated;
         });
     };
@@ -270,6 +276,11 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         }));
     };
 
+    const handleUnlinkChecklist = (index: number, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setUnlinkConfirm({ show: true, index });
+    };
+
     const handleRemoveLegacyGeneric = (index: number, field: 'drawings' | 'certificates') => {
         setFormData(prev => ({
             ...prev,
@@ -279,7 +290,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
 
     const handleSave = async () => {
         if (!formData.noiNumber) {
-            alert(t('itr.validation.noiRequired') || 'Please select an NOI Number.');
+            toast.warning(t('itr.validation.noiRequired') || 'Please select an NOI Number.');
             return;
         }
 
@@ -290,7 +301,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
 
             if (openNcrs.length > 0 || openObs.length > 0) {
                 const totalOpen = openNcrs.length + openObs.length;
-                alert(`Cannot close ITR: There are still ${totalOpen} open NCR/OBS associated with this inspection. Please close them first.`);
+                toast.warning(`Cannot close ITR: There are still ${totalOpen} open NCR/OBS associated with this inspection. Please close them first.`);
                 return;
             }
         }
@@ -299,24 +310,25 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
             await onSave(formData, pendingUploads, deletedFileIds);
             onClose();
         } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
-            // 錯誤已在父層 handleSaveITRDetails 以 alert 顯示，保持 modal 開啟
+            // 錯誤已在父層 handleSaveITRDetails 以 toast 顯示，保持 modal 開啟
         }
     };
 
-    const handlePublish = async () => {
-        const nextRev = getNextRevision(formData.type || 'Rev0.0'); // Default to Rev0.0 if empty so it becomes Rev1.0
-        if (window.confirm(`Are you sure you want to publish as ${nextRev}?`)) {
-            try {
-                await onSave({
-                    ...formData,
-                    type: nextRev,
-                    status: 'Approved' // ITR usually approves on publish? Or keep existing? Plan says optional.
-                    // Let's keep status update optional or implicit. 
-                }, pendingUploads, deletedFileIds);
-                onClose();
-            } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
-                // Error handled in parent
-            }
+    const handlePublish = () => {
+        const nextRev = getNextRevision(formData.type || 'Rev0.0');
+        setPublishConfirm({ show: true, nextRev });
+    };
+
+    const doPublish = async (nextRev: string) => {
+        try {
+            await onSave({
+                ...formData,
+                type: nextRev,
+                status: 'Approved'
+            }, pendingUploads, deletedFileIds);
+            onClose();
+        } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
+            // Error handled in parent
         }
     };
 
@@ -335,6 +347,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
     }
 
     return (
+        <>
         <div className={styles.modalOverlay}>
             <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
                 <div className={styles.modalHeader}>
@@ -342,6 +355,12 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                     <button className={styles.closeButton} onClick={onClose}>×</button>
                 </div>
                 <div className={styles.modalBody}>
+                    {isLocked && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#fef9c3', border: '1px solid #fde047', borderRadius: '6px', padding: '8px 14px', marginBottom: '12px', color: '#854d0e', fontSize: '13px', fontWeight: 600 }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                            {t('itr.lockedMsg') || `此 ITR 狀態為「${formData.status}」，欄位已鎖定。如需修改請先透過 Publish 建立新版本，或將狀態改為 Reject。`}
+                        </div>
+                    )}
                     <p className={styles.formRequiredHint}>{t('form.requiredHint')}</p>
                     <div className={styles.formSections}>
                         {/* {t('common.baseInfo') || '基本資訊'} */}
@@ -363,6 +382,8 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                     <select
                                         className={styles.formSelect}
                                         value={formData.noiNumber}
+                                        disabled={isLocked || noiSaved}
+                                        style={(isLocked || noiSaved) ? { backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: '#000' } : {}}
                                         onChange={(e) => {
                                             const selectedRef = e.target.value;
                                             handleFieldChange('noiNumber', selectedRef);
@@ -397,7 +418,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                 </div>
                                 <div className={styles.formGroup}>
                                     <label className={formData.noiNumber ? styles.optionalLabel : ''}>{t('common.contractor')}</label>
-                                    {formData.noiNumber ? (
+                                    {(formData.noiNumber || isLocked) ? (
                                         <input
                                             type="text"
                                             className={styles.formInput}
@@ -427,8 +448,8 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                         className={styles.formInput}
                                         value={formData.subject}
                                         onChange={(e) => handleFieldChange('subject', e.target.value)}
-                                        readOnly={!!formData.noiNumber}
-                                        style={formData.noiNumber ? { backgroundColor: '#D9D9D9', cursor: 'not-allowed' } : {}}
+                                        readOnly={isLocked || !!formData.noiNumber}
+                                        style={(isLocked || !!formData.noiNumber) ? { backgroundColor: '#D9D9D9', cursor: 'not-allowed' } : {}}
                                     />
                                 </div>
                                 <div className={styles.formGroup}>
@@ -437,11 +458,11 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                         className={styles.formSelect}
                                         value={formData.itpNo}
                                         onChange={(e) => handleFieldChange('itpNo', e.target.value)}
-                                        disabled={!!formData.noiNumber}
-                                        style={formData.noiNumber ? { backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: '#000000' } : {}}
+                                        disabled={isLocked || !!formData.noiNumber}
+                                        style={(isLocked || !!formData.noiNumber) ? { backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: '#000000' } : {}}
                                     >
                                         <option value="">{t('itr.selectITP') || 'Select ITP'}</option>
-                                        {useITPStore.getState().itpList.map((itp) => (
+                                        {itpList.map((itp) => (
                                             <option key={itp.id} value={itp.referenceNo || ''}>
                                                 {itp.referenceNo || itp.description || `(${t('common.notGenerated')})`}
                                             </option>
@@ -461,8 +482,8 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                         className={styles.formInput}
                                         value={formatDateISO(formData.raiseDate)}
                                         onChange={(e) => handleFieldChange('raiseDate', e.target.value)}
-                                        readOnly={!!formData.noiNumber}
-                                        style={formData.noiNumber ? { backgroundColor: '#D9D9D9', cursor: 'not-allowed' } : {}}
+                                        readOnly={isLocked || !!formData.noiNumber}
+                                        style={(isLocked || !!formData.noiNumber) ? { backgroundColor: '#D9D9D9', cursor: 'not-allowed' } : {}}
                                     />
                                 </div>
                                 <div className={styles.formGroup}>
@@ -481,6 +502,8 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                         <select
                                             className={styles.formSelect}
                                             value={VERSION_OPTIONS.includes(formData.type || '') ? formData.type : 'Rev1.0'}
+                                            disabled={isLocked}
+                                            style={isLocked ? { backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: '#000' } : {}}
                                             onChange={(e) => {
                                                 const value = e.target.value;
                                                 if (value === 'custom') {
@@ -504,6 +527,8 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                             className={styles.formInput}
                                             value={formData.type || ''}
                                             onChange={(e) => handleFieldChange('type', e.target.value)}
+                                            readOnly={isLocked}
+                                            style={isLocked ? { backgroundColor: '#D9D9D9', cursor: 'not-allowed' } : {}}
                                             placeholder={t('itr.revCustomPlaceholder')}
                                         />
                                     )}
@@ -524,6 +549,8 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                     </span>
                                     <select
                                         className="h-8 pl-2 pr-8 rounded-md border border-slate-200 bg-white text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-blue-400 transition-colors cursor-pointer"
+                                        disabled={isLocked}
+                                        style={isLocked ? { backgroundColor: '#D9D9D9', cursor: 'not-allowed', opacity: 0.6 } : {}}
                                         onChange={(e) => {
                                             const value = e.target.value;
                                             if (!value) return;
@@ -581,16 +608,6 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
 
                             {/* Unlink Handler & Snapshot Editor */}
                             {(() => {
-                                const handleUnlinkChecklist = (index: number, e: React.MouseEvent) => {
-                                    e.stopPropagation(); // Prevent navigation
-                                    if (window.confirm(t('itr.confirmUnlinkChecklist') || 'Remove this checklist snapshot?')) {
-                                        setFormData(prev => ({
-                                            ...prev,
-                                            linkedChecklists: prev.linkedChecklists.filter((_, i) => i !== index)
-                                        }));
-                                    }
-                                };
-
                                 const handleSaveSnapshot = (updatedSnapshot: any) => {
                                     if (editingSnapshotIndex === null) return;
                                     setFormData(prev => {
@@ -639,8 +656,8 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                                                 <span className="text-xs font-medium text-slate-600">{record.date}</span>
                                                             </div>
 
-                                                            {/* Unlink Button */}
-                                                            <button
+                                                            {/* Unlink Button — hidden when ITR is locked */}
+                                                            {!isLocked && <button
                                                                 type="button"
                                                                 onClick={(e) => handleUnlinkChecklist(index, e)}
                                                                 className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors z-10"
@@ -653,7 +670,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                                                     <line x1="10" y1="11" x2="10" y2="17"></line>
                                                                     <line x1="14" y1="11" x2="14" y2="17"></line>
                                                                 </svg>
-                                                            </button>
+                                                            </button>}
                                                         </div>
                                                     </div>
                                                 ))}
@@ -774,10 +791,13 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                             className={styles.formSelect}
                                             value={formData.status}
                                             onChange={(e) => handleFieldChange('status', e.target.value)}
+                                            disabled={formData.status === 'Void'}
+                                            style={formData.status === 'Void' ? { backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: '#000' } : {}}
                                         >
                                             <option value="Approved">{t('itr.status.approved')}</option>
                                             <option value="Reject">{t('itr.status.reject')}</option>
                                             <option value="In Progress">{t('itr.status.inProgress')}</option>
+                                            <option value="Void">{t('itr.status.void') || 'Void'}</option>
                                         </select>
 
                                         {linkedChecklists.length > 0 && (
@@ -820,6 +840,8 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                         className={styles.formInput}
                                         value={formData.closeoutDate}
                                         onChange={(e) => handleFieldChange('closeoutDate', e.target.value)}
+                                        readOnly={isLocked}
+                                        style={isLocked ? { backgroundColor: '#D9D9D9', cursor: 'not-allowed' } : {}}
                                     />
                                 </div>
                                 <div className={styles.formGroupFull}>
@@ -838,6 +860,8 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                         value={formData.remark}
                                         onChange={(e) => handleFieldChange('remark', e.target.value)}
                                         rows={3}
+                                        readOnly={isLocked}
+                                        style={isLocked ? { backgroundColor: '#D9D9D9', cursor: 'not-allowed' } : {}}
                                     />
                                 </div>
 
@@ -856,15 +880,60 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                     >
                         Publish
                     </button>
-                    <button className={styles.saveButton} onClick={handleSave} style={{ marginLeft: '12px' }}>
-                        {t('common.save')}
-                    </button>
+                    {!isLocked && (
+                        <button className={styles.saveButton} onClick={handleSave} style={{ marginLeft: '12px' }}>
+                            {t('common.save')}
+                        </button>
+                    )}
                     <button className={styles.cancelButton} onClick={onClose}>
                         {t('common.cancel')}
                     </button>
                 </div>
             </div>
-        </div >
+        </div>
+        <ConfirmModal
+            isOpen={approvalWarning.show}
+            title={t('common.warning') || 'Warning'}
+            message={t('itr.approvalWarningMsg') || 'WARNING: There are failed checklists associated with this ITR. Are you sure you want to approve it?'}
+            confirmText={t('common.confirm') || 'Confirm'}
+            cancelText={t('common.cancel')}
+            onConfirm={() => {
+                setFormData(prev => ({ ...prev, status: approvalWarning.pendingStatus }));
+                setApprovalWarning({ show: false, pendingStatus: '' });
+            }}
+            onCancel={() => setApprovalWarning({ show: false, pendingStatus: '' })}
+        />
+        <ConfirmModal
+            isOpen={publishConfirm.show}
+            title={t('itr.publishTitle') || 'Publish Revision'}
+            message={`${t('itr.publishConfirm') || 'Are you sure you want to publish as'} ${publishConfirm.nextRev}?`}
+            confirmText={t('itr.publish') || 'Publish'}
+            cancelText={t('common.cancel')}
+            onConfirm={() => {
+                const rev = publishConfirm.nextRev;
+                setPublishConfirm({ show: false, nextRev: '' });
+                doPublish(rev);
+            }}
+            onCancel={() => setPublishConfirm({ show: false, nextRev: '' })}
+        />
+        <ConfirmModal
+            isOpen={unlinkConfirm.show}
+            title={t('common.confirmDeleteTitle')}
+            message={t('itr.confirmUnlinkChecklist') || 'Remove this checklist snapshot?'}
+            confirmText={t('common.delete')}
+            cancelText={t('common.cancel')}
+            onConfirm={() => {
+                if (unlinkConfirm.index !== null) {
+                    setFormData(prev => ({
+                        ...prev,
+                        linkedChecklists: prev.linkedChecklists.filter((_, i) => i !== unlinkConfirm.index)
+                    }));
+                }
+                setUnlinkConfirm({ show: false, index: null });
+            }}
+            onCancel={() => setUnlinkConfirm({ show: false, index: null })}
+        />
+        </>
     );
 };
 

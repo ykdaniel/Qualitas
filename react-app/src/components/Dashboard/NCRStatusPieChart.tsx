@@ -7,6 +7,7 @@ import {
     Legend,
     ResponsiveContainer
 } from 'recharts';
+import { Inbox } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import styles from './Dashboard.module.css';
 
@@ -62,7 +63,8 @@ const NCRStatusPieChart: React.FC<NCRStatusPieChartProps> = React.memo(({
             <div className={styles.chartCard}>
                 <h3 className={styles.chartCardTitle}>{t('dashboard.ncrStatusChart') || 'NCR Status Distribution'}</h3>
                 <div className={styles.emptyChart}>
-                    {t('common.noData') || 'No data available'}
+                    <Inbox size={48} strokeWidth={1.5} color="#9ca3af" />
+                    <span>{t('common.noData') || 'No data available'}</span>
                 </div>
             </div>
         );

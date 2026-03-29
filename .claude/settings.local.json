@@ -41,7 +41,14 @@
       "Bash(git rm:*)",
       "Bash(npm run build:*)",
       "Bash(npx tsc:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(.venv/bin/python -c \"import main\")",
+      "Bash(python3.11 -c \"print\\(''ok''\\)\")",
+      "Bash(python3.12 -c \"print\\(''ok''\\)\")",
+      "Bash(python3.9 -c \"print\\(''ok''\\)\")",
+      "Bash(/Library/Developer/CommandLineTools/usr/bin/python3 --version)",
+      "Bash(/Library/Developer/CommandLineTools/usr/bin/python3 -c \"import main\")",
+      "Bash(pip3 install:*)"
     ]
   }
 }

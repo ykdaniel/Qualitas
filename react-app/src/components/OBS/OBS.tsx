@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useOBSStore } from '../../store/obsStore';
@@ -8,7 +9,7 @@ import ConfirmModal from '../Shared/ConfirmModal';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { BackButton } from '@/components/ui/BackButton';
-import { OBSDetailModal, OBSDetailsViewModal, OBSDetailData, PendingUploads } from './OBSModals';
+import { OBSDetailModal, OBSDetailData, PendingUploads } from './OBSModals';
 import { useDebounce } from '../../hooks/useDebounce';
 import { uploadFiles, deleteFile } from '../../services/api';
 import { useOBSStats } from '../../hooks/useOBSStats';
@@ -32,9 +33,7 @@ const OBS: React.FC = () => {
 
   // Modal States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [currentObsId, setCurrentObsId] = useState<string | null>(null);
-  const [viewingObsId, setViewingObsId] = useState<string | null>(null);
 
   // Delete Confirmation State
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null; message: string }>({
@@ -88,6 +87,9 @@ const OBS: React.FC = () => {
       defectPhotos: details.defectPhotos,
       improvementPhotos: details.improvementPhotos,
       attachments: details.attachments,
+      dueDate: details.dueDate || undefined,
+      noiNumber: details.noiNumber || undefined,
+      itrNumber: details.itrNumber || undefined,
     };
     try {
       let targetId = '';
@@ -99,23 +101,41 @@ const OBS: React.FC = () => {
         targetId = currentObsId;
       }
 
+      const fileErrors: string[] = [];
       if (deletedFileIds.length > 0) {
-        await Promise.all(deletedFileIds.map(fileId => deleteFile(fileId).catch(e => console.error("Failed to delete", e))));
+        const deleteResults = await Promise.allSettled(
+          [...new Set(deletedFileIds)].map((fileId) => deleteFile(fileId))
+        );
+        deleteResults.forEach((result) => {
+          if (result.status === 'rejected') {
+            const detail = (result.reason as any)?.response?.data?.detail || (result.reason as Error)?.message;
+            fileErrors.push(detail || 'Failed to delete one or more files');
+          }
+        });
       }
 
       if (targetId) {
         for (const { category, files } of pendingUploads) {
           if (files.length > 0) {
-            await uploadFiles('obs', targetId, files, category).catch(e => console.error(`Failed to upload ${category}`, e));
+            try {
+              await uploadFiles('obs', targetId, files, category);
+            } catch (err: any) {
+              const detail = err?.response?.data?.detail || err?.message;
+              fileErrors.push(detail || `Failed to upload ${category}`);
+            }
           }
         }
+      }
+
+      if (fileErrors.length > 0) {
+        throw new Error(fileErrors[0]);
       }
 
       setIsEditModalOpen(false);
       setCurrentObsId(null);
     } catch (error: any) {
       const detail = error?.response?.data?.detail || t('common.saveFailed') || 'Save failed';
-      alert(detail);
+      toast.error(detail);
     }
   };
 
@@ -136,6 +156,7 @@ const OBS: React.FC = () => {
         await deleteOBS(deleteModal.id);
       } catch (err) {
         console.error('Failed to delete OBS:', err);
+        toast.error((err as Error)?.message || t('common.deleteFailed'));
       }
       setDeleteModal({ isOpen: false, id: null, message: '' });
     }
@@ -203,7 +224,7 @@ const OBS: React.FC = () => {
 
       <div className={styles.content}>
         <DataTable
-          title={t('obs.listTitle')}
+          title={t('obs.title')}
           actions={
             <button
               className={styles.addNewButton}
@@ -244,18 +265,6 @@ const OBS: React.FC = () => {
           onClose={() => {
             setIsEditModalOpen(false);
             setCurrentObsId(null);
-          }}
-        />
-      )}
-
-      {isDetailsModalOpen && viewingObsId && (
-        <OBSDetailsViewModal
-          obsId={viewingObsId}
-          obsItem={obsList.find(item => item.id === viewingObsId)}
-          obsDetailData={undefined}
-          onClose={() => {
-            setIsDetailsModalOpen(false);
-            setViewingObsId(null);
           }}
         />
       )}

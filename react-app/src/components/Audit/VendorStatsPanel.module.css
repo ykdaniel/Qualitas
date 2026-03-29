@@ -1,0 +1,160 @@
+.panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 200px);
+  min-height: 400px;
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.panel:hover {
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+
+.panelHeader {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.headerTitleGroup {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panelTitle {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.badge {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2);
+}
+
+.panelSubtitle {
+  margin: 4px 0 0 0;
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* Vendor List */
+.vendorList {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 8px;
+}
+
+/* Custom Scrollbar for list */
+.vendorList::-webkit-scrollbar {
+  width: 6px;
+}
+.vendorList::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 4px;
+}
+.vendorList::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.5);
+  border-radius: 4px;
+}
+.vendorList::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.8);
+}
+
+.vendorItem {
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vendorItem:hover {
+  border-color: #34d399;
+  background: #f0fdf4;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.08);
+}
+
+.vendorItem.active {
+  background: linear-gradient(to right, #ecfdf5, #f0fdf4);
+  border-color: #10b981;
+  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15), inset 4px 0 0 #10b981;
+}
+
+.vendorHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.vendorName {
+  font-weight: 600;
+  color: #334155;
+  font-size: 14px;
+}
+
+.auditCount {
+  font-weight: 700;
+  color: #0f172a;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Progress Chart */
+.chartTrack {
+  height: 6px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.chartBar {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #94a3b8, #cbd5e1);
+  transition: width 1s cubic-bezier(0.16, 1, 0.3, 1), background 0.3s ease;
+}
+
+.vendorItem:hover .chartBar {
+  background: linear-gradient(90deg, #34d399, #10b981);
+}
+
+.vendorItem.active .chartBar {
+  background: linear-gradient(90deg, #059669, #10b981);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+.allBar {
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+}
+
+.vendorItem.active .allBar {
+  background: linear-gradient(90deg, #1d4ed8, #3b82f6);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
+}

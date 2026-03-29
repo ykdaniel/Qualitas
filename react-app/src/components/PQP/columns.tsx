@@ -9,7 +9,7 @@ const getLocalizedStatus = (status: string, t: (key: string) => string) => {
     const s = (status || '').toLowerCase();
     if (s === 'approved') return t('pqp.status.approved');
     if (s === 'reject') return t('pqp.status.reject');
-    if (s === 'not submit') return t('pqp.status.notSubmit');
+    if (s === 'not submit') return t('pqp.status.notSubmitted');
     if (s === 'under review') return t('pqp.status.underReview');
     return status;
 };
@@ -43,7 +43,7 @@ export const createColumns = (
                     column={column}
                     title={t('common.status')}
                     filterOptions={[
-                        { label: t('pqp.status.notSubmit'), value: 'Not Submit' },
+                        { label: t('pqp.status.notSubmitted'), value: 'Not Submit' },
                         { label: t('pqp.status.underReview'), value: 'Under Review' },
                         { label: t('pqp.status.approved'), value: 'Approved' },
                         { label: t('pqp.status.reject'), value: 'Reject' },

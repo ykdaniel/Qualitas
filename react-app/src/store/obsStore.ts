@@ -30,6 +30,7 @@ export interface OBSItem {
     attachments?: string[];
     noiNumber?: string;
     itrNumber?: string;
+    dueDate?: string;
 }
 
 function normalizeItem(item: unknown): OBSItem {

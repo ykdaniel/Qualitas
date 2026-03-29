@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { toast } from 'sonner';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { usePQPStore } from '../../store/pqpStore';
 import type { PQPItem } from '../../store/pqpStore';
@@ -10,7 +11,7 @@ import { StatItem } from '../Shared/StatItem';
 import statStyles from '../Shared/StatItem.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
-import { PQPDetailModal, PQPDetailsViewModal } from './PQPModals';
+import { PQPDetailModal } from './PQPModals';
 import { BackButton } from '@/components/ui/BackButton';
 import { useDebounce } from '../../hooks/useDebounce';
 import { uploadFiles, deleteFile } from '../../services/api';
@@ -31,9 +32,7 @@ const PQP: React.FC = () => {
 
   // Modal States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [currentPqpId, setCurrentPqpId] = useState<string | null>(null);
-  const [viewingPqpId, setViewingPqpId] = useState<string | null>(null);
 
   // Delete Confirmation State
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null }>({
@@ -82,7 +81,7 @@ const PQP: React.FC = () => {
           title: updates.title || '',
           description: updates.description || '',
           vendor: updates.vendor || '',
-          status: updates.status || 'Approved',
+          status: updates.status || 'Not Submit',
           version: updates.version || 'Rev1.0',
           createdAt: today,
           updatedAt: today,
@@ -92,18 +91,36 @@ const PQP: React.FC = () => {
       }
 
       // 處理實體檔案上傳與刪除
+      const fileErrors: string[] = [];
       if (deletedFileIds.length > 0) {
-        await Promise.all(deletedFileIds.map(fileId => deleteFile(fileId).catch(e => console.error("Failed to delete file:", e))));
+        const deleteResults = await Promise.allSettled(
+          [...new Set(deletedFileIds)].map((fileId) => deleteFile(fileId))
+        );
+        deleteResults.forEach((result) => {
+          if (result.status === 'rejected') {
+            const detail = (result.reason as any)?.response?.data?.detail || (result.reason as Error)?.message;
+            fileErrors.push(detail || 'Failed to delete one or more attachments');
+          }
+        });
       }
       if (pendingFiles.length > 0 && targetId) {
-        await uploadFiles('pqp', targetId, pendingFiles).catch(e => console.error("Failed to upload files:", e));
+        try {
+          await uploadFiles('pqp', targetId, pendingFiles);
+        } catch (err: any) {
+          const detail = err?.response?.data?.detail || err?.message;
+          fileErrors.push(detail || 'Failed to upload one or more attachments');
+        }
+      }
+
+      if (fileErrors.length > 0) {
+        throw new Error(fileErrors[0]);
       }
 
       setIsEditModalOpen(false);
       setCurrentPqpId(null);
     } catch (error: any) {
       const detail = error?.response?.data?.detail || t('common.saveFailed') || 'Save failed';
-      alert(detail);
+      toast.error(detail);
     }
   };
 
@@ -115,7 +132,7 @@ const PQP: React.FC = () => {
       setDeleteModal({ isOpen: false, id: null });
     } catch (err) {
       console.error('Delete PQP failed:', err);
-      alert((err as Error)?.message || t('common.deleteFailed'));
+      toast.error((err as Error)?.message || t('common.deleteFailed'));
     }
   };
 
@@ -138,7 +155,7 @@ const PQP: React.FC = () => {
       </div>
 
       <div className={styles.summarySection}>
-        <h2 className={styles.summaryTitle}>{t('pqp.statsTitle')}</h2>
+        <h2 className={styles.summaryTitle}>{t('pqp.statusStats')}</h2>
         <div className={styles.statsContainer}>
           <div className={styles.statusStatsGrid}>
             <StatItem
@@ -155,13 +172,13 @@ const PQP: React.FC = () => {
               style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}
             />
             <StatItem
-              label={t('pqp.stats.total') || 'Total'}
+              label={t('pqp.total') || 'Total'}
               value={statistics.total}
               icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" /><path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" /></svg>}
               iconColorClass={statStyles.grayIcon}
             />
             <StatItem
-              label={t('pqp.stats.approvedRate') || 'Approved Rate'}
+              label={t('pqp.approvedRate') || 'Approved Rate'}
               value={`${statistics.approved} (${statistics.activeRate}%)`}
               icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" /></svg>}
               iconColorClass={statStyles.blueIcon}
@@ -194,8 +211,8 @@ const PQP: React.FC = () => {
             searchKey=""
             searchPlaceholder={t('pqp.searchPlaceholder')}
             getRowClassName={(row) =>
-              (row.status || 'Approved').toLowerCase() === 'reject'
-                ? 'bg-emerald-100/50 text-gray-500 hover:bg-emerald-200/50'
+              (row.status || 'Not Submit').toLowerCase() === 'reject'
+                ? 'bg-red-100/50 text-red-700 hover:bg-red-200/50'
                 : ''
             }
             onRowClick={(row) => handleEdit(row.id)}
@@ -227,18 +244,6 @@ const PQP: React.FC = () => {
         )
       }
 
-      {
-        isDetailsModalOpen && viewingPqpId && (
-          <PQPDetailsViewModal
-            pqpId={viewingPqpId}
-            pqpItem={pqpList.find(item => item.id === viewingPqpId)}
-            onClose={() => {
-              setIsDetailsModalOpen(false);
-              setViewingPqpId(null);
-            }}
-          />
-        )
-      }
     </div >
   );
 };

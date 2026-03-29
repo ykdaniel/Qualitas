@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useMemo, useEffect, useCallback, ReactNode } from 'react';
 import { AxiosError } from 'axios';
-import api, * as apiService from '../services/api';
+import * as apiService from '../services/api';
 import { useAuth } from './AuthContext';
 import { useErrorHandler } from '../hooks/useErrorHandler';
 import { getErrorMessage } from '../utils/errorUtils';

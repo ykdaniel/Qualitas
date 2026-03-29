@@ -84,6 +84,7 @@ const FAT: React.FC = () => {
           deliveryTo: updates.deliveryTo || '',
           siteReadiness: updates.siteReadiness || '',
           moveInDate: updates.moveInDate || '',
+          status: updates.status || 'Scheduled',
           hasDetails: false,
         } as any; // safe cast for omit id
         await addFAT(newItem);
@@ -472,6 +473,7 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
     deliveryTo: existingItem?.deliveryTo || '',
     siteReadiness: existingItem?.siteReadiness || '',
     moveInDate: existingItem?.moveInDate || '',
+    status: existingItem?.status || 'Scheduled',
   });
 
   const handleFieldChange = (field: keyof FATItem, value: string) => {
@@ -608,6 +610,19 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
                     value={formData.moveInDate || ''}
                     onChange={(e) => handleFieldChange('moveInDate', e.target.value)}
                   />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>{t('common.status')}</label>
+                  <select
+                    className={styles.formSelect}
+                    value={formData.status || 'Scheduled'}
+                    onChange={(e) => handleFieldChange('status', e.target.value)}
+                  >
+                    <option value="Scheduled">{t('fat.status.scheduled')}</option>
+                    <option value="In Progress">{t('fat.status.inProgress')}</option>
+                    <option value="Completed">{t('fat.status.completed')}</option>
+                    <option value="Cancelled">{t('fat.status.cancelled')}</option>
+                  </select>
                 </div>
               </div>
             </div>

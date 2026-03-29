@@ -19,6 +19,9 @@ export const useDashboardStats = (selectedVendor: string) => {
   const checklistRecords = useChecklistStore(state => state.records);
 
   const statistics = useMemo(() => {
+    const normalizeStatus = (status: unknown): string =>
+      typeof status === 'string' ? status.trim().toLowerCase() : '';
+
     const filterByVendor = <T,>(list: T[]): T[] => {
       if (selectedVendor === 'all') return list;
       return list.filter((item: any) =>
@@ -42,22 +45,25 @@ export const useDashboardStats = (selectedVendor: string) => {
     const checklistPassRate = checklistTotal > 0 ? Math.round((checklistPassed / checklistTotal) * 100) : 0;
 
     // ITP 統計
-    const itpTotal = filteredItpList.filter(item => item.status.toLowerCase() !== 'void').length;
+    const itpTotal = filteredItpList.filter(item => normalizeStatus(item.status) !== 'void').length;
     const itpSubmitted = filteredItpList.filter(item => {
-      const status = item.status.toLowerCase();
+      const status = normalizeStatus(item.status);
       return status !== 'void' && status !== 'no submit' && status !== 'nosubmit';
     }).length;
     const itpSubmissionRate = itpTotal > 0 ? Math.round((itpSubmitted / itpTotal) * 100) : 0;
     const itpApproved = filteredItpList.filter(item => {
-      const status = item.status.toLowerCase();
+      const status = normalizeStatus(item.status);
       return status === 'approved' || status === 'approved with comments';
     }).length;
     const itpApprovalRate = itpTotal > 0 ? Math.round((itpApproved / itpTotal) * 100) : 0;
 
     // NCR 統計
     const ncrTotal = filteredNcrList.length;
-    const ncrOpen = filteredNcrList.filter(item => item.status.toLowerCase() === 'open' || item.status.toLowerCase() === 'opening').length;
-    const ncrClosed = filteredNcrList.filter(item => item.status.toLowerCase() === 'closed').length;
+    const ncrOpen = filteredNcrList.filter(item => {
+      const status = normalizeStatus(item.status);
+      return status === 'open' || status === 'opening';
+    }).length;
+    const ncrClosed = filteredNcrList.filter(item => normalizeStatus(item.status) === 'closed').length;
     const ncrCloseRate = ncrTotal > 0 ? Math.round((ncrClosed / ncrTotal) * 100) : 0;
     const ncrOpenRate = ncrTotal > 0 ? Math.round((ncrOpen / ncrTotal) * 100) : 0;
 
@@ -76,8 +82,11 @@ export const useDashboardStats = (selectedVendor: string) => {
 
     // ITR 統計
     const itrTotal = filteredItrList.length;
-    const itrApproved = filteredItrList.filter(item => item.status.toLowerCase() === 'approved').length;
-    const itrRejected = filteredItrList.filter(item => item.status.toLowerCase() === 'reject').length;
+    const itrApproved = filteredItrList.filter(item => normalizeStatus(item.status) === 'approved').length;
+    const itrRejected = filteredItrList.filter(item => {
+      const status = normalizeStatus(item.status);
+      return status === 'reject' || status === 'rejected';
+    }).length;
     const itrApprovalRate = itrTotal > 0 ? Math.round((itrApproved / itrTotal) * 100) : 0;
 
     // OBS 統計

@@ -1,0 +1,324 @@
+.panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 200px);
+  min-height: 400px;
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.panel:hover {
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+
+.panelHeader {
+  margin-bottom: 24px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.headerTitleGroup {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panelTitle {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.navControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(4px);
+  padding: 4px;
+  border-radius: 20px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.navBtn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.navBtn:hover {
+  background: white;
+  color: #1e293b;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.todayBtn {
+  background: transparent;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  padding: 4px 12px;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.todayBtn:hover {
+  background: white;
+  color: #0f172a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.monthDisplay {
+  font-size: 14px;
+  font-weight: 600;
+  color: #64748b;
+  margin: 0;
+}
+
+/* Empty State & Skeletons */
+.matrixContainer {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  position: relative;
+}
+
+.skeletonGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  height: 100%;
+}
+
+.skeletonPulse {
+  height: 48px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(226, 232, 240, 0.5) 25%, rgba(203, 213, 225, 0.5) 50%, rgba(226, 232, 240, 0.5) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite ease-in-out;
+}
+
+@keyframes skeleton-loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  height: 100%;
+  padding: 40px;
+  color: #64748b;
+  font-family: inherit;
+}
+
+.emptyIcon {
+  color: #94a3b8;
+  margin-bottom: 16px;
+  stroke-width: 1.5;
+  opacity: 0.8;
+}
+
+.emptyState h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.emptyState p {
+  margin: 0;
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+/* Matrix Table View */
+.matrixScroll {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+  /* Premium scroll shading hint */
+  background: 
+    linear-gradient(to right, white 30%, rgba(255,255,255,0)),
+    linear-gradient(to right, rgba(255,255,255,0), white 70%) 100% 0,
+    radial-gradient(farthest-side at 0 50%, rgba(0,0,0,0.1), rgba(0,0,0,0)),
+    radial-gradient(farthest-side at 100% 50%, rgba(0,0,0,0.1), rgba(0,0,0,0)) 100% 0;
+  background-repeat: no-repeat;
+  background-color: transparent;
+  background-size: 40px 100%, 40px 100%, 14px 100%, 14px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
+
+.matrixScroll::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+.matrixScroll::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 4px;
+}
+.matrixScroll::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 4px;
+}
+.matrixScroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.8);
+}
+
+.matrixTable {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: max-content;
+}
+
+.matrixHeaderCell, .indexCell, .vendorCell, .matrixCell {
+  border-right: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.matrixHeaderCell {
+  position: sticky;
+  top: 0;
+  background: rgba(248, 250, 252, 0.95);
+  backdrop-filter: blur(8px);
+  z-index: 10;
+  padding: 12px 6px;
+  text-align: center;
+  min-width: 60px;
+  border-bottom: 2px solid #cbd5e1;
+}
+
+.indexCorner {
+  position: sticky;
+  left: 0;
+  z-index: 30;
+  background: #f1f5f9;
+  min-width: 40px;
+}
+
+.vendorCorner {
+  position: sticky;
+  left: 40px;
+  z-index: 30;
+  background: #f1f5f9;
+  min-width: 140px;
+  text-align: left;
+  padding-left: 16px;
+}
+
+.dayLabel {
+  font-size: 11px;
+  color: #64748b;
+  text-transform: uppercase;
+  display: block;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.dateLabel {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.todayCol {
+  background: #fefce8;
+  color: #854d0e;
+}
+.todayCol .dateLabel { color: #854d0e; }
+
+.indexCell {
+  position: sticky;
+  left: 0;
+  background: rgba(255, 255, 255, 0.95);
+  z-index: 20;
+  text-align: center;
+  font-weight: 500;
+  color: #94a3b8;
+  font-size: 13px;
+  border-right: 1px solid #e2e8f0;
+}
+
+.vendorCell {
+  position: sticky;
+  left: 40px;
+  background: rgba(255, 255, 255, 0.95);
+  z-index: 20;
+  padding: 12px 16px;
+  font-weight: 600;
+  color: #334155;
+  font-size: 14px;
+  border-right: 2px solid #cbd5e1;
+  white-space: nowrap;
+}
+
+.matrixRow:hover .vendorCell,
+.matrixRow:hover .indexCell {
+  background: #f8fafc;
+}
+
+.matrixCell {
+  padding: 6px;
+  min-width: 60px;
+  height: 100%;
+  background: #ffffff;
+  transition: background-color 0.2s ease;
+  vertical-align: middle;
+}
+
+.matrixRow:hover .matrixCell {
+  background: #f8fafc;
+}
+
+.todayCell {
+  background: #fffbeb;
+}
+
+.matrixRow:hover .todayCell {
+  background: #fef3c7;
+}
+
+.weekendCell {
+  background: #f9fafb;
+}
+
+.matrixRow:hover .weekendCell {
+  background: #f1f5f9;
+}
+
+.iconContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}

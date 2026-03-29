@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styles from './TableHeader.module.css';
+import { useLanguage } from '../../../context/LanguageContext';
 import { SortConfig } from '../../../hooks/useTable';
 
 export type FilterType = 'text' | 'select' | 'date';
@@ -29,6 +30,7 @@ export const TableHeader = <T,>({
     className,
     center,
 }: TableHeaderProps<T>) => {
+    const { t } = useLanguage();
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const filterRef = useRef<HTMLDivElement>(null);
 
@@ -84,7 +86,7 @@ export const TableHeader = <T,>({
                                         value={filterValue || ''}
                                         onChange={(e) => onFilter(e.target.value)}
                                     >
-                                        <option value="">All</option>
+                                        <option value="">{t('common.all')}</option>
                                         {filterOptions?.map(opt => (
                                             <option key={opt.value} value={opt.value}>{opt.label}</option>
                                         ))}
@@ -93,7 +95,7 @@ export const TableHeader = <T,>({
                                     <input
                                         type={filterType === 'date' ? 'date' : 'text'}
                                         className={styles.filterInput}
-                                        placeholder={`Filter ${label}...`}
+                                        placeholder={`${t('common.filter')} ${label}...`}
                                         value={filterValue || ''}
                                         onChange={(e) => onFilter(e.target.value)}
                                         autoFocus

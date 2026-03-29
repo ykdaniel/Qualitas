@@ -2,7 +2,7 @@ import json
 import re
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, constr, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, constr, field_validator, model_validator
 
 # 輸入驗證常數
 MAX_TEXT_LENGTH = 10000  # 一般文字欄位最大長度
@@ -101,7 +101,7 @@ class ITPUpdate(BaseModel):
 
 class ITP(ITPBase):
     id: str
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 # NCR
 class NCRBase(BaseModel):
@@ -131,6 +131,16 @@ class NCRBase(BaseModel):
     dueDate: str | None = None  # 到期日 (YYYY-MM-DD)
     attachments: list[str] | None = []
     last_reminded_at: str | None = None
+    referenceStandards: str | None = None
+    serialNumbers: str | None = None
+    repairMethodStatement: str | None = None
+    immediateCorrectionAction: str | None = None
+    rootCauseAnalysis: str | None = None
+    correctiveActions: str | None = None
+    preventiveAction: str | None = None
+    finalProductIntegrityStatement: str | None = None
+    reInspectionNumber: str | None = None
+    projectQualityManager: str | None = None
 
     @field_validator('raiseDate', 'closeoutDate', 'dueDate', mode='before')
     @classmethod
@@ -190,6 +200,34 @@ class NCRUpdate(BaseModel):
     dueDate: str | None = None
     attachments: list[str] | None = None
     last_reminded_at: str | None = None
+    referenceStandards: str | None = None
+    serialNumbers: str | None = None
+    repairMethodStatement: str | None = None
+    immediateCorrectionAction: str | None = None
+    rootCauseAnalysis: str | None = None
+    correctiveActions: str | None = None
+    preventiveAction: str | None = None
+    finalProductIntegrityStatement: str | None = None
+    reInspectionNumber: str | None = None
+    projectQualityManager: str | None = None
+
+    @field_validator('raiseDate', 'closeoutDate', 'dueDate', mode='before')
+    @classmethod
+    def check_dates(cls, v):
+        return validate_date_format(v)
+
+    @model_validator(mode='after')
+    def check_date_ranges(self):
+        if self.raiseDate and self.closeoutDate:
+            if self.raiseDate > self.closeoutDate:
+                raise ValueError('Raise date must be before or equal to closeout date')
+        if self.raiseDate and self.dueDate:
+            if self.raiseDate > self.dueDate:
+                raise ValueError('Raise date must be before or equal to due date')
+        if self.closeoutDate and self.dueDate:
+            if self.closeoutDate > self.dueDate:
+                raise ValueError('Closeout date must be before or equal to due date')
+        return self
 
     @field_validator('defectPhotos', 'improvementPhotos', 'attachments', mode='before')
     @classmethod
@@ -203,7 +241,7 @@ class NCRUpdate(BaseModel):
 
 class NCR(NCRBase):
     id: str
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 
 # NOI
@@ -286,7 +324,7 @@ class NOIUpdate(BaseModel):
 
 class NOI(NOIBase):
     id: str
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ITR
@@ -375,7 +413,7 @@ class ITRUpdate(BaseModel):
 
 class ITR(ITRBase):
     id: str
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 
 # PQP
@@ -434,7 +472,7 @@ class PQPUpdate(BaseModel):
 
 class PQP(PQPBase):
     id: str
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 
 # OBS
@@ -463,6 +501,8 @@ class OBSBase(BaseModel):
     improvementPhotos: Any | None = None
     attachments: list[str] | None = None
     dueDate: str | None = None
+    noiNumber: str | None = None
+    itrNumber: str | None = None
 
     @field_validator('raiseDate', 'closeoutDate', 'dueDate', mode='before')
     @classmethod
@@ -528,7 +568,7 @@ class OBSUpdate(BaseModel):
 
 class OBS(OBSBase):
     id: str
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Contractor
@@ -559,7 +599,7 @@ class ContractorUpdate(BaseModel):
 
 class Contractor(ContractorBase):
     id: str
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Project
@@ -581,7 +621,7 @@ class ProjectUpdate(BaseModel):
 class Project(ProjectBase):
     id: str
     created_at: str | None = None
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 
 # FollowUp
@@ -624,7 +664,7 @@ class FollowUpUpdate(BaseModel):
 
 class FollowUp(FollowUpBase):
     id: str
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Document Naming Rules
@@ -637,7 +677,7 @@ class NamingRuleBase(BaseModel):
 class NamingRule(NamingRuleBase):
     id: int
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 # --- IAM Schemas ---
 
@@ -671,7 +711,7 @@ class RoleUpdate(BaseModel):
 class Role(RoleBase):
     id: int
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 # Permission
 class PermissionBase(BaseModel):
@@ -681,7 +721,7 @@ class PermissionBase(BaseModel):
 class Permission(PermissionBase):
     id: int
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 # User
 class ChecklistBase(BaseModel):
@@ -727,7 +767,7 @@ class ChecklistUpdate(BaseModel):
 class Checklist(ChecklistBase):
     id: str
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 class UserBase(BaseModel):
     username: str
@@ -754,7 +794,7 @@ class User(UserBase):
     role_name: str | None = None
     created_at: str | None = None
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Audit Schemas ---
 class AuditBase(BaseModel):
@@ -834,7 +874,7 @@ class Audit(AuditBase):
     id: str
     vendor_id: str | None = None
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 
 # --- KPI & Performance Schemas ---
@@ -850,7 +890,7 @@ class KPIWeightUpdate(KPIWeightBase):
 class KPIWeight(KPIWeightBase):
     id: int
     updated_at: str | None = None
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 class OwnerPerformanceBase(BaseModel):
     owner_name: str
@@ -870,7 +910,7 @@ class OwnerPerformanceUpdate(BaseModel):
 class OwnerPerformance(OwnerPerformanceBase):
     id: str
     updated_at: str | None = None
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 
 # --- Attachment (File Management) Schemas ---
@@ -888,7 +928,7 @@ class AttachmentResponse(BaseModel):
     uploaded_by: str | None = None
     uploaded_at: str
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Auth Schemas ---
 class Token(BaseModel):
@@ -988,7 +1028,7 @@ class FAT(FATBase):
     created_at: str | None = None
     updated_at: str | None = None
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 # --- KM Schemas ---
 class KMAttachment(BaseModel):
@@ -1053,7 +1093,7 @@ class KMArticle(KMArticleBase):
     updated_at: str | None = None
     version_no: int | None = 1
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 class KMArticleHistory(BaseModel):
     id: str
@@ -1073,4 +1113,4 @@ class KMArticleHistory(BaseModel):
 
 
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)

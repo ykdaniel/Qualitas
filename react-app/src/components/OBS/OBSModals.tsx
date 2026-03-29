@@ -505,7 +505,10 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                         onChange={(e) => handleFieldChange('status', e.target.value)}
                                     >
                                         <option value="Open">{t('status.open')}</option>
+                                        <option value="In Progress">In Progress</option>
+                                        <option value="Resolved">Resolved</option>
                                         <option value="Closed">{t('status.closed')}</option>
+                                        <option value="Void">{t('status.void')}</option>
                                     </select>
                                 </div>
                                 <div className={styles.formGroupFull}>

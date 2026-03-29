@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
@@ -79,7 +80,7 @@ const ITP: React.FC = () => {
     } catch (err: any) {
       if (err?.response?.status === 401) return;
       const msg = getErrorMessage(err, t('itp.addError'));
-      alert(t('itp.addError') + '：' + msg);
+      toast.error(t('itp.addError') + '：' + msg);
     }
   };
 
@@ -113,7 +114,7 @@ const ITP: React.FC = () => {
         setDeleteModal({ isOpen: false, id: null, message: '' });
       } catch (error: any) {
         if (error?.response?.status === 401) return;
-        alert(t('itp.deleteError'));
+        toast.error(t('itp.deleteError'));
       }
     }
   };
@@ -271,6 +272,15 @@ const ITP: React.FC = () => {
         <ITPDetailModal
           itpId={currentItpId}
           existingItem={itpList.find(item => item.id === currentItpId)}
+          onApplyItems={async (detailPayload) => {
+            try {
+              await updateITPDetail(currentItpId, detailPayload);
+              refetch();
+            } catch (error: any) {
+              if (error?.response?.status === 401) return;
+              toast.error(error?.response?.data?.detail || t('itp.updateError'));
+            }
+          }}
           onSave={async (updates, details, pendingUploads, deletedFileIds) => {
             try {
               await updateITP(currentItpId, updates);
@@ -291,7 +301,7 @@ const ITP: React.FC = () => {
             } catch (error: any) {
               if (error?.response?.status === 401) return;
               const detail = error?.response?.data?.detail || t('itp.updateError');
-              alert(detail);
+              toast.error(detail);
             }
           }}
           onClose={() => {

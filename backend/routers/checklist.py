@@ -32,7 +32,7 @@ def read_checklists(
     itr_id: str = None,
     noi_number: str = None,
     service: ChecklistService = Depends(get_checklist_service),
-    current_user: schemas.User = Depends(RoleChecker(CHECKLIST_VIEW))
+    _: schemas.User = Depends(RoleChecker(CHECKLIST_VIEW))
 ):
     return service.get_checklists(
         skip=skip,
@@ -49,7 +49,7 @@ def read_checklists(
 def read_checklist(
     checklist_id: str,
     service: ChecklistService = Depends(get_checklist_service),
-    current_user: schemas.User = Depends(RoleChecker(CHECKLIST_VIEW))
+    _: schemas.User = Depends(RoleChecker(CHECKLIST_VIEW))
 ):
     db_chk = service.get_checklist(checklist_id)
     if db_chk is None:
@@ -71,10 +71,11 @@ def update_checklist(
 @router.delete("/{chk_id}/", response_model=dict)
 def delete_checklist(
     chk_id: str,
+    reason: str = None,
     service: ChecklistService = Depends(get_checklist_service),
     current_user: schemas.User = Depends(RoleChecker(CHECKLIST_DELETE))
 ):
-    deleted = service.delete_checklist(chk_id, user_id=current_user.id, username=current_user.username)
+    deleted = service.delete_checklist(chk_id, user_id=current_user.id, username=current_user.username, reason=reason)
     if not deleted:
         raise HTTPException(status_code=404, detail="Checklist not found")
     return {"ok": True}

@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { useAuth } from './context/AuthContext';
 import { AppProviders } from './components/Shared/AppProviders';
@@ -27,6 +27,20 @@ const KPI = React.lazy(() => import('./components/KPI/KPI'));
 const DocumentNamingRules = React.lazy(() => import('./components/DocumentNamingRules/DocumentNamingRules'));
 const OSD = React.lazy(() => import('./components/OSD/OSD'));
 const Checklist = React.lazy(() => import('./components/Checklist/Checklist'));
+
+// --- 404 page ---
+const NotFound = () => {
+  const navigate = useNavigate();
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: '16px', fontFamily: 'sans-serif', color: '#374151' }}>
+      <div style={{ fontSize: '4rem', fontWeight: 700, color: '#d1d5db' }}>404</div>
+      <div style={{ fontSize: '1.125rem', color: '#6b7280' }}>Page not found</div>
+      <button onClick={() => navigate('/')} style={{ marginTop: '8px', padding: '8px 20px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}>
+        Back to Home
+      </button>
+    </div>
+  );
+};
 
 // --- Loading fallback ---
 const PageLoader = () => (
@@ -78,6 +92,7 @@ function App() {
             <Route path="/document-naming-rules" element={<DocumentNamingRules />} />
             <Route path="/checklist" element={<Checklist />} />
           </Route>
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
       <Toaster position="top-center" richColors />

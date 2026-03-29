@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import ReactDOM from 'react-dom';
+import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
 import { useNOIStore } from '../../store/noiStore';
 import type { NOIItem } from '../../store/noiStore';
@@ -185,7 +186,7 @@ const NOI: React.FC = () => {
         refetch(); // Refresh to ensure attachments are updated
       } catch (error: any) {
         const detail = error?.response?.data?.detail || t('common.saveFailed') || 'Save failed';
-        alert(detail);
+        toast.error(detail);
       }
     }
   };
@@ -476,7 +477,7 @@ const NOI: React.FC = () => {
               setIsBulkModalOpen(false);
             } catch (err: any) {
               const msg = err instanceof Error ? err.message : (t('common.unknownError') || 'Unknown Error');
-              alert(`${t('noi.bulkAddFailed') || 'Bulk add failed'}: ${msg}`);
+              toast.error(`${t('noi.bulkAddFailed') || 'Bulk add failed'}: ${msg}`);
             }
           }}
           onClose={() => setIsBulkModalOpen(false)}

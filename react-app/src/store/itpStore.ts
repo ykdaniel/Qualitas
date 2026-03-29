@@ -38,12 +38,12 @@ function normalizeItem(item: unknown): ITPItem {
     if (record.detail_data && typeof record.detail_data === 'string') {
         try {
             record.detail_data = JSON.parse(record.detail_data);
-        } catch (e) {
+        } catch {
             record.detail_data = [];
         }
     }
 
-    return parseJsonFields(record, ['defectPhotos', 'improvementPhotos', 'attachments']) as unknown as ITPItem;
+    return parseJsonFields(record, ['detail_data', 'attachments']) as unknown as ITPItem;
 }
 
 interface ITPState {

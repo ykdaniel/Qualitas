@@ -6,7 +6,6 @@ import { Pencil, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { StatusBadge } from "@/components/Shared/StatusBadge";
 import { formatTime24h, getLocalizedStatus, formatDateLocale } from "../../utils/formatters";
-import styles from "./NOI.module.css";
 
 export const createColumns = (
     handleEdit: (id: string) => void,

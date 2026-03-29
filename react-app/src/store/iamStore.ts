@@ -71,6 +71,7 @@ export const useIAMStore = create<IAMState>((set, get) => ({
                 name: u.full_name || u.username,
                 email: u.email,
                 role: u.role_name || 'user',
+                role_id: u.role_id ?? undefined,
                 status: u.is_active ? 'active' as const : 'inactive' as const,
                 createdAt: (u as any).created_at || new Date().toISOString().split('T')[0],
             }));
@@ -123,6 +124,7 @@ export const useIAMStore = create<IAMState>((set, get) => ({
                 name: u.full_name || u.username,
                 email: u.email,
                 role: u.role_name || 'user',
+                role_id: u.role_id ?? undefined,
                 status: u.is_active ? 'active' as const : 'inactive' as const,
                 createdAt: (u as any).created_at || new Date().toISOString().split('T')[0],
             }));
@@ -148,7 +150,10 @@ export const useIAMStore = create<IAMState>((set, get) => ({
         const apiPayload: apiService.CreateUserPayload = {
             username: payload.name || payload.username,
             email: payload.email,
-            password: payload.password || `User_${Date.now()}`,
+            password: payload.password || Array.from(
+                crypto.getRandomValues(new Uint8Array(12)),
+                b => b.toString(36)
+            ).join('').slice(0, 12) + 'Aa1!',
             role_id: payload.role_id,
             is_active: payload.status === 'active',
         };
@@ -168,10 +173,10 @@ export const useIAMStore = create<IAMState>((set, get) => ({
 
     updateUser: async (id: number, payload: any) => {
         const apiPayload: apiService.UpdateUserPayload = {};
-        if (payload.name) apiPayload.username = payload.name;
-        if (payload.email) apiPayload.email = payload.email;
-        if (payload.status) apiPayload.is_active = payload.status === 'active';
-        if (payload.role_id) apiPayload.role_id = payload.role_id;
+        if (payload.name !== undefined) apiPayload.username = payload.name;
+        if (payload.email !== undefined) apiPayload.email = payload.email;
+        if (payload.status !== undefined) apiPayload.is_active = payload.status === 'active';
+        if (payload.role_id !== undefined) apiPayload.role_id = payload.role_id;
         if (payload.password) apiPayload.password = payload.password;
 
         const result = await apiService.updateUser(id, apiPayload);
@@ -190,8 +195,8 @@ export const useIAMStore = create<IAMState>((set, get) => ({
         return result;
     },
 
-    deleteUser: async (id: number, _reason?: string) => {
-        await apiService.deleteUser(id);
+    deleteUser: async (id: number, reason?: string) => {
+        await apiService.deleteUser(id, reason);
         set((state) => ({ users: state.users.filter(u => u.id !== String(id)) }));
     },
 
@@ -215,9 +220,9 @@ export const useIAMStore = create<IAMState>((set, get) => ({
 
     updateRole: async (id: number, payload: any) => {
         const apiPayload: apiService.UpdateRolePayload = {};
-        if (payload.name) apiPayload.name = payload.name;
-        if (payload.description) apiPayload.description = payload.description;
-        if (payload.permissions) apiPayload.permissions = payload.permissions;
+        if (payload.name !== undefined) apiPayload.name = payload.name;
+        if (payload.description !== undefined) apiPayload.description = payload.description;
+        if (payload.permissions !== undefined) apiPayload.permissions = payload.permissions;
 
         const result = await apiService.updateRole(id, apiPayload);
         set((state) => ({
@@ -231,8 +236,8 @@ export const useIAMStore = create<IAMState>((set, get) => ({
         return result;
     },
 
-    deleteRole: async (id: number, _reason?: string) => {
-        await apiService.deleteRole(id);
+    deleteRole: async (id: number, reason?: string) => {
+        await apiService.deleteRole(id, reason);
         set((state) => ({ roles: state.roles.filter(r => r.id !== String(id)) }));
     },
 }));

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
@@ -271,7 +272,7 @@ const FollowUpIssue: React.FC = () => {
       fetchManualIssues();
     } catch (err) {
       console.error('Failed to save issue:', err);
-      alert('儲存失敗');
+      toast.error(t('common.saveFailed') || '儲存失敗');
     }
   };
 
@@ -287,7 +288,7 @@ const FollowUpIssue: React.FC = () => {
         setDeleteModal({ isOpen: false, id: null, message: '' });
       } catch (err) {
         console.error('Failed to delete issue:', err);
-        alert('刪除失敗');
+        toast.error(t('common.deleteFailed') || '刪除失敗');
       }
     }
   };

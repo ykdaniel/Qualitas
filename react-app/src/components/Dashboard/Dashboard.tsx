@@ -1,6 +1,4 @@
 import { useNavigate } from 'react-router-dom';
-import { useNCRStore } from '../../store/ncrStore';
-import { useNOIStore } from '../../store/noiStore';
 import { useContractorsStore, Contractor } from '../../store/contractorsStore';
 import { useDashboardFilterStore } from '../../store/dashboardFilterStore';
 import { useState } from 'react';
@@ -13,8 +11,7 @@ import PQPGaugeChart from './PQPGaugeChart';
 import PQPStatsCard from './PQPStatsCard';
 import NCRParetoChart from './NCRParetoChart';
 import NCRStatsCard from './NCRStatsCard';
-import NCRStatusPieChart from './NCRStatusPieChart';
-import NOITrendChart from './NOITrendChart';
+import TrendAnalysisSection from './TrendAnalysisSection';
 import OBSParetoChart from './OBSParetoChart';
 import OBSStatsCard from './OBSStatsCard';
 import { DashboardChartSection } from './DashboardChartSection';
@@ -41,9 +38,6 @@ const DashboardContent: React.FC<{
   const { selectedVendor, setSelectedVendor } = useDashboardFilterStore();
   const { statistics, t } = useDashboardStats(selectedVendor);
   const upcomingTasks = useUpcomingTasks(selectedVendor);
-
-  const ncrList = useNCRStore(state => state.ncrList);
-  const noiList = useNOIStore(state => state.noiList);
   return (
     <div className={styles.container}>
       <div className={styles.header}>
@@ -116,70 +110,77 @@ const DashboardContent: React.FC<{
               onClick={() => navigate('/pqp')}
               onViewDetails={() => navigate('/pqp')}
               viewDetailsText={t('common.viewDetails') || 'View Details'}
+              accentColor="#8b5cf6"
               metrics={[
-                { label: t('dashboard.pqpMaturity') || 'PQP Maturity', value: `${statistics.pqp.maturity}%`, color: statistics.pqp.maturity >= 50 ? '#10b981' : '#f59e0b' },
-                { label: t('common.total') || 'Total', value: statistics.pqp.total, color: '#3b82f6', isLarge: true },
-                { label: t('status.reject') || 'Rejected', value: statistics.pqp.reject, color: '#ef4444', isLarge: true },
+                { label: t('dashboard.pqpTotal') || 'PQP Total', value: statistics.pqp.total, isPrimary: true },
+                { label: t('status.approved') || 'Approved', value: `${statistics.pqp.approved} (${statistics.pqp.maturity}%)` },
+                { label: t('status.reject') || 'Rejected', value: statistics.pqp.reject, color: statistics.pqp.reject > 0 ? '#dc2626' : undefined },
               ]}
             />
             <KPICard
               onClick={() => navigate('/itp')}
               onViewDetails={() => navigate('/itp')}
               viewDetailsText={t('common.viewDetails') || 'View Details'}
+              accentColor="#3b82f6"
               metrics={[
-                { label: t('dashboard.itpTotal') || 'ITP Total', value: statistics.itp.total, color: '#3b82f6' },
-                { label: t('dashboard.submitted') || 'Submitted', value: `${statistics.itp.submitted} (${statistics.itp.submissionRate}%)`, color: '#3b82f6', isLarge: true },
-                { label: t('status.approved') || 'Approved', value: `${statistics.itp.approved} (${statistics.itp.approvalRate}%)`, color: '#10b981', isLarge: true },
+                { label: t('dashboard.itpTotal') || 'ITP Total', value: statistics.itp.total, isPrimary: true },
+                { label: t('dashboard.submitted') || 'Submitted', value: `${statistics.itp.submitted} (${statistics.itp.submissionRate}%)` },
+                { label: t('status.approved') || 'Approved', value: `${statistics.itp.approved} (${statistics.itp.approvalRate}%)` },
               ]}
             />
             <KPICard
               onClick={() => navigate('/checklist')}
               onViewDetails={() => navigate('/checklist')}
               viewDetailsText={t('common.viewDetails') || 'View Details'}
+              accentColor="#10b981"
               metrics={[
-                { label: t('checklist.title') || 'Checklist', value: statistics.checklist.total, color: '#8b5cf6' },
-                { label: t('status.pass') || 'Pass', value: `${statistics.checklist.passed} (${statistics.checklist.passRate}%)`, color: '#10b981', isLarge: true },
-                { label: t('status.ongoing') || 'Ongoing', value: statistics.checklist.ongoing, color: '#f59e0b', isLarge: true },
+                { label: t('dashboard.checklistTotal') || 'Checklist Total', value: statistics.checklist.total, isPrimary: true },
+                { label: t('checklist.status.pass') || 'Pass', value: `${statistics.checklist.passed} (${statistics.checklist.passRate}%)` },
+                { label: t('checklist.status.ongoing') || 'Ongoing', value: statistics.checklist.ongoing },
               ]}
             />
             <KPICard
               onClick={() => navigate('/obs')}
               onViewDetails={() => navigate('/obs')}
               viewDetailsText={t('common.viewDetails') || 'View Details'}
+              accentColor="#f59e0b"
               metrics={[
-                { label: t('dashboard.obsTotal') || 'OBS Total', value: statistics.obs.total, color: '#3b82f6' },
-                { label: t('dashboard.open') || 'Open', value: `${statistics.obs.open} (${statistics.obs.openRate}%)`, color: '#f59e0b', isLarge: true },
-                { label: t('dashboard.closed') || 'Closed', value: `${statistics.obs.closed} (${statistics.obs.closeRate}%)`, color: '#10b981', isLarge: true },
+                { label: t('dashboard.obsTotal') || 'OBS Total', value: statistics.obs.total, isPrimary: true },
+                { label: t('dashboard.open') || 'Open', value: `${statistics.obs.open} (${statistics.obs.openRate}%)` },
+                { label: t('dashboard.closed') || 'Closed', value: `${statistics.obs.closed} (${statistics.obs.closeRate}%)` },
               ]}
             />
             <KPICard
               onClick={() => navigate('/ncr')}
               onViewDetails={() => navigate('/ncr')}
               viewDetailsText={t('common.viewDetails') || 'View Details'}
+              accentColor="#ef4444"
               metrics={[
-                { label: t('dashboard.ncrTotal') || 'NCR Total', value: statistics.ncr.total, color: '#3b82f6' },
-                { label: t('dashboard.open') || 'Open', value: `${statistics.ncr.open} (${statistics.ncr.openRate}%)`, color: '#f59e0b', isLarge: true },
-                { label: t('dashboard.closed') || 'Closed', value: `${statistics.ncr.closed} (${statistics.ncr.closeRate}%)`, color: '#10b981', isLarge: true },
+                { label: t('dashboard.ncrTotal') || 'NCR Total', value: statistics.ncr.total, isPrimary: true },
+                { label: t('dashboard.open') || 'Open', value: `${statistics.ncr.open} (${statistics.ncr.openRate}%)` },
+                { label: t('dashboard.closed') || 'Closed', value: `${statistics.ncr.closed} (${statistics.ncr.closeRate}%)` },
               ]}
             />
             <KPICard
               onClick={() => navigate('/noi')}
               onViewDetails={() => navigate('/noi')}
               viewDetailsText={t('common.viewDetails') || 'View Details'}
+              accentColor="#06b6d4"
               metrics={[
-                { label: t('dashboard.noiTotal') || 'NOI Total', value: statistics.noi.total, color: '#3b82f6' },
-                { label: t('dashboard.open') || 'Open', value: `${statistics.noi.open} (${statistics.noi.openRate}%)`, color: '#f59e0b', isLarge: true },
-                { label: t('dashboard.closed') || 'Closed', value: `${statistics.noi.closed} (${statistics.noi.closeRate}%)`, color: '#10b981', isLarge: true },
+                { label: t('dashboard.noiTotal') || 'NOI Total', value: statistics.noi.total, isPrimary: true },
+                { label: t('dashboard.open') || 'Open', value: `${statistics.noi.open} (${statistics.noi.openRate}%)` },
+                { label: t('dashboard.closed') || 'Closed', value: `${statistics.noi.closed} (${statistics.noi.closeRate}%)` },
               ]}
             />
             <KPICard
               onClick={() => navigate('/itr')}
               onViewDetails={() => navigate('/itr')}
               viewDetailsText={t('common.viewDetails') || 'View Details'}
+              accentColor="#6366f1"
               metrics={[
-                { label: t('dashboard.itrTotal') || 'ITR Total', value: statistics.itr.total, color: '#3b82f6' },
-                { label: t('status.approved') || 'Approved', value: `${statistics.itr.approved} (${statistics.itr.approvalRate}%)`, color: '#10b981', isLarge: true },
-                { label: t('status.reject') || 'Rejected', value: `${statistics.itr.rejected} (${statistics.itr.total > 0 ? Math.round((statistics.itr.rejected / statistics.itr.total) * 100) : 0}%)`, color: '#ef4444', isLarge: true },
+                { label: t('dashboard.itrTotal') || 'ITR Total', value: statistics.itr.total, isPrimary: true },
+                { label: t('status.approved') || 'Approved', value: `${statistics.itr.approved} (${statistics.itr.approvalRate}%)` },
+                { label: t('status.reject') || 'Rejected', value: `${statistics.itr.rejected} (${statistics.itr.total > 0 ? Math.round((statistics.itr.rejected / statistics.itr.total) * 100) : 0}%)`, color: statistics.itr.rejected > 0 ? '#dc2626' : undefined },
               ]}
             />
           </div>
@@ -253,24 +254,8 @@ const DashboardContent: React.FC<{
       {/* 分隔线 */}
       <div className={styles.sectionDivider}></div>
 
-      {/* Recharts 互動圖表區域 */}
-      <div className={styles.chartSection}>
-        <h2 className={styles.sectionTitle}>{t('dashboard.interactiveCharts') || '互動圖表'}</h2>
-        <div className={styles.rechartsGrid}>
-          <NCRStatusPieChart
-            ncrList={ncrList}
-            filterByVendor={selectedVendor !== 'all'}
-            selectedVendor={selectedVendor}
-          />
-          <NOITrendChart
-            noiList={noiList}
-            months={6}
-            filterByVendor={selectedVendor !== 'all'}
-            selectedVendor={selectedVendor}
-          />
-        </div>
-      </div>
-
+      {/* 趨勢分析區域 */}
+      <TrendAnalysisSection />
     </div>
   );
 };

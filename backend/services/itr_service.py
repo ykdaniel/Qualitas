@@ -178,6 +178,19 @@ class ITRService:
                     f"Invalid status transition from {db_itr.status} to {itr_update.status}"
                 )
 
+            # 勾稽鎖定：Approved 狀態的 ITR 只允許 Publish（變更 type/status）或轉為 Reject/Void
+            # 任何其他欄位更新均被阻擋，以防止已批准記錄被竄改
+            if db_itr.status == 'Approved':
+                allowed_keys = {'type', 'status', 'detail_data'}
+                update_keys = set(itr_update.dict(exclude_unset=True).keys())
+                blocked = update_keys - allowed_keys
+                if blocked:
+                    raise ValueError(
+                        f"Cannot modify a locked (Approved) ITR. "
+                        f"Blocked fields: {', '.join(sorted(blocked))}. "
+                        f"Use Publish to create a new revision."
+                    )
+
             # Capture old values for audit
             old_val = {c.name: getattr(db_itr, c.name) for c in db_itr.__table__.columns}
 

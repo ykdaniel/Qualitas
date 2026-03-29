@@ -7,20 +7,35 @@ export const useUpcomingTasks = (selectedVendor: string) => {
   const followUpList = useFollowUpStore(state => state.followUpList);
 
   const upcomingTasks = useMemo(() => {
+    const formatLocalDate = (date: Date): string => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    const normalizeDateOnly = (value?: string): string => {
+      if (!value) return '';
+      return value.slice(0, 10).replace(/\//g, '-');
+    };
+
+    const normalizeStatus = (status?: string): string => (status || '').trim().toLowerCase();
+
     const today = new Date();
     const next7Days = new Date();
     next7Days.setDate(today.getDate() + 7);
 
-    const todayStr = today.toISOString().split('T')[0];
-    const next7DaysStr = next7Days.toISOString().split('T')[0];
+    const todayStr = formatLocalDate(today);
+    const next7DaysStr = formatLocalDate(next7Days);
 
     const matchesVendor = (vendor?: string) =>
       selectedVendor === 'all' || vendor === selectedVendor;
 
     const upcomingNcrs = ncrList
       .filter(n =>
-        n.status.toLowerCase() !== 'closed' &&
-        n.dueDate && n.dueDate >= todayStr && n.dueDate <= next7DaysStr &&
+        normalizeStatus(n.status) !== 'closed' &&
+        normalizeDateOnly(n.dueDate) >= todayStr &&
+        normalizeDateOnly(n.dueDate) <= next7DaysStr &&
         matchesVendor(n.vendor)
       )
       .map(n => ({
@@ -34,9 +49,10 @@ export const useUpcomingTasks = (selectedVendor: string) => {
 
     const upcomingFollowUps = followUpList
       .filter(f =>
-        f.status.toLowerCase() !== 'closed' &&
-        f.dueDate && f.dueDate >= todayStr && f.dueDate <= next7DaysStr &&
-        matchesVendor(f.vendor || f.assignedTo)
+        normalizeStatus(f.status) !== 'closed' &&
+        normalizeDateOnly(f.dueDate) >= todayStr &&
+        normalizeDateOnly(f.dueDate) <= next7DaysStr &&
+        matchesVendor(f.vendor)
       )
       .map(f => ({
         id: f.id,

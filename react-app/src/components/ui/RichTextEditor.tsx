@@ -1,4 +1,5 @@
 import React, { useRef, useCallback, useMemo } from 'react';
+import { toast } from 'sonner';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import { kmService } from '../../services/kmService';
@@ -40,7 +41,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                         quill.insertEmbed(position, 'image', url);
                     }
                 } catch (err) {
-                    alert('Image upload failed');
+                    toast.error('Image upload failed');
                     console.error('RichTextEditor Image Upload Error:', err);
                 } finally {
                     if (onLoadingStateChange) onLoadingStateChange(false);

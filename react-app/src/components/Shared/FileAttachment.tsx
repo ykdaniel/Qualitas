@@ -45,20 +45,12 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
 }) => {
     const { t } = useLanguage();
     // 儲存已從 Server 拿回來的檔案
-    const [apiAttachments, setApiAttachments] = useState<AttachmentInfo[]>(propsAttachments || []);
+    const [apiAttachments, setApiAttachments] = useState<AttachmentInfo[]>([]);
     // 儲存使用者剛選取但尚未上傳至 Server 的實體 File 物件
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
     // 儲存待上傳 File 所產生出的預覽用 URL (blob UI)
     const [pendingPreviews, setPendingPreviews] = useState<string[]>([]);
     const uploading = false;
-
-    // 同步外部傳入的 API attachments
-    useEffect(() => {
-        if (propsAttachments) {
-            // eslint-disable-next-line react-hooks/exhaustive-deps
-            setApiAttachments(propsAttachments);
-        }
-    }, [propsAttachments]);
 
     // 如果提供了實體 ID，嘗試自動抓取遠端檔案 (如果外部沒傳 propsAttachments 的話)
     useEffect(() => {
@@ -68,6 +60,8 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
                 .catch(err => console.error('Failed to load attachments', err));
         }
     }, [entityType, entityId, category, propsAttachments]);
+
+    const displayedApiAttachments = propsAttachments ?? apiAttachments;
 
     // 清理 ObjectURL 防止記憶體洩漏
     useEffect(() => {
@@ -235,10 +229,10 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
                     </>
                 )}
 
-                {(apiAttachments.length > 0 || pendingFiles.length > 0 || (legacyAttachments && legacyAttachments.length > 0)) && (
+                {(displayedApiAttachments.length > 0 || pendingFiles.length > 0 || (legacyAttachments && legacyAttachments.length > 0)) && (
                     <div style={styles.photoPreviewGrid}>
                         {/* 1. 顯示已存在伺服器上的檔案 */}
-                        {apiAttachments.map((a) => {
+                        {displayedApiAttachments.map((a) => {
                             const isImage = isImageSrc(a.file_url, a.mime_type);
                             return (
                                 <div key={a.id} style={styles.photoPreviewItem}>

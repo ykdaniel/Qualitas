@@ -205,6 +205,20 @@ class NOIService:
                 if not itp:
                     raise ValueError(error_messages.reference_not_found("ITP", "reference number", d['itpNo']))
 
+            # 勾稽鎖定：關閉 NOI 前確認其下所有 ITR 已完結（Approved 或 Void）
+            new_status = d.get('status') or (noi_update.status if noi_update.status else None)
+            if new_status == 'Closed' and db_noi.referenceNo:
+                open_itr_count = self.repo.db.query(models.ITR).filter(
+                    models.ITR.noiNumber == db_noi.referenceNo,
+                    models.ITR.status.notin_(['Approved', 'Void'])
+                ).count()
+                if open_itr_count > 0:
+                    raise ValueError(
+                        f"Cannot close NOI '{db_noi.referenceNo}': "
+                        f"{open_itr_count} ITR(s) still in progress. "
+                        f"Please ensure all linked ITRs are Approved or Void first."
+                    )
+
             # Update the record
             updated = self.repo.update(db_noi, d)
 

@@ -203,8 +203,8 @@ export const checkContractorReferences = (
  * 未來如果有模組引用 FAT，可以在這裡添加檢查邏輯
  */
 export const checkFATReferences = (
-  fatId: string,
-  fatIdentifier: string,
+  _fatId: string,
+  _fatIdentifier: string,
   // 未來可以添加其他模組的列表參數，例如 itrList, noiList 等
 ): {
   hasReferences: boolean;

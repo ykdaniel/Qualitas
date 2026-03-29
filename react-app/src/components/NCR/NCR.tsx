@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
 
 import { useNCRStore } from '../../store/ncrStore';
@@ -96,6 +97,16 @@ const NCR: React.FC = () => {
         defectPhotos: details.defectPhotos,
         improvementPhotos: details.improvementPhotos,
         attachments: details.attachments,
+        referenceStandards: details.referenceStandards,
+        serialNumbers: details.serialNumbers,
+        repairMethodStatement: details.repairMethodStatement,
+        immediateCorrectionAction: details.immediateCorrectionAction,
+        rootCauseAnalysis: details.rootCauseAnalysis,
+        correctiveActions: details.correctiveActions,
+        preventiveAction: details.preventiveAction,
+        finalProductIntegrityStatement: details.finalProductIntegrityStatement,
+        reInspectionNumber: details.reInspectionNumber,
+        projectQualityManager: details.projectQualityManager,
       };
 
       try {
@@ -131,7 +142,7 @@ const NCR: React.FC = () => {
                         await uploadFiles(moduleStr, targetId, uploadGroup.files, uploadGroup.category);
                     } catch (error) {
                         console.error(`Error uploading files for category ${uploadGroup.category}:`, error);
-                        alert(`Failed to upload some files for ${uploadGroup.category}.`);
+                        toast.error(`Failed to upload some files for ${uploadGroup.category}.`);
                     }
                 }
             }
@@ -143,7 +154,7 @@ const NCR: React.FC = () => {
         setCurrentNcrId(null);
       } catch (error: any) {
         const detail = error?.response?.data?.detail || t('common.saveFailed') || 'Save failed';
-        alert(detail);
+        toast.error(detail);
       }
     }
   };

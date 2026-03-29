@@ -5,7 +5,7 @@ interface KPIMetric {
   label: string;
   value: string | number;
   color?: string;
-  isLarge?: boolean;
+  isPrimary?: boolean;
 }
 
 interface KPICardProps {
@@ -13,6 +13,7 @@ interface KPICardProps {
   onViewDetails: () => void;
   viewDetailsText: string;
   onClick: () => void;
+  accentColor?: string;
 }
 
 export const KPICard: React.FC<KPICardProps> = ({
@@ -20,9 +21,14 @@ export const KPICard: React.FC<KPICardProps> = ({
   onViewDetails,
   viewDetailsText,
   onClick,
+  accentColor = '#6366f1',
 }) => {
   return (
-    <div className={styles.kpiCard} onClick={onClick}>
+    <div
+      className={styles.kpiCard}
+      onClick={onClick}
+      style={{ '--card-accent': accentColor } as React.CSSProperties}
+    >
       <div className={styles.kpiCardContent}>
         {metrics.map((metric, index) => (
           <div key={index} className={styles.kpiHeader}>
@@ -30,8 +36,9 @@ export const KPICard: React.FC<KPICardProps> = ({
             <span
               className={styles.kpiValue}
               style={{
-                color: metric.color || 'inherit',
-                fontSize: metric.isLarge ? '20px' : 'inherit',
+                color: metric.color || '#1e293b',
+                fontSize: metric.isPrimary ? '22px' : '17px',
+                fontWeight: metric.isPrimary ? '700' : '600',
               }}
             >
               {metric.value}

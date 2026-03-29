@@ -34,7 +34,10 @@ export const createColumns = (
                     title={t('obs.status')}
                     filterOptions={[
                         { label: 'Open', value: 'Open' },
+                        { label: 'In Progress', value: 'In Progress' },
+                        { label: 'Resolved', value: 'Resolved' },
                         { label: 'Closed', value: 'Closed' },
+                        { label: 'Void', value: 'Void' },
                     ]}
                 />
             ),

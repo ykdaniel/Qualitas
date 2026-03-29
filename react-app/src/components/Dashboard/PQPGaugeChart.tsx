@@ -42,16 +42,14 @@ const PQPGaugeChart: React.FC<PQPGaugeChartProps> = React.memo(({ approved, matu
   const needleAngle = 90 - targetAngle;
 
   const getValueColor = () => {
-    if (maturity === 0)   return '#9ca3af';
-    if (maturity === 100) return '#10b981';
-    if (maturity < 50)    return '#f59e0b';
-    return '#10b981';
+    if (maturity === 0) return '#9ca3af';
+    return '#0f172a';
   };
   const valueColor = getValueColor();
 
   return (
     <div className={styles.gaugeChartContainer} ref={containerRef}>
-      <h3 className={styles.gaugeTitle}>PQP Maturity (Qty &amp; %)</h3>
+      <h3 className={styles.gaugeTitle}>PQP Total (Qty &amp; %)</h3>
       <div className={styles.gaugeWrapper} style={{ height: chartHeight }}>
         <ResponsiveContainer width="100%" height={chartHeight}>
           <PieChart>

@@ -78,6 +78,7 @@ const NCRParetoChart: React.FC = React.memo(() => {
           />
           <YAxis
             yAxisId="left"
+            allowDecimals={false}
             label={{ value: 'NCR Count', angle: -90, position: 'insideLeft' }}
           />
           <YAxis
@@ -95,7 +96,7 @@ const NCRParetoChart: React.FC = React.memo(() => {
             }}
           />
           <Legend />
-          <Bar yAxisId="left" dataKey="closed" stackId="a" fill="#10b981" name="Closed">
+          <Bar yAxisId="left" dataKey="closed" stackId="a" fill="#10b981" name="Closed" maxBarSize={80}>
             <LabelList
               dataKey="closed"
               position="inside"
@@ -109,7 +110,7 @@ const NCRParetoChart: React.FC = React.memo(() => {
               }}
             />
           </Bar>
-          <Bar yAxisId="left" dataKey="open" stackId="a" fill="#f59e0b" name="Open">
+          <Bar yAxisId="left" dataKey="open" stackId="a" fill="#f59e0b" name="Open" maxBarSize={80}>
             <LabelList
               dataKey="open"
               position="inside"

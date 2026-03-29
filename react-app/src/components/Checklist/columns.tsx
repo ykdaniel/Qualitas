@@ -63,9 +63,28 @@ export const createColumns = (
             }
         },
         {
-            accessorKey: "status",
+            accessorKey: "noiNumber",
             header: ({ column }) => (
-                <DataTableColumnHeader column={column} title={t('common.version')} />
+                <DataTableColumnHeader column={column} title="NOI Number" />
+            ),
+            cell: ({ row }) => {
+                const noiNumber = row.original.noiNumber;
+                return noiNumber ? (
+                    <Link
+                        to={`/noi?search=${encodeURIComponent(noiNumber)}`}
+                        className="font-mono text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                    >
+                        {noiNumber}
+                    </Link>
+                ) : (
+                    <span className="text-slate-400 text-xs">-</span>
+                );
+            }
+        },
+        {
+            accessorKey: "revision",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title={t('common.revision')} />
             ),
             cell: ({ row }) => {
                 const rev = row.original.revision ?? 0;

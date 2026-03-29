@@ -28,8 +28,30 @@ class PQPService:
     def __init__(self, repo: PQPRepository):
         self.repo = repo
 
+    @staticmethod
+    def _normalize_pqp_status(status: str | None) -> str | None:
+        """Normalize legacy/new PQP statuses into canonical values."""
+        if status is None:
+            return None
+        normalized = str(status).strip().lower()
+        mapping = {
+            "draft": "Not Submit",
+            "not submit": "Not Submit",
+            "not submitted": "Not Submit",
+            "pending": "Under Review",
+            "under review": "Under Review",
+            "revise & resubmit": "Reject",
+            "rejected": "Reject",
+            "reject": "Reject",
+            "approved": "Approved",
+            "void": "Void",
+        }
+        return mapping.get(normalized, status)
+
     def get_pqps(self, skip: int = 0, limit: int = 500, **filters) -> List[models.PQP]:
         """Get list of PQPs with optional filters"""
+        if filters.get("status") is not None:
+            filters["status"] = self._normalize_pqp_status(filters.get("status"))
         return self.repo.get_all(skip, limit, **filters)
 
     def get_pqp(self, pqp_id: str) -> Optional[models.PQP]:
@@ -41,6 +63,7 @@ class PQPService:
         """Create a new PQP with business logic validation"""
         try:
             data = _json_serialize(pqp_create.dict(), ['attachments'])
+            data['status'] = self._normalize_pqp_status(data.get('status')) or "Approved"
 
             vendor_name = data.pop('vendor', None)
             if vendor_name:
@@ -76,7 +99,9 @@ class PQPService:
                 return None
 
             if pqp_update.status and not WorkflowEngine.validate_transition(
-                "PQP", db_pqp.status, pqp_update.status
+                "PQP",
+                self._normalize_pqp_status(db_pqp.status) or db_pqp.status,
+                self._normalize_pqp_status(pqp_update.status) or pqp_update.status,
             ):
                 raise ValueError(
                     f"Invalid status transition from {db_pqp.status} to {pqp_update.status}"
@@ -85,6 +110,8 @@ class PQPService:
             old_val = {c.name: getattr(db_pqp, c.name) for c in db_pqp.__table__.columns}
             d = pqp_update.dict(exclude_unset=True)
             d = _json_serialize(d, ['attachments'])
+            if 'status' in d:
+                d['status'] = self._normalize_pqp_status(d.get('status'))
 
             if 'vendor' in d:
                 vendor_name = d.pop('vendor')

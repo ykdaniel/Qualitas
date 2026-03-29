@@ -1,0 +1,332 @@
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.modalOverlay.closing {
+  animation: fadeOut 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.modalContent {
+  background: white;
+  border-radius: 20px;
+  width: 95%;
+  max-width: 650px;
+  max-height: 90vh;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: center bottom;
+}
+
+.modalContent.closingCard {
+  animation: slideDown 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.modalHeader {
+  padding: 24px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #f1f5f9;
+  background: #ffffff;
+}
+
+.modalHeader h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.closeIconBtn {
+  background: #f1f5f9;
+  border: none;
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  transition: all 0.2s ease;
+}
+
+.closeIconBtn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+  transform: rotate(90deg);
+}
+
+.modalForm {
+  padding: 24px 32px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Custom Scrollbar */
+.modalForm::-webkit-scrollbar {
+  width: 6px;
+}
+.modalForm::-webkit-scrollbar-track {
+  background: transparent;
+}
+.modalForm::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 4px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.formGroup label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 4px;
+}
+
+.required {
+  color: #ef4444;
+}
+
+.formGroup input,
+.formGroup textarea,
+.formGroup select {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 15px;
+  font-family: inherit;
+  color: #1e293b;
+  background: #f8fafc;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  appearance: none;
+}
+
+.formGroup textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.formGroup input:focus,
+.formGroup textarea:focus,
+.formGroup select:focus {
+  outline: none;
+  background: #ffffff;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+.formGroup input::placeholder,
+.formGroup textarea::placeholder {
+  color: #94a3b8;
+}
+
+.permissionsGroupContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.permissionSection {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: all 0.2s ease;
+}
+
+.permissionSection:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.04);
+}
+
+.permissionSectionHeader {
+  background: #f1f5f9;
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.moduleBadge {
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #334155;
+}
+
+.moduleCount {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  background: #e2e8f0;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.permissionsSectionGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  padding: 12px;
+}
+
+@media (max-width: 640px) {
+  .permissionsSectionGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.permissionCheckbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  padding: 10px;
+  border-radius: 6px;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.permissionCheckbox:hover {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.permissionCheckbox.selected {
+  background: #eff6ff;
+  border-color: #dbeafe;
+}
+
+.permissionCheckbox input[type="checkbox"] {
+  width: 18px !important;
+  height: 18px !important;
+  cursor: pointer;
+  margin: 0 !important;
+  margin-top: 2px !important;
+  accent-color: #2563eb;
+}
+
+.permissionCheckbox span {
+  font-size: 14px;
+  color: #475569;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.permissionCheckbox.selected span {
+  color: #1e3a8a;
+  font-weight: 600;
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 24px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.cancelButton {
+  padding: 12px 24px;
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancelButton:hover:not(:disabled) {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.cancelButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.submitButton {
+  padding: 12px 28px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+}
+
+.submitButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.3);
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+
+.submitButton:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.submitButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes slideDown {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(20px) scale(0.98); }
+}

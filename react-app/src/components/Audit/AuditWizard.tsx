@@ -7,6 +7,10 @@ import {
 import { useAuditStore, AuditItem } from '../../store/auditStore';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useProjectStore } from '../../store/projectStore';
+import { useLanguage } from '../../context/LanguageContext';
+
+const ALL_CATEGORY = '__ALL__';
+const UNCATEGORIZED = '__UNCATEGORIZED__';
 
 // 內建 ISO 9001:2015 條文資料庫
 const ISO_CLAUSES = [
@@ -40,6 +44,7 @@ interface AuditWizardProps {
 }
 
 export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose, onSaveSuccess }) => {
+  const { t } = useLanguage();
   const { addAudit, updateAudit, loading } = useAuditStore();
   const { getActiveContractors } = useContractorsStore();
   const activeContractors = useMemo(() => getActiveContractors(), [getActiveContractors]);
@@ -106,11 +111,11 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
   const cancelEdit = () => setEditingItemId(null);
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeCategory, setActiveCategory] = useState('全部');
+  const [activeCategory, setActiveCategory] = useState(ALL_CATEGORY);
 
   const categories = useMemo(() => {
-    const cats = formData.customCheckItems.map((i: any) => i.no || '未分類');
-    return ['全部', ...Array.from(new Set(cats))] as string[];
+    const cats = formData.customCheckItems.map((i: any) => i.no || UNCATEGORIZED);
+    return [ALL_CATEGORY, ...Array.from(new Set(cats))] as string[];
   }, [formData.customCheckItems]);
 
   const stats = useMemo(() => {
@@ -125,7 +130,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
   const filteredItems = useMemo(() => {
     return formData.customCheckItems.filter((item: any) => {
       const matchesSearch = (item.clause || '').includes(searchTerm) || (item.task || '').includes(searchTerm);
-      const matchesCategory = activeCategory === '全部' || (item.no || '未分類') === activeCategory;
+      const matchesCategory = activeCategory === ALL_CATEGORY || (item.no || UNCATEGORIZED) === activeCategory;
       return matchesSearch && matchesCategory;
     });
   }, [formData.customCheckItems, searchTerm, activeCategory]);
@@ -247,13 +252,13 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
         await addAudit(updates);
       }
       
-      const time = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      setDraftMessage(`進度已於 ${time} 儲存`);
+      const time = new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setDraftMessage(`${t('audit.wizard.draftSaved')} ${time}`);
       setTimeout(() => setDraftMessage(''), 4000);
       onSaveSuccess();
     } catch (err: any) {
       console.error("草稿儲存失敗: ", err);
-      setSaveError('儲存進度時發生錯誤，請檢查網路連線。');
+      setSaveError(t('audit.wizard.saveError'));
     } finally {
       setIsDraftSaving(false);
     }
@@ -276,7 +281,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
       onSaveSuccess();
     } catch (err: any) {
       console.error("資料庫寫入失敗: ", err);
-      setSaveError('儲存至資料庫時發生錯誤，請檢查網路連線。');
+      setSaveError(t('audit.wizard.submitError'));
     } finally {
       setIsSaving(false);
     }
@@ -299,7 +304,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
             <span className={`absolute -bottom-8 text-xs font-bold whitespace-nowrap ${
               step >= i ? 'text-teal-700' : 'text-slate-400'
             }`}>
-              {i === 1 ? '專案資訊' : i === 2 ? '人員配置' : i === 3 ? '地點與範圍' : i === 4 ? '配置查檢表' : '執行與評估'}
+              {i === 1 ? t('audit.wizard.step1') : i === 2 ? t('audit.wizard.step2') : i === 3 ? t('audit.wizard.step3') : i === 4 ? t('audit.wizard.step4') : t('audit.wizard.step5')}
             </span>
           </div>
           {i < 5 && (
@@ -319,29 +324,29 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
           <div className="w-24 h-24 bg-teal-50 text-teal-600 rounded-full flex items-center justify-center mx-auto mb-6">
             <CheckCircle size={56} />
           </div>
-          <h2 className="text-3xl font-black text-slate-800 mb-2">稽核計畫已成功寫入資料庫</h2>
-          <p className="text-slate-500 mb-8">雲端紀錄已建立，文件編號：{formData.auditDocNo || '自動產生'}</p>
-          
+          <h2 className="text-3xl font-black text-slate-800 mb-2">{t('audit.wizard.successTitle')}</h2>
+          <p className="text-slate-500 mb-8">{t('audit.wizard.successSubtitle')}{formData.auditDocNo || t('audit.wizard.successSubtitleAuto')}</p>
+
           <div className="grid grid-cols-2 gap-4 text-left bg-slate-50 p-6 rounded-2xl mb-8 border border-slate-100">
             <div className="col-span-2">
-              <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">專案名稱</p>
+              <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">{t('audit.wizard.projectNameLabel')}</p>
               <p className="font-semibold text-slate-700">{formData.projectName}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">主導稽核員</p>
+              <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">{t('audit.wizard.leadAuditorLabel')}</p>
               <p className="font-semibold text-slate-700">{formData.leadAuditor}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">查檢項數量</p>
-              <p className="font-semibold text-slate-700">{formData.customCheckItems.length} 項自定義</p>
+              <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">{t('audit.wizard.checkItemCountLabel')}</p>
+              <p className="font-semibold text-slate-700">{formData.customCheckItems.length} {t('audit.wizard.customItemsSuffix')}</p>
             </div>
           </div>
 
-          <button 
+          <button
             onClick={onClose}
             className="w-full py-4 bg-teal-600 text-white rounded-2xl font-bold text-lg hover:bg-teal-700 hover:shadow-lg transition-all active:scale-[0.98]"
           >
-            返回列表
+            {t('audit.wizard.backToList')}
           </button>
         </div>
       </div>
@@ -356,7 +361,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                 <div className="inline-flex items-center justify-center p-3.5 bg-emerald-50 text-teal-700 rounded-2xl">
                     <ClipboardList size={28} />
                 </div>
-                <h1 className="text-3xl font-black text-slate-800 tracking-tight">稽核計畫主檔系統</h1>
+                <h1 className="text-3xl font-black text-slate-800 tracking-tight">{t('audit.wizard.title')}</h1>
             </div>
             <button 
                 onClick={onClose}
@@ -384,7 +389,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
               <div className="p-8 md:p-12 space-y-8 animate-in fade-in slide-in-from-bottom-4">
                 <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-6">
                   <FileText className="text-teal-600" size={28} />
-                  <h2 className="text-2xl font-bold text-slate-800">專案資訊</h2>
+                  <h2 className="text-2xl font-bold text-slate-800">{t('audit.wizard.step1')}</h2>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -406,7 +411,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                       onChange={handleInputChange}
                       className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none"
                     >
-                      <option value="">-- 請選擇專案 --</option>
+                      <option value="">{t('audit.wizard.selectProject')}</option>
                       {projectList.map(p => (
                         <option key={p.id} value={p.name}>{p.code ? `[${p.code}] ` : ''}{p.name}</option>
                       ))}
@@ -418,7 +423,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                        <span className="text-xs font-medium text-slate-400">(受稽核廠商)</span>
                     </label>
                     <select value={formData.vendorId} onChange={handleContractorChange} className="w-full md:w-1/2 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none">
-                        <option value="">-- 請選擇受稽核廠商 --</option>
+                        <option value="">{t('audit.wizard.selectContractor')}</option>
                         {activeContractors.map((vendor: any) => (
                             <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
                         ))}
@@ -458,7 +463,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
               <div className="p-8 md:p-12 space-y-8 animate-in fade-in slide-in-from-bottom-4">
                 <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-6">
                   <Users className="text-teal-600" size={28} />
-                  <h2 className="text-2xl font-bold text-slate-800">人員配置 (Carried Out By)</h2>
+                  <h2 className="text-2xl font-bold text-slate-800">{t('audit.wizard.step2')} (Carried Out By)</h2>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div>
@@ -495,10 +500,10 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                 <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
                   <div className="flex items-center gap-3">
                     <MapPin className="text-teal-600" size={28} />
-                    <h2 className="text-2xl font-bold text-slate-800">地點與範圍設定</h2>
+                    <h2 className="text-2xl font-bold text-slate-800">{t('audit.wizard.step3')}</h2>
                   </div>
                   <button type="button" onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors shadow-sm text-sm font-medium no-print">
-                    <Printer className="w-4 h-4" /> 列印稽核計畫
+                    <Printer className="w-4 h-4" /> {t('audit.wizard.printPlan')}
                   </button>
                 </div>
                 
@@ -596,10 +601,10 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                 <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
                   <div className="flex items-center gap-3">
                     <CheckSquare className="text-teal-600" size={28} />
-                    <h2 className="text-2xl font-bold text-slate-800">配置查檢表 Checklist</h2>
+                    <h2 className="text-2xl font-bold text-slate-800">{t('audit.wizard.step4')} Checklist</h2>
                   </div>
                   <button type="button" onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors shadow-sm text-sm font-medium no-print">
-                    <Printer className="w-4 h-4" /> 列印查檢表
+                    <Printer className="w-4 h-4" /> {t('audit.wizard.printChecklist')}
                   </button>
                 </div>
 
@@ -647,9 +652,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                         </div>
                       ) : (
                         <select name="no" value={newItem.no || ''} onChange={handleNewClauseSelect} className="w-1/3 shrink-0 p-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all text-sm text-slate-800 font-bold appearance-none">
-                          <option value="" disabled>-- 選擇 ISO 條文帶入 --</option>
+                          <option value="" disabled>{t('audit.wizard.selectISOClause')}</option>
                           {ISO_CLAUSES.map(c => <option key={c.no} value={c.no}>{c.no} - {c.clause}</option>)}
-                          <option value="custom">✎ 自訂其他條文...</option>
+                          <option value="custom">✎ {t('audit.wizard.customClause')}</option>
                         </select>
                       )}
                       <input type="text" name="clause" value={newItem.clause} onChange={handleNewItemChange} placeholder="ISO 9001:2015 Clause 內容..." className="flex-1 p-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all text-sm font-medium text-slate-800" />
@@ -675,17 +680,17 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                                 </div>
                               ) : (
                                 <select name="no" value={editFormData.no || ''} onChange={handleEditClauseSelect} className="w-1/3 shrink-0 p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm font-bold text-slate-700">
-                                  <option value="" disabled>-- 選擇 ISO 條文 --</option>
+                                  <option value="" disabled>{t('audit.wizard.selectISOClause')}</option>
                                   {ISO_CLAUSES.map(c => <option key={c.no} value={c.no}>{c.no} - {c.clause}</option>)}
-                                  <option value="custom">✎ 自訂其他條文...</option>
+                                  <option value="custom">✎ {t('audit.wizard.customClause')}</option>
                                 </select>
                               )}
                               <input type="text" name="clause" value={editFormData.clause} onChange={handleEditChange} onKeyPress={(e) => { if (e.key === 'Enter') e.preventDefault(); }} placeholder="ISO 9001:2015 Clause 內容..." className="flex-1 p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm" />
                             </div>
                             <input type="text" name="task" value={editFormData.task} onChange={handleEditChange} onKeyPress={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveEdit(); } }} placeholder="輸入稽核查檢重點 (Audit Question)..." className="w-full p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm" />
                             <div className="flex justify-end gap-2 mt-1">
-                              <button type="button" onClick={cancelEdit} className="px-3 py-1.5 text-sm text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-1"><X size={16} /> 取消</button>
-                              <button type="button" onClick={saveEdit} className="px-3 py-1.5 text-sm text-white bg-teal-600 rounded-lg hover:bg-teal-700 transition-colors flex items-center gap-1"><Check size={16} /> 儲存</button>
+                              <button type="button" onClick={cancelEdit} className="px-3 py-1.5 text-sm text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-1"><X size={16} /> {t('common.cancel')}</button>
+                              <button type="button" onClick={saveEdit} className="px-3 py-1.5 text-sm text-white bg-teal-600 rounded-lg hover:bg-teal-700 transition-colors flex items-center gap-1"><Check size={16} /> {t('common.save')}</button>
                             </div>
                           </div>
                         ) : (
@@ -715,7 +720,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                       </div>
                     ))}
                     {formData.customCheckItems.length === 0 && (
-                      <div className="text-center py-8 text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50">目前尚無自定義查檢項</div>
+                      <div className="text-center py-8 text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50">{t('audit.wizard.noCustomItems')}</div>
                     )}
                   </div>
                 </div>
@@ -731,14 +736,14 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       <ShieldCheck className="w-8 h-8 text-indigo-600" />
-                      <h1 className="text-2xl font-bold text-slate-800">稽核執行與評估</h1>
+                      <h1 className="text-2xl font-bold text-slate-800">{t('audit.wizard.executionTitle')}</h1>
                     </div>
-                    <p className="text-slate-500">{formData.projectName ? `${formData.projectName} - 例行性稽核` : '配置後的查檢表將在此處執行'}</p>
+                    <p className="text-slate-500">{formData.projectName ? `${formData.projectName} - ${t('audit.wizard.regularAudit')}` : t('audit.wizard.configureFirst')}</p>
                   </div>
                   
                   <div className="flex items-center gap-3 no-print">
                     <button type="button" onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors shadow-sm text-sm font-medium">
-                      <Printer className="w-4 h-4" /> 列印報告
+                      <Printer className="w-4 h-4" /> {t('audit.wizard.printReport')}
                     </button>
                   </div>
                 </header>
@@ -746,31 +751,31 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                 {/* Statistics Cards */}
                 <div className="grid grid-cols-4 gap-4 overflow-x-auto min-w-full pb-2">
                   <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]">
-                    <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">總查核項目</p>
+                    <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">{t('audit.wizard.statTotal')}</p>
                     <p className="text-2xl font-bold text-slate-800">{stats.total}</p>
                     <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3">
                       <div className="bg-indigo-500 h-1.5 rounded-full" style={{ width: '100%' }}></div>
                     </div>
                   </div>
                   <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]">
-                    <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">查核進度</p>
+                    <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">{t('audit.wizard.statProgress')}</p>
                     <div className="flex items-end justify-between">
                       <p className="text-2xl font-bold text-slate-800">{stats.progress}%</p>
-                      <p className="text-xs text-slate-400 mb-1 whitespace-nowrap ml-2">已完成 {stats.total - stats.pending}</p>
+                      <p className="text-xs text-slate-400 mb-1 whitespace-nowrap ml-2">{t('audit.wizard.statCompleted')} {stats.total - stats.pending}</p>
                     </div>
                     <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3">
                       <div className="bg-blue-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${stats.progress}%` }}></div>
                     </div>
                   </div>
                   <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]">
-                    <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">符合項 (Pass)</p>
+                    <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">{t('audit.wizard.statPass')}</p>
                     <p className="text-2xl font-bold text-green-600">{stats.passed}</p>
                     <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3">
                       <div className="bg-green-500 h-1.5 rounded-full" style={{ width: stats.total ? `${(stats.passed / stats.total) * 100}%` : '0%' }}></div>
                     </div>
                   </div>
                   <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]">
-                    <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">缺失項 (Fail)</p>
+                    <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">{t('audit.wizard.statFail')}</p>
                     <p className="text-2xl font-bold text-red-600">{stats.failed}</p>
                     <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3">
                       <div className="bg-red-500 h-1.5 rounded-full" style={{ width: stats.total ? `${(stats.failed / stats.total) * 100}%` : '0%' }}></div>
@@ -793,7 +798,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                             : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
                           }`}
                         >
-                          {cat}
+                          {cat === ALL_CATEGORY ? t('audit.wizard.allCategories') : cat === UNCATEGORIZED ? t('audit.wizard.uncategorized') : cat}
                         </button>
                       ))}
                     </div>
@@ -801,7 +806,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                       <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input 
                         type="text" 
-                        placeholder="搜尋項目或規範敘述..."
+                        placeholder={t('audit.wizard.searchPlaceholder')}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-slate-50"
@@ -816,11 +821,11 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-100">
-                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-32">分類</th>
-                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">查核內容</th>
-                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-40 text-center">狀態</th>
-                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">查核備註 / 證據說明</th>
-                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-28 text-right">更新日期</th>
+                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-32">{t('audit.wizard.colCategory')}</th>
+                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">{t('audit.wizard.colContent')}</th>
+                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-40 text-center">{t('audit.wizard.colStatus')}</th>
+                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">{t('audit.wizard.colRemarks')}</th>
+                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-28 text-right">{t('audit.wizard.colUpdated')}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -828,7 +833,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                           <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
                             <td className="px-6 py-4">
                               <span className="text-xs font-medium px-2.5 py-1 bg-slate-100 text-slate-600 rounded-md">
-                                {item.no || '未設定'}
+                                {item.no || t('audit.wizard.notSet')}
                               </span>
                             </td>
                             <td className="px-6 py-4">
@@ -872,7 +877,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                                 <textarea 
                                   value={item.note || ''}
                                   onChange={(e) => updateItemNote(item.id, e.target.value)}
-                                  placeholder="點擊輸入說明..."
+                                  placeholder={t('common.clickToEnter') || 'Click to enter...'}
                                   rows={2}
                                   className="w-full text-sm bg-transparent border border-transparent hover:border-slate-200 focus:border-indigo-400 focus:outline-none p-2 rounded-lg transition-all text-slate-700 resize-y min-h-[40px]"
                                 />
@@ -890,13 +895,13 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                             <td colSpan={5} className="px-6 py-20 text-center">
                               <div className="flex flex-col items-center justify-center text-slate-400">
                                 <Search className="w-12 h-12 mb-3 opacity-20" />
-                                <p className="text-sm font-medium">找不到符合條件的項目</p>
-                                <button 
+                                <p className="text-sm font-medium">{t('audit.wizard.noResults')}</p>
+                                <button
                                   type="button"
-                                  onClick={() => {setSearchTerm(''); setActiveCategory('全部');}}
+                                  onClick={() => {setSearchTerm(''); setActiveCategory(ALL_CATEGORY);}}
                                   className="mt-2 text-indigo-500 text-xs hover:underline"
                                 >
-                                  重設過濾條件
+                                  {t('audit.wizard.resetFilter')}
                                 </button>
                               </div>
                             </td>
@@ -910,19 +915,19 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-1.5">
                         <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                        <span className="text-xs text-slate-500">符合: {stats.passed}</span>
+                        <span className="text-xs text-slate-500">{t('audit.wizard.legendPass')}: {stats.passed}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                        <span className="text-xs text-slate-500">注意: {stats.pending}</span>
+                        <span className="text-xs text-slate-500">{t('audit.wizard.legendWarning')}: {stats.pending}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                        <span className="text-xs text-slate-500">缺失: {stats.failed}</span>
+                        <span className="text-xs text-slate-500">{t('audit.wizard.legendFail')}: {stats.failed}</span>
                       </div>
                     </div>
                     <p className="text-xs text-slate-400 font-medium italic">
-                      * 系統將自動記錄每一次的狀態變更與時間戳記
+                      * {t('audit.wizard.autoTimestamp')}
                     </p>
                   </div>
                 </div>
@@ -937,7 +942,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                     type="button" onClick={prevStep}
                     className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-all border border-transparent hover:border-slate-200"
                   >
-                    <ChevronLeft size={20} /> 上一步
+                    <ChevronLeft size={20} /> {t('audit.wizard.prevStep')}
                   </button>
                 )}
               </div>
@@ -950,7 +955,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                   disabled={isDraftSaving || loading}
                   className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-slate-500 bg-transparent hover:bg-slate-50 border border-slate-200 transition-all disabled:opacity-50"
                 >
-                  <Save size={18} /> {isDraftSaving ? '儲存中...' : '儲存草稿'}
+                  <Save size={18} /> {isDraftSaving ? t('audit.wizard.savingDraft') : t('audit.wizard.saveDraft')}
                 </button>
                 
                 {draftMessage && (
@@ -961,7 +966,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
 
                 {step < 5 ? (
                   <button key="btn-next" type="button" onClick={(e) => { e.preventDefault(); nextStep(); }} className="w-full md:w-auto flex items-center justify-center gap-2 px-10 py-3.5 bg-teal-600 text-white rounded-2xl font-bold hover:bg-teal-700 shadow-md shadow-teal-600/20 transition-all active:scale-[0.98]">
-                    下一步 <ChevronRight size={20} />
+                    {t('audit.wizard.nextStep')} <ChevronRight size={20} />
                   </button>
                 ) : (
                   <button
@@ -970,7 +975,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                     disabled={isSaving || loading}
                     className="w-full md:w-auto flex items-center justify-center gap-2 px-10 py-3.5 bg-slate-900 text-white rounded-2xl font-bold hover:bg-black shadow-md shadow-slate-900/20 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isSaving ? '資料處理中...' : '完成並建立計畫'} <CheckCircle size={20} />
+                    {isSaving ? t('audit.wizard.submitting') : t('audit.wizard.submit')} <CheckCircle size={20} />
                   </button>
                 )}
               </div>

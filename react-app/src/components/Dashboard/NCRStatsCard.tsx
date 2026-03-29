@@ -1,12 +1,13 @@
 import { useNCRStore } from '../../store/ncrStore';
 import { useDashboardFilterStore } from '../../store/dashboardFilterStore';
 import { useMemo } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { useLanguage } from '../../context/LanguageContext';
 import styles from './Dashboard.module.css';
 
 const NCRStatsCard: React.FC = () => {
   const ncrList = useNCRStore(state => state.ncrList);
   const selectedVendor = useDashboardFilterStore(state => state.selectedVendor);
+  const { t } = useLanguage();
 
   const stats = useMemo(() => {
     const filteredList = selectedVendor === 'all'
@@ -44,54 +45,30 @@ const NCRStatsCard: React.FC = () => {
     <div className={styles.ncrStatsCard}>
       <div className={styles.ncrStatsContent}>
         <div className={styles.ncrStatsRow}>
-          <span className={styles.ncrStatsLabel}>NCR 總數</span>
-          <span className={styles.ncrStatsValue} style={{ color: '#3b82f6' }}>{stats.total}</span>
+          <span className={styles.ncrStatsLabel}>{t('dashboard.ncrTotal') || 'NCR Total'}</span>
+          <span className={styles.ncrStatsValue}>{stats.total}</span>
         </div>
         <div className={styles.ncrStatsRow}>
-          <span className={styles.ncrStatsLabel}>開啟</span>
-          <span className={styles.ncrStatsValue} style={{ color: '#1f2937', fontSize: '20px' }}>
+          <span className={styles.ncrStatsLabel}>{t('status.open') || 'Open'}</span>
+          <span className={styles.ncrStatsValue} style={{ color: '#1e293b', fontSize: '20px', fontWeight: '600' }}>
             {stats.open} ({stats.openPercent}%)
           </span>
         </div>
         <div className={styles.ncrStatsRow}>
-          <span className={styles.ncrStatsLabel}>已關閉</span>
-          <span className={styles.ncrStatsValue} style={{ color: '#10b981', fontSize: '20px' }}>
+          <span className={styles.ncrStatsLabel}>{t('status.closed') || 'Closed'}</span>
+          <span className={styles.ncrStatsValue} style={{ color: '#1e293b', fontSize: '20px', fontWeight: '600' }}>
             {stats.closed} ({stats.closedPercent}%)
           </span>
         </div>
 
-        {/* Open/Closed 圆环图 */}
-        <div className={styles.ncrPieChartContainer}>
-          <div style={{ width: '100%', height: 220 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart margin={{ top: 20, right: 30, bottom: 20, left: 30 }}>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={42}
-                  outerRadius={83}
-                  paddingAngle={2}
-                  dataKey="value"
-                  label={({ value, percent }) => `${value}, ${(percent * 100).toFixed(0)}%`}
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* 自定义图例 */}
-          <div className={styles.ncrChartLegend}>
-            {pieData.map((entry, index) => (
-              <div key={index} className={styles.legendItem}>
-                <div className={styles.legendColor} style={{ backgroundColor: entry.color }}></div>
-                <span className={styles.legendText}>{entry.name}: {entry.value}</span>
-              </div>
-            ))}
-          </div>
+        {/* Legend dots only — no redundant pie chart in sidebar */}
+        <div className={styles.ncrChartLegend} style={{ marginTop: '16px' }}>
+          {pieData.map((entry, index) => (
+            <div key={index} className={styles.legendItem}>
+              <div className={styles.legendColor} style={{ backgroundColor: entry.color }}></div>
+              <span className={styles.legendText}>{entry.name}: {entry.value}</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>

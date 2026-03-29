@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { getErrorMessage } from '../../utils/errorUtils';
@@ -7,8 +8,8 @@ import api from '../../services/api';
 import styles from './Login.module.css';
 
 const Login = () => {
-  const [email, setEmail] = useState('admin@example.com');
-  const [password, setPassword] = useState('admin');
+  const [account, setAccount] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { login } = useAuth();
@@ -21,7 +22,7 @@ const Login = () => {
     setIsSubmitting(true);
     try {
       const formData = new URLSearchParams();
-      formData.append('username', email);
+      formData.append('username', account);
       formData.append('password', password);
 
       const response = await api.post('/auth/login', formData.toString(), {
@@ -34,6 +35,17 @@ const Login = () => {
       await login(access_token, refresh_token || '');
       navigate('/');
     } catch (err: unknown) {
+      if (isAxiosError(err) && !err.response) {
+        setError('Unable to reach backend API. Please confirm backend is running on port 8000.');
+        return;
+      }
+      if (isAxiosError(err) && err.response?.status === 500) {
+        const detail = err.response?.data?.detail;
+        if (typeof detail === 'string' && detail.trim()) {
+          setError(detail);
+          return;
+        }
+      }
       setError(getErrorMessage(err, t('login.failed')));
     } finally {
       setIsSubmitting(false);
@@ -66,11 +78,11 @@ const Login = () => {
             <label className={styles.label} htmlFor="email">{t('login.email')}</label>
             <input
               id="email"
-              type="email"
+              type="text"
               className={styles.input}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@example.com"
+              value={account}
+              onChange={(e) => setAccount(e.target.value)}
+              placeholder="admin or admin@example.com"
               required
             />
           </div>

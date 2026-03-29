@@ -50,15 +50,16 @@
 }
 
 .title {
-  font-size: 28px;
-  font-weight: 600;
-  color: #1f2937;
+  font-size: 32px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.5px;
   margin: 0;
 }
 
 .subtitle {
   font-size: 15px;
-  color: #6b7280;
+  color: #64748b;
   margin: 0 0 20px 0;
 }
 
@@ -96,14 +97,14 @@
   font-size: 24px;
   font-weight: 700;
   color: #1f2937;
-  margin: 0 0 12px 0;
+  margin: 0 0 24px 0;
 }
 
 .sectionTitleCollapsible {
   font-size: 24px;
   font-weight: 700;
   color: #1f2937;
-  margin: 0 0 12px 0;
+  margin: 0 0 24px 0;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -122,18 +123,31 @@
 
 .kpiGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+}
+
+@media (max-width: 1400px) {
+  .kpiGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .kpiGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 .kpiCard {
-  background: white;
-  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-left: 4px solid var(--card-accent, #6366f1);
+  border-radius: 16px;
   padding: 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  border-left: 4px solid #3b82f6;
+  box-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.06);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -141,29 +155,29 @@
 }
 
 .kpiCard:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.1);
 }
 
 .kpiHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
 }
 
 .kpiLabel {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
-  color: #6b7280;
+  color: #64748b;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.04em;
 }
 
 .kpiValue {
-  font-size: 32px;
+  font-size: 22px;
   font-weight: 700;
-  color: #1f2937;
+  color: #0f172a;
+  letter-spacing: -0.3px;
 }
 
 .kpiStatusRow {
@@ -200,6 +214,9 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  gap: 16px;
+  justify-content: space-evenly;
+  margin-bottom: 20px;
 }
 
 .kpiDescription {
@@ -212,25 +229,25 @@
 .kpiCard .viewButton {
   margin-top: auto;
   width: 100%;
-  padding: 12px 16px;
-  background: #3b82f6;
+  padding: 11px 16px;
+  background: #1e293b;
   color: white;
   border: none;
-  border-radius: 6px;
-  font-size: 15px;
+  border-radius: 8px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
+  letter-spacing: 0.01em;
 }
 
 .kpiCard .viewButton:hover {
-  background: #2563eb;
+  background: #0f172a;
   transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
 }
 
 /* 圖表區域 */
@@ -246,7 +263,7 @@
   margin: 24px 0;
 }
 
-/* Recharts 互動圖表區域 */
+/* Recharts legacy grid */
 .rechartsGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
@@ -254,12 +271,97 @@
   margin-top: 16px;
 }
 
+/* ── Trend Analysis Section ─────────────────────────────── */
+.trendAnalysisSection {
+  margin-bottom: 32px;
+}
+
+.trendAnalysisHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.trendSubtitle {
+  font-size: 13px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.trendGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 1100px) {
+  .trendGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.trendCard {
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 14px;
+  padding: 20px 20px 12px;
+  box-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.06);
+  transition: box-shadow 0.2s ease;
+}
+
+.trendCard:hover {
+  box-shadow: 0 6px 20px -4px rgba(0, 0, 0, 0.1);
+}
+
+.trendCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.trendCardTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.trendCardTotal {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.trendCardChart {
+  height: 100px;
+}
+
+.trendEmptyState {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.trendEmptyState span:first-child {
+  font-size: 24px;
+  font-weight: 300;
+}
+
+
 .chartCard {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.03);
 }
 
 .chartCardTitle {
@@ -271,11 +373,16 @@
 
 .emptyChart {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 200px;
   color: #9ca3af;
-  font-size: 14px;
+  font-size: 15px;
+  gap: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px dashed #e5e7eb;
 }
 
 .verticalDivider {
@@ -360,10 +467,11 @@
 }
 
 .ncrStatsCard {
-  background: white;
-  border-radius: 12px;
-  padding: 18px 24px 18px 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.03);
   min-width: 280px;
   display: flex;
   flex-direction: column;
@@ -385,16 +493,20 @@
 }
 
 .ncrStatsLabel {
-  font-size: 14px;
-  font-weight: 500;
-  color: #6b7280;
+  font-size: 13px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   text-align: left;
 }
 
 .ncrStatsValue {
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 36px;
+  font-weight: 800;
   line-height: 1;
+  color: #0f172a;
+  letter-spacing: -1px;
   text-align: right;
 }
 
@@ -421,32 +533,34 @@
 }
 
 .ncrSectionButton {
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  padding: 8px 16px;
-  background: #3b82f6;
+  margin-top: 24px;
+  margin-left: auto;
+  padding: 12px 24px;
+  background: #0f172a;
   color: white;
   border: none;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+  display: block;
+  width: max-content;
 }
 
 .ncrSectionButton:hover {
-  background: #2563eb;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+  background: #1e293b;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.25);
 }
 
 .obsStatsCard {
-  background: white;
-  border-radius: 12px;
-  padding: 18px 24px 18px 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.03);
   min-width: 280px;
   display: flex;
   flex-direction: column;
@@ -468,16 +582,20 @@
 }
 
 .obsStatsLabel {
-  font-size: 18px;
-  font-weight: 500;
-  color: #6b7280;
+  font-size: 13px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   text-align: left;
 }
 
 .obsStatsValue {
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 36px;
+  font-weight: 800;
   line-height: 1;
+  color: #0f172a;
+  letter-spacing: -1px;
   text-align: right;
 }
 
@@ -519,32 +637,34 @@
 }
 
 .obsSectionButton {
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  padding: 8px 16px;
-  background: #3b82f6;
+  margin-top: 24px;
+  margin-left: auto;
+  padding: 12px 24px;
+  background: #0f172a;
   color: white;
   border: none;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+  display: block;
+  width: max-content;
 }
 
 .obsSectionButton:hover {
-  background: #2563eb;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+  background: #1e293b;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.25);
 }
 
 .itpStatsCard {
-  background: white;
-  border-radius: 12px;
-  padding: 18px 24px 24px 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.03);
   min-width: 280px;
   display: flex;
   flex-direction: column;
@@ -565,44 +685,50 @@
 }
 
 .itpStatsLabel {
-  font-size: 16px;
-  font-weight: 500;
-  color: #6b7280;
+  font-size: 13px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   text-align: left;
 }
 
 .itpStatsValue {
-  font-size: 28px;
-  font-weight: 700;
+  font-size: 36px;
+  font-weight: 800;
   line-height: 1;
+  color: #0f172a;
+  letter-spacing: -1px;
   text-align: right;
 }
 
 .itpStatsButton {
   width: 100%;
   padding: 12px 24px;
-  background: #3b82f6;
+  background: #0f172a;
   color: white;
   border: none;
   border-radius: 8px;
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
-  margin-top: 8px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+  margin-top: auto;
 }
 
 .itpStatsButton:hover {
-  background: #2563eb;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+  background: #1e293b;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.25);
 }
 
 .pqpStatsCard {
-  background: white;
-  border-radius: 12px;
-  padding: 18px 24px 24px 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.03);
   min-width: 280px;
   display: flex;
   flex-direction: column;
@@ -623,37 +749,42 @@
 }
 
 .pqpStatsLabel {
-  font-size: 16px;
-  font-weight: 500;
-  color: #6b7280;
+  font-size: 13px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   text-align: left;
 }
 
 .pqpStatsValue {
-  font-size: 28px;
-  font-weight: 700;
+  font-size: 36px;
+  font-weight: 800;
   line-height: 1;
+  color: #0f172a;
+  letter-spacing: -1px;
   text-align: right;
 }
 
 .pqpStatsButton {
   width: 100%;
   padding: 12px 24px;
-  background: #3b82f6;
+  background: #0f172a;
   color: white;
   border: none;
   border-radius: 8px;
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
-  margin-top: 20px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+  margin-top: auto;
 }
 
 .pqpStatsButton:hover {
-  background: #2563eb;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+  background: #1e293b;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.25);
 }
 
 .gaugeChartContainer {

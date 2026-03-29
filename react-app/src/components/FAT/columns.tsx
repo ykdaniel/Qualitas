@@ -102,6 +102,25 @@ export const createColumns = (
             cell: ({ row }) => <div className="text-center">{row.getValue("moveInDate")}</div>,
         },
         {
+            accessorKey: "status",
+            header: ({ column }) => (
+                <DataTableColumnHeader
+                    column={column}
+                    title={t('common.status')}
+                    filterOptions={[
+                        { label: t('fat.status.scheduled'), value: 'Scheduled' },
+                        { label: t('fat.status.inProgress'), value: 'In Progress' },
+                        { label: t('fat.status.completed'), value: 'Completed' },
+                        { label: t('fat.status.cancelled'), value: 'Cancelled' },
+                    ]}
+                />
+            ),
+            cell: ({ row }) => <div className="text-center">{row.getValue("status") || 'Scheduled'}</div>,
+            filterFn: (row, id, value) => {
+                return value.includes(row.getValue(id));
+            },
+        },
+        {
             id: "actions",
             header: t('common.operations'),
             cell: ({ row }) => {

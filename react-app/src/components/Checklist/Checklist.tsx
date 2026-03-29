@@ -1,8 +1,9 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
+import { toast } from 'sonner';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
-import { Plus, Printer, FileText, Info, MapPin, Calendar, CheckCircle, AlertCircle, Trash2, XCircle, Check, HelpCircle, User, Signature } from 'lucide-react';
+import { Plus, Printer, Info, MapPin, CheckCircle, AlertCircle, Trash2, XCircle, HelpCircle, User, Signature } from 'lucide-react';
 import { useChecklistStore, ChecklistRecord } from '../../store/checklistStore';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
@@ -49,15 +50,15 @@ const itpDatabase: ItpItemDefinition[] = [
 const Checklist: React.FC = () => {
     const { t } = useLanguage();
     const navigate = useNavigate();
-    const { records, loading, deleteRecord, addRecord, updateRecord, refreshRecords } = useChecklistStore();
+    const { records, deleteRecord, addRecord, updateRecord, refreshRecords } = useChecklistStore();
     const [view, setView] = useState<'list' | 'editor'>('list');
     const [editingRecord, setEditingRecord] = useState<ChecklistRecord | null>(null);
     const [saving, setSaving] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const debouncedSearch = useDebounce(searchQuery, 500);
 
-    const { noiList, fetchNOIs } = useNOIStore();
-    const { itrList, fetchITRs } = useITRStore();
+    const { fetchNOIs } = useNOIStore();
+    const { fetchITRs } = useITRStore();
 
     useEffect(() => {
         fetchNOIs();
@@ -86,7 +87,7 @@ const Checklist: React.FC = () => {
                 setEditingRecord(found);
                 setView('editor');
             } else {
-                alert(t('checklist.recordNotFound') || 'Record not found');
+                toast.error(t('checklist.recordNotFound') || 'Record not found');
             }
         }
     }, [recordNoParam, records, t, fromSource, editingRecord]);
@@ -153,17 +154,17 @@ const Checklist: React.FC = () => {
         setView('editor');
     };
 
-    const handleEdit = (record: ChecklistRecord) => {
+    const handleEdit = useCallback((record: ChecklistRecord) => {
         setEditingRecord(record);
         // Note: For editing, record data has precedence
         setView('editor');
-    };
+    }, []);
 
-    const handleDelete = async (id: string) => {
-        if (window.confirm("Are you sure you want to delete this record?")) {
+    const handleDelete = useCallback(async (id: string) => {
+        if (window.confirm(t('common.confirmDelete'))) {
             await deleteRecord(id);
         }
-    };
+    }, [deleteRecord, t]);
 
     const checklistColumns = useMemo(() => createColumns(handleEdit, handleDelete, t), [handleEdit, handleDelete, t]);
 
@@ -265,7 +266,7 @@ const Checklist: React.FC = () => {
                             if (typeof detail === 'object') {
                                 detail = JSON.stringify(detail);
                             }
-                            alert(detail);
+                            toast.error(detail);
                         } finally {
                             setSaving(false);
                         }

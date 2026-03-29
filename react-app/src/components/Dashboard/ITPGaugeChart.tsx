@@ -42,10 +42,8 @@ const ITPGaugeChart: React.FC<ITPGaugeChartProps> = React.memo(({ approved, matu
   const needleAngle = 90 - targetAngle;
 
   const getValueColor = () => {
-    if (maturity === 0)   return '#9ca3af';
-    if (maturity === 100) return '#10b981';
-    if (maturity < 50)    return '#f59e0b';
-    return '#10b981';
+    if (maturity === 0) return '#9ca3af';
+    return '#0f172a';
   };
   const valueColor = getValueColor();
 

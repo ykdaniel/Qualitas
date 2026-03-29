@@ -1,12 +1,13 @@
 import { useOBSStore } from '../../store/obsStore';
 import { useDashboardFilterStore } from '../../store/dashboardFilterStore';
 import { useMemo } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { useLanguage } from '../../context/LanguageContext';
 import styles from './Dashboard.module.css';
 
 const OBSStatsCard: React.FC = () => {
   const obsList = useOBSStore(state => state.obsList);
   const selectedVendor = useDashboardFilterStore(state => state.selectedVendor);
+  const { t } = useLanguage();
 
   const stats = useMemo(() => {
     const filteredList = selectedVendor === 'all'
@@ -44,54 +45,30 @@ const OBSStatsCard: React.FC = () => {
     <div className={styles.obsStatsCard}>
       <div className={styles.obsStatsContent}>
         <div className={styles.obsStatsRow}>
-          <span className={styles.obsStatsLabel}>Total OBS</span>
-          <span className={styles.obsStatsValue} style={{ color: '#3b82f6' }}>{stats.total}</span>
+          <span className={styles.obsStatsLabel}>{t('dashboard.obsTotal') || 'Total OBS'}</span>
+          <span className={styles.obsStatsValue}>{stats.total}</span>
         </div>
         <div className={styles.obsStatsRow}>
-          <span className={styles.obsStatsLabel}>Open</span>
-          <span className={styles.obsStatsValue} style={{ color: '#1f2937', fontSize: '24px' }}>
+          <span className={styles.obsStatsLabel}>{t('status.open') || 'Open'}</span>
+          <span className={styles.obsStatsValue} style={{ color: '#1e293b', fontSize: '20px', fontWeight: '600' }}>
             {stats.open} ({stats.openPercent}%)
           </span>
         </div>
         <div className={styles.obsStatsRow}>
-          <span className={styles.obsStatsLabel}>Closed</span>
-          <span className={styles.obsStatsValue} style={{ color: '#10b981', fontSize: '24px' }}>
+          <span className={styles.obsStatsLabel}>{t('status.closed') || 'Closed'}</span>
+          <span className={styles.obsStatsValue} style={{ color: '#1e293b', fontSize: '20px', fontWeight: '600' }}>
             {stats.closed} ({stats.closedPercent}%)
           </span>
         </div>
 
-        {/* Open/Closed 圆环图 */}
-        <div className={styles.obsPieChartContainer}>
-          <div style={{ width: '100%', height: 220 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart margin={{ top: 20, right: 30, bottom: 20, left: 30 }}>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={42}
-                  outerRadius={83}
-                  paddingAngle={2}
-                  dataKey="value"
-                  label={({ value, percent }) => `${value}, ${(percent * 100).toFixed(0)}%`}
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* 自定义图例 */}
-          <div className={styles.obsChartLegend}>
-            {pieData.map((entry, index) => (
-              <div key={index} className={styles.legendItem}>
-                <div className={styles.legendColor} style={{ backgroundColor: entry.color }}></div>
-                <span className={styles.legendText}>{entry.name}: {entry.value}</span>
-              </div>
-            ))}
-          </div>
+        {/* Legend dots only — no redundant pie chart in sidebar */}
+        <div className={styles.obsChartLegend} style={{ marginTop: '16px' }}>
+          {pieData.map((entry, index) => (
+            <div key={index} className={styles.legendItem}>
+              <div className={styles.legendColor} style={{ backgroundColor: entry.color }}></div>
+              <span className={styles.legendText}>{entry.name}: {entry.value}</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>

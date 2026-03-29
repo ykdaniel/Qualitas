@@ -112,16 +112,22 @@ class WorkflowEngine:
     TRANSITIONS = {
         "ITP": {
             "Draft": ["Pending", "Void"],
-            "Pending": ["Approved", "Revise & Resubmit", "Void"],
-            "Approved": ["Void", "Pending"],
+            "Pending": ["Approved", "Approved with comments", "Revise & Resubmit", "Void"],
+            "Approved": ["Approved with comments", "Void", "Pending"],
+            "Approved with comments": ["Pending", "Revise & Resubmit", "Void"],
             "Revise & Resubmit": ["Pending", "Void"],
             "Void": []
         },
         "PQP": {
-            "Draft": ["Pending", "Void"],
-            "Pending": ["Approved", "Revise & Resubmit", "Void"],
-            "Approved": ["Void", "Pending"],
-            "Revise & Resubmit": ["Pending", "Void"],
+            # Canonical workflow used by current UI
+            "Not Submit": ["Under Review", "Void"],
+            "Under Review": ["Approved", "Reject", "Void"],
+            "Approved": ["Under Review", "Void"],
+            "Reject": ["Under Review", "Void"],
+            # Backward-compatible legacy statuses
+            "Draft": ["Pending", "Not Submit", "Void"],
+            "Pending": ["Approved", "Revise & Resubmit", "Under Review", "Void"],
+            "Revise & Resubmit": ["Pending", "Under Review", "Void"],
             "Void": []
         },
         "NCR": {
@@ -147,10 +153,11 @@ class WorkflowEngine:
             "Void": []
         },
         "OBS": {
-            "Open": ["In Progress", "Void"],
-            "In Progress": ["Resolved", "Void"],
-            "Resolved": ["Closed", "Void"],
-            "Closed": [],
+            # Compatible with both simple UI statuses and legacy workflow data
+            "Open": ["In Progress", "Resolved", "Closed", "Void"],
+            "In Progress": ["Resolved", "Closed", "Open", "Void"],
+            "Resolved": ["Closed", "Open", "Void"],
+            "Closed": ["Open", "Void"],
             "Void": []
         },
         "Checklist": {

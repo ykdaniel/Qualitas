@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { BackButton } from '@/components/ui/BackButton';
 import { useDebounce } from '../../hooks/useDebounce';
@@ -143,7 +144,7 @@ const ITR: React.FC = () => {
                             await uploadFiles(moduleStr, targetId as string, uploadGroup.files, uploadGroup.category);
                         } catch (error) {
                             console.error(`Error uploading files for category ${uploadGroup.category}:`, error);
-                            alert(`Failed to upload some files for ${uploadGroup.category}.`);
+                            toast.error(`Failed to upload some files for ${uploadGroup.category}.`);
                         }
                     }
                 }
@@ -155,7 +156,7 @@ const ITR: React.FC = () => {
             setCurrentItrId(null);
         } catch (error: any) {
             const detail = error?.response?.data?.detail || t('common.saveFailed') || 'Save failed';
-            alert(detail);
+            toast.error(detail);
         }
     };
 

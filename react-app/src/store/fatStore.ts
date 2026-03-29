@@ -13,7 +13,10 @@ export interface FATItem {
     deliveryTo: string;
     siteReadiness: string;
     moveInDate: string;
+    status?: string;
     hasDetails?: boolean;
+    created_at?: string;
+    updated_at?: string;
 }
 
 export interface FATDetailItem {
