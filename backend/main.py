@@ -85,6 +85,41 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logger.info(f"日誌系統已啟動 - 級別: {LOG_LEVEL}, 目錄: {LOG_DIR}")
 
+# Backup database before migrations/seeding
+def _backup_database():
+    """Create a timestamped backup of the SQLite database on each startup."""
+    import shutil
+    from datetime import datetime
+    from core.config import settings
+
+    db_url = settings.DATABASE_URL
+    if not db_url.startswith("sqlite"):
+        return  # Only applies to SQLite
+
+    # Extract file path from sqlite:///./qualitas.db
+    db_rel = db_url.replace("sqlite:///", "")
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), db_rel.lstrip("./"))
+    if not os.path.exists(db_path):
+        return
+
+    backup_dir = os.path.join(os.path.dirname(db_path), "backups")
+    os.makedirs(backup_dir, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = os.path.join(backup_dir, f"qualitas_{timestamp}.db")
+    shutil.copy2(db_path, backup_path)
+    logger.info(f"Database backed up to {backup_path}")
+
+    # Keep only the 7 most recent backups
+    backups = sorted(
+        [f for f in os.listdir(backup_dir) if f.startswith("qualitas_") and f.endswith(".db")]
+    )
+    for old in backups[:-7]:
+        os.remove(os.path.join(backup_dir, old))
+        logger.info(f"Removed old backup: {old}")
+
+_backup_database()
+
 # Create tables
 models.Base.metadata.create_all(bind=engine)
 
@@ -118,9 +153,12 @@ async def startup_event():
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Global Exception: {exc}", exc_info=True)
+    detail = "Internal Server Error"
+    if settings.ENVIRONMENT != "production":
+        detail = f"Internal Server Error: {exc}"
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal Server Error"},
+        content={"detail": detail},
     )
 
 # API Router

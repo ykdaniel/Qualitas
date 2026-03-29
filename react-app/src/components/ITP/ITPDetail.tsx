@@ -256,6 +256,36 @@ const ITPDetail: React.FC = () => {
     });
   };
 
+  const normalizeCriteria = (criteria: any): { en: string; ch: string }[] => {
+    if (!criteria) return [];
+    if (typeof criteria === 'string') return criteria ? [{ en: criteria, ch: '' }] : [];
+    if (!Array.isArray(criteria)) return [];
+    return criteria.map((c: any) => typeof c === 'string' ? { en: c, ch: '' } : { en: c?.en ?? '', ch: c?.ch ?? '' });
+  };
+
+  const handleCriteriaChange = (index: number, value: string, subField: 'en' | 'ch') => {
+    setEditingItem((prev: InspectionItem | null) => {
+      if (!prev) return null;
+      const arr = normalizeCriteria(prev.criteria);
+      const next = arr.map((c, i) => i === index ? { ...c, [subField]: value } : c);
+      return { ...prev, criteria: next };
+    });
+  };
+
+  const handleCriteriaAdd = () => {
+    setEditingItem((prev: InspectionItem | null) => {
+      if (!prev) return null;
+      return { ...prev, criteria: [...normalizeCriteria(prev.criteria), { en: '', ch: '' }] };
+    });
+  };
+
+  const handleCriteriaRemove = (index: number) => {
+    setEditingItem((prev: InspectionItem | null) => {
+      if (!prev) return null;
+      return { ...prev, criteria: normalizeCriteria(prev.criteria).filter((_, i) => i !== index) };
+    });
+  };
+
   const handleDelete = (itemId: string) => {
     if (window.confirm("確定要刪除此項目嗎？")) {
       setItems(prev => prev.filter(item => item.id !== itemId));
@@ -390,10 +420,16 @@ const ITPDetail: React.FC = () => {
                   </div>
                   <div>
                     <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2 ml-1">
-                      <ShieldCheck size={14} /> Standard
+                      <ShieldCheck size={14} /> Standard (EN/CH)
                     </label>
-                    <input type="text" className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono text-slate-600 bg-white shadow-sm"
-                      value={editingItem.standard} onChange={(e) => handleChange('standard', e.target.value)} />
+                    <input type="text" className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono text-slate-600 bg-white shadow-sm mb-1"
+                      placeholder="EN"
+                      value={typeof editingItem.standard === 'string' ? editingItem.standard : editingItem.standard.en}
+                      onChange={(e) => handleChange('standard', e.target.value, 'en')} />
+                    <input type="text" className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono text-slate-500 bg-white shadow-sm"
+                      placeholder="中文"
+                      value={typeof editingItem.standard === 'string' ? '' : editingItem.standard.ch}
+                      onChange={(e) => handleChange('standard', e.target.value, 'ch')} />
                   </div>
                 </div>
 
@@ -410,8 +446,18 @@ const ITPDetail: React.FC = () => {
                     <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2 ml-1">
                       <CheckCircle2 size={14} /> Acceptance Criteria
                     </label>
-                    <input type="text" className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm font-medium"
-                      value={editingItem.criteria} onChange={(e) => handleChange('criteria', e.target.value)} />
+                    {normalizeCriteria(editingItem.criteria).map((c, idx) => (
+                      <div key={idx} className="flex items-start gap-2 mb-2">
+                        <div className="flex-1 space-y-1">
+                          <input type="text" className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm font-medium"
+                            placeholder="EN" value={c.en} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'en')} />
+                          <input type="text" className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm text-slate-500"
+                            placeholder="中文" value={c.ch} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'ch')} />
+                        </div>
+                        <button type="button" onClick={() => handleCriteriaRemove(idx)} className="text-slate-400 hover:text-red-500 p-1.5 rounded-md hover:bg-red-50 transition-all shrink-0 mt-2">✕</button>
+                      </div>
+                    ))}
+                    <button type="button" onClick={handleCriteriaAdd} className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded hover:bg-blue-50 transition-all">+ Add Criteria</button>
                   </div>
                 </div>
 
@@ -441,10 +487,14 @@ const ITPDetail: React.FC = () => {
                   </div>
                   <div>
                     <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2 ml-1">
-                      <AlertCircle size={14} className="text-slate-400" /> Frequency
+                      <AlertCircle size={14} className="text-slate-400" /> Frequency (EN/CH)
                     </label>
-                    <input type="text" className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm"
-                      value={editingItem.frequency} onChange={(e) => handleChange('frequency', e.target.value)} />
+                    <input type="text" className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm mb-2"
+                      value={typeof editingItem.frequency === 'string' ? editingItem.frequency : editingItem.frequency.en}
+                      onChange={(e) => handleChange('frequency', e.target.value, 'en')} />
+                    <input type="text" className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm text-slate-500"
+                      value={typeof editingItem.frequency === 'string' ? '' : editingItem.frequency.ch}
+                      onChange={(e) => handleChange('frequency', e.target.value, 'ch')} />
                   </div>
                   <div>
                     <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2 ml-1">
@@ -576,7 +626,7 @@ const ITPDetail: React.FC = () => {
               </tr>
               <tr>
                 <th className="px-2 py-2 text-center border-r border-black w-12 bg-slate-800 text-[11px] font-bold">Sub.</th>
-                <th className="px-2 py-2 text-center border-r border-black w-12 bg-slate-800 text-[11px] font-bold">TECO</th>
+                <th className="px-2 py-2 text-center border-r border-black w-12 bg-slate-800 text-[11px] font-bold">MAIN</th>
                 <th className="px-2 py-2 text-center border-r border-black w-12 bg-slate-800 text-[11px] font-bold">Emp.</th>
                 <th className="px-2 py-2 text-center w-12 bg-slate-800 text-[11px] font-bold">HSE</th>
               </tr>
@@ -602,9 +652,10 @@ const ITPDetail: React.FC = () => {
                       </td>
                       <td className="px-5 py-4 border-r border-black align-top">
                         <div className="inline-block bg-slate-100 text-slate-600 text-[11px] font-mono px-2 py-0.5 rounded mb-2 border border-black">
-                          {item.standard}
+                          <div>{typeof item.standard === 'string' ? item.standard : item.standard.en}</div>
+                          {typeof item.standard !== 'string' && item.standard.ch && <div className="text-slate-400">{item.standard.ch}</div>}
                         </div>
-                        <div className="text-slate-800 text-sm leading-relaxed font-medium">{item.criteria}</div>
+                        {(() => { const arr = (typeof item.criteria === 'string' ? (item.criteria ? [{ en: item.criteria, ch: '' }] : []) : (Array.isArray(item.criteria) ? item.criteria.map((c: any) => typeof c === 'string' ? { en: c, ch: '' } : c) : [])).filter((c: any) => c.en || c.ch); if (arr.length === 0) return null; if (arr.length === 1) return <><div className="text-slate-800 text-sm font-medium">{(arr[0] as any).en}</div>{(arr[0] as any).ch && <div className="text-slate-500 text-xs mt-0.5">{(arr[0] as any).ch}</div>}</>; return <ul className="space-y-1 pl-1">{arr.map((c: any, i: number) => <li key={i} className="flex items-start gap-1"><span className="text-slate-400 shrink-0 mt-0.5">•</span><div><div className="text-slate-800 text-sm font-medium">{c.en}</div>{c.ch && <div className="text-slate-500 text-xs">{c.ch}</div>}</div></li>)}</ul>; })()}
                       </td>
                       <td className="px-5 py-4 border-r border-black bg-slate-50 align-top">
                         <div className="text-black text-sm font-medium">{item.checkTime.en}</div>
@@ -614,7 +665,16 @@ const ITPDetail: React.FC = () => {
                         <div className="text-black text-sm">{item.method.en}</div>
                         <div className="text-slate-500 text-xs mt-1">{item.method.ch}</div>
                       </td>
-                      <td className="px-5 py-4 border-r border-black align-top"><div className="text-slate-800 text-xs">{item.frequency}</div></td>
+                      <td className="px-5 py-4 border-r border-black align-top">
+                        {typeof item.frequency === 'string' ? (
+                          <div className="text-slate-800 text-xs">{item.frequency}</div>
+                        ) : (
+                          <>
+                            <div className="text-slate-800 text-xs">{item.frequency.en}</div>
+                            {item.frequency.ch && <div className="text-slate-400 text-xs mt-1">{item.frequency.ch}</div>}
+                          </>
+                        )}
+                      </td>
                       <td className="px-5 py-4 border-r border-black bg-slate-50 align-top">
                         {item.record !== '-' ? (
                           <button
@@ -720,7 +780,7 @@ const ITPDetail: React.FC = () => {
                   </tr>
                   <tr>
                     <th className="px-2 py-2 text-center border-r border-black w-12 bg-slate-800 text-[11px] font-bold">Sub.</th>
-                    <th className="px-2 py-2 text-center border-r border-black w-12 bg-slate-800 text-[11px] font-bold">TECO</th>
+                    <th className="px-2 py-2 text-center border-r border-black w-12 bg-slate-800 text-[11px] font-bold">MAIN</th>
                     <th className="px-2 py-2 text-center border-r border-black w-12 bg-slate-800 text-[11px] font-bold">Emp.</th>
                     <th className="px-2 py-2 text-center w-12 bg-slate-800 text-[11px] font-bold">HSE</th>
                   </tr>
@@ -746,9 +806,10 @@ const ITPDetail: React.FC = () => {
                           </td>
                           <td className="px-5 py-4 border-r border-black align-top">
                             <div className="inline-block bg-slate-100 text-slate-600 text-[11px] font-mono px-2 py-0.5 rounded mb-2 border border-black">
-                              {item.standard}
+                              <div>{typeof item.standard === 'string' ? item.standard : item.standard.en}</div>
+                              {typeof item.standard !== 'string' && item.standard.ch && <div className="text-slate-400">{item.standard.ch}</div>}
                             </div>
-                            <div className="text-slate-800 text-sm leading-relaxed font-medium">{item.criteria}</div>
+                            {(() => { const arr = (typeof item.criteria === 'string' ? (item.criteria ? [{ en: item.criteria, ch: '' }] : []) : (Array.isArray(item.criteria) ? item.criteria.map((c: any) => typeof c === 'string' ? { en: c, ch: '' } : c) : [])).filter((c: any) => c.en || c.ch); if (arr.length === 0) return null; if (arr.length === 1) return <><div className="text-slate-800 text-sm font-medium">{(arr[0] as any).en}</div>{(arr[0] as any).ch && <div className="text-slate-500 text-xs mt-0.5">{(arr[0] as any).ch}</div>}</>; return <ul className="space-y-1 pl-1">{arr.map((c: any, i: number) => <li key={i} className="flex items-start gap-1"><span className="text-slate-400 shrink-0 mt-0.5">•</span><div><div className="text-slate-800 text-sm font-medium">{c.en}</div>{c.ch && <div className="text-slate-500 text-xs">{c.ch}</div>}</div></li>)}</ul>; })()}
                           </td>
                           <td className="px-5 py-4 border-r border-black bg-slate-50 align-top">
                             <div className="text-black text-sm font-medium">{item.checkTime.en}</div>
@@ -758,7 +819,16 @@ const ITPDetail: React.FC = () => {
                             <div className="text-black text-sm">{item.method.en}</div>
                             <div className="text-slate-500 text-xs mt-1">{item.method.ch}</div>
                           </td>
-                          <td className="px-5 py-4 border-r border-black align-top"><div className="text-slate-800 text-xs">{item.frequency}</div></td>
+                          <td className="px-5 py-4 border-r border-black align-top">
+                        {typeof item.frequency === 'string' ? (
+                          <div className="text-slate-800 text-xs">{item.frequency}</div>
+                        ) : (
+                          <>
+                            <div className="text-slate-800 text-xs">{item.frequency.en}</div>
+                            {item.frequency.ch && <div className="text-slate-400 text-xs mt-1">{item.frequency.ch}</div>}
+                          </>
+                        )}
+                      </td>
                           <td className="px-5 py-4 border-r border-black bg-slate-50 align-top">
                             {item.record !== '-' ? (
                               <span className="font-mono text-xs font-bold text-slate-900">{item.record}</span>

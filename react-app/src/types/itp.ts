@@ -14,11 +14,11 @@ export interface InspectionItem {
     phase: string;
     id: string;
     activity: ITPTranslation;
-    standard: string;
-    criteria: string;
+    standard: ITPTranslation | string; // string for legacy backward-compat
+    criteria: ITPTranslation[] | string[] | string; // ITPTranslation[] preferred; legacy: string[] or string
     checkTime: ITPTranslation;
     method: ITPTranslation;
-    frequency: string;
+    frequency: ITPTranslation | string; // string for legacy backward-compat
     vp: VerificationPoints;
     record: string;
     isNew?: boolean;

@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import uuid
 from datetime import datetime
 
@@ -8,6 +9,7 @@ from passlib.context import CryptContext
 import crud
 import models
 import schemas
+from core.config import settings
 from database import SessionLocal
 
 logger = logging.getLogger(__name__)
@@ -125,15 +127,21 @@ def seed_initial_data():
             logger.info("Seeded user role.")
 
         # 4. Create Admin User if not exists
+        configured_admin_password = os.getenv("INITIAL_ADMIN_PASSWORD", "").strip()
+        desired_admin_password = configured_admin_password
+        if settings.ENVIRONMENT != "production" and not desired_admin_password:
+            # Development fallback to keep local login recoverable.
+            desired_admin_password = "admin"
+
         admin_user = crud.get_user_by_email(db, "admin@example.com")
         if not admin_user:
             crud.create_user(db, schemas.UserCreate(
                 username="admin",
                 email="admin@example.com",
-                password="admin",
+                password=desired_admin_password or "admin",
                 full_name="System Administrator",
                 role_id=admin_role.id
-            ), hashed_password=get_password_hash("admin"))
+            ), hashed_password=get_password_hash(desired_admin_password or "admin"))
             logger.info("Seeded admin user.")
         else:
             # Always ensure admin user has the admin role
@@ -141,6 +149,22 @@ def seed_initial_data():
                 admin_user.role_id = admin_role.id
                 db.commit()
                 logger.info(f"Updated admin user role_id to {admin_role.id}.")
+
+            # Only sync admin password if INITIAL_ADMIN_PASSWORD is explicitly set via env var.
+            # Never reset to a hardcoded fallback to avoid overwriting user-changed passwords.
+            if configured_admin_password:
+                should_reset_password = not admin_user.hashed_password
+                if not should_reset_password:
+                    try:
+                        should_reset_password = not pwd_context.verify(
+                            configured_admin_password, admin_user.hashed_password
+                        )
+                    except Exception:
+                        should_reset_password = True
+                if should_reset_password:
+                    admin_user.hashed_password = get_password_hash(configured_admin_password)
+                    db.commit()
+                    logger.info("Synchronized admin password from INITIAL_ADMIN_PASSWORD env var.")
 
         # 4. Create Seed Checklist Records if none exists
         if db.query(models.Checklist).count() == 0:
@@ -180,21 +204,7 @@ def seed_initial_data():
             db.commit()
             logger.info("Seeded initial Checklist record.")
 
-        # 5. [CLEANUP] Update existing Checklist record if it contains old default items
-        existing_record = db.query(models.Checklist).filter(models.Checklist.recordsNo == "QTS-RKS-HL-CHK-000001").first()
-        if existing_record and existing_record.detail_data:
-            detail = json.loads(existing_record.detail_data)
-            items = detail.get("items", [])
-            logger.info(f"DEBUG: Found {len(items)} items in existing record.")
-            # Force cleanup regardless of content match
-            if items:
-                logger.info("Forcing cleanup of existing record items...")
-                detail["items"] = [] # Clear items
-                existing_record.detail_data = json.dumps(detail)
-                db.commit()
-                logger.info("Existing record items cleared.")
-            else:
-                logger.info("Items already empty.")
+        # 5. [CLEANUP] Removed - was clearing checklist items on every restart (destructive)
 
     except Exception as e:
         logger.info(f"Error seeding data: {e}")
@@ -250,9 +260,7 @@ def seed_rebar_itp():
         }
 
         if existing:
-            logger.info(f"Updating existing Rebar ITP: {ref_no}")
-            for key, value in itp_data.items():
-                setattr(existing, key, value)
+            logger.info(f"Rebar ITP already exists, skipping seed: {ref_no}")
         else:
             logger.info(f"Creating new Rebar ITP: {ref_no}")
             new_itp = models.ITP(**itp_data, id=str(uuid.uuid4()))
@@ -314,9 +322,7 @@ def seed_piling_itp():
         }
 
         if existing:
-            logger.info(f"Updating existing Piling ITP: {ref_no}")
-            for key, value in itp_data.items():
-                setattr(existing, key, value)
+            logger.info(f"Piling ITP already exists, skipping seed: {ref_no}")
         else:
             logger.info(f"Creating new Piling ITP: {ref_no}")
             new_itp = models.ITP(**itp_data, id=str(uuid.uuid4()))

@@ -12,11 +12,11 @@ export const EMPTY_ITEM: InspectionItem = {
     phase: "B",
     id: "",
     activity: { en: "", ch: "" },
-    standard: "",
-    criteria: "",
+    standard: { en: "", ch: "" },
+    criteria: [],
     checkTime: { en: "", ch: "" },
     method: { en: "", ch: "" },
-    frequency: "",
+    frequency: { en: "", ch: "" },
     vp: { sub: "", teco: "", employer: "", hse: "" },
     record: "-"
 };

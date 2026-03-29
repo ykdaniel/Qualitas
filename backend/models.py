@@ -61,6 +61,16 @@ class NCR(Base):
     dueDate = Column(String, nullable=True)  # 到期日 (YYYY-MM-DD)
     attachments = Column(Text, nullable=True)
     last_reminded_at = Column(String, nullable=True)
+    referenceStandards = Column(Text, nullable=True)
+    serialNumbers = Column(Text, nullable=True)
+    repairMethodStatement = Column(Text, nullable=True)
+    immediateCorrectionAction = Column(Text, nullable=True)
+    rootCauseAnalysis = Column(Text, nullable=True)
+    correctiveActions = Column(Text, nullable=True)
+    preventiveAction = Column(Text, nullable=True)
+    finalProductIntegrityStatement = Column(Text, nullable=True)
+    reInspectionNumber = Column(String, nullable=True)
+    projectQualityManager = Column(String, nullable=True)
 
     # Relationships
     vendor_ref = relationship("Contractor", back_populates="ncrs")
@@ -128,7 +138,8 @@ class NOI(Base):
     vendor_ref = relationship("Contractor", back_populates="nois")
     ncrs = relationship("NCR", back_populates="noi_ref")
     itrs = relationship("ITR", back_populates="noi_ref")
-    checklists = relationship("Checklist", back_populates="noi_ref")
+    checklists = relationship("Checklist", back_populates="noi_ref",
+                             primaryjoin="NOI.referenceNo == foreign(Checklist.noiNumber)")
 
     @property
     def contractor(self):
@@ -396,15 +407,16 @@ class Checklist(Base):
     passCount = Column(Integer, default=0) # 統計數據
     failCount = Column(Integer, default=0) # 統計數據
     detail_data = Column(Text, nullable=True) # JSON 數據
-    noiNumber = Column(String, ForeignKey("noi.referenceNo"), nullable=True, index=True)
+    noiNumber = Column(String, nullable=True, index=True)  # 參照 noi.referenceNo（非 FK，避免編號異動時約束斷裂）
     # NOTE: DB 欄位名為 vendor_id，Python attr 為 contractor_id，透過 Column("vendor_id") alias 實現
     # 這是為了保持 DB schema 與其他模組一致（都叫 vendor_id），同時在 Python 層面語義更清楚
     contractor_id = Column("vendor_id", String, ForeignKey("contractors.id"), nullable=True, index=True)
     itrId = Column(String, ForeignKey("itr.id"), nullable=True, index=True) # ITR 關聯
-    itrNumber = Column(String, ForeignKey("itr.documentNumber"), nullable=True, index=True) # ITR 單號
+    itrNumber = Column(String, nullable=True, index=True)  # 參照 itr.documentNumber（非 FK，避免編號異動時約束斷裂）
 
     # Relationships
-    noi_ref = relationship("NOI", back_populates="checklists")
+    noi_ref = relationship("NOI", back_populates="checklists",
+                          primaryjoin="foreign(Checklist.noiNumber) == NOI.referenceNo")
     itr_ref = relationship("ITR", back_populates="checklists", foreign_keys=[itrId])
     vendor_ref = relationship("Contractor")
 
@@ -505,6 +517,7 @@ class FAT(Base):
     attachments = Column(Text, nullable=True)
     created_at = Column(String, nullable=True)
     updated_at = Column(String, nullable=True)
+    last_reminded_at = Column(String, nullable=True)
 
     # Relationships
     vendor_ref = relationship("Contractor", back_populates="fats")

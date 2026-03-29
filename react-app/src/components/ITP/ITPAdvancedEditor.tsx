@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PenTool, Trash2, ArrowDown, X, Save, ShieldCheck, HardHat, Building2, User, FileText } from 'lucide-react';
+import { PenTool, Trash2, ArrowDown, X, Save, ShieldCheck, HardHat, Building2, User, FileText, GripVertical } from 'lucide-react';
 import { InspectionItem } from '../../types/itp';
 import { PHASES, EMPTY_ITEM } from '../../constants/itp';
 import { useITRStore } from '../../store/itrStore';
@@ -77,6 +77,8 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
             let newPhaseItems = [];
             if (!insertAfter || insertAfter === 'end') {
                 newPhaseItems = [...currentPhaseItems, newItem];
+            } else if (insertAfter === 'beginning') {
+                newPhaseItems = [newItem, ...currentPhaseItems];
             } else {
                 const insertIndex = currentPhaseItems.findIndex(i => i.id === insertAfter);
                 if (insertIndex !== -1) {
@@ -144,6 +146,77 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
         });
     };
 
+    const normalizeCriteria = (criteria: any): { en: string; ch: string }[] => {
+        if (!criteria) return [];
+        if (typeof criteria === 'string') return criteria ? [{ en: criteria, ch: '' }] : [];
+        if (!Array.isArray(criteria)) return [];
+        return criteria.map((c: any) => typeof c === 'string' ? { en: c, ch: '' } : { en: c?.en ?? '', ch: c?.ch ?? '' });
+    };
+
+    const handleCriteriaChange = (index: number, value: string, subField: 'en' | 'ch') => {
+        setEditingItem((prev: InspectionItem | null) => {
+            if (!prev) return null;
+            const arr = normalizeCriteria(prev.criteria);
+            const next = arr.map((c, i) => i === index ? { ...c, [subField]: value } : c);
+            return { ...prev, criteria: next };
+        });
+    };
+
+    const handleCriteriaAdd = () => {
+        setEditingItem((prev: InspectionItem | null) => {
+            if (!prev) return null;
+            return { ...prev, criteria: [...normalizeCriteria(prev.criteria), { en: '', ch: '' }] };
+        });
+    };
+
+    const handleCriteriaRemove = (index: number) => {
+        setEditingItem((prev: InspectionItem | null) => {
+            if (!prev) return null;
+            return { ...prev, criteria: normalizeCriteria(prev.criteria).filter((_, i) => i !== index) };
+        });
+    };
+
+    // Drag-and-drop reorder
+    const [dragItemId, setDragItemId] = useState<string | null>(null);
+    const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+    const handleDragStart = (e: React.DragEvent, itemId: string) => {
+        setDragItemId(itemId);
+        e.dataTransfer.effectAllowed = 'move';
+    };
+
+    const handleDragOver = (e: React.DragEvent, itemId: string) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (itemId !== dragOverId) setDragOverId(itemId);
+    };
+
+    const handleDragEnd = () => {
+        setDragItemId(null);
+        setDragOverId(null);
+    };
+
+    const handleDrop = (e: React.DragEvent, targetId: string) => {
+        e.preventDefault();
+        if (!dragItemId || dragItemId === targetId) { handleDragEnd(); return; }
+        const sourceItem = items.find(i => i.id === dragItemId);
+        const targetItem = items.find(i => i.id === targetId);
+        if (!sourceItem || !targetItem || sourceItem.phase !== targetItem.phase) { handleDragEnd(); return; }
+
+        const phaseItems = items.filter(i => i.phase === sourceItem.phase);
+        const srcIdx = phaseItems.findIndex(i => i.id === dragItemId);
+        const tgtIdx = phaseItems.findIndex(i => i.id === targetId);
+
+        const reordered = [...phaseItems];
+        const [moved] = reordered.splice(srcIdx, 1);
+        reordered.splice(tgtIdx, 0, moved);
+
+        const renumbered = reordered.map((item, idx) => ({ ...item, id: `${item.phase}${idx + 1}` }));
+        const otherItems = items.filter(i => i.phase !== sourceItem.phase);
+        onItemsChange([...otherItems, ...renumbered]);
+        handleDragEnd();
+    };
+
     return (
         <div className="w-full bg-slate-50 relative pt-4 print:bg-white print:pt-0">
             {/* Print Header */}
@@ -176,11 +249,12 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
 
             {/* Table */}
             {/* Table */}
-            <div className="w-full overflow-x-auto bg-white print:overflow-visible relative">
+            <div className="w-full overflow-auto bg-white print:overflow-visible print:max-h-none relative" style={{ maxHeight: 'calc(100vh - 240px)' }}>
                 <table className="w-full text-left text-sm border-collapse print:border-collapse">
-                    <thead className="bg-[#1e293b] text-white font-bold text-xs uppercase tracking-wider leading-tight">
+                    <thead className="bg-[#1e293b] text-white font-bold text-xs uppercase tracking-wider leading-tight sticky top-0 z-[15]">
                         <tr>
-                            <th rowSpan={2} className="px-5 py-4 w-16 border-r border-slate-700 text-center rounded-tl-lg">Event No.</th>
+                            {!readOnly && <th rowSpan={2} className="px-2 py-4 w-8 border-r border-slate-700 text-center rounded-tl-lg print:hidden"></th>}
+                            <th rowSpan={2} className={`px-5 py-4 w-16 border-r border-slate-700 text-center ${readOnly ? 'rounded-tl-lg' : ''}`}>Event No.</th>
                             <th rowSpan={2} className="px-5 py-4 w-64 border-r border-slate-700 text-center">Inspection Activity</th>
                             <th rowSpan={2} className="px-5 py-4 w-56 border-r border-slate-700 text-center">Standard / Criteria</th>
                             <th rowSpan={2} className="px-5 py-4 w-40 border-r border-slate-700 text-center">Check Time</th>
@@ -192,7 +266,7 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
                         </tr>
                         <tr>
                             <th className="px-2 py-2 text-center border-r border-slate-700 w-12 text-[11px] font-bold">Sub.</th>
-                            <th className="px-2 py-2 text-center border-r border-slate-700 w-12 text-[11px] font-bold">TECO</th>
+                            <th className="px-2 py-2 text-center border-r border-slate-700 w-12 text-[11px] font-bold">MAIN</th>
                             <th className="px-2 py-2 text-center border-r border-slate-700 w-12 text-[11px] font-bold">Emp.</th>
                             <th className={`px-2 py-2 text-center w-12 text-[11px] font-bold ${!readOnly && 'border-r border-slate-700'}`}>HSE</th>
                         </tr>
@@ -201,14 +275,27 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
                         {PHASES.map((phase) => (
                             <React.Fragment key={phase.code}>
                                 <tr className="sticky top-0 z-[5]">
-                                    <td colSpan={readOnly ? 11 : 12} className={`px-0 py-0 border-b border-slate-300 ${phase.color}`}>
+                                    <td colSpan={readOnly ? 11 : 13} className={`px-0 py-0 border-b border-slate-300 ${phase.color}`}>
                                         <div className="px-6 py-3 font-bold text-sm flex items-center gap-2 uppercase tracking-wide w-full text-slate-800">
                                             {phase.title}
                                         </div>
                                     </td>
                                 </tr>
                                 {items.filter(item => item.phase === phase.code).map((item) => (
-                                    <tr key={item.id} className="hover:bg-slate-50 transition-colors group border-b border-slate-100 last:border-0 relative">
+                                    <tr
+                                        key={item.id}
+                                        draggable={!readOnly}
+                                        onDragStart={!readOnly ? (e) => handleDragStart(e, item.id) : undefined}
+                                        onDragOver={!readOnly ? (e) => handleDragOver(e, item.id) : undefined}
+                                        onDragEnd={!readOnly ? handleDragEnd : undefined}
+                                        onDrop={!readOnly ? (e) => handleDrop(e, item.id) : undefined}
+                                        className={`transition-colors group border-b border-slate-100 last:border-0 relative ${dragOverId === item.id && dragItemId !== item.id ? 'bg-blue-50 border-t-2 border-t-blue-400' : dragItemId === item.id ? 'opacity-40' : 'hover:bg-slate-50'}`}
+                                    >
+                                        {!readOnly && (
+                                            <td className="px-2 py-4 text-center border-r border-slate-100 align-middle cursor-grab active:cursor-grabbing print:hidden">
+                                                <GripVertical size={14} className="text-slate-300 group-hover:text-slate-400 mx-auto" />
+                                            </td>
+                                        )}
                                         <td className="px-5 py-4 font-mono text-slate-900 font-bold border-r border-slate-100 bg-slate-50/50 align-top pt-5">
                                             {item.id}
                                         </td>
@@ -218,9 +305,15 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
                                         </td>
                                         <td className="px-5 py-4 border-r border-slate-100 align-top">
                                             <div className="inline-block bg-slate-100 text-slate-600 text-[11px] font-mono px-2 py-0.5 rounded mb-2 border border-slate-200">
-                                                {item.standard}
+                                                <div>{typeof item.standard === 'string' ? item.standard : item.standard.en}</div>
+                                                {typeof item.standard !== 'string' && item.standard.ch && <div className="text-slate-400">{item.standard.ch}</div>}
                                             </div>
-                                            <div className="text-slate-700 text-sm leading-relaxed font-medium">{item.criteria}</div>
+                                            {(() => {
+                                                const arr = (typeof item.criteria === 'string' ? (item.criteria ? [{ en: item.criteria, ch: '' }] : []) : (Array.isArray(item.criteria) ? item.criteria.map((c: any) => typeof c === 'string' ? { en: c, ch: '' } : c) : [])).filter((c: any) => c.en || c.ch);
+                                                if (arr.length === 0) return null;
+                                                if (arr.length === 1) return <><div className="text-slate-700 text-sm font-medium">{(arr[0] as any).en}</div>{(arr[0] as any).ch && <div className="text-slate-500 text-xs mt-0.5">{(arr[0] as any).ch}</div>}</>;
+                                                return <ul className="space-y-1 pl-1">{arr.map((c: any, i: number) => <li key={i} className="flex items-start gap-1"><span className="text-slate-400 shrink-0 mt-0.5">•</span><div><div className="text-slate-700 text-sm font-medium">{c.en}</div>{c.ch && <div className="text-slate-500 text-xs">{c.ch}</div>}</div></li>)}</ul>;
+                                            })()}
                                         </td>
                                         <td className="px-5 py-4 border-r border-slate-100 align-top bg-slate-50/30">
                                             <div className="text-slate-900 text-sm font-medium">{item.checkTime.en}</div>
@@ -230,7 +323,16 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
                                             <div className="text-slate-900 text-sm">{item.method.en}</div>
                                             <div className="text-slate-500 text-xs mt-1">{item.method.ch}</div>
                                         </td>
-                                        <td className="px-5 py-4 border-r border-slate-200 align-top"><div className="text-slate-600 text-xs font-medium bg-slate-100 inline-block px-2 py-1 rounded">{item.frequency}</div></td>
+                                        <td className="px-5 py-4 border-r border-slate-200 align-top">
+                                            {typeof item.frequency === 'string' ? (
+                                                <div className="text-slate-600 text-xs font-medium bg-slate-100 inline-block px-2 py-1 rounded">{item.frequency}</div>
+                                            ) : (
+                                                <>
+                                                    <div className="text-slate-600 text-xs font-medium bg-slate-100 inline-block px-2 py-1 rounded">{item.frequency.en}</div>
+                                                    {item.frequency.ch && <div className="text-slate-400 text-xs mt-1">{item.frequency.ch}</div>}
+                                                </>
+                                            )}
+                                        </td>
                                         <td className="px-5 py-4 border-r border-slate-200 bg-slate-50/30 align-top">
                                             {item.record !== '-' ? (
                                                 <button
@@ -244,7 +346,7 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
                                                             if (onViewRecord) {
                                                                 onViewRecord(found);
                                                             } else {
-                                                                alert(`Viewing ITR: ${found.documentNumber}`);
+                                                                toast.info(`Viewing ITR: ${found.documentNumber}`);
                                                             }
                                                         } else {
                                                             toast.error('Record document data not found.');
@@ -321,6 +423,7 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
                                                     value={editingItem.insertAfter || 'end'}
                                                     onChange={(e) => handleChange('insertAfter', e.target.value)}
                                                 >
+                                                    <option value="beginning">At the Beginning (最前面)</option>
                                                     <option value="end">At the End (最後面)</option>
                                                     {items.filter(i => i.phase === editingItem.phase).map(item => (
                                                         <option key={item.id} value={item.id}>
@@ -337,22 +440,29 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
                                 <div className="space-y-4">
                                     <div className="grid grid-cols-2 gap-6">
                                         <div>
-                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Activity (EN)</label>
-                                            <input className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm" value={editingItem.activity.en} onChange={(e) => handleChange('activity', e.target.value, 'en')} />
+                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Activity (EN/CH)</label>
+                                            <input className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm mb-2" value={editingItem.activity.en} onChange={(e) => handleChange('activity', e.target.value, 'en')} />
+                                            <input className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm text-slate-500" value={editingItem.activity.ch} onChange={(e) => handleChange('activity', e.target.value, 'ch')} />
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Standard</label>
-                                            <input className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm" value={editingItem.standard} onChange={(e) => handleChange('standard', e.target.value)} />
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-6">
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Activity (CH)</label>
-                                            <input className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm" value={editingItem.activity.ch} onChange={(e) => handleChange('activity', e.target.value, 'ch')} />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Criteria</label>
-                                            <input className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm" value={editingItem.criteria} onChange={(e) => handleChange('criteria', e.target.value)} />
+                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Standard (EN/CH)</label>
+                                            <input className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm mb-1" placeholder="EN"
+                                                value={typeof editingItem.standard === 'string' ? editingItem.standard : editingItem.standard.en}
+                                                onChange={(e) => handleChange('standard', e.target.value, 'en')} />
+                                            <input className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm mb-2 text-slate-500" placeholder="中文"
+                                                value={typeof editingItem.standard === 'string' ? '' : editingItem.standard.ch}
+                                                onChange={(e) => handleChange('standard', e.target.value, 'ch')} />
+                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2 mt-3">Criteria</label>
+                                            {normalizeCriteria(editingItem.criteria).map((c, idx) => (
+                                                <div key={idx} className="flex items-start gap-2 mb-2">
+                                                    <div className="flex-1 space-y-1">
+                                                        <input className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm" placeholder="EN" value={c.en} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'en')} />
+                                                        <input className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm text-slate-500" placeholder="中文" value={c.ch} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'ch')} />
+                                                    </div>
+                                                    <button type="button" onClick={() => handleCriteriaRemove(idx)} className="text-slate-400 hover:text-red-500 p-1.5 rounded-md hover:bg-red-50 transition-all shrink-0 mt-2">✕</button>
+                                                </div>
+                                            ))}
+                                            <button type="button" onClick={handleCriteriaAdd} className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded hover:bg-blue-50 transition-all">+ Add Criteria</button>
                                         </div>
                                     </div>
 
@@ -369,8 +479,13 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
                                             <input className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm text-slate-500" value={editingItem.method.ch} onChange={(e) => handleChange('method', e.target.value, 'ch')} />
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Frequency</label>
-                                            <input className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm" value={editingItem.frequency} onChange={(e) => handleChange('frequency', e.target.value)} />
+                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Frequency (EN/CH)</label>
+                                            <input className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm mb-2"
+                                                value={typeof editingItem.frequency === 'string' ? editingItem.frequency : editingItem.frequency.en}
+                                                onChange={(e) => handleChange('frequency', e.target.value, 'en')} />
+                                            <input className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm text-slate-500"
+                                                value={typeof editingItem.frequency === 'string' ? '' : editingItem.frequency.ch}
+                                                onChange={(e) => handleChange('frequency', e.target.value, 'ch')} />
                                         </div>
                                         <div>
                                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Record</label>
@@ -414,7 +529,7 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
                             {/* Footer */}
                             <div className="bg-slate-50 px-8 py-5 border-t border-slate-200 flex justify-end gap-4 shrink-0">
                                 <button onClick={() => setEditingItem(null)} className="px-6 py-2.5 text-sm font-semibold text-slate-600 bg-white border border-slate-300 rounded-lg">Cancel</button>
-                                <button onClick={handleSaveItem} className="px-6 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-lg flex items-center gap-2"><Save size={18} /> Save Changes</button>
+                                <button onClick={handleSaveItem} className="px-6 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-lg flex items-center gap-2"><Save size={18} /> Apply</button>
                             </div>
                         </div>
                     </div>
