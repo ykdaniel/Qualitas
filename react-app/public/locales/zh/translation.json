@@ -306,7 +306,7 @@
   "itp.vendor": "承攬廠商",
   "itp.description": "主旨",
   "itp.rev": "版本",
-  "itp.submissionDate": "更新日期",
+  "itp.submissionDate": "送審日期",
   "itp.editTitle": "編輯 ITP",
   "itp.addTitle": "新增 ITP",
   "itp.infoSection": "ITP 資訊",
@@ -323,7 +323,7 @@
   "itp.status.approved": "已核准",
   "itp.status.approvedWithComments": "核准但帶有意見",
   "itp.status.pending": "待審核",
-  "itp.status.notSubmitted": "未提交",
+  "itp.status.noSubmit": "未送審",
   "itp.status.reviseResubmit": "修訂並重新提交",
   "itp.status.rejected": "退件",
   "itp.status.void": "作廢",
@@ -614,5 +614,6 @@
   "checklist.searchPlaceholder": "搜尋檢查表...",
   "checklist.listTitle": "檢查表紀錄",
   "checklist.recordNotFound": "找不到紀錄",
-  "checklist.selectNoi": "選擇 NOI"
+  "checklist.selectNoi": "選擇 NOI",
+  "itr.lockedMsg": "此 ITR 狀態已鎖定，欄位無法修改。如需修改請先透過 Publish 建立新版本，或將狀態改為 Reject。"
 }

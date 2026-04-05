@@ -33,6 +33,7 @@ def run_seeding():
     seed_default_pqp()
     seed_initial_data()
     seed_rebar_itp()
+    seed_formwork_itp()
     logger.info("Seeding completed.")
 
 def seed_default_contractors():
@@ -336,6 +337,348 @@ def seed_piling_itp():
         db.rollback()
     finally:
         db.close()
+
+def seed_formwork_itp():
+    db = SessionLocal()
+    try:
+        ref_no = "QTS-RKS-HL-ITP-000002"
+        existing = db.query(models.ITP).filter(models.ITP.referenceNo == ref_no).first()
+
+        detail_data = {
+            "a": [
+                {
+                    "id": "A1", "phase": "A",
+                    "activity": {"en": "Material", "ch": "材料"},
+                    "standard": {"en": "Formwork Type", "ch": "模板型式"},
+                    "criteria": "Approved formwork type\n經核可之模板型式",
+                    "checkTime": {"en": "Deliver to site", "ch": "運抵工地"},
+                    "method": {"en": "Visual", "ch": "目視檢查"},
+                    "frequency": {"en": "Each batch", "ch": "每批"},
+                    "vp": {"sub": "-", "teco": "H", "employer": "W", "hse": "R"},
+                    "record": "Reject 拒收"
+                },
+                {
+                    "id": "A2", "phase": "A",
+                    "activity": {"en": "Formwork assembly strength", "ch": "模板組立強度"},
+                    "standard": {"en": "Calculation report", "ch": "強度計算書"},
+                    "criteria": "Approved calculation report\n經核可之強度計算書",
+                    "checkTime": {"en": "Before construction", "ch": "施工前"},
+                    "method": {"en": "Visual", "ch": "目視檢查"},
+                    "frequency": {"en": "Each time", "ch": "每次組立"},
+                    "vp": {"sub": "-", "teco": "H", "employer": "W", "hse": "R"},
+                    "record": "Re-calculation 重新計算"
+                },
+                {
+                    "id": "A3", "phase": "A",
+                    "activity": {"en": "Stakeout", "ch": "放樣"},
+                    "standard": "HL-ONS-TECO-CVL-DWG-01800",
+                    "criteria": "Meet approved drawing\n符合設計圖說",
+                    "checkTime": {"en": "Before construction", "ch": "施工前"},
+                    "method": {"en": "Total Station", "ch": "全站儀"},
+                    "frequency": {"en": "Each time", "ch": "每次"},
+                    "vp": {"sub": "-", "teco": "H", "employer": "H", "hse": "H"},
+                    "record": "Re-Stakeout 重新放樣"
+                }
+            ],
+            "b": [
+                {
+                    "id": "B1", "phase": "B",
+                    "activity": {"en": "Formwork assembly size", "ch": "模板組立尺寸"},
+                    "standard": "HL-ONS-TECO-CVL-DWG-20002",
+                    "criteria": "Vertical ±20mm/3m, Horizontal ±10mm/3m, Section size ±10mm, Plane position ±25mm\n容許誤差\n垂直 ±20mm每3m,\n水平 ±10mm每3m,\n斷面尺寸 ±10mm\n平面位置 ±25mm",
+                    "checkTime": {"en": "During construction", "ch": "施工時"},
+                    "method": {"en": "Tape measure", "ch": "捲尺"},
+                    "frequency": {"en": "Before pouring", "ch": "灌漿前查驗"},
+                    "vp": {"sub": "H", "teco": "H", "employer": "R", "hse": "※"},
+                    "record": "Reassembly 重新組立"
+                },
+                {
+                    "id": "B2", "phase": "B",
+                    "activity": {"en": "Support Assembly", "ch": "模板支撐組立"},
+                    "standard": {"en": "Calculation report", "ch": "強度計算書"},
+                    "criteria": "Support distance ≤ 1.5m\n支撐距離 ≤ 1.5m",
+                    "checkTime": {"en": "During construction", "ch": "施工時"},
+                    "method": {"en": "Tape measure", "ch": "捲尺"},
+                    "frequency": {"en": "Before pouring", "ch": "灌漿前查驗"},
+                    "vp": {"sub": "H", "teco": "W", "employer": "R", "hse": "※"},
+                    "record": "Add supports 添加支撐"
+                },
+                {
+                    "id": "B3", "phase": "B",
+                    "activity": {"en": "Ground status for support", "ch": "地表支撐面"},
+                    "standard": {"en": "Flat without subsidence", "ch": "平坦無沉陷"},
+                    "criteria": "Flat without subsidence\n平坦無沉陷",
+                    "checkTime": {"en": "During construction", "ch": "施工時"},
+                    "method": {"en": "Visual", "ch": "目視檢查"},
+                    "frequency": {"en": "Before pouring", "ch": "灌漿前查驗"},
+                    "vp": {"sub": "H", "teco": "H", "employer": "R", "hse": "※"},
+                    "record": "Laying steel plate 鋪設鋼板"
+                },
+                {
+                    "id": "B4", "phase": "B",
+                    "activity": {"en": "Horizontal tie", "ch": "水平綁紮"},
+                    "standard": {"en": "Calculation report", "ch": "強度計算書"},
+                    "criteria": "If Height>3.5m, tie distance<2m\n若高度>3.5m，則距離< 2m",
+                    "checkTime": {"en": "During construction", "ch": "施工時"},
+                    "method": {"en": "Tape measure", "ch": "捲尺"},
+                    "frequency": {"en": "Before pouring", "ch": "灌漿前查驗"},
+                    "vp": {"sub": "H", "teco": "W", "employer": "R", "hse": "※"},
+                    "record": "Add tie points 添加支撐點"
+                },
+                {
+                    "id": "B5", "phase": "B",
+                    "activity": {"en": "Opening size", "ch": "開口尺寸"},
+                    "standard": "HL-ONS-TECO-CVL-DWG-20002",
+                    "criteria": "Tolerance -5mm/ +13mm\n容許誤差 -5mm/ +13mm",
+                    "checkTime": {"en": "During construction", "ch": "施工時"},
+                    "method": {"en": "Tape measure", "ch": "捲尺"},
+                    "frequency": {"en": "Before pouring", "ch": "灌漿前查驗"},
+                    "vp": {"sub": "H", "teco": "H", "employer": "R", "hse": "※"},
+                    "record": "Reassembly 重新組立"
+                },
+                {
+                    "id": "B6", "phase": "B",
+                    "activity": {"en": "Opening location", "ch": "開口位置"},
+                    "standard": "HL-ONS-TECO-CVL-DWG-20002",
+                    "criteria": "Tolerance < 1cm\n容許值 < 1cm",
+                    "checkTime": {"en": "During construction", "ch": "施工時"},
+                    "method": {"en": "Tape measure", "ch": "捲尺"},
+                    "frequency": {"en": "Before pouring", "ch": "灌漿前查驗"},
+                    "vp": {"sub": "H", "teco": "H", "employer": "R", "hse": "※"},
+                    "record": "Reassembly 重新組立"
+                },
+                {
+                    "id": "B7", "phase": "B",
+                    "activity": {"en": "Construction Joint", "ch": "施工縫"},
+                    "standard": "HL-ONS-TECO-CVL-DWG-20002",
+                    "criteria": "Fixed firmly without loosening\n牢固不鬆脫",
+                    "checkTime": {"en": "During construction", "ch": "施工時"},
+                    "method": {"en": "Visual", "ch": "目視檢查"},
+                    "frequency": {"en": "Before pouring", "ch": "灌漿前查驗"},
+                    "vp": {"sub": "H", "teco": "W", "employer": "R", "hse": "※"},
+                    "record": "Reassembly 重新組立"
+                }
+            ],
+            "c": [
+                {
+                    "id": "C1", "phase": "C",
+                    "activity": {"en": "Cleanliness", "ch": "清潔"},
+                    "standard": "HL-ONS-TECO-CVL-DWG-20002",
+                    "criteria": "Clean hole for Each column, 1 for every wall\n每面牆及柱 1 個",
+                    "checkTime": {"en": "Before pouring", "ch": "灌漿前"},
+                    "method": {"en": "Visual", "ch": "目視檢查"},
+                    "frequency": {"en": "Before pouring", "ch": "灌漿前查驗"},
+                    "vp": {"sub": "H", "teco": "H", "employer": "H", "hse": "-"},
+                    "record": "Re-clean 重新清潔"
+                }
+            ]
+        }
+
+        vendor_name = "廠商C"
+        vendor = db.query(models.Contractor).filter(models.Contractor.name == vendor_name).first()
+        vendor_id = vendor.id if vendor else None
+
+        itp_data = {
+            "referenceNo": ref_no,
+            "description": "Formwork Works 模板工程",
+            "vendor_id": vendor_id,
+            "status": "Approved",
+            "rev": "Rev1.0",
+            "hasDetails": True,
+            "detail_data": json.dumps(detail_data),
+            "submissionDate": datetime.now().strftime("%Y-%m-%d"),
+            "submit": ""
+        }
+
+        if existing:
+            logger.info(f"Formwork ITP already exists, updating detail_data: {ref_no}")
+            for key, value in itp_data.items():
+                setattr(existing, key, value)
+        else:
+            logger.info(f"Creating new Formwork ITP: {ref_no}")
+            new_itp = models.ITP(**itp_data, id=str(uuid.uuid4()))
+            db.add(new_itp)
+
+        db.commit()
+        logger.info("Formwork ITP seeded successfully.")
+
+    except Exception as e:
+        logger.info(f"Error seeding Formwork ITP: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+def seed_excavation_itp():
+    db = SessionLocal()
+    try:
+        ref_no = "QTS-RKS-HL-ITP-000018"
+        existing = db.query(models.ITP).filter(models.ITP.referenceNo == ref_no).first()
+
+        detail_data = {
+            "a": [
+                {
+                    "id": "A1", "phase": "A",
+                    "activity": {"en": "Utility Detection", "ch": "地下管線探測"},
+                    "standard": "Survey Control Report",
+                    "criteria": "範圍無未辨識障礙物",
+                    "checkTime": {"en": "Before site clearing", "ch": "整理地面前"},
+                    "method": {"en": "Check the related as-built drawing", "ch": "比對as-built圖面"},
+                    "frequency": "100%",
+                    "vp": {"sub": "-", "teco": "-", "employer": "-", "hse": "-"},
+                    "record": "-"
+                },
+                {
+                    "id": "A2", "phase": "A",
+                    "activity": {"en": "Site preparation", "ch": "整地"},
+                    "standard": "Contract Technical Specification",
+                    "criteria": "清除不良表層土壤、雜草與廢棄物",
+                    "checkTime": {"en": "Before setting out", "ch": "放樣前"},
+                    "method": {"en": "Visual", "ch": "目視"},
+                    "frequency": "100%",
+                    "vp": {"sub": "-", "teco": "-", "employer": "-", "hse": "-"},
+                    "record": "-"
+                },
+                {
+                    "id": "A3", "phase": "A",
+                    "activity": {"en": "Benchmark Verification", "ch": "基準點確認"},
+                    "standard": "-",
+                    "criteria": "-",
+                    "checkTime": {"en": "Before Excavating", "ch": "開挖前"},
+                    "method": {"en": "Total Station", "ch": "全測站儀"},
+                    "frequency": {"en": "Before Excavating", "ch": "開挖前"},
+                    "vp": {"sub": "-", "teco": "-", "employer": "-", "hse": "-"},
+                    "record": "-"
+                },
+                {
+                    "id": "A4", "phase": "A",
+                    "activity": {"en": "Survey & Setting out", "ch": "測量與放樣"},
+                    "standard": {"en": "Setting out excavation scope and elevation", "ch": "範圍及高程放樣"},
+                    "criteria": "-",
+                    "checkTime": {"en": "Before Excavating", "ch": "開挖前"},
+                    "method": "-",
+                    "frequency": "-",
+                    "vp": {"sub": "-", "teco": "-", "employer": "-", "hse": "-"},
+                    "record": "-"
+                }
+            ],
+            "b": [
+                {
+                    "id": "B1", "phase": "B",
+                    "activity": {"en": "Excavation (without shoring)", "ch": "開挖(無擋土設施)"},
+                    "standard": "-",
+                    "criteria": "開挖深度與整平精度\n採階梯式開挖\n開挖深度須<1.5 m\n基底整平允收誤差：±5 cm\n開挖坡度控制\n坡度不得大於 33°\n坡度允收誤差：±10°",
+                    "checkTime": {"en": "During excavation", "ch": "開挖中"},
+                    "method": {"en": "Total Station", "ch": "全站儀"},
+                    "frequency": "100%",
+                    "vp": {"sub": "-", "teco": "-", "employer": "-", "hse": "-"},
+                    "record": "-"
+                },
+                {
+                    "id": "B2", "phase": "B",
+                    "activity": {"en": "Excavation (with shoring)", "ch": "開挖(有擋土設施)"},
+                    "standard": "-",
+                    "criteria": "自上而下分層依序開挖，單層開挖深度 ≦ 1.5 m\n整平後基底容許誤差：±5 cm",
+                    "checkTime": {"en": "During excavation", "ch": "開挖中"},
+                    "method": {"en": "Total Station", "ch": "全站儀"},
+                    "frequency": "100%",
+                    "vp": {"sub": "-", "teco": "-", "employer": "-", "hse": "-"},
+                    "record": "-"
+                },
+                {
+                    "id": "B3", "phase": "B",
+                    "activity": {"en": "Excavation (dewatering)", "ch": "開挖(排水)"},
+                    "standard": "-",
+                    "criteria": "設置排水／抽水設備\n水位降至開挖面下 1.0 m，方可開挖",
+                    "checkTime": {"en": "During excavation", "ch": "開挖中"},
+                    "method": {"en": "Total Station", "ch": "全站儀"},
+                    "frequency": "100%",
+                    "vp": {"sub": "-", "teco": "-", "employer": "-", "hse": "-"},
+                    "record": "-"
+                },
+                {
+                    "id": "B4", "phase": "B",
+                    "activity": {"en": "Archaeological monitoring", "ch": "考古監看"},
+                    "standard": {"en": "Full-time monitoring", "ch": "依全時監看"},
+                    "criteria": "發現文物：依程序立即停工與通報",
+                    "checkTime": {"en": "During excavation", "ch": "開挖中"},
+                    "method": {"en": "Visual", "ch": "目視"},
+                    "frequency": "100%",
+                    "vp": {"sub": "-", "teco": "-", "employer": "-", "hse": "-"},
+                    "record": "-"
+                },
+                {
+                    "id": "B5", "phase": "B",
+                    "activity": {"en": "Spoil disposal", "ch": "土石方清運"},
+                    "standard": "Waste Disposal Regulation",
+                    "criteria": "運至指定區堆置。\n暫置區距開挖與支撐 ≥ 2 m。\n土堆高度 < 2 m、坡度 < 60°。\n覆蓋防塵網並灑水抑塵。",
+                    "checkTime": {"en": "During excavation", "ch": "開挖中"},
+                    "method": {"en": "Visual", "ch": "目視"},
+                    "frequency": "100%",
+                    "vp": {"sub": "-", "teco": "-", "employer": "-", "hse": "-"},
+                    "record": "-"
+                }
+            ],
+            "c": [
+                {
+                    "id": "C1", "phase": "C",
+                    "activity": {"en": "Finished surface elevation", "ch": "完成面高程"},
+                    "standard": "-",
+                    "criteria": "完成面高程≦10 cm設計要求",
+                    "checkTime": {"en": "After excavation", "ch": "開挖後"},
+                    "method": {"en": "Total Station", "ch": "Total Station"},
+                    "frequency": "100%",
+                    "vp": {"sub": "-", "teco": "-", "employer": "-", "hse": "-"},
+                    "record": "-"
+                },
+                {
+                    "id": "C2", "phase": "C",
+                    "activity": {"en": "Drainage", "ch": "排水"},
+                    "standard": "-",
+                    "criteria": "臨時排水溝與抽水，確保場地可進行後續作業",
+                    "checkTime": {"en": "After excavation", "ch": "開挖後"},
+                    "method": {"en": "Visual", "ch": "目視"},
+                    "frequency": "100%",
+                    "vp": {"sub": "-", "teco": "-", "employer": "-", "hse": "-"},
+                    "record": "-"
+                }
+            ]
+        }
+
+        vendor_name = "廠商C"
+        vendor = db.query(models.Contractor).filter(models.Contractor.name == vendor_name).first()
+        vendor_id = vendor.id if vendor else None
+
+        itp_data = {
+            "referenceNo": ref_no,
+            "description": "Excavation Works 開挖工程",
+            "vendor_id": vendor_id,
+            "status": "Approved",
+            "rev": "Rev1.0",
+            "hasDetails": True,
+            "detail_data": json.dumps(detail_data),
+            "submissionDate": datetime.now().strftime("%Y-%m-%d"),
+            "submit": ""
+        }
+
+        if existing:
+            logger.info(f"Excavation ITP already exists, updating: {ref_no}")
+            for key, value in itp_data.items():
+                setattr(existing, key, value)
+        else:
+            logger.info(f"Creating new Excavation ITP: {ref_no}")
+            new_itp = models.ITP(**itp_data, id=str(uuid.uuid4()))
+            db.add(new_itp)
+
+        db.commit()
+        logger.info("Excavation ITP seeded successfully.")
+
+    except Exception as e:
+        logger.info(f"Error seeding Excavation ITP: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
 
 if __name__ == "__main__":
     run_seeding()

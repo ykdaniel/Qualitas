@@ -249,7 +249,7 @@ const ITP: React.FC = () => {
               data={processedData}
               searchKey=""
               getRowClassName={(row) =>
-                row.status.toLowerCase() === 'void' ? styles.voidRow : ''
+                (row.status || '').toLowerCase() === 'void' ? styles.voidRow : ''
               }
               getRowId={(row) => row.id}
               onRowClick={(row) => handleEdit(row.id)}
@@ -278,7 +278,7 @@ const ITP: React.FC = () => {
               refetch();
             } catch (error: any) {
               if (error?.response?.status === 401) return;
-              toast.error(error?.response?.data?.detail || t('itp.updateError'));
+              toast.error(getErrorMessage(error, t('itp.updateError')));
             }
           }}
           onSave={async (updates, details, pendingUploads, deletedFileIds) => {
@@ -300,7 +300,7 @@ const ITP: React.FC = () => {
               refetch();
             } catch (error: any) {
               if (error?.response?.status === 401) return;
-              const detail = error?.response?.data?.detail || t('itp.updateError');
+              const detail = getErrorMessage(error, t('itp.updateError'));
               toast.error(detail);
             }
           }}

@@ -15,7 +15,9 @@ import { parseInspectionItems } from '../../utils/itpParser';
 import ConfirmModal from '../Shared/ConfirmModal';
 
 
-import { Printer, ShieldCheck, Save, LayoutTemplate, Plus } from 'lucide-react';
+import { Printer, ShieldCheck, Save, LayoutTemplate, Plus, ClipboardList } from 'lucide-react';
+import { toast } from 'sonner';
+import api from '../../services/api';
 
 export interface ITPDetailModalProps {
     itpId: string;
@@ -195,6 +197,67 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
     };
 
 
+
+    const [generatingChecklist, setGeneratingChecklist] = useState(false);
+
+    const handleGenerateChecklist = async () => {
+        if (!itpId) {
+            toast.error('Please save the ITP first.');
+            return;
+        }
+        if (advancedItems.length === 0) {
+            toast.error('No inspection items to generate checklist from.');
+            return;
+        }
+
+        const checklistItems = advancedItems.map((item, idx) => {
+            const activityText = typeof item.activity === 'string' ? item.activity : (item.activity.en || '');
+            const criteriaText = Array.isArray(item.criteria)
+                ? item.criteria.map((c: any) => typeof c === 'string' ? c : c.en || '').filter(Boolean).join('; ')
+                : typeof item.criteria === 'string' ? item.criteria : '';
+
+            return {
+                id: idx + 1,
+                item: `[${item.id}] ${activityText}`,
+                criteria: criteriaText || activityText,
+                situation: '',
+                result: '-'
+            };
+        });
+
+        const detailData = JSON.stringify({
+            projectTitle: formData.description || '',
+            recordsNo: '',
+            packageName: '',
+            inspectionDate: new Date().toISOString().split('T')[0],
+            location: '',
+            stage: '',
+            items: checklistItems,
+            remarks: '',
+            signatures: { siteEngineer: '', constructionLeader: '', subcontractorRep: '' }
+        });
+
+        setGeneratingChecklist(true);
+        try {
+            const res = await api.post('/checklist/', {
+                date: new Date().toISOString().split('T')[0],
+                status: 'Ongoing',
+                activity: formData.description || 'ITP Checklist',
+                itpId: itpId,
+                itpVersion: formData.rev || '',
+                contractor: formData.vendor || '',
+                detail_data: detailData,
+            });
+
+            const newRecordNo = res.data.recordsNo || res.data.records_no;
+            toast.success(`Checklist ${newRecordNo} created successfully`);
+            navigate(`/checklist?recordNo=${newRecordNo}&from=itp`);
+        } catch (err: any) {
+            toast.error(err?.response?.data?.detail || 'Failed to generate checklist');
+        } finally {
+            setGeneratingChecklist(false);
+        }
+    };
 
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
     const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
@@ -376,13 +439,13 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                                             value={formData.status || 'Pending'}
                                             onChange={(e) => handleFieldChange('status', e.target.value)}
                                         >
-                                            <option value="Approved">Approved</option>
-                                            <option value="Approved with comments">Approved with comments</option>
-                                            <option value="Revise & Resubmit">Revise & Resubmit</option>
-                                            <option value="Rejected">Rejected</option>
-                                            <option value="Pending">Pending</option>
-                                            <option value="No submit">No submit</option>
-                                            <option value="Void">Void</option>
+                                            <option value="Approved">{t('itp.status.approved')}</option>
+                                            <option value="Approved with comments">{t('itp.status.approvedWithComments')}</option>
+                                            <option value="Revise & Resubmit">{t('itp.status.reviseResubmit')}</option>
+                                            <option value="Rejected">{t('itp.status.rejected')}</option>
+                                            <option value="Pending">{t('itp.status.pending')}</option>
+                                            <option value="No submit">{t('itp.status.noSubmit')}</option>
+                                            <option value="Void">{t('itp.status.void')}</option>
                                         </select>
                                     </div>
                                     <div className={styles.formGroupFull}>
@@ -413,14 +476,11 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                             <ITPAdvancedEditor
                                 ref={editorRef}
                                 items={advancedItems}
-
                                 onItemsChange={handleItemsChange}
                                 onViewRecord={() => {
                                     navigate('/itr');
-                                    // toast.info(`Please find ITR ${itr.documentNumber} in the ITR list.`);
                                 }}
                                 headerData={headerData}
-
                             />
                             {/* <div className="mt-2 text-center text-xs text-slate-500 print:hidden">
                                 Note: Changes to the inspection plan are saved when you click "Save" below.
@@ -437,6 +497,17 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                             onClick={handlePrint}
                         >
                             <Printer size={16} /> Print
+                        </button>
+                    )}
+
+                    {activeTab === 'plan' && (
+                        <button
+                            type="button"
+                            className="px-4 py-2 text-sm font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 shadow-sm flex items-center gap-2 print:hidden disabled:opacity-50"
+                            onClick={handleGenerateChecklist}
+                            disabled={generatingChecklist || advancedItems.length === 0}
+                        >
+                            <ClipboardList size={16} /> {generatingChecklist ? 'Generating...' : 'Generate Checklist'}
                         </button>
                     )}
 

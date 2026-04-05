@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import ReactDOM from 'react-dom';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { ChecklistSnapshotModal } from './ChecklistSnapshotModal';
@@ -136,7 +137,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         // 新項目：itrNumber 留空，由後端自動產生
         return {
             itrNumber: '',  // 由後端產生
-            status: 'Approved',
+            status: 'In Progress',
             raiseDate: '',
             closeoutDate: '',
             aconex: '',
@@ -326,9 +327,10 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                 type: nextRev,
                 status: 'Approved'
             }, pendingUploads, deletedFileIds);
-            onClose();
-        } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
-            // Error handled in parent
+            // onClose is handled by parent (handleSaveITRDetails sets isEditModalOpen=false)
+        } catch (err) {
+            console.error('Publish failed:', err);
+            toast.error(t('itr.saveError'));
         }
     };
 
@@ -341,7 +343,6 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
             <ITRPrintPreview
                 data={formData}
                 onClose={() => setShowPrintPreview(false)}
-                onPrint={() => window.print()}
             />
         );
     }
@@ -715,6 +716,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                         category="defectPhoto"
                                         accept="image/*"
                                         id="defectPhoto"
+                                        hideTitle
                                     />
                                 </div>
                                 <div className={styles.photoSection}>
@@ -729,6 +731,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                         category="improvementPhoto"
                                         accept="image/*"
                                         id="improvementPhoto"
+                                        hideTitle
                                     />
                                 </div>
                             </div>
@@ -746,6 +749,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                 entityId={existingItem?.id}
                                 category="drawing"
                                 id="drawing"
+                                hideTitle
                             />
                         </div>
 
@@ -760,6 +764,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                 entityId={existingItem?.id}
                                 category="certificate"
                                 id="certificate"
+                                hideTitle
                             />
                         </div>
 
@@ -774,6 +779,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                 entityId={existingItem?.id}
                                 category="attachment"
                                 id="attachment"
+                                hideTitle
                             />
                         </div>
 
@@ -940,218 +946,98 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
 export interface ITRPrintPreviewProps {
     data: ITRDetailData;
     onClose: () => void;
-    onPrint: () => void;
 }
 
-export const ITRPrintPreview: React.FC<ITRPrintPreviewProps> = ({ data: displayData, onClose, onPrint }) => {
+export const ITRPrintPreview: React.FC<ITRPrintPreviewProps> = ({ data: displayData, onClose }) => {
     const { t } = useLanguage();
+    const printRoot = document.getElementById('itr-single-print-root');
 
-    // Auto-trigger print when component mounts? Or manual? 
-    // Usually preview shows first.
+    const handlePrint = () => {
+        window.print();
+    };
 
-    return (
-        <div className={styles.modalOverlay} style={{ zIndex: 1100 }}> {/* Higher z-index to overlay Edit modal */}
-            <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-                <div className={styles.modalHeader}>
-                    <h2>{t('itr.detailsTitle') || 'ITR Details (Print Preview)'}</h2>
-                    <button className={styles.closeButton} onClick={onClose}>×</button>
+    const printContent = (
+        <div style={{ fontFamily: 'Arial, sans-serif', fontSize: '12px', lineHeight: 1.6, color: '#1a1a1a' }}>
+            <h1 style={{ fontSize: '18px', fontWeight: 700, textAlign: 'center', marginBottom: '4px' }}>Inspection & Test Record (ITR)</h1>
+            <p style={{ textAlign: 'center', fontSize: '11px', color: '#666', marginBottom: '16px' }}>{displayData.itrNumber || '-'}</p>
+
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '16px' }}>
+                <tbody>
+                    {[
+                        [t('common.referenceNo'), displayData.itrNumber, t('noi.package'), displayData.subject],
+                        [t('itr.inspectionDate'), displayData.raiseDate, t('common.version'), displayData.type],
+                        [t('common.dueDate'), displayData.dueDate, t('itr.closeoutDate'), displayData.closeoutDate],
+                        [t('itr.noiNo'), displayData.noiNumber, t('common.contractor'), displayData.contractor],
+                        [t('itr.relatedITP'), displayData.itpNo, t('itr.ncrNo'), displayData.ncrNumber],
+                        [t('common.status'), displayData.status, t('itr.raisedBy'), displayData.raisedBy],
+                    ].map((row, i) => (
+                        <tr key={i}>
+                            <td style={{ border: '1px solid #ccc', padding: '4px 8px', fontWeight: 600, backgroundColor: '#f5f5f5', width: '18%' }}>{row[0]}</td>
+                            <td style={{ border: '1px solid #ccc', padding: '4px 8px', width: '32%' }}>{row[1] || '-'}</td>
+                            <td style={{ border: '1px solid #ccc', padding: '4px 8px', fontWeight: 600, backgroundColor: '#f5f5f5', width: '18%' }}>{row[2]}</td>
+                            <td style={{ border: '1px solid #ccc', padding: '4px 8px', width: '32%' }}>{row[3] || '-'}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+
+            {[
+                { label: t('itr.referenceStandards'), value: displayData.referenceStandards },
+                { label: t('itr.foundLocation'), value: displayData.foundLocation },
+                { label: t('itr.detailsDescription'), value: displayData.detailsDescription },
+                { label: t('itr.repairMethodStatement') || 'Repair Method Statement', value: displayData.repairMethodStatement },
+                { label: t('itr.immediateCorrectionAction') || 'Immediate Correction Action', value: displayData.immediateCorrectionAction },
+                { label: t('itr.rootCauseAnalysis') || 'Root Cause Analysis', value: displayData.rootCauseAnalysis },
+                { label: t('itr.correctiveActions') || 'Corrective Actions', value: displayData.correctiveActions },
+                { label: t('itr.preventiveAction') || 'Preventive Action', value: displayData.preventiveAction },
+                { label: t('itr.finalProductIntegrityStatement') || 'Final Product Integrity Statement', value: displayData.finalProductIntegrityStatement },
+            ].filter(item => item.value).map((item, i) => (
+                <div key={i} style={{ marginBottom: '10px' }}>
+                    <div style={{ fontWeight: 600, fontSize: '11px', color: '#444', borderBottom: '1px solid #ddd', paddingBottom: '2px', marginBottom: '4px' }}>{item.label}</div>
+                    <div style={{ whiteSpace: 'pre-wrap', fontSize: '12px' }}>{item.value}</div>
                 </div>
-                <div className={styles.modalBody}>
-                    <div className={styles.formSections}>
-                        {/* {t('common.baseInfo') || '基本資訊'} */}
-                        <div className={styles.formSection}>
-                            <h3 className={styles.sectionTitle}>{t('itr.sectionInfo')}</h3>
-                            <div className={styles.formGrid}>
-                                <div className={styles.formGroup}>
-                                    <label>{t('common.referenceNo')}</label>
-                                    <div className={styles.readOnlyField}>{displayData.itrNumber || '-'}</div>
-                                </div>
-                                <div className={styles.formGroup}>
-                                    <label>{t('noi.package')}</label>
-                                    <div className={styles.readOnlyField}>{displayData.subject || '-'}</div>
-                                </div>
-                                <div className={styles.formGroup}>
-                                    <label>{t('itr.inspectionDate')}</label>
-                                    <div className={styles.readOnlyField}>{displayData.raiseDate || '-'}</div>
-                                </div>
-                                <div className={styles.formGroup}>
-                                    <label>{t('common.version')}</label>
-                                    <div className={styles.readOnlyField}>{displayData.type || '-'}</div>
-                                </div>
-                                <div className={styles.formGroup}>
-                                    <label>{t('common.dueDate')}</label>
-                                    <div className={styles.readOnlyField}>{displayData.dueDate || '-'}</div>
-                                </div>
-                                <div className={styles.formGroup}>
-                                    <label>{t('itr.noiNo')}</label>
-                                    <div className={styles.readOnlyField}>{displayData.noiNumber || '-'}</div>
-                                </div>
-                                <div className={styles.formGroup}>
-                                    <label>{t('common.contractor')}</label>
-                                    <div className={styles.readOnlyField}>{displayData.contractor || '-'}</div>
-                                </div>
-                                <div className={styles.formGroup}>
-                                    <label>{t('itr.ncrNo')}</label>
-                                    <div className={styles.readOnlyField}>{displayData.ncrNumber || '-'}</div>
-                                </div>
-                                <div className={styles.formGroup}>
-                                    <label>{t('itr.relatedITP') || 'Related ITP'}</label>
-                                    <div className={styles.readOnlyField}>{displayData.itpNo || '-'}</div>
-                                </div>
-                            </div>
-                        </div>
+            ))}
 
-                        <div className={styles.formSection}>
-                            <h3 className={styles.sectionTitle}>{t('itr.sectionDetails') || 'Details Description'}</h3>
-                            <div className={styles.formGrid}>
-                                <div className={styles.formGroup}>
-                                    <label>{t('itr.referenceStandards') || 'Reference Standards'}</label>
-                                    <div className={styles.readOnlyField}>{displayData.referenceStandards || '-'}</div>
-                                </div>
-                                <div className={styles.formGroup}>
-                                    <label>{t('itr.foundLocation') || 'Found Location'}</label>
-                                    <div className={styles.readOnlyField}>{displayData.foundLocation || '-'}</div>
-                                </div>
-                                <div className={styles.formGroupFull}>
-                                    <label>{t('itr.detailsDescription') || 'Details Description'}</label>
-                                    <div className={styles.readOnlyField}>{displayData.detailsDescription || '-'}</div>
-                                </div>
-                                <div className={styles.formGroup}>
-                                    <label>{t('itr.raisedBy') || 'Raised By'}</label>
-                                    <div className={styles.readOnlyField}>{displayData.raisedBy || '-'}</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className={styles.formSection}>
-                            <h3 className={styles.sectionTitle}>{t('itr.sectionCauseCorrection') || 'Cause & Correction'}</h3>
-                            <div className={styles.formGrid}>
-                                <div className={styles.formGroupFull}>
-                                    <label>{t('itr.repairMethodStatement') || 'Repair Method Statement'}</label>
-                                    <div className={styles.readOnlyField}>{displayData.repairMethodStatement || '-'}</div>
-                                </div>
-                                <div className={styles.formGroupFull}>
-                                    <label>{t('itr.immediateCorrectionAction') || 'Immediate Correction Action'}</label>
-                                    <div className={styles.readOnlyField}>{displayData.immediateCorrectionAction || '-'}</div>
-                                </div>
-                                <div className={styles.formGroupFull}>
-                                    <label>{t('itr.rootCauseAnalysis') || 'Root Cause Analysis'}</label>
-                                    <div className={styles.readOnlyField}>{displayData.rootCauseAnalysis || '-'}</div>
-                                </div>
-                                <div className={styles.formGroupFull}>
-                                    <label>{t('itr.correctiveActions') || 'Corrective Actions'}</label>
-                                    <div className={styles.readOnlyField}>{displayData.correctiveActions || '-'}</div>
-                                </div>
-                                <div className={styles.formGroupFull}>
-                                    <label>{t('itr.preventiveAction') || 'Preventive Action'}</label>
-                                    <div className={styles.readOnlyField}>{displayData.preventiveAction || '-'}</div>
-                                </div>
-                                <div className={styles.formGroupFull}>
-                                    <label>{t('itr.finalProductIntegrityStatement') || 'Final Product Integrity Statement'}</label>
-                                    <div className={styles.readOnlyField}>{displayData.finalProductIntegrityStatement || '-'}</div>
-                                </div>
-                            </div>
-                        </div>
-
-
-                        {/* Latest Drawings */}
-                        {displayData.drawings && displayData.drawings.length > 0 && (
-                            <div className={styles.formSection}>
-                                <h3 className={styles.sectionTitle}>{t('itr.sectionDrawings') || 'Latest Drawings'}</h3>
-                                <div className={styles.photoPreviewGrid}>
-                                    {displayData.drawings.map((drawing, index) => (
-                                        <div key={index} className={styles.photoPreviewItem}>
-                                            <a href={typeof drawing === 'string' ? drawing : drawing.file_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13 }}>
-                                                Drawing {index + 1}
-                                            </a>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Calibration Certificates */}
-                        {displayData.certificates && displayData.certificates.length > 0 && (
-                            <div className={styles.formSection}>
-                                <h3 className={styles.sectionTitle}>{t('itr.sectionCertificates') || 'Calibration Certificates'}</h3>
-                                <div className={styles.photoPreviewGrid}>
-                                    {displayData.certificates.map((cert, index) => (
-                                        <div key={index} className={styles.photoPreviewItem}>
-                                            <a href={typeof cert === 'string' ? cert : cert.file_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13 }}>
-                                                Certificate {index + 1}
-                                            </a>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* 照片 */}
-                        {(displayData.defectPhotos?.length > 0 || displayData.improvementPhotos?.length > 0) && (
-                            <div className={styles.formSection}>
-                                <div className={styles.photoSectionContainer}>
-                                    {displayData.defectPhotos && displayData.defectPhotos.length > 0 && (
-                                        <div className={styles.photoSection}>
-                                            <h3 className={styles.sectionTitle}>{t('itr.photo.defect')}</h3>
-                                            <div className={styles.photoPreviewGrid}>
-                                                {displayData.defectPhotos.map((photo, index) => (
-                                                    <div key={index} className={styles.photoPreviewItem}>
-                                                        <img src={typeof photo === 'string' ? photo : photo.file_url} alt={`Defect Photo ${index + 1}`} className={styles.photoPreview} />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                    {displayData.improvementPhotos && displayData.improvementPhotos.length > 0 && (
-                                        <div className={styles.photoSection}>
-                                            <h3 className={styles.sectionTitle}>{t('itr.photo.improvement')}</h3>
-                                            <div className={styles.photoPreviewGrid}>
-                                                {displayData.improvementPhotos.map((photo, index) => (
-                                                    <div key={index} className={styles.photoPreviewItem}>
-                                                        <img src={typeof photo === 'string' ? photo : photo.file_url} alt={`Improvement Photo ${index + 1}`} className={styles.photoPreview} />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* 複檢資料 */}
-                        <div className={styles.formSection}>
-                            <h3 className={styles.sectionTitle}>{t('itr.sectionReinspection')}</h3>
-                            <div className={styles.formGrid}>
-                                <div className={styles.formGroup}>
-                                    <label>{t('itr.reInspectionNo')}</label>
-                                    <div className={styles.readOnlyField}>{displayData.reInspectionNumber || '-'}</div>
-                                </div>
-                            </div>
-                        </div>
-                        {((displayData?.attachments && displayData.attachments.length > 0)) && (
-                            <div className={styles.formSection}>
-                                <h3 className={styles.sectionTitle}>{t('common.attachments')}</h3>
-                                <div className={styles.photoPreviewGrid}>
-                                    {(displayData.attachments || []).map((attachment, index) => (
-                                        <div key={index} className={styles.photoPreviewItem}>
-                                            <span style={{ fontSize: 12, wordBreak: 'break-all' }}>Attachment {index + 1}</span>
-                                            <a href={typeof attachment === 'string' ? attachment : attachment.file_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, marginLeft: 4 }}>View</a>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </div>
+            {displayData.remark && (
+                <div style={{ marginBottom: '10px' }}>
+                    <div style={{ fontWeight: 600, fontSize: '11px', color: '#444', borderBottom: '1px solid #ddd', paddingBottom: '2px', marginBottom: '4px' }}>{t('common.remark')}</div>
+                    <div style={{ whiteSpace: 'pre-wrap', fontSize: '12px' }}>{displayData.remark}</div>
                 </div>
-                <div className={styles.modalActions}>
-                    <button className={styles.printButton} onClick={onPrint}>
-                        {t('common.print')}
-                    </button>
-                    <button className={styles.cancelButton} onClick={onClose}>
-                        {t('common.close')}
-                    </button>
-                </div>
+            )}
+
+            <div style={{ marginTop: '40px', display: 'flex', justifyContent: 'space-between' }}>
+                <div style={{ borderTop: '1px solid #000', width: '30%', textAlign: 'center', paddingTop: '4px', fontSize: '11px' }}>Prepared By</div>
+                <div style={{ borderTop: '1px solid #000', width: '30%', textAlign: 'center', paddingTop: '4px', fontSize: '11px' }}>Reviewed By</div>
+                <div style={{ borderTop: '1px solid #000', width: '30%', textAlign: 'center', paddingTop: '4px', fontSize: '11px' }}>Approved By</div>
             </div>
         </div>
+    );
+
+    return (
+        <>
+            {/* Portal: render print content outside #root so @media print can show it */}
+            {printRoot && ReactDOM.createPortal(printContent, printRoot)}
+
+            {/* On-screen preview modal */}
+            <div className={styles.modalOverlay} style={{ zIndex: 1100 }}>
+                <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+                    <div className={styles.modalHeader}>
+                        <h2>{t('itr.detailsTitle') || 'ITR Details (Print Preview)'}</h2>
+                        <button className={styles.closeButton} onClick={onClose}>×</button>
+                    </div>
+                    <div className={styles.modalBody}>
+                        {printContent}
+                    </div>
+                    <div className={styles.modalActions}>
+                        <button className={styles.printButton} onClick={handlePrint}>
+                            {t('common.print')}
+                        </button>
+                        <button className={styles.cancelButton} onClick={onClose}>
+                            {t('common.close')}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </>
     );
 };

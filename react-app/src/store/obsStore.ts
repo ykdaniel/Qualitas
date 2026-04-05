@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import api from '../services/api';
 import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
+import { getErrorMessage } from '../utils/errorUtils';
 
 export interface OBSItem {
     id: string;
@@ -67,7 +68,7 @@ export const useOBSStore = create<OBSState>((set, get) => ({
             const response = await api.get('/obs/', { params });
             set({ obsList: (response.data || []).map(normalizeItem), loading: false });
         } catch (err: any) {
-            set({ error: err.response?.data?.detail || err.message || 'Failed to fetch OBSs', loading: false });
+            set({ error: getErrorMessage(err, 'Failed to fetch OBSs'), loading: false });
         }
     },
 
@@ -82,7 +83,7 @@ export const useOBSStore = create<OBSState>((set, get) => ({
             set((state) => ({ obsList: [...state.obsList, newOBS] }));
             return newOBS;
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to add OBS';
+            const msg = getErrorMessage(error, 'Failed to add OBS');
             set({ error: msg });
             throw error;
         }
@@ -94,7 +95,7 @@ export const useOBSStore = create<OBSState>((set, get) => ({
             const updated = normalizeItem(response.data);
             set((state) => ({ obsList: state.obsList.map(o => o.id === id ? updated : o) }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to update OBS';
+            const msg = getErrorMessage(error, 'Failed to update OBS');
             set({ error: msg });
             throw error;
         }
@@ -105,7 +106,7 @@ export const useOBSStore = create<OBSState>((set, get) => ({
             await api.delete(`/obs/${id}/`);
             set((state) => ({ obsList: state.obsList.filter(o => o.id !== id) }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to delete OBS';
+            const msg = getErrorMessage(error, 'Failed to delete OBS');
             set({ error: msg });
             throw error;
         }

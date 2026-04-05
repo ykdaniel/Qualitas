@@ -35,7 +35,7 @@ export const useITPStats = (itpList: ITPItem[]) => {
     const total = itpList.filter(item => (item.status || '').toLowerCase() !== 'void').length;
     const submission = itpList.filter(item => {
       const status = (item.status || '').toLowerCase();
-      return status !== 'void' && status !== 'no submit' && status !== 'nosubmit';
+      return status !== 'void' && status !== 'no submit' && status !== 'nosubmit' && status !== '';
     }).length;
     
     const submissionMaturity = total > 0 ? Math.round((submission / total) * 100) : 0;

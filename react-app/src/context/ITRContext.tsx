@@ -25,6 +25,7 @@ export interface ITRItem {
   noiNumber?: string;  // 連結到產生此 ITR 的 NOI（取代舊的 itpNo）
   eventNumber?: string;
   checkpoint?: string;
+  dueDate?: string;
   defectPhotos?: string[];
   improvementPhotos?: string[];
   attachments?: string[];

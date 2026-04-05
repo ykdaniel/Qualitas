@@ -22,6 +22,13 @@ const translations: Record<Language, Record<string, string>> = {
     'login.signingIn': 'Signing in...',
     'login.failed': 'Failed to login. Please check your credentials.',
 
+    // Error Boundary
+    'error.title': 'Something went wrong',
+    'error.description': 'An unexpected error occurred. Please try again or refresh the page.',
+    'error.details': 'Error details',
+    'error.retry': 'Retry',
+    'error.refresh': 'Refresh',
+
     // Common
     'common.edit': 'Edit',
     'common.details': 'Details',
@@ -262,6 +269,7 @@ const translations: Record<Language, Record<string, string>> = {
     'itr.status.approved': 'Approved',
     'itr.status.reject': 'Reject',
     'itr.status.inProgress': 'In Progress',
+    'itr.status.void': 'Void',
     'itr.tooltip.edit': 'Edit',
     'itr.tooltip.details': 'Details',
     'itr.tooltip.delete': 'Delete',
@@ -826,6 +834,10 @@ const translations: Record<Language, Record<string, string>> = {
     'itp.tab.inspectionPlan': 'Inspection Plan',
     // Checklist Snapshot
     'itr.checklistSnapshotWarning': 'Editing this list does not affect standard templates.',
+    'itr.lockedMsg': 'This ITR status is locked. To modify, please create a new version via Publish, or change the status to Reject.',
+    'itr.publishTitle': 'Publish Revision',
+    'itr.publishConfirm': 'Are you sure you want to publish as',
+    'itr.publish': 'Publish',
     'checklist.editSnapshot': 'Edit Checklist Snapshot',
     'checklist.snapshotEditNote': 'You are editing a snapshot of the checklist attached to this ITR. Changes here do not affect the original checklist template.',
     'checklist.tabGeneral': 'General Information',
@@ -885,6 +897,13 @@ const translations: Record<Language, Record<string, string>> = {
     'login.signIn': '登入',
     'login.signingIn': '登入中...',
     'login.failed': '登入失敗。請檢查您的憑證。',
+
+    // Error Boundary
+    'error.title': '發生錯誤',
+    'error.description': '發生了意外錯誤，請重試或重新整理頁面。',
+    'error.details': '錯誤詳情',
+    'error.retry': '重試',
+    'error.refresh': '重新整理',
 
     // Common
     'common.edit': '編輯',
@@ -1126,6 +1145,7 @@ const translations: Record<Language, Record<string, string>> = {
     'itr.status.approved': '已核准',
     'itr.status.reject': '駁回',
     'itr.status.inProgress': '進行中',
+    'itr.status.void': '已作廢',
     'itr.tooltip.edit': '編輯',
     'itr.tooltip.details': '查看詳情',
     'itr.tooltip.delete': '刪除',
@@ -1158,6 +1178,10 @@ const translations: Record<Language, Record<string, string>> = {
     'itr.sectionLinkedChecklists': '關聯檢查表',
     'itr.noLinkedChecklists': '尚無任何關聯檢查表。',
     'itr.validation.noiRequired': '請選擇一個 NOI 編號。',
+    'itr.lockedMsg': '此 ITR 狀態已鎖定，欄位無法修改。如需修改請先透過 Publish 建立新版本，或將狀態改為 Reject。',
+    'itr.publishTitle': '發佈新版本',
+    'itr.publishConfirm': '確定要發佈為',
+    'itr.publish': '發佈',
 
     // NCR
     'ncr.title': 'NCR 列表',

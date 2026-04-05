@@ -1162,7 +1162,8 @@
   }
 
   /* 批次列印內容 - 使用 static 定位以支援分頁 */
-  :global(#itr-batch-print-root) {
+  :global(#itr-batch-print-root),
+  :global(#itr-single-print-root) {
     display: block !important;
     position: static !important;
     left: auto !important;

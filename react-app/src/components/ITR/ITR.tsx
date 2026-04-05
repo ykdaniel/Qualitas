@@ -155,7 +155,10 @@ const ITR: React.FC = () => {
             setIsEditModalOpen(false);
             setCurrentItrId(null);
         } catch (error: any) {
-            const detail = error?.response?.data?.detail || t('common.saveFailed') || 'Save failed';
+            const raw = error?.response?.data?.detail;
+            const detail = typeof raw === 'string' ? raw
+                : Array.isArray(raw) ? raw.map((e: any) => e.msg || JSON.stringify(e)).join('; ')
+                : t('common.saveFailed') || 'Save failed';
             toast.error(detail);
         }
     };

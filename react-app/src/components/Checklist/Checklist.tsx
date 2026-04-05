@@ -16,6 +16,7 @@ import { useITRStore } from '../../store/itrStore';
 import { useChecklistStats } from '../../hooks/useChecklistStats';
 import { StatItem } from '../Shared/StatItem';
 import { useContractorsStore } from '../../store/contractorsStore';
+import { getErrorMessage } from '../../utils/errorUtils';
 
 // --- ITP 資料庫定義 ---
 interface ItpItemDefinition {
@@ -262,10 +263,7 @@ const Checklist: React.FC = () => {
                             }
                             setView('list');
                         } catch (err: any) {
-                            let detail = err?.response?.data?.detail || t('common.saveFailed') || 'Save failed';
-                            if (typeof detail === 'object') {
-                                detail = JSON.stringify(detail);
-                            }
+                            const detail = getErrorMessage(err, t('common.saveFailed'));
                             toast.error(detail);
                         } finally {
                             setSaving(false);

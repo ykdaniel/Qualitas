@@ -37,7 +37,7 @@ export const ITPPrintTemplate: React.FC<ITPPrintTemplateProps> = ({ items, heade
             )}
 
             {/* Table */}
-            <table className="w-full text-left text-xs border-collapse">
+            <table className="w-full text-left text-xs border-collapse border border-slate-400">
                 <thead>
                     <tr className="bg-slate-100">
                         <th rowSpan={2} className="border-y border-r border-slate-400 px-2 py-2 text-center w-12">Event</th>

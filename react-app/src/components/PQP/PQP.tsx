@@ -15,6 +15,7 @@ import { PQPDetailModal } from './PQPModals';
 import { BackButton } from '@/components/ui/BackButton';
 import { useDebounce } from '../../hooks/useDebounce';
 import { uploadFiles, deleteFile } from '../../services/api';
+import { getErrorMessage } from '../../utils/errorUtils';
 
 const PQP: React.FC = () => {
   const { t } = useLanguage();
@@ -119,7 +120,7 @@ const PQP: React.FC = () => {
       setIsEditModalOpen(false);
       setCurrentPqpId(null);
     } catch (error: any) {
-      const detail = error?.response?.data?.detail || t('common.saveFailed') || 'Save failed';
+      const detail = getErrorMessage(error, t('common.saveFailed'));
       toast.error(detail);
     }
   };

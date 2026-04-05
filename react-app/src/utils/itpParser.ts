@@ -1,8 +1,42 @@
 import type { InspectionItem } from '../types/itp';
 
+/**
+ * Normalize a bilingual field: extract only { en, ch } from potentially
+ * polluted objects that contain numeric index keys (e.g. {'0':'D','1':'r',...,'en':'...'}).
+ */
+const normalizeBilingual = (val: unknown, fallbackEn = '', fallbackCh = ''): { en: string; ch: string } => {
+    if (typeof val === 'string') return { en: val, ch: '' };
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+        const obj = val as Record<string, unknown>;
+        return { en: String(obj.en ?? fallbackEn), ch: String(obj.ch ?? fallbackCh) };
+    }
+    return { en: fallbackEn, ch: fallbackCh };
+};
+
+const normalizeItem = (item: Record<string, unknown>, phase: string): InspectionItem => {
+    return {
+        ...item,
+        phase,
+        id: (item.id as string) || `${phase}1`,
+        activity: normalizeBilingual(item.activity),
+        standard: normalizeBilingual(item.standard),
+        checkTime: normalizeBilingual(item.checkTime),
+        method: normalizeBilingual(item.method),
+        frequency: normalizeBilingual(item.frequency),
+        criteria: Array.isArray(item.criteria)
+            ? item.criteria.map((c: unknown) =>
+                typeof c === 'string' ? { en: c, ch: '' } : normalizeBilingual(c))
+            : typeof item.criteria === 'string'
+                ? [{ en: item.criteria, ch: '' }]
+                : [],
+        vp: item.vp || { sub: '', teco: '', employer: '', hse: '' },
+        record: (item.record as string) || '',
+    } as unknown as InspectionItem;
+};
+
 export const parseInspectionItems = (detailData: unknown): InspectionItem[] => {
     if (!detailData) return [];
-    
+
     let data = detailData;
     if (typeof data === 'string') {
         try {
@@ -20,26 +54,15 @@ export const parseInspectionItems = (detailData: unknown): InspectionItem[] => {
         const typedData = data as Record<string, unknown>;
         ['a', 'b', 'c'].forEach((phaseKey) => {
             if (Array.isArray(typedData[phaseKey])) {
-                parsedItems.push(...typedData[phaseKey].map((item) => ({
-                    ...(item as Record<string, unknown>),
-                    phase: phaseKey.toUpperCase()
-                })) as InspectionItem[]);
+                parsedItems.push(...typedData[phaseKey].map((item) =>
+                    normalizeItem(item as Record<string, unknown>, phaseKey.toUpperCase())
+                ));
             }
         });
     } else if (Array.isArray(data)) {
-        // Convert simple array to items, default to Phase A if missing
         parsedItems.push(...data.map((item, index) => {
             const typedItem = item as Record<string, unknown>;
-            return {
-                ...typedItem,
-                id: (typedItem.id as string) || `A${index + 1}`,
-                phase: (typedItem.phase as string) || 'A',
-                // Ensure other required fields exist
-                activity: typeof typedItem.activity === 'object' && typedItem.activity !== null ? typedItem.activity : { en: (typedItem.activity as string) || '', ch: '' },
-                checkTime: typeof typedItem.checkTime === 'object' && typedItem.checkTime !== null ? typedItem.checkTime : { en: (typedItem.checkTime as string) || '', ch: '' },
-                method: typeof typedItem.method === 'object' && typedItem.method !== null ? typedItem.method : { en: (typedItem.method as string) || '', ch: '' },
-                vp: typedItem.vp || { sub: '', teco: '', employer: '', hse: '' }
-            } as unknown as InspectionItem;
+            return normalizeItem(typedItem, (typedItem.phase as string) || 'A');
         }));
     }
 

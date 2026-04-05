@@ -17,6 +17,7 @@ import { createColumns } from './columns';
 import { RowSelectionState } from '@tanstack/react-table';
 import { BackButton } from '@/components/ui/BackButton';
 import { useDebounce } from '../../hooks/useDebounce';
+import { getErrorMessage } from '../../utils/errorUtils';
 
 import {
   NOIDetailModal,
@@ -185,7 +186,7 @@ const NOI: React.FC = () => {
         setCurrentNoiId(null);
         refetch(); // Refresh to ensure attachments are updated
       } catch (error: any) {
-        const detail = error?.response?.data?.detail || t('common.saveFailed') || 'Save failed';
+        const detail = getErrorMessage(error, t('common.saveFailed'));
         toast.error(detail);
       }
     }

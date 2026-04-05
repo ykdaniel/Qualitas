@@ -1,0 +1,42 @@
+services:
+  backend:
+    build: ./backend
+    container_name: qualitas-backend
+    restart: unless-stopped
+    volumes:
+      - ./backend/qualitas.db:/app/qualitas.db
+      - ./backend/uploads:/app/uploads
+      - ./backend/backups:/app/backups
+      - ./backend/logs:/app/logs
+    env_file:
+      - ./backend/.env
+    networks:
+      - qualitas-net
+
+  frontend:
+    image: nginx:alpine
+    container_name: qualitas-frontend
+    restart: unless-stopped
+    volumes:
+      - ./react-app/dist:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+    networks:
+      - qualitas-net
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: qualitas-tunnel
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - frontend
+    networks:
+      - qualitas-net
+
+networks:
+  qualitas-net:
+    driver: bridge

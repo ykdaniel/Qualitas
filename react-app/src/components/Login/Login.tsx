@@ -32,7 +32,7 @@ const Login = () => {
       });
 
       const { access_token, refresh_token } = response.data;
-      await login(access_token, refresh_token || '');
+      await login(access_token, refresh_token);
       navigate('/');
     } catch (err: unknown) {
       if (isAxiosError(err) && !err.response) {

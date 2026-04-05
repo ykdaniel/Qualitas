@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import api from '../services/api';
+import { getErrorMessage } from '../utils/errorUtils';
 
 export interface AuditItem {
     id: string;
@@ -53,7 +54,7 @@ export const useAuditStore = create<AuditState>((set, get) => ({
             const list = response.data || [];
             set({ auditList: list, loading: false });
         } catch (err: any) {
-            const errorMessage = err.response?.data?.detail || err.message || 'Failed to fetch audits';
+            const errorMessage = getErrorMessage(err, 'Failed to fetch audits');
             set({
                 auditList: [],
                 loading: false,
@@ -77,7 +78,7 @@ export const useAuditStore = create<AuditState>((set, get) => ({
             }));
             return newAudit;
         } catch (err: any) {
-            const errorMessage = err.response?.data?.detail || err.message || 'Failed to create audit';
+            const errorMessage = getErrorMessage(err, 'Failed to create audit');
             set({ error: errorMessage });
             console.error('Failed to create audit:', err);
             throw new Error(errorMessage);
@@ -92,7 +93,7 @@ export const useAuditStore = create<AuditState>((set, get) => ({
                 auditList: state.auditList.map(a => (a.id === id ? response.data : a))
             }));
         } catch (err: any) {
-            const errorMessage = err.response?.data?.detail || err.message || 'Failed to update audit';
+            const errorMessage = getErrorMessage(err, 'Failed to update audit');
             set({ error: errorMessage });
             console.error('Failed to update audit:', err);
             throw new Error(errorMessage);
@@ -107,7 +108,7 @@ export const useAuditStore = create<AuditState>((set, get) => ({
                 auditList: state.auditList.filter(a => a.id !== id)
             }));
         } catch (err: any) {
-            const errorMessage = err.response?.data?.detail || err.message || 'Failed to delete audit';
+            const errorMessage = getErrorMessage(err, 'Failed to delete audit');
             set({ error: errorMessage });
             console.error('Failed to delete audit:', err);
             throw new Error(errorMessage);

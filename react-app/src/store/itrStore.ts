@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import api from '../services/api';
 import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
+import { getErrorMessage } from '../utils/errorUtils';
 
 export interface ITRItem {
     id: string;
@@ -24,6 +25,7 @@ export interface ITRItem {
     noiNumber?: string;  // 連結到產生此 ITR 的 NOI（取代舊的 itpNo）
     eventNumber?: string;
     checkpoint?: string;
+    dueDate?: string;
     defectPhotos?: any[];
     improvementPhotos?: any[];
     attachments?: any[];
@@ -83,7 +85,7 @@ export const useITRStore = create<ITRState>((set, get) => ({
             const response = await api.get('/itr/', { params });
             set({ itrList: (response.data || []).map(normalizeItem), loading: false });
         } catch (err: any) {
-            set({ error: err.response?.data?.detail || err.message || 'Failed to fetch ITRs', loading: false });
+            set({ error: getErrorMessage(err, 'Failed to fetch ITRs'), loading: false });
         }
     },
 
@@ -120,7 +122,7 @@ export const useITRStore = create<ITRState>((set, get) => ({
             set((state) => ({ itrList: [...state.itrList, newITR] }));
             return newITR;
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to add ITR';
+            const msg = getErrorMessage(error, 'Failed to add ITR');
             set({ error: msg });
             throw error;
         }
@@ -174,7 +176,7 @@ export const useITRStore = create<ITRState>((set, get) => ({
             const updated = normalizeItem(response.data);
             set((state) => ({ itrList: state.itrList.map(i => i.id === id ? updated : i) }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to update ITR';
+            const msg = getErrorMessage(error, 'Failed to update ITR');
             set({ error: msg });
             throw error;
         }
@@ -185,7 +187,7 @@ export const useITRStore = create<ITRState>((set, get) => ({
             await api.delete(`/itr/${id}/`);
             set((state) => ({ itrList: state.itrList.filter(i => i.id !== id) }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to delete ITR';
+            const msg = getErrorMessage(error, 'Failed to delete ITR');
             set({ error: msg });
             throw error;
         }

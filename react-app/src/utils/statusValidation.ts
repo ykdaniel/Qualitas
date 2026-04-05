@@ -53,8 +53,16 @@ export const ITPStatusTransitions: StatusTransition[] = [
 export const ITRStatusTransitions: StatusTransition[] = [
   { from: 'In Progress', to: 'Approved', allowed: true },
   { from: 'In Progress', to: 'Reject', allowed: true },
-  { from: 'Approved', to: 'Reject', allowed: false, message: '已批准的 ITR 不能改為拒絕' },
+  { from: 'In Progress', to: 'Void', allowed: true },
+  { from: 'Approved', to: 'Reject', allowed: false, message: '已批准的 ITR 不能直接改為拒絕，請透過 Publish 建立新版本' },
+  { from: 'Approved', to: 'In Progress', allowed: false, message: '已批准的 ITR 不能改為進行中，請透過 Publish 建立新版本' },
+  { from: 'Approved', to: 'Void', allowed: true },
+  { from: 'Reject', to: 'In Progress', allowed: true },
   { from: 'Reject', to: 'Approved', allowed: true },
+  { from: 'Reject', to: 'Void', allowed: true },
+  { from: 'Void', to: 'In Progress', allowed: false, message: '已作廢的 ITR 無法變更狀態' },
+  { from: 'Void', to: 'Approved', allowed: false, message: '已作廢的 ITR 無法變更狀態' },
+  { from: 'Void', to: 'Reject', allowed: false, message: '已作廢的 ITR 無法變更狀態' },
 ];
 
 /**

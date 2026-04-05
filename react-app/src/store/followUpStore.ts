@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import api from '../services/api';
+import { getErrorMessage } from '../utils/errorUtils';
 
 export interface FollowUpIssueItem {
     id: string;
@@ -47,7 +48,7 @@ export const useFollowUpStore = create<FollowUpState>((set, get) => ({
             const response = await api.get('/followup/');
             set({ followUpList: response.data || [], loading: false });
         } catch (err: any) {
-            set({ error: err.response?.data?.detail || err.message || 'Failed to fetch Follow-up Issues', loading: false });
+            set({ error: getErrorMessage(err, 'Failed to fetch Follow-up Issues'), loading: false });
         }
     },
 
@@ -62,7 +63,7 @@ export const useFollowUpStore = create<FollowUpState>((set, get) => ({
             set((state) => ({ followUpList: [...state.followUpList, newItem] }));
             return newItem;
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to add Follow-up Issue';
+            const msg = getErrorMessage(error, 'Failed to add Follow-up Issue');
             set({ error: msg });
             throw error;
         }
@@ -75,7 +76,7 @@ export const useFollowUpStore = create<FollowUpState>((set, get) => ({
                 followUpList: state.followUpList.map(f => (f.id === id ? response.data : f)),
             }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to update Follow-up Issue';
+            const msg = getErrorMessage(error, 'Failed to update Follow-up Issue');
             set({ error: msg });
             throw error;
         }
@@ -88,7 +89,7 @@ export const useFollowUpStore = create<FollowUpState>((set, get) => ({
                 followUpList: state.followUpList.filter(f => f.id !== id),
             }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to delete Follow-up Issue';
+            const msg = getErrorMessage(error, 'Failed to delete Follow-up Issue');
             set({ error: msg });
             throw error;
         }

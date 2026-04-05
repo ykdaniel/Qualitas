@@ -305,7 +305,7 @@
   "itp.vendor": "Contractor",
   "itp.description": "Subject",
   "itp.rev": "Version",
-  "itp.submissionDate": "Updated Date",
+  "itp.submissionDate": "Submission Date",
   "itp.editTitle": "Edit ITP",
   "itp.addTitle": "Add ITP",
   "itp.infoSection": "ITP Information",
@@ -322,7 +322,7 @@
   "itp.status.approved": "Approved",
   "itp.status.approvedWithComments": "Approved with comments",
   "itp.status.pending": "Pending",
-  "itp.status.notSubmitted": "Not Submitted",
+  "itp.status.noSubmit": "No Submission",
   "itp.status.reviseResubmit": "Revise & Resubmit",
   "itp.status.rejected": "Rejected",
   "itp.status.void": "Void",
@@ -613,5 +613,6 @@
   "checklist.searchPlaceholder": "Search Checklist...",
   "checklist.listTitle": "Checklist Records",
   "checklist.recordNotFound": "Record not found",
-  "checklist.selectNoi": "Select NOI"
+  "checklist.selectNoi": "Select NOI",
+  "itr.lockedMsg": "This ITR status is locked. To modify, please create a new version via Publish, or change the status to Reject."
 }

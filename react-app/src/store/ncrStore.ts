@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import api from '../services/api';
 import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
+import { getErrorMessage } from '../utils/errorUtils';
 
 export interface NCRItem {
     id: string;
@@ -77,7 +78,7 @@ export const useNCRStore = create<NCRState>((set, get) => ({
             const response = await api.get('/ncr/', { params });
             set({ ncrList: (response.data || []).map(normalizeItem), loading: false });
         } catch (err: any) {
-            set({ error: err.response?.data?.detail || err.message || 'Failed to fetch NCRs', loading: false });
+            set({ error: getErrorMessage(err, 'Failed to fetch NCRs'), loading: false });
         }
     },
 
@@ -92,7 +93,7 @@ export const useNCRStore = create<NCRState>((set, get) => ({
             set((state) => ({ ncrList: [...state.ncrList, newNCR] }));
             return newNCR;
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to add NCR';
+            const msg = getErrorMessage(error, 'Failed to add NCR');
             set({ error: msg });
             throw error;
         }
@@ -104,7 +105,7 @@ export const useNCRStore = create<NCRState>((set, get) => ({
             const updated = normalizeItem(response.data);
             set((state) => ({ ncrList: state.ncrList.map(n => n.id === id ? updated : n) }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to update NCR';
+            const msg = getErrorMessage(error, 'Failed to update NCR');
             set({ error: msg });
             throw error;
         }
@@ -115,7 +116,7 @@ export const useNCRStore = create<NCRState>((set, get) => ({
             await api.delete(`/ncr/${id}/`);
             set((state) => ({ ncrList: state.ncrList.filter(n => n.id !== id) }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to delete NCR';
+            const msg = getErrorMessage(error, 'Failed to delete NCR');
             set({ error: msg });
             throw error;
         }

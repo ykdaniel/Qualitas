@@ -15,6 +15,7 @@ import { uploadFiles, deleteFile } from '../../services/api';
 import { useOBSStats } from '../../hooks/useOBSStats';
 import { StatItem } from '../Shared/StatItem';
 import statStyles from '../Shared/StatItem.module.css';
+import { getErrorMessage } from '../../utils/errorUtils';
 
 const OBS: React.FC = () => {
   const { t } = useLanguage();
@@ -134,7 +135,7 @@ const OBS: React.FC = () => {
       setIsEditModalOpen(false);
       setCurrentObsId(null);
     } catch (error: any) {
-      const detail = error?.response?.data?.detail || t('common.saveFailed') || 'Save failed';
+      const detail = getErrorMessage(error, t('common.saveFailed'));
       toast.error(detail);
     }
   };

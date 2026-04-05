@@ -7,6 +7,7 @@ import {
     Contractor as ApiContractor,
     CreateContractorPayload,
 } from '../services/api';
+import { getErrorMessage } from '../utils/errorUtils';
 
 export interface Contractor {
     id: string;
@@ -74,7 +75,7 @@ export const useContractorsStore = create<ContractorsState>((set, get) => ({
             const data = await getContractors();
             set({ contractors: data.map(mapApiToInternal) });
         } catch (err: any) {
-            set({ error: err.response?.data?.detail || err.message || 'Failed to fetch contractors' });
+            set({ error: getErrorMessage(err, 'Failed to fetch contractors') });
         }
     },
 
@@ -84,7 +85,7 @@ export const useContractorsStore = create<ContractorsState>((set, get) => ({
             const newContractor = await createContractor(payload);
             set((state) => ({ contractors: [...state.contractors, mapApiToInternal(newContractor)] }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to add contractor';
+            const msg = getErrorMessage(error, 'Failed to add contractor');
             set({ error: msg });
             throw error;
         }
@@ -103,7 +104,7 @@ export const useContractorsStore = create<ContractorsState>((set, get) => ({
                 contractors: state.contractors.map(c => (c.id === id ? mapApiToInternal(updated) : c)),
             }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to update contractor';
+            const msg = getErrorMessage(error, 'Failed to update contractor');
             set({ error: msg });
             throw error;
         }
@@ -114,7 +115,7 @@ export const useContractorsStore = create<ContractorsState>((set, get) => ({
             await apiDeleteContractor(id);
             set((state) => ({ contractors: state.contractors.filter(c => c.id !== id) }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to delete contractor';
+            const msg = getErrorMessage(error, 'Failed to delete contractor');
             set({ error: msg });
             throw error;
         }

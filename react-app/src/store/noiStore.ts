@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import api from '../services/api';
 import { FilterParams } from '../types/api';
+import { getErrorMessage } from '../utils/errorUtils';
 
 export interface NOIItem {
     id: string;
@@ -55,7 +56,7 @@ export const useNOIStore = create<NOIState>((set, get) => ({
             const response = await api.get('/noi/', { params });
             set({ noiList: response.data || [], loading: false });
         } catch (err: any) {
-            set({ error: err.response?.data?.detail || err.message || 'Failed to fetch NOIs', loading: false });
+            set({ error: getErrorMessage(err, 'Failed to fetch NOIs'), loading: false });
         }
     },
 
@@ -70,7 +71,7 @@ export const useNOIStore = create<NOIState>((set, get) => ({
             set((state) => ({ noiList: [...state.noiList, newNOI] }));
             return newNOI;
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to add NOI';
+            const msg = getErrorMessage(error, 'Failed to add NOI');
             set({ error: msg });
             throw error;
         }
@@ -83,7 +84,7 @@ export const useNOIStore = create<NOIState>((set, get) => ({
             set((state) => ({ noiList: [...state.noiList, ...newNOIs] }));
             return newNOIs;
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to add bulk NOI';
+            const msg = getErrorMessage(error, 'Failed to add bulk NOI');
             set({ error: msg });
             throw error;
         }
@@ -94,7 +95,7 @@ export const useNOIStore = create<NOIState>((set, get) => ({
             const response = await api.put(`/noi/${id}/`, updates);
             set((state) => ({ noiList: state.noiList.map(n => n.id === id ? response.data : n) }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to update NOI';
+            const msg = getErrorMessage(error, 'Failed to update NOI');
             set({ error: msg });
             throw error;
         }
@@ -105,7 +106,7 @@ export const useNOIStore = create<NOIState>((set, get) => ({
             await api.delete(`/noi/${id}/`);
             set((state) => ({ noiList: state.noiList.filter(n => n.id !== id) }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to delete NOI';
+            const msg = getErrorMessage(error, 'Failed to delete NOI');
             set({ error: msg });
             throw error;
         }

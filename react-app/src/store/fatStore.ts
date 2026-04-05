@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import api from '../services/api';
+import { getErrorMessage } from '../utils/errorUtils';
 
 export interface FATItem {
     id: string;
@@ -73,7 +74,7 @@ export const useFATStore = create<FATState>((set, get) => ({
             set({ fatList: list, fatDetails: detailsMap, loading: false });
         } catch (err: any) {
             set({
-                error: err.response?.data?.detail || err.message || 'Failed to fetch FAT list',
+                error: getErrorMessage(err, 'Failed to fetch FAT list'),
                 loading: false,
             });
         }
@@ -90,7 +91,7 @@ export const useFATStore = create<FATState>((set, get) => ({
             set((state) => ({ fatList: [...state.fatList, newFAT] }));
             return newFAT;
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to add FAT';
+            const msg = getErrorMessage(error, 'Failed to add FAT');
             set({ error: msg });
             throw error;
         }
@@ -103,7 +104,7 @@ export const useFATStore = create<FATState>((set, get) => ({
                 fatList: state.fatList.map(f => (f.id === id ? response.data : f)),
             }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to update FAT';
+            const msg = getErrorMessage(error, 'Failed to update FAT');
             set({ error: msg });
             throw error;
         }
@@ -119,7 +120,7 @@ export const useFATStore = create<FATState>((set, get) => ({
                 ),
             }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to delete FAT';
+            const msg = getErrorMessage(error, 'Failed to delete FAT');
             set({ error: msg });
             throw error;
         }
@@ -135,7 +136,7 @@ export const useFATStore = create<FATState>((set, get) => ({
                 ),
             }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to save FAT details';
+            const msg = getErrorMessage(error, 'Failed to save FAT details');
             set({ error: msg });
             throw error;
         }

@@ -6,7 +6,6 @@ import { useITRStore } from '../../store/itrStore';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import VPBadge from './VPBadge';
-
 // Define Props
 interface ITPAdvancedEditorProps {
     items: InspectionItem[];
@@ -201,19 +200,33 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
         if (!dragItemId || dragItemId === targetId) { handleDragEnd(); return; }
         const sourceItem = items.find(i => i.id === dragItemId);
         const targetItem = items.find(i => i.id === targetId);
-        if (!sourceItem || !targetItem || sourceItem.phase !== targetItem.phase) { handleDragEnd(); return; }
+        if (!sourceItem || !targetItem) { handleDragEnd(); return; }
 
-        const phaseItems = items.filter(i => i.phase === sourceItem.phase);
-        const srcIdx = phaseItems.findIndex(i => i.id === dragItemId);
-        const tgtIdx = phaseItems.findIndex(i => i.id === targetId);
+        const sourcePhase = sourceItem.phase;
+        const targetPhase = targetItem.phase;
 
-        const reordered = [...phaseItems];
-        const [moved] = reordered.splice(srcIdx, 1);
-        reordered.splice(tgtIdx, 0, moved);
+        // Remove source item from its original phase
+        const sourcePhaseItems = items.filter(i => i.phase === sourcePhase && i.id !== dragItemId);
+        // Insert into target phase at the target position
+        const targetPhaseItems = sourcePhase === targetPhase
+            ? sourcePhaseItems
+            : items.filter(i => i.phase === targetPhase);
+        const tgtIdx = targetPhaseItems.findIndex(i => i.id === targetId);
+        const movedItem = { ...sourceItem, phase: targetPhase };
+        const reorderedTarget = [...targetPhaseItems];
+        reorderedTarget.splice(tgtIdx, 0, movedItem);
 
-        const renumbered = reordered.map((item, idx) => ({ ...item, id: `${item.phase}${idx + 1}` }));
-        const otherItems = items.filter(i => i.phase !== sourceItem.phase);
-        onItemsChange([...otherItems, ...renumbered]);
+        // Renumber both phases
+        const renumberedSource = sourcePhase !== targetPhase
+            ? sourcePhaseItems.map((item, idx) => ({ ...item, id: `${sourcePhase}${idx + 1}` }))
+            : [];
+        const renumberedTarget = reorderedTarget.map((item, idx) => ({ ...item, id: `${targetPhase}${idx + 1}` }));
+
+        // Collect items from unaffected phases
+        const affectedPhases = new Set([sourcePhase, targetPhase]);
+        const otherItems = items.filter(i => !affectedPhases.has(i.phase));
+
+        onItemsChange([...otherItems, ...renumberedSource, ...renumberedTarget]);
         handleDragEnd();
     };
 
@@ -365,10 +378,10 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
                                         {!readOnly && (
                                             <td className="px-4 py-4 text-center align-middle sticky right-0 bg-white/95 backdrop-blur-sm shadow-[-5px_0_10px_-5px_rgba(0,0,0,0.05)] print:hidden">
                                                 <div className="flex items-center justify-center gap-2">
-                                                    <button onClick={() => handleEditClick(item)} className="text-slate-400 hover:text-blue-600 p-1.5 rounded-md hover:bg-blue-50 transition-all">
+                                                    <button onClick={() => handleEditClick(item)} className="text-slate-400 hover:text-blue-600 p-1.5 rounded-md hover:bg-blue-50 transition-all" title="Edit">
                                                         <PenTool size={14} strokeWidth={2.5} />
                                                     </button>
-                                                    <button onClick={() => handleDelete(item.id)} className="text-slate-400 hover:text-red-600 p-1.5 rounded-md hover:bg-red-50 transition-all">
+                                                    <button onClick={() => handleDelete(item.id)} className="text-slate-400 hover:text-red-600 p-1.5 rounded-md hover:bg-red-50 transition-all" title="Delete">
                                                         <Trash2 size={14} strokeWidth={2.5} />
                                                     </button>
                                                 </div>

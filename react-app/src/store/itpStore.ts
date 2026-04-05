@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import api from '../services/api';
 import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
+import { getErrorMessage } from '../utils/errorUtils';
 
 export interface ITPInspectionItem {
     id: string;
@@ -77,7 +78,7 @@ export const useITPStore = create<ITPState>((set, get) => ({
             const data = response.data;
             set({ itpList: data?.map(normalizeItem) || [], loading: false });
         } catch (err: any) {
-            set({ error: err.response?.data?.detail || err.message || 'Failed to fetch ITPs', loading: false });
+            set({ error: getErrorMessage(err, 'Failed to fetch ITPs'), loading: false });
         }
     },
 
@@ -115,7 +116,7 @@ export const useITPStore = create<ITPState>((set, get) => ({
             set((state) => ({ itpList: [...state.itpList, newITP] }));
             return newITP;
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to add ITP';
+            const msg = getErrorMessage(error, 'Failed to add ITP');
             set({ error: msg });
             throw error;
         }
@@ -127,7 +128,7 @@ export const useITPStore = create<ITPState>((set, get) => ({
             const updated = normalizeItem(response.data);
             set((state) => ({ itpList: state.itpList.map(item => item.id === id ? updated : item) }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to update ITP';
+            const msg = getErrorMessage(error, 'Failed to update ITP');
             set({ error: msg });
             throw error;
         }
@@ -139,7 +140,7 @@ export const useITPStore = create<ITPState>((set, get) => ({
             // Backend doesn't return the full ITP, so fetch again to keep state synced
             await get().fetchITPs();
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to update ITP details';
+            const msg = getErrorMessage(error, 'Failed to update ITP details');
             set({ error: msg });
             throw error;
         }
@@ -150,7 +151,7 @@ export const useITPStore = create<ITPState>((set, get) => ({
             await api.delete(`/itp/${id}/`);
             set((state) => ({ itpList: state.itpList.filter((item) => item.id !== id) }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to delete ITP';
+            const msg = getErrorMessage(error, 'Failed to delete ITP');
             set({ error: msg });
             throw error;
         }

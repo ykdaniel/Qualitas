@@ -24,6 +24,7 @@ export interface FileAttachmentProps {
     buttonText?: string;
     readOnly?: boolean;
     accept?: string;
+    hideTitle?: boolean;
     onPreview?: (src: string, name?: string) => void;
 }
 
@@ -41,6 +42,7 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
     buttonText,
     readOnly = false,
     accept = "image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    hideTitle = false,
     onPreview
 }) => {
     const { t } = useLanguage();
@@ -202,10 +204,12 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
 
     return (
         <div style={styles.container}>
-            <h3 style={styles.sectionTitleWrapper}>
-                <span style={styles.sectionTitleBar}></span>
-                {title || t('common.attachments')}
-            </h3>
+            {!hideTitle && (
+                <h3 style={styles.sectionTitleWrapper}>
+                    <span style={styles.sectionTitleBar}></span>
+                    {title || t('common.attachments')}
+                </h3>
+            )}
             <div style={styles.photoUploadContainer}>
                 {!readOnly && (
                     <>

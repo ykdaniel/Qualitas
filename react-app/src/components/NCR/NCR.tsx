@@ -15,6 +15,7 @@ import { BackButton } from '@/components/ui/BackButton';
 import { useDebounce } from '../../hooks/useDebounce';
 import { uploadFiles, deleteFile } from '../../services/api';
 import { useNCRStats } from '../../hooks/useNCRStats';
+import { getErrorMessage } from '../../utils/errorUtils';
 import { StatItem } from '../Shared/StatItem';
 import statStyles from '../Shared/StatItem.module.css';
 
@@ -153,7 +154,7 @@ const NCR: React.FC = () => {
         setIsEditModalOpen(false);
         setCurrentNcrId(null);
       } catch (error: any) {
-        const detail = error?.response?.data?.detail || t('common.saveFailed') || 'Save failed';
+        const detail = getErrorMessage(error, t('common.saveFailed'));
         toast.error(detail);
       }
     }

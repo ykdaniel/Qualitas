@@ -35,30 +35,89 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle errors
+// Track whether a token refresh is already in progress
+let isRefreshing = false;
+let refreshSubscribers: ((token: string) => void)[] = [];
+
+function onTokenRefreshed(token: string) {
+  refreshSubscribers.forEach((cb) => cb(token));
+  refreshSubscribers = [];
+}
+
+function addRefreshSubscriber(cb: (token: string) => void) {
+  refreshSubscribers.push(cb);
+}
+
+// Response interceptor — attempt silent refresh on 401
 api.interceptors.response.use(
-  (response) => {
-    return response;
-  },
-  (error) => {
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
     if (error.response?.status === 401) {
-      // 排除登入相關請求，避免登入失敗時觸發重複重導向
-      const isAuthEndpoint = error.config?.url?.includes('/auth/');
+      // 排除登入 / refresh 請求，避免無限迴圈（注意：/auth/verify 不在排除範圍內）
+      const isAuthEndpoint =
+        originalRequest?.url?.includes('/auth/login') ||
+        originalRequest?.url?.includes('/auth/refresh');
       const isAlreadyOnLogin = window.location.pathname === '/login';
 
-      if (!isAuthEndpoint && !isAlreadyOnLogin) {
-        if (logoutHandler) {
-          logoutHandler();
-        } else {
-          localStorage.removeItem('token');
-          localStorage.removeItem('refreshToken');
-          window.location.href = '/login';
-        }
+      if (isAuthEndpoint || isAlreadyOnLogin) {
+        return Promise.reject(error);
+      }
+
+      const refreshToken = localStorage.getItem('refreshToken');
+
+      // No refresh token — logout immediately
+      if (!refreshToken) {
+        doLogout();
+        return Promise.reject(error);
+      }
+
+      // If already refreshing, queue this request until the new token arrives
+      if (isRefreshing) {
+        return new Promise((resolve) => {
+          addRefreshSubscriber((newToken: string) => {
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            resolve(api(originalRequest));
+          });
+        });
+      }
+
+      isRefreshing = true;
+
+      try {
+        const res = await axios.post(`${baseURL}/auth/refresh`, {
+          refresh_token: refreshToken,
+        });
+        const { access_token, refresh_token: newRefresh } = res.data;
+        localStorage.setItem('token', access_token);
+        localStorage.setItem('refreshToken', newRefresh);
+        isRefreshing = false;
+        onTokenRefreshed(access_token);
+
+        // Retry the original request with the new token
+        originalRequest.headers.Authorization = `Bearer ${access_token}`;
+        return api(originalRequest);
+      } catch {
+        isRefreshing = false;
+        refreshSubscribers = [];
+        doLogout();
+        return Promise.reject(error);
       }
     }
     return Promise.reject(error);
   }
 );
+
+function doLogout() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('refreshToken');
+  if (logoutHandler) {
+    logoutHandler();
+  } else {
+    window.location.href = '/login';
+  }
+}
 
 export interface NamingRuleApi {
   id: number;

@@ -4,11 +4,13 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+from jose import JWTError, jwt
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 import schemas
 from core.config import settings
-from core.security import create_access_token, get_current_user, verify_password
+from core.security import create_access_token, create_refresh_token, get_current_user, verify_password
 from core.dependencies import get_user_service
 from services.user_service import UserService
 
@@ -54,11 +56,11 @@ async def login_for_access_token(
             )
 
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        access_token = create_access_token(
-            data={"sub": user.username, "user_id": user.id},
-            expires_delta=access_token_expires
-        )
-        return {"access_token": access_token, "token_type": "bearer"}
+        refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+        token_data = {"sub": user.username, "user_id": user.id}
+        access_token = create_access_token(data=token_data, expires_delta=access_token_expires)
+        refresh_token = create_refresh_token(data=token_data, expires_delta=refresh_token_expires)
+        return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
     except HTTPException:
         raise
     except Exception as exc:
@@ -76,6 +78,43 @@ async def login_for_access_token(
 @router.get("/auth/verify")
 async def auth_verify(current_user: schemas.User = Depends(get_current_user)):
     return {"ok": True}
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+@router.post("/auth/refresh", response_model=schemas.Token)
+async def refresh_access_token(
+    body: RefreshRequest,
+    user_service: UserService = Depends(get_user_service),
+):
+    """Use a valid refresh token to get a new access + refresh token pair."""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired refresh token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(body.refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if payload.get("type") != "refresh":
+            raise credentials_exception
+        username: str | None = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    user = user_service.get_user_by_username(username=username)
+    if user is None:
+        raise credentials_exception
+
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    token_data = {"sub": user.username, "user_id": user.id}
+    return {
+        "access_token": create_access_token(data=token_data, expires_delta=access_token_expires),
+        "refresh_token": create_refresh_token(data=token_data, expires_delta=refresh_token_expires),
+        "token_type": "bearer",
+    }
 
 @router.get("/user/profile", response_model=schemas.User)
 async def read_users_me(current_user: schemas.User = Depends(get_current_user)):

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import * as api from '../services/api';
 import { FilterParams } from '../types/api';
+import { getErrorMessage } from '../utils/errorUtils';
 
 // NOTE: 重複使用 api.ts 中的 ChecklistRecordApi 介面避免重複定義
 export type { ChecklistRecordApi } from '../services/api';
@@ -92,7 +93,7 @@ export const useChecklistStore = create<ChecklistState>((set, get) => ({
             set({ records: data.map(normalizeRecord), loading: false });
         } catch (err: any) {
             set({
-                error: err.response?.data?.detail || err.message || 'Failed to fetch checklist records',
+                error: getErrorMessage(err, 'Failed to fetch checklist records'),
                 loading: false,
             });
         }
@@ -128,7 +129,7 @@ export const useChecklistStore = create<ChecklistState>((set, get) => ({
             // NOTE: 本地直接附加新記錄，避免不必要的全量 refetch
             set((state) => ({ records: [...state.records, newRecord] }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to add checklist record';
+            const msg = getErrorMessage(error, 'Failed to add checklist record');
             set({ error: msg });
             throw error;
         }
@@ -154,7 +155,7 @@ export const useChecklistStore = create<ChecklistState>((set, get) => ({
                 records: state.records.map((r) => (r.id === id ? updatedRecord : r)),
             }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to update checklist record';
+            const msg = getErrorMessage(error, 'Failed to update checklist record');
             set({ error: msg });
             throw error;
         }
@@ -168,7 +169,7 @@ export const useChecklistStore = create<ChecklistState>((set, get) => ({
                 records: state.records.filter((r) => r.id !== id),
             }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to delete checklist record';
+            const msg = getErrorMessage(error, 'Failed to delete checklist record');
             set({ error: msg });
             throw error;
         }

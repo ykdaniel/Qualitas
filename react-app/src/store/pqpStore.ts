@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import api from '../services/api';
 import { FilterParams } from '../types/api';
+import { getErrorMessage } from '../utils/errorUtils';
 
 export interface PQPItem {
     id: string;
@@ -49,7 +50,7 @@ export const usePQPStore = create<PQPState>((set, get) => ({
             const response = await api.get('/pqp/', { params });
             set({ pqpList: response.data || [], loading: false });
         } catch (err: any) {
-            set({ error: err.response?.data?.detail || err.message || 'Failed to fetch PQPs', loading: false });
+            set({ error: getErrorMessage(err, 'Failed to fetch PQPs'), loading: false });
         }
     },
 
@@ -64,7 +65,7 @@ export const usePQPStore = create<PQPState>((set, get) => ({
             set((state) => ({ pqpList: [...state.pqpList, newPQP] }));
             return newPQP;
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to add PQP';
+            const msg = getErrorMessage(error, 'Failed to add PQP');
             set({ error: msg });
             throw error;
         }
@@ -75,7 +76,7 @@ export const usePQPStore = create<PQPState>((set, get) => ({
             const response = await api.put(`/pqp/${id}/`, updates);
             set((state) => ({ pqpList: state.pqpList.map(p => (p.id === id ? response.data : p)) }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to update PQP';
+            const msg = getErrorMessage(error, 'Failed to update PQP');
             set({ error: msg });
             throw error;
         }
@@ -86,7 +87,7 @@ export const usePQPStore = create<PQPState>((set, get) => ({
             await api.delete(`/pqp/${id}/`);
             set((state) => ({ pqpList: state.pqpList.filter(p => p.id !== id) }));
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || 'Failed to delete PQP';
+            const msg = getErrorMessage(error, 'Failed to delete PQP');
             set({ error: msg });
             throw error;
         }

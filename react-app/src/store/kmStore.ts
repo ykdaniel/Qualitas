@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { kmService } from '../services/kmService';
 import { KMArticle, KMArticleCreate, KMArticleUpdate } from '../types/km';
+import { getErrorMessage } from '../utils/errorUtils';
 
 interface KMState {
     kmList: KMArticle[];
@@ -24,7 +25,7 @@ export const useKMStore = create<KMState>((set, _get) => ({
             set({ kmList: data, loading: false });
         } catch (err: any) {
             set({
-                error: err.response?.data?.detail || err.message || 'Failed to fetch KM articles',
+                error: getErrorMessage(err, 'Failed to fetch KM articles'),
                 loading: false,
             });
         }
@@ -35,7 +36,7 @@ export const useKMStore = create<KMState>((set, _get) => ({
             const newKM = await kmService.create(data);
             set((state) => ({ kmList: [newKM, ...state.kmList] }));
         } catch (err: any) {
-            throw new Error(err.response?.data?.detail || err.message || 'Failed to add KM article');
+            throw new Error(getErrorMessage(err, 'Failed to add KM article'));
         }
     },
 
@@ -46,7 +47,7 @@ export const useKMStore = create<KMState>((set, _get) => ({
                 kmList: state.kmList.map((km) => (km.id === id ? updatedKM : km)),
             }));
         } catch (err: any) {
-            throw new Error(err.response?.data?.detail || err.message || 'Failed to update KM article');
+            throw new Error(getErrorMessage(err, 'Failed to update KM article'));
         }
     },
 
@@ -57,7 +58,7 @@ export const useKMStore = create<KMState>((set, _get) => ({
                 kmList: state.kmList.filter((km) => km.id !== id),
             }));
         } catch (err: any) {
-            throw new Error(err.response?.data?.detail || err.message || 'Failed to delete KM article');
+            throw new Error(getErrorMessage(err, 'Failed to delete KM article'));
         }
     },
 }));
