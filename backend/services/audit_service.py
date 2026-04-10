@@ -74,28 +74,17 @@ class AuditService:
             self.repo.db, audit.contractor or '', 'audit'
         )
 
-        # Prepare audit data
-        audit_data = {
-            "id": audit.id or str(uuid.uuid4()),
-            "auditNo": audit_no,
-            "title": audit.title,
-            "date": audit.date,
-            "end_date": audit.end_date,
-            "auditor": audit.auditor,
-            "status": audit.status,
-            "location": audit.location,
-            "findings": audit.findings,
-            "contractor": audit.contractor,
-            "vendor_id": vendor_id,
-            "project_name": audit.project_name,
-            "project_director": audit.project_director,
-            "support_auditors": audit.support_auditors,
-            "tech_lead": audit.tech_lead,
-            "scope_description": audit.scope_description,
-            "audit_criteria": audit.audit_criteria,
-            "selected_templates": json.dumps(audit.selected_templates) if isinstance(audit.selected_templates, list) else audit.selected_templates,
-            "custom_check_items": json.dumps(audit.custom_check_items) if isinstance(audit.custom_check_items, list) else audit.custom_check_items,
-        }
+        # Start from the full schema dump so that future fields flow through
+        # automatically instead of silently being dropped by a hand-maintained
+        # field list. Then stamp the server-controlled fields on top.
+        audit_data = audit.model_dump()
+        audit_data["id"] = audit_data.get("id") or str(uuid.uuid4())
+        audit_data["auditNo"] = audit_no
+        audit_data["vendor_id"] = vendor_id
+        for json_field in ("selected_templates", "custom_check_items"):
+            value = audit_data.get(json_field)
+            if isinstance(value, list):
+                audit_data[json_field] = json.dumps(value)
 
         # Create audit record
         db_audit = self.repo.create(audit_data)

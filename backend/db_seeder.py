@@ -1,6 +1,8 @@
 import json
 import logging
 import os
+import secrets
+import string
 import uuid
 from datetime import datetime
 
@@ -11,6 +13,12 @@ import models
 import schemas
 from core.config import settings
 from database import SessionLocal
+
+
+def _generate_strong_password(length: int = 20) -> str:
+    """Return a cryptographically strong random password."""
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*-_=+"
+    return "".join(secrets.choice(alphabet) for _ in range(length))
 
 logger = logging.getLogger(__name__)
 
@@ -128,22 +136,46 @@ def seed_initial_data():
             logger.info("Seeded user role.")
 
         # 4. Create Admin User if not exists
+        #
+        # Password selection policy:
+        # - If INITIAL_ADMIN_PASSWORD env var is set, use it (preferred).
+        # - Otherwise, in production: hard-fail. Deployers must set the env var
+        #   deliberately; there is no silent fallback to a guessable password.
+        # - Otherwise, in development: generate a strong random password on the
+        #   fly and print it ONCE so the developer can copy it. No "admin"/"admin"
+        #   fallback ever — that was the old behaviour and it was a walking
+        #   security hole.
         configured_admin_password = os.getenv("INITIAL_ADMIN_PASSWORD", "").strip()
-        desired_admin_password = configured_admin_password
-        if settings.ENVIRONMENT != "production" and not desired_admin_password:
-            # Development fallback to keep local login recoverable.
-            desired_admin_password = "admin"
 
         admin_user = crud.get_user_by_email(db, "admin@example.com")
         if not admin_user:
+            if configured_admin_password:
+                admin_password_to_use = configured_admin_password
+                password_source = "INITIAL_ADMIN_PASSWORD env var"
+            elif settings.ENVIRONMENT == "production":
+                raise RuntimeError(
+                    "FATAL: Refusing to seed admin user without INITIAL_ADMIN_PASSWORD "
+                    "in a production environment. Set the environment variable to a "
+                    "strong password and retry."
+                )
+            else:
+                admin_password_to_use = _generate_strong_password()
+                password_source = "auto-generated (development)"
+                logger.warning("=" * 72)
+                logger.warning("INITIAL ADMIN PASSWORD (copy this now — it will NOT be shown again):")
+                logger.warning("    username: admin")
+                logger.warning("    password: %s", admin_password_to_use)
+                logger.warning("Set INITIAL_ADMIN_PASSWORD env var to pick your own next time.")
+                logger.warning("=" * 72)
+
             crud.create_user(db, schemas.UserCreate(
                 username="admin",
                 email="admin@example.com",
-                password=desired_admin_password or "admin",
+                password=admin_password_to_use,
                 full_name="System Administrator",
                 role_id=admin_role.id
-            ), hashed_password=get_password_hash(desired_admin_password or "admin"))
-            logger.info("Seeded admin user.")
+            ), hashed_password=get_password_hash(admin_password_to_use))
+            logger.info("Seeded admin user (source: %s).", password_source)
         else:
             # Always ensure admin user has the admin role
             if admin_user.role_id != admin_role.id:
@@ -166,6 +198,18 @@ def seed_initial_data():
                     admin_user.hashed_password = get_password_hash(configured_admin_password)
                     db.commit()
                     logger.info("Synchronized admin password from INITIAL_ADMIN_PASSWORD env var.")
+
+            # Nag loudly if the existing admin still has the legacy "admin" password.
+            # (This was the default prior to the password-seeding hardening.)
+            try:
+                if admin_user.hashed_password and pwd_context.verify("admin", admin_user.hashed_password):
+                    logger.warning("=" * 72)
+                    logger.warning("SECURITY WARNING: admin user is still using the legacy password 'admin'.")
+                    logger.warning("Log in and change it immediately, or set INITIAL_ADMIN_PASSWORD")
+                    logger.warning("and delete the user so it can be re-seeded with a strong password.")
+                    logger.warning("=" * 72)
+            except Exception:
+                pass
 
         # 4. Create Seed Checklist Records if none exists
         if db.query(models.Checklist).count() == 0:
@@ -491,16 +535,15 @@ def seed_formwork_itp():
         }
 
         if existing:
-            logger.info(f"Formwork ITP already exists, updating detail_data: {ref_no}")
-            for key, value in itp_data.items():
-                setattr(existing, key, value)
+            # Do NOT overwrite user edits on restart. If the seeded template
+            # needs to change, delete the record manually or run a migration.
+            logger.info(f"Formwork ITP already exists, skipping seed: {ref_no}")
         else:
             logger.info(f"Creating new Formwork ITP: {ref_no}")
             new_itp = models.ITP(**itp_data, id=str(uuid.uuid4()))
             db.add(new_itp)
-
-        db.commit()
-        logger.info("Formwork ITP seeded successfully.")
+            db.commit()
+            logger.info("Formwork ITP seeded successfully.")
 
     except Exception as e:
         logger.info(f"Error seeding Formwork ITP: {e}")
@@ -662,16 +705,14 @@ def seed_excavation_itp():
         }
 
         if existing:
-            logger.info(f"Excavation ITP already exists, updating: {ref_no}")
-            for key, value in itp_data.items():
-                setattr(existing, key, value)
+            # Do NOT overwrite user edits on restart. See seed_formwork_itp for rationale.
+            logger.info(f"Excavation ITP already exists, skipping seed: {ref_no}")
         else:
             logger.info(f"Creating new Excavation ITP: {ref_no}")
             new_itp = models.ITP(**itp_data, id=str(uuid.uuid4()))
             db.add(new_itp)
-
-        db.commit()
-        logger.info("Excavation ITP seeded successfully.")
+            db.commit()
+            logger.info("Excavation ITP seeded successfully.")
 
     except Exception as e:
         logger.info(f"Error seeding Excavation ITP: {e}")

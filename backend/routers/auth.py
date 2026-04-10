@@ -38,14 +38,23 @@ async def login_for_access_token(
                 )
                 password_ok = False
 
+        # Development-only rescue login for the admin account.
+        #
+        # Only active in non-production AND only when INITIAL_ADMIN_PASSWORD
+        # is explicitly set. The old behaviour fell back to a hard-coded
+        # "admin" password, which was a walking back door — it let anyone
+        # bypass the database password entirely. We now require an explicit
+        # env var so the operator has to opt in.
         if not password_ok and settings.ENVIRONMENT != "production":
-            fallback_password = os.getenv("INITIAL_ADMIN_PASSWORD", "").strip() or "admin"
+            fallback_password = os.getenv("INITIAL_ADMIN_PASSWORD", "").strip()
             is_dev_admin_login = form_data.username in {"admin", "admin@example.com"}
-            if is_dev_admin_login and form_data.password == fallback_password:
+            if fallback_password and is_dev_admin_login and form_data.password == fallback_password:
                 if not user:
                     user = user_service.get_user_by_email("admin@example.com") or user_service.get_user_by_username("admin")
                 if user:
-                    logger.warning("Development fallback login used for admin account")
+                    logger.warning(
+                        "Development rescue login used for admin account via INITIAL_ADMIN_PASSWORD"
+                    )
                     password_ok = True
 
         if not user or not password_ok:

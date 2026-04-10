@@ -122,9 +122,20 @@ class ChecklistService:
             if data.get('itrNumber'):
                 validators.validate_itr_reference(self.repo.db, data['itrNumber'])
 
-            # Generate recordsNo automatically if not provided or is placeholder
+            # Generate recordsNo automatically if not provided.
+            # The legacy "[AUTO-GENERATE]" sentinel is still accepted for
+            # backwards compatibility with frontends that send it, but it
+            # is deprecated — the frontend should send null/None instead so
+            # we don't overload a string value with control semantics.
             contractor_name = data.get('contractor', '')
-            if not data.get('recordsNo') or data.get('recordsNo') == "[AUTO-GENERATE]":
+            records_no = data.get('recordsNo')
+            if records_no == "[AUTO-GENERATE]":
+                logger.info(
+                    "checklist_service: legacy [AUTO-GENERATE] sentinel received; "
+                    "frontends should send null to request auto-generation"
+                )
+                records_no = None
+            if not records_no:
                 data['recordsNo'] = generate_reference_no(
                     self.repo.db, contractor_name, 'CHECKLIST'
                 )

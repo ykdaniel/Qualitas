@@ -12,6 +12,7 @@ This module contains shared utilities used across all modules:
 import json
 import logging
 import re
+import threading
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -23,6 +24,20 @@ from models import AuditLog, Contractor, DocumentNamingRule, ReferenceSequence
 from core.constants import PROJECT_CODE, MAX_PAGE_LIMIT, DEFAULT_PAGE_LIMIT
 
 logger = logging.getLogger(__name__)
+
+# Process-wide lock for reference-number allocation.
+#
+# Why this exists: generate_reference_no uses `.with_for_update()` to
+# serialise concurrent callers at the database level. That works on
+# PostgreSQL/MySQL, but SQLite silently ignores FOR UPDATE, so on SQLite
+# two threads can read the same last_seq and produce duplicate refs.
+#
+# Holding this lock around the read-modify-write serialises callers within
+# a single Python process, which is the production topology (single uvicorn
+# worker behind nginx). It does NOT protect a multi-worker deployment; for
+# that you must either move to Postgres (so FOR UPDATE actually locks) or
+# add a cross-process lock such as a file lock or Redis lock.
+_reference_seq_lock = threading.Lock()
 
 
 def sanitize_pagination(skip: int, limit: int) -> tuple[int, int]:
@@ -119,15 +134,12 @@ class WorkflowEngine:
             "Void": []
         },
         "PQP": {
-            # Canonical workflow used by current UI
+            # Canonical workflow
             "Not Submit": ["Under Review", "Void"],
-            "Under Review": ["Approved", "Reject", "Void"],
+            "Under Review": ["Approved", "Reject", "Revise & Resubmit", "Void"],
             "Approved": ["Under Review", "Void"],
-            "Reject": ["Under Review", "Void"],
-            # Backward-compatible legacy statuses
-            "Draft": ["Pending", "Not Submit", "Void"],
-            "Pending": ["Approved", "Revise & Resubmit", "Under Review", "Void"],
-            "Revise & Resubmit": ["Pending", "Under Review", "Void"],
+            "Reject": ["Not Submit", "Void"],
+            "Revise & Resubmit": ["Not Submit", "Under Review", "Void"],
             "Void": []
         },
         "NCR": {
@@ -146,10 +158,9 @@ class WorkflowEngine:
             "Void": []
         },
         "ITR": {
-            "Draft": ["Submitted", "Void"],
-            "Submitted": ["Approved", "Rejected", "Void"],
-            "Approved": ["Void"],
-            "Rejected": ["Submitted", "Void"],
+            "In Progress": ["Approved", "Reject", "Void"],
+            "Approved": ["In Progress", "Void"],
+            "Reject": ["In Progress", "Approved", "Void"],
             "Void": []
         },
         "OBS": {
@@ -164,6 +175,14 @@ class WorkflowEngine:
             "Ongoing": ["Pass", "Fail"],
             "Pass": ["Ongoing"],  # 允許回退修改
             "Fail": ["Ongoing"]
+        },
+        "Audit": {
+            "Draft": ["Planned", "Void"],
+            "Planned": ["In Progress", "Draft", "Void"],
+            "In Progress": ["Completed", "Void"],
+            "Completed": ["Closed", "In Progress", "Void"],
+            "Closed": [],
+            "Void": []
         }
     }
 
@@ -349,7 +368,12 @@ def generate_reference_no(db: Session, vendor_name: str, doc_type: str) -> str:
         Generated reference number
 
     Note:
-        Uses database row-level locking (with_for_update) to prevent concurrent conflicts
+        Concurrency is protected by two layers:
+        - DB row-level lock via `.with_for_update()` (effective on Postgres/MySQL,
+          silently ignored on SQLite).
+        - Process-level `_reference_seq_lock` serialising callers in the same
+          Python process. This is the layer that actually protects SQLite
+          deployments — see the comment on _reference_seq_lock above.
     """
     vendor_abbrev = get_contractor_abbreviation(db, vendor_name)
 
@@ -359,28 +383,28 @@ def generate_reference_no(db: Session, vendor_name: str, doc_type: str) -> str:
     ).first()
     seq_digits = rule.sequence_digits if rule and rule.sequence_digits else 6
 
-    # 查詢或建立序號記錄
-    seq_record = db.query(ReferenceSequence).filter(
-        ReferenceSequence.project == PROJECT_CODE,
-        ReferenceSequence.vendor == vendor_abbrev,
-        ReferenceSequence.doc == doc_type
-    ).with_for_update().first()  # 加鎖防止並發
+    with _reference_seq_lock:
+        # 查詢或建立序號記錄
+        seq_record = db.query(ReferenceSequence).filter(
+            ReferenceSequence.project == PROJECT_CODE,
+            ReferenceSequence.vendor == vendor_abbrev,
+            ReferenceSequence.doc == doc_type
+        ).with_for_update().first()
 
-    if seq_record:
-        seq_record.last_seq += 1
-        next_seq = seq_record.last_seq
-    else:
-        # 第一次建立該組合
-        next_seq = 1
-        seq_record = ReferenceSequence(
-            project=PROJECT_CODE,
-            vendor=vendor_abbrev,
-            doc=doc_type,
-            last_seq=next_seq
-        )
-        db.add(seq_record)
+        if seq_record:
+            seq_record.last_seq += 1
+            next_seq = seq_record.last_seq
+        else:
+            next_seq = 1
+            seq_record = ReferenceSequence(
+                project=PROJECT_CODE,
+                vendor=vendor_abbrev,
+                doc=doc_type,
+                last_seq=next_seq
+            )
+            db.add(seq_record)
 
-    db.flush()  # 確保序號已寫入
+        db.flush()  # 確保序號已寫入
 
     # 依規則組合編號；若沒有規則則走 fallback
     if rule and rule.prefix:
