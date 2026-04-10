@@ -100,13 +100,8 @@ class ITRService:
             if vendor_name:
                 data['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
 
-            # Generate Reference No automatically if not provided
-            if not data.get('documentNumber'):
-                data['documentNumber'] = generate_reference_no(
-                    self.repo.db, vendor_name or '', 'ITR'
-                )
-
-            # Validate noiNumber exists if provided
+            # Validate foreign keys BEFORE allocating a reference number,
+            # so failed creates don't leave gaps in the ITR sequence.
             if data.get('noiNumber'):
                 noi = self.repo.db.query(models.NOI).filter(
                     models.NOI.referenceNo == data['noiNumber']
@@ -114,13 +109,18 @@ class ITRService:
                 if not noi:
                     raise ValueError(f"NOI with reference number '{data['noiNumber']}' not found")
 
-            # Validate ncrNumber exists if provided
             if data.get('ncrNumber'):
                 ncr = self.repo.db.query(models.NCR).filter(
                     models.NCR.documentNumber == data['ncrNumber']
                 ).first()
                 if not ncr:
                     raise ValueError(f"NCR with document number '{data['ncrNumber']}' not found")
+
+            # Generate Reference No automatically if not provided
+            if not data.get('documentNumber'):
+                data['documentNumber'] = generate_reference_no(
+                    self.repo.db, vendor_name or '', 'ITR'
+                )
 
             # Create ITR object
             db_itr = models.ITR(**data)

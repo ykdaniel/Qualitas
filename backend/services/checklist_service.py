@@ -106,21 +106,9 @@ class ChecklistService:
             data = checklist_create.model_dump()
             data = _json_serialize(data, ['detail_data'])
 
-            # Generate recordsNo automatically if not provided or is placeholder
-            if not data.get('recordsNo') or data.get('recordsNo') == "[AUTO-GENERATE]":
-                data['recordsNo'] = generate_reference_no(
-                    self.repo.db, data.get('contractor', ''), 'CHECKLIST'
-                )
-
-            # Handle contractor name -> contractor_id mapping
-            if 'contractor' in data:
-                contractor_name = data.pop('contractor')
-                if contractor_name:
-                    data['contractor_id'] = _resolve_vendor_id(self.repo.db, contractor_name)
-
-            # Validate references to other modules
+            # Validate foreign keys BEFORE allocating a reference number,
+            # so failed creates don't leave gaps in the Checklist sequence.
             if data.get('itpId'):
-                # Validate ITP exists by ID (since itpId is UUID, not referenceNo)
                 itp = self.repo.db.query(models.ITP).filter(models.ITP.id == data['itpId']).first()
                 if not itp:
                     raise ValueError(f"ITP with ID '{data['itpId']}' not found")
@@ -133,6 +121,19 @@ class ChecklistService:
 
             if data.get('itrNumber'):
                 validators.validate_itr_reference(self.repo.db, data['itrNumber'])
+
+            # Generate recordsNo automatically if not provided or is placeholder
+            contractor_name = data.get('contractor', '')
+            if not data.get('recordsNo') or data.get('recordsNo') == "[AUTO-GENERATE]":
+                data['recordsNo'] = generate_reference_no(
+                    self.repo.db, contractor_name, 'CHECKLIST'
+                )
+
+            # Handle contractor name -> contractor_id mapping
+            if 'contractor' in data:
+                contractor_name = data.pop('contractor')
+                if contractor_name:
+                    data['contractor_id'] = _resolve_vendor_id(self.repo.db, contractor_name)
 
             # Create Checklist object
             db_checklist = models.Checklist(**data)

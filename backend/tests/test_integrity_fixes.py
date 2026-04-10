@@ -37,10 +37,9 @@ class TestReferentialIntegrity:
             type="Initial"
         )
 
-        # Should raise ValueError
-        with patch('services.noi_service.generate_reference_no', return_value="NOI-TEST-001"):
-            with pytest.raises(ValueError) as exc_info:
-                service.create_noi(noi_data)
+        # Should raise ValueError (FK validation runs before reference-no generation)
+        with pytest.raises(ValueError) as exc_info:
+            service.create_noi(noi_data)
 
         assert "not found" in str(exc_info.value).lower()
         assert "ITP" in str(exc_info.value)
@@ -64,10 +63,9 @@ class TestReferentialIntegrity:
             noiNumber="NOI-NONEXISTENT"  # This NOI doesn't exist
         )
 
-        # Should raise ValueError
-        with patch('services.ncr_service.generate_reference_no', return_value="NCR-TEST-001"):
-            with pytest.raises(ValueError) as exc_info:
-                service.create_ncr(ncr_data)
+        # Should raise ValueError (FK validation runs before reference-no generation)
+        with pytest.raises(ValueError) as exc_info:
+            service.create_ncr(ncr_data)
 
         assert "not found" in str(exc_info.value).lower()
         assert "NOI" in str(exc_info.value)
@@ -91,10 +89,9 @@ class TestReferentialIntegrity:
             noiNumber="NOI-NONEXISTENT"  # This NOI doesn't exist
         )
 
-        # Should raise ValueError
-        with patch('services.itr_service.generate_reference_no', return_value="ITR-TEST-001"):
-            with pytest.raises(ValueError) as exc_info:
-                service.create_itr(itr_data)
+        # Should raise ValueError (FK validation runs before reference-no generation)
+        with pytest.raises(ValueError) as exc_info:
+            service.create_itr(itr_data)
 
         assert "not found" in str(exc_info.value).lower()
         assert "NOI" in str(exc_info.value)

@@ -48,23 +48,28 @@ class ITPBase(BaseModel):
                 return []
         return v
 
-    @model_validator(mode='after')
-    def check_date_ranges(self):
-        if self.submissionDate and self.dueDate:
-            # Normalize to YYYY-MM-DD comparison only
-            try:
-                sub = self.submissionDate[:10]
-                due = self.dueDate[:10]
-                if sub > due:
-                    # Don't raise — just warn; existing data may be inconsistent
-                    pass
-            except Exception:
-                pass
-        return self
+    # NOTE: ITPBase is intentionally lenient about submissionDate/dueDate ordering
+    # because it's also used as the base for the ITP response model, which must
+    # parse legacy DB records that may have inconsistent dates. Strict validation
+    # lives on ITPCreate so that new input is still rejected.
 
 
 class ITPCreate(ITPBase):
     id: str | None = None
+
+    @model_validator(mode='after')
+    def check_date_ranges(self):
+        if self.submissionDate and self.dueDate:
+            try:
+                sub = self.submissionDate[:10]
+                due = self.dueDate[:10]
+            except Exception:
+                return self
+            if sub > due:
+                raise ValueError(
+                    'submissionDate must be before or equal to dueDate'
+                )
+        return self
 class ITPDetailBody(BaseModel):
     a: list[Any] = []
     b: list[Any] = []
@@ -128,6 +133,7 @@ class NCRBase(BaseModel):
     defectPhotos: Any | None = None
     improvementPhotos: Any | None = None
     noiNumber: str | None = None  # 連結到觸發此 NCR 的 NOI
+    itrNumber: str | None = None  # 連結到觸發此 NCR 的 ITR
     dueDate: str | None = None  # 到期日 (YYYY-MM-DD)
     attachments: list[str] | None = []
     last_reminded_at: str | None = None
@@ -197,6 +203,7 @@ class NCRUpdate(BaseModel):
     defectPhotos: Any | None = None
     improvementPhotos: Any | None = None
     noiNumber: str | None = None
+    itrNumber: str | None = None
     dueDate: str | None = None
     attachments: list[str] | None = None
     last_reminded_at: str | None = None
@@ -444,7 +451,7 @@ class PQPCreate(PQPBase):
     title: str | None = ''
     description: str | None = ''
     vendor: str | None = ''
-    status: str | None = 'Approved'
+    status: str | None = 'Not Submit'
     version: str | None = 'Rev1.0'
     createdAt: str | None = ''
     updatedAt: str | None = ''
@@ -472,6 +479,25 @@ class PQPUpdate(BaseModel):
 
 class PQP(PQPBase):
     id: str
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PQPPublish(BaseModel):
+    """Request body for publishing a new PQP revision"""
+    change_summary: str | None = None
+
+
+class PQPHistoryItem(BaseModel):
+    id: str
+    pqp_id: str
+    version: str
+    version_no: int
+    title: str | None = None
+    description: str | None = None
+    status: str | None = None
+    change_summary: str | None = None
+    created_at: str
+
     model_config = ConfigDict(from_attributes=True)
 
 

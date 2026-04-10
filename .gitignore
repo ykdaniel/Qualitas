@@ -3,7 +3,10 @@ node_modules/
 dist/
 build/
 .npm
-scripts/
+
+# One-off / debug scripts — keep scripts/ itself tracked so legitimate
+# build and deploy scripts can live there.
+scripts/debug/
 
 # Python
 __pycache__/

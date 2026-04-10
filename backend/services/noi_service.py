@@ -87,6 +87,11 @@ class NOIService:
             if vendor_name:
                 data['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
 
+            # Validate foreign keys BEFORE allocating a reference number,
+            # so failed creates don't leave gaps in the NOI sequence.
+            if data.get('itpNo'):
+                validators.validate_itp_reference(self.repo.db, data['itpNo'])
+
             # Generate Reference No automatically if not provided
             if not data.get('referenceNo'):
                 data['referenceNo'] = generate_reference_no(
@@ -96,10 +101,6 @@ class NOIService:
             # Set default status
             if not data.get('status'):
                 data['status'] = "Draft"
-
-            # Validate itpNo exists
-            if data.get('itpNo'):
-                validators.validate_itp_reference(self.repo.db, data['itpNo'])
 
             # Create NOI object
             db_noi = models.NOI(**data)

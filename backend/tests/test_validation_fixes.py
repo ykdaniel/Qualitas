@@ -89,24 +89,29 @@ class TestDateRangeValidation:
             "submissionDate": "2024-01-01",
             "dueDate": "2024-12-31"
         }
-        itp = schemas.ITPBase(**data)
+        itp = schemas.ITPCreate(**data)
         assert itp.submissionDate == "2024-01-01"
         assert itp.dueDate == "2024-12-31"
 
-    @pytest.mark.skip(
-        reason="ITPBase is intentionally lenient on submissionDate/dueDate ordering "
-               "because it's also used to read legacy records with inconsistent dates. "
-               "See schemas.ITPBase.check_date_ranges."
-    )
     def test_itp_invalid_date_range(self):
-        """Submission date after due date should fail"""
+        """Submission date after due date should fail on ITPCreate (strict input)"""
         with pytest.raises(ValidationError) as exc_info:
-            schemas.ITPBase(
+            schemas.ITPCreate(
                 status="Draft",
                 submissionDate="2024-12-31",
                 dueDate="2024-01-01"
             )
         assert "before or equal" in str(exc_info.value).lower()
+
+    def test_itp_base_tolerates_inconsistent_legacy_dates(self):
+        """ITPBase (response model base) must not reject legacy records with bad dates"""
+        itp = schemas.ITPBase(
+            status="Draft",
+            submissionDate="2024-12-31",
+            dueDate="2024-01-01"
+        )
+        assert itp.submissionDate == "2024-12-31"
+        assert itp.dueDate == "2024-01-01"
 
     def test_ncr_valid_date_range(self):
         """Valid NCR date range should pass"""
