@@ -134,26 +134,99 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
         }
 
         setLoading(true);
+
+        // Image formats the browser will actually render as <img>. Word often
+        // embeds Excel charts / Visio drawings / equations as EMF or WMF,
+        // which the browser cannot decode even if the backend accepted them.
+        const SUPPORTED_IMAGE_MIME = new Set([
+            'image/png',
+            'image/jpeg',
+            'image/jpg',
+            'image/gif',
+            'image/webp',
+            'image/bmp',
+        ]);
+
+        // Placeholder image shown in place of formats we could not import.
+        // Rendered to a canvas → PNG data URL so DOMPurify always accepts
+        // it on render (SVG data URIs are sometimes stripped for script
+        // safety, PNG is universally allowed).
+        const UNSUPPORTED_IMAGE_PLACEHOLDER = (() => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 400;
+            canvas.height = 100;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return '';
+            ctx.fillStyle = '#fef3c7';
+            ctx.fillRect(0, 0, 400, 100);
+            ctx.strokeStyle = '#f59e0b';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(1, 1, 398, 98);
+            ctx.fillStyle = '#92400e';
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 15px -apple-system, system-ui, "Noto Sans TC", sans-serif';
+            ctx.fillText('⚠️ 未能匯入的圖片', 200, 36);
+            ctx.font = '12px -apple-system, system-ui, "Noto Sans TC", sans-serif';
+            ctx.fillText('格式不支援（EMF / WMF / TIFF 等）', 200, 60);
+            ctx.fillText('請在 Word 改存為 PNG / JPEG 後重新匯入', 200, 80);
+            return canvas.toDataURL('image/png');
+        })();
+
+        // Counters populated by the image handler; reported to the user once
+        // the whole document is converted.
+        let skippedImageCount = 0;
+        const skippedImageTypes = new Set<string>();
+
         try {
             // Mammoth is ~500KB; load it lazily so the base KM bundle stays small.
             const mammoth = await import('mammoth/mammoth.browser');
             const arrayBuffer = await file.arrayBuffer();
 
             const convertImage = mammoth.images.imgElement(async (image) => {
-                const rawBuffer = await image.read();
-                const buffer = rawBuffer instanceof Uint8Array
-                    ? rawBuffer
-                    : new TextEncoder().encode(String(rawBuffer));
-                const contentType = image.contentType || 'image/png';
-                const ext = (contentType.split('/')[1] || 'png').toLowerCase();
-                const suffix = Math.random().toString(36).slice(2, 8);
-                const imageFile = new File(
-                    [buffer as BlobPart],
-                    `word-import-${Date.now()}-${suffix}.${ext}`,
-                    { type: contentType }
-                );
-                const uploadedUrl = await kmService.uploadImage(imageFile);
-                return { src: uploadedUrl, alt: image.altText || '' };
+                const contentType = (image.contentType || '').toLowerCase();
+                const isSupported = SUPPORTED_IMAGE_MIME.has(contentType);
+
+                if (isSupported) {
+                    try {
+                        const rawBuffer = await image.read();
+                        const buffer = rawBuffer instanceof Uint8Array
+                            ? rawBuffer
+                            : new TextEncoder().encode(String(rawBuffer));
+                        // Normalise jpg → jpeg so the backend allow-list hits.
+                        const rawExt = (contentType.split('/')[1] || 'png').toLowerCase();
+                        const ext = rawExt === 'jpg' ? 'jpeg' : rawExt;
+                        const suffix = Math.random().toString(36).slice(2, 8);
+                        const imageFile = new File(
+                            [buffer as BlobPart],
+                            `word-import-${Date.now()}-${suffix}.${ext}`,
+                            { type: contentType }
+                        );
+                        const uploadedUrl = await kmService.uploadImage(imageFile);
+                        return { src: uploadedUrl, alt: image.altText || '' };
+                    } catch (err) {
+                        // Upload itself failed (network error, 413 too large,
+                        // auth expired, etc.). Don't abort the whole import —
+                        // substitute a placeholder so the user at least keeps
+                        // the rest of the document.
+                        console.warn('Image upload failed during Word import:', err);
+                        skippedImageCount += 1;
+                        skippedImageTypes.add(`${contentType} (上傳失敗)`);
+                        return {
+                            src: UNSUPPORTED_IMAGE_PLACEHOLDER,
+                            alt: image.altText || `[上傳失敗的圖片: ${contentType}]`,
+                        };
+                    }
+                }
+
+                // Unsupported browser format (EMF/WMF/TIFF/etc). Don't bother
+                // hitting the backend — it would fail, and even if it succeeded
+                // the browser can't render the result.
+                skippedImageCount += 1;
+                skippedImageTypes.add(contentType || 'unknown');
+                return {
+                    src: UNSUPPORTED_IMAGE_PLACEHOLDER,
+                    alt: image.altText || `[未支援的圖片格式: ${contentType || '未知'}]`,
+                };
             });
 
             const result = await mammoth.convertToHtml(
@@ -248,7 +321,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                     toast.success(
                         `Word 檔匯入成功，自動分成 ${importedChapters.length} 個章節`
                     );
-                    emitMammothWarnings(result.messages);
+                    reportImportWarnings(result.messages, skippedImageCount, skippedImageTypes);
                     return;
                 }
                 // Fall through to single-chapter import if user declined.
@@ -271,7 +344,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
             setChapters(newChapters);
 
             toast.success('Word 檔匯入成功');
-            emitMammothWarnings(result.messages);
+            reportImportWarnings(result.messages, skippedImageCount, skippedImageTypes);
         } catch (err) {
             console.error('Word import failed:', err);
             const message = err instanceof Error ? err.message : String(err);
@@ -281,13 +354,26 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
         }
     };
 
-    const emitMammothWarnings = (messages: Array<{ type: string; message: string }> | undefined) => {
-        if (!messages || messages.length === 0) return;
-        const warningCount = messages.filter(m => m.type === 'warning').length;
-        if (warningCount > 0) {
+    const reportImportWarnings = (
+        messages: Array<{ type: string; message: string }> | undefined,
+        skippedImageCount: number,
+        skippedImageTypes: Set<string>,
+    ) => {
+        if (skippedImageCount > 0) {
+            const typeList = Array.from(skippedImageTypes).join('、');
             toast.warning(
-                `其中有 ${warningCount} 項格式未完整保留（例如文字方塊、SmartArt、頁首頁尾）。請檢查內容。`
+                `其中 ${skippedImageCount} 張圖片未匯入（格式：${typeList}）。` +
+                `請在 Word 改用 PNG/JPEG 重新插入這些圖片後再匯入。`,
+                { duration: 8000 }
             );
+        }
+        if (messages && messages.length > 0) {
+            const warningCount = messages.filter(m => m.type === 'warning').length;
+            if (warningCount > 0) {
+                toast.warning(
+                    `另有 ${warningCount} 項文字格式未完整保留（例如文字方塊、SmartArt、頁首頁尾）。`
+                );
+            }
         }
     };
 
