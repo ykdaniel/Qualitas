@@ -110,16 +110,22 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
     };
 
     /**
-     * Import a .docx file into the specified chapter.
+     * Import a .docx file.
      *
-     * The file is converted to HTML in-browser by mammoth. Embedded images
-     * are extracted one-by-one and uploaded to the existing KM image
-     * endpoint, so the resulting HTML references real URLs under
-     * /uploads/km/ rather than base64 data URLs (keeps the DB lean and
-     * makes images searchable by filename).
+     * Flow:
+     * 1. Mammoth converts the file to HTML in the browser. Embedded images
+     *    are extracted one-by-one and uploaded to /api/km/upload-image/,
+     *    so the final HTML references real URLs under /uploads/km/
+     *    instead of bloating the DB with base64.
+     * 2. If the resulting HTML contains 2+ top-level <h1> headings, the
+     *    import is automatically split into multiple KM chapters — one
+     *    per H1. Content appearing BEFORE the first H1 is prepended to
+     *    the first chapter (so nothing is lost).
+     * 3. Single-H1 and no-H1 documents fall back to a one-chapter import
+     *    into the chapter the user clicked.
      *
-     * Warns — but does not abort — if mammoth reports format fidelity
-     * issues (unsupported text boxes, SmartArt, etc).
+     * When splitting would replace non-empty existing chapters, the user
+     * is asked to confirm so nothing is clobbered silently.
      */
     const handleWordImport = async (chapterIndex: number, file: File) => {
         if (!file.name.toLowerCase().endsWith('.docx')) {
@@ -154,35 +160,134 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                 { arrayBuffer },
                 { convertImage }
             );
+            const html = result.value;
 
+            // Detect H1 headings to decide whether to split into chapters.
+            const parsedDoc = new DOMParser().parseFromString(html, 'text/html');
+            const h1Elements = parsedDoc.body.querySelectorAll('h1');
+            const defaultTitlePattern = /^Chapter \d+$/;
+
+            type ImportedChapter = { title: string; content: string };
+            let importedChapters: ImportedChapter[] = [];
+
+            if (h1Elements.length >= 2) {
+                // Walk direct children of <body>, splitting at each H1.
+                let current: ImportedChapter | null = null;
+                let preamble = '';
+
+                for (const node of Array.from(parsedDoc.body.childNodes)) {
+                    const isH1 = node.nodeType === Node.ELEMENT_NODE
+                        && (node as Element).tagName === 'H1';
+
+                    if (isH1) {
+                        if (current) importedChapters.push(current);
+                        current = {
+                            title: ((node as Element).textContent || '').trim() || 'Untitled',
+                            content: '',
+                        };
+                        continue;
+                    }
+
+                    const serialized = node.nodeType === Node.ELEMENT_NODE
+                        ? (node as Element).outerHTML
+                        : (node.nodeValue || '');
+
+                    if (current) {
+                        current.content += serialized;
+                    } else {
+                        preamble += serialized;
+                    }
+                }
+                if (current) importedChapters.push(current);
+
+                // Preserve content that appeared before the first H1.
+                if (preamble.trim() && importedChapters.length > 0) {
+                    importedChapters[0].content = preamble + importedChapters[0].content;
+                }
+            }
+
+            // Decide the apply strategy.
+            const doMultiChapterSplit = importedChapters.length >= 2;
+
+            if (doMultiChapterSplit) {
+                // Check whether the user has real content that we'd clobber.
+                const existing = chapters.filter(c => !c.deleted);
+                const hasExistingContent = existing.some(c => {
+                    const titleIsDefault = defaultTitlePattern.test(c.title || '');
+                    const stripped = (c.content || '').replace(/<[^>]+>/g, '').trim();
+                    const contentIsEmpty = stripped === '' || stripped === '\u200b';
+                    return !titleIsDefault || !contentIsEmpty;
+                });
+
+                let shouldSplit = true;
+                if (hasExistingContent) {
+                    shouldSplit = window.confirm(
+                        `偵測到 ${importedChapters.length} 個 H1 標題。\n\n` +
+                        `按「確定」將 Word 檔自動分成 ${importedChapters.length} 個章節，` +
+                        `會取代目前 ${existing.length} 個章節。\n\n` +
+                        `按「取消」則合併為單一章節、覆蓋目前正在編輯的這一章。`
+                    );
+                }
+
+                if (shouldSplit) {
+                    // Mark any existing chapters that have a server id as deleted
+                    // (soft-delete) so they get removed from the DB on save.
+                    // Purely unsaved chapters can just be dropped.
+                    const softDeleted = chapters
+                        .filter(c => c.id && !c.deleted)
+                        .map(c => ({ ...c, deleted: true }));
+
+                    const fresh = importedChapters.map((ch, i) => ({
+                        title: ch.title,
+                        content: ch.content,
+                        chapter_no: `${i + 1}.0`,
+                    }));
+
+                    setChapters([...softDeleted, ...fresh]);
+
+                    toast.success(
+                        `Word 檔匯入成功，自動分成 ${importedChapters.length} 個章節`
+                    );
+                    emitMammothWarnings(result.messages);
+                    return;
+                }
+                // Fall through to single-chapter import if user declined.
+            }
+
+            // Single-chapter import (no split, or user declined split).
             const newChapters = [...chapters];
+            const singleH1Title = h1Elements.length === 1
+                ? (h1Elements[0].textContent || '').trim()
+                : '';
+
             newChapters[chapterIndex] = {
                 ...newChapters[chapterIndex],
-                content: result.value,
+                content: html,
             };
-            // If the chapter still has the default placeholder title, adopt
-            // the Word file's stem as the new title so the user doesn't have
-            // to rename it manually.
-            const defaultTitlePattern = /^Chapter \d+$/;
-            if (defaultTitlePattern.test(newChapters[chapterIndex].title)) {
-                newChapters[chapterIndex].title = file.name.replace(/\.docx$/i, '');
+            if (defaultTitlePattern.test(newChapters[chapterIndex].title || '')) {
+                newChapters[chapterIndex].title =
+                    singleH1Title || file.name.replace(/\.docx$/i, '');
             }
             setChapters(newChapters);
 
-            if (result.messages && result.messages.length > 0) {
-                const warningCount = result.messages.filter(m => m.type === 'warning').length;
-                toast.warning(
-                    `Word 匯入完成，但有 ${warningCount} 項格式未完整保留（例如文字方塊、SmartArt、頁首頁尾）。請檢查內容。`
-                );
-            } else {
-                toast.success('Word 檔匯入成功');
-            }
+            toast.success('Word 檔匯入成功');
+            emitMammothWarnings(result.messages);
         } catch (err) {
             console.error('Word import failed:', err);
             const message = err instanceof Error ? err.message : String(err);
             toast.error(`Word 匯入失敗：${message}`);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const emitMammothWarnings = (messages: Array<{ type: string; message: string }> | undefined) => {
+        if (!messages || messages.length === 0) return;
+        const warningCount = messages.filter(m => m.type === 'warning').length;
+        if (warningCount > 0) {
+            toast.warning(
+                `其中有 ${warningCount} 項格式未完整保留（例如文字方塊、SmartArt、頁首頁尾）。請檢查內容。`
+            );
         }
     };
 
