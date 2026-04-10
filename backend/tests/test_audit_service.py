@@ -3,7 +3,7 @@ Tests for Audit Service Layer
 """
 
 import pytest
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock, MagicMock, patch
 from datetime import datetime
 import uuid
 
@@ -120,7 +120,8 @@ def test_create_audit_with_vendor_resolution(audit_service, mock_repo, mock_db, 
         contractor="ABC Company"
     )
 
-    result = audit_service.create_audit(audit_create, user_id=1, username="testuser")
+    with patch('services.audit_service.generate_reference_no', return_value="QTS-RKS-ABC-AUD-000001"):
+        result = audit_service.create_audit(audit_create, user_id=1, username="testuser")
 
     # Verify vendor_id was resolved
     assert result is not None
@@ -154,7 +155,8 @@ def test_create_audit_without_vendor(audit_service, mock_repo, mock_db):
         status="Draft"
     )
 
-    result = audit_service.create_audit(audit_create, user_id=1, username="testuser")
+    with patch('services.audit_service.generate_reference_no', return_value="QTS-RKS-XXX-AUD-000002"):
+        result = audit_service.create_audit(audit_create, user_id=1, username="testuser")
 
     # Verify vendor_id is None when no contractor provided
     call_args = mock_repo.create.call_args[0][0]

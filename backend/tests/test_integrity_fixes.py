@@ -4,7 +4,7 @@ Tests the fixes made for cross-module references and delete protection
 """
 
 import pytest
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock, MagicMock, patch
 import models
 import schemas
 from services.noi_service import NOIService
@@ -38,8 +38,9 @@ class TestReferentialIntegrity:
         )
 
         # Should raise ValueError
-        with pytest.raises(ValueError) as exc_info:
-            service.create_noi(noi_data)
+        with patch('services.noi_service.generate_reference_no', return_value="NOI-TEST-001"):
+            with pytest.raises(ValueError) as exc_info:
+                service.create_noi(noi_data)
 
         assert "not found" in str(exc_info.value).lower()
         assert "ITP" in str(exc_info.value)
@@ -64,8 +65,9 @@ class TestReferentialIntegrity:
         )
 
         # Should raise ValueError
-        with pytest.raises(ValueError) as exc_info:
-            service.create_ncr(ncr_data)
+        with patch('services.ncr_service.generate_reference_no', return_value="NCR-TEST-001"):
+            with pytest.raises(ValueError) as exc_info:
+                service.create_ncr(ncr_data)
 
         assert "not found" in str(exc_info.value).lower()
         assert "NOI" in str(exc_info.value)
@@ -90,8 +92,9 @@ class TestReferentialIntegrity:
         )
 
         # Should raise ValueError
-        with pytest.raises(ValueError) as exc_info:
-            service.create_itr(itr_data)
+        with patch('services.itr_service.generate_reference_no', return_value="ITR-TEST-001"):
+            with pytest.raises(ValueError) as exc_info:
+                service.create_itr(itr_data)
 
         assert "not found" in str(exc_info.value).lower()
         assert "NOI" in str(exc_info.value)

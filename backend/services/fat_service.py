@@ -38,7 +38,7 @@ class FATService:
                    user_id: int = None, username: str = None) -> models.FAT:
         """Create a new FAT with business logic validation"""
         try:
-            data = fat_create.dict()
+            data = fat_create.model_dump()
             
             # Serialize array fields to string
             data = _json_serialize(data, ['detail_data', 'attachments'])
@@ -59,7 +59,7 @@ class FATService:
 
             log_audit(
                 self.repo.db, "CREATE", "FAT", created.id, created.equipment,
-                new_value=fat_create.dict(), user_id=user_id, username=username
+                new_value=fat_create.model_dump(), user_id=user_id, username=username
             )
 
             return created
@@ -77,7 +77,7 @@ class FATService:
 
             old_val = {c.name: getattr(db_fat, c.name) for c in db_fat.__table__.columns}
             
-            data = fat_update.dict(exclude_unset=True)
+            data = fat_update.model_dump(exclude_unset=True)
             data = _json_serialize(data, ['detail_data', 'attachments'])
 
             if 'supplier' in data:
@@ -90,7 +90,7 @@ class FATService:
 
             log_audit(
                 self.repo.db, "UPDATE", "FAT", fat_id, updated.equipment,
-                old_value=old_val, new_value=fat_update.dict(exclude_unset=True),
+                old_value=old_val, new_value=fat_update.model_dump(exclude_unset=True),
                 user_id=user_id, username=username
             )
 

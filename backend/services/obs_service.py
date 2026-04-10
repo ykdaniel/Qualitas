@@ -41,7 +41,7 @@ class OBSService:
         """Create a new OBS with business logic validation"""
         try:
             data = _json_serialize(
-                obs_create.dict(),
+                obs_create.model_dump(),
                 ['defectPhotos', 'improvementPhotos', 'attachments']
             )
 
@@ -62,7 +62,7 @@ class OBSService:
 
             log_audit(
                 self.repo.db, "CREATE", "OBS", created.id, created.documentNumber,
-                new_value=obs_create.dict(), user_id=user_id, username=username
+                new_value=obs_create.model_dump(), user_id=user_id, username=username
             )
 
             return created
@@ -86,7 +86,7 @@ class OBSService:
                 )
 
             old_val = {c.name: getattr(db_obs, c.name) for c in db_obs.__table__.columns}
-            d = obs_update.dict(exclude_unset=True)
+            d = obs_update.model_dump(exclude_unset=True)
             d = _json_serialize(d, ['defectPhotos', 'improvementPhotos', 'attachments'])
 
             if 'vendor' in d:
@@ -97,7 +97,7 @@ class OBSService:
 
             log_audit(
                 self.repo.db, "UPDATE", "OBS", obs_id, updated.documentNumber,
-                old_value=old_val, new_value=obs_update.dict(exclude_unset=True),
+                old_value=old_val, new_value=obs_update.model_dump(exclude_unset=True),
                 user_id=user_id, username=username
             )
 

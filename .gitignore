@@ -21,26 +21,46 @@ env/
 *.swp
 *.swo
 
+# Claude Code worktrees (should never be committed)
+.claude/worktrees/
+.claude/settings.local.json
+
+# Local backup archive (moved out of project tree)
+backups/
+
 # OS
 .DS_Store
 Thumbs.db
 
 # Database
 *.db
+*.db.backup*
+*.db.bak*
+*.bak.*
+*.backup.*
 
 # Logs
 logs/
 *.log
 
-# Experimental Scripts
+# Experimental / debug scripts
 comprehensive_dump.py
 db_complete_dump.txt
 deep_search_db.py
 dump_db_data.py
 raw_dump.py
 search_partial_db.py
+verify_backend_integrity.py
+verify_km_api.py
+update_itp017.py
+import_concrete_itp.py
+test_api.py
 token.json
 nul
+~$*
+
+# Stray backup/dump artifacts
+*.xlsm.bak
 
 # Specific files to include
 !backend/requirements.txt

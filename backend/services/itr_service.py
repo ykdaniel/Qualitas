@@ -91,7 +91,7 @@ class ITRService:
         try:
             # Serialize JSON fields
             data = _json_serialize(
-                itr_create.dict(),
+                itr_create.model_dump(),
                 ['defectPhotos', 'improvementPhotos', 'attachments']
             )
 
@@ -133,7 +133,7 @@ class ITRService:
             # Log audit trail
             log_audit(
                 self.repo.db, "CREATE", "ITR", created.id, created.documentNumber,
-                new_value=itr_create.dict(), user_id=user_id, username=username
+                new_value=itr_create.model_dump(), user_id=user_id, username=username
             )
 
             return created
@@ -182,7 +182,7 @@ class ITRService:
             # 任何其他欄位更新均被阻擋，以防止已批准記錄被竄改
             if db_itr.status == 'Approved':
                 allowed_keys = {'type', 'status', 'detail_data'}
-                update_keys = set(itr_update.dict(exclude_unset=True).keys())
+                update_keys = set(itr_update.model_dump(exclude_unset=True).keys())
                 blocked = update_keys - allowed_keys
                 if blocked:
                     raise ValueError(
@@ -195,7 +195,7 @@ class ITRService:
             old_val = {c.name: getattr(db_itr, c.name) for c in db_itr.__table__.columns}
 
             # Prepare update data
-            d = itr_update.dict(exclude_unset=True)
+            d = itr_update.model_dump(exclude_unset=True)
             d = _json_serialize(d, ['defectPhotos', 'improvementPhotos', 'attachments'])
 
             # Handle vendor name -> vendor_id mapping
@@ -225,7 +225,7 @@ class ITRService:
             # Log audit trail
             log_audit(
                 self.repo.db, "UPDATE", "ITR", itr_id, updated.documentNumber,
-                old_value=old_val, new_value=itr_update.dict(exclude_unset=True),
+                old_value=old_val, new_value=itr_update.model_dump(exclude_unset=True),
                 user_id=user_id, username=username
             )
 

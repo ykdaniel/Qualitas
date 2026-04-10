@@ -80,7 +80,7 @@ class NOIService:
             Exception: If creation fails
         """
         try:
-            data = _json_serialize(noi_create.dict(), ['attachments'])
+            data = _json_serialize(noi_create.model_dump(), ['attachments'])
 
             # Handle contractor name -> vendor_id mapping (NOI uses 'contractor' field)
             vendor_name = data.pop('contractor', None)
@@ -112,7 +112,7 @@ class NOIService:
             # Log audit trail
             log_audit(
                 self.repo.db, "CREATE", "NOI", created.id, created.referenceNo,
-                new_value=noi_create.dict(), user_id=user_id, username=username
+                new_value=noi_create.model_dump(), user_id=user_id, username=username
             )
 
             return created
@@ -159,7 +159,7 @@ class NOIService:
             old_val = {c.name: getattr(db_noi, c.name) for c in db_noi.__table__.columns}
 
             # Prepare update data
-            d = noi_update.dict(exclude_unset=True)
+            d = noi_update.model_dump(exclude_unset=True)
             d = _json_serialize(d, ['attachments'])
 
             # Handle contractor name -> vendor_id mapping
@@ -225,7 +225,7 @@ class NOIService:
             # Log audit trail
             log_audit(
                 self.repo.db, "UPDATE", "NOI", noi_id, updated.referenceNo,
-                old_value=old_val, new_value=noi_update.dict(exclude_unset=True),
+                old_value=old_val, new_value=noi_update.model_dump(exclude_unset=True),
                 user_id=user_id, username=username
             )
 

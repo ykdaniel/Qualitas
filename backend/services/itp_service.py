@@ -23,7 +23,7 @@ class ITPService:
 
     def create_itp(self, itp_create: schemas.ITPCreate, user_id: int = None, username: str = None) -> models.ITP:
         try:
-            data = _json_serialize(itp_create.dict(), ['attachments', 'detail_data'])
+            data = _json_serialize(itp_create.model_dump(), ['attachments', 'detail_data'])
 
             # Handle Vendor Name -> ID mapping
             vendor_name = data.pop('vendor', None)
@@ -42,7 +42,7 @@ class ITPService:
 
             log_audit(
                 self.repo.db, "CREATE", "ITP", created_itp.id, created_itp.referenceNo,
-                new_value=itp_create.dict(), user_id=user_id, username=username
+                new_value=itp_create.model_dump(), user_id=user_id, username=username
             )
 
             return created_itp
@@ -61,7 +61,7 @@ class ITPService:
                 raise ValueError(error_messages.invalid_status_transition("ITP", db_itp.status, itp_update.status))
 
             old_val = {c.name: getattr(db_itp, c.name) for c in db_itp.__table__.columns}
-            d = itp_update.dict(exclude_unset=True)
+            d = itp_update.model_dump(exclude_unset=True)
             d = _json_serialize(d, ['attachments', 'detail_data'])
 
             # Handle Vendor Name -> ID mapping
@@ -73,7 +73,7 @@ class ITPService:
 
             log_audit(
                 self.repo.db, "UPDATE", "ITP", itp_id, updated_itp.referenceNo,
-                old_value=old_val, new_value=itp_update.dict(exclude_unset=True),
+                old_value=old_val, new_value=itp_update.model_dump(exclude_unset=True),
                 user_id=user_id, username=username
             )
 

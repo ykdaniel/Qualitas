@@ -29,7 +29,7 @@ class KMService:
         if not db_article:
             raise HTTPException(status_code=404, detail="KM Article not found")
 
-        update_data = article_update.dict(exclude_unset=True)
+        update_data = article_update.model_dump(exclude_unset=True)
         return self.repo.update(db_article, update_data)
 
     def delete_article(self, article_id: str):

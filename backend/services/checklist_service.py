@@ -103,7 +103,7 @@ class ChecklistService:
             Exception: If creation fails
         """
         try:
-            data = checklist_create.dict()
+            data = checklist_create.model_dump()
             data = _json_serialize(data, ['detail_data'])
 
             # Generate recordsNo automatically if not provided or is placeholder
@@ -145,7 +145,7 @@ class ChecklistService:
             # Log audit trail
             log_audit(
                 self.repo.db, "CREATE", "Checklist", created.id, created.recordsNo,
-                new_value=checklist_create.dict(), user_id=user_id, username=username
+                new_value=checklist_create.model_dump(), user_id=user_id, username=username
             )
 
             return created
@@ -195,7 +195,7 @@ class ChecklistService:
             old_val = {prop.key: getattr(db_checklist, prop.key) for prop in mapper.column_attrs}
 
             # Prepare update data
-            d = checklist_update.dict(exclude_unset=True)
+            d = checklist_update.model_dump(exclude_unset=True)
             d = _json_serialize(d, ['detail_data'])
 
             # Handle contractor name -> contractor_id mapping
@@ -225,7 +225,7 @@ class ChecklistService:
             # Log audit trail
             log_audit(
                 self.repo.db, "UPDATE", "Checklist", checklist_id, updated.recordsNo,
-                old_value=old_val, new_value=checklist_update.dict(exclude_unset=True),
+                old_value=old_val, new_value=checklist_update.model_dump(exclude_unset=True),
                 user_id=user_id, username=username
             )
 

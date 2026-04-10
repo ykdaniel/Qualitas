@@ -82,7 +82,7 @@ class UserService:
             "is_active": db_user.is_active
         }
 
-        update_dict = {k: v for k, v in user_update.dict(exclude_unset=True).items() if v is not None}
+        update_dict = {k: v for k, v in user_update.model_dump(exclude_unset=True).items() if v is not None}
         if hashed_password:
             update_dict["hashed_password"] = hashed_password
             

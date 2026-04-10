@@ -30,7 +30,7 @@ class ProjectService:
 
     def create_project(self, project_create: schemas.ProjectCreate) -> models.Project:
         try:
-            data = project_create.dict()
+            data = project_create.model_dump()
             if not data.get("id"):
                 data["id"] = str(uuid.uuid4())
             data["created_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -45,7 +45,7 @@ class ProjectService:
             db_project = self.repo.get_by_id(project_id)
             if not db_project:
                 return None
-            update_data = project_update.dict(exclude_unset=True)
+            update_data = project_update.model_dump(exclude_unset=True)
             return self.repo.update(db_project, update_data)
         except Exception as e:
             logger.error(f"Error updating Project {project_id}: {e}", exc_info=True)

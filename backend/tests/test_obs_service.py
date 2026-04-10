@@ -51,17 +51,17 @@ def test_create_obs_success(obs_service, mock_repo):
 
 def test_update_obs_status_transition_fail(obs_service, mock_repo):
     # Arrange
-    # Current status is Closed
-    mock_db_obs = models.OBS(id="obs-123", status="Closed", documentNumber="OBS-001")
+    # Current status is Void (terminal — nothing else allowed)
+    mock_db_obs = models.OBS(id="obs-123", status="Void", documentNumber="OBS-001")
     mock_repo.get_by_id.return_value = mock_db_obs
-    
-    # Try to change back to Open (forbidden by WorkflowEngine for OBS)
+
+    # Try to change Void -> Open (forbidden by WorkflowEngine for OBS)
     obs_update = schemas.OBSUpdate(status="Open")
-    
+
     # Act & Assert
     with pytest.raises(ValueError) as excinfo:
         obs_service.update_obs("obs-123", obs_update)
-    
+
     assert "Invalid status transition" in str(excinfo.value)
     mock_repo.update.assert_not_called()
 

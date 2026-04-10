@@ -68,7 +68,8 @@ def test_update_itp_invalid_transition():
         service.update_itp("itp_123", itp_update)
     
     assert "Invalid status transition" in str(excinfo.value)
-    assert "from Approved to Draft" in str(excinfo.value)
+    assert "'Approved'" in str(excinfo.value)
+    assert "'Draft'" in str(excinfo.value)
 
 def test_update_itp_valid_transition():
     # Setup

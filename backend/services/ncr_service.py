@@ -6,6 +6,7 @@ Business logic layer for NCR module
 
 import uuid
 import logging
+from datetime import datetime
 from typing import List, Optional
 
 import models
@@ -79,7 +80,7 @@ class NCRService:
         try:
             # Serialize JSON fields
             data = _json_serialize(
-                ncr_create.dict(),
+                ncr_create.model_dump(),
                 ['defectPhotos', 'improvementPhotos', 'attachments']
             )
 
@@ -113,7 +114,7 @@ class NCRService:
             # Log audit trail
             log_audit(
                 self.repo.db, "CREATE", "NCR", created.id, created.documentNumber,
-                new_value=ncr_create.dict(), user_id=user_id, username=username
+                new_value=ncr_create.model_dump(), user_id=user_id, username=username
             )
 
             return created
@@ -162,13 +163,17 @@ class NCRService:
             old_val = {c.name: getattr(db_ncr, c.name) for c in db_ncr.__table__.columns}
 
             # Prepare update data
-            d = ncr_update.dict(exclude_unset=True)
+            d = ncr_update.model_dump(exclude_unset=True)
             d = _json_serialize(d, ['defectPhotos', 'improvementPhotos', 'attachments'])
 
             # Handle vendor name -> vendor_id mapping
             if 'vendor' in d:
                 vendor_name = d.pop('vendor')
                 d['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
+
+            # Auto-set closeoutDate when transitioning to Closed
+            if d.get('status') == 'Closed' and not d.get('closeoutDate') and not db_ncr.closeoutDate:
+                d['closeoutDate'] = datetime.now().strftime('%Y-%m-%d')
 
             # Validate noiNumber exists if being updated
             if 'noiNumber' in d and d['noiNumber']:
@@ -184,7 +189,7 @@ class NCRService:
             # Log audit trail
             log_audit(
                 self.repo.db, "UPDATE", "NCR", ncr_id, updated.documentNumber,
-                old_value=old_val, new_value=ncr_update.dict(exclude_unset=True),
+                old_value=old_val, new_value=ncr_update.model_dump(exclude_unset=True),
                 user_id=user_id, username=username
             )
 

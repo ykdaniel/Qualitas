@@ -39,7 +39,7 @@ class FollowUpService:
                         user_id: int = None, username: str = None) -> models.FollowUp:
         """Create a new FollowUp with business logic validation"""
         try:
-            data = followup_create.dict()
+            data = followup_create.model_dump()
 
             vendor_name = data.pop('vendor', None)
             if vendor_name:
@@ -65,7 +65,7 @@ class FollowUpService:
 
             log_audit(
                 self.repo.db, "CREATE", "FollowUp", created.id, created.issueNo,
-                new_value=followup_create.dict(), user_id=user_id, username=username
+                new_value=followup_create.model_dump(), user_id=user_id, username=username
             )
 
             return created
@@ -82,7 +82,7 @@ class FollowUpService:
                 return None
 
             old_val = {c.name: getattr(db_followup, c.name) for c in db_followup.__table__.columns}
-            data = followup_update.dict(exclude_unset=True)
+            data = followup_update.model_dump(exclude_unset=True)
 
             if 'vendor' in data:
                 vendor_name = data.pop('vendor')
@@ -102,7 +102,7 @@ class FollowUpService:
 
             log_audit(
                 self.repo.db, "UPDATE", "FollowUp", followup_id, updated.issueNo,
-                old_value=old_val, new_value=followup_update.dict(exclude_unset=True),
+                old_value=old_val, new_value=followup_update.model_dump(exclude_unset=True),
                 user_id=user_id, username=username
             )
 

@@ -67,7 +67,7 @@ class ContractorService:
         """
         try:
             # Create Contractor object
-            db_contractor = models.Contractor(**contractor_create.dict())
+            db_contractor = models.Contractor(**contractor_create.model_dump())
             if not db_contractor.id:
                 db_contractor.id = str(uuid.uuid4())
 
@@ -77,7 +77,7 @@ class ContractorService:
             # Log audit trail
             log_audit(
                 self.repo.db, "CREATE", "Contractor", created.id, created.name,
-                new_value=contractor_create.dict(), user_id=user_id, username=username
+                new_value=contractor_create.model_dump(), user_id=user_id, username=username
             )
 
             return created
@@ -111,7 +111,7 @@ class ContractorService:
             old_val = {c.name: getattr(db_contractor, c.name) for c in db_contractor.__table__.columns}
 
             # Prepare update data
-            d = contractor_update.dict(exclude_unset=True)
+            d = contractor_update.model_dump(exclude_unset=True)
 
             # Update the record
             updated = self.repo.update(db_contractor, d)
@@ -119,7 +119,7 @@ class ContractorService:
             # Log audit trail
             log_audit(
                 self.repo.db, "UPDATE", "Contractor", contractor_id, updated.name,
-                old_value=old_val, new_value=contractor_update.dict(exclude_unset=True),
+                old_value=old_val, new_value=contractor_update.model_dump(exclude_unset=True),
                 user_id=user_id, username=username
             )
 

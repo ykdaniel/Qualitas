@@ -92,12 +92,16 @@ def test_delete_noi_success(noi_service, mock_repo):
     # Arrange
     mock_db_noi = models.NOI(id="noi-123", referenceNo="NOI-001")
     mock_repo.get_by_id.return_value = mock_db_noi
-    
-    with patch('services.noi_service.log_audit') as mock_log:
+
+    with patch('services.noi_service.log_audit') as mock_log, \
+         patch('services.noi_service.validators.check_noi_references') as mock_check:
+        mock_check.return_value = None
+
         # Act
         result = noi_service.delete_noi("noi-123", user_id=1, username="admin")
-        
+
         # Assert
         assert result is True
         mock_repo.delete.assert_called_once()
         mock_log.assert_called_once()
+        mock_check.assert_called_once()

@@ -12,7 +12,7 @@ from typing import List, Optional
 import models
 import schemas
 from repositories.audit_repository import AuditRepository
-from core.utils import generate_reference_no
+from core.utils import generate_reference_no, WorkflowEngine
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -138,11 +138,16 @@ class AuditService:
         if not db_audit:
             return None
 
+        # Validate status transition if status is being changed
+        update_data = audit.model_dump(exclude_unset=True)
+        if 'status' in update_data and update_data['status'] != db_audit.status:
+            if not WorkflowEngine.validate_transition("Audit", db_audit.status, update_data['status']):
+                raise ValueError(
+                    f"Invalid status transition from '{db_audit.status}' to '{update_data['status']}'"
+                )
+
         # Store old values for audit log
         old_value = {c.name: getattr(db_audit, c.name) for c in db_audit.__table__.columns}
-
-        # Prepare update data
-        update_data = audit.model_dump(exclude_unset=True)
         processed_data = {}
 
         for key, value in update_data.items():

@@ -40,14 +40,14 @@ class KPIService:
                 "ncr": db_weight.ncr_weight
             }
 
-            data = weight_update.dict()
+            data = weight_update.model_dump()
             data["updated_at"] = datetime.now().isoformat()
 
             updated = self.repo.update_kpi_weight(db_weight, data)
 
             log_audit(
                 self.repo.db, "UPDATE", "KPIWeight", str(updated.id), "Global KPI Weights",
-                old_value=old_val, new_value=weight_update.dict(),
+                old_value=old_val, new_value=weight_update.model_dump(),
                 user_id=user_id, username=username
             )
 
@@ -65,7 +65,7 @@ class KPIService:
                                  user_id: int = None, username: str = None) -> models.OwnerPerformance:
         """Create a new owner performance and log the audit trail"""
         try:
-            data = perf_create.dict()
+            data = perf_create.model_dump()
             
             db_perf = models.OwnerPerformance(**data)
             if not db_perf.id:
