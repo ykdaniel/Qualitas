@@ -1,11 +1,60 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import DOMPurify from 'dompurify';
 import { useLanguage } from '../../context/LanguageContext';
 import { KMArticle } from '../../types/km';
 import { useKMStore } from '../../store/kmStore';
 import { BackButton } from '../ui/BackButton';
 import { KMHistoryModal } from './KMHistoryModal';
+import { SectionToc } from './SectionToc';
+import { extractSectionToc } from '../../utils/extractSectionToc';
 import styles from './KMDetail.module.css';
+
+/**
+ * Single chapter body + its auto-generated section TOC.
+ *
+ * Extracted into its own component so useMemo can be called per chapter
+ * without violating the rules of hooks. Keeps the HTML-parsing work
+ * cached as long as the chapter's content hasn't changed, which matters
+ * because ChapterSection re-renders on every scroll event via the sticky
+ * sidebar effect in KMDetail's parent.
+ */
+interface ChapterSectionProps {
+    chapter: KMArticle;
+    showTitle: boolean;
+    showDivider: boolean;
+}
+
+const ChapterSection: React.FC<ChapterSectionProps> = ({
+    chapter,
+    showTitle,
+    showDivider,
+}) => {
+    const { processedHtml, toc } = useMemo(
+        () => extractSectionToc(chapter.content || '', `ch-${chapter.id}-sec`),
+        [chapter.content, chapter.id]
+    );
+
+    const sanitizedHtml = useMemo(
+        () => DOMPurify.sanitize(processedHtml),
+        [processedHtml]
+    );
+
+    return (
+        <div id={`chapter-${chapter.id}`} className={styles.chapterSection}>
+            {showDivider && <hr className={styles.chapterDivider} />}
+            {showTitle && (
+                <h2 className={styles.chapterTitle}>
+                    {chapter.chapter_no ? `${chapter.chapter_no} ` : ''}
+                    {chapter.title}
+                </h2>
+            )}
+            {toc.length >= 2 && <SectionToc entries={toc} />}
+            <div className={`ql-editor ${styles.editorContainer}`}>
+                <div dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
+            </div>
+        </div>
+    );
+};
 
 interface KMDetailProps {
     article: KMArticle;
@@ -171,17 +220,12 @@ export const KMDetail: React.FC<KMDetailProps> = ({ article, onClose, onEdit, on
                     </div>
                     <div className={styles.contentBody}>
                         {sortedChapters.map((ch, index) => (
-                            <div key={ch.id} id={`chapter-${ch.id}`} className={styles.chapterSection}>
-                                {index > 0 && <hr className={styles.chapterDivider} />}
-                                {hasChapters && (
-                                    <h2 className={styles.chapterTitle}>
-                                        {ch.chapter_no ? `${ch.chapter_no} ` : ''}{ch.title}
-                                    </h2>
-                                )}
-                                <div className={`ql-editor ${styles.editorContainer}`}>
-                                    <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(ch.content) }} />
-                                </div>
-                            </div>
+                            <ChapterSection
+                                key={ch.id}
+                                chapter={ch}
+                                showTitle={hasChapters}
+                                showDivider={index > 0}
+                            />
                         ))}
                     </div>
                 </div>
