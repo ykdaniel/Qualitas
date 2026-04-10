@@ -109,6 +109,83 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
         setChapters(newChapters);
     };
 
+    /**
+     * Import a .docx file into the specified chapter.
+     *
+     * The file is converted to HTML in-browser by mammoth. Embedded images
+     * are extracted one-by-one and uploaded to the existing KM image
+     * endpoint, so the resulting HTML references real URLs under
+     * /uploads/km/ rather than base64 data URLs (keeps the DB lean and
+     * makes images searchable by filename).
+     *
+     * Warns — but does not abort — if mammoth reports format fidelity
+     * issues (unsupported text boxes, SmartArt, etc).
+     */
+    const handleWordImport = async (chapterIndex: number, file: File) => {
+        if (!file.name.toLowerCase().endsWith('.docx')) {
+            toast.error('僅支援 .docx 格式。舊版 .doc 檔請先用 Word 另存新檔為 .docx');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            // Mammoth is ~500KB; load it lazily so the base KM bundle stays small.
+            const mammoth = await import('mammoth/mammoth.browser');
+            const arrayBuffer = await file.arrayBuffer();
+
+            const convertImage = mammoth.images.imgElement(async (image) => {
+                const rawBuffer = await image.read();
+                const buffer = rawBuffer instanceof Uint8Array
+                    ? rawBuffer
+                    : new TextEncoder().encode(String(rawBuffer));
+                const contentType = image.contentType || 'image/png';
+                const ext = (contentType.split('/')[1] || 'png').toLowerCase();
+                const suffix = Math.random().toString(36).slice(2, 8);
+                const imageFile = new File(
+                    [buffer as BlobPart],
+                    `word-import-${Date.now()}-${suffix}.${ext}`,
+                    { type: contentType }
+                );
+                const uploadedUrl = await kmService.uploadImage(imageFile);
+                return { src: uploadedUrl, alt: image.altText || '' };
+            });
+
+            const result = await mammoth.convertToHtml(
+                { arrayBuffer },
+                { convertImage }
+            );
+
+            const newChapters = [...chapters];
+            newChapters[chapterIndex] = {
+                ...newChapters[chapterIndex],
+                content: result.value,
+            };
+            // If the chapter still has the default placeholder title, adopt
+            // the Word file's stem as the new title so the user doesn't have
+            // to rename it manually.
+            const defaultTitlePattern = /^Chapter \d+$/;
+            if (defaultTitlePattern.test(newChapters[chapterIndex].title)) {
+                newChapters[chapterIndex].title = file.name.replace(/\.docx$/i, '');
+            }
+            setChapters(newChapters);
+
+            if (result.messages && result.messages.length > 0) {
+                const warningCount = result.messages.filter(m => m.type === 'warning').length;
+                toast.warning(
+                    `Word 匯入完成，但有 ${warningCount} 項格式未完整保留（例如文字方塊、SmartArt、頁首頁尾）。請檢查內容。`
+                );
+            } else {
+                toast.success('Word 檔匯入成功');
+            }
+        } catch (err) {
+            console.error('Word import failed:', err);
+            const message = err instanceof Error ? err.message : String(err);
+            toast.error(`Word 匯入失敗：${message}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || e.target.files.length === 0) return;
         const file = e.target.files[0];
@@ -371,13 +448,38 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                                                 style={{ flexGrow: 1 }}
                                             />
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => removeChapter(index)}
-                                            className={styles.removeChapterBtn}
-                                            title="Remove Chapter"
-                                            disabled={chapters.filter(c => !c.deleted).length === 1}
-                                        >&times;</button>
+                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                            <input
+                                                type="file"
+                                                id={`word-import-${index}`}
+                                                accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                                className={styles.fileInputHidden}
+                                                disabled={loading}
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (file) {
+                                                        handleWordImport(index, file);
+                                                    }
+                                                    e.target.value = '';
+                                                }}
+                                            />
+                                            <label
+                                                htmlFor={`word-import-${index}`}
+                                                className={styles.uploadButton}
+                                                style={{ cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1, fontSize: '0.8rem', padding: '6px 10px' }}
+                                                title="從 .docx 檔匯入文字和圖片到本章節（會取代目前內容）"
+                                            >
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                                從 Word 匯入
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={() => removeChapter(index)}
+                                                className={styles.removeChapterBtn}
+                                                title="Remove Chapter"
+                                                disabled={chapters.filter(c => !c.deleted).length === 1}
+                                            >&times;</button>
+                                        </div>
                                     </div>
                                     <div className={styles.editorWrapper}>
                                         <div className={styles.quillContainer}>
