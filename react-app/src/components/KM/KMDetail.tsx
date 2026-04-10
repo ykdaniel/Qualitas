@@ -1,4 +1,5 @@
 import React, { useRef, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { useLanguage } from '../../context/LanguageContext';
 import { KMArticle } from '../../types/km';
 import { useKMStore } from '../../store/kmStore';
@@ -178,7 +179,7 @@ export const KMDetail: React.FC<KMDetailProps> = ({ article, onClose, onEdit, on
                                     </h2>
                                 )}
                                 <div className={`ql-editor ${styles.editorContainer}`}>
-                                    <div dangerouslySetInnerHTML={{ __html: ch.content }} />
+                                    <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(ch.content) }} />
                                 </div>
                             </div>
                         ))}

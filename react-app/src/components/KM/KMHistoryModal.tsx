@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import DOMPurify from 'dompurify';
 import { diff_match_patch, DIFF_INSERT, DIFF_DELETE } from 'diff-match-patch';
 import { KMArticleHistory } from '../../types/km';
 import { kmService } from '../../services/kmService';
@@ -10,11 +11,12 @@ interface KMHistoryModalProps {
     articleId: string;
 }
 
-/** Strip HTML tags from a string to get plain text for diffing */
+/** Strip HTML tags from a string to get plain text for diffing.
+ *  Uses DOMParser instead of innerHTML so that onerror handlers and similar
+ *  active content in the input are NOT triggered in the viewer's browser. */
 function stripHtml(html: string): string {
-    const div = document.createElement('div');
-    div.innerHTML = html;
-    return div.textContent || div.innerText || '';
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    return doc.body.textContent || '';
 }
 
 /** Compute word-level diff HTML between two plain-text strings */
@@ -144,10 +146,10 @@ export const KMHistoryModal: React.FC<KMHistoryModalProps> = ({ isOpen, onClose,
 
                     <div className={styles.snapshotContent}>
                         {mode === 'snapshot' ? (
-                            <div className="ql-editor" dangerouslySetInnerHTML={{ __html: version.content }} />
+                            <div className="ql-editor" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(version.content) }} />
                         ) : (
                             <div style={{ lineHeight: 1.8, fontFamily: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-                                dangerouslySetInnerHTML={{ __html: diffHtml || '' }} />
+                                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(diffHtml || '') }} />
                         )}
                     </div>
                 </div>
