@@ -110,6 +110,113 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
     };
 
     /**
+     * Split a chapter at the current text-caret position.
+     *
+     * The intended flow is: the user clicks into a chapter's Quill editor,
+     * positions the caret at the start of the paragraph they want to be the
+     * beginning of a NEW chapter, then clicks "在此分章節".
+     *
+     * Implementation notes:
+     * - We use window.getSelection() rather than Quill's API so we don't
+     *   need to reach into RichTextEditor's internals. The caret is always
+     *   inside a descendant of a ".ql-editor" element.
+     * - We walk up from the caret's anchor node until we find the direct
+     *   child of ".ql-editor" — that direct child is a block element
+     *   (paragraph, heading, list, etc.). Everything BEFORE that block
+     *   stays in the current chapter; that block and everything AFTER it
+     *   become a new chapter inserted immediately below.
+     * - We verify via a data-chapter-index attribute that the caret is
+     *   actually inside the chapter whose button was clicked, not a sibling
+     *   chapter that happened to be focused last.
+     */
+    const splitChapterAtCursor = (chapterIndex: number) => {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0 || !selection.anchorNode) {
+            toast.error('請先把游標點到你想分章節的位置');
+            return;
+        }
+
+        // Walk up to find the enclosing .ql-editor element.
+        let node: Node | null = selection.anchorNode;
+        let qlEditor: HTMLElement | null = null;
+        while (node) {
+            if (node.nodeType === Node.ELEMENT_NODE
+                && (node as Element).classList?.contains('ql-editor')) {
+                qlEditor = node as HTMLElement;
+                break;
+            }
+            node = node.parentNode;
+        }
+        if (!qlEditor) {
+            toast.error('請先點進章節的內文、把游標放到想分章節的位置再按');
+            return;
+        }
+
+        // Confirm the focused editor belongs to the chapter whose button was
+        // clicked. Prevents "I clicked chapter 2's split button but my caret
+        // was actually in chapter 1" confusion.
+        const chapterContainer = qlEditor.closest('[data-chapter-index]');
+        const containerIndex = chapterContainer
+            ? parseInt(chapterContainer.getAttribute('data-chapter-index') || '', 10)
+            : -1;
+        if (containerIndex !== chapterIndex) {
+            toast.error('游標不在這個章節的內文裡。請先點進本章節再按。');
+            return;
+        }
+
+        // Find the direct child of the ql-editor that contains the caret.
+        let splitBlock: Node | null = selection.anchorNode;
+        while (splitBlock && splitBlock.parentNode !== qlEditor) {
+            splitBlock = splitBlock.parentNode;
+        }
+        if (!splitBlock) {
+            toast.error('找不到分章節的位置');
+            return;
+        }
+
+        const directChildren = Array.from(qlEditor.childNodes);
+        const splitIndex = directChildren.indexOf(splitBlock as ChildNode);
+        if (splitIndex < 0) {
+            toast.error('找不到游標對應的段落');
+            return;
+        }
+        if (splitIndex === 0) {
+            toast.error('游標在章節最開頭 — 分開來第一個章節會是空的');
+            return;
+        }
+
+        const serialize = (n: Node) =>
+            n.nodeType === Node.ELEMENT_NODE
+                ? (n as Element).outerHTML
+                : (n.nodeValue || '');
+
+        const beforeHtml = directChildren.slice(0, splitIndex).map(serialize).join('');
+        const afterHtml = directChildren.slice(splitIndex).map(serialize).join('');
+
+        // Generate a sensible chapter number for the new chapter:
+        //   "2.0" → "2.1",  "2.1" → "2.2",  "章節" → ""
+        const currentNo = chapters[chapterIndex].chapter_no || '';
+        const noMatch = currentNo.match(/^(\d+)\.(\d+)$/);
+        const newChapterNo = noMatch
+            ? `${noMatch[1]}.${parseInt(noMatch[2], 10) + 1}`
+            : '';
+
+        const newChapters = [...chapters];
+        newChapters[chapterIndex] = {
+            ...newChapters[chapterIndex],
+            content: beforeHtml,
+        };
+        newChapters.splice(chapterIndex + 1, 0, {
+            title: '新章節',
+            content: afterHtml,
+            chapter_no: newChapterNo,
+        });
+        setChapters(newChapters);
+
+        toast.success('章節已分開，記得替新章節改個標題');
+    };
+
+    /**
      * Import a .docx file.
      *
      * Flow:
@@ -438,7 +545,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
         e.preventDefault();
         setLoading(true);
         try {
-            // Determine active chapters and use first chapter's content as main fallback 
+            // Determine active chapters and use first chapter's content as main fallback
             // if single chapter mode is effectively used.
             const activeChapters = chapters.filter(c => !c.deleted);
 
@@ -458,13 +565,22 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
 
             const mainId = savedMainDoc?.id || id;
 
-            // Loop and save chapters
+            // Build the next chapters state as we process each save so that
+            // multiple saves within the same modal session don't re-POST the
+            // same no-id chapter over and over. Without this, every time the
+            // user pressed Save the no-id entries would be created again and
+            // the DB would accumulate duplicate "Chapter 1" / "Chapter 2"
+            // records (the bug that produced the 12-chapter mess in the
+            // test article on 2026-04-11).
+            const nextChaptersState: typeof chapters = [];
+
             for (const ch of chapters) {
                 if (ch.deleted && ch.id) {
-                    // Delete
                     await kmService.delete(ch.id);
+                    // Dropped from next state.
+                } else if (ch.deleted && !ch.id) {
+                    // Was added and removed in the same session, nothing to persist.
                 } else if (!ch.deleted && ch.id) {
-                    // Update existing
                     await kmService.update(ch.id, {
                         title: ch.title,
                         content: ch.content,
@@ -474,13 +590,14 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                         tags: mainDocData.tags,
                         status: mainDocData.status
                     } as KMArticleUpdate);
+                    nextChaptersState.push(ch);
                 } else if (!ch.deleted && !ch.id) {
-                    // Create new chapter (Skip the first one if we want the main doc to ACT as chapter 1? No, user explicitly wants sub-chapters.
-                    // Actually, if it's the main book, it can just be a container, or it can be Chapter 1. 
-                    // Let's create all chapters as children if user added them, except maybe if it's just 1 chapter, we just put it in main.
-                    // To keep it clean: always create them as children if parent_id = mainId is set.
+                    // Only materialise new sub-chapters if there's more than one
+                    // active chapter, OR the single chapter's title diverges
+                    // from the main doc title (i.e. it's not just the main doc
+                    // masquerading as a chapter).
                     if (activeChapters.length > 1 || (activeChapters.length === 1 && ch.title !== mainDocData.title)) {
-                        await kmService.create({
+                        const created = await kmService.create({
                             title: ch.title,
                             content: ch.content,
                             chapter_no: ch.chapter_no,
@@ -488,11 +605,19 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                             category: mainDocData.category,
                             tags: mainDocData.tags,
                             status: mainDocData.status,
-                            attachments: [] // Inherit attachments? Usually, keep child attachments blank.
+                            attachments: [] // Child chapters don't carry attachments.
                         } as KMArticleCreate);
+                        // IMPORTANT: remember the new server id so that a
+                        // subsequent Save in the same session UPDATEs this
+                        // row instead of creating another copy.
+                        nextChaptersState.push({ ...ch, id: created?.id });
+                    } else {
+                        nextChaptersState.push(ch);
                     }
                 }
             }
+
+            setChapters(nextChaptersState);
 
             // Refresh data via store
             await useKMStore.getState().fetchKMs();
@@ -619,7 +744,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                         {chapters.map((ch, index) => {
                             if (ch.deleted) return null;
                             return (
-                                <div key={index} className={styles.chapterBlock}>
+                                <div key={index} className={styles.chapterBlock} data-chapter-index={index}>
                                     <div className={styles.chapterBlockHeader}>
                                         <div className={styles.chapterInputs}>
                                             <input
@@ -639,7 +764,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                                                 style={{ flexGrow: 1 }}
                                             />
                                         </div>
-                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                                             <input
                                                 type="file"
                                                 id={`word-import-${index}`}
@@ -663,6 +788,28 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                                                 從 Word 匯入
                                             </label>
+                                            <button
+                                                type="button"
+                                                onClick={() => splitChapterAtCursor(index)}
+                                                disabled={loading}
+                                                title="把游標停在想分章節的段落開頭，再按這顆。可以把一個章節拆成兩個。"
+                                                style={{
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    padding: '6px 10px',
+                                                    background: '#ecfdf5',
+                                                    color: '#047857',
+                                                    border: '1px solid #a7f3d0',
+                                                    borderRadius: 5,
+                                                    fontSize: '0.8rem',
+                                                    fontWeight: 600,
+                                                    cursor: loading ? 'not-allowed' : 'pointer',
+                                                    opacity: loading ? 0.5 : 1,
+                                                }}
+                                            >
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
+                                                在此分章節
+                                            </button>
                                             <button
                                                 type="button"
                                                 onClick={() => removeChapter(index)}
