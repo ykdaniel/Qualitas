@@ -116,6 +116,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                 [{ 'color': [] }, { 'background': [] }],
                 [{ 'align': [] }],
                 [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                [{ 'indent': '-1' }, { 'indent': '+1' }],
                 ['link', 'image'],
                 ['clean']
             ],
