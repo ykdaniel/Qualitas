@@ -378,7 +378,14 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                 { arrayBuffer },
                 { convertImage }
             );
-            const html = result.value;
+            // Strip inline font-size properties so imported content
+            // inherits the editor's default size (15px) instead of
+            // whatever pt value Word was using. Users who want a
+            // specific size can still set one via the size picker.
+            // Also clean up style="" attributes left behind.
+            const html = result.value
+                .replace(/font-size:\s*[^;"]+;?\s*/g, '')
+                .replace(/ style="\s*"/g, '');
 
             // Detect H1 headings to decide whether to split into chapters.
             const parsedDoc = new DOMParser().parseFromString(html, 'text/html');
