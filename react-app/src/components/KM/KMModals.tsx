@@ -224,21 +224,19 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
         const beforeHtml = directChildren.slice(0, splitIndex).map(serialize).join('');
         const afterHtml = directChildren.slice(splitIndex).map(serialize).join('');
 
-        // New chapters from split-at-cursor always get a top-level
-        // (x.0) number one past the current max. Split is used to peel
-        // off a brand-new top-level section — e.g. splitting "2.0
-        // 範圍Scope" after "定義 Definition" should produce "3.0 定義"
-        // as its own chapter, not "2.1" nested under scope.
+        // Splice the new chapter in right after the split point, then
+        // renumber every top-level (x.0) chapter sequentially so the
+        // chapter_no matches array order. This matters when you split
+        // in the MIDDLE: without the renumber pass the new chapter
+        // would get maxMajor+1 (pushing it to the end numerically even
+        // though it sits in the middle of the array), and splitting
+        // again would keep scattering numbers around. Renumbering on
+        // every split keeps x.0 contiguous and in order.
         //
-        // Scans only x.0 slots so that sub-chapters (1.1, 1.1.1, ...)
-        // don't push the new major number higher than intended.
-        const active = chapters.filter(c => !c.deleted);
-        const maxMajor = active.reduce((max, c) => {
-            const m = (c.chapter_no || '').match(/^(\d+)\.0$/);
-            return m ? Math.max(max, parseInt(m[1], 10)) : max;
-        }, 0);
-        const newChapterNo = `${maxMajor + 1}.0`;
-
+        // Only renumbers entries that already follow the x.0 pattern
+        // (or have empty chapter_no) — custom labels like "第一章"
+        // are left alone so users can keep non-standard numbering if
+        // they chose it intentionally.
         const newChapters = [...chapters];
         newChapters[chapterIndex] = {
             ...newChapters[chapterIndex],
@@ -247,8 +245,19 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
         newChapters.splice(chapterIndex + 1, 0, {
             title: '新章節',
             content: afterHtml,
-            chapter_no: newChapterNo,
+            chapter_no: '',
         });
+
+        let counter = 0;
+        for (let i = 0; i < newChapters.length; i++) {
+            if (newChapters[i].deleted) continue;
+            counter++;
+            const currentNo = newChapters[i].chapter_no || '';
+            if (currentNo === '' || /^\d+\.0$/.test(currentNo)) {
+                newChapters[i] = { ...newChapters[i], chapter_no: `${counter}.0` };
+            }
+        }
+
         setChapters(newChapters);
 
         toast.success('章節已分開，記得替新章節改個標題');
