@@ -889,7 +889,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                         {chapters.map((ch, index) => {
                             if (ch.deleted) return null;
                             return (
-                                <div key={index} className={styles.chapterBlock} data-chapter-index={index}>
+                                <div key={ch.id ?? `new-${index}`} className={styles.chapterBlock} data-chapter-index={index}>
                                     <div className={styles.chapterBlockHeader}>
                                         <div className={styles.chapterInputs}>
                                             <input
