@@ -224,33 +224,20 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
         const beforeHtml = directChildren.slice(0, splitIndex).map(serialize).join('');
         const afterHtml = directChildren.slice(splitIndex).map(serialize).join('');
 
-        // Generate a sensible chapter number for the new chapter:
-        //   "2.0" → "2.1",  "2.1" → "2.2",  "章節" → ""
+        // New chapters from split-at-cursor always get a top-level
+        // (x.0) number one past the current max. Split is used to peel
+        // off a brand-new top-level section — e.g. splitting "2.0
+        // 範圍Scope" after "定義 Definition" should produce "3.0 定義"
+        // as its own chapter, not "2.1" nested under scope.
         //
-        // IMPORTANT: the naive `minor + 1` can collide with an existing
-        // sibling chapter (e.g. splitting 1.0 when 1.1 already exists
-        // would produce a duplicate 1.1). We scan the current active
-        // chapters for conflicts and skip forward until we find a free
-        // slot. Deleted chapters are excluded from the check because
-        // their chapter_no is about to disappear on save.
-        //
-        // This protects against the data-corruption incident on
-        // 2026-04-11 where split-at-cursor silently produced duplicate
-        // chapter_nos that took manual SQL to clean up.
-        const currentNo = chapters[chapterIndex].chapter_no || '';
-        const noMatch = currentNo.match(/^(\d+)\.(\d+)$/);
-        let newChapterNo = '';
-        if (noMatch) {
-            const major = noMatch[1];
-            const existingNos = new Set(
-                chapters.filter(c => !c.deleted).map(c => c.chapter_no || '')
-            );
-            let minor = parseInt(noMatch[2], 10) + 1;
-            while (existingNos.has(`${major}.${minor}`)) {
-                minor += 1;
-            }
-            newChapterNo = `${major}.${minor}`;
-        }
+        // Scans only x.0 slots so that sub-chapters (1.1, 1.1.1, ...)
+        // don't push the new major number higher than intended.
+        const active = chapters.filter(c => !c.deleted);
+        const maxMajor = active.reduce((max, c) => {
+            const m = (c.chapter_no || '').match(/^(\d+)\.0$/);
+            return m ? Math.max(max, parseInt(m[1], 10)) : max;
+        }, 0);
+        const newChapterNo = `${maxMajor + 1}.0`;
 
         const newChapters = [...chapters];
         newChapters[chapterIndex] = {
