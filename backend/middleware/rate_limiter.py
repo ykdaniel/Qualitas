@@ -48,11 +48,23 @@ class RateLimiter:
 api_limiter = RateLimiter(requests_limit=500, window_seconds=60)      # API: 每分鐘 500 次
 auth_limiter = RateLimiter(requests_limit=10, window_seconds=900)     # 登入: 每 15 分鐘 10 次
 
+# Loopback addresses are exempted from rate limiting so a single
+# developer running both backend and frontend locally never trips
+# the limiter during a busy edit session (each KM save fires ~12
+# API calls, and the dev workflow racks up hundreds per hour). Real
+# remote clients still go through the limiter.
+LOOPBACK_IPS = {"127.0.0.1", "::1", "localhost"}
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # 取得客戶端 IP
         client_ip = request.client.host if request.client else "unknown"
         path = request.url.path
+
+        # Skip rate limiting entirely for loopback (local dev).
+        if client_ip in LOOPBACK_IPS:
+            return await call_next(request)
 
         # 針對登入介面使用更嚴格的限制
         if path == "/api/auth/login" or path == "/api/auth/token":
