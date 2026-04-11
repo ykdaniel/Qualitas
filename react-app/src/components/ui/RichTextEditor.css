@@ -112,6 +112,17 @@
     padding-left: 3em;
 }
 
+/* Top-level <ul> items share the same 3em text gutter as top-level
+   <ol> items so bullets (○) hanging in the gutter line up with the
+   chapter-prefix markers, and the "召開…" text sits directly under
+   the "專案…" text of the surrounding ol item. The ○ marker itself
+   uses Quill's default hanging offset (margin-left: -1.5em) so it
+   ends up at roughly x=1.5em–2.7em in the left gutter. */
+[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor ul > li:not([class*="ql-indent"]):not(.ql-direction-rtl),
+.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) ul > li:not([class*="ql-indent"]):not(.ql-direction-rtl) {
+    padding-left: 3em;
+}
+
 [data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor ol > li:not([class*="ql-indent"])::before,
 .ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) ol > li:not([class*="ql-indent"])::before {
     content: var(--chapter-prefix) "." counter(list-0);
