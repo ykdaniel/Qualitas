@@ -475,10 +475,24 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
             );
         }
         if (messages && messages.length > 0) {
-            const warningCount = messages.filter(m => m.type === 'warning').length;
-            if (warningCount > 0) {
+            const warningMessages = messages.filter(m => m.type === 'warning');
+            if (warningMessages.length > 0) {
+                // Dump the full list to the browser console so the author can
+                // inspect exactly which Word constructs didn't translate —
+                // useful for "what was that warning about?" follow-ups. Use
+                // console.groupCollapsed so the entries live inside a single
+                // expandable node instead of spamming the console.
+                console.groupCollapsed(
+                    `[KM Word 匯入] ${warningMessages.length} 項格式未完整保留`
+                );
+                for (const m of warningMessages) {
+                    console.warn(m.message);
+                }
+                console.groupEnd();
+
                 toast.warning(
-                    `另有 ${warningCount} 項文字格式未完整保留（例如文字方塊、SmartArt、頁首頁尾）。`
+                    `另有 ${warningMessages.length} 項文字格式未完整保留（例如文字方塊、SmartArt、頁首頁尾）。按 F12 打開開發者工具的 Console 可以看到完整清單。`,
+                    { duration: 8000 }
                 );
             }
         }
