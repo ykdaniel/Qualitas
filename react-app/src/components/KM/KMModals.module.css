@@ -37,9 +37,9 @@
 
 .modalContent {
   background: #ffffff;
-  width: 90%;
-  max-width: 800px;
-  height: 85vh;
+  width: 95%;
+  max-width: 1400px;
+  height: 92vh;
   border-radius: 16px;
   display: flex;
   flex-direction: column;
