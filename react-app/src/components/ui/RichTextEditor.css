@@ -175,19 +175,19 @@
  * style="..." override on the wrapper div that carries
  * data-chapter-prefix.
  * ───────────────────────────────────────────────────────────────── */
-[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor ol li.ql-indent-1:not(.ql-direction-rtl)::before,
-.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) ol li.ql-indent-1:not(.ql-direction-rtl)::before {
-    content: "(" counter(list-1) ") ";
+/* Level 1 nested: white circle bullet (○)
+   Level 2 nested: hyphen (-)
+   Both use a static symbol, not a counter — unordered visual style
+   even when the underlying blot is an <ol>. Applies to ol AND ul
+   indented items so the same symbol shows regardless of which list
+   type the user chose at each level. Deeper levels (3+) fall back
+   to Quill defaults so users still have distinguishable markers if
+   they nest further. */
+[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor li.ql-indent-1:not(.ql-direction-rtl)::before,
+.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) li.ql-indent-1:not(.ql-direction-rtl)::before {
+    content: "○ ";
 }
-[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor ol li.ql-indent-2:not(.ql-direction-rtl)::before,
-.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) ol li.ql-indent-2:not(.ql-direction-rtl)::before {
-    content: counter(list-2, lower-alpha) ". ";
-}
-[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor ol li.ql-indent-3:not(.ql-direction-rtl)::before,
-.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) ol li.ql-indent-3:not(.ql-direction-rtl)::before {
-    content: counter(list-3, lower-roman) ". ";
-}
-[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor ol li.ql-indent-4:not(.ql-direction-rtl)::before,
-.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) ol li.ql-indent-4:not(.ql-direction-rtl)::before {
-    content: counter(list-4, upper-alpha) ". ";
+[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor li.ql-indent-2:not(.ql-direction-rtl)::before,
+.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) li.ql-indent-2:not(.ql-direction-rtl)::before {
+    content: "- ";
 }
