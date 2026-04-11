@@ -10,6 +10,18 @@ declare module '*.module.scss' {
   export default classes;
 }
 
+// quilljs-markdown ships no .d.ts. Minimal declaration for our usage
+// (constructor with a Quill editor instance and an options object, and
+// a destroy() method for cleanup on unmount).
+declare module 'quilljs-markdown' {
+  export default class QuillMarkdown {
+    constructor(editor: unknown, options?: Record<string, unknown>);
+    destroy?(): void;
+  }
+}
+
+declare module 'quilljs-markdown/dist/quilljs-markdown-common-style.css';
+
 // Mammoth ships no .d.ts — declare just enough of the browser build for us.
 declare module 'mammoth/mammoth.browser' {
   export interface MammothImage {

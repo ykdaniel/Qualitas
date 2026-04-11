@@ -1,7 +1,9 @@
-import React, { useRef, useCallback, useMemo } from 'react';
+import React, { useRef, useCallback, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
+import QuillMarkdown from 'quilljs-markdown';
+import 'quilljs-markdown/dist/quilljs-markdown-common-style.css';
 import { kmService } from '../../services/kmService';
 
 interface RichTextEditorProps {
@@ -64,6 +66,33 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             }
         }
     }), [imageHandler]);
+
+    // Attach markdown shortcut handling after the underlying Quill instance
+    // is mounted. quilljs-markdown is not a Quill Module in the
+    // Quill.register sense — it's a wrapper that attaches its own text-change
+    // listener to the editor — so we bolt it on imperatively via a ref.
+    //
+    // Shortcuts it installs:
+    //   # ␣         → H1       (##, ###, ... → H2..H6)
+    //   **text**    → bold
+    //   *text*      → italic
+    //   ~~text~~    → strikethrough
+    //   `code`      → inline code
+    //   - ␣ or * ␣  → bullet list
+    //   1. ␣        → ordered list
+    //   > ␣         → blockquote
+    //   ---         → horizontal rule
+    //   [label](url) → link
+    useEffect(() => {
+        const editor = quillRef.current?.getEditor();
+        if (!editor) return;
+        const md = new QuillMarkdown(editor, {});
+        return () => {
+            if (md && typeof md.destroy === 'function') {
+                md.destroy();
+            }
+        };
+    }, []);
 
     return (
         <ReactQuill
