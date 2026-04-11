@@ -617,9 +617,17 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
             // if single chapter mode is effectively used.
             const activeChapters = chapters.filter(c => !c.deleted);
 
+            // Single-chapter mode (1 active chapter): the book carries
+            // the chapter's content directly, no separate child record.
+            // Multi-chapter mode (2+): the book is just a container —
+            // its content stays empty so KMDetail doesn't double-render
+            // the first chapter's body. Likewise its chapter_no goes
+            // null so it's not treated as a phantom chapter.
+            const isSingleChapter = activeChapters.length === 1;
             const mainDocData = {
                 ...formData,
-                content: activeChapters.length > 0 ? activeChapters[0].content : formData.content
+                content: isSingleChapter ? activeChapters[0].content : '',
+                chapter_no: isSingleChapter ? formData.chapter_no : null,
             };
 
             // Save main document first

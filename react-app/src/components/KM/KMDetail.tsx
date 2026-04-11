@@ -74,12 +74,22 @@ export const KMDetail: React.FC<KMDetailProps> = ({ article, onClose, onEdit, on
     const { kmList } = useKMStore();
     const [isHistoryModalOpen, setIsHistoryModalOpen] = React.useState(false);
 
-    // Determine the main book and its chapters
+    // Determine the main book and its chapters.
+    //
+    // Two storage shapes are supported:
+    //   - Multi-chapter: a book record with N child chapter records.
+    //     The book itself is just a container; its content/chapter_no
+    //     fields are ignored here so it doesn't render as a phantom
+    //     chapter alongside its children.
+    //   - Single-chapter: a book record with no children. The book
+    //     itself carries the only chapter, so we render it as one.
     const bookId = article.parent_id ? article.parent_id : article.id;
-    const chapters = kmList.filter(km => km.parent_id === bookId || km.id === bookId);
+    const book = kmList.find(km => km.id === bookId);
+    const childChapters = kmList.filter(km => km.parent_id === bookId);
 
-    // Sort chapters by chapter_no (immutable)
-    const sortedChapters = [...chapters].sort((a, b) => (a.chapter_no || '').localeCompare(b.chapter_no || ''));
+    const sortedChapters = childChapters.length > 0
+        ? [...childChapters].sort((a, b) => (a.chapter_no || '').localeCompare(b.chapter_no || ''))
+        : (book ? [book] : []);
 
     React.useEffect(() => {
         if (article && article.id) {
