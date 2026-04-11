@@ -124,3 +124,36 @@
     text-align: left;
     white-space: nowrap;
 }
+
+/* Nested indented list items inside a chapter-prefix container.
+   Quill's defaults put the text at 4.5em / 7.5em / 10.5em / ...
+   (1.5em + 3em per level). Our top-level chapter-prefix item has
+   padding-left: 3em, so text starts at 3em — we want the FIRST
+   nested level to also start at 3em (aligning its text under the
+   top-level text) rather than 4.5em, and each deeper level to
+   step another 1.5em beyond that. Marker sits in the left gutter
+   via Quill's default ::before negative-margin hanging indent. */
+[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor li.ql-indent-1:not(.ql-direction-rtl),
+.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) li.ql-indent-1:not(.ql-direction-rtl) {
+    padding-left: 3em;
+}
+[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor li.ql-indent-2:not(.ql-direction-rtl),
+.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) li.ql-indent-2:not(.ql-direction-rtl) {
+    padding-left: 4.5em;
+}
+[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor li.ql-indent-3:not(.ql-direction-rtl),
+.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) li.ql-indent-3:not(.ql-direction-rtl) {
+    padding-left: 6em;
+}
+[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor li.ql-indent-4:not(.ql-direction-rtl),
+.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) li.ql-indent-4:not(.ql-direction-rtl) {
+    padding-left: 7.5em;
+}
+[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor li.ql-indent-5:not(.ql-direction-rtl),
+.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) li.ql-indent-5:not(.ql-direction-rtl) {
+    padding-left: 9em;
+}
+[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor li.ql-indent-6:not(.ql-direction-rtl),
+.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) li.ql-indent-6:not(.ql-direction-rtl) {
+    padding-left: 10.5em;
+}
