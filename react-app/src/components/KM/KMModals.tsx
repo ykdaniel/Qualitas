@@ -47,11 +47,15 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
     useEffect(() => {
         if (existingData) {
             setFormData(existingData);
-            // If editing, try to find children documents
+            // If editing, force-refresh the kmList from the server before
+            // reading children. The store can be stale if the modal is
+            // opened right after a save in another component, or after
+            // direct DB edits — fetchChildren previously read getState()
+            // synchronously and missed any not-yet-fetched siblings.
             const fetchChildren = async () => {
                 if (existingData.id) {
                     try {
-                        // Optimistically check store first if all data is loaded
+                        await useKMStore.getState().fetchKMs();
                         const children = useKMStore.getState().kmList.filter(k => k.parent_id === existingData.id);
                         if (children.length > 0) {
                             const sortedChildren = [...children].sort((a, b) => compareChapterNo(a.chapter_no, b.chapter_no));
