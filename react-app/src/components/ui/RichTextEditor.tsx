@@ -123,14 +123,27 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                 image: imageHandler
             }
         },
+        // Clipboard matcher: when Quill parses HTML on load (or paste),
+        // map every <br> to a softbreak embed instead of the default
+        // newline character. The default behaviour converts <br> to '\n'
+        // in the Delta — and a '\n' inside a list block means "new list
+        // item", which would split bilingual <li>中文<br>English</li>
+        // entries into two separate items on every reload. The matcher
+        // emits the SoftBreakBlot embed registered above so the round
+        // trip stays stable: HTML <br> ↔ Delta {softbreak:true}.
+        clipboard: {
+            matchers: [
+                ['br', (_node: any, _delta: any) => {
+                    const Delta = Quill.import('delta') as any;
+                    return new Delta().insert({ softbreak: true });
+                }],
+            ],
+        },
         // Quill's default Shift+Enter inside an <ol>/<ul> breaks to a new
-        // list item instead of inserting a soft <br> — because a `\n` in
-        // the Delta means "new line block" at the list-block level. We
-        // work around it by intercepting Shift+Enter when the caret is in
-        // a list format and inserting a raw <br> node at the caret via
-        // DOM mutation. This lets users keep bilingual "中文<br>English"
-        // pairs inside a single <li>. Pressing plain Enter still splits
-        // to a new list item like normal.
+        // list item instead of inserting a soft <br>. We intercept it
+        // and insert the SoftBreakBlot embed at the caret so the
+        // current list item picks up an inline <br> on the next line.
+        // Plain Enter still splits to a new list item like normal.
         keyboard: {
             bindings: {
                 'soft-break-in-list': {
