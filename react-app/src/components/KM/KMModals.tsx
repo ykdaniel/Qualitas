@@ -4,7 +4,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { KMArticleCreate, KMArticleUpdate, KMArticle } from '../../types/km';
 import { useKMStore } from '../../store/kmStore';
 import { kmService } from '../../services/kmService';
-import { stripDecorativeZeros } from '../../utils/extractSectionToc';
+import { stripDecorativeZeros, compareChapterNo } from '../../utils/extractSectionToc';
 import { RichTextEditor } from '../ui/RichTextEditor';
 import { KMAttachment } from '../../types/km';
 import styles from './KMModals.module.css';
@@ -54,7 +54,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                         // Optimistically check store first if all data is loaded
                         const children = useKMStore.getState().kmList.filter(k => k.parent_id === existingData.id);
                         if (children.length > 0) {
-                            const sortedChildren = [...children].sort((a, b) => (a.chapter_no || '').localeCompare(b.chapter_no || ''));
+                            const sortedChildren = [...children].sort((a, b) => compareChapterNo(a.chapter_no, b.chapter_no));
                             setChapters(sortedChildren.map(c => ({
                                 id: c.id,
                                 title: c.title,

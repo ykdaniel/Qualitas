@@ -6,7 +6,7 @@ import { useKMStore } from '../../store/kmStore';
 import { BackButton } from '../ui/BackButton';
 import { KMHistoryModal } from './KMHistoryModal';
 import { SectionToc } from './SectionToc';
-import { extractSectionToc, computeNumberedLevel, stripDecorativeZeros } from '../../utils/extractSectionToc';
+import { extractSectionToc, computeNumberedLevel, stripDecorativeZeros, compareChapterNo } from '../../utils/extractSectionToc';
 import styles from './KMDetail.module.css';
 
 /**
@@ -88,7 +88,7 @@ export const KMDetail: React.FC<KMDetailProps> = ({ article, onClose, onEdit, on
     const childChapters = kmList.filter(km => km.parent_id === bookId);
 
     const sortedChapters = childChapters.length > 0
-        ? [...childChapters].sort((a, b) => (a.chapter_no || '').localeCompare(b.chapter_no || ''))
+        ? [...childChapters].sort((a, b) => compareChapterNo(a.chapter_no, b.chapter_no))
         : (book ? [book] : []);
 
     React.useEffect(() => {

@@ -78,6 +78,46 @@ export function stripDecorativeZeros(number: string): string {
     return parts.join('.');
 }
 
+/**
+ * Compare two chapter numbers numerically segment-by-segment.
+ *
+ * String localeCompare on dotted-decimal numbers misbehaves once any
+ * segment crosses 10 — "10.0" sorts before "2.0" because the strings
+ * are compared char-by-char. We split on '.', parse each segment as
+ * an integer, and compare. Non-numeric segments fall through to the
+ * raw string compare so labels like "第一章" still produce a stable
+ * (if arbitrary) order.
+ *
+ * Empty / null / undefined sort first.
+ */
+export function compareChapterNo(
+    a: string | null | undefined,
+    b: string | null | undefined,
+): number {
+    const sa = a || '';
+    const sb = b || '';
+    if (!sa && !sb) return 0;
+    if (!sa) return -1;
+    if (!sb) return 1;
+
+    const partsA = sa.split('.');
+    const partsB = sb.split('.');
+    const len = Math.max(partsA.length, partsB.length);
+    for (let i = 0; i < len; i++) {
+        const segA = partsA[i] ?? '';
+        const segB = partsB[i] ?? '';
+        const numA = parseInt(segA, 10);
+        const numB = parseInt(segB, 10);
+        if (!isNaN(numA) && !isNaN(numB)) {
+            if (numA !== numB) return numA - numB;
+        } else {
+            const cmp = segA.localeCompare(segB);
+            if (cmp !== 0) return cmp;
+        }
+    }
+    return 0;
+}
+
 function tryNumberedPattern(text: string): PatternMatch | null {
     // Require: numeric prefix, whitespace, at least one non-numeric char
     // following. Cap the total line length so we don't grab whole paragraphs
