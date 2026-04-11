@@ -51,12 +51,31 @@ interface PatternMatch {
  *  - "1.1"    → level 2
  *  - "1.1.1"  → level 3
  */
-function computeNumberedLevel(number: string): number {
+export function computeNumberedLevel(number: string): number {
     const parts = number.split('.');
     while (parts.length > 1 && parts[parts.length - 1] === '0') {
         parts.pop();
     }
     return Math.max(1, parts.length);
+}
+
+/**
+ * Strip trailing ".0" segments from a dotted-decimal chapter number so
+ * it can be used as a prefix for sub-item numbering.
+ *
+ *   "1.0"     → "1"       (then list items become "1.1", "1.2", ...)
+ *   "1.1"     → "1.1"     (list items become "1.1.1", "1.1.2", ...)
+ *   "2.0.0"   → "2"
+ *   "第一章"   → "第一章"  (unchanged — non-numeric)
+ *   ""        → ""
+ */
+export function stripDecorativeZeros(number: string): string {
+    if (!number) return '';
+    const parts = number.split('.');
+    while (parts.length > 1 && parts[parts.length - 1] === '0') {
+        parts.pop();
+    }
+    return parts.join('.');
 }
 
 function tryNumberedPattern(text: string): PatternMatch | null {

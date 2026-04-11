@@ -17,16 +17,15 @@ import { kmService } from '../../services/kmService';
 // the matching .ql-font-<value> and dropdown ::before rule there or
 // the dropdown item will be rendered blank.
 // ───────────────────────────────────────────────────────────────────
+// Minimal font whitelist: Calibri (English default) + 微軟正黑體 (Chinese
+// default). The CSS font-family declaration on .ql-editor uses both as a
+// fallback chain, so English glyphs pick up Calibri automatically and
+// Chinese glyphs fall through to 微軟正黑體 without any per-character
+// tagging. Users can still explicitly switch the whole selection via the
+// font dropdown.
 const FONT_WHITELIST = [
-    'sans-serif',
-    'serif',
-    'monospace',
+    'calibri',
     'ms-jhenghei',    // 微軟正黑體
-    'pmingliu',       // 新細明體
-    'dfkai-sb',       // 標楷體
-    'pingfang',       // 蘋方
-    'arial',
-    'times-new-roman',
 ];
 
 const SIZE_WHITELIST = [
@@ -39,9 +38,28 @@ const FontFormat = Quill.import('formats/font') as { whitelist: string[] };
 FontFormat.whitelist = FONT_WHITELIST;
 Quill.register(FontFormat as unknown as Parameters<typeof Quill.register>[0], true);
 
-const SizeFormat = Quill.import('formats/size') as { whitelist: string[] };
-SizeFormat.whitelist = SIZE_WHITELIST;
-Quill.register(SizeFormat as unknown as Parameters<typeof Quill.register>[0], true);
+// IMPORTANT: use the STYLE attributor (not the default class attributor)
+// for font size. The class attributor produces markup like
+// <span class="ql-size-24px">…</span> and relies on a matching CSS rule
+// .ql-size-24px { font-size: 24px } for every whitelist entry. The style
+// attributor produces <span style="font-size:24px">…</span> directly, so
+// arbitrary px values work without adding per-size CSS rules.
+const SizeStyle = Quill.import('attributors/style/size') as { whitelist: string[] };
+SizeStyle.whitelist = SIZE_WHITELIST;
+Quill.register(SizeStyle as unknown as Parameters<typeof Quill.register>[0], true);
+
+// Custom inline embed for a soft line break (<br>). Quill's default
+// Parchment model doesn't expose <br> as an insertable format — a `\n`
+// in the Delta means "new block" (new list item inside an <ol>), not
+// "visual line break". Registering a Break embed lets us insertEmbed
+// the caret position with a <br>, which renders inside the current
+// <li> instead of splitting it. Used by the soft-break-in-list
+// keyboard binding below to support bilingual "中文<br>English" items.
+const EmbedBlot = Quill.import('blots/embed') as any;
+class SoftBreakBlot extends EmbedBlot {}
+SoftBreakBlot.blotName = 'softbreak';
+SoftBreakBlot.tagName = 'br';
+Quill.register(SoftBreakBlot as unknown as Parameters<typeof Quill.register>[0], true);
 
 interface RichTextEditorProps {
     value: string;
@@ -104,7 +122,30 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             handlers: {
                 image: imageHandler
             }
-        }
+        },
+        // Quill's default Shift+Enter inside an <ol>/<ul> breaks to a new
+        // list item instead of inserting a soft <br> — because a `\n` in
+        // the Delta means "new line block" at the list-block level. We
+        // work around it by intercepting Shift+Enter when the caret is in
+        // a list format and inserting a raw <br> node at the caret via
+        // DOM mutation. This lets users keep bilingual "中文<br>English"
+        // pairs inside a single <li>. Pressing plain Enter still splits
+        // to a new list item like normal.
+        keyboard: {
+            bindings: {
+                'soft-break-in-list': {
+                    key: 13,
+                    shiftKey: true,
+                    format: ['list'],
+                    handler(this: any, range: { index: number; length: number }) {
+                        const quill = this.quill;
+                        quill.insertEmbed(range.index, 'softbreak', true, 'user');
+                        quill.setSelection(range.index + 1, 0, 'user');
+                        return false;
+                    },
+                },
+            },
+        },
     }), [imageHandler]);
 
     // Attach markdown shortcut handling after the underlying Quill instance

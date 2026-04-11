@@ -6,7 +6,7 @@ import { useKMStore } from '../../store/kmStore';
 import { BackButton } from '../ui/BackButton';
 import { KMHistoryModal } from './KMHistoryModal';
 import { SectionToc } from './SectionToc';
-import { extractSectionToc } from '../../utils/extractSectionToc';
+import { extractSectionToc, computeNumberedLevel, stripDecorativeZeros } from '../../utils/extractSectionToc';
 import styles from './KMDetail.module.css';
 
 /**
@@ -39,6 +39,8 @@ const ChapterSection: React.FC<ChapterSectionProps> = ({
         [processedHtml]
     );
 
+    const chapterPrefix = stripDecorativeZeros(chapter.chapter_no || '');
+
     return (
         <div id={`chapter-${chapter.id}`} className={styles.chapterSection}>
             {showDivider && <hr className={styles.chapterDivider} />}
@@ -49,7 +51,11 @@ const ChapterSection: React.FC<ChapterSectionProps> = ({
                 </h2>
             )}
             {toc.length >= 2 && <SectionToc entries={toc} />}
-            <div className={`ql-editor ${styles.editorContainer}`}>
+            <div
+                className={`ql-editor ${styles.editorContainer}`}
+                data-chapter-prefix={chapterPrefix}
+                style={{ ['--chapter-prefix' as any]: `"${chapterPrefix}"` }}
+            >
                 <div dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
             </div>
         </div>
@@ -174,10 +180,16 @@ export const KMDetail: React.FC<KMDetailProps> = ({ article, onClose, onEdit, on
                     onClick={onClose}
                     className="!bg-white !border !border-slate-200 !text-slate-600 hover:!bg-slate-50 hover:!text-slate-900 rounded-full"
                 />
-                <button className={styles.editBtn} onClick={onEdit}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                    {t('common.edit') || '編輯內容'}
-                </button>
+                <div style={{ display: 'flex', gap: 12 }}>
+                    <button className={styles.printBtn} onClick={() => window.print()}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                        {t('common.print') || '列印'}
+                    </button>
+                    <button className={styles.editBtn} onClick={onEdit}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                        {t('common.edit') || '編輯內容'}
+                    </button>
+                </div>
             </div>
 
             {/* Hero Title Card */}
@@ -218,6 +230,42 @@ export const KMDetail: React.FC<KMDetailProps> = ({ article, onClose, onEdit, on
                         </div>
                         <h3>{t('km.documentDetails') || '文件內容 (Document Details)'}</h3>
                     </div>
+                    {/* Print-only index page. Hidden on screen by CSS.
+                        Each <a href="#chapter-..."> gets a target-counter(page)
+                        injected via ::after — works in Chrome/Edge and
+                        Safari 17.4+. Firefox degrades to no page numbers. */}
+                    {hasChapters && (
+                        <div className={styles.printIndexPage}>
+                            <div className={styles.printDocHeader}>
+                                <h1>{article.title}</h1>
+                                <div className={styles.printDocMeta}>
+                                    <span>{article.category || 'Quality'}</span>
+                                    <span>#{article.articleNo}</span>
+                                    <span>v{article.version_no || 1}.0</span>
+                                    <span>{article.updated_at}</span>
+                                </div>
+                            </div>
+                            <h2 className={styles.printIndexTitle}>目錄 Index</h2>
+                            <ol className={styles.printTocList}>
+                                {sortedChapters.map(ch => {
+                                    const level = computeNumberedLevel(ch.chapter_no || '1');
+                                    return (
+                                        <li
+                                            key={ch.id}
+                                            className={styles.printTocItem}
+                                            style={{ paddingLeft: `${(level - 1) * 18}pt` }}
+                                        >
+                                            <a href={`#chapter-${ch.id}`} className={styles.printTocLink}>
+                                                <span className={styles.printTocNum}>{ch.chapter_no}</span>
+                                                <span className={styles.printTocTitle}>{ch.title}</span>
+                                            </a>
+                                        </li>
+                                    );
+                                })}
+                            </ol>
+                        </div>
+                    )}
+
                     <div className={styles.contentBody}>
                         {sortedChapters.map((ch, index) => (
                             <ChapterSection

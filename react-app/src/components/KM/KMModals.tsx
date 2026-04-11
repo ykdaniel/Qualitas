@@ -4,6 +4,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { KMArticleCreate, KMArticleUpdate, KMArticle } from '../../types/km';
 import { useKMStore } from '../../store/kmStore';
 import { kmService } from '../../services/kmService';
+import { stripDecorativeZeros } from '../../utils/extractSectionToc';
 import { RichTextEditor } from '../ui/RichTextEditor';
 import { KMAttachment } from '../../types/km';
 import styles from './KMModals.module.css';
@@ -92,13 +93,38 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
 
 
     const handleChapterChange = (index: number, field: string, value: string) => {
-        const newChapters = [...chapters];
-        newChapters[index] = { ...newChapters[index], [field]: value };
-        setChapters(newChapters);
+        // Use functional update to avoid the stale-closure trap: when Quill
+        // rehydrates a chapter's content after the fetchChildren effect
+        // loads real children into the chapters array, ReactQuill fires an
+        // onChange as part of its internal setContents pass. That onChange
+        // callback was created during the INITIAL render (chapters=[1 item
+        // placeholder]) and still holds a reference to that stale array.
+        // If we spread the closure's `chapters` we'd collapse the state
+        // back to the placeholder with the current content merged in,
+        // wiping the loaded children. Reading `prev` inside the updater
+        // always gives the latest state regardless of when the callback
+        // was captured.
+        setChapters((prev: typeof chapters) => {
+            if (!prev[index]) return prev;
+            const newChapters = [...prev];
+            newChapters[index] = { ...newChapters[index], [field]: value };
+            return newChapters;
+        });
     };
 
     const addChapter = () => {
-        const nextNo = chapters.filter(c => !c.deleted).length + 1;
+        // Pick the next free top-level chapter number by scanning the
+        // existing x.0 markers and taking max + 1. Counting chapters.length
+        // was wrong because sub-chapters (1.1, 1.2) inflate the count and
+        // make the next top-level number skip ahead — e.g. [1.0, 1.1, 2.0]
+        // would produce 4.0 instead of 3.0. Deleted chapters are ignored
+        // because their numbers disappear on save.
+        const active = chapters.filter(c => !c.deleted);
+        const maxMajor = active.reduce((max, c) => {
+            const m = (c.chapter_no || '').match(/^(\d+)\.0$/);
+            return m ? Math.max(max, parseInt(m[1], 10)) : max;
+        }, 0);
+        const nextNo = maxMajor + 1;
         setChapters([...chapters, { title: `Chapter ${nextNo}`, content: '', chapter_no: `${nextNo}.0` }]);
     };
 
@@ -200,11 +226,31 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
 
         // Generate a sensible chapter number for the new chapter:
         //   "2.0" → "2.1",  "2.1" → "2.2",  "章節" → ""
+        //
+        // IMPORTANT: the naive `minor + 1` can collide with an existing
+        // sibling chapter (e.g. splitting 1.0 when 1.1 already exists
+        // would produce a duplicate 1.1). We scan the current active
+        // chapters for conflicts and skip forward until we find a free
+        // slot. Deleted chapters are excluded from the check because
+        // their chapter_no is about to disappear on save.
+        //
+        // This protects against the data-corruption incident on
+        // 2026-04-11 where split-at-cursor silently produced duplicate
+        // chapter_nos that took manual SQL to clean up.
         const currentNo = chapters[chapterIndex].chapter_no || '';
         const noMatch = currentNo.match(/^(\d+)\.(\d+)$/);
-        const newChapterNo = noMatch
-            ? `${noMatch[1]}.${parseInt(noMatch[2], 10) + 1}`
-            : '';
+        let newChapterNo = '';
+        if (noMatch) {
+            const major = noMatch[1];
+            const existingNos = new Set(
+                chapters.filter(c => !c.deleted).map(c => c.chapter_no || '')
+            );
+            let minor = parseInt(noMatch[2], 10) + 1;
+            while (existingNos.has(`${major}.${minor}`)) {
+                minor += 1;
+            }
+            newChapterNo = `${major}.${minor}`;
+        }
 
         const newChapters = [...chapters];
         newChapters[chapterIndex] = {
@@ -918,7 +964,11 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                                             >&times;</button>
                                         </div>
                                     </div>
-                                    <div className={styles.editorWrapper}>
+                                    <div
+                                        className={styles.editorWrapper}
+                                        data-chapter-prefix={stripDecorativeZeros(ch.chapter_no || '')}
+                                        style={{ ['--chapter-prefix' as any]: `"${stripDecorativeZeros(ch.chapter_no || '')}"` }}
+                                    >
                                         <div className={styles.quillContainer}>
                                             <RichTextEditor
                                                 value={ch.content}
