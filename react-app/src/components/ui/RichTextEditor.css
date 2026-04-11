@@ -1,0 +1,122 @@
+/*
+ * Custom font + size styling for the shared RichTextEditor (Quill).
+ *
+ * This has to be a regular CSS file (not a .module.css) because Quill
+ * mounts its own DOM with global class names like .ql-font-* and
+ * .ql-picker-*, which a scoped CSS module cannot reach.
+ *
+ * The classes and dropdown labels listed here must stay in sync with
+ * the Font.whitelist and Size.whitelist registered in RichTextEditor.tsx
+ * — if the whitelists add a new entry, this file must add matching
+ * .ql-font-<value> + dropdown ::before rules or the picker will show
+ * an empty item.
+ */
+
+/* ─────────────────────────────────────────────────────────────────
+ * 1. Font family — applied to selected text
+ * ───────────────────────────────────────────────────────────────── */
+.ql-font-sans-serif {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+}
+.ql-font-serif {
+    font-family: Georgia, "Times New Roman", "Noto Serif TC",
+        "Source Han Serif TC", "PMingLiU", serif;
+}
+.ql-font-monospace {
+    font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+}
+.ql-font-ms-jhenghei {
+    font-family: "Microsoft JhengHei", "微軟正黑體", "PingFang TC",
+        "Heiti TC", sans-serif;
+}
+.ql-font-pmingliu {
+    font-family: "PMingLiU", "新細明體", "Source Han Serif TC", serif;
+}
+.ql-font-dfkai-sb {
+    font-family: "DFKai-SB", "標楷體", "BiauKai", "Kaiti TC", cursive;
+}
+.ql-font-pingfang {
+    font-family: "PingFang TC", "蘋方-繁", "Noto Sans TC", sans-serif;
+}
+.ql-font-arial {
+    font-family: Arial, Helvetica, sans-serif;
+}
+.ql-font-times-new-roman {
+    font-family: "Times New Roman", Times, serif;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+ * 2. Font-family dropdown labels
+ *    Quill's default picker labels (Sans Serif / Serif / Monospace)
+ *    are baked into the snow theme for only those three values, so
+ *    once we override the whitelist we must re-provide ALL labels.
+ * ───────────────────────────────────────────────────────────────── */
+
+/* Widen the dropdown so CJK labels don't get clipped */
+.ql-snow .ql-picker.ql-font {
+    width: 130px;
+}
+
+/* Clear default labels */
+.ql-snow .ql-picker.ql-font .ql-picker-label::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item::before {
+    content: "";
+}
+
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="sans-serif"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="sans-serif"]::before {
+    content: "無襯線 Sans Serif";
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="serif"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="serif"]::before {
+    content: "襯線 Serif";
+    font-family: Georgia, "Times New Roman", serif;
+}
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="monospace"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="monospace"]::before {
+    content: "等寬 Monospace";
+    font-family: Menlo, Monaco, monospace;
+}
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="ms-jhenghei"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="ms-jhenghei"]::before {
+    content: "微軟正黑體";
+    font-family: "Microsoft JhengHei", "PingFang TC", sans-serif;
+}
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="pmingliu"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="pmingliu"]::before {
+    content: "新細明體";
+    font-family: "PMingLiU", serif;
+}
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="dfkai-sb"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="dfkai-sb"]::before {
+    content: "標楷體";
+    font-family: "DFKai-SB", "BiauKai", cursive;
+}
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="pingfang"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="pingfang"]::before {
+    content: "蘋方";
+    font-family: "PingFang TC", sans-serif;
+}
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="arial"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="arial"]::before {
+    content: "Arial";
+    font-family: Arial, Helvetica, sans-serif;
+}
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="times-new-roman"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="times-new-roman"]::before {
+    content: "Times New Roman";
+    font-family: "Times New Roman", Times, serif;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+ * 3. Font size dropdown — display the raw px value as the label
+ * ───────────────────────────────────────────────────────────────── */
+.ql-snow .ql-picker.ql-size {
+    width: 70px;
+}
+.ql-snow .ql-picker.ql-size .ql-picker-label::before,
+.ql-snow .ql-picker.ql-size .ql-picker-item::before {
+    content: attr(data-value);
+}

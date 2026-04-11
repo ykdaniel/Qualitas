@@ -1,10 +1,47 @@
 import React, { useRef, useCallback, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
-import ReactQuill from 'react-quill';
+import ReactQuill, { Quill } from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import QuillMarkdown from 'quilljs-markdown';
 import 'quilljs-markdown/dist/quilljs-markdown-common-style.css';
+import './RichTextEditor.css';
 import { kmService } from '../../services/kmService';
+
+// ───────────────────────────────────────────────────────────────────
+// Quill customisation — runs once on module load, not per component.
+//
+// Register an extended font whitelist (CJK + common Latin faces) and
+// a pixel-based size whitelist. The corresponding visual styling
+// (font-family CSS + dropdown labels) lives in RichTextEditor.css;
+// BOTH FILES MUST STAY IN SYNC — if you add a new entry here, add
+// the matching .ql-font-<value> and dropdown ::before rule there or
+// the dropdown item will be rendered blank.
+// ───────────────────────────────────────────────────────────────────
+const FONT_WHITELIST = [
+    'sans-serif',
+    'serif',
+    'monospace',
+    'ms-jhenghei',    // 微軟正黑體
+    'pmingliu',       // 新細明體
+    'dfkai-sb',       // 標楷體
+    'pingfang',       // 蘋方
+    'arial',
+    'times-new-roman',
+];
+
+const SIZE_WHITELIST = [
+    '10px', '12px', '14px', '16px', '18px', '20px', '24px', '28px', '32px', '36px', '48px',
+];
+
+// Extend Quill's font format. Using `true` as the second arg to
+// Quill.register REPLACES the existing format, which is what we want.
+const FontFormat = Quill.import('formats/font') as { whitelist: string[] };
+FontFormat.whitelist = FONT_WHITELIST;
+Quill.register(FontFormat as unknown as Parameters<typeof Quill.register>[0], true);
+
+const SizeFormat = Quill.import('formats/size') as { whitelist: string[] };
+SizeFormat.whitelist = SIZE_WHITELIST;
+Quill.register(SizeFormat as unknown as Parameters<typeof Quill.register>[0], true);
 
 interface RichTextEditorProps {
     value: string;
@@ -55,8 +92,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     const modules = useMemo(() => ({
         toolbar: {
             container: [
+                [{ 'font': FONT_WHITELIST }, { 'size': SIZE_WHITELIST }],
                 [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
                 ['bold', 'italic', 'underline', 'strike'],
+                [{ 'color': [] }, { 'background': [] }],
+                [{ 'align': [] }],
                 [{ 'list': 'ordered' }, { 'list': 'bullet' }],
                 ['link', 'image'],
                 ['clean']
