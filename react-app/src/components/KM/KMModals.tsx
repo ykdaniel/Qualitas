@@ -19,6 +19,11 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
     const { t } = useLanguage();
     const { kmList } = useKMStore();
     const [loading, setLoading] = useState(false);
+    // Collapse the "basic info" panel by default when editing an existing
+    // article — that's the mode where the user almost always just wants to
+    // touch the chapter content, not the title/category/tags. Keep it
+    // expanded for Create so the required fields (title) are visible.
+    const [metaCollapsed, setMetaCollapsed] = useState(Boolean(id));
 
     const parentOptions = kmList.filter(km => !km.parent_id && km.id !== id);
 
@@ -653,101 +658,180 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                     <button type="button" className={styles.closeButton} onClick={onClose}>&times;</button>
                 </div>
                 <form onSubmit={handleSubmit} className={styles.formBody}>
-                    <div className={styles.formGroup}>
-                        <label>{t('km.titleField') || 'Title'} *</label>
-                        <input
-                            type="text"
-                            name="title"
-                            value={formData.title}
-                            onChange={handleChange}
-                            required
-                            placeholder="Enter article title"
-                            className={styles.inputField}
-                        />
-                    </div>
+                    {/* Collapsible "Basic Info" section.
+                        Click the header bar to toggle. Defaults to collapsed
+                        on edit, expanded on create (see metaCollapsed init). */}
+                    <div
+                        style={{
+                            border: '1px solid #e2e8f0',
+                            borderRadius: 8,
+                            background: '#f8fafc',
+                            marginBottom: 16,
+                            overflow: 'hidden',
+                        }}
+                    >
+                        <button
+                            type="button"
+                            onClick={() => setMetaCollapsed(!metaCollapsed)}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                width: '100%',
+                                background: 'none',
+                                border: 'none',
+                                padding: '10px 16px',
+                                cursor: 'pointer',
+                                fontFamily: 'inherit',
+                                color: '#334155',
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', minWidth: 0 }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+                                </svg>
+                                <span style={{ fontWeight: 600, fontSize: '0.92rem', whiteSpace: 'nowrap' }}>基本資訊</span>
+                                {/* Compact summary shown when collapsed so the author
+                                    still has context while editing content below. */}
+                                {metaCollapsed && (
+                                    <span style={{
+                                        fontSize: '0.82rem',
+                                        color: '#64748b',
+                                        fontWeight: 400,
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                        minWidth: 0,
+                                    }}>
+                                        {formData.title || '（未命名）'}
+                                        <span style={{ color: '#cbd5e1', margin: '0 8px' }}>·</span>
+                                        {formData.category || 'General'}
+                                        <span style={{ color: '#cbd5e1', margin: '0 8px' }}>·</span>
+                                        {formData.status || 'Published'}
+                                    </span>
+                                )}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, color: '#64748b', fontSize: '0.8rem' }}>
+                                <span>{metaCollapsed ? '展開' : '收合'}</span>
+                                <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    style={{
+                                        transform: metaCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+                                        transition: 'transform 0.15s ease',
+                                    }}
+                                >
+                                    <polyline points="6 9 12 15 18 9"/>
+                                </svg>
+                            </div>
+                        </button>
 
-                    <div className={styles.formRow}>
-                        <div className={styles.formGroup}>
-                            <label>{t('km.category') || 'Category'}</label>
-                            <select
-                                name="category"
-                                value={formData.category}
-                                onChange={handleChange}
-                                className={styles.inputField}
-                            >
-                                <option value="General">General</option>
-                                <option value="Safety">Safety</option>
-                                <option value="Quality">Quality</option>
-                                <option value="Procedure">Procedure</option>
-                                <option value="Guidelines">Guidelines</option>
-                            </select>
-                        </div>
-                        <div className={styles.formGroup}>
-                            <label>{t('km.tags') || 'Tags (comma separated)'}</label>
-                            <input
-                                type="text"
-                                name="tags"
-                                value={formData.tags}
-                                onChange={handleChange}
-                                placeholder="e.g. welding, safety, standard"
-                                className={styles.inputField}
-                            />
-                        </div>
-                        <div className={styles.formGroup}>
-                            <label>{t('common.status') || 'Status'}</label>
-                            <select
-                                name="status"
-                                value={formData.status}
-                                onChange={handleChange}
-                                className={styles.inputField}
-                            >
-                                <option value="Draft">Draft</option>
-                                <option value="Published">Published</option>
-                                <option value="Archived">Archived</option>
-                            </select>
-                        </div>
-                    </div>
+                        {!metaCollapsed && (
+                            <div style={{ padding: '4px 16px 16px 16px', background: '#fff', borderTop: '1px solid #e2e8f0' }}>
+                                <div className={styles.formGroup}>
+                                    <label>{t('km.titleField') || 'Title'} *</label>
+                                    <input
+                                        type="text"
+                                        name="title"
+                                        value={formData.title}
+                                        onChange={handleChange}
+                                        required
+                                        placeholder="Enter article title"
+                                        className={styles.inputField}
+                                    />
+                                </div>
 
-                    <div className={styles.formRow}>
-                        <div className={styles.formGroup} style={{ flexGrow: 1 }}>
-                            <label>本次改版摘要 (Change Summary)</label>
-                            <input
-                                type="text"
-                                name="change_summary"
-                                value={(formData as any).change_summary || ''}
-                                onChange={handleChange}
-                                placeholder="簡述本次修改內容，例如：更新伺服器 IP (非必填)"
-                                className={styles.inputField}
-                            />
-                        </div>
-                    </div>
+                                <div className={styles.formRow}>
+                                    <div className={styles.formGroup}>
+                                        <label>{t('km.category') || 'Category'}</label>
+                                        <select
+                                            name="category"
+                                            value={formData.category}
+                                            onChange={handleChange}
+                                            className={styles.inputField}
+                                        >
+                                            <option value="General">General</option>
+                                            <option value="Safety">Safety</option>
+                                            <option value="Quality">Quality</option>
+                                            <option value="Procedure">Procedure</option>
+                                            <option value="Guidelines">Guidelines</option>
+                                        </select>
+                                    </div>
+                                    <div className={styles.formGroup}>
+                                        <label>{t('km.tags') || 'Tags (comma separated)'}</label>
+                                        <input
+                                            type="text"
+                                            name="tags"
+                                            value={formData.tags}
+                                            onChange={handleChange}
+                                            placeholder="e.g. welding, safety, standard"
+                                            className={styles.inputField}
+                                        />
+                                    </div>
+                                    <div className={styles.formGroup}>
+                                        <label>{t('common.status') || 'Status'}</label>
+                                        <select
+                                            name="status"
+                                            value={formData.status}
+                                            onChange={handleChange}
+                                            className={styles.inputField}
+                                        >
+                                            <option value="Draft">Draft</option>
+                                            <option value="Published">Published</option>
+                                            <option value="Archived">Archived</option>
+                                        </select>
+                                    </div>
+                                </div>
 
-                    <div className={styles.formRow}>
-                        <div className={styles.formGroup}>
-                            <label>Parent Document (Optional)</label>
-                            <select
-                                name="parent_id"
-                                value={formData.parent_id || ''}
-                                onChange={handleChange}
-                                className={styles.inputField}
-                            >
-                                <option value="">None (Main Book)</option>
-                                {parentOptions.map(p => (
-                                    <option key={p.id} value={p.id}>{p.title}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className={styles.formGroup}>
-                            <label>Chapter No (e.g., 1.0)</label>
-                            <input
-                                type="text"
-                                name="chapter_no"
-                                value={formData.chapter_no || ''}
-                                onChange={handleChange}
-                                placeholder="e.g., 1.1"
-                                className={styles.inputField}
-                            />
-                        </div>
+                                <div className={styles.formRow}>
+                                    <div className={styles.formGroup} style={{ flexGrow: 1 }}>
+                                        <label>本次改版摘要 (Change Summary)</label>
+                                        <input
+                                            type="text"
+                                            name="change_summary"
+                                            value={(formData as any).change_summary || ''}
+                                            onChange={handleChange}
+                                            placeholder="簡述本次修改內容，例如：更新伺服器 IP (非必填)"
+                                            className={styles.inputField}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className={styles.formRow}>
+                                    <div className={styles.formGroup}>
+                                        <label>Parent Document (Optional)</label>
+                                        <select
+                                            name="parent_id"
+                                            value={formData.parent_id || ''}
+                                            onChange={handleChange}
+                                            className={styles.inputField}
+                                        >
+                                            <option value="">None (Main Book)</option>
+                                            {parentOptions.map(p => (
+                                                <option key={p.id} value={p.id}>{p.title}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className={styles.formGroup}>
+                                        <label>Chapter No (e.g., 1.0)</label>
+                                        <input
+                                            type="text"
+                                            name="chapter_no"
+                                            value={formData.chapter_no || ''}
+                                            onChange={handleChange}
+                                            placeholder="e.g., 1.1"
+                                            className={styles.inputField}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className={styles.chaptersContainer}>
