@@ -157,3 +157,37 @@
 .ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) li.ql-indent-6:not(.ql-direction-rtl) {
     padding-left: 10.5em;
 }
+
+/* ─────────────────────────────────────────────────────────────────
+ * Nested ordered-list marker styles inside a chapter-prefix container.
+ *
+ * Quill defaults to "1.", "a.", "i.", "A.", "I." for levels 0..4 and
+ * then cycles. That's fine for English prose but Chinese official
+ * documents typically use (1), a., i. patterns. We override the
+ * ::before content to match.
+ *
+ * CUSTOMISING: each level's marker is produced via
+ *   content: <prefix> counter(list-N, <style>) <suffix>
+ * so you can swap the style (decimal / lower-alpha / lower-roman /
+ * upper-alpha / upper-roman / cjk-ideographic) or wrap the counter
+ * with parentheses / full-width brackets as needed. To change the
+ * style for an individual article without touching this file, use a
+ * style="..." override on the wrapper div that carries
+ * data-chapter-prefix.
+ * ───────────────────────────────────────────────────────────────── */
+[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor ol li.ql-indent-1:not(.ql-direction-rtl)::before,
+.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) ol li.ql-indent-1:not(.ql-direction-rtl)::before {
+    content: "(" counter(list-1) ") ";
+}
+[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor ol li.ql-indent-2:not(.ql-direction-rtl)::before,
+.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) ol li.ql-indent-2:not(.ql-direction-rtl)::before {
+    content: counter(list-2, lower-alpha) ". ";
+}
+[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor ol li.ql-indent-3:not(.ql-direction-rtl)::before,
+.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) ol li.ql-indent-3:not(.ql-direction-rtl)::before {
+    content: counter(list-3, lower-roman) ". ";
+}
+[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor ol li.ql-indent-4:not(.ql-direction-rtl)::before,
+.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) ol li.ql-indent-4:not(.ql-direction-rtl)::before {
+    content: counter(list-4, upper-alpha) ". ";
+}
