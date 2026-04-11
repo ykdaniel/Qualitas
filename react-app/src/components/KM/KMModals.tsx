@@ -668,6 +668,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                             background: '#f8fafc',
                             marginBottom: 16,
                             overflow: 'hidden',
+                            flexShrink: 0,
                         }}
                     >
                         <button
