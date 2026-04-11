@@ -1,5 +1,7 @@
 import React, { useRef, useEffect, useMemo } from 'react';
 import DOMPurify from 'dompurify';
+import 'react-quill/dist/quill.snow.css';
+import '../ui/RichTextEditor.css';
 import { useLanguage } from '../../context/LanguageContext';
 import { KMArticle } from '../../types/km';
 import { useKMStore } from '../../store/kmStore';

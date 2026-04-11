@@ -199,9 +199,9 @@
  * so it doesn't clobber the indented rule below it. */
 [data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor ul > li:not([class*="ql-indent"]):not(.ql-direction-rtl)::before,
 .ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) ul > li:not([class*="ql-indent"]):not(.ql-direction-rtl)::before {
-    content: "○ " !important;
+    content: "XXX" !important;
 }
 [data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor li.ql-indent-1:not(.ql-direction-rtl)::before,
 .ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) li.ql-indent-1:not(.ql-direction-rtl)::before {
-    content: "- " !important;
+    content: "YYY" !important;
 }
