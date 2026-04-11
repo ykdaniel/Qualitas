@@ -47,11 +47,18 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
     useEffect(() => {
         if (existingData) {
             setFormData(existingData);
-            // If editing, force-refresh the kmList from the server before
-            // reading children. The store can be stale if the modal is
-            // opened right after a save in another component, or after
-            // direct DB edits — fetchChildren previously read getState()
-            // synchronously and missed any not-yet-fetched siblings.
+            // Force-refresh the kmList from the server, then load children.
+            // The store can be stale if the modal is opened right after a
+            // save in another component, or after direct DB edits.
+            //
+            // CRITICAL: this effect's dependency is `existingData?.id`, NOT
+            // the whole `existingData` object. Without that, awaiting
+            // fetchKMs causes an infinite loop:
+            //   fetchKMs → kmList replaced → KM.tsx's selectedArticle
+            //   useMemo returns a new ref → existingData prop ref
+            //   changes → useEffect re-fires → fetchKMs again → ...
+            // Keying on the id keeps the effect stable across kmList
+            // re-fetches as long as the user is editing the same article.
             const fetchChildren = async () => {
                 if (existingData.id) {
                     try {
@@ -88,7 +95,8 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
             });
             setChapters([{ title: 'Chapter 1', content: '', chapter_no: '1.0' }]);
         }
-    }, [existingData]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [existingData?.id]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
