@@ -55,7 +55,7 @@ export const ITRStatusTransitions: StatusTransition[] = [
   { from: 'In Progress', to: 'Reject', allowed: true },
   { from: 'In Progress', to: 'Void', allowed: true },
   { from: 'Approved', to: 'Reject', allowed: false, message: '已批准的 ITR 不能直接改為拒絕，請透過 Publish 建立新版本' },
-  { from: 'Approved', to: 'In Progress', allowed: false, message: '已批准的 ITR 不能改為進行中，請透過 Publish 建立新版本' },
+  { from: 'Approved', to: 'In Progress', allowed: true },
   { from: 'Approved', to: 'Void', allowed: true },
   { from: 'Reject', to: 'In Progress', allowed: true },
   { from: 'Reject', to: 'Approved', allowed: true },

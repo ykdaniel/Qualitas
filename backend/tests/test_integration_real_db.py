@@ -239,6 +239,14 @@ def test_ncr_delete_blocked_by_itr_reference(db_session, vendor):
     db_session.commit()
     assert itr.ncrNumber == ncr.documentNumber
 
+    # Non-Void NCRs cannot be deleted at all (anti-gaming guard)
+    with pytest.raises(ValueError, match="Void the NCR first"):
+        ncr_service.delete_ncr(ncr.id, user_id=1, username="tester")
+
+    # Transition to Void so we can test the ITR reference guard
+    ncr_service.update_ncr(ncr.id, schemas.NCRUpdate(status="Void"), user_id=1, username="tester")
+    db_session.commit()
+
     with pytest.raises(ValueError, match="referenced by"):
         ncr_service.delete_ncr(ncr.id, user_id=1, username="tester")
 

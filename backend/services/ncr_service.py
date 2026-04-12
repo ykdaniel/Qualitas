@@ -4,6 +4,7 @@ NCR (Non-Conformance Report) Service
 Business logic layer for NCR module
 """
 
+import json
 import uuid
 import logging
 from datetime import datetime
@@ -167,10 +168,58 @@ class NCRService:
             d = ncr_update.model_dump(exclude_unset=True)
             d = _json_serialize(d, ['defectPhotos', 'improvementPhotos', 'attachments'])
 
+            # --- Guard: prevent modification of quality fields on an already-Closed NCR ---
+            # This check must run BEFORE the "transitioning to Closed" validation so
+            # that an update that is NOT changing status but tries to alter these
+            # fields on a Closed record is correctly rejected.
+            _LOCKED_QUALITY_FIELDS = {
+                'repairMethodStatement', 'rootCauseAnalysis', 'correctiveActions',
+                'reInspectionNumber', 'improvementPhotos',
+            }
+            is_already_closed = db_ncr.status == 'Closed'
+            is_transitioning_to_closed = d.get('status') == 'Closed' and not is_already_closed
+
+            if is_already_closed and not is_transitioning_to_closed:
+                changed_locked = _LOCKED_QUALITY_FIELDS & set(d.keys())
+                if changed_locked:
+                    raise ValueError("Cannot modify quality fields on a Closed NCR")
+
             # Handle vendor name -> vendor_id mapping
             if 'vendor' in d:
                 vendor_name = d.pop('vendor')
                 d['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
+
+            # --- Validate required fields when transitioning to Closed ---
+            if is_transitioning_to_closed:
+                # Merge incoming data with existing record to check final state
+                final_repair = d.get('repairMethodStatement', db_ncr.repairMethodStatement)
+                final_reinspection = d.get('reInspectionNumber', db_ncr.reInspectionNumber)
+                final_photos_raw = d.get('improvementPhotos', db_ncr.improvementPhotos)
+
+                # improvementPhotos may be a JSON string or a Python list
+                if isinstance(final_photos_raw, str):
+                    try:
+                        final_photos = json.loads(final_photos_raw)
+                    except (json.JSONDecodeError, TypeError):
+                        final_photos = []
+                elif isinstance(final_photos_raw, list):
+                    final_photos = final_photos_raw
+                else:
+                    final_photos = []
+
+                missing = []
+                if not final_repair or not str(final_repair).strip():
+                    missing.append('repairMethodStatement (改善方案)')
+                if not final_reinspection or not str(final_reinspection).strip():
+                    missing.append('reInspectionNumber (複檢編號)')
+                if not final_photos:
+                    missing.append('improvementPhotos (改善照片)')
+
+                if missing:
+                    raise ValueError(
+                        f"Cannot close NCR: the following required fields are missing: "
+                        f"{', '.join(missing)}"
+                    )
 
             # Auto-set closeoutDate when transitioning to Closed
             if d.get('status') == 'Closed' and not d.get('closeoutDate') and not db_ncr.closeoutDate:
@@ -220,6 +269,14 @@ class NCRService:
             db_ncr = self.repo.get_by_id(ncr_id)
             if not db_ncr:
                 return False
+
+            # Only Void NCRs can be deleted — deleting Open/In Progress/Resolved/Closed
+            # NCRs would game the Q-WorkFlow completion percentage to 100%.
+            if db_ncr.status != 'Void':
+                raise ValueError(
+                    f"Cannot delete NCR '{db_ncr.documentNumber}' with status '{db_ncr.status}'. "
+                    f"Please Void the NCR first, then delete."
+                )
 
             # Check for ITR references before deletion
             itr_count = self.repo.db.query(models.ITR).filter(

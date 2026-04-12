@@ -3,6 +3,7 @@ import api from '../services/api';
 import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
+import { getProjectFilterParams } from '../utils/projectFilter';
 
 export interface OBSItem {
     id: string;
@@ -65,7 +66,7 @@ export const useOBSStore = create<OBSState>((set, get) => ({
     fetchOBSs: async (params?: FilterParams) => {
         set({ loading: true, error: null });
         try {
-            const response = await api.get('/obs/', { params });
+            const response = await api.get('/obs/', { params: { ...getProjectFilterParams(), ...params } });
             set({ obsList: (response.data || []).map(normalizeItem), loading: false });
         } catch (err: any) {
             set({ error: getErrorMessage(err, 'Failed to fetch OBSs'), loading: false });

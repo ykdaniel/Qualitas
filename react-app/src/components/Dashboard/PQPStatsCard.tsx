@@ -25,6 +25,10 @@ const PQPStatsCard: React.FC = () => {
       const status = (item.status || '').toLowerCase();
       return status === 'reject';
     }).length;
+    const reviseResubmit = filteredList.filter(item => {
+      const status = (item.status || '').toLowerCase();
+      return status === 'revise & resubmit';
+    }).length;
     const notSubmit = filteredList.filter(item => {
       const status = (item.status || '').toLowerCase();
       return status === 'not submit';
@@ -36,6 +40,7 @@ const PQPStatsCard: React.FC = () => {
 
     const approvedPercent = total > 0 ? Math.round((approved / total) * 100) : 0;
     const rejectPercent = total > 0 ? Math.round((reject / total) * 100) : 0;
+    const reviseResubmitPercent = total > 0 ? Math.round((reviseResubmit / total) * 100) : 0;
     const notSubmitPercent = total > 0 ? Math.round((notSubmit / total) * 100) : 0;
     const underReviewPercent = total > 0 ? Math.round((underReview / total) * 100) : 0;
     const maturity = total > 0 ? Math.round((approved / total) * 100) : 0;
@@ -44,10 +49,12 @@ const PQPStatsCard: React.FC = () => {
       total,
       approved,
       reject,
+      reviseResubmit,
       notSubmit,
       underReview,
       approvedPercent,
       rejectPercent,
+      reviseResubmitPercent,
       notSubmitPercent,
       underReviewPercent,
       maturity,
@@ -83,6 +90,12 @@ const PQPStatsCard: React.FC = () => {
           <span className={styles.pqpStatsLabel}>{t('status.reject') || 'Reject'}</span>
           <span className={styles.pqpStatsValue} style={{ color: stats.reject > 0 ? '#dc2626' : '#1e293b', fontSize: '18px', fontWeight: '600' }}>
             {stats.reject} ({stats.rejectPercent}%)
+          </span>
+        </div>
+        <div className={styles.pqpStatsRow}>
+          <span className={styles.pqpStatsLabel}>{t('pqp.status.reviseResubmit') || 'Revise & Resubmit'}</span>
+          <span className={styles.pqpStatsValue} style={{ color: stats.reviseResubmit > 0 ? '#ea580c' : '#1e293b', fontSize: '18px', fontWeight: '600' }}>
+            {stats.reviseResubmit} ({stats.reviseResubmitPercent}%)
           </span>
         </div>
       </div>

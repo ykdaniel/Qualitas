@@ -10,11 +10,13 @@ class ITPRepository:
     def get_by_id(self, itp_id: str) -> Optional[models.ITP]:
         return self.db.query(models.ITP).options(joinedload(models.ITP.vendor_ref)).filter(models.ITP.id == itp_id).first()
 
-    def get_all(self, skip: int = 0, limit: int = 100, search: str = None, status: str = None, start_date: str = None, end_date: str = None) -> List[models.ITP]:
+    def get_all(self, skip: int = 0, limit: int = 100, search: str = None, status: str = None, start_date: str = None, end_date: str = None, project_id: str = None) -> List[models.ITP]:
         # 驗證分頁參數
         skip, limit = sanitize_pagination(skip, limit)
 
         query = self.db.query(models.ITP).options(joinedload(models.ITP.vendor_ref))
+        if project_id:
+            query = query.filter(models.ITP.project_id == project_id)
         if search:
             search = sanitize_search_term(search)
             if search:

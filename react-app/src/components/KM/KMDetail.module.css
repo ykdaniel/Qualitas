@@ -21,11 +21,36 @@
 }
 
 /* ======== Top Navigation ======== */
+/* Sticky wrapper: keeps Back/Print/Edit + hero card pinned */
+.stickyHeader {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: #f3f4f6;
+    margin: 0 -24px;
+    padding: 12px 24px 0;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+@supports (animation-timeline: scroll()) {
+    .stickyHeader {
+        animation: topNavShadow linear both;
+        animation-timeline: scroll(nearest);
+        animation-range: 0px 80px;
+    }
+}
+
+@keyframes topNavShadow {
+    from { border-bottom-color: transparent; box-shadow: none; }
+    to   { border-bottom-color: #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+}
+
 .topNav {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0 0 24px 0;
+    padding: 0 0 12px 0;
 }
 
 .editBtn {
@@ -78,12 +103,12 @@
 .heroCard {
     background-color: #ffffff;
     border-radius: 20px;
-    padding: 32px 40px;
+    padding: 24px 32px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
-    margin-bottom: 24px;
+    margin-bottom: 16px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
 }
 
 .metaRow {
@@ -200,10 +225,11 @@
 
 .contentBody {
     padding: 32px;
-    font-family: 'Inter', -apple-system, sans-serif;
+    font-family: Calibri, "Helvetica Neue", Arial,
+        "Microsoft JhengHei", "微軟正黑體", "PingFang TC", sans-serif;
     line-height: 1.8;
     color: #334155;
-    font-size: 1.05rem;
+    font-size: 12pt;
 }
 
 .editorContainer {
@@ -213,6 +239,8 @@
 /* Chapter Rendering Styles */
 .chapterSection {
     margin-bottom: 24px;
+    /* Offset scroll target so sticky header doesn't cover the title */
+    scroll-margin-top: 200px;
 }
 
 .chapterDivider {
@@ -223,12 +251,40 @@
 }
 
 .chapterTitle {
-    font-size: 1.6rem;
+    font-size: 14pt;
     font-weight: 700;
+    font-family: Calibri, "Helvetica Neue", Arial,
+        "Microsoft JhengHei", "微軟正黑體", "PingFang TC", sans-serif;
     color: #1e293b;
     margin-bottom: 20px;
     padding-bottom: 10px;
     border-bottom: 2px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.chapterEditBtn {
+    background: none;
+    border: 1px solid transparent;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    opacity: 0;
+    transition: all 0.2s ease;
+}
+
+.chapterTitle:hover .chapterEditBtn {
+    opacity: 1;
+}
+
+.chapterEditBtn:hover {
+    color: #3b82f6;
+    background-color: #eff6ff;
+    border-color: #bfdbfe;
 }
 
 /* ======== Right Sidebar ======== */
@@ -422,7 +478,7 @@
         margin: 2cm 1.8cm 2.5cm 1.8cm;
 
         @bottom-right {
-            content: counter(page);
+            content: counter(page) " of " counter(pages);
             font-size: 10pt;
             color: #64748b;
         }
@@ -436,11 +492,13 @@
     }
 
     /* Hide all UI chrome */
+    .stickyHeader,
     .topNav,
     .heroCard,
     .rightLayout,
     .contentHeader,
-    .chapterDivider {
+    .chapterDivider,
+    .chapterEditBtn {
         display: none !important;
     }
 
@@ -458,6 +516,7 @@
         min-height: 0 !important;
         overflow: visible !important;
         display: block !important;
+        position: static !important;
     }
 
     /* ---- Index page ---- */

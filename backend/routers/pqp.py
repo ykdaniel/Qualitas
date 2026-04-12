@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 import schemas
 from core.dependencies import RoleChecker, get_pqp_service
-from core.perms import PQP_CREATE, PQP_DELETE, PQP_UPDATE, PQP_VIEW
+from core.perms import PQP_APPROVE, PQP_CREATE, PQP_DELETE, PQP_UPDATE, PQP_VIEW
 from database import get_db
 from services.pqp_service import PQPService
 
@@ -69,6 +69,36 @@ def update_pqp(
     if db_pqp is None:
         raise HTTPException(status_code=404, detail="PQP not found")
     return db_pqp
+
+@router.post("/{pqp_id}/publish", response_model=schemas.PQP)
+def publish_pqp(
+    pqp_id: str,
+    body: schemas.PQPPublish = schemas.PQPPublish(),
+    pqp_service: PQPService = Depends(get_pqp_service),
+    current_user: schemas.User = Depends(RoleChecker(PQP_APPROVE))
+):
+    try:
+        db_pqp = pqp_service.publish_pqp(
+            pqp_id=pqp_id,
+            change_summary=body.change_summary,
+            user_id=current_user.id,
+            username=current_user.username
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if db_pqp is None:
+        raise HTTPException(status_code=404, detail="PQP not found")
+    return db_pqp
+
+
+@router.get("/{pqp_id}/history", response_model=list[schemas.PQPHistoryItem])
+def get_pqp_history(
+    pqp_id: str,
+    pqp_service: PQPService = Depends(get_pqp_service),
+    current_user: schemas.User = Depends(RoleChecker(PQP_VIEW))
+):
+    return pqp_service.get_history(pqp_id)
+
 
 @router.delete("/{pqp_id}")
 def delete_pqp(

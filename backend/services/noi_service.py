@@ -13,6 +13,7 @@ import schemas
 from repositories.noi_repository import NOIRepository
 from core.utils import (
     _json_serialize,
+    _reference_seq_lock,
     _resolve_vendor_id,
     generate_reference_no,
     log_audit,
@@ -109,6 +110,13 @@ class NOIService:
 
             # Save to database
             created = self.repo.create(db_noi)
+
+            # Auto-create the paired Q-WorkFlow row. A Q-WorkFlow is
+            # 1:1 with an NOI and drives the cross-module tracker on
+            # the Dashboard / /workflow page. Done inline (not via a
+            # service) because the row is trivial and the 1:1 binding
+            # must stay in the same transaction as the NOI insert.
+            self._create_qworkflow_for_noi(created)
 
             # Log audit trail
             log_audit(
@@ -220,6 +228,19 @@ class NOIService:
                         f"Please ensure all linked ITRs are Approved or Void first."
                     )
 
+                # 勾稽鎖定：關閉 NOI 前確認其下所有 NCR 已完結（Closed 或 Void）
+                open_ncrs = self.repo.db.query(models.NCR).filter(
+                    models.NCR.noiNumber == db_noi.referenceNo,
+                    models.NCR.status.notin_(['Closed', 'Void'])
+                ).all()
+                if open_ncrs:
+                    open_refs = [ncr.documentNumber or ncr.id for ncr in open_ncrs]
+                    raise ValueError(
+                        f"Cannot close NOI '{db_noi.referenceNo}': "
+                        f"{len(open_ncrs)} NCR(s) still open: {', '.join(open_refs)}. "
+                        f"Please ensure all linked NCRs are Closed or Void first."
+                    )
+
             # Update the record
             updated = self.repo.update(db_noi, d)
 
@@ -236,6 +257,50 @@ class NOIService:
         except Exception as e:
             logger.error(f"Error updating NOI {noi_id}: {e}", exc_info=True)
             raise e
+
+    def _create_qworkflow_for_noi(self, noi: models.NOI) -> None:
+        """Attach a fresh Q-WorkFlow row to a newly-created NOI.
+
+        Numbering is a simple MAX+1 on the ``qworkflow.referenceNo``
+        column: Q-WorkFlow numbers are a single global sequence, not
+        per-vendor or per-project, so we don't need the shared
+        reference_sequences table. Any parse failure on an existing
+        row is ignored (treated as 0) so a hand-edited DB can't break
+        startup. If the QWorkflow insert somehow fails we log and
+        swallow — NOI creation must not be blocked by tracker
+        bookkeeping.
+        """
+        from datetime import datetime, timezone
+
+        try:
+            with _reference_seq_lock:
+                existing = (
+                    self.repo.db.query(models.QWorkflow.referenceNo)
+                    .with_for_update()
+                    .all()
+                )
+                max_seq = 0
+                for (ref,) in existing:
+                    if not ref or not ref.startswith("Q-WorkFlow-"):
+                        continue
+                    try:
+                        max_seq = max(max_seq, int(ref.split("-")[-1]))
+                    except ValueError:
+                        continue
+
+                next_ref = f"Q-WorkFlow-{max_seq + 1:06d}"
+                qwf = models.QWorkflow(
+                    id=str(uuid.uuid4()),
+                    referenceNo=next_ref,
+                    noi_id=noi.id,
+                    createdAt=datetime.now(timezone.utc).isoformat(),
+                )
+                self.repo.db.add(qwf)
+                self.repo.db.flush()
+        except Exception as e:
+            logger.warning(
+                f"Failed to create Q-WorkFlow for NOI {noi.id}: {e}"
+            )
 
     def delete_noi(self, noi_id: str, user_id: int = None, username: str = None) -> bool:
         """

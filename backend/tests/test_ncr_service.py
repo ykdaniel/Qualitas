@@ -88,8 +88,8 @@ def test_update_ncr_success(ncr_service, mock_repo):
         mock_log.assert_called_once()
 
 def test_delete_ncr_success(ncr_service, mock_repo):
-    # Arrange
-    mock_db_ncr = models.NCR(id="ncr-123", documentNumber="NCR-001")
+    # Arrange — only Void NCRs can be deleted
+    mock_db_ncr = models.NCR(id="ncr-123", documentNumber="NCR-001", status="Void")
     mock_repo.get_by_id.return_value = mock_db_ncr
     mock_repo.db.query.return_value.filter.return_value.count.return_value = 0
 
@@ -103,9 +103,19 @@ def test_delete_ncr_success(ncr_service, mock_repo):
         mock_log.assert_called_once()
 
 
+def test_delete_ncr_blocked_by_non_void_status(ncr_service, mock_repo):
+    """Non-Void NCRs cannot be deleted (anti-gaming guard)."""
+    mock_db_ncr = models.NCR(id="ncr-123", documentNumber="NCR-001", status="Open")
+    mock_repo.get_by_id.return_value = mock_db_ncr
+
+    with pytest.raises(ValueError, match="Void the NCR first"):
+        ncr_service.delete_ncr("ncr-123", user_id=1, username="admin")
+    mock_repo.delete.assert_not_called()
+
+
 def test_delete_ncr_blocked_by_itr_references(ncr_service, mock_repo):
-    # Arrange
-    mock_db_ncr = models.NCR(id="ncr-123", documentNumber="NCR-001")
+    # Arrange — Void NCR but still referenced by ITRs
+    mock_db_ncr = models.NCR(id="ncr-123", documentNumber="NCR-001", status="Void")
     mock_repo.get_by_id.return_value = mock_db_ncr
     mock_repo.db.query.return_value.filter.return_value.count.return_value = 2
 

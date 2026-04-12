@@ -65,6 +65,7 @@ export const createColumns = (
                         { label: t('itr.status.approved'), value: 'Approved' },
                         { label: t('itr.status.reject'), value: 'Reject' },
                         { label: t('itr.status.inProgress'), value: 'In Progress' },
+                        { label: t('status.void'), value: 'Void' },
                     ]}
                 />
             ),
@@ -114,7 +115,18 @@ export const createColumns = (
                 const stored = row.original.dueDate;
                 const raiseDate = row.original.raiseDate;
                 const computed = stored || (raiseDate ? addSevenWorkingDays(formatDateISO(raiseDate)) : null);
-                return <div className="text-center">{computed || '-'}</div>;
+                const status = (row.original.status || '').toLowerCase();
+                const isTerminal = status === 'approved' || status === 'void';
+                const isOverdue = !isTerminal && !!computed && computed < new Date().toISOString().slice(0, 10);
+                return (
+                    <div
+                        className="text-center"
+                        style={isOverdue ? { color: '#ef4444', fontWeight: 600 } : undefined}
+                    >
+                        {isOverdue && <AlertTriangle className="inline-block h-3.5 w-3.5 mr-1 align-text-bottom" />}
+                        {computed || '-'}
+                    </div>
+                );
             },
         },
         {
@@ -160,7 +172,7 @@ export const createColumns = (
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 text-gray-500 hover:text-gray-600 hover:bg-gray-100"
-                                onClick={() => navigate('/noi')}
+                                onClick={() => navigate(`/noi?openId=${encodeURIComponent(itr.noiNumber!)}`)}
                                 title={t('itr.tooltip.viewRelatedNOI')}
                             >
                                 <FileText className="h-4 w-4" />
@@ -171,7 +183,7 @@ export const createColumns = (
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
-                                onClick={() => navigate('/ncr')}
+                                onClick={() => navigate(`/ncr?openId=${encodeURIComponent(itr.ncrNumber!)}`)}
                                 title={t('itr.tooltip.viewRelatedNCR')}
                             >
                                 <AlertTriangle className="h-4 w-4" />

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 
 import models
 import schemas
-from core.utils import sanitize_pagination, sanitize_search_term
+from core.utils import _reference_seq_lock, sanitize_pagination, sanitize_search_term
 
 
 class KMRepository:
@@ -18,31 +18,35 @@ class KMRepository:
         prefix = rule.prefix if rule else "QTS-KM-"
         digits = rule.sequence_digits if rule else 6
 
-        seq_record = self.db.query(models.ReferenceSequence).filter(
-            models.ReferenceSequence.project == "QTS",
-            models.ReferenceSequence.vendor == "SYS",
-            models.ReferenceSequence.doc == "km"
-        ).first()
+        with _reference_seq_lock:
+            seq_record = self.db.query(models.ReferenceSequence).filter(
+                models.ReferenceSequence.project == "QTS",
+                models.ReferenceSequence.vendor == "SYS",
+                models.ReferenceSequence.doc == "km"
+            ).with_for_update().first()
 
-        if not seq_record:
-            seq_record = models.ReferenceSequence(
-                project="QTS",
-                vendor="SYS",
-                doc="km",
-                last_seq=0
-            )
-            self.db.add(seq_record)
-            self.db.commit()
-            self.db.refresh(seq_record)
+            if seq_record:
+                seq_record.last_seq += 1
+                next_seq = seq_record.last_seq
+            else:
+                next_seq = 1
+                seq_record = models.ReferenceSequence(
+                    project="QTS",
+                    vendor="SYS",
+                    doc="km",
+                    last_seq=next_seq
+                )
+                self.db.add(seq_record)
 
-        seq_record.last_seq += 1
-        self.db.commit()
+            self.db.flush()
 
-        return f"{prefix}{str(seq_record.last_seq).zfill(digits)}"
+        return f"{prefix}{str(next_seq).zfill(digits)}"
 
-    def get_all(self, skip: int = 0, limit: int = 100, category: str | None = None, search: str | None = None) -> list[models.KMArticle]:
-        # 驗證分頁參數
-        skip, limit = sanitize_pagination(skip, limit)
+    def get_all(self, skip: int = 0, limit: int = 10000, category: str | None = None, search: str | None = None) -> list[models.KMArticle]:
+        # KM articles include child chapters — need a high default limit
+        # to avoid silently truncating chapters. Skip sanitize_pagination
+        # which caps at MAX_PAGE_LIMIT (500).
+        skip = max(0, skip)
 
         query = self.db.query(models.KMArticle).options(
             joinedload(models.KMArticle.author)
@@ -125,6 +129,13 @@ class KMRepository:
 
         # Track change summary before removing it from update_data (as it's not in KMArticle)
         change_summary = update_data.pop("change_summary", None) or "Auto-saved version"
+
+        # Optimistic locking: verify version_no matches before updating
+        expected_version = update_data.pop("version_no", None)
+        if expected_version is not None and db_article.version_no != expected_version:
+            raise ValueError(
+                "This article has been modified by another user. Please refresh and try again."
+            )
 
         update_data["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 

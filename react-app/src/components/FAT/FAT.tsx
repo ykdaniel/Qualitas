@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { checkFATReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
@@ -314,9 +315,13 @@ const FATDetailModal: React.FC<FATDetailModalProps> = ({ fatId, details, onSave,
     );
   };
 
-  const handleSave = () => {
-    onSave(detailList);
-    onClose();
+  const handleSave = async () => {
+    try {
+      await onSave(detailList);
+      onClose();
+    } catch (err) {
+      toast.error((err as Error)?.message || 'Save failed');
+    }
   };
 
   return (
@@ -480,9 +485,13 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSave = () => {
-    onSave(formData);
-    onClose();
+  const handleSave = async () => {
+    try {
+      await onSave(formData);
+      onClose();
+    } catch (err) {
+      toast.error((err as Error)?.message || 'Save failed');
+    }
   };
 
   return (

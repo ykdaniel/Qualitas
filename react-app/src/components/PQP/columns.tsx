@@ -9,6 +9,7 @@ const getLocalizedStatus = (status: string, t: (key: string) => string) => {
     const s = (status || '').toLowerCase();
     if (s === 'approved') return t('pqp.status.approved');
     if (s === 'reject') return t('pqp.status.reject');
+    if (s === 'revise & resubmit') return t('pqp.status.reviseResubmit');
     if (s === 'not submit') return t('pqp.status.notSubmitted');
     if (s === 'under review') return t('pqp.status.underReview');
     return status;
@@ -47,6 +48,7 @@ export const createColumns = (
                         { label: t('pqp.status.underReview'), value: 'Under Review' },
                         { label: t('pqp.status.approved'), value: 'Approved' },
                         { label: t('pqp.status.reject'), value: 'Reject' },
+                        { label: t('pqp.status.reviseResubmit'), value: 'Revise & Resubmit' },
                     ]}
                 />
             ),
@@ -57,6 +59,7 @@ export const createColumns = (
 
                 if (s === 'approved') badgeClass = styles.statusApproved;
                 else if (s === 'reject') badgeClass = styles.statusReject;
+                else if (s === 'revise & resubmit') badgeClass = styles.statusReviseResubmit || styles.statusReject;
                 else if (s === 'under review') badgeClass = styles.statusUnderReview;
                 else if (s === 'not submit') badgeClass = styles.statusNotSubmit;
 

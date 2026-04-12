@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from loguru import logger
 
 import models
-from core.utils import sanitize_search_term
+from core.utils import sanitize_pagination, sanitize_search_term
 
 class FATRepository:
     """Repository for FAT entity"""
@@ -23,9 +23,12 @@ class FATRepository:
             joinedload(models.FAT.vendor_ref)
         ).filter(models.FAT.id == fat_id).first()
 
-    def get_all(self, skip: int = 0, limit: int = 500, **filters) -> List[models.FAT]:
+    def get_all(self, skip: int = 0, limit: int = 500, project_id: str = None, **filters) -> List[models.FAT]:
         """Fetch multiple FATs with optional exact and fuzzy filters"""
+        skip, limit = sanitize_pagination(skip, limit)
         query = self.db.query(models.FAT).options(joinedload(models.FAT.vendor_ref))
+        if project_id:
+            query = query.filter(models.FAT.project_id == project_id)
 
         # Dynamic exact filters
         for key, value in filters.items():

@@ -7,4 +7,5 @@ export interface FilterParams {
     limit?: number;
     itrId?: string;
     noiNumber?: string;
+    project_id?: string;
 }

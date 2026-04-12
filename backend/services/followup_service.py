@@ -14,7 +14,8 @@ from repositories.followup_repository import FollowUpRepository
 from core.utils import (
     _resolve_vendor_id,
     generate_reference_no,
-    log_audit
+    log_audit,
+    WorkflowEngine
 )
 from core import validators
 
@@ -75,11 +76,19 @@ class FollowUpService:
 
     def update_followup(self, followup_id: str, followup_update: schemas.FollowUpUpdate,
                         user_id: int = None, username: str = None) -> Optional[models.FollowUp]:
-        """Update an existing FollowUp (no status validation)"""
+        """Update an existing FollowUp with status transition validation"""
         try:
             db_followup = self.repo.get_by_id(followup_id)
             if not db_followup:
                 return None
+
+            # Workflow validation: Check status transition
+            if followup_update.status and not WorkflowEngine.validate_transition(
+                "FollowUp", db_followup.status, followup_update.status
+            ):
+                raise ValueError(
+                    f"Invalid status transition from {db_followup.status} to {followup_update.status}"
+                )
 
             old_val = {c.name: getattr(db_followup, c.name) for c in db_followup.__table__.columns}
             data = followup_update.model_dump(exclude_unset=True)

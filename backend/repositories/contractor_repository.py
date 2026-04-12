@@ -8,6 +8,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 
 import models
+from core.utils import sanitize_pagination
 
 
 class ContractorRepository:
@@ -41,6 +42,7 @@ class ContractorRepository:
         Returns:
             List of Contractor objects
         """
+        skip, limit = sanitize_pagination(skip, limit)
         return self.db.query(models.Contractor).offset(skip).limit(limit).all()
 
     def create(self, contractor: models.Contractor) -> models.Contractor:

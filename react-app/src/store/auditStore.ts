@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import api from '../services/api';
 import { getErrorMessage } from '../utils/errorUtils';
+import { getProjectFilterParams } from '../utils/projectFilter';
 
 export interface AuditItem {
     id: string;
@@ -50,7 +51,7 @@ export const useAuditStore = create<AuditState>((set, get) => ({
     fetchAudits: async () => {
         set({ loading: true, error: null });
         try {
-            const response = await api.get('/audit/');
+            const response = await api.get('/audit/', { params: { ...getProjectFilterParams() } });
             const list = response.data || [];
             set({ auditList: list, loading: false });
         } catch (err: any) {

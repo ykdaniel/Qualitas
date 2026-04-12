@@ -38,6 +38,8 @@ from services.contractor_service import ContractorService
 from services.audit_service import AuditService
 from services.fat_service import FATService
 from services.kpi_service import KPIService
+from services.related_service import RelatedService
+from services.workflow_service import WorkflowService
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +98,18 @@ def get_fat_service(db: Session = Depends(get_db)) -> FATService:
 def get_kpi_service(db: Session = Depends(get_db)) -> KPIService:
     repo = KPIRepository(db)
     return KPIService(repo)
+
+def get_related_service(db: Session = Depends(get_db)) -> RelatedService:
+    # RelatedService doesn't need a repository — it reads across many
+    # modules via SQLAlchemy relationships declared on the models, so
+    # it takes the raw session.
+    return RelatedService(db)
+
+def get_workflow_service(db: Session = Depends(get_db)) -> WorkflowService:
+    # WorkflowService also spans modules (NOI + ITR + NCR) and reads via
+    # SQLAlchemy relationships, so it bypasses the repository layer and
+    # takes the session directly.
+    return WorkflowService(db)
 
 class RoleChecker:
     def __init__(self, required_permission: str):

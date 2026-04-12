@@ -7,6 +7,7 @@ import { useNOIStore } from '../../store/noiStore';
 import { useITRStore } from '../../store/itrStore';
 import type { NCRItem } from '../../store/ncrStore';
 import FileAttachment from '../Shared/FileAttachment';
+import RelatedDocuments from '../ui/RelatedDocuments';
 import styles from './NCR.module.css';
 
 export interface NCRDetailData {
@@ -53,29 +54,24 @@ export interface PendingUploads {
 
 export interface NCRDetailModalProps {
     ncrId: string | null;
-    existingData?: NCRDetailData;
     existingItem?: NCRItem;
-    ncrList: NCRItem[];
     onSave: (details: NCRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => void | Promise<void>;
     onClose: () => void;
 }
 
-export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, existingData, existingItem, ncrList: _propNcrList, onSave, onClose }) => {
+export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, existingItem, onSave, onClose }) => {
     const { t } = useLanguage();
     const { getActiveContractors } = useContractorsStore();
     const noiList = useNOIStore(state => state.noiList);
     const getNOIList = () => noiList;
     const itrList = useITRStore(state => state.itrList);
 
-    // Initialize form data from existing data or existing item
+    // Initialize form data from existing item
     const getInitialData = (): NCRDetailData => {
-        if (existingData) {
-            return { ...existingData, itrNumber: existingData.itrNumber || '', rev: existingData.rev || '' };
-        }
         if (existingItem) {
             return {
                 ncrNumber: existingItem.documentNumber || '',  // 既有編號，顯示用
-                itrNumber: '',
+                itrNumber: existingItem.itrNumber || '',
                 rev: existingItem.rev || '',
                 status: existingItem.status || 'Open',
                 raiseDate: existingItem.raiseDate || '',
@@ -234,6 +230,8 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                 { category: 'attachment', files: pendingAttachments }
             ], deletedFileIds);
             onClose();
+        } catch (err) {
+            toast.error((err as Error)?.message || t('common.saveFailed'));
         } finally {
             setSaving(false);
         }
@@ -247,16 +245,15 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                 await onSave({
                     ...formData,
                     rev: nextRev,
-                    status: 'Closed' // Optional: NCR usually closes on completion, but publish might just be versioning. Let's keep status manual or ask user? 
-                    // For now, mirroring ITP logic: update rev. Status is manually managed in NCR usually.
-                    // Actually, for NCR, "Publish" might mean "Issue" (Open) or "Close".
-                    // Let's stick to Versioning only to be safe, or default to current status.
+                    // Keep current status — don't force Closed (must go through workflow)
                 }, [
                     { category: 'defectPhoto', files: pendingDefectPhotos },
                     { category: 'improvementPhoto', files: pendingImprovementPhotos },
                     { category: 'attachment', files: pendingAttachments }
                 ], deletedFileIds);
                 onClose();
+            } catch (err) {
+                toast.error((err as Error)?.message || t('common.saveFailed'));
             } finally {
                 setSaving(false);
             }
@@ -267,7 +264,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         <div className={styles.modalOverlay}>
             <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
                 <div className={styles.modalHeader}>
-                    <h2>{existingData || existingItem ? t('ncr.editTitle') : t('ncr.addTitle')}</h2>
+                    <h2>{existingItem ? t('ncr.editTitle') : t('ncr.addTitle')}</h2>
                     <button className={styles.closeButton} onClick={onClose} disabled={saving}>×</button>
                 </div>
                 <div className={styles.modalBody}>
@@ -741,8 +738,6 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                         className={styles.formInput}
                                         value={formData.closeoutDate}
                                         onChange={(e) => handleFieldChange('closeoutDate', e.target.value)}
-                                        readOnly
-                                        style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
                                     />
                                 </div>
                                 <div className={styles.formGroup}>
@@ -801,6 +796,9 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 </div>
                             </div>
                         </div>
+                        {existingItem?.id && (
+                            <RelatedDocuments entityType="ncr" entityId={existingItem.id} />
+                        )}
                     </div>
                     <div className={styles.modalActions}>
                         <button

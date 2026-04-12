@@ -31,19 +31,23 @@ class AuditRepository:
                 .filter(models.Audit.id == audit_id)
                 .first())
 
-    def get_all(self, skip: int = 0, limit: int = 100) -> List[models.Audit]:
+    def get_all(self, skip: int = 0, limit: int = 100, project_id: str = None) -> List[models.Audit]:
         """
         Get all Audits
 
         Args:
             skip: Number of records to skip (pagination)
             limit: Maximum number of records to return
+            project_id: Optional project ID filter
 
         Returns:
             List of Audit objects
         """
         skip, limit = sanitize_pagination(skip, limit)
-        return self.db.query(models.Audit).offset(skip).limit(limit).all()
+        query = self.db.query(models.Audit)
+        if project_id:
+            query = query.filter(models.Audit.project_id == project_id)
+        return query.offset(skip).limit(limit).all()
 
     def create(self, audit_data: Dict[str, Any]) -> models.Audit:
         """

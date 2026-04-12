@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import * as api from '../services/api';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
+import { getProjectFilterParams } from '../utils/projectFilter';
 
 // NOTE: 重複使用 api.ts 中的 ChecklistRecordApi 介面避免重複定義
 export type { ChecklistRecordApi } from '../services/api';
@@ -89,7 +90,7 @@ export const useChecklistStore = create<ChecklistState>((set, get) => ({
     fetchRecords: async (params?: FilterParams) => {
         set({ loading: true, error: null });
         try {
-            const data = await api.getChecklists(params);
+            const data = await api.getChecklists({ ...getProjectFilterParams(), ...params });
             set({ records: data.map(normalizeRecord), loading: false });
         } catch (err: any) {
             set({

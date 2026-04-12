@@ -256,6 +256,71 @@ fallback branch in `services/checklist_service.py`.
 
 ---
 
+## 11. Cross-module workflow (not started)
+
+**The gap:**
+Qualitas modules (ITP / NOI / ITR / NCR / PQP / OBS / FAT / FollowUp)
+each have their own CRUD + status, but the **business process that
+connects them** is not modelled anywhere. A user who raises an NCR
+from a failing ITR has to manually copy the vendor, reference numbers,
+and dates between modules; a manager looking at an ITP cannot see the
+NOIs / ITRs / NCRs that descend from it; nobody has a unified "what's
+waiting on me across all modules" view; and there is no enforcement
+that work flows through the intended sequence.
+
+The data model has some of the FKs already (NOI→ITP, ITR→NOI,
+NCR→NOI) but key links are missing: **PQP→ITP is absent entirely**
+(PQP is an island), and **NCR→ITR only goes through NOI** so you
+can't trace an NCR back to the specific failing inspection report
+in one hop.
+
+**The five pain points this initiative is meant to fix** (in
+dependency order — each builds on the previous):
+
+1. Cannot see relationships between documents
+2. Creating a linked document requires manual copy/paste of key fields
+3. No global "my tasks" view across modules
+4. The process has no teeth — users can skip steps
+5. Managers have no view of process health (cycle time, stuck items,
+   vendor compliance trends)
+
+**Planned approach:**
+Five phases, each independently shippable:
+
+| Phase | Addresses | Core change | Risk |
+|---|---|---|---|
+| 1. Trace + Create-from | 1, 2 | Fill missing FKs, add `<RelatedDocuments/>` shared component, add "Create from" buttons | Low |
+| 2. Business event log | 4, 5 (base) | Extend `AuditLog` (or add `business_events`) to record non-CRUD events like `ITR.failed`, `NCR.raised`; emit from services | Low |
+| 3. Cross-module inbox | 3 | Aggregation query + "My Tasks" dashboard | Medium |
+| 4. Rules + enforcement | 4 | Python rule engine (hardcoded rules to start); transition gates | Med-high |
+| 5. Dashboards / metrics | 5 | Cycle time, open items, SLA compliance views | Medium |
+
+**Phase 1 is split into five PRs** for independent review:
+- PR1 — `<RelatedDocuments/>` component using existing FKs only
+  (no schema change). **Detailed plan:**
+  `docs/workflow/phase1-pr1-related-documents.md`
+- PR2 — Add `NCR.itr_id` FK + data migration (back-fill via NOI)
+- PR3 — Add `ITP.pqp_id` FK (manual link, no auto back-fill)
+- PR4 — "Create from" buttons, starting with ITR → NCR
+- PR5 — Evaluate whether OBS / FAT / FollowUp should join the chain
+
+**Why it was not fixed here:**
+Scope: this is a multi-month initiative, not a single PR. It needs
+product-level sequencing decisions (which pain point to solve first),
+and Phase 1 PRs 2 and 3 partially overlap with backlog item **#1**
+(the `referenceNo` → `id` FK migration) — that work should be
+folded in rather than done twice.
+
+**What to do when you pick it up:**
+1. Start with `docs/workflow/phase1-pr1-related-documents.md`
+2. Answer the six open design questions in that doc's final section
+3. Ship PR1 (pure UI, zero schema risk) and review the UX before
+   committing to PR2+
+4. When tackling PR2 / PR3, coordinate with backlog item **#1** so
+   the FK refactor is done once, not twice
+
+---
+
 ## Not on this list (and why)
 
 - **Migrating SQLite → Postgres.** Real production move, not a code

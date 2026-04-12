@@ -7,16 +7,19 @@ import {
   LayoutDashboard, TrendingUp, Search, FileText, ClipboardList,
   CheckSquare, Bell, GitPullRequest, AlertTriangle, Eye, XOctagon,
   Factory, Scale, HardHat, BookOpen, Shield, FileCode2, Trophy, LogOut,
+  Workflow as WorkflowIcon,
   type LucideIcon,
 } from 'lucide-react';
+import ProjectSelector from '../Shared/ProjectSelector';
 
 type ModuleId =
-  | 'dashboard' | 'kpi' | 'followup' | 'pqp' | 'itp' | 'checklist'
+  | 'dashboard' | 'workflow' | 'kpi' | 'followup' | 'pqp' | 'itp' | 'checklist'
   | 'noi' | 'itr' | 'osd' | 'obs' | 'ncr' | 'fat' | 'audit'
   | 'contractors' | 'km' | 'iam' | 'document-naming-rules' | 'owner-performance';
 
 const MODULE_ICONS: Record<ModuleId, LucideIcon> = {
   dashboard: LayoutDashboard,
+  workflow: WorkflowIcon,
   kpi: TrendingUp,
   followup: Search,
   pqp: FileText,
@@ -49,6 +52,14 @@ const Home = () => {
       path: '/dashboard',
       gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
       color: '#667eea',
+    },
+    {
+      id: 'workflow' as ModuleId,
+      title: t('workflow.title'),
+      description: t('home.workflow.description'),
+      path: '/workflow',
+      gradient: 'linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%)',
+      color: '#0ea5e9',
     },
     {
       id: 'kpi' as ModuleId,
@@ -201,10 +212,13 @@ const Home = () => {
             </p>
           </div>
         </div>
-        <button className={styles.logoutButton} onClick={logout}>
-          <LogOut size={16} />
-          {t('home.logout')}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <ProjectSelector />
+          <button className={styles.logoutButton} onClick={logout}>
+            <LogOut size={16} />
+            {t('home.logout')}
+          </button>
+        </div>
       </div>
 
       {/* Modules Grid */}

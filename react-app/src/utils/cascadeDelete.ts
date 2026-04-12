@@ -175,7 +175,7 @@ export const checkContractorReferences = (
   const obsReferences = obsList.filter(item => item.vendor === contractorName);
   const fatReferences = fatList.filter(item => item.supplier === contractorName); // FAT uses 'supplier' instead of 'vendor'
   const followupReferences = followupList.filter(item => item.vendor === contractorName);
-  const auditReferences = auditList.filter(item => item.vendor === contractorName);
+  const auditReferences = auditList.filter(item => item.contractor === contractorName);
 
   const references = [
     { type: 'ITP', count: itpReferences.length },

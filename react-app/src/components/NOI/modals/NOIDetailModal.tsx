@@ -9,6 +9,7 @@ import { useITRStore } from '../../../store/itrStore';
 import type { NOIItem } from '../../../store/noiStore';
 import { validateStatusTransition, NOIStatusTransitions, NOIStatusTransitionList, validateRequiredFields, NOIValidationRules } from '../../../utils/statusValidation';
 import FileAttachment from '../../Shared/FileAttachment';
+import RelatedDocuments from '../../ui/RelatedDocuments';
 import styles from '../NOI.module.css';
 import { NOIDetailData } from '../NOITypes';
 
@@ -17,7 +18,7 @@ export interface NOIDetailModalProps {
     existingData?: NOIDetailData;
     existingItem?: NOIItem;
     noiList: NOIItem[];
-    onSave: (details: NOIDetailData, pendingFiles: File[], deletedFileIds: string[]) => void;
+    onSave: (details: NOIDetailData, pendingFiles: File[], deletedFileIds: string[]) => void | Promise<void>;
     onClose: () => void;
     onPrint?: (data: NOIDetailData) => void;
 }
@@ -149,7 +150,9 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, e
         setPreviewName(name || '');
     };
 
-    const handleSave = () => {
+    const [saving, setSaving] = useState(false);
+
+    const handleSave = async () => {
         // 使用配置式驗證取代硬編碼
         const validation = validateRequiredFields(formData, formData.status, NOIValidationRules);
         if (!validation.valid) {
@@ -181,8 +184,15 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, e
             }
         }
 
-        onSave(formData, pendingFiles, deletedFileIds);
-        onClose();
+        setSaving(true);
+        try {
+            await onSave(formData, pendingFiles, deletedFileIds);
+            onClose();
+        } catch (err) {
+            toast.error((err as Error)?.message || t('common.saveFailed'));
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
@@ -369,6 +379,9 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, e
                                 </div>
                             </div>
                         </div>
+                        {existingItem?.id && (
+                            <RelatedDocuments entityType="noi" entityId={existingItem.id} />
+                        )}
                     </div>
                 </div>
                 <div className={styles.modalActions}>
@@ -381,8 +394,8 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, e
                             {t('common.print')}
                         </button>
                     )}
-                    <button className={styles.saveButton} onClick={handleSave}>{t('common.save')}</button>
-                    <button className={styles.cancelButton} onClick={onClose}>{t('common.cancel')}</button>
+                    <button className={styles.saveButton} onClick={handleSave} disabled={saving}>{saving ? t('common.saving') || 'Saving...' : t('common.save')}</button>
+                    <button className={styles.cancelButton} onClick={onClose} disabled={saving}>{t('common.cancel')}</button>
                 </div>
             </div>
             {previewUrl && (

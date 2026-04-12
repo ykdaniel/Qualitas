@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useMemo } from 'react';
 import DOMPurify from 'dompurify';
 import 'react-quill/dist/quill.snow.css';
 import '../ui/RichTextEditor.css';
+import './kmArticle.css';
 import { useLanguage } from '../../context/LanguageContext';
 import { KMArticle } from '../../types/km';
 import { useKMStore } from '../../store/kmStore';
@@ -9,6 +10,7 @@ import { BackButton } from '../ui/BackButton';
 import { KMHistoryModal } from './KMHistoryModal';
 import { SectionToc } from './SectionToc';
 import { extractSectionToc, computeNumberedLevel, stripDecorativeZeros, compareChapterNo } from '../../utils/extractSectionToc';
+import { injectAuthTokenIntoHtml } from '../../utils/authUrl';
 import styles from './KMDetail.module.css';
 
 /**
@@ -24,12 +26,14 @@ interface ChapterSectionProps {
     chapter: KMArticle;
     showTitle: boolean;
     showDivider: boolean;
+    onEditChapter?: (chapterId: string) => void;
 }
 
 const ChapterSection: React.FC<ChapterSectionProps> = ({
     chapter,
     showTitle,
     showDivider,
+    onEditChapter,
 }) => {
     const { processedHtml, toc } = useMemo(
         () => extractSectionToc(chapter.content || '', `ch-${chapter.id}-sec`),
@@ -37,28 +41,51 @@ const ChapterSection: React.FC<ChapterSectionProps> = ({
     );
 
     const sanitizedHtml = useMemo(
-        () => DOMPurify.sanitize(processedHtml),
+        () => injectAuthTokenIntoHtml(DOMPurify.sanitize(processedHtml)),
         [processedHtml]
     );
 
     const chapterPrefix = stripDecorativeZeros(chapter.chapter_no || '');
+    // "1.0" → depth 0, "2.1" → depth 1, "2.1.1" → depth 2
+    const chNoClean = (chapter.chapter_no || '').replace(/\.0$/, '');
+    const depth = Math.max(0, (chNoClean.match(/\./g) || []).length);
 
     return (
-        <div id={`chapter-${chapter.id}`} className={styles.chapterSection}>
+        <div id={`chapter-${chapter.id}`} className={styles.chapterSection} style={{ marginLeft: depth * 32 }}>
             {showDivider && <hr className={styles.chapterDivider} />}
             {showTitle && (
                 <h2 className={styles.chapterTitle}>
-                    {chapter.chapter_no ? `${chapter.chapter_no} ` : ''}
-                    {chapter.title}
+                    <span>
+                        {chapter.chapter_no ? `${chapter.chapter_no} ` : ''}
+                        {chapter.title}
+                    </span>
+                    {onEditChapter && (
+                        <button
+                            className={styles.chapterEditBtn}
+                            onClick={() => onEditChapter(chapter.id)}
+                            title="編輯此章節"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                        </button>
+                    )}
                 </h2>
             )}
-            {toc.length >= 2 && <SectionToc entries={toc} />}
+            {/* SectionToc removed — sidebar chapter navigation is sufficient */}
+            {/* Wrapper carries km-article (bullet/indent rules) and
+                the chapter-prefix attribute/variable. The INNER div
+                is the .ql-editor — same DOM shape as edit mode, so
+                kmArticle.css can use a single `.km-article .ql-editor`
+                selector form instead of duplicated `wrapper OR editor`
+                variants. */}
             <div
-                className={`ql-editor ${styles.editorContainer}`}
+                className={`km-article ${styles.editorContainer}`}
                 data-chapter-prefix={chapterPrefix}
                 style={{ ['--chapter-prefix' as any]: `"${chapterPrefix}"` }}
             >
-                <div dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
+                <div
+                    className="ql-editor"
+                    dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
+                />
             </div>
         </div>
     );
@@ -67,7 +94,7 @@ const ChapterSection: React.FC<ChapterSectionProps> = ({
 interface KMDetailProps {
     article: KMArticle;
     onClose: () => void;
-    onEdit: () => void;
+    onEdit: (focusChapterId?: string) => void;
     onSelectArticle?: (article: KMArticle) => void;
 }
 
@@ -186,26 +213,28 @@ export const KMDetail: React.FC<KMDetailProps> = ({ article, onClose, onEdit, on
 
     return (
         <div className={styles.container}>
-            {/* Top Navigation Bar: Back Button (Left) & Edit Button (Right) */}
-            <div className={styles.topNav}>
-                <BackButton
-                    onClick={onClose}
-                    className="!bg-white !border !border-slate-200 !text-slate-600 hover:!bg-slate-50 hover:!text-slate-900 rounded-full"
-                />
-                <div style={{ display: 'flex', gap: 12 }}>
-                    <button className={styles.printBtn} onClick={() => window.print()}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-                        {t('common.print') || '列印'}
-                    </button>
-                    <button className={styles.editBtn} onClick={onEdit}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                        {t('common.edit') || '編輯內容'}
-                    </button>
+            {/* Sticky header: nav + hero pinned at top on scroll */}
+            <div className={styles.stickyHeader}>
+                {/* Top Navigation Bar: Back Button (Left) & Edit Button (Right) */}
+                <div className={styles.topNav}>
+                    <BackButton
+                        onClick={onClose}
+                        className="!bg-white !border !border-slate-200 !text-slate-600 hover:!bg-slate-50 hover:!text-slate-900 rounded-full"
+                    />
+                    <div style={{ display: 'flex', gap: 12 }}>
+                        <button className={styles.printBtn} onClick={() => window.print()}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                            {t('common.print') || '列印'}
+                        </button>
+                        <button className={styles.editBtn} onClick={() => onEdit()}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                            {t('common.edit') || '編輯內容'}
+                        </button>
+                    </div>
                 </div>
-            </div>
 
-            {/* Hero Title Card */}
-            <div className={styles.heroCard}>
+                {/* Hero Title Card */}
+                <div className={styles.heroCard}>
                 <div className={styles.metaRow}>
                     <span className={styles.categoryBadge}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px' }}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
@@ -231,6 +260,7 @@ export const KMDetail: React.FC<KMDetailProps> = ({ article, onClose, onEdit, on
                     </div>
                 )}
             </div>
+            </div>{/* end stickyHeader */}
 
             {/* Layout Wrapper: Left Document, Right Sidebar */}
             <div className={styles.layoutWrapper} ref={layoutRef}>
@@ -285,6 +315,7 @@ export const KMDetail: React.FC<KMDetailProps> = ({ article, onClose, onEdit, on
                                 chapter={ch}
                                 showTitle={hasChapters}
                                 showDivider={index > 0}
+                                onEditChapter={(chapterId) => onEdit(chapterId)}
                             />
                         ))}
                     </div>

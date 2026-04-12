@@ -20,7 +20,7 @@ import { getErrorMessage } from '../../utils/errorUtils';
 const PQP: React.FC = () => {
   const { t } = useLanguage();
   const { getActiveContractors } = useContractorsStore();
-  const { pqpList, loading, error, refetch, addPQP, updatePQP, deletePQP } = usePQPStore();
+  const { pqpList, loading, error, refetch, addPQP, updatePQP, publishPQP, deletePQP } = usePQPStore();
 
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -212,7 +212,7 @@ const PQP: React.FC = () => {
             searchKey=""
             searchPlaceholder={t('pqp.searchPlaceholder')}
             getRowClassName={(row) =>
-              (row.status || 'Not Submit').toLowerCase() === 'reject'
+              ['reject', 'revise & resubmit'].includes((row.status || 'Not Submit').toLowerCase())
                 ? 'bg-red-100/50 text-red-700 hover:bg-red-200/50'
                 : ''
             }
@@ -237,6 +237,11 @@ const PQP: React.FC = () => {
             pqpId={currentPqpId}
             existingItem={currentPqpId !== 'new' ? pqpList.find(item => item.id === currentPqpId) : undefined}
             onSave={handleSavePQPDetails}
+            onPublish={async (id, changeSummary) => {
+              await publishPQP(id, changeSummary);
+              setIsEditModalOpen(false);
+              setCurrentPqpId(null);
+            }}
             onClose={() => {
               setIsEditModalOpen(false);
               setCurrentPqpId(null);

@@ -10,54 +10,105 @@ logger = logging.getLogger(__name__)
 
 async def check_and_send_reminders():
     """
-    自動提醒邏輯：檢查 3 天後到期的案件
+    自動提醒邏輯：
+    - 即將到期（3 天內）且尚未提醒的案件
+    - 已過期但仍未結案的案件
+    - 涵蓋 NCR, FollowUp, NOI, ITR
     """
-    logger.info("[Scheduler] Checking for upcoming due dates (3 days ahead)...")
+    logger.info("[Scheduler] Checking for upcoming & overdue items...")
 
     db = SessionLocal()
     try:
-        # 計算目標日期 (今天 + 3 天)
-        target_date = datetime.now() + timedelta(days=3)
+        today = datetime.now()
+        today_str = today.strftime("%Y-%m-%d")
+        target_date = today + timedelta(days=3)
         target_date_str = target_date.strftime("%Y-%m-%d")
 
-        logger.info(f"[Scheduler] Target date: {target_date_str}")
+        logger.info(f"[Scheduler] Today: {today_str}, lookahead: {target_date_str}")
 
-        # 1. 查詢 NCR
+        total_sent = 0
+
+        # ── NCR: upcoming (due within 3 days) OR overdue ──
         ncrs = db.query(models.NCR).filter(
-            models.NCR.status.notin_(["Closed", "結案"]),
-            models.NCR.dueDate == target_date_str
+            models.NCR.status.notin_(["Closed", "Void", "結案"]),
+            models.NCR.dueDate.isnot(None),
+            models.NCR.dueDate <= target_date_str,
         ).all()
 
-        # 2. 查詢 FollowUp Issues
-        followups = db.query(models.FollowUp).filter(
-            models.FollowUp.status.notin_(["Closed", "結案"]),
-            models.FollowUp.dueDate == target_date_str
-        ).all()
-
-        # 3. 處理 NCR 提醒
         for ncr in ncrs:
-            # 直接使用關聯物件取得郵件 (Refactored to use vendor_ref)
-            email = "admin@example.com"
-            if ncr.vendor_ref and ncr.vendor_ref.email:
-                email = ncr.vendor_ref.email
+            email = _get_vendor_email(ncr)
+            overdue = ncr.dueDate < today_str
+            label = "OVERDUE NCR" if overdue else "NCR Due Soon"
+            await send_email_notification(
+                email, f"{label}: {ncr.documentNumber}", "NCR", ncr.dueDate
+            )
+            total_sent += 1
 
-            await send_email_notification(email, f"NCR: {ncr.documentNumber}", "NCR", ncr.dueDate)
+        # ── FollowUp: upcoming OR overdue ──
+        followups = db.query(models.FollowUp).filter(
+            models.FollowUp.status.notin_(["Closed", "Void", "結案"]),
+            models.FollowUp.dueDate.isnot(None),
+            models.FollowUp.dueDate <= target_date_str,
+        ).all()
 
-        # 4. 處理 FollowUp 提醒
         for f in followups:
-            # 優先檢查廠商郵件，否則發給管理員
-            email = "admin@example.com"
-            if f.vendor_ref and f.vendor_ref.email:
-                email = f.vendor_ref.email
+            email = _get_vendor_email(f)
+            overdue = f.dueDate < today_str
+            label = "OVERDUE Follow-up" if overdue else "Follow-up Due Soon"
+            await send_email_notification(
+                email, f"{label}: {f.issueNo} - {f.title}", "Follow-up Issue", f.dueDate
+            )
+            total_sent += 1
 
-            await send_email_notification(email, f"Follow-up Issue: {f.issueNo} - {f.title}", "Follow-up Issue", f.dueDate)
+        # ── NOI: upcoming OR overdue ──
+        nois = db.query(models.NOI).filter(
+            models.NOI.status.notin_(["Closed", "Void", "Reject", "結案"]),
+            models.NOI.dueDate.isnot(None),
+            models.NOI.dueDate <= target_date_str,
+        ).all()
 
-        logger.info(f"[Scheduler] Reminders process finished. Found {len(ncrs)} NCRs and {len(followups)} FollowUps.")
+        for noi in nois:
+            email = _get_vendor_email(noi)
+            overdue = noi.dueDate is not None and noi.dueDate < today_str
+            label = "OVERDUE NOI" if overdue else "NOI Due Soon"
+            await send_email_notification(
+                email, f"{label}: {noi.referenceNo}", "NOI", noi.dueDate
+            )
+            total_sent += 1
+
+        # ── ITR: upcoming OR overdue ──
+        itrs = db.query(models.ITR).filter(
+            models.ITR.status.notin_(["Approved", "Void", "結案"]),
+            models.ITR.dueDate.isnot(None),
+            models.ITR.dueDate <= target_date_str,
+        ).all()
+
+        for itr in itrs:
+            email = _get_vendor_email(itr)
+            overdue = itr.dueDate is not None and itr.dueDate < today_str
+            label = "OVERDUE ITR" if overdue else "ITR Due Soon"
+            await send_email_notification(
+                email, f"{label}: {itr.documentNumber}", "ITR", itr.dueDate
+            )
+            total_sent += 1
+
+        logger.info(
+            f"[Scheduler] Done. Sent {total_sent} reminders "
+            f"({len(ncrs)} NCRs, {len(followups)} FollowUps, "
+            f"{len(nois)} NOIs, {len(itrs)} ITRs)."
+        )
 
     except Exception as e:
-        logger.error(f"[Scheduler] Error during reminder process: {e}")
+        logger.error(f"[Scheduler] Error during reminder process: {e}", exc_info=True)
     finally:
         db.close()
+
+
+def _get_vendor_email(record) -> str:
+    """Extract vendor email from a record's vendor_ref, fallback to empty."""
+    if hasattr(record, "vendor_ref") and record.vendor_ref and record.vendor_ref.email:
+        return record.vendor_ref.email
+    return ""
 
 async def scheduler_loop():
     """
@@ -78,6 +129,10 @@ async def scheduler_loop():
         await check_and_send_reminders()
 
 def start_scheduler():
-    """啟動排程器（作為背景任務）"""
-    loop = asyncio.get_event_loop()
+    """啟動排程器（作為背景任務）。
+
+    Called from the FastAPI lifespan handler, which already runs inside
+    a running event loop, so ``get_running_loop`` is safe here.
+    """
+    loop = asyncio.get_running_loop()
     loop.create_task(scheduler_loop())

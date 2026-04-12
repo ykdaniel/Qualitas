@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils";
 export const createColumns = (
     handleEdit: (id: string) => void,
     handleDelete: (id: string) => void,
-    handleReport: (id: string) => void,
     t: (key: string) => string,
     activeContractors: { name: string }[]
 ): ColumnDef<AuditItem>[] => [

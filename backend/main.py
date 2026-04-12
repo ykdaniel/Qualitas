@@ -1,11 +1,12 @@
+import asyncio
 import logging
 import os
+from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 
 import db_migrations
 import db_seeder
@@ -31,6 +32,7 @@ from routers import (
     obs,
     pqp,
     projects,
+    workflow,
 )
 from routers import settings as settings_router
 from scheduler import start_scheduler
@@ -127,7 +129,28 @@ models.Base.metadata.create_all(bind=engine)
 db_migrations.run_migrations()
 db_seeder.run_seeding()
 
-app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION)
+async def _token_blacklist_cleanup_loop():
+    """Periodically remove expired tokens from the in-memory blacklist."""
+    from core.security import cleanup_expired_tokens
+    while True:
+        await asyncio.sleep(3600)  # every hour
+        try:
+            cleanup_expired_tokens()
+        except Exception:
+            logger.exception("Error during token blacklist cleanup")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    start_scheduler()
+    logger.info("Background scheduler started.")
+    asyncio.get_event_loop().create_task(_token_blacklist_cleanup_loop())
+    logger.info("Token blacklist cleanup task started (hourly).")
+    yield
+    # Shutdown (nothing needed currently)
+
+
+app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION, lifespan=lifespan)
 
 # Middleware
 app.add_middleware(RateLimitMiddleware)
@@ -139,16 +162,9 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-# Static Files
+# Upload directory (served via authenticated route in file_router.py)
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
-
-# Event Handlers
-@app.on_event("startup")
-async def startup_event():
-    start_scheduler()
-    logger.info("Background scheduler started.")
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -172,7 +188,7 @@ for router in [
     auth,
     settings_router,
     iam,
-    itp, ncr, noi, itr, pqp, obs, contractors, followup, audit, checklist, kpi, file_router, fat, km, projects
+    itp, ncr, noi, itr, pqp, obs, contractors, followup, audit, checklist, kpi, file_router, fat, km, projects, workflow
 ]:
     api.include_router(router.router)
 

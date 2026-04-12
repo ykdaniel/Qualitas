@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useDeferredValue, useEffect, useCallback } from 'react';
-import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useAuditStore, AuditItem } from '../../store/auditStore';
@@ -89,7 +88,7 @@ const Audit: React.FC = () => {
         return data;
     }, [auditList, deferredSearchQuery, selectedVendorFilter]);
 
-    // 3. Matrix Computation
+    // 3. Matrix Computation — shows ALL audit dates as a fixed reference schedule
     const matrixDates = useMemo(() => {
         const validDates = Array.from(new Set(filteredData.map(a => a.date)))
             .filter(dateStr => dateStr && !isNaN(new Date(dateStr).getTime()))
@@ -114,7 +113,7 @@ const Audit: React.FC = () => {
 
     // Actions
     const handleAddNew = useCallback(() => {
-        setCurrentAuditId(String(Date.now()));
+        setCurrentAuditId(null);
         setIsEditModalOpen(true);
     }, []);
 
@@ -123,9 +122,7 @@ const Audit: React.FC = () => {
         setIsEditModalOpen(true);
     }, []);
 
-    const handleReport = useCallback((id: string) => {
-        toast.info(`Audit Report for ID: ${id}`);
-    }, []);
+    // handleReport removed — report generation not yet implemented
 
     const handleDeleteClick = useCallback((id: string) => {
         setDeleteModal({ isOpen: true, id, message: t('audit.confirmDelete') || 'Are you sure you want to delete this audit?' });
@@ -212,7 +209,7 @@ const Audit: React.FC = () => {
                             {t('audit.addNew') || 'Add New'}
                         </button>
                     }
-                    columns={createColumns(handleEdit, handleDeleteClick, handleReport, t, activeContractors)}
+                    columns={createColumns(handleEdit, handleDeleteClick, t, activeContractors)}
                     data={filteredData}
                     searchKey=""
                     getRowClassName={() => styles.normalRow}
@@ -225,7 +222,7 @@ const Audit: React.FC = () => {
             {isEditModalOpen && (
                 <AuditWizard
                     auditId={currentAuditId}
-                    existingItem={auditList.find(item => item.id === currentAuditId)}
+                    existingItem={currentAuditId ? auditList.find(item => item.id === currentAuditId) : undefined}
                     onClose={() => {
                         setIsEditModalOpen(false);
                         setCurrentAuditId(null);

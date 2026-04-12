@@ -435,4 +435,16 @@ export const deleteFile = async (fileId: string): Promise<void> => {
   await api.delete(`/files/${fileId}/`);
 };
 
+/**
+ * Append the current auth token as a query parameter to a file URL.
+ * This is needed for contexts that cannot set Authorization headers,
+ * such as <img src="..."> or <a href="..."> tags.
+ */
+export const getAuthenticatedFileUrl = (url: string): string => {
+  const token = localStorage.getItem('token');
+  if (!token || !url) return url;
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}token=${encodeURIComponent(token)}`;
+};
+
 export default api;

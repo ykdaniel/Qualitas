@@ -59,7 +59,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     auditDocNo: existingItem?.auditNo || '',
+    auditTitle: existingItem?.title || '',
     projectName: existingItem?.project_name || '',
+    findings: existingItem?.findings || '',
     auditStartDate: existingItem?.date || '',
     auditEndDate: existingItem?.end_date || '',
     projectDirector: existingItem?.project_director || '',
@@ -219,7 +221,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
   const prepareAuditData = (status: string): Omit<AuditItem, 'id'> => {
     return {
       auditNo: formData.auditDocNo || '',
-      title: formData.projectName || '',
+      title: formData.auditTitle || '',
       date: formData.auditStartDate || '',
       end_date: formData.auditEndDate || '',
       project_name: formData.projectName || '',
@@ -228,7 +230,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
       support_auditors: formData.supportAuditors || '',
       tech_lead: formData.techLead || '',
       location: formData.location || '',
-      findings: existingItem?.findings || '',
+      findings: formData.findings || '',
       audit_criteria: formData.auditCriteria || '',
       scope_description: formData.scopeDescription || '',
       selected_templates: formData.selectedTemplates,
@@ -255,7 +257,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
       const time = new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       setDraftMessage(`${t('audit.wizard.draftSaved')} ${time}`);
       setTimeout(() => setDraftMessage(''), 4000);
-      onSaveSuccess();
+      // Don't call onSaveSuccess() here — draft save should keep the wizard open
     } catch (err: any) {
       console.error("草稿儲存失敗: ", err);
       setSaveError(t('audit.wizard.saveError'));
@@ -399,6 +401,13 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                        <span className="text-xs font-medium text-slate-400">(稽核文件編號)</span>
                     </label>
                     <input type="text" name="auditDocNo" value={formData.auditDocNo} className="w-full md:w-1/2 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl outline-none text-slate-400 font-medium cursor-not-allowed" placeholder="系統自動產生" readOnly style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }} />
+                  </div>
+                  <div className="col-span-full">
+                    <label className="flex items-baseline gap-2 mb-2">
+                       <span className="text-sm font-bold text-slate-800">{t('audit.auditTitle') || 'Audit Title'}</span>
+                       <span className="text-xs font-medium text-slate-400">(稽核標題)</span>
+                    </label>
+                    <input type="text" name="auditTitle" value={formData.auditTitle} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" placeholder={t('audit.auditTitlePlaceholder') || 'Enter audit title'} />
                   </div>
                   <div className="col-span-full">
                     <label className="flex items-baseline gap-2 mb-2">
@@ -930,6 +939,22 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                       * {t('audit.wizard.autoTimestamp')}
                     </p>
                   </div>
+                </div>
+
+                {/* Findings / Summary */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 mt-6">
+                  <label className="flex items-baseline gap-2 mb-3">
+                    <span className="text-sm font-bold text-slate-800">{t('audit.findings') || 'Findings / Summary'}</span>
+                    <span className="text-xs font-medium text-slate-400">(稽核發現與總結)</span>
+                  </label>
+                  <textarea
+                    name="findings"
+                    value={formData.findings}
+                    onChange={handleInputChange}
+                    rows={5}
+                    className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium resize-y"
+                    placeholder={t('audit.findingsPlaceholder') || 'Enter audit findings and summary...'}
+                  />
                 </div>
               </div>
             )}

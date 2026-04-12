@@ -19,6 +19,7 @@ def validate_date_format(v: str) -> str:
     return v
 
 class ITPBase(BaseModel):
+    project_id: str | None = None
     vendor: str | None = None
     referenceNo: str | None = None  # 由後端自動產生
     description: constr(max_length=MAX_TEXT_LENGTH) | None = ''
@@ -79,6 +80,7 @@ class ITPDetailBody(BaseModel):
 
 class ITPUpdate(BaseModel):
     """ITP 更新用 schema，referenceNo 不可更新"""
+    project_id: str | None = None
     vendor: str | None = None
     # referenceNo 不可更新（由後端自動產生，建立後不可變）
     description: str | None = None
@@ -110,6 +112,7 @@ class ITP(ITPBase):
 
 # NCR
 class NCRBase(BaseModel):
+    project_id: str | None = None
     vendor: str | None = None
     documentNumber: str | None = None  # 由後端自動產生
     description: constr(max_length=MAX_TEXT_LENGTH)
@@ -180,6 +183,7 @@ class NCRCreate(NCRBase):
     id: str | None = None
 
 class NCRUpdate(BaseModel):
+    project_id: str | None = None
     vendor: str | None = None
     # documentNumber 不可更新（由後端自動產生，建立後不可變）
     description: str | None = None
@@ -253,6 +257,7 @@ class NCR(NCRBase):
 
 # NOI
 class NOIBase(BaseModel):
+    project_id: str | None = None
     package: str
     referenceNo: str | None = None  # 由後端自動產生
     issueDate: str
@@ -298,6 +303,7 @@ class NOICreate(NOIBase):
     id: str | None = None
 
 class NOIUpdate(BaseModel):
+    project_id: str | None = None
     package: str | None = None
     # referenceNo 不可更新（由後端自動產生，建立後不可變）
     issueDate: str | None = None
@@ -336,6 +342,7 @@ class NOI(NOIBase):
 
 # ITR
 class ITRBase(BaseModel):
+    project_id: str | None = None
     vendor: str | None = None
     documentNumber: str | None = None  # 由後端自動產生
     description: str
@@ -359,6 +366,18 @@ class ITRBase(BaseModel):
     improvementPhotos: Any | None = None
     detail_data: str | None = None  # JSON string for extended data
     attachments: list[Any] | None = []
+    dueDate: str | None = None
+    inspectionResult: str | None = None
+    preparedBy: str | None = None
+    preparedAt: str | None = None
+    reviewedBy: str | None = None
+    reviewedAt: str | None = None
+    approvedBy: str | None = None
+    approvedAt: str | None = None
+    isReInspection: bool = False
+    reInspectionCount: int = 0
+    originalItrId: str | None = None
+    discipline: str | None = None
 
     @field_validator('raiseDate', 'closeoutDate', mode='before')
     @classmethod
@@ -384,6 +403,7 @@ class ITRCreate(ITRBase):
     id: str | None = None
 
 class ITRUpdate(BaseModel):
+    project_id: str | None = None
     vendor: str | None = None
     # documentNumber 不可更新（由後端自動產生，建立後不可變）
     description: str | None = None
@@ -407,6 +427,19 @@ class ITRUpdate(BaseModel):
     improvementPhotos: Any | None = None
     detail_data: str | None = None
     attachments: list[Any] | None = None
+    dueDate: str | None = None
+    inspectionResult: str | None = None
+    preparedBy: str | None = None
+    preparedAt: str | None = None
+    reviewedBy: str | None = None
+    reviewedAt: str | None = None
+    approvedBy: str | None = None
+    approvedAt: str | None = None
+    isReInspection: bool | None = None
+    reInspectionCount: int | None = None
+    originalItrId: str | None = None
+    discipline: str | None = None
+    version_no: int | None = None
 
     @field_validator('defectPhotos', 'improvementPhotos', 'attachments', 'detail_data', mode='before')
     @classmethod
@@ -425,6 +458,7 @@ class ITR(ITRBase):
 
 # PQP
 class PQPBase(BaseModel):
+    project_id: str | None = None
     pqpNo: str | None = None  # 由後端自動產生
     title: str
     description: str
@@ -457,6 +491,7 @@ class PQPCreate(PQPBase):
     updatedAt: str | None = ''
 
 class PQPUpdate(BaseModel):
+    project_id: str | None = None
     # pqpNo 不可更新（由後端自動產生，建立後不可變）
     title: str | None = None
     description: str | None = None
@@ -503,6 +538,7 @@ class PQPHistoryItem(BaseModel):
 
 # OBS
 class OBSBase(BaseModel):
+    project_id: str | None = None
     vendor: str | None = None
     documentNumber: str | None = None  # 由後端自動產生
     description: str
@@ -554,6 +590,7 @@ class OBSCreate(OBSBase):
     id: str | None = None
 
 class OBSUpdate(BaseModel):
+    project_id: str | None = None
     vendor: str | None = None
     # documentNumber 不可更新（由後端自動產生，建立後不可變）
     description: str | None = None
@@ -652,6 +689,7 @@ class Project(ProjectBase):
 
 # FollowUp
 class FollowUpBase(BaseModel):
+    project_id: str | None = None
     issueNo: str | None = None
     title: str
     description: str
@@ -675,6 +713,7 @@ class FollowUpCreate(FollowUpBase):
     id: str | None = None
 
 class FollowUpUpdate(BaseModel):
+    project_id: str | None = None
     title: str | None = None
     description: str | None = None
     status: str | None = None
@@ -751,6 +790,7 @@ class Permission(PermissionBase):
 
 # User
 class ChecklistBase(BaseModel):
+    project_id: str | None = None
     recordsNo: str | None = None  # 改為 Optional 以支援後端自動產生
     activity: str | None = None
     date: str
@@ -773,6 +813,7 @@ class ChecklistCreate(ChecklistBase):
 
 class ChecklistUpdate(BaseModel):
     """Checklist 更新用 schema"""
+    project_id: str | None = None
     recordsNo: str | None = None
     activity: str | None = None
     date: str | None = None
@@ -824,6 +865,7 @@ class User(UserBase):
 
 # --- Audit Schemas ---
 class AuditBase(BaseModel):
+    project_id: str | None = None
     auditNo: str
     title: str | None = None
     date: str | None = None
@@ -868,6 +910,7 @@ class AuditCreate(AuditBase):
     id: str | None = None
 
 class AuditUpdate(BaseModel):
+    project_id: str | None = None
     auditNo: str | None = None
     title: str | None = None
     date: str | None = None
@@ -981,6 +1024,7 @@ class FATDetailItem(BaseModel):
     remarks: str | None = ''
 
 class FATBase(BaseModel):
+    project_id: str | None = None
     equipment: str
     supplier: str
     procedure: str | None = None
@@ -1025,6 +1069,7 @@ class FATCreate(FATBase):
     id: str | None = None
 
 class FATUpdate(BaseModel):
+    project_id: str | None = None
     equipment: str | None = None
     supplier: str | None = None
     procedure: str | None = None
@@ -1099,6 +1144,7 @@ class KMArticleUpdate(BaseModel):
     parent_id: str | None = None
     chapter_no: str | None = None
     change_summary: str | None = None
+    version_no: int | None = None
 
     @field_validator('attachments', mode='before')
     @classmethod
@@ -1141,3 +1187,65 @@ class KMArticleHistory(BaseModel):
 
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ─── Cross-module workflow: RelatedDocuments (Phase 1 PR1) ────────────
+# Response schema for `GET /{module}/{id}/related`. One flat entry per
+# discovered document, ordered by BFS level. See RelatedService for the
+# traversal logic and workflows.relationships for the graph definition.
+class RelatedEntity(BaseModel):
+    entityType: str  # 'itp' | 'noi' | 'itr' | 'ncr'
+    id: str
+    referenceNo: str | None = None
+    title: str | None = None
+    status: str | None = None
+    vendorName: str | None = None
+    level: int
+    direction: str  # 'upstream' | 'downstream'
+    primaryDate: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RelatedEntitiesResponse(BaseModel):
+    upstream: list[RelatedEntity] = []
+    downstream: list[RelatedEntity] = []
+
+
+# ─── Cross-module workflow: Q-WorkFlow (Phase 1 PR1b v3) ─────────────
+# Powers the Dashboard QWorkflowStatsCard and the /workflow page. A
+# "workflow" here is a first-class ``qworkflow`` row that is created
+# 1:1 alongside every NOI (see noi_service._create_qworkflow_for_noi).
+# Each Q-WorkFlow has a sequential reference number
+# (Q-WorkFlow-000001) and is tracked through 9 canonical checkpoints:
+# NOI → W/H Inspection → NCR → MoC → Improvement → Re-Inspection →
+# ITR → Close NCR → Accepted. Every checkpoint is computed from
+# NOI/NCR/ITR fields; there is no manual check state. See
+# WorkflowService for the rules.
+class CheckpointState(BaseModel):
+    key: str     # e.g. 'noi', 'wh_inspection', 'moc', ...
+    state: str   # 'done' | 'current' | 'pending'
+    done: bool
+
+
+class WorkflowSummary(BaseModel):
+    qworkflow_id: str
+    reference_no: str | None = None  # Q-WorkFlow-000001
+    noi_id: str | None = None
+    noi_reference_no: str | None = None
+    noi_package: str | None = None
+    issue_date: str | None = None
+    vendor_name: str | None = None
+    checkpoints: list[CheckpointState]
+    done_count: int
+    completion_percent: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WorkflowStats(BaseModel):
+    total: int
+    bucket_0_25: int
+    bucket_26_50: int
+    bucket_51_75: int
+    bucket_76_100: int

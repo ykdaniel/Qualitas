@@ -23,7 +23,7 @@
 .ql-editor {
     font-family: Calibri, "Helvetica Neue", Arial,
         "Microsoft JhengHei", "微軟正黑體", "PingFang TC", sans-serif;
-    font-size: 15px;
+    font-size: 12pt;
     line-height: 1.6;
 }
 
@@ -79,129 +79,38 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────
- * 4. Chapter-scoped ordered-list prefix
- *
- * When a Quill editor (or a rendered .ql-editor HTML block) is
- * wrapped in an element carrying [data-chapter-prefix] and the
- * --chapter-prefix CSS variable, its top-level <ol> items render
- * as "{prefix}.1", "{prefix}.2", ... instead of "1.", "2.", ...
- *
- * Only level-0 items are overridden — nested (ql-indent-*) items
- * keep Quill's default alpha/roman counters. This matches the
- * "Q1=b" choice in the design discussion.
- *
- * The --chapter-prefix value must be a CSS string (i.e. quoted
- * in JS: `"${prefix}"`), so content concatenation works.
+ * 4. Line-height dropdown — display the value with a "行高" prefix
+ *    and a visual line-spacing icon as the default label.
  * ───────────────────────────────────────────────────────────────── */
-/* Two selectors: [data-chapter-prefix] may sit on a wrapper (edit mode,
-   where the attribute is on an ancestor of .ql-editor) or on the
-   .ql-editor element itself (view mode, where the ql-editor div is
-   also where we render the sanitized HTML).
-
-   Use absolute positioning for the marker instead of negative margin
-   hacks. Why: when marker width is dynamic (variable-length prefix
-   like "1.1" vs "1.1.1"), the margin-left + width + margin-right
-   advance math ends up negative for some combinations, so the item
-   text drifts left and overlaps the marker. Absolute positioning
-   takes the marker out of inline flow, so the first line of text
-   always starts at padding-left: 3em — same as the wrapped line
-   after a <br>. Clean bilingual alignment. */
-[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor ol > li:not([class*="ql-indent"]),
-.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) ol > li:not([class*="ql-indent"]) {
-    position: relative;
-    padding-left: 3em;
+.ql-snow .ql-picker.ql-lineHeight {
+    width: 80px;
 }
 
-/* Top-level <ul> items share the same 3em text gutter as top-level
-   <ol> items so bullets (○) hanging in the gutter line up with the
-   chapter-prefix markers, and the "召開…" text sits directly under
-   the "專案…" text of the surrounding ol item. The ○ marker itself
-   uses Quill's default hanging offset (margin-left: -1.5em) so it
-   ends up at roughly x=1.5em–2.7em in the left gutter. */
-[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor ul > li:not([class*="ql-indent"]):not(.ql-direction-rtl),
-.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) ul > li:not([class*="ql-indent"]):not(.ql-direction-rtl) {
-    padding-left: 3em;
+/* Default label when nothing is selected */
+.ql-snow .ql-picker.ql-lineHeight .ql-picker-label::before {
+    content: "行高";
 }
 
-[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor ol > li:not([class*="ql-indent"])::before,
-.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) ol > li:not([class*="ql-indent"])::before {
-    content: var(--chapter-prefix) "." counter(list-0);
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: auto;
-    margin: 0;
-    padding: 0;
-    text-align: left;
-    white-space: nowrap;
+/* Dropdown items: show the numeric value with × suffix */
+.ql-snow .ql-picker.ql-lineHeight .ql-picker-item::before {
+    content: attr(data-value) "×";
 }
 
-/* Nested indented list items inside a chapter-prefix container.
-   Quill's defaults put the text at 4.5em / 7.5em / 10.5em / ...
-   (1.5em + 3em per level). Our top-level chapter-prefix item has
-   padding-left: 3em, so text starts at 3em — we want the FIRST
-   nested level to also start at 3em (aligning its text under the
-   top-level text) rather than 4.5em, and each deeper level to
-   step another 1.5em beyond that. Marker sits in the left gutter
-   via Quill's default ::before negative-margin hanging indent. */
-[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor li.ql-indent-1:not(.ql-direction-rtl),
-.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) li.ql-indent-1:not(.ql-direction-rtl) {
-    padding-left: 3em;
-}
-[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor li.ql-indent-2:not(.ql-direction-rtl),
-.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) li.ql-indent-2:not(.ql-direction-rtl) {
-    padding-left: 4.5em;
-}
-[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor li.ql-indent-3:not(.ql-direction-rtl),
-.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) li.ql-indent-3:not(.ql-direction-rtl) {
-    padding-left: 6em;
-}
-[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor li.ql-indent-4:not(.ql-direction-rtl),
-.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) li.ql-indent-4:not(.ql-direction-rtl) {
-    padding-left: 7.5em;
-}
-[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor li.ql-indent-5:not(.ql-direction-rtl),
-.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) li.ql-indent-5:not(.ql-direction-rtl) {
-    padding-left: 9em;
-}
-[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor li.ql-indent-6:not(.ql-direction-rtl),
-.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) li.ql-indent-6:not(.ql-direction-rtl) {
-    padding-left: 10.5em;
+/* Selected value: show in the label too */
+.ql-snow .ql-picker.ql-lineHeight .ql-picker-label[data-value]::before {
+    content: attr(data-value) "×";
 }
 
-/* ─────────────────────────────────────────────────────────────────
- * Nested ordered-list marker styles inside a chapter-prefix container.
- *
- * Quill defaults to "1.", "a.", "i.", "A.", "I." for levels 0..4 and
- * then cycles. That's fine for English prose but Chinese official
- * documents typically use (1), a., i. patterns. We override the
- * ::before content to match.
- *
- * CUSTOMISING: each level's marker is produced via
- *   content: <prefix> counter(list-N, <style>) <suffix>
- * so you can swap the style (decimal / lower-alpha / lower-roman /
- * upper-alpha / upper-roman / cjk-ideographic) or wrap the counter
- * with parentheses / full-width brackets as needed. To change the
- * style for an individual article without touching this file, use a
- * style="..." override on the wrapper div that carries
- * data-chapter-prefix.
- * ───────────────────────────────────────────────────────────────── */
-/* Bullet list markers inside a chapter-prefix container.
- *
- * Two bullet levels are mapped to Chinese-doc convention:
- *   Top-level <ul>  → ○  (replaces Quill's default • / \2022)
- *   ql-indent-1     → -  (nested one level under ul OR ol)
- * Deeper levels fall back to Quill defaults.
- *
- * We target both ol and ul ql-indent-1 so the same symbol shows up
- * regardless of which list blot the user toggled at that level.
- * The top-level selector uses `ul > li:not([class*="ql-indent"])`
- * so it doesn't clobber the indented rule below it. */
-[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor ul > li:not([class*="ql-indent"]):not(.ql-direction-rtl)::before,
-.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) ul > li:not([class*="ql-indent"]):not(.ql-direction-rtl)::before {
-    content: "○ " !important;
+/* Highlight the active item */
+.ql-snow .ql-picker.ql-lineHeight .ql-picker-item.ql-selected {
+    color: #3b82f6;
+    font-weight: 600;
 }
-[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor li.ql-indent-1:not(.ql-direction-rtl)::before,
-.ql-editor[data-chapter-prefix]:not([data-chapter-prefix=""]) li.ql-indent-1:not(.ql-direction-rtl)::before {
-    content: "- " !important;
-}
+
+/*
+ * NOTE: The chapter-scoped list styling (chapter-prefix numbering, ○/-
+ * bullet markers, per-level indent steps) used to live here but was
+ * specific to KM articles, not to every RichTextEditor in the app.
+ * It now lives in `src/components/KM/kmArticle.css` and is imported
+ * only by KM modules. Keep this file focused on the editor core.
+ */

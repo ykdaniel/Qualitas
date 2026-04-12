@@ -3,6 +3,7 @@ import api from '../services/api';
 import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
+import { getProjectFilterParams } from '../utils/projectFilter';
 
 export interface NCRItem {
     id: string;
@@ -75,7 +76,7 @@ export const useNCRStore = create<NCRState>((set, get) => ({
     fetchNCRs: async (params?: FilterParams) => {
         set({ loading: true, error: null });
         try {
-            const response = await api.get('/ncr/', { params });
+            const response = await api.get('/ncr/', { params: { ...getProjectFilterParams(), ...params } });
             set({ ncrList: (response.data || []).map(normalizeItem), loading: false });
         } catch (err: any) {
             set({ error: getErrorMessage(err, 'Failed to fetch NCRs'), loading: false });

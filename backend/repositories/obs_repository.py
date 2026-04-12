@@ -8,7 +8,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session, joinedload
 
 import models
-from core.utils import sanitize_search_term
+from core.utils import sanitize_pagination, sanitize_search_term
 
 
 class OBSRepository:
@@ -24,9 +24,12 @@ class OBSRepository:
                 .filter(models.OBS.id == obs_id)
                 .first())
 
-    def get_all(self, skip: int = 0, limit: int = 500, **filters) -> List[models.OBS]:
+    def get_all(self, skip: int = 0, limit: int = 500, project_id: str = None, **filters) -> List[models.OBS]:
         """Get all OBS records with optional filters"""
+        skip, limit = sanitize_pagination(skip, limit)
         query = self.db.query(models.OBS).options(joinedload(models.OBS.vendor_ref))
+        if project_id:
+            query = query.filter(models.OBS.project_id == project_id)
 
         if filters.get('search'):
             search_term = sanitize_search_term(filters['search'])

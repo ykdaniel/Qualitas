@@ -3,6 +3,7 @@ import api from '../services/api';
 import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
+import { getProjectFilterParams } from '../utils/projectFilter';
 
 export interface ITRItem {
     id: string;
@@ -82,7 +83,7 @@ export const useITRStore = create<ITRState>((set, get) => ({
     fetchITRs: async (params?: FilterParams) => {
         set({ loading: true, error: null });
         try {
-            const response = await api.get('/itr/', { params });
+            const response = await api.get('/itr/', { params: { ...getProjectFilterParams(), ...params } });
             set({ itrList: (response.data || []).map(normalizeItem), loading: false });
         } catch (err: any) {
             set({ error: getErrorMessage(err, 'Failed to fetch ITRs'), loading: false });

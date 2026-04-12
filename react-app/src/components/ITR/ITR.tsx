@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BackButton } from '@/components/ui/BackButton';
 import { useDebounce } from '../../hooks/useDebounce';
 import { useLanguage } from '../../context/LanguageContext';
-import { useITRStats } from '../../hooks/useITRStats';
+import { useITRStats, isITROverdue } from '../../hooks/useITRStats';
 import { StatItem } from '../Shared/StatItem';
 import statStyles from '../Shared/StatItem.module.css';
 import { useITRStore } from '../../store/itrStore';
@@ -27,6 +27,7 @@ const ITR: React.FC = () => {
 
     const [searchQuery, setSearchQuery] = useState('');
     const debouncedSearch = useDebounce(searchQuery, 500);
+    const [statusFilter, setStatusFilter] = useState<string>('all');
 
     // Trigger server-side refetch when debounced search changes
     React.useEffect(() => {
@@ -40,10 +41,15 @@ const ITR: React.FC = () => {
         message: '',
     });
 
-    // Data is now primarily filtered by backend.
+    // Apply client-side status/overdue filter on top of backend results.
     const filteredList = useMemo(() => {
-        return itrList;
-    }, [itrList]);
+        if (statusFilter === 'all') return itrList;
+        if (statusFilter === 'overdue') return itrList.filter(isITROverdue);
+        return itrList.filter(item => {
+            const s = (item.status || '').toLowerCase();
+            return s === statusFilter.toLowerCase();
+        });
+    }, [itrList, statusFilter]);
 
     const statistics = useITRStats(itrList);
 
@@ -56,6 +62,24 @@ const ITR: React.FC = () => {
         setCurrentItrId(id);
         setIsEditModalOpen(true);
     }, []);
+
+    // ── Deep-link support: /itr?openId=<id> opens that ITR's detail
+    // modal on mount. Same pattern as NCR and NOI pages.
+    const [searchParams, setSearchParams] = useSearchParams();
+    const deepLinkAppliedRef = useRef(false);
+    useEffect(() => {
+        if (deepLinkAppliedRef.current) return;
+        const openId = searchParams.get('openId');
+        if (!openId) return;
+        if (itrList.length === 0) return;
+        const match = itrList.find(item => item.id === openId);
+        if (!match) return;
+        handleEdit(openId);
+        deepLinkAppliedRef.current = true;
+        const next = new URLSearchParams(searchParams);
+        next.delete('openId');
+        setSearchParams(next, { replace: true });
+    }, [searchParams, itrList, handleEdit, setSearchParams]);
 
     const handleDeleteClick = React.useCallback((id: string) => {
         const itr = itrList.find(item => item.id === id);
@@ -204,14 +228,48 @@ const ITR: React.FC = () => {
                             icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>} 
                             iconColorClass={statStyles.pinkIcon} 
                         />
-                        <StatItem 
-                            label={t('obs.statTotal')} 
-                            value={statistics.total} 
-                            icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" /><path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-                            iconColorClass={statStyles.grayIcon} 
+                        <StatItem
+                            label={t('itr.overdue')}
+                            value={statistics.overdue}
+                            icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                            iconColorClass={statStyles.orangeIcon}
+                        />
+                        <StatItem
+                            label={t('obs.statTotal')}
+                            value={statistics.total}
+                            icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" /><path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                            iconColorClass={statStyles.grayIcon}
                         />
                     </div>
                 </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+                {([
+                    { key: 'all', label: t('common.all') || 'All' },
+                    { key: 'In Progress', label: t('itr.status.inProgress') },
+                    { key: 'Approved', label: t('itr.status.approved') },
+                    { key: 'Reject', label: t('itr.status.reject') },
+                    { key: 'overdue', label: t('itr.overdue') },
+                ] as const).map(tab => (
+                    <button
+                        key={tab.key}
+                        onClick={() => setStatusFilter(tab.key)}
+                        style={{
+                            padding: '6px 16px',
+                            borderRadius: 9999,
+                            border: statusFilter === tab.key ? '2px solid #2563eb' : '1px solid #d1d5db',
+                            background: statusFilter === tab.key ? '#eff6ff' : '#fff',
+                            color: statusFilter === tab.key ? '#2563eb' : '#374151',
+                            fontWeight: statusFilter === tab.key ? 600 : 400,
+                            fontSize: 14,
+                            cursor: 'pointer',
+                            transition: 'all 0.15s',
+                        }}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
             </div>
 
             <div className={styles.content}>

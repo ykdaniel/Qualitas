@@ -3,7 +3,9 @@ import DOMPurify from 'dompurify';
 import { diff_match_patch, DIFF_INSERT, DIFF_DELETE } from 'diff-match-patch';
 import { KMArticleHistory } from '../../types/km';
 import { kmService } from '../../services/kmService';
+import { injectAuthTokenIntoHtml } from '../../utils/authUrl';
 import styles from './KMHistoryModal.module.css';
+import './kmArticle.css';
 
 interface KMHistoryModalProps {
     isOpen: boolean;
@@ -171,7 +173,9 @@ export const KMHistoryModal: React.FC<KMHistoryModalProps> = ({ isOpen, onClose,
 
                     <div className={styles.snapshotContent}>
                         {mode === 'snapshot' && (
-                            <div className="ql-editor" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(version.content) }} />
+                            <div className="km-article">
+                                <div className="ql-editor" dangerouslySetInnerHTML={{ __html: injectAuthTokenIntoHtml(DOMPurify.sanitize(version.content)) }} />
+                            </div>
                         )}
                         {mode === 'diff' && (
                             <div style={{ lineHeight: 1.8, fontFamily: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
@@ -184,16 +188,20 @@ export const KMHistoryModal: React.FC<KMHistoryModalProps> = ({ isOpen, onClose,
                                         <span style={{ background: '#f1f5f9', color: '#475569', padding: '2px 8px', borderRadius: 4 }}>v{prevVersion.version_no}.0</span>
                                         <span style={{ color: '#94a3b8', fontWeight: 400 }}>{prevVersion.created_at}</span>
                                     </div>
-                                    <div className="ql-editor" style={{ padding: 16 }}
-                                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(prevVersion.content) }} />
+                                    <div className="km-article">
+                                        <div className="ql-editor" style={{ padding: 16 }}
+                                            dangerouslySetInnerHTML={{ __html: injectAuthTokenIntoHtml(DOMPurify.sanitize(prevVersion.content)) }} />
+                                    </div>
                                 </div>
                                 <div style={{ border: '1px solid #0ea5e9', borderRadius: 6, overflow: 'hidden', background: '#fff' }}>
                                     <div style={{ padding: '8px 12px', background: '#e0f2fe', borderBottom: '1px solid #0ea5e9', fontSize: '0.8rem', fontWeight: 600, color: '#0369a1', display: 'flex', alignItems: 'center', gap: 8 }}>
                                         <span style={{ background: '#0ea5e9', color: '#fff', padding: '2px 8px', borderRadius: 4 }}>v{version.version_no}.0</span>
                                         <span style={{ color: '#0369a1', fontWeight: 400 }}>{version.created_at}</span>
                                     </div>
-                                    <div className="ql-editor" style={{ padding: 16 }}
-                                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(version.content) }} />
+                                    <div className="km-article">
+                                        <div className="ql-editor" style={{ padding: 16 }}
+                                            dangerouslySetInnerHTML={{ __html: injectAuthTokenIntoHtml(DOMPurify.sanitize(version.content)) }} />
+                                    </div>
                                 </div>
                             </div>
                         )}

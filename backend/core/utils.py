@@ -176,6 +176,12 @@ class WorkflowEngine:
             "Pass": ["Ongoing"],  # 允許回退修改
             "Fail": ["Ongoing"]
         },
+        "FollowUp": {
+            "Open": ["In Progress", "Closed", "Void"],
+            "In Progress": ["Closed", "Void"],
+            "Closed": [],
+            "Void": []
+        },
         "Audit": {
             "Draft": ["Planned", "Void"],
             "Planned": ["In Progress", "Draft", "Void"],
@@ -349,7 +355,7 @@ def _resolve_vendor_id(db: Session, vendor_name: str) -> Optional[str]:
     return contractor.id if contractor else None
 
 
-def generate_reference_no(db: Session, vendor_name: str, doc_type: str) -> str:
+def generate_reference_no(db: Session, vendor_name: str, doc_type: str, project_code: str | None = None) -> str:
     """
     產生 Reference No
 
@@ -375,6 +381,7 @@ def generate_reference_no(db: Session, vendor_name: str, doc_type: str) -> str:
           Python process. This is the layer that actually protects SQLite
           deployments — see the comment on _reference_seq_lock above.
     """
+    code = project_code or PROJECT_CODE
     vendor_abbrev = get_contractor_abbreviation(db, vendor_name)
 
     # 嘗試讀取文件命名規則（以 doc_type 小寫對應，如 ITP -> itp）
@@ -386,7 +393,7 @@ def generate_reference_no(db: Session, vendor_name: str, doc_type: str) -> str:
     with _reference_seq_lock:
         # 查詢或建立序號記錄
         seq_record = db.query(ReferenceSequence).filter(
-            ReferenceSequence.project == PROJECT_CODE,
+            ReferenceSequence.project == code,
             ReferenceSequence.vendor == vendor_abbrev,
             ReferenceSequence.doc == doc_type
         ).with_for_update().first()
@@ -397,7 +404,7 @@ def generate_reference_no(db: Session, vendor_name: str, doc_type: str) -> str:
         else:
             next_seq = 1
             seq_record = ReferenceSequence(
-                project=PROJECT_CODE,
+                project=code,
                 vendor=vendor_abbrev,
                 doc=doc_type,
                 last_seq=next_seq
@@ -414,4 +421,4 @@ def generate_reference_no(db: Session, vendor_name: str, doc_type: str) -> str:
 
     # Fallback：維持舊有格式 QTS-ABBREV-DOC-000001
     seq_str = str(next_seq).zfill(6)
-    return f"{PROJECT_CODE}-{vendor_abbrev}-{doc_type.upper()}-{seq_str}"
+    return f"{code}-{vendor_abbrev}-{doc_type.upper()}-{seq_str}"

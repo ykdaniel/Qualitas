@@ -8,6 +8,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 
 import models
+from core.utils import sanitize_pagination
 
 
 class ProjectRepository:
@@ -20,6 +21,7 @@ class ProjectRepository:
         return self.db.query(models.Project).filter(models.Project.id == project_id).first()
 
     def get_all(self, skip: int = 0, limit: int = 200) -> List[models.Project]:
+        skip, limit = sanitize_pagination(skip, limit)
         return self.db.query(models.Project).order_by(models.Project.name).offset(skip).limit(limit).all()
 
     def create(self, project: models.Project) -> models.Project:

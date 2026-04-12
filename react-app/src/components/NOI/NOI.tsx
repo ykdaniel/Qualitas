@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import ReactDOM from 'react-dom';
 import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
@@ -7,7 +8,7 @@ import type { NOIItem } from '../../store/noiStore';
 
 import { useNCRStore } from '../../store/ncrStore';
 import { useITRStore } from '../../store/itrStore';
-import { uploadFiles, deleteFile } from '../../services/api';
+import { uploadFiles, deleteFile, getAuthenticatedFileUrl } from '../../services/api';
 import { checkNOIReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
 import { formatTime24h } from '../../utils/formatters';
 import ConfirmModal from '../Shared/ConfirmModal';
@@ -128,20 +129,39 @@ const NOI: React.FC = () => {
     setIsModalOpen(true);
   }, []);
 
+  // Deep-link support: `/noi?openId=<uuid>` auto-opens that NOI's detail
+  // modal once the list has loaded. Used by the Q-WorkFlow Dashboard card
+  // to jump straight from an at-risk workflow to the NOI in question.
+  // We consume the param on first successful match so a subsequent manual
+  // close-and-reopen of the modal doesn't keep bouncing back.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkAppliedRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkAppliedRef.current) return;
+    const openId = searchParams.get('openId');
+    if (!openId) return;
+    if (noiList.length === 0) return;
+    const match = noiList.find(item => item.id === openId || item.referenceNo === openId);
+    if (!match) return;
+    handleEdit(match.id);
+    deepLinkAppliedRef.current = true;
+    const next = new URLSearchParams(searchParams);
+    next.delete('openId');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, noiList, handleEdit, setSearchParams]);
+
   const handleAddNew = () => {
-    const newId = String(Date.now());
-    setCurrentNoiId(newId);
+    setCurrentNoiId('new');
     setIsModalOpen(true);
   };
 
   const handleSaveNOIDetails = async (details: NOIDetailData, pendingUploads: File[], deletedFileIds: string[]) => {
     if (currentNoiId) {
-      setNoiDetails(prev => ({ ...prev, [currentNoiId]: details }));
-
-      const existingItem = noiList.find(item => item.id === currentNoiId);
+      const isNew = currentNoiId === 'new';
+      const existingItem = isNew ? undefined : noiList.find(item => item.id === currentNoiId);
 
       const updatedItem: NOIItem = {
-        id: currentNoiId,
+        id: isNew ? '' : currentNoiId,
         package: details.package || '',
         referenceNo: details.referenceNo || '',
         issueDate: details.issueDate || '',
@@ -169,7 +189,8 @@ const NOI: React.FC = () => {
           await updateNOI(currentNoiId, updatedItem);
           savedNOI = updatedItem;
         } else {
-          savedNOI = await addNOI(updatedItem, currentNoiId);
+          // Don't pass a fake ID — let the backend generate a UUID
+          savedNOI = await addNOI(updatedItem);
         }
 
         const finalId = savedNOI?.id || currentNoiId;
@@ -457,7 +478,7 @@ const NOI: React.FC = () => {
                         }))
                       ).map((item, idx) => (
                         <div key={idx} className={styles.noiBatchPrintPhotoItem}>
-                          <img src={typeof item.img === 'string' ? item.img : item.img.file_url} alt={item.label} className={styles.noiBatchPrintPhoto} />
+                          <img src={getAuthenticatedFileUrl(typeof item.img === 'string' ? item.img : item.img.file_url)} alt={item.label} className={styles.noiBatchPrintPhoto} />
                           <div className={styles.noiBatchPrintPhotoLabel}>{item.label}</div>
                         </div>
                       ))}

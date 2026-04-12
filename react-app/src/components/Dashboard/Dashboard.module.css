@@ -88,6 +88,18 @@
   box-shadow: 0 0 0 2px rgba(17, 153, 142, 0.2);
 }
 
+/* Q-WorkFlow 區域 — full-width row for the cross-module progress card */
+.workflowSection {
+  margin-bottom: 32px;
+  display: flex;
+  justify-content: stretch;
+}
+
+.workflowSection > * {
+  flex: 1;
+  max-width: 720px;
+}
+
 /* KPI 區域 */
 .kpiSection {
   margin-bottom: 32px;

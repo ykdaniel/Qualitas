@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import api from '../services/api';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
+import { getProjectFilterParams } from '../utils/projectFilter';
 
 export interface NOIItem {
     id: string;
@@ -53,7 +54,7 @@ export const useNOIStore = create<NOIState>((set, get) => ({
     fetchNOIs: async (params?: FilterParams) => {
         set({ loading: true, error: null });
         try {
-            const response = await api.get('/noi/', { params });
+            const response = await api.get('/noi/', { params: { ...getProjectFilterParams(), ...params } });
             set({ noiList: response.data || [], loading: false });
         } catch (err: any) {
             set({ error: getErrorMessage(err, 'Failed to fetch NOIs'), loading: false });

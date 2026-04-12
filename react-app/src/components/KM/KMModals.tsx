@@ -5,18 +5,21 @@ import { KMArticleCreate, KMArticleUpdate, KMArticle } from '../../types/km';
 import { useKMStore } from '../../store/kmStore';
 import { kmService } from '../../services/kmService';
 import { stripDecorativeZeros, compareChapterNo } from '../../utils/extractSectionToc';
+import { injectAuthTokenIntoHtml, stripAuthTokenFromHtml } from '../../utils/authUrl';
 import { RichTextEditor } from '../ui/RichTextEditor';
 import { KMAttachment } from '../../types/km';
 import styles from './KMModals.module.css';
+import './kmArticle.css';
 
 interface KMModalProps {
     id: string | null;
     existingData?: KMArticle;
+    focusChapterId?: string | null;
     onSaveSuccess: () => void;
     onClose: () => void;
 }
 
-export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSuccess, onClose }) => {
+export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapterId, onSaveSuccess, onClose }) => {
     const { t } = useLanguage();
     const { kmList } = useKMStore();
     const [loading, setLoading] = useState(false);
@@ -63,21 +66,39 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                 if (existingData.id) {
                     try {
                         await useKMStore.getState().fetchKMs();
+                        // Re-sync formData from the store snapshot we
+                        // just fetched. Without this, any update the
+                        // store pulled in (a newer title, newer
+                        // content, status bump, etc.) is invisible to
+                        // the form — the initial setFormData above
+                        // captured the stale snapshot, and because the
+                        // outer effect only re-runs on id change we
+                        // never re-read existingData even after its
+                        // ref updates. Look the row up by id rather
+                        // than trusting existingData's identity so we
+                        // always render the freshest copy.
+                        const fresh = useKMStore
+                            .getState()
+                            .kmList.find(k => k.id === existingData.id);
+                        if (fresh) {
+                            setFormData(fresh);
+                        }
                         const children = useKMStore.getState().kmList.filter(k => k.parent_id === existingData.id);
                         if (children.length > 0) {
                             const sortedChildren = [...children].sort((a, b) => compareChapterNo(a.chapter_no, b.chapter_no));
                             setChapters(sortedChildren.map(c => ({
                                 id: c.id,
                                 title: c.title,
-                                content: c.content,
+                                content: injectAuthTokenIntoHtml(c.content),
                                 chapter_no: c.chapter_no || ''
                             })));
                         } else {
                             // If it has content itself, convert to first chapter
-                            setChapters([{ title: existingData.title, content: existingData.content, chapter_no: existingData.chapter_no || '1.0' }]);
+                            const base = fresh || existingData;
+                            setChapters([{ title: base.title, content: injectAuthTokenIntoHtml(base.content), chapter_no: base.chapter_no || '1.0' }]);
                         }
                     } catch {
-                        setChapters([{ title: existingData.title, content: existingData.content, chapter_no: existingData.chapter_no || '1.0' }]);
+                        setChapters([{ title: existingData.title, content: injectAuthTokenIntoHtml(existingData.content), chapter_no: existingData.chapter_no || '1.0' }]);
                     }
                 }
             };
@@ -97,6 +118,24 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [existingData?.id]);
+
+    // Auto-scroll to a specific chapter when the modal opens from a
+    // per-chapter edit button in the detail view.
+    useEffect(() => {
+        if (focusChapterId && chapters.length > 0) {
+            // Small delay to let the DOM render the chapter blocks
+            const timer = setTimeout(() => {
+                const el = document.getElementById(`edit-chapter-${focusChapterId}`);
+                if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Brief highlight flash
+                    el.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.4)';
+                    setTimeout(() => { el.style.boxShadow = ''; }, 1500);
+                }
+            }, 400);
+            return () => clearTimeout(timer);
+        }
+    }, [focusChapterId, chapters.length]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -138,6 +177,43 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
         }, 0);
         const nextNo = maxMajor + 1;
         setChapters([...chapters, { title: `Chapter ${nextNo}`, content: '', chapter_no: `${nextNo}.0` }]);
+    };
+
+    /** Insert a sub-chapter (child level) after the given index.
+     *
+     *  The new chapter becomes a CHILD of the current chapter:
+     *    "2.0"   → inserts "2.0.1" (or 2.0.2, 2.0.3…)
+     *    "4.1"   → inserts "4.1.1" (or 4.1.2…)
+     *    "4.1.1" → inserts "4.1.1.1" (or 4.1.1.2…)
+     *
+     *  Supports unlimited nesting depth.
+     */
+    const insertChapterAfter = (afterIndex: number) => {
+        const current = chapters[afterIndex];
+        const parentPrefix = (current.chapter_no || '1').replace(/\.0$/, ''); // "2.0" → "2", "4.1" stays "4.1"
+
+        // Find existing children under this parent prefix
+        // e.g. parentPrefix="4.1" → match "4.1.1", "4.1.2", but NOT "4.1" itself or "4.10.1"
+        const active = chapters.filter(c => !c.deleted);
+        const childNos = active
+            .map(c => {
+                const re = new RegExp(`^${parentPrefix.replace(/\./g, '\\.')}\\.(\\d+)$`);
+                const m = (c.chapter_no || '').match(re);
+                return m ? parseInt(m[1], 10) : null;
+            })
+            .filter((n): n is number => n !== null);
+        const maxChild = childNos.length > 0 ? Math.max(...childNos) : 0;
+        const nextChild = maxChild + 1;
+        const newChapterNo = `${parentPrefix}.${nextChild}`;
+
+        const newChapters = [...chapters];
+        // Insert right after the afterIndex position
+        newChapters.splice(afterIndex + 1, 0, {
+            title: '',
+            content: '',
+            chapter_no: newChapterNo,
+        });
+        setChapters(newChapters);
     };
 
     const removeChapter = (indexToRemove: number) => {
@@ -638,7 +714,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
             const isSingleChapter = activeChapters.length === 1;
             const mainDocData = {
                 ...formData,
-                content: isSingleChapter ? activeChapters[0].content : '',
+                content: isSingleChapter ? stripAuthTokenFromHtml(activeChapters[0].content) : '',
                 chapter_no: isSingleChapter ? formData.chapter_no : null,
             };
 
@@ -671,7 +747,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                 } else if (!ch.deleted && ch.id) {
                     await kmService.update(ch.id, {
                         title: ch.title,
-                        content: ch.content,
+                        content: stripAuthTokenFromHtml(ch.content),
                         chapter_no: ch.chapter_no,
                         parent_id: mainId,
                         category: mainDocData.category,
@@ -687,7 +763,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                     if (activeChapters.length > 1 || (activeChapters.length === 1 && ch.title !== mainDocData.title)) {
                         const created = await kmService.create({
                             title: ch.title,
-                            content: ch.content,
+                            content: stripAuthTokenFromHtml(ch.content),
                             chapter_no: ch.chapter_no,
                             parent_id: mainId,
                             category: mainDocData.category,
@@ -726,7 +802,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                     <h2>{id ? (t('km.edit') || 'Edit Article') : (t('km.create') || 'Create Article')}</h2>
                     <button type="button" className={styles.closeButton} onClick={onClose}>&times;</button>
                 </div>
-                <form onSubmit={handleSubmit} className={styles.formBody}>
+                <form id="km-edit-form" onSubmit={handleSubmit} className={styles.formBody}>
                     {/* Collapsible "Basic Info" section.
                         Click the header bar to toggle. Defaults to collapsed
                         on edit, expanded on create (see metaCollapsed init). */}
@@ -911,8 +987,18 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
 
                         {chapters.map((ch, index) => {
                             if (ch.deleted) return null;
+                            // Calculate nesting depth from chapter_no for indentation
+                            // "1.0" → depth 0, "2.1" → depth 1, "2.1.1" → depth 2
+                            const chNo = (ch.chapter_no || '').replace(/\.0$/, '');
+                            const depth = Math.max(0, (chNo.match(/\./g) || []).length);
                             return (
-                                <div key={ch.id ?? `new-${index}`} className={styles.chapterBlock} data-chapter-index={index}>
+                                <div
+                                    key={ch.id ?? `new-${index}`}
+                                    id={`edit-chapter-${ch.id || index}`}
+                                    className={styles.chapterBlock}
+                                    data-chapter-index={index}
+                                    style={{ marginLeft: depth * 32 }}
+                                >
                                     <div className={styles.chapterBlockHeader}>
                                         <div className={styles.chapterInputs}>
                                             <input
@@ -988,7 +1074,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                                         </div>
                                     </div>
                                     <div
-                                        className={styles.editorWrapper}
+                                        className={`km-article ${styles.editorWrapper}`}
                                         data-chapter-prefix={stripDecorativeZeros(ch.chapter_no || '')}
                                         style={{ ['--chapter-prefix' as any]: `"${stripDecorativeZeros(ch.chapter_no || '')}"` }}
                                     >
@@ -1001,6 +1087,17 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                                                 placeholder="Write your chapter content here..."
                                             />
                                         </div>
+                                    </div>
+                                    {/* Insert sub-chapter button between chapters */}
+                                    <div className={styles.insertChapterRow}>
+                                        <button
+                                            type="button"
+                                            onClick={() => insertChapterAfter(index)}
+                                            className={styles.insertChapterBtn}
+                                            title={`在 ${ch.chapter_no || 'this chapter'} 後面插入子章節`}
+                                        >
+                                            + 插入章節
+                                        </button>
                                     </div>
                                 </div>
                             );
@@ -1052,15 +1149,15 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, onSaveSucces
                         })()}
                     </div>
 
-                    <div className={styles.modalFooter}>
-                        <button type="button" className={styles.cancelBtn} onClick={onClose} disabled={loading}>
-                            {t('common.cancel') || 'Cancel'}
-                        </button>
-                        <button type="submit" className={styles.saveBtn} disabled={loading}>
-                            {loading ? (t('common.saving') || 'Saving...') : (t('common.save') || 'Save')}
-                        </button>
-                    </div>
                 </form>
+                <div className={styles.modalFooter}>
+                    <button type="button" className={styles.cancelBtn} onClick={onClose} disabled={loading}>
+                        {t('common.cancel') || 'Cancel'}
+                    </button>
+                    <button type="submit" form="km-edit-form" className={styles.saveBtn} disabled={loading}>
+                        {loading ? (t('common.saving') || 'Saving...') : (t('common.save') || 'Save')}
+                    </button>
+                </div>
             </div>
         </div>
     );

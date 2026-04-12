@@ -3,10 +3,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 import schemas
-from core.dependencies import RoleChecker, get_ncr_service
+from core.dependencies import RoleChecker, get_ncr_service, get_related_service
 from core.perms import NCR_CREATE, NCR_DELETE, NCR_UPDATE, NCR_VIEW
 from database import get_db
 from services.ncr_service import NCRService
+from services.related_service import RelatedService
 
 router = APIRouter(
     prefix="/ncr",
@@ -87,3 +88,13 @@ def delete_ncr(
     if not deleted:
         raise HTTPException(status_code=404, detail="NCR not found")
     return {"ok": True}
+
+@router.get("/{ncr_id}/related", response_model=schemas.RelatedEntitiesResponse)
+def read_ncr_related(
+    ncr_id: str,
+    max_depth: int = 2,
+    related_service: RelatedService = Depends(get_related_service),
+    current_user: schemas.User = Depends(RoleChecker(NCR_VIEW)),
+):
+    """Return upstream/downstream related documents for this NCR."""
+    return related_service.get_related("ncr", ncr_id, max_depth=max_depth)

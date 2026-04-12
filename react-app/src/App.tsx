@@ -27,6 +27,7 @@ const KPI = React.lazy(() => import('./components/KPI/KPI'));
 const DocumentNamingRules = React.lazy(() => import('./components/DocumentNamingRules/DocumentNamingRules'));
 const OSD = React.lazy(() => import('./components/OSD/OSD'));
 const Checklist = React.lazy(() => import('./components/Checklist/Checklist'));
+const Workflow = React.lazy(() => import('./components/Workflow/Workflow'));
 
 // --- 404 page ---
 const NotFound = () => {
@@ -91,6 +92,7 @@ function App() {
             <Route path="/owner-performance" element={<OwnerPerformance />} />
             <Route path="/document-naming-rules" element={<DocumentNamingRules />} />
             <Route path="/checklist" element={<Checklist />} />
+            <Route path="/workflow" element={<Workflow />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

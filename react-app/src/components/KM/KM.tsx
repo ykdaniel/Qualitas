@@ -20,6 +20,7 @@ const KM: React.FC = () => {
   const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [focusChapterId, setFocusChapterId] = useState<string | null>(null);
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null }>({
     isOpen: false,
     id: null,
@@ -55,8 +56,9 @@ const KM: React.FC = () => {
     setIsModalOpen(true);
   }, []);
 
-  const handleEdit = useCallback((id: string) => {
+  const handleEdit = useCallback((id: string, chapterId?: string) => {
     setSelectedArticleId(id);
+    setFocusChapterId(chapterId || null);
     setIsModalOpen(true);
   }, []);
 
@@ -142,7 +144,7 @@ const KM: React.FC = () => {
               setCurrentView('list');
               setSelectedArticleId(null);
             }}
-            onEdit={() => handleEdit(selectedArticle.id)}
+            onEdit={(chapterId) => handleEdit(selectedArticle.id, chapterId)}
             onSelectArticle={(article) => setSelectedArticleId(article.id)}
           />
         )
@@ -152,8 +154,9 @@ const KM: React.FC = () => {
         <KMModal
           id={selectedArticleId}
           existingData={selectedArticle || undefined}
-          onSaveSuccess={() => setIsModalOpen(false)}
-          onClose={() => setIsModalOpen(false)}
+          focusChapterId={focusChapterId}
+          onSaveSuccess={() => { setIsModalOpen(false); setFocusChapterId(null); }}
+          onClose={() => { setIsModalOpen(false); setFocusChapterId(null); }}
         />
       )}
 

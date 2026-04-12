@@ -56,10 +56,21 @@ auth_limiter = RateLimiter(requests_limit=10, window_seconds=900)     # 登入: 
 LOOPBACK_IPS = {"127.0.0.1", "::1", "localhost"}
 
 
+def get_client_ip(request: Request) -> str:
+    """Extract the real client IP, respecting reverse-proxy headers."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    return request.client.host if request.client else "unknown"
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        # 取得客戶端 IP
-        client_ip = request.client.host if request.client else "unknown"
+        # 取得客戶端 IP（支援反向代理）
+        client_ip = get_client_ip(request)
         path = request.url.path
 
         # Skip rate limiting entirely for loopback (local dev).

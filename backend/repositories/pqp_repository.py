@@ -9,7 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 import models
-from core.utils import sanitize_search_term
+from core.utils import sanitize_pagination, sanitize_search_term
 
 
 class PQPRepository:
@@ -25,9 +25,12 @@ class PQPRepository:
                 .filter(models.PQP.id == pqp_id)
                 .first())
 
-    def get_all(self, skip: int = 0, limit: int = 500, **filters) -> List[models.PQP]:
+    def get_all(self, skip: int = 0, limit: int = 500, project_id: str = None, **filters) -> List[models.PQP]:
         """Get all PQPs with optional filters"""
+        skip, limit = sanitize_pagination(skip, limit)
         query = self.db.query(models.PQP).options(joinedload(models.PQP.vendor_ref))
+        if project_id:
+            query = query.filter(models.PQP.project_id == project_id)
 
         if filters.get('search'):
             search_term = sanitize_search_term(filters['search'])
@@ -38,10 +41,11 @@ class PQPRepository:
                 )
         if filters.get('status'):
             status_filter = str(filters['status']).strip().lower()
-            if status_filter == "not submitted":
-                status_filter = "not submit"
-            if status_filter == "rejected":
-                status_filter = "reject"
+            status_aliases = {
+                "not submitted": "not submit",
+                "rejected": "reject",
+            }
+            status_filter = status_aliases.get(status_filter, status_filter)
             query = query.filter(func.lower(models.PQP.status) == status_filter)
         if filters.get('start_date'):
             query = query.filter(models.PQP.createdAt >= filters['start_date'])

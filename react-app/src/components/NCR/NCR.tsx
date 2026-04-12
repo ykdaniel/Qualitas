@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -8,7 +9,7 @@ import { useITRStore } from '../../store/itrStore';
 import { checkNCRReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './NCR.module.css';
-import { NCRDetailModal, NCRDetailsViewModal, NCRDetailData, PendingUploads } from './NCRModals';
+import { NCRDetailModal, NCRDetailData, PendingUploads } from './NCRModals';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { BackButton } from '@/components/ui/BackButton';
@@ -41,10 +42,7 @@ const NCR: React.FC = () => {
 
   // Modal States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [currentNcrId, setCurrentNcrId] = useState<string | null>(null);
-  const [viewingNcrId, setViewingNcrId] = useState<string | null>(null);
-  const [ncrDetails, setNcrDetails] = useState<{ [key: string]: NCRDetailData }>({});
 
   // Delete Confirmation State
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null; message: string }>({
@@ -62,16 +60,37 @@ const NCR: React.FC = () => {
     setIsEditModalOpen(true);
   }, []);
 
+  // ── Deep-link support: /ncr?openId=<id> opens that NCR's detail
+  // modal on mount. Used by the Q-WorkFlow Dashboard card and page so
+  // clicking a row jumps straight into the NCR rather than dropping
+  // into the list view. We wait for ncrList to populate before trying
+  // to match, and only fire once per mount (ref guard) so subsequent
+  // param changes from inside this page don't re-open the modal.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkAppliedRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkAppliedRef.current) return;
+    const openId = searchParams.get('openId');
+    if (!openId) return;
+    if (ncrList.length === 0) return;
+    const match = ncrList.find(item => item.id === openId || item.documentNumber === openId);
+    if (!match) return;
+    handleEdit(match.id);
+    deepLinkAppliedRef.current = true;
+    const next = new URLSearchParams(searchParams);
+    next.delete('openId');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, ncrList, handleEdit, setSearchParams]);
+
   const handleAddNew = () => {
-    const newId = String(Date.now());
-    setCurrentNcrId(newId);
+    setCurrentNcrId('new');
     setIsEditModalOpen(true);
   };
 
   const handleSaveNCRDetails = async (details: NCRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => {
     if (currentNcrId) {
-      setNcrDetails(prev => ({ ...prev, [currentNcrId]: details }));
-      const existingItem = ncrList.find(item => item.id === currentNcrId);
+      const isNew = currentNcrId === 'new';
+      const existingItem = isNew ? undefined : ncrList.find(item => item.id === currentNcrId);
 
       // documentNumber 由後端自動產生，新建時不送；更新時也不覆蓋
       const updatedItem: Record<string, unknown> = {
@@ -95,6 +114,7 @@ const NCR: React.FC = () => {
         permanentProductDeviation: details.permanentProductDeviation,
         impactToOM: details.impactToOM,
         noiNumber: details.noiNumber,  // 連結到觸發此 NCR 的 NOI
+        itrNumber: details.itrNumber,  // 連結到觸發此 NCR 的 ITR
         defectPhotos: details.defectPhotos,
         improvementPhotos: details.improvementPhotos,
         attachments: details.attachments,
@@ -117,11 +137,6 @@ const NCR: React.FC = () => {
         } else {
           const newNCR = await addNCR(updatedItem as Omit<NCRItem, 'id'>);
           targetId = newNCR.id;
-          setNcrDetails(prev => {
-            const newDetails = { ...prev };
-            newDetails[newNCR.id] = details;
-            return newDetails;
-          });
         }
 
         // Process file API operations
@@ -282,25 +297,11 @@ const NCR: React.FC = () => {
       {isEditModalOpen && currentNcrId && (
         <NCRDetailModal
           ncrId={currentNcrId}
-          existingData={ncrDetails[currentNcrId]}
-          existingItem={ncrList.find(item => item.id === currentNcrId)}
-          ncrList={ncrList}
+          existingItem={currentNcrId !== 'new' ? ncrList.find(item => item.id === currentNcrId) : undefined}
           onSave={handleSaveNCRDetails}
           onClose={() => {
             setIsEditModalOpen(false);
             setCurrentNcrId(null);
-          }}
-        />
-      )}
-
-      {isDetailsModalOpen && viewingNcrId && (
-        <NCRDetailsViewModal
-          ncrId={viewingNcrId}
-          ncrItem={ncrList.find(item => item.id === viewingNcrId)}
-          ncrDetailData={ncrDetails[viewingNcrId]}
-          onClose={() => {
-            setIsDetailsModalOpen(false);
-            setViewingNcrId(null);
           }}
         />
       )}

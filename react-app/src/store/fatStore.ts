@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import api from '../services/api';
 import { getErrorMessage } from '../utils/errorUtils';
+import { getProjectFilterParams } from '../utils/projectFilter';
 
 export interface FATItem {
     id: string;
@@ -62,7 +63,7 @@ export const useFATStore = create<FATState>((set, get) => ({
     fetchFATs: async () => {
         set({ loading: true, error: null });
         try {
-            const response = await api.get('/fat/');
+            const response = await api.get('/fat/', { params: { ...getProjectFilterParams() } });
             const list = response.data || [];
             // NOTE: 從後端回應中解析 detail_data 並填入 fatDetails
             const detailsMap: { [key: string]: FATDetailItem[] } = {};

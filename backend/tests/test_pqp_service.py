@@ -18,8 +18,8 @@ def test_create_pqp_success(pqp_service, mock_repo):
         title="Test PQP",
         description="Test PQP Description",
         vendor="TestVendor",
-        status="Approved",
-        version="Rev 1.0",
+        status="Not Submit",
+        version="Rev1.0",
         createdAt="2026-01-01",
         updatedAt="2026-01-01"
     )
@@ -35,7 +35,7 @@ def test_create_pqp_success(pqp_service, mock_repo):
             id="pqp-123",
             pqpNo="PQP-QTS-TEST-001",
             vendor_id="vendor-uuid-123",
-            status="Approved"
+            status="Not Submit"
         )
         mock_repo.create.return_value = mock_created_pqp
         

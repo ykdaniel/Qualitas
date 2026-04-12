@@ -33,13 +33,24 @@ export const createColumns = (
                     title={t('obs.status')}
                     filterOptions={[
                         { label: t('status.open'), value: 'Open' },
+                        { label: t('status.inProgress'), value: 'In Progress' },
+                        { label: t('status.resolved'), value: 'Resolved' },
                         { label: t('status.closed'), value: 'Closed' },
+                        { label: t('status.void'), value: 'Void' },
                     ]}
                 />
             ),
             cell: ({ row }) => {
                 const status = row.getValue("status") as string;
-                return <div className="text-center">{status.toLowerCase() === 'open' ? t('status.open') : t('status.closed')}</div>;
+                const s = (status || '').toLowerCase();
+                const statusKeyMap: Record<string, string> = {
+                    'open': 'status.open',
+                    'in progress': 'status.inProgress',
+                    'resolved': 'status.resolved',
+                    'closed': 'status.closed',
+                    'void': 'status.void',
+                };
+                return <div className="text-center">{t(statusKeyMap[s] || '') || status}</div>;
             },
             filterFn: (row, id, value) => {
                 return value.includes(row.getValue(id));

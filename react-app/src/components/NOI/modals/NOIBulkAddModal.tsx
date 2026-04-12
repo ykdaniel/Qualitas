@@ -171,6 +171,8 @@ export const NOIBulkAddModal: React.FC<NOIBulkAddModalProps> = ({ onSave, onClos
                                             <td style={{ padding: '4px', borderBottom: '1px solid #e5e7eb' }}>
                                                 <select value={row.checkpoint} onChange={(e) => handleRowChange(row.id, 'checkpoint', e.target.value)} style={{ width: '100%', padding: '6px', border: '1px solid #d1d5db', borderRadius: '4px' }}>
                                                     <option value="">選擇</option>
+                                                    <option value="R">R</option>
+                                                    <option value="MS">MS</option>
                                                     <option value="W">W</option>
                                                     <option value="H">H</option>
                                                 </select>

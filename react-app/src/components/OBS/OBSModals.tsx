@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { toast } from 'sonner';
 import { getNextRevision } from '../../utils/revision';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
@@ -202,6 +203,8 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                 { category: 'attachment', files: pendingAttachments }
             ], deletedFileIds);
             onClose();
+        } catch (err) {
+            toast.error((err as Error)?.message || t('common.saveFailed'));
         } finally {
             setSaving(false);
         }
@@ -225,6 +228,8 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                     { category: 'attachment', files: pendingAttachments }
                 ], deletedFileIds);
                 onClose();
+            } catch (err) {
+                toast.error((err as Error)?.message || t('common.saveFailed'));
             } finally {
                 setSaving(false);
             }

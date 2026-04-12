@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import api from '../services/api';
 import { getErrorMessage } from '../utils/errorUtils';
+import { getProjectFilterParams } from '../utils/projectFilter';
 
 export interface FollowUpIssueItem {
     id: string;
@@ -45,7 +46,7 @@ export const useFollowUpStore = create<FollowUpState>((set, get) => ({
     fetchFollowUps: async () => {
         set({ loading: true, error: null });
         try {
-            const response = await api.get('/followup/');
+            const response = await api.get('/followup/', { params: { ...getProjectFilterParams() } });
             set({ followUpList: response.data || [], loading: false });
         } catch (err: any) {
             set({ error: getErrorMessage(err, 'Failed to fetch Follow-up Issues'), loading: false });

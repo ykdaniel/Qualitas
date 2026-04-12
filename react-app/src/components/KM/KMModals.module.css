@@ -153,7 +153,7 @@
   display: flex;
   justify-content: flex-end;
   gap: 16px;
-  margin-top: auto;
+  flex-shrink: 0;
 }
 
 .cancelBtn {
@@ -225,11 +225,12 @@
 
 /* This is needed to make the actual typing area stretch and scroll */
 .quillEditor :global(.ql-container) {
-  flex-grow: 1;
   overflow-y: auto;
-  min-height: 200px;
-  max-height: 40vh;
-  /* Prevent it from growing infinitely inside a modal */
+  min-height: 120px;
+  height: 300px;
+  max-height: 80vh;
+  resize: vertical;
+  /* Drag the bottom-right corner to adjust editor height */
 }
 
 .quillEditor :global(.ql-toolbar) {
@@ -419,6 +420,37 @@
 .removeChapterBtn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
+}
+
+.insertChapterRow {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.chapterBlock:hover .insertChapterRow,
+.insertChapterRow:focus-within {
+  opacity: 1;
+}
+
+.insertChapterBtn {
+  padding: 4px 16px;
+  background: #f0fdf4;
+  border: 1px dashed #86efac;
+  border-radius: 6px;
+  color: #16a34a;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.insertChapterBtn:hover {
+  background: #dcfce7;
+  border-color: #22c55e;
+  color: #15803d;
 }
 
 .addChapterBtnBottom {

@@ -1,0 +1,157 @@
+/*
+ * <RelatedDocuments /> panel — shown at the bottom of ITP / NOI / ITR /
+ * NCR detail modals to expose the cross-module workflow chain.
+ * See docs/workflow/phase1-pr1-related-documents.md for the plan.
+ */
+
+.wrapper {
+    margin-top: 24px;
+    padding: 16px 20px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.title {
+    margin: 0 0 12px 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #334155;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.section {
+    margin-top: 12px;
+}
+
+.sectionHeader {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #64748b;
+    margin-bottom: 6px;
+}
+
+.sectionArrow {
+    display: inline-block;
+    width: 1em;
+    text-align: center;
+}
+
+.list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    background: #fff;
+    padding: 6px;
+}
+
+.item {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 5px;
+    border: 1px solid transparent;
+    background: #fff;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    font: inherit;
+    color: inherit;
+    transition: background-color 0.1s ease, border-color 0.1s ease;
+}
+
+.item:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+.badge {
+    display: inline-block;
+    min-width: 42px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-align: center;
+    text-transform: uppercase;
+    color: #fff;
+    background: #64748b;
+    letter-spacing: 0.04em;
+}
+
+.badgeItp { background: #0ea5e9; }
+.badgeNoi { background: #8b5cf6; }
+.badgeItr { background: #10b981; }
+.badgeNcr { background: #ef4444; }
+
+.body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.refLine {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.titleLine {
+    font-size: 0.78rem;
+    color: #475569;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.72rem;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+.statusDot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #94a3b8;
+}
+
+.empty {
+    padding: 10px 12px;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.82rem;
+}
+
+.loading,
+.errorMsg {
+    padding: 10px 12px;
+    text-align: center;
+    color: #64748b;
+    font-size: 0.82rem;
+}
+
+.errorMsg {
+    color: #b91c1c;
+}

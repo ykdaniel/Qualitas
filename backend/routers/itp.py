@@ -6,11 +6,12 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 import schemas
-from core.dependencies import RoleChecker, get_itp_service
+from core.dependencies import RoleChecker, get_itp_service, get_related_service
 from core.perms import ITP_CREATE, ITP_DELETE, ITP_UPDATE, ITP_VIEW
 from database import get_db
 from middleware.auth import get_current_user
 from services.itp_service import ITPService
+from services.related_service import RelatedService
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ def create_itp(
 @router.get("/")
 def read_itps(
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 500,
     search: str = None,
     status: str = None,
     start_date: str = None,
@@ -127,3 +128,13 @@ def update_itp_detail(
     if db_itp is None:
         raise HTTPException(status_code=404, detail="ITP not found")
     return db_itp
+
+@router.get("/{itp_id}/related", response_model=schemas.RelatedEntitiesResponse)
+def read_itp_related(
+    itp_id: str,
+    max_depth: int = 2,
+    related_service: RelatedService = Depends(get_related_service),
+    current_user: schemas.User = Depends(RoleChecker(ITP_VIEW)),
+):
+    """Return upstream/downstream related documents for this ITP."""
+    return related_service.get_related("itp", itp_id, max_depth=max_depth)

@@ -27,10 +27,30 @@ const mapApiToInternal = (data: ProjectApi): Project => ({
     created_at: data.created_at || null,
 });
 
+const CURRENT_PROJECT_KEY = 'qualitas_current_project';
+
+const loadCurrentProject = (): Project | null => {
+    try {
+        const raw = localStorage.getItem(CURRENT_PROJECT_KEY);
+        if (raw) return JSON.parse(raw);
+    } catch { /* ignore corrupt data */ }
+    return null;
+};
+
+const persistCurrentProject = (project: Project | null) => {
+    if (project) {
+        localStorage.setItem(CURRENT_PROJECT_KEY, JSON.stringify(project));
+    } else {
+        localStorage.removeItem(CURRENT_PROJECT_KEY);
+    }
+};
+
 interface ProjectState {
     projectList: Project[];
+    currentProject: Project | null;
     error: string | null;
     fetchProjects: () => Promise<void>;
+    setCurrentProject: (project: Project | null) => void;
     addProject: (data: CreateProjectPayload) => Promise<void>;
     updateProject: (id: string, data: UpdateProjectPayload) => Promise<void>;
     deleteProject: (id: string) => Promise<void>;
@@ -38,7 +58,13 @@ interface ProjectState {
 
 export const useProjectStore = create<ProjectState>((set, _get) => ({
     projectList: [],
+    currentProject: loadCurrentProject(),
     error: null,
+
+    setCurrentProject: (project: Project | null) => {
+        persistCurrentProject(project);
+        set({ currentProject: project });
+    },
 
     fetchProjects: async () => {
         try {

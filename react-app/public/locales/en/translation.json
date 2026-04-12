@@ -1,4 +1,9 @@
 {
+  "related.title": "Related Documents",
+  "related.upstream": "Upstream",
+  "related.downstream": "Downstream",
+  "related.empty": "No related documents yet.",
+  "related.error": "Failed to load related documents.",
   "login.welcome": "Welcome Back",
   "login.subtitle": "Enter your credentials to access Qualitas",
   "login.email": "Email Address",
@@ -104,6 +109,7 @@
   "pqp.createdDate": "Created Date",
   "pqp.status.approved": "Approved",
   "pqp.status.reject": "Reject",
+  "pqp.status.reviseResubmit": "Revise & Resubmit",
   "pqp.status.notSubmitted": "Not Submitted",
   "pqp.status.underReview": "Under Review",
   "pqp.editTitle": "Edit PQP",

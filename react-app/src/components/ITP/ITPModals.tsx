@@ -9,6 +9,7 @@ import ReactDOM from 'react-dom';
 import { ITPPrintTemplate } from './ITPPrintTemplate';
 import { InspectionItem } from '../../types/itp';
 import FileAttachment from '../Shared/FileAttachment';
+import RelatedDocuments from '../ui/RelatedDocuments';
 import styles from './ITP.module.css';
 import { getNextRevision } from '../../utils/revision';
 import { parseInspectionItems } from '../../utils/itpParser';
@@ -168,6 +169,8 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                 const detailPayload = itpId ? prepareDetailPayload() : undefined;
                 await onSave(payload, detailPayload, pendingFiles, deletedFileIds);
                 setIsDirty(false);
+            } catch (err) {
+                toast.error((err as Error)?.message || t('common.saveFailed'));
             } finally {
                 setSaving(false);
             }
@@ -468,6 +471,10 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                                     </div>
                                 </div>
                             </div>
+
+                            {existingItem?.id && (
+                                <RelatedDocuments entityType="itp" entityId={existingItem.id} />
+                            )}
                         </div>
                     )}
 

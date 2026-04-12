@@ -3,7 +3,16 @@ import { toast } from 'sonner';
 import ReactQuill, { Quill } from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import QuillMarkdown from 'quilljs-markdown';
-import 'quilljs-markdown/dist/quilljs-markdown-common-style.css';
+// NOTE: quilljs-markdown ships a `common-style.css` that we intentionally
+// DO NOT import. That file sets `display: list-item; list-style: disc` on
+// `.ql-editor ul li::before`, which makes the pseudo render a browser disc
+// marker in addition to its `content`, and also injects up-to-100 levels
+// of indent styling that we don't use. The markdown *shortcuts* are pure
+// JS (QuillMarkdown attaches a text-change listener and rewrites Deltas
+// into Quill's native formats — bold, italic, lists, headings, etc.), so
+// the visual styling comes from Quill's own snow theme + our rules in
+// RichTextEditor.css. Dropping the import lets us style bullet markers
+// via plain `content` without an `!important` war.
 import './RichTextEditor.css';
 import { kmService } from '../../services/kmService';
 
@@ -28,8 +37,15 @@ const FONT_WHITELIST = [
     'ms-jhenghei',    // 微軟正黑體
 ];
 
+// Use pt (points) instead of px to match Word conventions.
+// 12pt is the standard Word default and renders at ~16px on screen.
 const SIZE_WHITELIST = [
-    '10px', '12px', '14px', '16px', '18px', '20px', '24px', '28px', '32px', '36px', '48px',
+    '8pt', '9pt', '10pt', '10.5pt', '11pt', '12pt', '14pt', '16pt',
+    '18pt', '20pt', '22pt', '24pt', '26pt', '28pt', '36pt', '48pt', '72pt',
+];
+
+const LINE_HEIGHT_WHITELIST = [
+    '1', '1.2', '1.5', '1.8', '2', '2.5', '3',
 ];
 
 // Extend Quill's font format. Using `true` as the second arg to
@@ -47,6 +63,20 @@ Quill.register(FontFormat as unknown as Parameters<typeof Quill.register>[0], tr
 const SizeStyle = Quill.import('attributors/style/size') as { whitelist: string[] };
 SizeStyle.whitelist = SIZE_WHITELIST;
 Quill.register(SizeStyle as unknown as Parameters<typeof Quill.register>[0], true);
+
+// Line-height: use Parchment's StyleAttributor to produce inline
+// style="line-height:1.5" on the block element. This avoids the class
+// approach and works out of the box with any whitelist value.
+const Parchment = Quill.import('parchment') as any;
+const LineHeightStyle = new Parchment.Attributor.Style(
+    'lineHeight',     // internal format name
+    'line-height',    // CSS property
+    {
+        scope: Parchment.Scope.BLOCK,
+        whitelist: LINE_HEIGHT_WHITELIST,
+    }
+);
+Quill.register(LineHeightStyle, true);
 
 // Custom inline embed for a soft line break (<br>). Quill's default
 // Parchment model doesn't expose <br> as an insertable format — a `\n`
@@ -114,7 +144,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                 [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
                 ['bold', 'italic', 'underline', 'strike'],
                 [{ 'color': [] }, { 'background': [] }],
-                [{ 'align': [] }],
+                [{ 'align': [] }, { 'lineHeight': LINE_HEIGHT_WHITELIST }],
                 [{ 'list': 'ordered' }, { 'list': 'bullet' }],
                 [{ 'indent': '-1' }, { 'indent': '+1' }],
                 ['link', 'image'],

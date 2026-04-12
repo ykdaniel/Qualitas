@@ -8,7 +8,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session, joinedload
 
 import models
-from core.utils import sanitize_search_term
+from core.utils import sanitize_pagination, sanitize_search_term
 
 
 class ChecklistRepository:
@@ -36,21 +36,25 @@ class ChecklistRepository:
                 .filter(models.Checklist.id == checklist_id)
                 .first())
 
-    def get_all(self, skip: int = 0, limit: int = 500, **filters) -> List[models.Checklist]:
+    def get_all(self, skip: int = 0, limit: int = 500, project_id: str = None, **filters) -> List[models.Checklist]:
         """
         Get all Checklists with optional filters
 
         Args:
             skip: Number of records to skip (pagination)
             limit: Maximum number of records to return
+            project_id: Optional project ID filter
             **filters: Optional filters (search, status, start_date, end_date, itr_id, noi_number)
 
         Returns:
             List of Checklist objects
         """
+        skip, limit = sanitize_pagination(skip, limit)
         query = self.db.query(models.Checklist).options(
             joinedload(models.Checklist.vendor_ref)
         )
+        if project_id:
+            query = query.filter(models.Checklist.project_id == project_id)
 
         # Search filter (recordsNo, activity, packageName)
         if filters.get('search'):

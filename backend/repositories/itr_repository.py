@@ -4,11 +4,14 @@ ITR (Inspection and Test Record) Repository
 Data access layer for ITR module
 """
 
-from typing import List, Optional
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
+
+from sqlalchemy import asc, desc, func
 from sqlalchemy.orm import Session, joinedload
 
 import models
-from core.utils import sanitize_search_term
+from core.utils import sanitize_pagination, sanitize_search_term
 
 
 class ITRRepository:
@@ -54,21 +57,41 @@ class ITRRepository:
                 .filter(models.ITR.id == itr_id)
                 .first())
 
-    def get_all(self, skip: int = 0, limit: int = 500, **filters) -> List[models.ITR]:
+    # NOTE: Return type changed from List[models.ITR] to Tuple[List[models.ITR], int].
+    # Callers must be updated to unpack (items, total_count).
+    def get_all(
+        self,
+        skip: int = 0,
+        limit: int = 500,
+        vendor_id: Optional[str] = None,
+        noi_number: Optional[str] = None,
+        sort_by: str = "raiseDate",
+        sort_order: str = "desc",
+        project_id: Optional[str] = None,
+        **filters,
+    ) -> Tuple[List[models.ITR], int]:
         """
         Get all ITRs with optional filters
 
         Args:
             skip: Number of records to skip (pagination)
             limit: Maximum number of records to return
+            vendor_id: Optional vendor ID filter
+            noi_number: Optional NOI reference number filter
+            sort_by: Column to sort by (raiseDate, documentNumber, status, dueDate, closeoutDate)
+            sort_order: Sort direction ("asc" or "desc")
+            project_id: Optional project ID filter
             **filters: Optional filters (search, status, start_date, end_date)
 
         Returns:
-            List of ITR objects
+            Tuple of (list of ITR objects, total count before pagination)
         """
+        skip, limit = sanitize_pagination(skip, limit)
         query = self.db.query(models.ITR).options(
             joinedload(models.ITR.vendor_ref)
         )
+        if project_id:
+            query = query.filter(models.ITR.project_id == project_id)
 
         # Search filter (documentNumber, subject)
         if filters.get('search'):
@@ -83,13 +106,79 @@ class ITRRepository:
         if filters.get('status'):
             query = query.filter(models.ITR.status == filters['status'])
 
+        # Vendor filter
+        if vendor_id:
+            query = query.filter(models.ITR.vendor_id == vendor_id)
+
+        # NOI number filter
+        if noi_number:
+            query = query.filter(models.ITR.noiNumber == noi_number)
+
         # Date range filters
         if filters.get('start_date'):
             query = query.filter(models.ITR.raiseDate >= filters['start_date'])
         if filters.get('end_date'):
             query = query.filter(models.ITR.raiseDate <= filters['end_date'])
 
-        return query.offset(skip).limit(limit).all()
+        # Total count before pagination
+        total_count = query.count()
+
+        # Sorting
+        sortable_columns = {
+            "raiseDate": models.ITR.raiseDate,
+            "documentNumber": models.ITR.documentNumber,
+            "status": models.ITR.status,
+            "dueDate": models.ITR.dueDate,
+            "closeoutDate": models.ITR.closeoutDate,
+        }
+        sort_column = sortable_columns.get(sort_by, models.ITR.raiseDate)
+        order_func = desc if sort_order.lower() == "desc" else asc
+        query = query.order_by(order_func(sort_column))
+
+        return query.offset(skip).limit(limit).all(), total_count
+
+    def get_stats(self, project_id: Optional[str] = None) -> Dict[str, int]:
+        """Return ITR statistics by status + overdue count."""
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        base_query = self.db.query(func.count(models.ITR.id))
+        if project_id:
+            base_query = base_query.filter(models.ITR.project_id == project_id)
+
+        total = base_query.scalar()
+        in_progress = (
+            base_query.filter(models.ITR.status == "In Progress")
+            .scalar()
+        )
+        approved = (
+            base_query.filter(models.ITR.status == "Approved")
+            .scalar()
+        )
+        rejected = (
+            base_query.filter(models.ITR.status == "Reject")
+            .scalar()
+        )
+        void = (
+            base_query.filter(models.ITR.status == "Void")
+            .scalar()
+        )
+        overdue = (
+            base_query.filter(
+                models.ITR.status.notin_(["Approved", "Void"]),
+                models.ITR.dueDate.isnot(None),
+                models.ITR.dueDate < today,
+            )
+            .scalar()
+        )
+
+        return {
+            "total": total or 0,
+            "in_progress": in_progress or 0,
+            "approved": approved or 0,
+            "rejected": rejected or 0,
+            "void": void or 0,
+            "overdue": overdue or 0,
+        }
 
     def create(self, itr: models.ITR) -> models.ITR:
         """
@@ -149,6 +238,11 @@ class ITRRepository:
         ).first()
 
         if checklist:
+            # Validate checklist is not already linked to a different ITR
+            if checklist.itrId and checklist.itrId != itr.id:
+                raise ValueError(
+                    f"Checklist {checklist_id} is already linked to ITR {checklist.itrId}"
+                )
             # Set the itrId foreign key on the checklist
             checklist.itrId = itr.id
             self.db.commit()

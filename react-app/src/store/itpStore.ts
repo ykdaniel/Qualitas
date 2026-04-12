@@ -3,6 +3,7 @@ import api from '../services/api';
 import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
+import { getProjectFilterParams } from '../utils/projectFilter';
 
 export interface ITPInspectionItem {
     id: string;
@@ -74,7 +75,7 @@ export const useITPStore = create<ITPState>((set, get) => ({
     fetchITPs: async (params?: FilterParams) => {
         set({ loading: true, error: null });
         try {
-            const response = await api.get('/itp/', { params });
+            const response = await api.get('/itp/', { params: { limit: 500, ...getProjectFilterParams(), ...params } });
             const data = response.data;
             set({ itpList: data?.map(normalizeItem) || [], loading: false });
         } catch (err: any) {

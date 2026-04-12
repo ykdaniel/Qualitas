@@ -13,16 +13,19 @@ export const usePQPStats = (pqpList: PQPItem[]) => {
     const statusCounts = {
       approved: 0,
       reject: 0,
+      reviseResubmit: 0,
       underReview: 0,
       notSubmit: 0,
     };
 
     pqpList.forEach((item) => {
-      const status = normalizePQPStatus(item.status || 'Approved');
+      const status = normalizePQPStatus(item.status || 'Not Submit');
       if (status === 'approved') {
         statusCounts.approved++;
       } else if (status === 'reject') {
         statusCounts.reject++;
+      } else if (status === 'revise & resubmit') {
+        statusCounts.reviseResubmit++;
       } else if (status === 'under review') {
         statusCounts.underReview++;
       } else if (status === 'not submit') {

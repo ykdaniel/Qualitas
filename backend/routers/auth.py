@@ -10,7 +10,15 @@ from sqlalchemy.orm import Session
 
 import schemas
 from core.config import settings
-from core.security import create_access_token, create_refresh_token, get_current_user, verify_password
+from core.security import (
+    blacklist_token,
+    create_access_token,
+    create_refresh_token,
+    get_current_user,
+    is_token_blacklisted,
+    oauth2_scheme,
+    verify_password,
+)
 from core.dependencies import get_user_service
 from services.user_service import UserService
 
@@ -88,6 +96,17 @@ async def login_for_access_token(
 async def auth_verify(current_user: schemas.User = Depends(get_current_user)):
     return {"ok": True}
 
+
+@router.post("/auth/logout")
+async def logout(
+    token: str = Depends(oauth2_scheme),
+    current_user: schemas.User = Depends(get_current_user),
+):
+    """Blacklist the current access token so it can no longer be used."""
+    blacklist_token(token)
+    return {"ok": True, "detail": "Successfully logged out"}
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 
@@ -102,6 +121,11 @@ async def refresh_access_token(
         detail="Invalid or expired refresh token",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+    # Reject blacklisted refresh tokens
+    if is_token_blacklisted(body.refresh_token):
+        raise credentials_exception
+
     try:
         payload = jwt.decode(body.refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         if payload.get("type") != "refresh":
@@ -115,6 +139,9 @@ async def refresh_access_token(
     user = user_service.get_user_by_username(username=username)
     if user is None:
         raise credentials_exception
+
+    # Blacklist the consumed refresh token (single-use rotation)
+    blacklist_token(body.refresh_token)
 
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)

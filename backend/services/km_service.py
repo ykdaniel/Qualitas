@@ -30,7 +30,10 @@ class KMService:
             raise HTTPException(status_code=404, detail="KM Article not found")
 
         update_data = article_update.model_dump(exclude_unset=True)
-        return self.repo.update(db_article, update_data)
+        try:
+            return self.repo.update(db_article, update_data)
+        except ValueError as e:
+            raise HTTPException(status_code=409, detail=str(e))
 
     def delete_article(self, article_id: str):
         db_article = self.repo.get_by_id(article_id)
@@ -75,4 +78,4 @@ class KMService:
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        return f"/uploads/km/{filename}"
+        return f"/api/files/download/km/{filename}"

@@ -19,23 +19,23 @@ def test_create_itr_success(itr_service, mock_repo):
         description="Test description",
         rev="A",
         submit="Initial",
-        status="Draft",
+        status="In Progress",
         subject="Test Subject",
         type="Type A"
     )
-    
+
     with patch('services.itr_service._resolve_vendor_id') as mock_resolve, \
          patch('services.itr_service.generate_reference_no') as mock_gen_ref, \
          patch('services.itr_service.log_audit') as mock_log:
-        
+
         mock_resolve.return_value = "vendor-uuid-123"
         mock_gen_ref.return_value = "ITR-QTS-TEST-001"
-        
+
         mock_created_itr = models.ITR(
             id="itr-123",
             documentNumber="ITR-QTS-TEST-001",
             vendor_id="vendor-uuid-123",
-            status="Draft"
+            status="In Progress"
         )
         mock_repo.create.return_value = mock_created_itr
         
@@ -55,8 +55,10 @@ def test_update_itr_status_transition_fail(itr_service, mock_repo):
     mock_db_itr = models.ITR(id="itr-123", status="Approved", documentNumber="ITR-001")
     mock_repo.get_by_id.return_value = mock_db_itr
     
-    # Try to change back to Draft (normally forbidden by WorkflowEngine)
-    itr_update = schemas.ITRUpdate(status="Draft")
+    # Try to change to Reject (Approved → Reject is not allowed in new workflow — only via In Progress)
+    # Actually Approved → In Progress → Reject. Let's test Void → Approved which is always forbidden.
+    mock_db_itr.status = "Void"
+    itr_update = schemas.ITRUpdate(status="Approved")
     
     # Act & Assert
     with pytest.raises(ValueError) as excinfo:
@@ -67,21 +69,21 @@ def test_update_itr_status_transition_fail(itr_service, mock_repo):
 
 def test_update_itr_success(itr_service, mock_repo):
     # Arrange
-    mock_db_itr = models.ITR(id="itr-123", status="Draft", documentNumber="ITR-001")
+    mock_db_itr = models.ITR(id="itr-123", status="In Progress", documentNumber="ITR-001")
     mock_repo.get_by_id.return_value = mock_db_itr
-    
+
     with patch('services.itr_service.log_audit') as mock_log:
-        # Draft -> Submitted is valid
-        itr_update = schemas.ITRUpdate(status="Submitted", subject="NEW SUBJECT")
-        
-        mock_updated_itr = models.ITR(id="itr-123", status="Submitted", subject="NEW SUBJECT")
+        # In Progress -> Approved is valid
+        itr_update = schemas.ITRUpdate(status="Approved", subject="NEW SUBJECT")
+
+        mock_updated_itr = models.ITR(id="itr-123", status="Approved", subject="NEW SUBJECT")
         mock_repo.update.return_value = mock_updated_itr
-        
+
         # Act
         result = itr_service.update_itr("itr-123", itr_update, user_id=1, username="admin")
-        
+
         # Assert
-        assert result.status == "Submitted"
+        assert result.status == "Approved"
         assert result.subject == "NEW SUBJECT"
         mock_repo.update.assert_called_once()
         mock_log.assert_called_once()

@@ -1,0 +1,237 @@
+/* Q-WorkFlow Dashboard card.
+ *
+ * Visual language intentionally matches the existing PQP/NCR/OBS stats
+ * cards on the Dashboard — white rounded panel, uppercase labels, big
+ * bold numbers — so the new card doesn't look like a pasted-in widget.
+ *
+ * The card has three sections stacked vertically:
+ *   1. Stats row: total + four stage counts as small tiles
+ *   2. Needs-attention list: up to 3 at-risk workflow cards
+ *   3. Bottom button: navigate to /workflow for the full list
+ */
+
+.card {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 320px;
+  min-height: 360px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.3px;
+  margin: 0;
+}
+
+.totalBadge {
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+/* ── Stat pills row ───────────────────────────────────────────── */
+.stageRow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.stagePill {
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 10px 8px;
+  text-align: center;
+  border-top: 3px solid transparent;
+}
+
+/* Distribution buckets: red-hot to green as completion climbs. */
+.stagePill.bucket_0_25 { border-top-color: #ef4444; }
+.stagePill.bucket_26_50 { border-top-color: #f59e0b; }
+.stagePill.bucket_51_75 { border-top-color: #3b82f6; }
+.stagePill.bucket_76_100 { border-top-color: #10b981; }
+
+.stageCount {
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1;
+}
+
+.stageLabel {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-top: 4px;
+  letter-spacing: 0.04em;
+}
+
+/* ── Needs-attention list ─────────────────────────────────────── */
+.attentionHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 4px;
+}
+
+.attentionIcon {
+  color: #f59e0b;
+  font-size: 14px;
+}
+
+.attentionList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.attentionItem {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.attentionItem:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+}
+
+.attentionTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.attentionRef {
+  font-weight: 700;
+  font-size: 13px;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attentionDwell {
+  font-size: 12px;
+  font-weight: 700;
+  color: #dc2626;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.attentionMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.attentionSubject {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+
+.stageBadge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stageBadge.scheduled {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.stageBadge.inspecting {
+  background: #fef3c7;
+  color: #92400e;
+}
+.stageBadge.ncrOpen {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.stageBadge.closed {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.attentionEmpty {
+  padding: 20px 12px;
+  text-align: center;
+  font-size: 13px;
+  color: #94a3b8;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px dashed #e2e8f0;
+}
+
+/* ── Footer button ────────────────────────────────────────────── */
+.footerButton {
+  width: 100%;
+  padding: 12px 24px;
+  background: #0f172a;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+  margin-top: auto;
+}
+
+.footerButton:hover {
+  background: #1e293b;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.25);
+}
+
+.loading,
+.error {
+  padding: 16px;
+  text-align: center;
+  font-size: 13px;
+  color: #64748b;
+  background: #f8fafc;
+  border-radius: 10px;
+}
+
+.error {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}

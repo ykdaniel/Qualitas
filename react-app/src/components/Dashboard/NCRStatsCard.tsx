@@ -17,7 +17,7 @@ const NCRStatsCard: React.FC = () => {
     const total = filteredList.length;
     const open = filteredList.filter(item => {
       const status = (item.status || '').toLowerCase();
-      return status !== 'closed';
+      return status !== 'closed' && status !== 'void';
     }).length;
     const closed = filteredList.filter(item => {
       const status = (item.status || '').toLowerCase();

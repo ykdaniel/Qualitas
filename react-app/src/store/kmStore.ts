@@ -21,7 +21,7 @@ export const useKMStore = create<KMState>((set, _get) => ({
     fetchKMs: async (category?: string, search?: string) => {
         set({ loading: true, error: null });
         try {
-            const data = await kmService.getAll({ category, search });
+            const data = await kmService.getAll({ category, search, limit: 9999 });
             set({ kmList: data, loading: false });
         } catch (err: any) {
             set({

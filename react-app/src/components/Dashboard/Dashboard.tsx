@@ -11,6 +11,7 @@ import PQPGaugeChart from './PQPGaugeChart';
 import PQPStatsCard from './PQPStatsCard';
 import NCRParetoChart from './NCRParetoChart';
 import NCRStatsCard from './NCRStatsCard';
+import QWorkflowStatsCard from './QWorkflowStatsCard';
 import TrendAnalysisSection from './TrendAnalysisSection';
 import OBSParetoChart from './OBSParetoChart';
 import OBSStatsCard from './OBSStatsCard';
@@ -92,6 +93,11 @@ const DashboardContent: React.FC<{
           </div>
         </div>
       )}
+
+      {/* Q-WorkFlow 進度卡片 — 跨模組流程監控 */}
+      <div className={styles.workflowSection}>
+        <QWorkflowStatsCard />
+      </div>
 
       {/* KPI 卡片區域 */}
       <div className={styles.kpiSection}>

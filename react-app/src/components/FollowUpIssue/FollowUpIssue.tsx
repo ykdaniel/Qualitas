@@ -523,9 +523,13 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
     }, 0);
   };
 
-  const handleSave = () => {
-    onSave(formData);
-    onClose();
+  const handleSave = async () => {
+    try {
+      await onSave(formData);
+      onClose();
+    } catch (err) {
+      toast.error((err as Error)?.message || 'Save failed');
+    }
   };
 
   return (

@@ -3,10 +3,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 import schemas
-from core.dependencies import RoleChecker, get_noi_service
+from core.dependencies import RoleChecker, get_noi_service, get_related_service
 from core.perms import NOI_CREATE, NOI_DELETE, NOI_UPDATE, NOI_VIEW
 from database import get_db
 from services.noi_service import NOIService
+from services.related_service import RelatedService
 
 router = APIRouter(
     prefix="/noi",
@@ -97,3 +98,13 @@ def delete_noi(
     if not deleted:
         raise HTTPException(status_code=404, detail="NOI not found")
     return {"ok": True}
+
+@router.get("/{noi_id}/related", response_model=schemas.RelatedEntitiesResponse)
+def read_noi_related(
+    noi_id: str,
+    max_depth: int = 2,
+    related_service: RelatedService = Depends(get_related_service),
+    current_user: schemas.User = Depends(RoleChecker(NOI_VIEW)),
+):
+    """Return upstream/downstream related documents for this NOI."""
+    return related_service.get_related("noi", noi_id, max_depth=max_depth)

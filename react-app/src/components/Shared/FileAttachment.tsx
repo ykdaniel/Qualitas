@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
-import { getEntityFiles, deleteFile, AttachmentInfo } from '../../services/api';
+import { getEntityFiles, deleteFile, AttachmentInfo, getAuthenticatedFileUrl } from '../../services/api';
 
 export interface FileAttachmentProps {
     /** 已存在於伺服器的檔案資訊 (由上層傳入或由內部抓取) */
@@ -63,7 +63,29 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
         }
     }, [entityType, entityId, category, propsAttachments]);
 
-    const displayedApiAttachments = propsAttachments ?? apiAttachments;
+    // Callers like NOIDetailModal pass ``formData.attachments`` which
+    // is typed ``any[]`` and can legitimately contain a mix of
+    // AttachmentInfo objects (the current shape) and legacy base64
+    // strings (from older rows that haven't been migrated). Split the
+    // raw input so the render loop below only sees well-formed
+    // AttachmentInfo records, and fold any string entries into the
+    // legacy-attachments bucket so they still render. Without this
+    // split, a string entry would reach ``a.file_url`` and crash with
+    // "Cannot read properties of undefined (reading 'startsWith')".
+    const rawAttachments: any[] = propsAttachments ?? apiAttachments;
+    const displayedApiAttachments = rawAttachments.filter(
+        (a): a is AttachmentInfo =>
+            a !== null &&
+            typeof a === 'object' &&
+            typeof (a as AttachmentInfo).file_url === 'string',
+    );
+    const stringLegacyAttachments = rawAttachments.filter(
+        (a): a is string => typeof a === 'string',
+    );
+    const mergedLegacyAttachments: string[] = [
+        ...(legacyAttachments || []),
+        ...stringLegacyAttachments,
+    ];
 
     // 清理 ObjectURL 防止記憶體洩漏
     useEffect(() => {
@@ -196,8 +218,12 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
         },
     };
 
-    const isImageSrc = (src: string, mime?: string): boolean => {
+    const isImageSrc = (
+        src: string | undefined | null,
+        mime?: string,
+    ): boolean => {
         if (mime?.startsWith('image/')) return true;
+        if (typeof src !== 'string' || src.length === 0) return false;
         if (src.startsWith('data:image/') || src.startsWith('blob:')) return true;
         return /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(src.split('?')[0]);
     };
@@ -233,19 +259,20 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
                     </>
                 )}
 
-                {(displayedApiAttachments.length > 0 || pendingFiles.length > 0 || (legacyAttachments && legacyAttachments.length > 0)) && (
+                {(displayedApiAttachments.length > 0 || pendingFiles.length > 0 || mergedLegacyAttachments.length > 0) && (
                     <div style={styles.photoPreviewGrid}>
                         {/* 1. 顯示已存在伺服器上的檔案 */}
                         {displayedApiAttachments.map((a) => {
                             const isImage = isImageSrc(a.file_url, a.mime_type);
+                            const authUrl = getAuthenticatedFileUrl(a.file_url);
                             return (
                                 <div key={a.id} style={styles.photoPreviewItem}>
                                     {isImage ? (
                                         <img
-                                            src={a.file_url}
+                                            src={authUrl}
                                             alt={a.file_name}
                                             style={{ ...styles.photoPreview, cursor: onPreview ? 'pointer' : 'default' }}
-                                            onClick={() => onPreview && onPreview(a.file_url, a.file_name)}
+                                            onClick={() => onPreview && onPreview(authUrl, a.file_name)}
                                         />
                                     ) : (
                                         <div style={styles.filePlaceholder}>
@@ -309,7 +336,7 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
                         })}
 
                         {/* 3. 顯示向下相容的舊資料 Base64 (Legacy) */}
-                        {legacyAttachments?.map((src, idx) => (
+                        {mergedLegacyAttachments.map((src, idx) => (
                             <div key={`legacy-${idx}`} style={styles.photoPreviewItem}>
                                 <img
                                     src={src}

@@ -54,12 +54,15 @@ def update_audit_route(
     current_user: schemas.User = Depends(RoleChecker(AUDIT_UPDATE))
 ):
     """Update an existing audit"""
-    db_audit = service.update_audit(
-        audit_id,
-        audit,
-        user_id=current_user.id,
-        username=current_user.username
-    )
+    try:
+        db_audit = service.update_audit(
+            audit_id,
+            audit,
+            user_id=current_user.id,
+            username=current_user.username
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if db_audit is None:
         raise HTTPException(status_code=404, detail="Audit not found")
     return db_audit

@@ -1,4 +1,9 @@
 {
+  "related.title": "關聯文件",
+  "related.upstream": "上游",
+  "related.downstream": "下游",
+  "related.empty": "目前沒有關聯文件。",
+  "related.error": "載入關聯文件失敗。",
   "login.welcome": "歡迎回來",
   "login.subtitle": "輸入您的憑證以登入 Qualitas",
   "login.email": "電子郵件地址",
@@ -100,6 +105,7 @@
   "pqp.createdDate": "建立日期",
   "pqp.status.approved": "已核准",
   "pqp.status.reject": "退件",
+  "pqp.status.reviseResubmit": "修訂並重新提交",
   "pqp.status.notSubmitted": "未提交",
   "pqp.status.underReview": "審核中",
   "pqp.editTitle": "編輯 PQP",

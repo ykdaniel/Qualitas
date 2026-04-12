@@ -8,7 +8,8 @@ class ITP(Base):
     __tablename__ = "itp"
 
     id = Column(String, primary_key=True, index=True)
-    vendor_id = Column(String, ForeignKey("contractors.id"), index=True)
+    project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
+    vendor_id = Column(String, ForeignKey("contractors.id", ondelete="SET NULL"), index=True)
     referenceNo = Column(String, index=True, unique=True)  # 由後端自動產生
     description = Column(String, nullable=True)
     rev = Column(String, nullable=True)
@@ -24,7 +25,8 @@ class ITP(Base):
 
     # Relationships
     vendor_ref = relationship("Contractor", back_populates="itps")
-    nois = relationship("NOI", back_populates="itp_ref")
+    nois = relationship("NOI", back_populates="itp_ref", cascade="save-update, merge",
+                        passive_deletes=True)
 
     @property
     def vendor(self):
@@ -35,7 +37,8 @@ class NCR(Base):
     __tablename__ = "ncr"
 
     id = Column(String, primary_key=True, index=True)
-    vendor_id = Column(String, ForeignKey("contractors.id"), index=True)
+    project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
+    vendor_id = Column(String, ForeignKey("contractors.id", ondelete="SET NULL"), index=True)
     documentNumber = Column(String, index=True, unique=True)  # 由後端自動產生
     description = Column(String, nullable=True)
     rev = Column(String, nullable=True)
@@ -57,7 +60,8 @@ class NCR(Base):
     impactToOM = Column(String, nullable=True)
     defectPhotos = Column(Text, nullable=True)  # JSON array as string
     improvementPhotos = Column(Text, nullable=True)
-    noiNumber = Column(String, ForeignKey("noi.referenceNo"), nullable=True)
+    noiNumber = Column(String, ForeignKey("noi.referenceNo", ondelete="CASCADE"), nullable=True)
+    itrNumber = Column(String, nullable=True, index=True)  # 連結到觸發此 NCR 的 ITR
     dueDate = Column(String, nullable=True)  # 到期日 (YYYY-MM-DD)
     attachments = Column(Text, nullable=True)
     last_reminded_at = Column(String, nullable=True)
@@ -85,13 +89,14 @@ class FollowUp(Base):
     __tablename__ = "followup"
 
     id = Column(String, primary_key=True, index=True)
+    project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
     issueNo = Column(String, index=True, unique=True)
     title = Column(String)
     description = Column(String)
     status = Column(String)
     priority = Column(String, nullable=True)
     assignedTo = Column(String, nullable=True)
-    vendor_id = Column(String, ForeignKey("contractors.id"), nullable=True, index=True) # 關聯廠商
+    vendor_id = Column(String, ForeignKey("contractors.id", ondelete="SET NULL"), nullable=True, index=True) # 關聯廠商
     dueDate = Column(String, nullable=True)
     createdAt = Column(String)
     updatedAt = Column(String)
@@ -112,16 +117,17 @@ class NOI(Base):
     __tablename__ = "noi"
 
     id = Column(String, primary_key=True, index=True)
+    project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
     package = Column(String, index=True)
     referenceNo = Column(String, index=True, unique=True)
     issueDate = Column(String)
     inspectionTime = Column(String)
-    itpNo = Column(String, ForeignKey("itp.referenceNo"), index=True)  # 連結到 ITP referenceNo
+    itpNo = Column(String, ForeignKey("itp.referenceNo", ondelete="SET NULL"), index=True)  # 連結到 ITP referenceNo
     eventNumber = Column(String, nullable=True)
     checkpoint = Column(String, nullable=True)
     inspectionDate = Column(String)
     type = Column(String)
-    vendor_id = Column(String, ForeignKey("contractors.id"), index=True)
+    vendor_id = Column(String, ForeignKey("contractors.id", ondelete="SET NULL"), index=True)
     contacts = Column(String, nullable=True)
     phone = Column(String, nullable=True)
     email = Column(String, nullable=True)
@@ -136,10 +142,19 @@ class NOI(Base):
     # Relationships
     itp_ref = relationship("ITP", back_populates="nois")
     vendor_ref = relationship("Contractor", back_populates="nois")
-    ncrs = relationship("NCR", back_populates="noi_ref")
-    itrs = relationship("ITR", back_populates="noi_ref")
+    ncrs = relationship("NCR", back_populates="noi_ref",
+                        cascade="all, delete-orphan", passive_deletes=True)
+    itrs = relationship("ITR", back_populates="noi_ref",
+                        cascade="all, delete-orphan", passive_deletes=True)
     checklists = relationship("Checklist", back_populates="noi_ref",
-                             primaryjoin="NOI.referenceNo == foreign(Checklist.noiNumber)")
+                             primaryjoin="NOI.referenceNo == foreign(Checklist.noiNumber)",
+                             cascade="all, delete-orphan", passive_deletes=True)
+    # 1:1 — Q-WorkFlow is auto-created alongside every NOI and acts as
+    # the canonical progress tracker for that NOI's quality thread.
+    qworkflow = relationship(
+        "QWorkflow", back_populates="noi_ref", uselist=False,
+        cascade="all, delete-orphan", passive_deletes=True,
+    )
 
     @property
     def contractor(self):
@@ -150,7 +165,8 @@ class ITR(Base):
     __tablename__ = "itr"
 
     id = Column(String, primary_key=True, index=True)
-    vendor_id = Column(String, ForeignKey("contractors.id"), index=True)
+    project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
+    vendor_id = Column(String, ForeignKey("contractors.id", ondelete="SET NULL"), index=True)
     documentNumber = Column(String, index=True, unique=True)
     description = Column(String)
     rev = Column(String)
@@ -166,7 +182,7 @@ class ITR(Base):
     ncrNumber = Column(String, nullable=True, index=True)  # 若檢驗失敗，連結到產生的 NCR
     raisedBy = Column(String, nullable=True)
     foundLocation = Column(String, nullable=True)
-    noiNumber = Column(String, ForeignKey("noi.referenceNo"), nullable=True, index=True)  # 連結到產生此 ITR 的 NOI
+    noiNumber = Column(String, ForeignKey("noi.referenceNo", ondelete="CASCADE"), nullable=True, index=True)  # 連結到產生此 ITR 的 NOI
     eventNumber = Column(String, nullable=True)
     checkpoint = Column(String, nullable=True)
     defectPhotos = Column(Text, nullable=True)
@@ -176,24 +192,46 @@ class ITR(Base):
     last_reminded_at = Column(String, nullable=True)
     dueDate = Column(String, nullable=True)
 
+    # Inspection result (separate from document workflow status)
+    inspectionResult = Column(String, nullable=True)  # Pass / Fail / Conditional
+
+    # Multi-party sign-off
+    preparedBy = Column(String, nullable=True)
+    preparedAt = Column(String, nullable=True)
+    reviewedBy = Column(String, nullable=True)
+    reviewedAt = Column(String, nullable=True)
+    approvedBy = Column(String, nullable=True)
+    approvedAt = Column(String, nullable=True)
+
+    # Re-inspection tracking
+    isReInspection = Column(Boolean, default=False)
+    reInspectionCount = Column(Integer, default=0)
+    originalItrId = Column(String, ForeignKey("itr.id", ondelete="SET NULL"), nullable=True)
+
+    # Discipline/category
+    discipline = Column(String, nullable=True)  # Civil, Mechanical, Electrical, Piping, etc.
+
     # Relationships
     vendor_ref = relationship("Contractor", back_populates="itrs")
     noi_ref = relationship("NOI", back_populates="itrs")
+    original_itr = relationship("ITR", remote_side=[id], foreign_keys=[originalItrId])
 
     @property
     def vendor(self):
         return self.vendor_ref.name if self.vendor_ref else None
-    checklists = relationship("Checklist", back_populates="itr_ref", foreign_keys="Checklist.itrId")
+    checklists = relationship("Checklist", back_populates="itr_ref", foreign_keys="Checklist.itrId",
+                             cascade="all, delete-orphan", passive_deletes=True)
 
 
 class PQP(Base):
     __tablename__ = "pqp"
 
     id = Column(String, primary_key=True, index=True)
+    project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
     pqpNo = Column(String, index=True, unique=True)
     title = Column(String)
     description = Column(String)
-    vendor_id = Column(String, ForeignKey("contractors.id"), index=True)
+    vendor_id = Column(String, ForeignKey("contractors.id", ondelete="SET NULL"), index=True)
     status = Column(String)
     version = Column(String)
     createdAt = Column(String)
@@ -202,17 +240,38 @@ class PQP(Base):
 
     # Relationships
     vendor_ref = relationship("Contractor", back_populates="pqps")
+    history = relationship("PQPHistory", back_populates="pqp", cascade="all, delete-orphan",
+                          passive_deletes=True, order_by="PQPHistory.version_no.desc()")
 
     @property
     def vendor(self):
         return self.vendor_ref.name if self.vendor_ref else None
 
 
+class PQPHistory(Base):
+    """PQP 版本歷史快照 — 每次 Publish 時保存前一版內容"""
+    __tablename__ = "pqp_history"
+
+    id = Column(String, primary_key=True, index=True)
+    pqp_id = Column(String, ForeignKey("pqp.id", ondelete="CASCADE"), nullable=False, index=True)
+    version = Column(String, nullable=False)
+    version_no = Column(Integer, nullable=False)
+    title = Column(String)
+    description = Column(String)
+    status = Column(String)
+    vendor_id = Column(String, nullable=True)
+    change_summary = Column(String, nullable=True)
+    created_at = Column(String, nullable=False)
+
+    pqp = relationship("PQP", back_populates="history")
+
+
 class OBS(Base):
     __tablename__ = "obs"
 
     id = Column(String, primary_key=True, index=True)
-    vendor_id = Column(String, ForeignKey("contractors.id"), index=True)
+    project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
+    vendor_id = Column(String, ForeignKey("contractors.id", ondelete="SET NULL"), index=True)
     documentNumber = Column(String, index=True, unique=True)
     description = Column(String)
     rev = Column(String)
@@ -262,15 +321,26 @@ class Contractor(Base):
     address = Column(String, nullable=True)
     status = Column(String, default="active")
 
-    # Relationships
-    itps = relationship("ITP", back_populates="vendor_ref")
-    ncrs = relationship("NCR", back_populates="vendor_ref")
-    nois = relationship("NOI", back_populates="vendor_ref")
-    itrs = relationship("ITR", back_populates="vendor_ref")
-    pqps = relationship("PQP", back_populates="vendor_ref")
-    obss = relationship("OBS", back_populates="vendor_ref")
-    fats = relationship("FAT", back_populates="vendor_ref")
-    followups = relationship("FollowUp", back_populates="vendor_ref")
+    # Relationships — Contractor is a cross-reference; deleting a contractor
+    # should NOT cascade-delete its children.  DB-level ondelete="SET NULL"
+    # on every child FK handles the DB side; ORM-level passive_deletes lets
+    # SQLAlchemy defer to the DB constraint instead of issuing UPDATEs itself.
+    itps = relationship("ITP", back_populates="vendor_ref",
+                        cascade="save-update, merge", passive_deletes=True)
+    ncrs = relationship("NCR", back_populates="vendor_ref",
+                        cascade="save-update, merge", passive_deletes=True)
+    nois = relationship("NOI", back_populates="vendor_ref",
+                        cascade="save-update, merge", passive_deletes=True)
+    itrs = relationship("ITR", back_populates="vendor_ref",
+                        cascade="save-update, merge", passive_deletes=True)
+    pqps = relationship("PQP", back_populates="vendor_ref",
+                        cascade="save-update, merge", passive_deletes=True)
+    obss = relationship("OBS", back_populates="vendor_ref",
+                        cascade="save-update, merge", passive_deletes=True)
+    fats = relationship("FAT", back_populates="vendor_ref",
+                        cascade="save-update, merge", passive_deletes=True)
+    followups = relationship("FollowUp", back_populates="vendor_ref",
+                             cascade="save-update, merge", passive_deletes=True)
 
 
 class ReferenceSequence(Base):
@@ -294,6 +364,19 @@ class Project(Base):
     description = Column(String, nullable=True)                      # 描述
     owner = Column(String, nullable=True)                            # 業主
     created_at = Column(String, nullable=True)
+
+    # Relationships to quality documents
+    itps = relationship("ITP", backref="project_ref", passive_deletes=True)
+    ncrs = relationship("NCR", backref="project_ref", passive_deletes=True)
+    nois = relationship("NOI", backref="project_ref", passive_deletes=True)
+    itrs = relationship("ITR", backref="project_ref", passive_deletes=True)
+    obss = relationship("OBS", backref="project_ref", passive_deletes=True)
+    followups = relationship("FollowUp", backref="project_ref", passive_deletes=True)
+    checklists = relationship("Checklist", backref="project_ref", passive_deletes=True)
+    audits = relationship("Audit", backref="project_ref", passive_deletes=True)
+    fats = relationship("FAT", backref="project_ref", passive_deletes=True)
+    pqps = relationship("PQP", backref="project_ref", passive_deletes=True)
+    qworkflows = relationship("QWorkflow", backref="project_ref", passive_deletes=True)
 
 
 class DocumentNamingRule(Base):
@@ -319,7 +402,7 @@ class User(Base):
     hashed_password = Column(String)
     full_name = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
-    role_id = Column(Integer, ForeignKey("roles.id"), index=True, nullable=True)  # 加入外鍵約束
+    role_id = Column(Integer, ForeignKey("roles.id", ondelete="SET NULL"), index=True, nullable=True)  # 加入外鍵約束
     created_at = Column(String, nullable=True)
 
     # Relationships
@@ -339,8 +422,8 @@ class Permission(Base):
 class RolePermission(Base):
     __tablename__ = "role_permissions"
 
-    role_id = Column(Integer, ForeignKey("roles.id"), primary_key=True)
-    permission_id = Column(Integer, ForeignKey("permissions.id"), primary_key=True)
+    role_id = Column(Integer, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True)
+    permission_id = Column(Integer, ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True)
 
 class Role(Base):
     __tablename__ = "roles"
@@ -366,6 +449,7 @@ class Audit(Base):
     __tablename__ = "audits"
 
     id = Column(String, primary_key=True, index=True)
+    project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
     auditNo = Column(String, unique=True, nullable=False, index=True)
     title = Column(String, nullable=True)
     date = Column(String, nullable=False)
@@ -382,7 +466,7 @@ class Audit(Base):
     audit_criteria = Column(String, nullable=True)
     selected_templates = Column(String, nullable=True)
     custom_check_items = Column(String, nullable=True)
-    vendor_id = Column(String, ForeignKey("contractors.id"), nullable=True, index=True)
+    vendor_id = Column(String, ForeignKey("contractors.id", ondelete="SET NULL"), nullable=True, index=True)
     contractor = Column(String, nullable=True)  # NOTE: 保留純文字欄位以相容舊資料
 
     # Relationships
@@ -395,6 +479,7 @@ class Checklist(Base):
 
 
     id = Column(String, primary_key=True, index=True)
+    project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
     recordsNo = Column(String, index=True, unique=True)
     activity = Column(String, index=True)
     date = Column(String)
@@ -402,7 +487,7 @@ class Checklist(Base):
     packageName = Column(String, index=True)
     location = Column(String, nullable=True)
     itpIndex = Column(Integer)
-    itpId = Column(String, ForeignKey("itp.id"), nullable=True, index=True) # ITP 關聯
+    itpId = Column(String, ForeignKey("itp.id", ondelete="SET NULL"), nullable=True, index=True) # ITP 關聯
     itpVersion = Column(String, nullable=True) # 版本控制
     passCount = Column(Integer, default=0) # 統計數據
     failCount = Column(Integer, default=0) # 統計數據
@@ -410,8 +495,8 @@ class Checklist(Base):
     noiNumber = Column(String, nullable=True, index=True)  # 參照 noi.referenceNo（非 FK，避免編號異動時約束斷裂）
     # NOTE: DB 欄位名為 vendor_id，Python attr 為 contractor_id，透過 Column("vendor_id") alias 實現
     # 這是為了保持 DB schema 與其他模組一致（都叫 vendor_id），同時在 Python 層面語義更清楚
-    contractor_id = Column("vendor_id", String, ForeignKey("contractors.id"), nullable=True, index=True)
-    itrId = Column(String, ForeignKey("itr.id"), nullable=True, index=True) # ITR 關聯
+    contractor_id = Column("vendor_id", String, ForeignKey("contractors.id", ondelete="SET NULL"), nullable=True, index=True)
+    itrId = Column(String, ForeignKey("itr.id", ondelete="CASCADE"), nullable=True, index=True) # ITR 關聯
     itrNumber = Column(String, nullable=True, index=True)  # 參照 itr.documentNumber（非 FK，避免編號異動時約束斷裂）
 
     # Relationships
@@ -501,8 +586,9 @@ class FAT(Base):
     __tablename__ = "fat"
 
     id = Column(String, primary_key=True, index=True)
+    project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
     equipment = Column(String, index=True)
-    vendor_id = Column(String, ForeignKey("contractors.id"), index=True)
+    vendor_id = Column(String, ForeignKey("contractors.id", ondelete="SET NULL"), index=True)
     procedure = Column(String, nullable=True)
     location = Column(String, nullable=True)
     startDate = Column(String, nullable=True)
@@ -537,30 +623,35 @@ class KMArticle(Base):
     content = Column(Text) # Markdown or HTML content
     category = Column(String, index=True)
     tags = Column(String) # Comma-separated or JSON list
-    author_id = Column(Integer, ForeignKey("users.id"))
+    author_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     status = Column(String, default="Published") # Draft, Published, Archived
     created_at = Column(String)
     updated_at = Column(String)
     attachments = Column(Text, nullable=True) # JSON list of attachment IDs
-    parent_id = Column(String, nullable=True, index=True) # Links to main book
+    parent_id = Column(String, ForeignKey("km_articles.id", ondelete="CASCADE"), nullable=True, index=True) # Links to main book
     chapter_no = Column(String, nullable=True) # e.g., "1.0", "1.1"
     version_no = Column(Integer, default=1)
 
     author = relationship("User")
-    history = relationship("KMArticleHistory", back_populates="article", cascade="all, delete-orphan")
+    children = relationship("KMArticle", back_populates="parent",
+                           cascade="all, delete-orphan", passive_deletes=True)
+    parent = relationship("KMArticle", back_populates="children",
+                         remote_side="KMArticle.id")
+    history = relationship("KMArticleHistory", back_populates="article", cascade="all, delete-orphan",
+                          passive_deletes=True)
 
 class KMArticleHistory(Base):
     __tablename__ = "km_article_history"
 
     id = Column(String, primary_key=True, index=True)
-    article_id = Column(String, ForeignKey("km_articles.id"), index=True)
+    article_id = Column(String, ForeignKey("km_articles.id", ondelete="CASCADE"), index=True)
     version_no = Column(Integer, index=True)
     title = Column(String)
     content = Column(Text)
     category = Column(String)
     tags = Column(String)
     status = Column(String)
-    author_id = Column(Integer, ForeignKey("users.id"))
+    author_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     attachments = Column(Text, nullable=True)
     parent_id = Column(String, nullable=True)
     chapter_no = Column(String, nullable=True)
@@ -569,3 +660,31 @@ class KMArticleHistory(Base):
 
     article = relationship("KMArticle", back_populates="history")
     author = relationship("User")
+
+
+class QWorkflow(Base):
+    """Q-WorkFlow — the canonical cross-module progress tracker.
+
+    One QWorkflow row is auto-created for every NOI (1:1 via
+    ``noi_id``) and stays in sync with that NOI for its lifetime.
+    ``referenceNo`` is a sequential ``Q-WorkFlow-000001`` number the
+    backend generates — it's the user-facing ID on the /workflow
+    tracker page and the Dashboard card.
+
+    The 9 canonical checkpoints are *computed* by
+    ``services.workflow_service.WorkflowService`` from the NOI's
+    downstream ITR / NCR state, so there's no per-checkpoint column
+    on this table — adding one would just drift out of sync with the
+    business forms.
+    """
+    __tablename__ = "qworkflow"
+
+    id = Column(String, primary_key=True, index=True)
+    project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
+    referenceNo = Column(String, index=True, unique=True)  # Q-WorkFlow-000001
+    noi_id = Column(
+        String, ForeignKey("noi.id", ondelete="CASCADE"), nullable=False, unique=True, index=True,
+    )
+    createdAt = Column(String, nullable=True)
+
+    noi_ref = relationship("NOI", back_populates="qworkflow")

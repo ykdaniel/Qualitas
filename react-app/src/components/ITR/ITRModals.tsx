@@ -18,6 +18,7 @@ import { addSevenWorkingDays } from '../../utils/dateUtils';
 import { formatDateISO } from '../../utils/formatters';
 import { AttachmentInfo } from '../../services/api';
 import FileAttachment from '../Shared/FileAttachment';
+import RelatedDocuments from '../ui/RelatedDocuments';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './ITR.module.css';
 
@@ -99,7 +100,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                 : {};
             return {
                 itrNumber: existingItem.documentNumber || '',  // 既有編號，顯示用
-                status: existingItem.status || 'Approved',
+                status: existingItem.status || 'In Progress',
                 raiseDate: existingItem.raiseDate || '',
                 closeoutDate: existingItem.closeoutDate || '',
                 aconex: existingItem.aconex || '',
@@ -295,18 +296,6 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
             return;
         }
 
-        // P4: Cascade Validation - Blocks closing ITR if linked NCR or OBS is still Open
-        if (formData.status === 'Closed' && formData.itrNumber) {
-            const openNcrs = ncrList.filter(ncr => ncr.itrNumber === formData.itrNumber && ncr.status === 'Open');
-            const openObs = obsList.filter(obs => obs.itrNumber === formData.itrNumber && obs.status === 'Open');
-
-            if (openNcrs.length > 0 || openObs.length > 0) {
-                const totalOpen = openNcrs.length + openObs.length;
-                toast.warning(`Cannot close ITR: There are still ${totalOpen} open NCR/OBS associated with this inspection. Please close them first.`);
-                return;
-            }
-        }
-
         try {
             await onSave(formData, pendingUploads, deletedFileIds);
             onClose();
@@ -322,15 +311,15 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
 
     const doPublish = async (nextRev: string) => {
         try {
+            // Only send fields allowed by the backend lock (type, status, detail_data)
             await onSave({
                 ...formData,
                 type: nextRev,
                 status: 'Approved'
-            }, pendingUploads, deletedFileIds);
+            }, [], []);  // No file ops during publish
             // onClose is handled by parent (handleSaveITRDetails sets isEditModalOpen=false)
-        } catch (err) {
-            console.error('Publish failed:', err);
-            toast.error(t('itr.saveError'));
+        } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
+            // Error already shown by parent handleSaveITRDetails toast
         }
     };
 
@@ -873,6 +862,9 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
 
                             </div>
                         </div>
+                        {existingItem?.id && (
+                            <RelatedDocuments entityType="itr" entityId={existingItem.id} />
+                        )}
                     </div>
                 </div>
                 <div className={styles.modalActions}>
