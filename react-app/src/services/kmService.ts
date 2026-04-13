@@ -36,10 +36,27 @@ export const kmService = {
         const formData = new FormData();
         formData.append('file', file);
         const response = await api.post<{ url: string }>('/km/upload-image/', formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data'
-            }
+            headers: { 'Content-Type': 'multipart/form-data' }
         });
         return response.data.url;
-    }
+    },
+
+    exportDocx: async (id: string, filename: string) => {
+        const response = await api.get(`/km/${id}/export-docx`, { responseType: 'blob' });
+        const url = URL.createObjectURL(new Blob([response.data]));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${filename}.docx`;
+        a.click();
+        URL.revokeObjectURL(url);
+    },
+
+    importDocx: async (id: string, file: File): Promise<{ updated: any[]; skipped: string[]; total_sections: number }> => {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await api.post(`/km/${id}/import-docx`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+    },
 };

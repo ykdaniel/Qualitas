@@ -1,5 +1,6 @@
 
 from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi.responses import StreamingResponse
 
 import schemas
 from core.dependencies import get_km_service
@@ -71,3 +72,22 @@ def upload_km_image(
 ):
     url = service.upload_image(file)
     return {"url": url}
+
+@router.get("/{id}/export-docx", response_class=StreamingResponse)
+def export_km_docx(
+    id: str,
+    service: KMService = Depends(get_km_service),
+    current_user: schemas.User = Depends(get_current_user)
+):
+    """Export KM article and all chapters as a Word (.docx) file."""
+    return service.export_docx(article_id=id)
+
+@router.post("/{id}/import-docx")
+def import_km_docx(
+    id: str,
+    file: UploadFile = File(...),
+    service: KMService = Depends(get_km_service),
+    current_user: schemas.User = Depends(get_current_user)
+):
+    """Import a Word (.docx) file and update matching chapters by chapter number."""
+    return service.import_docx(article_id=id, file=file, author_id=current_user.id)

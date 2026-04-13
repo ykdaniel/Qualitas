@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo, useCallback } from 'react';
 import DOMPurify from 'dompurify';
 import 'react-quill/dist/quill.snow.css';
 import '../ui/RichTextEditor.css';
@@ -11,6 +11,7 @@ import { KMHistoryModal } from './KMHistoryModal';
 import { SectionToc } from './SectionToc';
 import { extractSectionToc, computeNumberedLevel, stripDecorativeZeros, compareChapterNo } from '../../utils/extractSectionToc';
 import { injectAuthTokenIntoHtml } from '../../utils/authUrl';
+import { kmService } from '../../services/kmService';
 import styles from './KMDetail.module.css';
 
 /**
@@ -100,8 +101,40 @@ interface KMDetailProps {
 
 export const KMDetail: React.FC<KMDetailProps> = ({ article, onClose, onEdit, onSelectArticle }) => {
     const { t } = useLanguage();
-    const { kmList } = useKMStore();
+    const { kmList, fetchKMs } = useKMStore();
     const [isHistoryModalOpen, setIsHistoryModalOpen] = React.useState(false);
+    const [isExporting, setIsExporting] = React.useState(false);
+    const [isImporting, setIsImporting] = React.useState(false);
+    const importInputRef = useRef<HTMLInputElement>(null);
+
+    const handleExportDocx = useCallback(async () => {
+        setIsExporting(true);
+        try {
+            await kmService.exportDocx(article.id, article.title);
+        } catch (e) {
+            alert('匯出失敗，請稍後再試');
+        } finally {
+            setIsExporting(false);
+        }
+    }, [article.id, article.title]);
+
+    const handleImportDocx = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setIsImporting(true);
+        try {
+            const result = await kmService.importDocx(article.id, file);
+            await fetchKMs();
+            const updatedList = result.updated.map((u: any) => `${u.chapter_no} ${u.title}`).join('\n');
+            const skippedList = result.skipped.length > 0 ? `\n\n未匹配章節：\n${result.skipped.join('\n')}` : '';
+            alert(`匯入完成！\n已更新 ${result.updated.length}/${result.total_sections} 個章節：\n${updatedList}${skippedList}`);
+        } catch (e: any) {
+            alert(`匯入失敗：${e?.response?.data?.detail || e?.message || '請確認檔案格式正確'}`);
+        } finally {
+            setIsImporting(false);
+            if (importInputRef.current) importInputRef.current.value = '';
+        }
+    }, [article.id, fetchKMs]);
 
     // Determine the main book and its chapters.
     //
@@ -221,10 +254,24 @@ export const KMDetail: React.FC<KMDetailProps> = ({ article, onClose, onEdit, on
                         onClick={onClose}
                         className="!bg-white !border !border-slate-200 !text-slate-600 hover:!bg-slate-50 hover:!text-slate-900 rounded-full"
                     />
-                    <div style={{ display: 'flex', gap: 12 }}>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                         <button className={styles.printBtn} onClick={() => window.print()}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
                             {t('common.print') || '列印'}
+                        </button>
+                        {/* Word Export */}
+                        <button className={styles.printBtn} onClick={handleExportDocx} disabled={isExporting}
+                            title="匯出為 Word 文件">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                            {isExporting ? '匯出中...' : '匯出 Word'}
+                        </button>
+                        {/* Word Import */}
+                        <input ref={importInputRef} type="file" accept=".docx" style={{ display: 'none' }}
+                            onChange={handleImportDocx} />
+                        <button className={styles.printBtn} onClick={() => importInputRef.current?.click()}
+                            disabled={isImporting} title="從 Word 匯入章節內容">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+                            {isImporting ? '匯入中...' : '匯入 Word'}
                         </button>
                         <button className={styles.editBtn} onClick={() => onEdit()}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
