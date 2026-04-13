@@ -1,9 +1,7 @@
 # Node
 node_modules/
-dist/
 build/
 .npm
-scripts/
 
 # Python
 __pycache__/
@@ -14,8 +12,14 @@ venv/
 env/
 .env
 
+# Database
+*.db
+
+# Build artifacts
+dist/
+.vite/
+
 # IDEs
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -23,3 +27,4 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+~$*
