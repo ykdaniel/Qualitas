@@ -20,9 +20,13 @@ dist/
 .vite/
 
 # IDEs
+.vscode/
 .idea/
 *.swp
 *.swo
+
+# Misc
+package-lock.json
 
 # OS
 .DS_Store
