@@ -133,9 +133,13 @@ const Workflow: React.FC = () => {
                 }
                 break;
             case 'itr':
-                // Re-inspection ITR — for now open the first ITR; ideally
-                // backend would return the specific re-inspection ITR id.
-                if (w.itr_ids?.length) {
+                // Re-inspection ITR — jump directly at the specific
+                // re-insp report resolved by the backend
+                // (NCR.reInspectionNumber / ITR.originalItrId). Falls
+                // back to any linked ITR if the re-insp set is empty.
+                if (w.reinsp_itr_ids?.length) {
+                    navigate(`/itr?openId=${encodeURIComponent(w.reinsp_itr_ids[0])}`);
+                } else if (w.itr_ids?.length) {
                     navigate(`/itr?openId=${encodeURIComponent(w.itr_ids[w.itr_ids.length - 1])}`);
                 }
                 break;

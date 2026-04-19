@@ -52,6 +52,7 @@ export interface WorkflowSummary {
     completion_percent: number;
     ncr_ids: string[];
     itr_ids: string[];
+    reinsp_itr_ids: string[];
 }
 
 // Completion-bucket distribution powering the Dashboard card.

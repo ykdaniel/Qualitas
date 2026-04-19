@@ -116,7 +116,16 @@ class NOIService:
             # the Dashboard / /workflow page. Done inline (not via a
             # service) because the row is trivial and the 1:1 binding
             # must stay in the same transaction as the NOI insert.
-            self._create_qworkflow_for_noi(created)
+            #
+            # Re-inspection NOIs (ones raised against an existing NCR,
+            # flagged by ``ncrNumber``) share their parent NOI's
+            # Q-WorkFlow — creating a second row for them would
+            # double-count the quality thread on the tracker. The
+            # re-insp ITR they carry is picked up by the original
+            # Q-WorkFlow via ``NCR.reInspectionNumber`` / the typed
+            # ``ITR.originalItrId`` relationship.
+            if not data.get('ncrNumber'):
+                self._create_qworkflow_for_noi(created)
 
             # Log audit trail
             log_audit(

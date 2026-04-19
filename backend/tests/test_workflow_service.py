@@ -139,6 +139,7 @@ def workflow_fixture(db_session, sample_contractor):
         id="itr-mixed-reinsp", vendor_id=vendor_id,
         documentNumber="ITR-MIXED-REINSP", description="re-insp",
         rev="A", submit="Initial", status="Pass",
+        inspectionResult="Pass",
         noiNumber="NOI-WF-MIXED", raiseDate="2026-03-20",
     ))
     db_session.add(models.NCR(
@@ -181,6 +182,7 @@ def workflow_fixture(db_session, sample_contractor):
         id="itr-full-reinsp", vendor_id=vendor_id,
         documentNumber="ITR-FULL-REINSP", description="re-insp",
         rev="A", submit="Initial", status="Pass",
+        inspectionResult="Pass",
         noiNumber="NOI-WF-FULL", raiseDate="2026-03-25",
     ))
     db_session.add(models.NCR(
@@ -492,6 +494,205 @@ def test_list_workflows_exposes_summary_fields(workflow_fixture):
     assert summary["noi_package"] == "P-PART"
     assert summary["vendor_name"] is not None
     assert len(summary["checkpoints"]) == TOTAL_CHECKPOINTS
+
+
+# ─── Business-logic gap fixes ───────────────────────────────────────
+
+
+def test_ncr_linked_only_via_itrNumber_is_visible(
+    db_session, sample_contractor,
+):
+    """NCR raised from an ITR but with ``noiNumber`` left null must
+    still be visible to the Q-WorkFlow — the itrNumber → NOI.itrs
+    linkage closes the gap, preventing a silent 100% completion."""
+    vendor_id = sample_contractor.id
+    noi = models.NOI(
+        id="noi-orphan", package="P-ORPHAN", referenceNo="NOI-ORPHAN",
+        issueDate="2026-03-01", inspectionTime="10:00",
+        itpNo=None, inspectionDate="2026-03-02", type="site",
+        vendor_id=vendor_id, status="In Progress",
+    )
+    db_session.add(noi)
+    db_session.add(models.ITR(
+        id="itr-orphan", vendor_id=vendor_id,
+        documentNumber="ITR-ORPHAN", description="failed", rev="A",
+        submit="Initial", status="Closed", inspectionResult="Fail",
+        noiNumber="NOI-ORPHAN", raiseDate="2026-03-02",
+    ))
+    # NCR with itrNumber set but noiNumber left null — the invisibility
+    # scenario this fix addresses.
+    db_session.add(models.NCR(
+        id="ncr-orphan", vendor_id=vendor_id,
+        documentNumber="NCR-ORPHAN", description="open NCR",
+        rev="A", submit="Initial", status="Open", subject="orphan",
+        raiseDate="2026-03-03", noiNumber=None, itrNumber="ITR-ORPHAN",
+    ))
+    _make_qworkflow(db_session, noi, "Q-WorkFlow-900001")
+    db_session.commit()
+
+    service = WorkflowService(db_session)
+    summary = _summary_for(service, "Q-WorkFlow-900001")
+
+    # The orphan NCR must block MoC via the all-or-nothing rule —
+    # without the itrNumber fallback it would be invisible and the
+    # Q-WorkFlow would sail to 100% via the N/A shortcut.
+    done = _done_map(summary)
+    assert done[CHECKPOINT_MOC] is False
+    assert done[CHECKPOINT_CLOSE_NCR] is False
+    assert summary["completion_percent"] < 100
+    assert "ncr-orphan" in summary["ncr_ids"]
+
+
+def test_failed_itr_without_ncr_fails_ncr_checkpoint(
+    db_session, sample_contractor,
+):
+    """A failed ITR with zero NCRs filed should fail the NCR
+    checkpoint — the whole point of the column is to catch missing
+    paperwork after a flunked inspection."""
+    vendor_id = sample_contractor.id
+    noi = models.NOI(
+        id="noi-failitr", package="P-FAILITR", referenceNo="NOI-FAILITR",
+        issueDate="2026-03-01", inspectionTime="10:00",
+        itpNo=None, inspectionDate="2026-03-02", type="site",
+        vendor_id=vendor_id, status="In Progress",
+    )
+    db_session.add(noi)
+    db_session.add(models.ITR(
+        id="itr-failed", vendor_id=vendor_id,
+        documentNumber="ITR-FAILED", description="failed inspection",
+        rev="A", submit="Initial", status="Closed",
+        inspectionResult="Fail",
+        noiNumber="NOI-FAILITR", raiseDate="2026-03-02",
+    ))
+    _make_qworkflow(db_session, noi, "Q-WorkFlow-900002")
+    db_session.commit()
+
+    service = WorkflowService(db_session)
+    state = _state_map(_summary_for(service, "Q-WorkFlow-900002"))
+
+    # NOI / W/H done; NCR is now the progress front because no NCR
+    # was filed against the failed inspection.
+    assert state[CHECKPOINT_NOI] == STATE_DONE
+    assert state[CHECKPOINT_WH_INSPECTION] == STATE_DONE
+    assert state[CHECKPOINT_NCR] == STATE_CURRENT
+
+
+def test_reinspection_itr_without_pass_fails_checkpoint(
+    db_session, sample_contractor,
+):
+    """A re-insp ITR that's merely linked but didn't pass (no
+    ``inspectionResult`` or ``Fail``) must NOT satisfy the
+    re-inspection-ITR checkpoint — the checkpoint exists to confirm
+    the loop actually closed, not just that paperwork was filed."""
+    vendor_id = sample_contractor.id
+    noi = models.NOI(
+        id="noi-reinsp-fail", package="P-RF", referenceNo="NOI-RF",
+        issueDate="2026-03-01", inspectionTime="10:00",
+        itpNo=None, inspectionDate="2026-03-02", type="site",
+        vendor_id=vendor_id, status="In Progress",
+    )
+    db_session.add(noi)
+    db_session.add(models.ITR(
+        id="itr-rf", vendor_id=vendor_id, documentNumber="ITR-RF",
+        description="initial", rev="A", submit="Initial", status="Pass",
+        noiNumber="NOI-RF", raiseDate="2026-03-02",
+    ))
+    # Re-insp ITR with inspectionResult=Fail — the checkpoint must
+    # see the NCR hasn't really been resolved.
+    db_session.add(models.ITR(
+        id="itr-rf-reinsp", vendor_id=vendor_id,
+        documentNumber="ITR-RF-REINSP", description="re-insp",
+        rev="A", submit="Initial", status="Closed",
+        inspectionResult="Fail",
+        noiNumber="NOI-RF", raiseDate="2026-03-05",
+    ))
+    db_session.add(models.NCR(
+        id="ncr-rf", vendor_id=vendor_id, documentNumber="NCR-RF",
+        description="x", rev="A", submit="Initial", status="Open",
+        subject="rf", raiseDate="2026-03-03", noiNumber="NOI-RF",
+        rootCauseAnalysis="rca", repairMethodStatement="moc",
+        improvementPhotos=json.dumps(["/uploads/x.jpg"]),
+        reInspectionNumber="ITR-RF-REINSP",
+    ))
+    _make_qworkflow(db_session, noi, "Q-WorkFlow-900003")
+    db_session.commit()
+
+    service = WorkflowService(db_session)
+    done = _done_map(_summary_for(service, "Q-WorkFlow-900003"))
+    assert done[CHECKPOINT_ITR] is False
+
+
+def test_reinspection_itr_resolves_via_typed_path(
+    db_session, sample_contractor,
+):
+    """When a user creates a proper re-inspection ITR via the typed
+    relationship (``isReInspection=True`` + ``originalItrId``) but
+    forgets to write the document number back to
+    ``NCR.reInspectionNumber``, the checkpoint should still resolve
+    via the fallback typed-path lookup."""
+    vendor_id = sample_contractor.id
+    noi = models.NOI(
+        id="noi-typed", package="P-TYPED", referenceNo="NOI-TYPED",
+        issueDate="2026-03-01", inspectionTime="10:00",
+        itpNo=None, inspectionDate="2026-03-02", type="site",
+        vendor_id=vendor_id, status="Closed",
+    )
+    db_session.add(noi)
+    orig_itr = models.ITR(
+        id="itr-typed-orig", vendor_id=vendor_id,
+        documentNumber="ITR-TYPED", description="orig",
+        rev="A", submit="Initial", status="Closed",
+        inspectionResult="Fail",
+        noiNumber="NOI-TYPED", raiseDate="2026-03-02",
+    )
+    db_session.add(orig_itr)
+    db_session.add(models.ITR(
+        id="itr-typed-reinsp", vendor_id=vendor_id,
+        documentNumber="ITR-TYPED-REINSP", description="re-insp",
+        rev="A", submit="Initial", status="Closed",
+        inspectionResult="Pass",
+        noiNumber="NOI-TYPED", raiseDate="2026-03-10",
+        isReInspection=True, originalItrId="itr-typed-orig",
+    ))
+    db_session.add(models.NCR(
+        id="ncr-typed", vendor_id=vendor_id, documentNumber="NCR-TYPED",
+        description="x", rev="A", submit="Initial", status="Closed",
+        subject="typed", raiseDate="2026-03-03", noiNumber="NOI-TYPED",
+        itrNumber="ITR-TYPED",
+        rootCauseAnalysis="rca", repairMethodStatement="moc",
+        improvementPhotos=json.dumps(["/uploads/x.jpg"]),
+        reInspectionNumber=None,  # deliberately absent — typed path only
+    ))
+    _make_qworkflow(db_session, noi, "Q-WorkFlow-900004")
+    db_session.commit()
+
+    service = WorkflowService(db_session)
+    summary = _summary_for(service, "Q-WorkFlow-900004")
+    done = _done_map(summary)
+
+    # Re-inspection (needs reInspectionNumber text) and ITR (resolve)
+    # both satisfied via the typed fallback + the string itrNumber.
+    # NOTE: Re-inspection checkpoint #6 still requires the text field
+    # on the NCR — it tests "has the user recorded the number" — so
+    # it legitimately fails here even though the typed path resolves.
+    # That's the intended separation between checkpoint 6 (paperwork)
+    # and checkpoint 7 (closed loop).
+    assert done[CHECKPOINT_REINSPECTION] is False
+    # And because of the linear progress front, #7 renders pending
+    # rather than done in the summary. Verify the underlying rule
+    # instead by calling the rule directly.
+    from services.workflow_service import _rule_itr_reinsp
+    qwfs = service._load_qworkflows()
+    lookups = service._build_lookups(qwfs)
+    for qwf in qwfs:
+        if qwf.referenceNo == "Q-WorkFlow-900004":
+            ctx = service._make_context(qwf, lookups)
+            assert _rule_itr_reinsp(ctx) is True
+            break
+    else:  # pragma: no cover
+        pytest.fail("Q-WorkFlow-900004 not found")
+    # ``reinsp_itr_ids`` should expose the re-insp ITR for deep-linking.
+    assert "itr-typed-reinsp" in summary["reinsp_itr_ids"]
 
 
 def test_list_workflows_filters_by_vendor(workflow_fixture, db_session):

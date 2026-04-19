@@ -88,6 +88,77 @@ def test_update_noi_success(noi_service, mock_repo):
         mock_repo.update.assert_called_once()
         mock_log.assert_called_once()
 
+def test_create_reinspection_noi_skips_qworkflow(noi_service, mock_repo):
+    """Re-inspection NOIs (flagged by ``ncrNumber``) must not create
+    their own Q-WorkFlow row — they share the original NOI's tracker.
+    Creating a second row would double-count the quality thread."""
+    noi_data = schemas.NOICreate(
+        package="TEST_PKG",
+        issueDate="2026-01-10",
+        inspectionTime="10:00",
+        itpNo="ITP-QTS-VEND-001",
+        inspectionDate="2026-01-11",
+        type="Re-inspection",
+        checkpoint="REINSPECT_POINT",
+        contractor="TestVendor",
+        status="Open",
+        ncrNumber="NCR-QTS-VEND-001",  # marks this as a re-insp NOI
+    )
+
+    with patch('services.noi_service._resolve_vendor_id') as mock_resolve, \
+         patch('services.noi_service.generate_reference_no') as mock_gen_ref, \
+         patch('services.noi_service.log_audit'), \
+         patch.object(noi_service, '_create_qworkflow_for_noi') as mock_create_qwf:
+
+        mock_resolve.return_value = "vendor-uuid-123"
+        mock_gen_ref.return_value = "NOI-QTS-REINSP-001"
+
+        mock_created_noi = models.NOI(
+            id="noi-reinsp", referenceNo="NOI-QTS-REINSP-001",
+            vendor_id="vendor-uuid-123", status="Open",
+            ncrNumber="NCR-QTS-VEND-001",
+        )
+        mock_repo.create.return_value = mock_created_noi
+
+        noi_service.create_noi(noi_data, user_id=1, username="admin")
+
+        mock_create_qwf.assert_not_called()
+
+
+def test_create_standalone_noi_creates_qworkflow(noi_service, mock_repo):
+    """Sanity check: a normal NOI (no ``ncrNumber``) still auto-creates
+    its Q-WorkFlow, so the re-inspection skip doesn't over-reach."""
+    noi_data = schemas.NOICreate(
+        package="TEST_PKG",
+        issueDate="2026-01-01",
+        inspectionTime="10:00",
+        itpNo="ITP-QTS-VEND-001",
+        inspectionDate="2026-01-02",
+        type="Hold Point",
+        checkpoint="FOUNDATION_INSPECTION",
+        contractor="TestVendor",
+        status="Open",
+    )
+
+    with patch('services.noi_service._resolve_vendor_id') as mock_resolve, \
+         patch('services.noi_service.generate_reference_no') as mock_gen_ref, \
+         patch('services.noi_service.log_audit'), \
+         patch.object(noi_service, '_create_qworkflow_for_noi') as mock_create_qwf:
+
+        mock_resolve.return_value = "vendor-uuid-123"
+        mock_gen_ref.return_value = "NOI-QTS-TEST-002"
+
+        mock_created_noi = models.NOI(
+            id="noi-std", referenceNo="NOI-QTS-TEST-002",
+            vendor_id="vendor-uuid-123", status="Open",
+        )
+        mock_repo.create.return_value = mock_created_noi
+
+        noi_service.create_noi(noi_data, user_id=1, username="admin")
+
+        mock_create_qwf.assert_called_once_with(mock_created_noi)
+
+
 def test_delete_noi_success(noi_service, mock_repo):
     # Arrange
     mock_db_noi = models.NOI(id="noi-123", referenceNo="NOI-001")

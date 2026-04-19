@@ -1239,6 +1239,14 @@ class WorkflowSummary(BaseModel):
     checkpoints: list[CheckpointState]
     done_count: int
     completion_percent: int
+    # Linked entity IDs so the frontend can deep-link from checkpoint
+    # markers to the relevant forms. ``reinsp_itr_ids`` is the subset
+    # of ITRs that satisfy (or should satisfy) the re-inspection
+    # checkpoint, letting the UI jump straight at the re-insp report
+    # instead of guessing based on ITR order.
+    ncr_ids: list[str] = []
+    itr_ids: list[str] = []
+    reinsp_itr_ids: list[str] = []
 
     model_config = ConfigDict(from_attributes=True)
 
