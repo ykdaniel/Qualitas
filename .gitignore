@@ -65,11 +65,23 @@ nul
 # Stray backup/dump artifacts
 *.xlsm.bak
 
+# Lint / tsc / test output dumps (accidentally tracked before)
+*_output.txt
+*_error.txt
+alembic_error.txt
+full-lint.txt
+eslint_*.txt
+*-lint.txt
+tsc_*.txt
+defined_keys.txt
+used_keys.txt
+frontend_stdout.log
+test_write.txt
+
+# User-uploaded files (runtime artifacts, not source)
+backend/uploads/
+
 # Specific files to include
 !backend/requirements.txt
 !react-app/package.json
 !react-app/package-lock.json
-
-# Ignore other text files in root or general spots if needed, 
-# but be careful with global *.txt
-*.log

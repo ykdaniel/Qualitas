@@ -321,6 +321,28 @@ folded in rather than done twice.
 
 ---
 
+## 12. NCR monthly statistics (feature gap)
+
+**Where:**
+- Dashboard currently has `NCRParetoChart` / `NCRStatsCard` but no
+  time-series view. `NCR.raiseDate` and `NCR.closeoutDate` are already
+  on the model — the data is there, the aggregation isn't.
+
+**What's missing:**
+Month-by-month trend of NCRs raised vs closed, with status / type /
+vendor breakdowns. A plan existed as `react-app/NCR_MONTHLY_STATISTICS_PLAN.md`
+(deleted 2026-04-19, see git history) but sat untouched for 3 months.
+
+**Recommended approach when picked up:**
+Group by `raiseDate` / `closeoutDate` in the client (no new schema —
+dodges backlog item **#1**'s FK problems). Scope to core metrics
+first: monthly new, monthly closed, rolling 12-month trend. Add
+type / vendor breakdowns only if the core view earns its keep.
+Avoid the "monthly snapshot table" alternative unless historical
+reporting becomes a hard requirement.
+
+---
+
 ## Not on this list (and why)
 
 - **Migrating SQLite → Postgres.** Real production move, not a code
