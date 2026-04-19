@@ -42,7 +42,8 @@ class ITRService:
         Returns:
             List of ITR objects
         """
-        return self.repo.get_all(skip, limit, **filters)
+        items, _total = self.repo.get_all(skip, limit, **filters)
+        return items
 
     def get_itr(self, itr_id: str) -> Optional[models.ITR]:
         """
