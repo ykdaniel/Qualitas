@@ -239,7 +239,6 @@ const Home = () => {
                 <h2 className={styles.moduleTitle}>{module.title}</h2>
                 <p className={styles.moduleDescription}>{module.description}</p>
               </div>
-              <div className={styles.moduleArrow}>→</div>
             </div>
           );
         })}
