@@ -116,7 +116,7 @@
 .table th {
   background: #f9fafb;
   padding: 10px 8px;
-  text-align: left;
+  text-align: center;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -131,6 +131,7 @@
   border-bottom: 1px solid #f3f4f6;
   font-size: 13px;
   color: #1f2937;
+  text-align: center;
 }
 
 /* Left-anchored columns (NCR number + subject) stay visible as the
@@ -296,12 +297,12 @@
 }
 
 .percentCol {
-  text-align: right;
+  text-align: center;
   min-width: 64px;
 }
 
 .percentCell {
-  text-align: right;
+  text-align: center;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   color: #111827;

@@ -1,8 +1,9 @@
 import React, { Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { useAuth } from './context/AuthContext';
 import { AppProviders } from './components/Shared/AppProviders';
+import AppLayout from './components/Shared/AppLayout';
 import './App.css';
 
 // --- Lazy loaded components ---
@@ -68,7 +69,7 @@ function App() {
           <Route element={
             <PrivateRoute>
               <AppProviders>
-                <Outlet />
+                <AppLayout />
               </AppProviders>
             </PrivateRoute>
           }>
