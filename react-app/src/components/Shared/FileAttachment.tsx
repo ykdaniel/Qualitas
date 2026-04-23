@@ -48,6 +48,10 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
     const { t } = useLanguage();
     // 儲存已從 Server 拿回來的檔案
     const [apiAttachments, setApiAttachments] = useState<AttachmentInfo[]>([]);
+    // Locally-hidden attachment ids (optimistic delete). Needed because when
+    // `propsAttachments` is provided by the parent, filtering `apiAttachments`
+    // does not affect the rendered list.
+    const [pendingDeletes, setPendingDeletes] = useState<Set<string>>(new Set());
     // 儲存使用者剛選取但尚未上傳至 Server 的實體 File 物件
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
     // 儲存待上傳 File 所產生出的預覽用 URL (blob UI)
@@ -77,7 +81,8 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
         (a): a is AttachmentInfo =>
             a !== null &&
             typeof a === 'object' &&
-            typeof (a as AttachmentInfo).file_url === 'string',
+            typeof (a as AttachmentInfo).file_url === 'string' &&
+            !pendingDeletes.has((a as AttachmentInfo).id),
     );
     const stringLegacyAttachments = rawAttachments.filter(
         (a): a is string => typeof a === 'string',
@@ -136,8 +141,15 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
         // 如果外部有接 onDeleteExistingFile，則單純通知外部
         if (onDeleteExistingFile) {
             onDeleteExistingFile(fileId);
-            // 由於外部控制，這裡就先 Optimistic Delete 畫面顯示
+            // Optimistic hide. When the parent passes `attachments` as a prop,
+            // filtering `apiAttachments` has no effect on what's rendered, so
+            // we also record the id in `pendingDeletes` to filter the prop list.
             setApiAttachments(prev => prev.filter(a => a.id !== fileId));
+            setPendingDeletes(prev => {
+                const next = new Set(prev);
+                next.add(fileId);
+                return next;
+            });
         } else {
             // 否則嘗試自己呼叫 API 刪除 (舊邏輯)
             try {

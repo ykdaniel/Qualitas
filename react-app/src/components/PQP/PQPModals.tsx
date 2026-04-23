@@ -262,6 +262,7 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
                                 id="pqp"
                                 entityType="pqp"
                                 category="attachment"
+                                hideTitle
                             />
                         </div>
 
