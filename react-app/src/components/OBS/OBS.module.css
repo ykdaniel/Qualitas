@@ -1,27 +1,176 @@
 .container {
-  min-height: 100vh;
-  background: #f3f4f6;
+  padding: 24px 28px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1600px;
+}
+
+.errorBanner {
+  background: #fef2f2;
+  color: #b91c1c;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.loadingNote {
   padding: 24px;
+  text-align: center;
+  color: #8b8275;
+  font-size: 13px;
 }
 
-.header {
+/* ─── Summary cards ──────────────────────────────────────────── */
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.summaryCard {
   display: flex;
   align-items: center;
+  gap: 14px;
+  background: #ffffff;
+  border: 1px solid rgba(184, 148, 90, 0.22);
+  border-radius: 12px;
+  padding: 16px 18px;
+  position: relative;
+  overflow: hidden;
+}
+
+.summaryCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--accent, #b8945a);
+}
+
+.summaryIcon {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent, #b8945a) 12%, white);
+  color: var(--accent, #b8945a);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.summaryBody {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.summaryLabel {
+  font-size: 12px;
+  color: #8b8275;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.summaryValue {
+  font-size: 22px;
+  font-weight: 800;
+  color: #2d2a24;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Toolbar (chips + search + add) ─────────────────────────── */
+
+.toolbar {
+  display: flex;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.headerLeft {
-  display: flex;
   align-items: center;
   gap: 16px;
+  flex-wrap: wrap;
 }
 
-.headerRight {
-  display: flex;
+.chipGroup {
+  display: inline-flex;
+  background: #ffffff;
+  border: 1px solid rgba(184, 148, 90, 0.22);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.chip {
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  padding: 7px 14px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #8b8275;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.chip:hover {
+  color: #4a4238;
+  background: rgba(184, 148, 90, 0.08);
+}
+
+.chipActive {
+  background: #4a4238;
+  color: #faf7f1;
+}
+
+.chipActive:hover {
+  background: #2d2a24;
+  color: #faf7f1;
+}
+
+.chipCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(184, 148, 90, 0.18);
+  color: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.chipActive .chipCount {
+  background: rgba(250, 247, 241, 0.18);
+  color: #faf7f1;
+}
+
+.toolbarRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.searchWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 12px;
+  color: #a39786;
+  pointer-events: none;
 }
 
 .filterGroup {
@@ -72,24 +221,24 @@
 }
 
 .searchInput {
-  padding: 10px 16px;
-  border: 1px solid #d1d5db;
+  padding: 8px 14px 8px 34px;
+  border: 1px solid rgba(184, 148, 90, 0.28);
   border-radius: 8px;
-  font-size: 14px;
-  width: 300px;
-  background: white;
-  color: #1f2937;
-  transition: border-color 0.2s;
+  font-size: 13px;
+  width: 260px;
+  background: #ffffff;
+  color: #2d2a24;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .searchInput:focus {
   outline: none;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  border-color: #b8945a;
+  box-shadow: 0 0 0 3px rgba(184, 148, 90, 0.15);
 }
 
 .searchInput::placeholder {
-  color: #9ca3af;
+  color: #a39786;
 }
 
 .backButton {
@@ -222,11 +371,20 @@
 }
 
 .content {
-  background: white;
+  background: #ffffff;
+  border: 1px solid rgba(184, 148, 90, 0.22);
   border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 16px 18px;
   overflow-x: auto;
+}
+
+.rowClosed {
+  background: rgba(184, 148, 90, 0.05) !important;
+  color: #a39786 !important;
+}
+
+.rowClosed:hover {
+  background: rgba(184, 148, 90, 0.10) !important;
 }
 
 .listHeader {
@@ -244,22 +402,24 @@
 }
 
 .addNewButton {
-  padding: 10px 20px;
-  background: #10b981;
-  color: white;
+  padding: 8px 18px;
+  background: linear-gradient(135deg, #b8945a 0%, #8a6a3a 100%);
+  color: #faf7f1;
   border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
-  transition: background-color 0.2s;
-  display: flex;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+  box-shadow: 0 2px 8px rgba(138, 106, 58, 0.22);
 }
 
 .addNewButton:hover {
-  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(138, 106, 58, 0.32);
 }
 
 .table {

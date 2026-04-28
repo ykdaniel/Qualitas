@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { toast } from 'sonner';
+import { Clock, CheckCircle2, BarChart3, Zap, Search } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useOBSStore } from '../../store/obsStore';
@@ -8,14 +9,13 @@ import styles from './OBS.module.css';
 import ConfirmModal from '../Shared/ConfirmModal';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
-import { BackButton } from '@/components/ui/BackButton';
 import { OBSDetailModal, OBSDetailData, PendingUploads } from './OBSModals';
 import { useDebounce } from '../../hooks/useDebounce';
 import { uploadFiles, deleteFile } from '../../services/api';
 import { useOBSStats } from '../../hooks/useOBSStats';
-import { StatItem } from '../Shared/StatItem';
-import statStyles from '../Shared/StatItem.module.css';
 import { getErrorMessage } from '../../utils/errorUtils';
+
+type StatusFilter = 'all' | 'open' | 'closed';
 
 const OBS: React.FC = () => {
   const { t } = useLanguage();
@@ -26,6 +26,7 @@ const OBS: React.FC = () => {
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebounce(searchQuery, 500);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   // Trigger server-side refetch when debounced search changes
   React.useEffect(() => {
@@ -43,10 +44,15 @@ const OBS: React.FC = () => {
     message: '',
   });
 
-  // Data is now primarily filtered by backend.
+  // Search hits the server via the debounced effect; the status chip is a
+  // client-side slice over whatever the server returned.
   const filteredList = useMemo(() => {
-    return obsList;
-  }, [obsList]);
+    if (statusFilter === 'all') return obsList;
+    return obsList.filter((item) => {
+      const s = (item.status || '').toLowerCase();
+      return statusFilter === 'closed' ? s === 'closed' : s !== 'closed';
+    });
+  }, [obsList, statusFilter]);
 
   const statistics = useOBSStats(obsList);
 
@@ -164,84 +170,103 @@ const OBS: React.FC = () => {
   };
 
 
+  const chips: { id: StatusFilter; label: string; count: number }[] = [
+    { id: 'all', label: t('common.all') || 'All', count: statistics.total },
+    { id: 'open', label: t('obs.statOpen') || 'Open', count: statistics.opening },
+    { id: 'closed', label: t('obs.statClosed') || 'Closed', count: statistics.closed },
+  ];
+
+  const summary = [
+    {
+      key: 'open',
+      label: t('obs.statOpen'),
+      value: statistics.opening,
+      icon: <Clock size={18} strokeWidth={1.8} />,
+      accent: '#c8753f',
+    },
+    {
+      key: 'closed',
+      label: t('obs.statClosed'),
+      value: statistics.closed,
+      icon: <CheckCircle2 size={18} strokeWidth={1.8} />,
+      accent: '#7a8f5a',
+    },
+    {
+      key: 'total',
+      label: t('obs.statTotal'),
+      value: statistics.total,
+      icon: <BarChart3 size={18} strokeWidth={1.8} />,
+      accent: '#8a6a3a',
+    },
+    {
+      key: 'rate',
+      label: t('obs.statOpenRate'),
+      value: `${statistics.openRate}%`,
+      icon: <Zap size={18} strokeWidth={1.8} />,
+      accent: '#b8945a',
+    },
+  ];
+
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <BackButton />
-          <h1>{t('home.obs.description') || 'OBS'}</h1>
-        </div>
-        <div className={styles.headerRight}>
-          <input
-            type="text"
-            className={styles.searchInput}
-            placeholder={t('obs.searchPlaceholder')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-      </div>
-
       {error && (
-        <div style={{ background: '#fef2f2', color: '#b91c1c', padding: '12px 16px', borderRadius: 8, marginBottom: 16 }}>
-          {error}
-        </div>
-      )}
-      {loading && (
-        <div style={{ padding: 24, textAlign: 'center', color: '#6b7280' }}>{t('common.loading') || 'Loading OBS list...'}</div>
+        <div className={styles.errorBanner}>{error}</div>
       )}
 
-      <div className={styles.summarySection}>
-        <h2 className={styles.summaryTitle}>{t('obs.statsTitle')}</h2>
-        <div className={styles.statsContainer}>
-          <div className={styles.statusStatsGrid}>
-            <StatItem 
-              label={t('obs.statOpen')} 
-              value={statistics.opening} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.blueIcon} 
-            />
-            <StatItem 
-              label={t('obs.statClosed')} 
-              value={statistics.closed} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.greenIcon} 
-            />
-            <StatItem 
-              label={t('obs.statTotal')} 
-              value={statistics.total} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" /><path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.grayIcon} 
-            />
-            <StatItem 
-              label={t('obs.statOpenRate')} 
-              value={`${statistics.opening} (${statistics.openRate}%)`} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.blueIcon} 
+      <section className={styles.summaryGrid}>
+        {summary.map((card) => (
+          <div key={card.key} className={styles.summaryCard} style={{ '--accent': card.accent } as React.CSSProperties}>
+            <div className={styles.summaryIcon}>{card.icon}</div>
+            <div className={styles.summaryBody}>
+              <div className={styles.summaryLabel}>{card.label}</div>
+              <div className={styles.summaryValue}>{card.value}</div>
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <div className={styles.toolbar}>
+        <div className={styles.chipGroup}>
+          {chips.map((chip) => (
+            <button
+              key={chip.id}
+              type="button"
+              className={`${styles.chip} ${statusFilter === chip.id ? styles.chipActive : ''}`}
+              onClick={() => setStatusFilter(chip.id)}
+            >
+              {chip.label}
+              <span className={styles.chipCount}>{chip.count}</span>
+            </button>
+          ))}
+        </div>
+        <div className={styles.toolbarRight}>
+          <div className={styles.searchWrap}>
+            <Search size={15} className={styles.searchIcon} strokeWidth={2} />
+            <input
+              type="text"
+              className={styles.searchInput}
+              placeholder={t('obs.searchPlaceholder')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
+          <button className={styles.addNewButton} onClick={handleAddNew}>
+            {t('obs.addNew')}
+          </button>
         </div>
       </div>
+
+      {loading && (
+        <div className={styles.loadingNote}>{t('common.loading') || 'Loading OBS list...'}</div>
+      )}
 
       <div className={styles.content}>
         <DataTable
-          title={t('obs.title')}
-          actions={
-            <button
-              className={styles.addNewButton}
-              onClick={handleAddNew}
-            >
-              {t('obs.addNew')}
-            </button>
-          }
           columns={columns}
           data={filteredList}
           searchKey=""
-          searchPlaceholder={t('obs.searchPlaceholder')}
           getRowClassName={(row) =>
-            (row.status || '').toLowerCase() === 'closed'
-              ? 'bg-emerald-100/50 text-gray-500 hover:bg-emerald-200/50'
-              : ''
+            (row.status || '').toLowerCase() === 'closed' ? styles.rowClosed : ''
           }
           onRowClick={(row) => handleEdit(row.id)}
         />
