@@ -15,6 +15,14 @@ export const BackButton = React.forwardRef<HTMLButtonElement, BackButtonProps>(
         const navigate = useNavigate();
         const { t } = useLanguage();
 
+        // The persistent sidebar in AppLayout already exposes a Home link,
+        // so a BackButton whose only purpose is to return to '/' is redundant
+        // noise. Keep detail-level back buttons (explicit `to` or `onClick`)
+        // where the sidebar can't navigate into a sub-view.
+        if (!onClick && to === '/') {
+            return null;
+        }
+
         const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
             if (onClick) {
                 onClick(e);

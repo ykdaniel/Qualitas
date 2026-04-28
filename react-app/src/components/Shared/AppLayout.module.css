@@ -73,6 +73,50 @@
   gap: 1px;
 }
 
+.navGroupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 12px;
+  padding: 7px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.navGroupHeader:hover {
+  background: rgba(184, 148, 90, 0.10);
+}
+
+.navGroupLabel {
+  font-size: 11px;
+  font-weight: 700;
+  color: #8b8275;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.navGroupHeaderActive .navGroupLabel {
+  color: #4a4238;
+}
+
+.navGroupCaret {
+  color: #a39786;
+  transition: transform 0.18s ease;
+}
+
+.navGroupCaretOpen {
+  transform: rotate(-180deg);
+}
+
+.navItemNested {
+  padding-left: 22px;
+}
+
 .navItem {
   display: flex;
   align-items: center;
@@ -175,14 +219,43 @@
   z-index: 40;
 }
 
-.userBlock {
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
   color: #8b8275;
+  font-weight: 500;
+}
+
+.crumbLink {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: #8b8275;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.crumbLink:hover {
+  color: #8a6a3a;
+}
+
+.crumbSep {
+  color: #c5b99f;
+}
+
+.crumbCurrent {
+  color: #2d2a24;
+  font-weight: 700;
 }
 
 .userName {
+  font-size: 13px;
   font-weight: 700;
   color: #4a4238;
+  margin-right: 4px;
 }
 
 .topActions {

@@ -1,3 +1,17 @@
 .app {
   min-height: 100vh;
 }
+
+/* ─── Shell content normalization ─────────────────────────────────
+   Modules were designed as top-level pages with their own full-
+   viewport backgrounds. Inside the persistent AppLayout shell they
+   now sit in a scrollable <main data-shell-content>. Drop their
+   bespoke backgrounds and fixed 100vh so they inherit the shell's
+   warm palette and only grow to their actual content height.
+
+   Targets direct children: modules consistently render a single
+   root <div> wrapper. */
+[data-shell-content] > div {
+  background: transparent !important;
+  min-height: auto !important;
+}
