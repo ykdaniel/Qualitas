@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
+import { BarChart3, FileCheck, TrendingUp, Search } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { checkFATReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
@@ -9,10 +10,10 @@ import { useFATStore } from '../../store/fatStore';
 import type { FATItem, FATDetailItem } from '../../store/fatStore';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './FAT.module.css';
-import { BackButton } from '@/components/ui/BackButton';
+import shellStyles from '../Shared/ModuleShell.module.css';
 import { useFATStats } from '../../hooks/useFATStats';
-import { StatItem } from '../Shared/StatItem';
-import statStyles from '../Shared/StatItem.module.css';
+
+type StatusFilter = 'all' | 'scheduled' | 'inProgress' | 'completed' | 'cancelled';
 
 // ... (keep constants and interfaces that are NOT FATItem if any, or move them)
 // FATDetailItem is used in FAT.tsx. Keep it.
@@ -22,9 +23,8 @@ const FAT: React.FC = () => {
   const { getActiveContractors } = useContractorsStore();
   const { fatList, addFAT, updateFAT, deleteFAT, saveFATDetails, fatDetails, fetchFATs } = useFATStore();
   const [searchQuery, setSearchQuery] = useState<string>('');
-  // Vendor filter removed (handled by DataTable)
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
-  // Fetch FATs on component mount
   useEffect(() => {
     fetchFATs();
   }, [fetchFATs]);
@@ -40,9 +40,18 @@ const FAT: React.FC = () => {
     message: '',
   });
 
-  // Only handle Global Search here. Column filters are handled by DataTable.
   const filteredFatList = useMemo(() => {
     let filtered = fatList;
+
+    if (statusFilter !== 'all') {
+      const target = ({
+        scheduled: 'scheduled',
+        inProgress: 'in progress',
+        completed: 'completed',
+        cancelled: 'cancelled',
+      } as const)[statusFilter];
+      filtered = filtered.filter(item => (item.status || '').toLowerCase() === target);
+    }
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -58,7 +67,18 @@ const FAT: React.FC = () => {
     }
 
     return filtered;
-  }, [fatList, searchQuery]);
+  }, [fatList, searchQuery, statusFilter]);
+
+  const statusCounts = useMemo(() => {
+    return fatList.reduce((acc, item) => {
+      const s = (item.status || '').toLowerCase();
+      if (s === 'scheduled') acc.scheduled++;
+      else if (s === 'in progress') acc.inProgress++;
+      else if (s === 'completed') acc.completed++;
+      else if (s === 'cancelled') acc.cancelled++;
+      return acc;
+    }, { scheduled: 0, inProgress: 0, completed: 0, cancelled: 0 });
+  }, [fatList]);
 
   const statistics = useFATStats(filteredFatList);
 
@@ -139,65 +159,95 @@ const FAT: React.FC = () => {
     }
   };
 
-  return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <BackButton />
-          <h1>{t('fat.title') || t('home.fat.description') || 'FAT'}</h1>
-        </div>
-        <div className={styles.headerRight}>
-          <input
-            type="text"
-            className={styles.searchInput}
-            placeholder={t('fat.searchPlaceholder')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-      </div>
+  const chips: { id: StatusFilter; label: string; count: number }[] = [
+    { id: 'all', label: t('common.all') || 'All', count: statistics.total },
+    { id: 'scheduled', label: t('fat.status.scheduled') || 'Scheduled', count: statusCounts.scheduled },
+    { id: 'inProgress', label: t('fat.status.inProgress') || 'In Progress', count: statusCounts.inProgress },
+    { id: 'completed', label: t('fat.status.completed') || 'Completed', count: statusCounts.completed },
+    { id: 'cancelled', label: t('fat.status.cancelled') || 'Cancelled', count: statusCounts.cancelled },
+  ];
 
-      <div className={styles.summarySection}>
-        <h2 className={styles.summaryTitle}>{t('fat.statsTitle') || '統計'}</h2>
-        <div className={styles.statsContainer}>
-          <div className={styles.statusStatsGrid}>
-            <StatItem 
-              label={t('fat.stats.total')} 
-              value={statistics.total} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" /><path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.grayIcon} 
-            />
-            <StatItem 
-              label={t('fat.stats.withDetails')} 
-              value={statistics.withDetails} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 11l3 3L22 4" strokeLinecap="round" strokeLinejoin="round" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.blueIcon} 
-            />
-            <StatItem 
-              label={t('fat.stats.detailsRate')} 
-              value={`${statistics.detailsRate}%`} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.blueIcon} 
+  const summary = [
+    {
+      key: 'total',
+      label: t('fat.stats.total'),
+      value: statistics.total,
+      icon: <BarChart3 size={18} strokeWidth={1.8} />,
+      accent: '#8a6a3a',
+    },
+    {
+      key: 'withDetails',
+      label: t('fat.stats.withDetails'),
+      value: statistics.withDetails,
+      icon: <FileCheck size={18} strokeWidth={1.8} />,
+      accent: '#7a8f5a',
+    },
+    {
+      key: 'detailsRate',
+      label: t('fat.stats.detailsRate'),
+      value: `${statistics.detailsRate}%`,
+      icon: <TrendingUp size={18} strokeWidth={1.8} />,
+      accent: '#b8945a',
+    },
+  ];
+
+  return (
+    <div className={shellStyles.container}>
+      <section className={shellStyles.summaryGrid}>
+        {summary.map((card) => (
+          <div
+            key={card.key}
+            className={shellStyles.summaryCard}
+            style={{ '--accent': card.accent } as React.CSSProperties}
+          >
+            <div className={shellStyles.summaryIcon}>{card.icon}</div>
+            <div className={shellStyles.summaryBody}>
+              <div className={shellStyles.summaryLabel}>{card.label}</div>
+              <div className={shellStyles.summaryValue}>{card.value}</div>
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <div className={shellStyles.toolbar}>
+        <div className={shellStyles.chipGroup}>
+          {chips.map((chip) => (
+            <button
+              key={chip.id}
+              type="button"
+              className={`${shellStyles.chip} ${statusFilter === chip.id ? shellStyles.chipActive : ''}`}
+              onClick={() => setStatusFilter(chip.id)}
+            >
+              {chip.label}
+              <span className={shellStyles.chipCount}>{chip.count}</span>
+            </button>
+          ))}
+        </div>
+        <div className={shellStyles.toolbarRight}>
+          <div className={shellStyles.searchWrap}>
+            <Search size={15} className={shellStyles.searchIcon} strokeWidth={2} />
+            <input
+              type="text"
+              className={shellStyles.searchInput}
+              placeholder={t('fat.searchPlaceholder')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
+          <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+            {t('fat.addNew')}
+          </button>
         </div>
       </div>
 
-      <div className={styles.content}>
+      <div className={shellStyles.content}>
         <DataTable
-          title={t('fat.listTitle')}
-          actions={
-            <button
-              className={styles.addNewButton}
-              onClick={handleAddNew}
-            >
-              {t('fat.addNew')}
-            </button>
-          }
           columns={createColumns(handleEdit, handleAddDetails, handleDeleteClick, t, getActiveContractors())}
           data={filteredFatList}
           searchKey=""
-          searchPlaceholder={t('fat.searchPlaceholder')}
+          getRowClassName={(row) =>
+            (row.status || '').toLowerCase() === 'cancelled' ? shellStyles.rowDim : ''
+          }
           getRowId={(row) => row.id}
           onRowClick={(row) => handleEdit(row.id)}
         />

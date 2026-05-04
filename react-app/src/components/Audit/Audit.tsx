@@ -7,7 +7,6 @@ import styles from './Audit.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import AuditWizard from './AuditWizard';
-import { BackButton } from '@/components/ui/BackButton';
 import VendorStatsPanel from './VendorStatsPanel';
 import ScheduleMatrix from './ScheduleMatrix';
 import { Search, Plus, AlertCircle, X } from 'lucide-react';
@@ -137,13 +136,7 @@ const Audit: React.FC = () => {
 
     return (
         <div className={styles.container}>
-            {/* Header Area */}
             <div className={styles.header}>
-                <div className={styles.headerLeft}>
-                    <BackButton />
-                    <h1>{t('audit.title')}</h1>
-                </div>
-                
                 <div className={styles.searchContainer}>
                     <Search className={styles.searchIcon} size={18} />
                     <input

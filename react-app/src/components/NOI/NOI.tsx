@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ReactDOM from 'react-dom';
 import { toast } from 'sonner';
+import { Clock, CheckCircle2, BarChart3, Zap, Search } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useNOIStore } from '../../store/noiStore';
 import type { NOIItem } from '../../store/noiStore';
@@ -13,21 +14,21 @@ import { checkNOIReferences, generateDeleteMessage } from '../../utils/cascadeDe
 import { formatTime24h } from '../../utils/formatters';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './NOI.module.css';
+import shellStyles from '../Shared/ModuleShell.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { RowSelectionState } from '@tanstack/react-table';
-import { BackButton } from '@/components/ui/BackButton';
 import { useDebounce } from '../../hooks/useDebounce';
 import { getErrorMessage } from '../../utils/errorUtils';
 
 import {
   NOIDetailModal,
   NOIBulkAddModal,
-  NOIDetailData
+  NOIDetailData,
 } from './NOIModals';
 import { useNOIStats } from '../../hooks/useNOIStats';
-import { StatItem } from '../Shared/StatItem';
-import statStyles from '../Shared/StatItem.module.css';
+
+type StatusFilter = 'all' | 'open' | 'closed' | 'reject';
 
 const NOI: React.FC = () => {
   const { t } = useLanguage();
@@ -35,42 +36,33 @@ const NOI: React.FC = () => {
   const ncrList = useNCRStore(state => state.ncrList);
   const itrList = useITRStore(state => state.itrList);
 
-  // Search and Filter States
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const debouncedSearch = useDebounce(searchQuery, 500);
 
-  // Trigger server-side refetch when debounced search or status filter changes
   useEffect(() => {
     refetch({
       search: debouncedSearch,
-      status: statusFilter === 'all' ? undefined : statusFilter
+      status: statusFilter === 'all' ? undefined : statusFilter,
     });
   }, [debouncedSearch, statusFilter, refetch]);
 
+  const filteredData = useMemo(() => noiList, [noiList]);
 
-  // Data is now primarily filtered by backend.
-  const filteredData = useMemo(() => {
-    return noiList;
-  }, [noiList]);
-
-  // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [currentNoiId, setCurrentNoiId] = useState<string | null>(null);
-  const [noiDetails, setNoiDetails] = useState<{ [key: string]: NOIDetailData }>({});
+  const [noiDetails] = useState<{ [key: string]: NOIDetailData }>({});
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null; message: string }>({
     isOpen: false,
     id: null,
     message: '',
   });
 
-  // DataTable selection state
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
   const [batchPrintData, setBatchPrintData] = useState<NOIItem[] | null>(null);
 
-  // Derive selected items from rowSelection (keys are IDs)
   const selectedItems = useMemo(() => {
     return Object.keys(rowSelection)
       .filter((id) => rowSelection[id])
@@ -98,7 +90,6 @@ const NOI: React.FC = () => {
     setBatchPrintData([itemToPrint]);
   };
 
-  // 按 Contractor 分組
   const groupedByContractor = useMemo(() => {
     if (!batchPrintData) return {};
     return batchPrintData.reduce((acc, noi) => {
@@ -129,11 +120,6 @@ const NOI: React.FC = () => {
     setIsModalOpen(true);
   }, []);
 
-  // Deep-link support: `/noi?openId=<uuid>` auto-opens that NOI's detail
-  // modal once the list has loaded. Used by the Q-WorkFlow Dashboard card
-  // to jump straight from an at-risk workflow to the NOI in question.
-  // We consume the param on first successful match so a subsequent manual
-  // close-and-reopen of the modal doesn't keep bouncing back.
   const [searchParams, setSearchParams] = useSearchParams();
   const deepLinkAppliedRef = useRef(false);
   useEffect(() => {
@@ -189,23 +175,21 @@ const NOI: React.FC = () => {
           await updateNOI(currentNoiId, updatedItem);
           savedNOI = updatedItem;
         } else {
-          // Don't pass a fake ID — let the backend generate a UUID
           savedNOI = await addNOI(updatedItem);
         }
 
         const finalId = savedNOI?.id || currentNoiId;
 
-        // Process file deletions and uploads
         if (deletedFileIds && deletedFileIds.length > 0) {
-            await Promise.all(deletedFileIds.map(id => deleteFile(id).catch(e => console.error("Failed to delete file", e))));
+          await Promise.all(deletedFileIds.map(id => deleteFile(id).catch(e => console.error('Failed to delete file', e))));
         }
         if (pendingUploads && pendingUploads.length > 0 && finalId) {
-            await uploadFiles('noi', finalId, pendingUploads, 'attachment');
+          await uploadFiles('noi', finalId, pendingUploads, 'attachment');
         }
 
         setIsModalOpen(false);
         setCurrentNoiId(null);
-        refetch(); // Refresh to ensure attachments are updated
+        refetch();
       } catch (error: any) {
         const detail = getErrorMessage(error, t('common.saveFailed'));
         toast.error(detail);
@@ -228,131 +212,135 @@ const NOI: React.FC = () => {
     }
   };
 
-  // Columns memoization
   const columns = useMemo(() => createColumns(handleEdit, handleDeleteClick, t), [t, handleEdit, handleDeleteClick]);
 
+  const chips: { id: StatusFilter; label: string; count: number }[] = [
+    { id: 'all', label: t('common.all') || 'All', count: statistics.total },
+    { id: 'open', label: t('noi.stats.open') || 'Open', count: statistics.opening },
+    { id: 'closed', label: t('noi.stats.closed') || 'Closed', count: statistics.closed },
+    { id: 'reject', label: t('noi.status.reject') || 'Reject', count: statistics.reject },
+  ];
+
+  const summary = [
+    {
+      key: 'open',
+      label: t('noi.stats.open') || 'Open',
+      value: statistics.opening,
+      icon: <Clock size={18} strokeWidth={1.8} />,
+      accent: '#c8753f',
+    },
+    {
+      key: 'closed',
+      label: t('noi.stats.closed') || 'Closed',
+      value: statistics.closed,
+      icon: <CheckCircle2 size={18} strokeWidth={1.8} />,
+      accent: '#7a8f5a',
+    },
+    {
+      key: 'total',
+      label: t('noi.stats.total') || 'Total',
+      value: statistics.total,
+      icon: <BarChart3 size={18} strokeWidth={1.8} />,
+      accent: '#8a6a3a',
+    },
+    {
+      key: 'rate',
+      label: t('noi.stats.openRate') || 'Open Rate',
+      value: `${statistics.openRate}%`,
+      icon: <Zap size={18} strokeWidth={1.8} />,
+      accent: '#b8945a',
+    },
+  ];
+
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <BackButton />
-          <h1>{t('noi.title')}</h1>
+    <div className={shellStyles.container}>
+      {error && (
+        <div className={shellStyles.errorBanner}>
+          <span>{error}</span>
+          <button type="button" className={shellStyles.retryButton} onClick={() => refetch()}>
+            {t('common.retry')}
+          </button>
         </div>
-        <div className={styles.headerRight}>
-          <div className={styles.filterGroup}>
-            <select
-              className={styles.statusFilter}
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+      )}
+
+      <section className={shellStyles.summaryGrid}>
+        {summary.map((card) => (
+          <div
+            key={card.key}
+            className={shellStyles.summaryCard}
+            style={{ '--accent': card.accent } as React.CSSProperties}
+          >
+            <div className={shellStyles.summaryIcon}>{card.icon}</div>
+            <div className={shellStyles.summaryBody}>
+              <div className={shellStyles.summaryLabel}>{card.label}</div>
+              <div className={shellStyles.summaryValue}>{card.value}</div>
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <div className={shellStyles.toolbar}>
+        <div className={shellStyles.chipGroup}>
+          {chips.map((chip) => (
+            <button
+              key={chip.id}
+              type="button"
+              className={`${shellStyles.chip} ${statusFilter === chip.id ? shellStyles.chipActive : ''}`}
+              onClick={() => setStatusFilter(chip.id)}
             >
-              <option value="all">{t('obs.allStatus') || 'All Status'}</option>
-              <option value="open">{t('noi.status.open') || 'Open'}</option>
-              <option value="closed">{t('noi.status.closed') || 'Closed'}</option>
-              <option value="reject">{t('noi.status.reject') || 'Reject'}</option>
-            </select>
+              {chip.label}
+              <span className={shellStyles.chipCount}>{chip.count}</span>
+            </button>
+          ))}
+        </div>
+        <div className={shellStyles.toolbarRight}>
+          <div className={shellStyles.searchWrap}>
+            <Search size={15} className={shellStyles.searchIcon} strokeWidth={2} />
+            <input
+              type="text"
+              className={shellStyles.searchInput}
+              placeholder={t('noi.searchPlaceholder')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
           </div>
-          <input
-            type="text"
-            className={styles.searchInput}
-            placeholder={t('noi.searchPlaceholder')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+          <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+            {t('noi.addNew')}
+          </button>
+          <button type="button" className={shellStyles.addNewButtonAlt} onClick={() => setIsBulkModalOpen(true)}>
+            {t('noi.bulkAdd')}
+          </button>
+          <button
+            type="button"
+            className={shellStyles.addNewButtonAlt}
+            onClick={handleBatchPrint}
+            disabled={selectedItems.length === 0}
+            title={selectedItems.length === 0
+              ? t('noi.tooltip.print')
+              : t('noi.tooltip.printCount', { count: selectedItems.length })}
+          >
+            {t('noi.batchPrint')}
+          </button>
         </div>
       </div>
 
-      <div className={styles.summarySection}>
-        <h2 className={styles.summaryTitle}>{t('pqp.statusStats')}</h2>
-        <div className={styles.statsContainer}>
-          <div className={styles.statusStatsGrid}>
-            <StatItem 
-              label={t('noi.stats.open')} 
-              value={statistics.opening} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.blueIcon} 
-            />
-            <StatItem 
-              label={t('noi.stats.closed')} 
-              value={statistics.closed} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.greenIcon} 
-            />
-            <StatItem 
-              label={t('noi.status.reject')} 
-              value={statistics.reject} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.redIcon} 
-              style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}
-            />
-            <StatItem 
-              label={t('noi.stats.total')} 
-              value={statistics.total} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" /><path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.grayIcon} 
-            />
-            <StatItem 
-              label={t('noi.stats.openRate')} 
-              value={`${statistics.opening} (${statistics.openRate}%)`} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.blueIcon} 
-            />
-          </div>
-        </div>
-      </div>
+      {loading && (
+        <div className={shellStyles.loadingNote}>{t('common.loading')}</div>
+      )}
 
-      <div className={styles.content}>
-        {loading && <p className={styles.loadingMessage}>{t('common.loading')}</p>}
-        {error && (
-          <div className={styles.loadingError}>
-            <p>{error}</p>
-            <button type="button" className={styles.retryButton} onClick={() => refetch()}>{t('common.retry')}</button>
-          </div>
-        )}
-        {!loading && !error && (
-          <>
-            <DataTable
-              title={t('noi.listTitle')}
-              actions={
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    className={styles.addNewButton}
-                    onClick={handleAddNew}
-                  >
-                    {t('noi.addNew')}
-                  </button>
-                  <button
-                    className={styles.addNewButton}
-                    onClick={() => setIsBulkModalOpen(true)}
-                    style={{ backgroundColor: '#059669' }}
-                  >
-                    {t('noi.bulkAdd')}
-                  </button>
-                  <button
-                    className={styles.printButton}
-                    onClick={handleBatchPrint}
-                    disabled={selectedItems.length === 0}
-                    title={selectedItems.length === 0 ? t('noi.tooltip.print') : t('noi.tooltip.printCount', { count: selectedItems.length })}
-                  >
-                    {t('noi.batchPrint')}
-                  </button>
-                </div>
-              }
-              columns={columns}
-              data={filteredData}
-              searchKey=""
-              searchPlaceholder={t('noi.searchPlaceholder')}
-              getRowClassName={(row) =>
-                (row.status || 'Open').toLowerCase() === 'closed'
-                  ? 'bg-emerald-100/50 text-gray-500 hover:bg-emerald-200/50'
-                  : ''
-              }
-              rowSelection={rowSelection}
-              onRowSelectionChange={setRowSelection}
-              getRowId={(row) => row.id}
-              onRowClick={(row) => handleEdit(row.id)}
-            />
-          </>
-        )}
+      <div className={shellStyles.content}>
+        <DataTable
+          columns={columns}
+          data={filteredData}
+          searchKey=""
+          getRowClassName={(row) =>
+            (row.status || 'Open').toLowerCase() === 'closed' ? shellStyles.rowDim : ''
+          }
+          rowSelection={rowSelection}
+          onRowSelectionChange={setRowSelection}
+          getRowId={(row) => row.id}
+          onRowClick={(row) => handleEdit(row.id)}
+        />
       </div>
 
       {isModalOpen && (
@@ -393,20 +381,17 @@ const NOI: React.FC = () => {
       {batchPrintData &&
         ReactDOM.createPortal(
           <div id="noi-batch-print-root" className={styles.noiBatchPrintRoot}>
-            {/* 每個 Contractor 一頁 */}
             {Object.entries(groupedByContractor).map(([contractor, items], pageIndex) => (
               <div
                 key={contractor}
                 className={styles.noiBatchPrintPage}
                 style={pageIndex > 0 ? { pageBreakBefore: 'always' } : undefined}
               >
-                {/* 標題 */}
                 <div className={styles.noiBatchPrintTitle}>
                   <h1>批次檢驗通知 (NOI)</h1>
                   <p>列印日期：{new Date().toLocaleDateString('zh-TW')}</p>
                 </div>
 
-                {/* 共同欄位區 */}
                 <div className={styles.noiBatchPrintCommon}>
                   <div className={styles.noiBatchPrintGrid}>
                     <div className={styles.noiBatchPrintField}>
@@ -436,7 +421,6 @@ const NOI: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 多筆資料表格 */}
                 <div className={styles.noiBatchPrintList}>
                   <h3>各筆 NOI 資料</h3>
                   <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '8px' }}>共 {items.length} 筆</p>
@@ -466,7 +450,6 @@ const NOI: React.FC = () => {
                   </table>
                 </div>
 
-                {/* 附件附錄 (Photo Record) */}
                 {items.some(n => n.attachments && n.attachments.length > 0) && (
                   <div className={styles.noiBatchPrintPhotoSection}>
                     <h3>{t('itp.selfInspection.attachments')} (Photo Record)</h3>
@@ -474,7 +457,7 @@ const NOI: React.FC = () => {
                       {items.flatMap(n =>
                         (n.attachments || []).map((img, imgIdx) => ({
                           img,
-                          label: `${n.package} - #${imgIdx + 1}`
+                          label: `${n.package} - #${imgIdx + 1}`,
                         }))
                       ).map((item, idx) => (
                         <div key={idx} className={styles.noiBatchPrintPhotoItem}>

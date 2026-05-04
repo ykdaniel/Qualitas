@@ -24,7 +24,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
-import { BackButton } from '@/components/ui/BackButton';
 import {
     fetchWorkflows,
     fetchWorkflowStats,
@@ -165,14 +164,6 @@ const Workflow: React.FC = () => {
 
     return (
         <div className={styles.container}>
-            <div className={styles.header}>
-                <div className={styles.headerLeft}>
-                    <BackButton />
-                    <h1 className={styles.title}>
-                        {t('workflow.title') || 'Q-WorkFlow'}
-                    </h1>
-                </div>
-            </div>
             <p className={styles.subtitle}>
                 {t('workflow.subtitle') ||
                     'Every NOI becomes a Q-WorkFlow, tracked through 9 canonical checkpoints to final acceptance.'}

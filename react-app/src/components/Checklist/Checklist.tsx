@@ -3,20 +3,21 @@ import ReactDOM from 'react-dom';
 import { toast } from 'sonner';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
-import { Plus, Printer, Info, MapPin, CheckCircle, AlertCircle, Trash2, XCircle, HelpCircle, User, Signature } from 'lucide-react';
+import { Plus, Printer, Info, MapPin, CheckCircle, AlertCircle, Trash2, XCircle, HelpCircle, User, Signature, Activity, BarChart3, TrendingUp, Search } from 'lucide-react';
 import { useChecklistStore, ChecklistRecord } from '../../store/checklistStore';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
-import { BackButton } from '@/components/ui/BackButton';
 import styles from './Checklist.module.css';
+import shellStyles from '../Shared/ModuleShell.module.css';
 import { useDebounce } from '../../hooks/useDebounce';
 import { useNOIStore } from '../../store/noiStore';
 import { useITPStore } from '../../store/itpStore';
 import { useITRStore } from '../../store/itrStore';
 import { useChecklistStats } from '../../hooks/useChecklistStats';
-import { StatItem } from '../Shared/StatItem';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { getErrorMessage } from '../../utils/errorUtils';
+
+type ChecklistStatusFilter = 'all' | 'pass' | 'fail' | 'ongoing';
 
 // --- ITP 資料庫定義 ---
 interface ItpItemDefinition {
@@ -56,6 +57,7 @@ const Checklist: React.FC = () => {
     const [editingRecord, setEditingRecord] = useState<ChecklistRecord | null>(null);
     const [saving, setSaving] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState<ChecklistStatusFilter>('all');
     const debouncedSearch = useDebounce(searchQuery, 500);
 
     const { fetchNOIs } = useNOIStore();
@@ -71,10 +73,15 @@ const Checklist: React.FC = () => {
         refreshRecords({ search: debouncedSearch });
     }, [debouncedSearch, refreshRecords]);
 
-    // Data is now primarily filtered by backend.
     const filteredList = useMemo(() => {
-        return records;
-    }, [records]);
+        if (statusFilter === 'all') return records;
+        const target = ({
+            pass: 'Pass',
+            fail: 'Fail',
+            ongoing: 'Ongoing',
+        } as const)[statusFilter];
+        return records.filter(r => r.status === target);
+    }, [records, statusFilter]);
 
     // Check for query param 'recordNo' to open specific record
     const [searchParams] = useSearchParams();
@@ -169,83 +176,112 @@ const Checklist: React.FC = () => {
 
     const checklistColumns = useMemo(() => createColumns(handleEdit, handleDelete, t), [handleEdit, handleDelete, t]);
 
+    const chips: { id: ChecklistStatusFilter; label: string; count: number }[] = [
+        { id: 'all', label: t('common.all') || 'All', count: stats.total },
+        { id: 'ongoing', label: t('checklist.status.ongoing') || 'Ongoing', count: stats.ongoing },
+        { id: 'pass', label: t('checklist.status.pass') || 'Pass', count: stats.passed },
+        { id: 'fail', label: t('checklist.status.fail') || 'Fail', count: stats.failed },
+    ];
+
+    const summary = [
+        {
+            key: 'ongoing',
+            label: t('checklist.status.ongoing') || 'Ongoing',
+            value: stats.ongoing,
+            icon: <Activity size={18} strokeWidth={1.8} />,
+            accent: '#c8753f',
+        },
+        {
+            key: 'pass',
+            label: t('checklist.status.pass') || 'Pass',
+            value: stats.passed,
+            icon: <CheckCircle size={18} strokeWidth={1.8} />,
+            accent: '#7a8f5a',
+        },
+        {
+            key: 'fail',
+            label: t('checklist.status.fail') || 'Fail',
+            value: stats.failed,
+            icon: <XCircle size={18} strokeWidth={1.8} />,
+            accent: '#b86060',
+        },
+        {
+            key: 'total',
+            label: t('common.total') || 'Total',
+            value: stats.total,
+            icon: <BarChart3 size={18} strokeWidth={1.8} />,
+            accent: '#8a6a3a',
+        },
+        {
+            key: 'rate',
+            label: t('common.passRate') || 'Pass Rate',
+            value: `${stats.passRate}%`,
+            icon: <TrendingUp size={18} strokeWidth={1.8} />,
+            accent: '#b8945a',
+        },
+    ];
+
     return (
-        <div className={styles.container}>
-
-
-            <div className={`${styles.header} print:hidden`}>
-                <div className={styles.headerLeft}>
-                    <BackButton onClick={handleBack} />
-                    <h1> {t('checklist.title') || 'Checklist Management'}</h1>
-                </div>
-                {view === 'list' && (
-                    <div className={styles.headerRight}>
-                        <input
-                            type="text"
-                            className={styles.searchInput}
-                            placeholder={t('checklist.searchPlaceholder') || 'Search...'}
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                    </div>
-                )}
-            </div>
-
+        <div className={shellStyles.container}>
             {view === 'list' ? (
                 <>
-                    <div className={styles.summarySection}>
-                        <h2 className={styles.summaryTitle}>{t('common.statistics') || 'Statistics'}</h2>
-                        <div className={styles.statsContainer}>
-                            <div className={styles.statusStatsGrid}>
-                                <StatItem
-                                    icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>}
-                                    label={t('checklist.status.ongoing') || 'Ongoing'}
-                                    value={stats.ongoing}
-                                    iconColorClass={styles.blueIcon}
-                                />
-                                <StatItem
-                                    icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                                    label={t('checklist.status.pass') || 'Pass'}
-                                    value={stats.passed}
-                                    iconColorClass={styles.greenIcon}
-                                />
-                                <StatItem
-                                    icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                                    label={t('checklist.status.fail') || 'Fail'}
-                                    value={stats.failed}
-                                    iconColorClass={styles.pinkIcon}
-                                />
-                                <StatItem
-                                    icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" /><path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                                    label={t('common.total') || 'Total'}
-                                    value={stats.total}
-                                    iconColorClass={styles.grayIcon}
-                                />
-                                <StatItem
-                                    icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                                    label={t('common.passRate') || 'Pass Rate'}
-                                    value={`${stats.passRate}%`}
-                                    iconColorClass={styles.blueIcon}
+                    <section className={shellStyles.summaryGrid}>
+                        {summary.map((card) => (
+                            <div
+                                key={card.key}
+                                className={shellStyles.summaryCard}
+                                style={{ '--accent': card.accent } as React.CSSProperties}
+                            >
+                                <div className={shellStyles.summaryIcon}>{card.icon}</div>
+                                <div className={shellStyles.summaryBody}>
+                                    <div className={shellStyles.summaryLabel}>{card.label}</div>
+                                    <div className={shellStyles.summaryValue}>{card.value}</div>
+                                </div>
+                            </div>
+                        ))}
+                    </section>
+
+                    <div className={shellStyles.toolbar}>
+                        <div className={shellStyles.chipGroup}>
+                            {chips.map((chip) => (
+                                <button
+                                    key={chip.id}
+                                    type="button"
+                                    className={`${shellStyles.chip} ${statusFilter === chip.id ? shellStyles.chipActive : ''}`}
+                                    onClick={() => setStatusFilter(chip.id)}
+                                >
+                                    {chip.label}
+                                    <span className={shellStyles.chipCount}>{chip.count}</span>
+                                </button>
+                            ))}
+                        </div>
+                        <div className={shellStyles.toolbarRight}>
+                            <div className={shellStyles.searchWrap}>
+                                <Search size={15} className={shellStyles.searchIcon} strokeWidth={2} />
+                                <input
+                                    type="text"
+                                    className={shellStyles.searchInput}
+                                    placeholder={t('checklist.searchPlaceholder') || 'Search...'}
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
                                 />
                             </div>
+                            <button type="button" onClick={handleAddNew} className={shellStyles.addNewButton}>
+                                <Plus size={16} /> {t('checklist.addNew') || 'New Checklist'}
+                            </button>
                         </div>
                     </div>
 
-                    <div className={styles.content}>
+                    <div className={shellStyles.content}>
                         <DataTable
-                            title={t('checklist.listTitle') || "Checklist Records"}
-                            actions={
-                                <button onClick={handleAddNew} className={styles.addNewButton}>
-                                    <Plus size={18} /> {t('checklist.addNew') || "New Checklist"}
-                                </button>
-                            }
                             columns={checklistColumns}
                             data={filteredList}
                             getRowId={(row) => row.id}
+                            getRowClassName={(row) =>
+                                row.status === 'Fail' ? shellStyles.rowAlert : ''
+                            }
                             onRowClick={(row) => handleEdit(row)}
                         />
-
-
                     </div>
                 </>
             ) : (

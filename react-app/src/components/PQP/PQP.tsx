@@ -1,50 +1,54 @@
 import React, { useState, useMemo } from 'react';
 import { toast } from 'sonner';
+import { CheckCircle2, XCircle, BarChart3, TrendingUp, Search } from 'lucide-react';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { usePQPStore } from '../../store/pqpStore';
 import type { PQPItem } from '../../store/pqpStore';
 import { useLanguage } from '../../context/LanguageContext';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './PQP.module.css';
+import shellStyles from '../Shared/ModuleShell.module.css';
 import { usePQPStats } from '../../hooks/usePQPStats';
-import { StatItem } from '../Shared/StatItem';
-import statStyles from '../Shared/StatItem.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { PQPDetailModal } from './PQPModals';
-import { BackButton } from '@/components/ui/BackButton';
 import { useDebounce } from '../../hooks/useDebounce';
 import { uploadFiles, deleteFile } from '../../services/api';
 import { getErrorMessage } from '../../utils/errorUtils';
+
+type StatusFilter = 'all' | 'notSubmit' | 'underReview' | 'approved' | 'reject' | 'reviseResubmit';
 
 const PQP: React.FC = () => {
   const { t } = useLanguage();
   const { getActiveContractors } = useContractorsStore();
   const { pqpList, loading, error, refetch, addPQP, updatePQP, publishPQP, deletePQP } = usePQPStore();
 
-  // Search & Filter States
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebounce(searchQuery, 500);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
-  // Trigger server-side refetch when debounced search changes
   React.useEffect(() => {
     refetch({ search: debouncedSearch });
   }, [debouncedSearch, refetch]);
 
-  // Modal States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [currentPqpId, setCurrentPqpId] = useState<string | null>(null);
-
-  // Delete Confirmation State
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null }>({
     isOpen: false,
     id: null,
   });
 
-  // Data is now primarily filtered by backend.
   const filteredList = useMemo(() => {
-    return pqpList;
-  }, [pqpList]);
+    if (statusFilter === 'all') return pqpList;
+    const target = ({
+      notSubmit: 'not submit',
+      underReview: 'under review',
+      approved: 'approved',
+      reject: 'reject',
+      reviseResubmit: 'revise & resubmit',
+    } as const)[statusFilter];
+    return pqpList.filter((item) => (item.status || 'Not Submit').toLowerCase() === target);
+  }, [pqpList, statusFilter]);
 
   const statistics = usePQPStats(pqpList);
 
@@ -57,9 +61,10 @@ const PQP: React.FC = () => {
     setDeleteModal({ isOpen: true, id });
   }, []);
 
-  // Columns memoization
-  const columns = useMemo(() => createColumns(handleEdit, confirmDelete, t, getActiveContractors), [t, getActiveContractors, handleEdit, confirmDelete]);
-
+  const columns = useMemo(
+    () => createColumns(handleEdit, confirmDelete, t, getActiveContractors),
+    [t, getActiveContractors, handleEdit, confirmDelete],
+  );
 
   const handleAddNew = () => {
     setCurrentPqpId('new');
@@ -91,7 +96,6 @@ const PQP: React.FC = () => {
         targetId = createdPqp.id;
       }
 
-      // 處理實體檔案上傳與刪除
       const fileErrors: string[] = [];
       if (deletedFileIds.length > 0) {
         const deleteResults = await Promise.allSettled(
@@ -125,7 +129,6 @@ const PQP: React.FC = () => {
     }
   };
 
-
   const handleDelete = async () => {
     if (!deleteModal.id) return;
     try {
@@ -137,88 +140,120 @@ const PQP: React.FC = () => {
     }
   };
 
+  const chips: { id: StatusFilter; label: string; count: number }[] = [
+    { id: 'all', label: t('common.all') || 'All', count: statistics.total },
+    { id: 'notSubmit', label: t('pqp.status.notSubmit'), count: statistics.notSubmit },
+    { id: 'underReview', label: t('pqp.status.underReview'), count: statistics.underReview },
+    { id: 'approved', label: t('pqp.status.approved'), count: statistics.approved },
+    { id: 'reject', label: t('pqp.status.reject'), count: statistics.reject },
+    { id: 'reviseResubmit', label: t('pqp.status.reviseResubmit'), count: statistics.reviseResubmit },
+  ];
+
+  const summary = [
+    {
+      key: 'approved',
+      label: t('pqp.status.approved'),
+      value: statistics.approved,
+      icon: <CheckCircle2 size={18} strokeWidth={1.8} />,
+      accent: '#7a8f5a',
+    },
+    {
+      key: 'reject',
+      label: t('pqp.status.reject'),
+      value: statistics.reject,
+      icon: <XCircle size={18} strokeWidth={1.8} />,
+      accent: '#c8753f',
+    },
+    {
+      key: 'total',
+      label: t('pqp.total'),
+      value: statistics.total,
+      icon: <BarChart3 size={18} strokeWidth={1.8} />,
+      accent: '#8a6a3a',
+    },
+    {
+      key: 'rate',
+      label: t('pqp.approvedRate'),
+      value: `${statistics.activeRate}%`,
+      icon: <TrendingUp size={18} strokeWidth={1.8} />,
+      accent: '#b8945a',
+    },
+  ];
+
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <BackButton />
-          <h1>{t('pqp.title') || t('pqp.titleShort')}</h1>
+    <div className={shellStyles.container}>
+      {error && (
+        <div className={shellStyles.errorBanner}>
+          <span>{error}</span>
+          <button type="button" className={shellStyles.retryButton} onClick={() => refetch()}>
+            {t('common.retry')}
+          </button>
         </div>
-        <div className={styles.headerRight}>
-          <input
-            type="text"
-            className={styles.searchInput}
-            placeholder={t('pqp.searchPlaceholder')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+      )}
+
+      <section className={shellStyles.summaryGrid}>
+        {summary.map((card) => (
+          <div
+            key={card.key}
+            className={shellStyles.summaryCard}
+            style={{ '--accent': card.accent } as React.CSSProperties}
+          >
+            <div className={shellStyles.summaryIcon}>{card.icon}</div>
+            <div className={shellStyles.summaryBody}>
+              <div className={shellStyles.summaryLabel}>{card.label}</div>
+              <div className={shellStyles.summaryValue}>{card.value}</div>
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <div className={shellStyles.toolbar}>
+        <div className={shellStyles.chipGroup}>
+          {chips.map((chip) => (
+            <button
+              key={chip.id}
+              type="button"
+              className={`${shellStyles.chip} ${statusFilter === chip.id ? shellStyles.chipActive : ''}`}
+              onClick={() => setStatusFilter(chip.id)}
+            >
+              {chip.label}
+              <span className={shellStyles.chipCount}>{chip.count}</span>
+            </button>
+          ))}
+        </div>
+        <div className={shellStyles.toolbarRight}>
+          <div className={shellStyles.searchWrap}>
+            <Search size={15} className={shellStyles.searchIcon} strokeWidth={2} />
+            <input
+              type="text"
+              className={shellStyles.searchInput}
+              placeholder={t('pqp.searchPlaceholder')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+            {t('pqp.addNew')}
+          </button>
         </div>
       </div>
 
-      <div className={styles.summarySection}>
-        <h2 className={styles.summaryTitle}>{t('pqp.statusStats')}</h2>
-        <div className={styles.statsContainer}>
-          <div className={styles.statusStatsGrid}>
-            <StatItem
-              label={t('pqp.status.approved') || 'Approved'}
-              value={statistics.approved}
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-              iconColorClass={statStyles.blueIcon}
-            />
-            <StatItem
-              label={t('pqp.status.reject') || 'Reject'}
-              value={statistics.reject}
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-              iconColorClass={statStyles.redIcon}
-              style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}
-            />
-            <StatItem
-              label={t('pqp.total') || 'Total'}
-              value={statistics.total}
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" /><path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-              iconColorClass={statStyles.grayIcon}
-            />
-            <StatItem
-              label={t('pqp.approvedRate') || 'Approved Rate'}
-              value={`${statistics.approved} (${statistics.activeRate}%)`}
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-              iconColorClass={statStyles.blueIcon}
-            />
-          </div>
-        </div>
-      </div>
-      <div className={styles.content}>
-        {loading && <p className={styles.loadingMessage}>{t('common.loading')}</p>}
-        {error && (
-          <div className={styles.loadingError}>
-            <p>{error}</p>
-            <button type="button" className={styles.retryButton} onClick={() => refetch()}>{t('common.retry')}</button>
-          </div>
-        )}
-        {!loading && !error && (
-          <DataTable
-            title={t('pqp.title')}
-            actions={
-              <button
-                type="button"
-                className={styles.addNewButton}
-                onClick={handleAddNew}
-              >
-                {t('pqp.addNew')}
-              </button>
-            }
-            columns={columns}
-            data={filteredList}
-            searchKey=""
-            searchPlaceholder={t('pqp.searchPlaceholder')}
-            getRowClassName={(row) =>
-              ['reject', 'revise & resubmit'].includes((row.status || 'Not Submit').toLowerCase())
-                ? 'bg-red-100/50 text-red-700 hover:bg-red-200/50'
-                : ''
-            }
-            onRowClick={(row) => handleEdit(row.id)}
-          />
-        )}
+      {loading && (
+        <div className={shellStyles.loadingNote}>{t('common.loading')}</div>
+      )}
+
+      <div className={shellStyles.content}>
+        <DataTable
+          columns={columns}
+          data={filteredList}
+          searchKey=""
+          getRowClassName={(row) => {
+            const s = (row.status || 'Not Submit').toLowerCase();
+            if (s === 'reject' || s === 'revise & resubmit') return shellStyles.rowAlert;
+            return '';
+          }}
+          onRowClick={(row) => handleEdit(row.id)}
+        />
       </div>
 
       <ConfirmModal
@@ -231,26 +266,23 @@ const PQP: React.FC = () => {
         cancelText={t('common.cancel')}
       />
 
-      {
-        isEditModalOpen && currentPqpId && (
-          <PQPDetailModal
-            pqpId={currentPqpId}
-            existingItem={currentPqpId !== 'new' ? pqpList.find(item => item.id === currentPqpId) : undefined}
-            onSave={handleSavePQPDetails}
-            onPublish={async (id, changeSummary) => {
-              await publishPQP(id, changeSummary);
-              setIsEditModalOpen(false);
-              setCurrentPqpId(null);
-            }}
-            onClose={() => {
-              setIsEditModalOpen(false);
-              setCurrentPqpId(null);
-            }}
-          />
-        )
-      }
-
-    </div >
+      {isEditModalOpen && currentPqpId && (
+        <PQPDetailModal
+          pqpId={currentPqpId}
+          existingItem={currentPqpId !== 'new' ? pqpList.find(item => item.id === currentPqpId) : undefined}
+          onSave={handleSavePQPDetails}
+          onPublish={async (id, changeSummary) => {
+            await publishPQP(id, changeSummary);
+            setIsEditModalOpen(false);
+            setCurrentPqpId(null);
+          }}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setCurrentPqpId(null);
+          }}
+        />
+      )}
+    </div>
   );
 };
 

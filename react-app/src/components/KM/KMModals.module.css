@@ -139,13 +139,6 @@
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
-.textareaField {
-  min-height: 200px;
-  resize: vertical;
-  flex-grow: 1;
-  font-family: inherit;
-}
-
 .modalFooter {
   padding: 20px 32px;
   background-color: #f8fafc;
@@ -335,23 +328,6 @@
   font-weight: 700;
   color: #1e293b;
   margin: 0;
-}
-
-.addChapterBtn {
-  padding: 8px 16px;
-  background-color: #f1f5f9;
-  border: 1px dashed #cbd5e1;
-  border-radius: 8px;
-  color: #3b82f6;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.addChapterBtn:hover {
-  background-color: #eff6ff;
-  border-color: #3b82f6;
 }
 
 .chapterBlock {

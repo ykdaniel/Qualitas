@@ -6,6 +6,7 @@ import { useContractorsStore } from '../../store/contractorsStore';
 import { useOBSStore } from '../../store/obsStore';
 import type { OBSItem as ContextOBSItem } from '../../store/obsStore';
 import styles from './OBS.module.css';
+import shellStyles from '../Shared/ModuleShell.module.css';
 import ConfirmModal from '../Shared/ConfirmModal';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
@@ -208,65 +209,65 @@ const OBS: React.FC = () => {
   ];
 
   return (
-    <div className={styles.container}>
+    <div className={shellStyles.container}>
       {error && (
-        <div className={styles.errorBanner}>{error}</div>
+        <div className={shellStyles.errorBanner}>{error}</div>
       )}
 
-      <section className={styles.summaryGrid}>
+      <section className={shellStyles.summaryGrid}>
         {summary.map((card) => (
-          <div key={card.key} className={styles.summaryCard} style={{ '--accent': card.accent } as React.CSSProperties}>
-            <div className={styles.summaryIcon}>{card.icon}</div>
-            <div className={styles.summaryBody}>
-              <div className={styles.summaryLabel}>{card.label}</div>
-              <div className={styles.summaryValue}>{card.value}</div>
+          <div key={card.key} className={shellStyles.summaryCard} style={{ '--accent': card.accent } as React.CSSProperties}>
+            <div className={shellStyles.summaryIcon}>{card.icon}</div>
+            <div className={shellStyles.summaryBody}>
+              <div className={shellStyles.summaryLabel}>{card.label}</div>
+              <div className={shellStyles.summaryValue}>{card.value}</div>
             </div>
           </div>
         ))}
       </section>
 
-      <div className={styles.toolbar}>
-        <div className={styles.chipGroup}>
+      <div className={shellStyles.toolbar}>
+        <div className={shellStyles.chipGroup}>
           {chips.map((chip) => (
             <button
               key={chip.id}
               type="button"
-              className={`${styles.chip} ${statusFilter === chip.id ? styles.chipActive : ''}`}
+              className={`${shellStyles.chip} ${statusFilter === chip.id ? shellStyles.chipActive : ''}`}
               onClick={() => setStatusFilter(chip.id)}
             >
               {chip.label}
-              <span className={styles.chipCount}>{chip.count}</span>
+              <span className={shellStyles.chipCount}>{chip.count}</span>
             </button>
           ))}
         </div>
-        <div className={styles.toolbarRight}>
-          <div className={styles.searchWrap}>
-            <Search size={15} className={styles.searchIcon} strokeWidth={2} />
+        <div className={shellStyles.toolbarRight}>
+          <div className={shellStyles.searchWrap}>
+            <Search size={15} className={shellStyles.searchIcon} strokeWidth={2} />
             <input
               type="text"
-              className={styles.searchInput}
+              className={shellStyles.searchInput}
               placeholder={t('obs.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <button className={styles.addNewButton} onClick={handleAddNew}>
+          <button className={shellStyles.addNewButton} onClick={handleAddNew}>
             {t('obs.addNew')}
           </button>
         </div>
       </div>
 
       {loading && (
-        <div className={styles.loadingNote}>{t('common.loading') || 'Loading OBS list...'}</div>
+        <div className={shellStyles.loadingNote}>{t('common.loading') || 'Loading OBS list...'}</div>
       )}
 
-      <div className={styles.content}>
+      <div className={shellStyles.content}>
         <DataTable
           columns={columns}
           data={filteredList}
           searchKey=""
           getRowClassName={(row) =>
-            (row.status || '').toLowerCase() === 'closed' ? styles.rowClosed : ''
+            (row.status || '').toLowerCase() === 'closed' ? shellStyles.rowDim : ''
           }
           onRowClick={(row) => handleEdit(row.id)}
         />

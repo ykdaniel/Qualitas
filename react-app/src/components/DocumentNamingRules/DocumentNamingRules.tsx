@@ -4,7 +4,6 @@ import { getNamingRules, updateNamingRules, NamingRuleApi } from '../../services
 import styles from './DocumentNamingRules.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns, NamingRuleItem } from './columns';
-import { BackButton } from '@/components/ui/BackButton';
 
 
 const DEFAULT_RULE_DEFS = [
@@ -121,7 +120,6 @@ const DocumentNamingRules: React.FC = () => {
     <div className={styles.container}>
       <div className={styles.header}>
         <div className={styles.headerLeft}>
-          <BackButton />
           <h1 className={styles.title}>{t('namingRules.title')}</h1>
           <p className={styles.subtitle}>{t('namingRules.subtitle')}</p>
         </div>

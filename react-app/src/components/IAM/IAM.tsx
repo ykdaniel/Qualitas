@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import styles from './IAM.module.css';
-import { BackButton } from '@/components/ui/BackButton';
 import { useIAMStore } from '../../store/iamStore';
 import { AlertCircle, X, Search } from 'lucide-react';
 
@@ -64,11 +63,6 @@ const IAM: React.FC = () => {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <BackButton />
-          <h1>{t('iam.title')}</h1>
-        </div>
-
         {/* Search Bar Moved to Header */}
         {activeTab !== 'permissions' && (
             <div className={styles.searchContainer}>

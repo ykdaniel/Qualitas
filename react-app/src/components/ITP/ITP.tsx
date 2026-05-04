@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { BarChart3, Send, TrendingUp, ShieldCheck, Search } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useITPStore } from '../../store/itpStore';
@@ -12,14 +13,22 @@ import { uploadFiles, deleteFile } from '../../services/api';
 import { getErrorMessage } from '../../utils/errorUtils';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './ITP.module.css';
+import shellStyles from '../Shared/ModuleShell.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { ITPDetailModal } from './ITPModals';
-import { BackButton } from '@/components/ui/BackButton';
 import { useDebounce } from '../../hooks/useDebounce';
 import { useITPStats } from '../../hooks/useITPStats';
-import { StatItem } from '../Shared/StatItem';
-import statStyles from '../Shared/StatItem.module.css';
+
+type StatusFilter =
+  | 'all'
+  | 'approved'
+  | 'approvedWithComments'
+  | 'pending'
+  | 'noSubmit'
+  | 'reviseResubmit'
+  | 'rejected'
+  | 'void';
 
 const ITP: React.FC = () => {
   const navigate = useNavigate();
@@ -29,26 +38,33 @@ const ITP: React.FC = () => {
   const noiList = useNOIStore(state => state.noiList);
   const checklistList = useChecklistStore(state => state.records);
 
-  // Search & Filter States
   const [searchQuery, setSearchQuery] = useState<string>('');
   const debouncedSearch = useDebounce(searchQuery, 500);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
-  // Trigger server-side refetch when debounced search changes
   React.useEffect(() => {
     refetch({ search: debouncedSearch });
   }, [debouncedSearch, refetch]);
 
+  const filteredList = useMemo(() => {
+    if (statusFilter === 'all') return itpList;
+    return itpList.filter((item) => {
+      const s = (item.status || '').toLowerCase();
+      switch (statusFilter) {
+        case 'approved': return s === 'approved';
+        case 'approvedWithComments': return s === 'approved with comments';
+        case 'pending': return s === 'pending';
+        case 'noSubmit': return s === 'no submit' || s === 'nosubmit';
+        case 'reviseResubmit': return s === 'revise & resubmit' || s === 'revise and resubmit';
+        case 'rejected': return s === 'rejected';
+        case 'void': return s === 'void';
+        default: return true;
+      }
+    });
+  }, [itpList, statusFilter]);
 
-  // Data is now primarily filtered by backend.
-  const processedData = useMemo(() => {
-    return itpList;
-  }, [itpList]);
-
-  // Modal States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [currentItpId, setCurrentItpId] = useState<string | null>(null);
-
-  // Delete Confirmation State
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null; message: string }>({
     isOpen: false,
     id: null,
@@ -88,23 +104,15 @@ const ITP: React.FC = () => {
     const itp = itpList.find(item => item.id === id);
     if (!itp) return;
 
-    // Check for references in NOI and Checklist
     const noiReferences = checkITPReferences(id, noiList);
     const checklistReferences = checkITPChecklistReferences(id, checklistList);
-
-    // Combine all references
     const allReferences = [
       ...noiReferences.references,
-      ...checklistReferences.references
+      ...checklistReferences.references,
     ];
-
     const message = generateDeleteMessage('ITP', itp.referenceNo || itp.id, allReferences, t);
 
-    setDeleteModal({
-      isOpen: true,
-      id,
-      message,
-    });
+    setDeleteModal({ isOpen: true, id, message });
   }, [itpList, noiList, checklistList, t]);
 
   const handleDelete = async () => {
@@ -119,143 +127,130 @@ const ITP: React.FC = () => {
     }
   };
 
-  // Memoize columns to prevent DataTable from unnecessarily re-rendering
   const columns = useMemo(() => createColumns(
     handleEdit,
     confirmDelete,
     navigate,
     t,
     getActiveContractors(),
-    noiList
+    noiList,
   ), [t, getActiveContractors, noiList, navigate, handleEdit, confirmDelete]);
 
+  const chips: { id: StatusFilter; label: string; count: number }[] = [
+    { id: 'all', label: t('common.all') || 'All', count: itpList.length },
+    { id: 'approved', label: t('itp.status.approved'), count: statistics.approved },
+    { id: 'approvedWithComments', label: t('itp.status.approvedWithComments'), count: statistics.approvedWithComments },
+    { id: 'pending', label: t('itp.status.pending'), count: statistics.pending },
+    { id: 'noSubmit', label: t('itp.status.noSubmit'), count: statistics.noSubmit },
+    { id: 'reviseResubmit', label: t('itp.status.reviseResubmit'), count: statistics.reviseResubmit },
+    { id: 'rejected', label: t('itp.status.rejected'), count: statistics.rejected },
+    { id: 'void', label: t('itp.status.void'), count: statistics.void },
+  ];
+
+  const summary = [
+    {
+      key: 'total',
+      label: t('pqp.total') || 'Total',
+      value: statistics.total,
+      icon: <BarChart3 size={18} strokeWidth={1.8} />,
+      accent: '#8a6a3a',
+    },
+    {
+      key: 'submission',
+      label: t('itp.stats.submission'),
+      value: statistics.submission,
+      icon: <Send size={18} strokeWidth={1.8} />,
+      accent: '#7a8f5a',
+    },
+    {
+      key: 'submissionMaturity',
+      label: t('itp.stats.submissionMaturity'),
+      value: `${statistics.submissionMaturity}%`,
+      icon: <TrendingUp size={18} strokeWidth={1.8} />,
+      accent: '#b8945a',
+    },
+    {
+      key: 'approvalMaturity',
+      label: t('itp.stats.approvalMaturity'),
+      value: `${statistics.approvalMaturity}%`,
+      icon: <ShieldCheck size={18} strokeWidth={1.8} />,
+      accent: '#c8753f',
+    },
+  ];
+
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <BackButton />
-          <h1>{t('itp.title')}</h1>
+    <div className={shellStyles.container}>
+      {error && (
+        <div className={shellStyles.errorBanner}>
+          <span>{error}</span>
+          <button type="button" className={shellStyles.retryButton} onClick={() => refetch()}>
+            {t('common.retry')}
+          </button>
         </div>
-        <div className={styles.headerRight}>
-          <input
-            type="text"
-            className={styles.searchInput}
-            placeholder={t('itp.searchPlaceholder')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+      )}
+
+      <section className={shellStyles.summaryGrid}>
+        {summary.map((card) => (
+          <div
+            key={card.key}
+            className={shellStyles.summaryCard}
+            style={{ '--accent': card.accent } as React.CSSProperties}
+          >
+            <div className={shellStyles.summaryIcon}>{card.icon}</div>
+            <div className={shellStyles.summaryBody}>
+              <div className={shellStyles.summaryLabel}>{card.label}</div>
+              <div className={shellStyles.summaryValue}>{card.value}</div>
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <div className={shellStyles.toolbar}>
+        <div className={shellStyles.chipGroup}>
+          {chips.map((chip) => (
+            <button
+              key={chip.id}
+              type="button"
+              className={`${shellStyles.chip} ${statusFilter === chip.id ? shellStyles.chipActive : ''}`}
+              onClick={() => setStatusFilter(chip.id)}
+            >
+              {chip.label}
+              <span className={shellStyles.chipCount}>{chip.count}</span>
+            </button>
+          ))}
+        </div>
+        <div className={shellStyles.toolbarRight}>
+          <div className={shellStyles.searchWrap}>
+            <Search size={15} className={shellStyles.searchIcon} strokeWidth={2} />
+            <input
+              type="text"
+              className={shellStyles.searchInput}
+              placeholder={t('itp.searchPlaceholder')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+            {t('itp.addNew')}
+          </button>
         </div>
       </div>
 
-      <div className={styles.summarySection}>
-        <h2 className={styles.summaryTitle}>{t('itp.statsTitle')}</h2>
-        <div className={styles.statsContainer}>
-          <div className={styles.statusStatsGrid}>
-            <StatItem 
-              label={t('itp.status.approved')} 
-              value={statistics.approved} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.greenIcon} 
-            />
-            <StatItem 
-              label={t('itp.status.approvedWithComments')} 
-              value={statistics.approvedWithComments} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" /><path d="M16 17h6" strokeLinecap="round" /></svg>} 
-              iconColorClass={statStyles.greenIcon} 
-            />
-            <StatItem 
-              label={t('itp.status.pending')} 
-              value={statistics.pending} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.yellowIcon} 
-            />
-            <StatItem 
-              label={t('itp.status.noSubmit')} 
-              value={statistics.noSubmit} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" strokeLinecap="round" strokeLinejoin="round" /><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.yellowIcon} 
-            />
-            <StatItem 
-              label={t('itp.status.reviseResubmit')} 
-              value={statistics.reviseResubmit} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" strokeLinecap="round" strokeLinejoin="round" /><path d="M21 3v5h-5" strokeLinecap="round" strokeLinejoin="round" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" strokeLinecap="round" strokeLinejoin="round" /><path d="M3 21v-5h5" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.pinkIcon} 
-            />
-            <StatItem 
-              label={t('itp.status.rejected')} 
-              value={statistics.rejected} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="m15 9-6 6M9 9l6 6" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.pinkIcon} 
-            />
-            <StatItem 
-              label={t('itp.status.void')} 
-              value={statistics.void} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" strokeLinecap="round" strokeLinejoin="round" /><path d="M12 9v4M12 17h.01" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.orangeIcon} 
-            />
-          </div>
-          <div className={styles.summaryStatsGrid}>
-            <StatItem 
-              label={t('pqp.total')} 
-              value={statistics.total} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" /><path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.grayIcon} 
-            />
-            <StatItem 
-              label={t('itp.stats.submission')} 
-              value={statistics.submission} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" strokeLinecap="round" strokeLinejoin="round" /><polyline points="17 8 12 3 7 8" strokeLinecap="round" strokeLinejoin="round" /><line x1="12" y1="3" x2="12" y2="15" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.grayIcon} 
-            />
-            <StatItem 
-              label={t('itp.stats.submissionMaturity')} 
-              value={`${statistics.submissionMaturity}%`} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.blueIcon} 
-            />
-            <StatItem 
-              label={t('itp.stats.approvalMaturity')} 
-              value={`${statistics.approvalMaturity}%`} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.blueIcon} 
-            />
-          </div>
-        </div>
-      </div>
+      {loading && (
+        <div className={shellStyles.loadingNote}>{t('common.loading')}</div>
+      )}
 
-      <div className={styles.content}>
-        {loading && <p className={styles.loadingMessage}>{t('common.loading')}</p>}
-        {error && (
-          <div className={styles.loadingError}>
-            <p>{error}</p>
-            <button type="button" className={styles.retryButton} onClick={() => refetch()}>{t('common.retry')}</button>
-          </div>
-        )}
-        {!loading && !error && (
-          <>
-            <DataTable
-              title={t('itp.title')}
-              actions={
-                <div className="flex items-center gap-2">
-                  <button
-                    className={styles.addNewButton}
-                    onClick={handleAddNew}
-                  >
-                    {t('itp.addNew')}
-                  </button>
-                </div>
-              }
-              columns={columns}
-              data={processedData}
-              searchKey=""
-              getRowClassName={(row) =>
-                (row.status || '').toLowerCase() === 'void' ? styles.voidRow : ''
-              }
-              getRowId={(row) => row.id}
-              onRowClick={(row) => handleEdit(row.id)}
-            />
-          </>
-        )}
+      <div className={shellStyles.content}>
+        <DataTable
+          columns={columns}
+          data={filteredList}
+          searchKey=""
+          getRowClassName={(row) =>
+            (row.status || '').toLowerCase() === 'void' ? shellStyles.rowDim : ''
+          }
+          getRowId={(row) => row.id}
+          onRowClick={(row) => handleEdit(row.id)}
+        />
       </div>
 
       <ConfirmModal
@@ -289,10 +284,10 @@ const ITP: React.FC = () => {
               }
 
               if (deletedFileIds && deletedFileIds.length > 0) {
-                 await Promise.all(deletedFileIds.map(id => deleteFile(id).catch(e => console.error("Del Err", e))));
+                await Promise.all(deletedFileIds.map(id => deleteFile(id).catch(e => console.error('Del Err', e))));
               }
               if (pendingUploads && pendingUploads.length > 0 && currentItpId) {
-                 await uploadFiles('itp', currentItpId, pendingUploads, 'attachment');
+                await uploadFiles('itp', currentItpId, pendingUploads, 'attachment');
               }
 
               setIsEditModalOpen(false);
@@ -310,8 +305,6 @@ const ITP: React.FC = () => {
           }}
         />
       )}
-
-
     </div>
   );
 };

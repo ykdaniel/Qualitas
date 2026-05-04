@@ -19,7 +19,6 @@ import { useNCRStore } from '../../store/ncrStore';
 import styles from './KPI.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns, KPIItem } from './columns';
-import { BackButton } from '@/components/ui/BackButton';
 
 const VENDOR_COLORS = [
   '#3b82f6', '#f97316', '#6b7280', '#eab308', '#22d3ee', '#10b981',
@@ -218,7 +217,6 @@ const KPI: React.FC = () => {
     <div className={styles.container}>
       <div className={styles.header}>
         <div className={styles.headerLeft}>
-          <BackButton />
           <h1 className={styles.title}>
             {t('kpi.title')}
           </h1>

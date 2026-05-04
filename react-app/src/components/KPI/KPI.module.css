@@ -80,22 +80,6 @@
   box-shadow: 0 0 0 2px rgba(17, 153, 142, 0.2);
 }
 
-.backButton {
-  padding: 8px 16px;
-  background: #11998e;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  align-self: flex-start;
-}
-
-.backButton:hover {
-  background: #0d7a72;
-}
-
 .title {
   font-size: 28px;
   font-weight: 600;
@@ -183,96 +167,6 @@
   font-size: 15px;
 }
 
-/* KPI 表格（趨勢圖之下） */
-.tableSection {
-  margin-top: 32px;
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.tableTitle {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1f2937;
-  margin: 0 0 16px 0;
-}
-
 .tableWrapper {
   overflow-x: auto;
-}
-
-.kpiTable {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.kpiTable thead {
-  background: #1e3a5f;
-  color: white;
-}
-
-.kpiTable th {
-  padding: 12px 10px;
-  text-align: center;
-  font-weight: 600;
-  white-space: nowrap;
-  border: 1px solid #2d4a6f;
-}
-
-.thIndex,
-.tdIndex {
-  width: 40px;
-  text-align: center;
-}
-
-.thMonth,
-.tdMonth {
-  min-width: 64px;
-  text-align: center;
-}
-
-.kpiTable tbody tr:nth-child(even) {
-  background: #f0f9ff;
-}
-
-.kpiTable tbody tr:nth-child(odd) {
-  background: white;
-}
-
-.kpiTable tbody tr:hover {
-  background: #e0f2fe;
-}
-
-.tableRow td {
-  padding: 10px;
-  border: 1px solid #e5e7eb;
-}
-
-.tdTrend {
-  text-align: center;
-}
-
-.trendUp {
-  color: #059669;
-  font-weight: 700;
-}
-
-.trendDown {
-  color: #dc2626;
-  font-weight: 700;
-}
-
-.trendFlat {
-  color: #6b7280;
-}
-
-.tableNoData {
-  color: #6b7280;
-  font-size: 14px;
-  text-align: center;
-  padding: 24px;
-  margin: 0;
 }

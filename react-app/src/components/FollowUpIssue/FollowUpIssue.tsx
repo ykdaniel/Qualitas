@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { Clock, CheckCircle2, BarChart3, Zap, Search } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useNCRStore } from '../../store/ncrStore';
@@ -12,13 +13,13 @@ import { usePQPStore } from '../../store/pqpStore';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './FollowUpIssue.module.css';
+import shellStyles from '../Shared/ModuleShell.module.css';
 import api from '../../services/api';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
-import { BackButton } from '@/components/ui/BackButton';
 import { useFollowUpIssueStats } from '../../hooks/useFollowUpIssueStats';
-import { StatItem } from '../Shared/StatItem';
-import statStyles from '../Shared/StatItem.module.css';
+
+type StatusFilter = 'all' | 'open' | 'closed';
 
 interface FollowUpIssueItem {
   id: string;
@@ -200,6 +201,7 @@ const FollowUpIssue: React.FC = () => {
   }, [manualIssues, ncrList, obsList, noiList, itrList, itpList, pqpList]);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
@@ -211,12 +213,16 @@ const FollowUpIssue: React.FC = () => {
     message: '',
   });
 
-  // 先套用日期範圍篩選與全域搜尋
   const filteredList = useMemo(() => {
     let result = [...issues];
 
+    if (statusFilter !== 'all') {
+      result = result.filter(issue => {
+        const s = (issue.status || '').toLowerCase();
+        return statusFilter === 'closed' ? s === 'closed' : s !== 'closed';
+      });
+    }
 
-    // Global Search
     if (searchQuery) {
       const lowerQuery = searchQuery.toLowerCase();
       result = result.filter(issue =>
@@ -230,7 +236,7 @@ const FollowUpIssue: React.FC = () => {
     }
 
     return result;
-  }, [issues, searchQuery]);
+  }, [issues, searchQuery, statusFilter]);
 
   const statistics = useFollowUpIssueStats(issues);
 
@@ -293,54 +299,62 @@ const FollowUpIssue: React.FC = () => {
     }
   };
 
+  const chips: { id: StatusFilter; label: string; count: number }[] = [
+    { id: 'all', label: t('common.all') || 'All', count: statistics.total },
+    { id: 'open', label: t('status.open') || 'Open', count: statistics.opening },
+    { id: 'closed', label: t('status.closed') || 'Closed', count: statistics.closed },
+  ];
+
+  const summary = [
+    {
+      key: 'open',
+      label: t('status.open') || 'Open',
+      value: statistics.opening,
+      icon: <Clock size={18} strokeWidth={1.8} />,
+      accent: '#c8753f',
+    },
+    {
+      key: 'closed',
+      label: t('status.closed') || 'Closed',
+      value: statistics.closed,
+      icon: <CheckCircle2 size={18} strokeWidth={1.8} />,
+      accent: '#7a8f5a',
+    },
+    {
+      key: 'total',
+      label: t('common.total') || 'Total',
+      value: statistics.total,
+      icon: <BarChart3 size={18} strokeWidth={1.8} />,
+      accent: '#8a6a3a',
+    },
+    {
+      key: 'rate',
+      label: t('noi.stats.openRate') || 'Open Rate',
+      value: `${statistics.openRate}%`,
+      icon: <Zap size={18} strokeWidth={1.8} />,
+      accent: '#b8945a',
+    },
+  ];
+
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <BackButton />
-          <h1>{t('followup.title')}</h1>
-        </div>
-        <div className={styles.headerRight}>
-          <input
-            type="text"
-            className={styles.searchInput}
-            placeholder={t('common.search')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-      </div>
+    <div className={shellStyles.container}>
+      <section className={shellStyles.summaryGrid}>
+        {summary.map((card) => (
+          <div
+            key={card.key}
+            className={shellStyles.summaryCard}
+            style={{ '--accent': card.accent } as React.CSSProperties}
+          >
+            <div className={shellStyles.summaryIcon}>{card.icon}</div>
+            <div className={shellStyles.summaryBody}>
+              <div className={shellStyles.summaryLabel}>{card.label}</div>
+              <div className={shellStyles.summaryValue}>{card.value}</div>
+            </div>
+          </div>
+        ))}
+      </section>
 
       <div className={styles.summaryRow}>
-        <div className={styles.summarySection}>
-          <h2 className={styles.summaryTitle}>{t('followup.statsTitle')}</h2>
-          <div className={styles.statusStatsGrid}>
-            <StatItem 
-              label={t('status.open')} 
-              value={statistics.opening} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.blueIcon} 
-            />
-            <StatItem 
-              label={t('status.closed')} 
-              value={statistics.closed} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.grayIcon} 
-            />
-            <StatItem 
-              label={t('common.total')} 
-              value={statistics.total} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" /><path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.grayIcon} 
-            />
-            <StatItem 
-              label={t('noi.stats.openRate')} 
-              value={`${statistics.opening} (${statistics.openRate}%)`} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.blueIcon} 
-            />
-          </div>
-        </div>
         <div className={styles.chartSection}>
           <div className={styles.pieChartInner}>
             {statistics.total > 0 ? (
@@ -405,25 +419,44 @@ const FollowUpIssue: React.FC = () => {
         </div>
       </div>
 
-      <div className={styles.content}>
-        <DataTable
-          title={t('followup.listTitle')}
-          actions={
+      <div className={shellStyles.toolbar}>
+        <div className={shellStyles.chipGroup}>
+          {chips.map((chip) => (
             <button
-              className={styles.addNewButton}
-              onClick={handleAddNew}
+              key={chip.id}
+              type="button"
+              className={`${shellStyles.chip} ${statusFilter === chip.id ? shellStyles.chipActive : ''}`}
+              onClick={() => setStatusFilter(chip.id)}
             >
-              {t('followup.addNew')}
+              {chip.label}
+              <span className={shellStyles.chipCount}>{chip.count}</span>
             </button>
-          }
+          ))}
+        </div>
+        <div className={shellStyles.toolbarRight}>
+          <div className={shellStyles.searchWrap}>
+            <Search size={15} className={shellStyles.searchIcon} strokeWidth={2} />
+            <input
+              type="text"
+              className={shellStyles.searchInput}
+              placeholder={t('common.search')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+            {t('followup.addNew')}
+          </button>
+        </div>
+      </div>
+
+      <div className={shellStyles.content}>
+        <DataTable
           columns={createColumns(handleEdit, handleDeleteClick, navigate, t)}
           data={filteredList}
           searchKey=""
-          searchPlaceholder={t('common.search')}
           getRowClassName={(row) =>
-            (row.status || '').toLowerCase() === 'closed'
-              ? 'bg-emerald-100/50 text-gray-500 hover:bg-emerald-200/50'
-              : ''
+            (row.status || '').toLowerCase() === 'closed' ? shellStyles.rowDim : ''
           }
           onRowClick={(row) => handleEdit(row.id)}
         />

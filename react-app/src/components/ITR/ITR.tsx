@@ -1,12 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { BackButton } from '@/components/ui/BackButton';
+import { Hammer, CheckCircle2, XCircle, AlertTriangle, BarChart3, Search } from 'lucide-react';
 import { useDebounce } from '../../hooks/useDebounce';
 import { useLanguage } from '../../context/LanguageContext';
 import { useITRStats, isITROverdue } from '../../hooks/useITRStats';
-import { StatItem } from '../Shared/StatItem';
-import statStyles from '../Shared/StatItem.module.css';
 import { useITRStore } from '../../store/itrStore';
 import type { ITRItem } from '../../store/itrStore';
 
@@ -17,7 +15,9 @@ import { createColumns } from './columns';
 import { ITRDetailModal, ITRDetailData, PendingUploads } from './ITRModals';
 import ConfirmModal from '../Shared/ConfirmModal';
 import { uploadFiles, deleteFile } from '../../services/api';
-import styles from './ITR.module.css';
+import shellStyles from '../Shared/ModuleShell.module.css';
+
+type StatusFilter = 'all' | 'inProgress' | 'approved' | 'reject' | 'void' | 'overdue';
 
 const ITR: React.FC = () => {
     const { t } = useLanguage();
@@ -27,12 +27,12 @@ const ITR: React.FC = () => {
 
     const [searchQuery, setSearchQuery] = useState('');
     const debouncedSearch = useDebounce(searchQuery, 500);
-    const [statusFilter, setStatusFilter] = useState<string>('all');
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
-    // Trigger server-side refetch when debounced search changes
     React.useEffect(() => {
         refetch({ search: debouncedSearch });
     }, [debouncedSearch, refetch]);
+
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [currentItrId, setCurrentItrId] = useState<string | null>(null);
     const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null; message: string }>({
@@ -41,14 +41,16 @@ const ITR: React.FC = () => {
         message: '',
     });
 
-    // Apply client-side status/overdue filter on top of backend results.
     const filteredList = useMemo(() => {
         if (statusFilter === 'all') return itrList;
         if (statusFilter === 'overdue') return itrList.filter(isITROverdue);
-        return itrList.filter(item => {
-            const s = (item.status || '').toLowerCase();
-            return s === statusFilter.toLowerCase();
-        });
+        const target = ({
+            inProgress: 'in progress',
+            approved: 'approved',
+            reject: 'reject',
+            void: 'void',
+        } as const)[statusFilter];
+        return itrList.filter(item => (item.status || '').toLowerCase() === target);
     }, [itrList, statusFilter]);
 
     const statistics = useITRStats(itrList);
@@ -63,8 +65,6 @@ const ITR: React.FC = () => {
         setIsEditModalOpen(true);
     }, []);
 
-    // ── Deep-link support: /itr?openId=<id> opens that ITR's detail
-    // modal on mount. Same pattern as NCR and NOI pages.
     const [searchParams, setSearchParams] = useSearchParams();
     const deepLinkAppliedRef = useRef(false);
     useEffect(() => {
@@ -85,7 +85,6 @@ const ITR: React.FC = () => {
         const itr = itrList.find(item => item.id === id);
         if (!itr) return;
 
-        // Check for checklist references
         const checklistReferences = checkITRChecklistReferences(id, checklistList);
         const message = generateDeleteMessage('ITR', itr.documentNumber || itr.id, checklistReferences.references, t);
 
@@ -137,8 +136,8 @@ const ITR: React.FC = () => {
                 reInspectionNumber: details.reInspectionNumber,
                 projectQualityManager: details.projectQualityManager,
                 drawings: details.drawings,
-                certificates: details.certificates
-            })
+                certificates: details.certificates,
+            }),
         };
 
         try {
@@ -164,8 +163,7 @@ const ITR: React.FC = () => {
                 for (const uploadGroup of pendingUploads) {
                     if (uploadGroup.files.length > 0) {
                         try {
-                            const moduleStr = 'itr';
-                            await uploadFiles(moduleStr, targetId as string, uploadGroup.files, uploadGroup.category);
+                            await uploadFiles('itr', targetId as string, uploadGroup.files, uploadGroup.category);
                         } catch (error) {
                             console.error(`Error uploading files for category ${uploadGroup.category}:`, error);
                             toast.error(`Failed to upload some files for ${uploadGroup.category}.`);
@@ -187,115 +185,129 @@ const ITR: React.FC = () => {
         }
     };
 
+    const chips: { id: StatusFilter; label: string; count: number }[] = [
+        { id: 'all', label: t('common.all') || 'All', count: statistics.total },
+        { id: 'inProgress', label: t('itr.status.inProgress'), count: statistics.inProgress },
+        { id: 'approved', label: t('itr.status.approved'), count: statistics.approved },
+        { id: 'reject', label: t('itr.status.reject'), count: statistics.reject },
+        { id: 'overdue', label: t('itr.overdue'), count: statistics.overdue },
+        { id: 'void', label: t('itp.status.void') || 'Void', count: statistics.void },
+    ];
+
+    const summary = [
+        {
+            key: 'inProgress',
+            label: t('itr.status.inProgress'),
+            value: statistics.inProgress,
+            icon: <Hammer size={18} strokeWidth={1.8} />,
+            accent: '#c8753f',
+        },
+        {
+            key: 'approved',
+            label: t('itr.status.approved'),
+            value: statistics.approved,
+            icon: <CheckCircle2 size={18} strokeWidth={1.8} />,
+            accent: '#7a8f5a',
+        },
+        {
+            key: 'reject',
+            label: t('itr.status.reject'),
+            value: statistics.reject,
+            icon: <XCircle size={18} strokeWidth={1.8} />,
+            accent: '#b86060',
+        },
+        {
+            key: 'overdue',
+            label: t('itr.overdue'),
+            value: statistics.overdue,
+            icon: <AlertTriangle size={18} strokeWidth={1.8} />,
+            accent: '#b8945a',
+        },
+        {
+            key: 'total',
+            label: t('obs.statTotal') || 'Total',
+            value: statistics.total,
+            icon: <BarChart3 size={18} strokeWidth={1.8} />,
+            accent: '#8a6a3a',
+        },
+    ];
 
     return (
-        <div className={styles.container}>
-            <div className={styles.header}>
-                <div className={styles.headerLeft}>
-                    <BackButton />
-                    <h1>{t('itr.title') || t('home.itr.description') || 'ITR'}</h1>
-                </div>
-                <div className={styles.headerRight}>
-                    <input
-                        type="text"
-                        className={styles.searchInput}
-                        placeholder={t('itr.searchPlaceholder') || 'Search ITR...'}
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                </div>
-            </div>
-
-            <div className={styles.summarySection}>
-                <h2 className={styles.summaryTitle}>{t('obs.statsTitle') || 'Statistics'}</h2>
-                <div className={styles.statsContainer}>
-                    <div className={styles.statusStatsGrid}>
-                        <StatItem 
-                            label={t('itr.status.inProgress')} 
-                            value={statistics.inProgress} 
-                            icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-                            iconColorClass={statStyles.blueIcon} 
-                        />
-                        <StatItem 
-                            label={t('itr.status.approved')} 
-                            value={statistics.approved} 
-                            icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-                            iconColorClass={statStyles.greenIcon} 
-                        />
-                        <StatItem 
-                            label={t('itr.status.reject')} 
-                            value={statistics.reject} 
-                            icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>} 
-                            iconColorClass={statStyles.pinkIcon} 
-                        />
-                        <StatItem
-                            label={t('itr.overdue')}
-                            value={statistics.overdue}
-                            icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                            iconColorClass={statStyles.orangeIcon}
-                        />
-                        <StatItem
-                            label={t('obs.statTotal')}
-                            value={statistics.total}
-                            icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" /><path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                            iconColorClass={statStyles.grayIcon}
-                        />
-                    </div>
-                </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-                {([
-                    { key: 'all', label: t('common.all') || 'All' },
-                    { key: 'In Progress', label: t('itr.status.inProgress') },
-                    { key: 'Approved', label: t('itr.status.approved') },
-                    { key: 'Reject', label: t('itr.status.reject') },
-                    { key: 'overdue', label: t('itr.overdue') },
-                ] as const).map(tab => (
-                    <button
-                        key={tab.key}
-                        onClick={() => setStatusFilter(tab.key)}
-                        style={{
-                            padding: '6px 16px',
-                            borderRadius: 9999,
-                            border: statusFilter === tab.key ? '2px solid #2563eb' : '1px solid #d1d5db',
-                            background: statusFilter === tab.key ? '#eff6ff' : '#fff',
-                            color: statusFilter === tab.key ? '#2563eb' : '#374151',
-                            fontWeight: statusFilter === tab.key ? 600 : 400,
-                            fontSize: 14,
-                            cursor: 'pointer',
-                            transition: 'all 0.15s',
-                        }}
-                    >
-                        {tab.label}
+        <div className={shellStyles.container}>
+            {error && (
+                <div className={shellStyles.errorBanner}>
+                    <span>{error}</span>
+                    <button type="button" className={shellStyles.retryButton} onClick={() => refetch()}>
+                        {t('common.retry')}
                     </button>
+                </div>
+            )}
+
+            <section className={shellStyles.summaryGrid}>
+                {summary.map((card) => (
+                    <div
+                        key={card.key}
+                        className={shellStyles.summaryCard}
+                        style={{ '--accent': card.accent } as React.CSSProperties}
+                    >
+                        <div className={shellStyles.summaryIcon}>{card.icon}</div>
+                        <div className={shellStyles.summaryBody}>
+                            <div className={shellStyles.summaryLabel}>{card.label}</div>
+                            <div className={shellStyles.summaryValue}>{card.value}</div>
+                        </div>
+                    </div>
                 ))}
+            </section>
+
+            <div className={shellStyles.toolbar}>
+                <div className={shellStyles.chipGroup}>
+                    {chips.map((chip) => (
+                        <button
+                            key={chip.id}
+                            type="button"
+                            className={`${shellStyles.chip} ${statusFilter === chip.id ? shellStyles.chipActive : ''}`}
+                            onClick={() => setStatusFilter(chip.id)}
+                        >
+                            {chip.label}
+                            <span className={shellStyles.chipCount}>{chip.count}</span>
+                        </button>
+                    ))}
+                </div>
+                <div className={shellStyles.toolbarRight}>
+                    <div className={shellStyles.searchWrap}>
+                        <Search size={15} className={shellStyles.searchIcon} strokeWidth={2} />
+                        <input
+                            type="text"
+                            className={shellStyles.searchInput}
+                            placeholder={t('itr.searchPlaceholder') || 'Search ITR...'}
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                    </div>
+                    <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+                        {t('itr.addNew') || '+ New ITR'}
+                    </button>
+                </div>
             </div>
 
-            <div className={styles.content}>
-                {loading && <p>{t('common.loading')}</p>}
-                {error && (
-                    <div className={styles.error}>
-                        <p>{error}</p>
-                        <button onClick={() => refetch()}>{t('common.retry')}</button>
-                    </div>
-                )}
-                {!loading && !error && (
-                    <DataTable
-                        title={t('itr.listTitle') || 'ITR List'}
-                        actions={
-                            <button className={styles.addNewButton} onClick={handleAddNew}>
-                                {t('itr.addNew') || '+ New ITR'}
-                            </button>
-                        }
-                        columns={columns}
-                        data={filteredList}
-                        searchKey=""
-                        searchPlaceholder={t('itr.searchPlaceholder')}
-                        getRowId={(row) => row.id}
-                        onRowClick={(row) => handleEdit(row.id)}
-                    />
-                )}
+            {loading && (
+                <div className={shellStyles.loadingNote}>{t('common.loading')}</div>
+            )}
+
+            <div className={shellStyles.content}>
+                <DataTable
+                    columns={columns}
+                    data={filteredList}
+                    searchKey=""
+                    getRowClassName={(row) => {
+                        const s = (row.status || '').toLowerCase();
+                        if (s === 'void') return shellStyles.rowDim;
+                        if (isITROverdue(row)) return shellStyles.rowAlert;
+                        return '';
+                    }}
+                    getRowId={(row) => row.id}
+                    onRowClick={(row) => handleEdit(row.id)}
+                />
             </div>
 
             <ConfirmModal

@@ -17,7 +17,6 @@ import styles from './Contractors.module.css';
 
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns, createProjectColumns } from './columns';
-import { BackButton } from '@/components/ui/BackButton';
 import { Search, Plus } from 'lucide-react';
 import ContractorModal from './ContractorModal';
 import ProjectModal from './ProjectModal';
@@ -146,13 +145,7 @@ const Contractors: React.FC = () => {
 
     return (
         <div className={styles.container}>
-            {/* Header */}
             <div className={styles.header}>
-                <div className={styles.headerLeft}>
-                    <BackButton />
-                    <h1>{t('contractors.title')} / Projects</h1>
-                </div>
-
                 {/* Animated Pills Tabs */}
                 <div className={styles.tabsContainer}>
                     <button

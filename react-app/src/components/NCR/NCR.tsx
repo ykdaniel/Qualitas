@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { Clock, CheckCircle2, BarChart3, Zap, Search } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 
 import { useNCRStore } from '../../store/ncrStore';
@@ -8,17 +9,16 @@ import type { NCRItem } from '../../store/ncrStore';
 import { useITRStore } from '../../store/itrStore';
 import { checkNCRReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
 import ConfirmModal from '../Shared/ConfirmModal';
-import styles from './NCR.module.css';
+import shellStyles from '../Shared/ModuleShell.module.css';
 import { NCRDetailModal, NCRDetailData, PendingUploads } from './NCRModals';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
-import { BackButton } from '@/components/ui/BackButton';
 import { useDebounce } from '../../hooks/useDebounce';
 import { uploadFiles, deleteFile } from '../../services/api';
 import { useNCRStats } from '../../hooks/useNCRStats';
 import { getErrorMessage } from '../../utils/errorUtils';
-import { StatItem } from '../Shared/StatItem';
-import statStyles from '../Shared/StatItem.module.css';
+
+type StatusFilter = 'all' | 'open' | 'inProgress' | 'resolved' | 'closed' | 'void';
 
 const NCR: React.FC = () => {
   const { t } = useLanguage();
@@ -26,25 +26,29 @@ const NCR: React.FC = () => {
   const { ncrList, loading, error, refetch, addNCR, updateNCR, deleteNCR } = useNCRStore();
   const itrList = useITRStore(state => state.itrList);
 
-  // Search & Filter States
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebounce(searchQuery, 500);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
-  // Trigger server-side refetch when debounced search changes
   React.useEffect(() => {
     refetch({ search: debouncedSearch });
   }, [debouncedSearch, refetch]);
 
-  // Data is now primarily filtered by backend.
   const filteredList = useMemo(() => {
-    return ncrList;
-  }, [ncrList]);
+    if (statusFilter === 'all') return ncrList;
+    const target = ({
+      open: 'open',
+      inProgress: 'in progress',
+      resolved: 'resolved',
+      closed: 'closed',
+      void: 'void',
+    } as const)[statusFilter];
+    return ncrList.filter((item) => (item.status || '').toLowerCase() === target);
+  }, [ncrList, statusFilter]);
 
-  // Modal States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [currentNcrId, setCurrentNcrId] = useState<string | null>(null);
 
-  // Delete Confirmation State
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null; message: string }>({
     isOpen: false,
     id: null,
@@ -53,19 +57,11 @@ const NCR: React.FC = () => {
 
   const statistics = useNCRStats(ncrList);
 
-
-
   const handleEdit = React.useCallback((id: string) => {
     setCurrentNcrId(id);
     setIsEditModalOpen(true);
   }, []);
 
-  // ── Deep-link support: /ncr?openId=<id> opens that NCR's detail
-  // modal on mount. Used by the Q-WorkFlow Dashboard card and page so
-  // clicking a row jumps straight into the NCR rather than dropping
-  // into the list view. We wait for ncrList to populate before trying
-  // to match, and only fire once per mount (ref guard) so subsequent
-  // param changes from inside this page don't re-open the modal.
   const [searchParams, setSearchParams] = useSearchParams();
   const deepLinkAppliedRef = useRef(false);
   useEffect(() => {
@@ -92,7 +88,6 @@ const NCR: React.FC = () => {
       const isNew = currentNcrId === 'new';
       const existingItem = isNew ? undefined : ncrList.find(item => item.id === currentNcrId);
 
-      // documentNumber 由後端自動產生，新建時不送；更新時也不覆蓋
       const updatedItem: Record<string, unknown> = {
         vendor: details.contractor || '',
         description: details.subject || details.detailsDescription || '',
@@ -113,8 +108,8 @@ const NCR: React.FC = () => {
         productIntegrityRelated: details.productIntegrityRelated,
         permanentProductDeviation: details.permanentProductDeviation,
         impactToOM: details.impactToOM,
-        noiNumber: details.noiNumber,  // 連結到觸發此 NCR 的 NOI
-        itrNumber: details.itrNumber,  // 連結到觸發此 NCR 的 ITR
+        noiNumber: details.noiNumber,
+        itrNumber: details.itrNumber,
         defectPhotos: details.defectPhotos,
         improvementPhotos: details.improvementPhotos,
         attachments: details.attachments,
@@ -139,29 +134,27 @@ const NCR: React.FC = () => {
           targetId = newNCR.id;
         }
 
-        // Process file API operations
         if (deletedFileIds && deletedFileIds.length > 0) {
-            for (const fileId of deletedFileIds) {
-                try {
-                    await deleteFile(fileId);
-                } catch (error) {
-                    console.error('Error deleting file:', fileId, error);
-                }
+          for (const fileId of deletedFileIds) {
+            try {
+              await deleteFile(fileId);
+            } catch (error) {
+              console.error('Error deleting file:', fileId, error);
             }
+          }
         }
 
         if (pendingUploads && pendingUploads.length > 0) {
-            for (const uploadGroup of pendingUploads) {
-                if (uploadGroup.files.length > 0) {
-                    try {
-                        const moduleStr = 'ncr';
-                        await uploadFiles(moduleStr, targetId, uploadGroup.files, uploadGroup.category);
-                    } catch (error) {
-                        console.error(`Error uploading files for category ${uploadGroup.category}:`, error);
-                        toast.error(`Failed to upload some files for ${uploadGroup.category}.`);
-                    }
-                }
+          for (const uploadGroup of pendingUploads) {
+            if (uploadGroup.files.length > 0) {
+              try {
+                await uploadFiles('ncr', targetId, uploadGroup.files, uploadGroup.category);
+              } catch (error) {
+                console.error(`Error uploading files for category ${uploadGroup.category}:`, error);
+                toast.error(`Failed to upload some files for ${uploadGroup.category}.`);
+              }
             }
+          }
         }
 
         await refetch();
@@ -182,11 +175,7 @@ const NCR: React.FC = () => {
     const references = checkNCRReferences(id, ncr.documentNumber, itrList);
     const message = generateDeleteMessage('NCR', ncr.documentNumber, references.references, t);
 
-    setDeleteModal({
-      isOpen: true,
-      id,
-      message,
-    });
+    setDeleteModal({ isOpen: true, id, message });
   }, [ncrList, itrList, t]);
 
   const handleDelete = async () => {
@@ -196,92 +185,123 @@ const NCR: React.FC = () => {
     }
   };
 
-  // Columns memoization
   const columns = useMemo(() => createColumns(handleEdit, confirmDelete, t), [t, handleEdit, confirmDelete]);
 
+  const chips: { id: StatusFilter; label: string; count: number }[] = [
+    { id: 'all', label: t('common.all') || 'All', count: statistics.total },
+    { id: 'open', label: t('obs.statOpen') || 'Open', count: statistics.open },
+    { id: 'inProgress', label: t('common.inProgress') || 'In Progress', count: statistics.inProgress },
+    { id: 'resolved', label: t('common.resolved') || 'Resolved', count: statistics.resolved },
+    { id: 'closed', label: t('obs.statClosed') || 'Closed', count: statistics.closed },
+    { id: 'void', label: t('itp.status.void') || 'Void', count: statistics.void },
+  ];
+
+  const summary = [
+    {
+      key: 'open',
+      label: t('obs.statOpen') || 'Open',
+      value: statistics.opening,
+      icon: <Clock size={18} strokeWidth={1.8} />,
+      accent: '#c8753f',
+    },
+    {
+      key: 'closed',
+      label: t('obs.statClosed') || 'Closed',
+      value: statistics.closed,
+      icon: <CheckCircle2 size={18} strokeWidth={1.8} />,
+      accent: '#7a8f5a',
+    },
+    {
+      key: 'total',
+      label: t('obs.statTotal') || 'Total',
+      value: statistics.total,
+      icon: <BarChart3 size={18} strokeWidth={1.8} />,
+      accent: '#8a6a3a',
+    },
+    {
+      key: 'rate',
+      label: t('obs.statOpenRate') || 'Open Rate',
+      value: `${statistics.openRate}%`,
+      icon: <Zap size={18} strokeWidth={1.8} />,
+      accent: '#b8945a',
+    },
+  ];
+
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <BackButton />
-          <h1>{t('ncr.title') || t('home.ncr.description') || 'NCR'}</h1>
+    <div className={shellStyles.container}>
+      {error && (
+        <div className={shellStyles.errorBanner}>
+          <span>{error}</span>
+          <button type="button" className={shellStyles.retryButton} onClick={() => refetch()}>
+            {t('common.retry')}
+          </button>
         </div>
-        <div className={styles.headerRight}>
-          <input
-            type="text"
-            className={styles.searchInput}
-            placeholder={t('ncr.searchPlaceholder')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+      )}
+
+      <section className={shellStyles.summaryGrid}>
+        {summary.map((card) => (
+          <div
+            key={card.key}
+            className={shellStyles.summaryCard}
+            style={{ '--accent': card.accent } as React.CSSProperties}
+          >
+            <div className={shellStyles.summaryIcon}>{card.icon}</div>
+            <div className={shellStyles.summaryBody}>
+              <div className={shellStyles.summaryLabel}>{card.label}</div>
+              <div className={shellStyles.summaryValue}>{card.value}</div>
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <div className={shellStyles.toolbar}>
+        <div className={shellStyles.chipGroup}>
+          {chips.map((chip) => (
+            <button
+              key={chip.id}
+              type="button"
+              className={`${shellStyles.chip} ${statusFilter === chip.id ? shellStyles.chipActive : ''}`}
+              onClick={() => setStatusFilter(chip.id)}
+            >
+              {chip.label}
+              <span className={shellStyles.chipCount}>{chip.count}</span>
+            </button>
+          ))}
+        </div>
+        <div className={shellStyles.toolbarRight}>
+          <div className={shellStyles.searchWrap}>
+            <Search size={15} className={shellStyles.searchIcon} strokeWidth={2} />
+            <input
+              type="text"
+              className={shellStyles.searchInput}
+              placeholder={t('ncr.searchPlaceholder')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+            {t('ncr.addNew')}
+          </button>
         </div>
       </div>
 
-      <div className={styles.summarySection}>
-        <h2 className={styles.summaryTitle}>{t('obs.statsTitle')}</h2>
-        <div className={styles.statsContainer}>
-          <div className={styles.statusStatsGrid}>
-            <StatItem 
-              label={t('obs.statOpen')} 
-              value={statistics.opening} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.blueIcon} 
-            />
-            <StatItem 
-              label={t('obs.statClosed')} 
-              value={statistics.closed} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.greenIcon} 
-            />
-            <StatItem 
-              label={t('obs.statTotal')} 
-              value={statistics.total} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" /><path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.grayIcon} 
-            />
-            <StatItem 
-              label={t('obs.statOpenRate')} 
-              value={`${statistics.opening} (${statistics.openRate}%)`} 
-              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" /></svg>} 
-              iconColorClass={statStyles.blueIcon} 
-            />
-          </div>
-        </div>
-      </div>
+      {loading && (
+        <div className={shellStyles.loadingNote}>{t('common.loading')}</div>
+      )}
 
-      <div className={styles.content}>
-        {loading && <p className={styles.loadingMessage}>{t('common.loading')}</p>}
-        {error && (
-          <div className={styles.loadingError}>
-            <p>{error}</p>
-            <button type="button" className={styles.retryButton} onClick={() => refetch()}>{t('common.retry')}</button>
-          </div>
-        )}
-        {!loading && !error && (
-          <>
-            <DataTable
-              title={t('ncr.title')}
-              actions={
-                <button
-                  className={styles.addNewButton}
-                  onClick={handleAddNew}
-                >
-                  {t('ncr.addNew')}
-                </button>
-              }
-              columns={columns}
-              data={filteredList}
-              searchKey=""
-              searchPlaceholder={t('ncr.searchPlaceholder')}
-              getRowClassName={(row) =>
-                (row.status || '').toLowerCase() === 'closed'
-                  ? 'bg-emerald-100/50 text-gray-500 hover:bg-emerald-200/50'
-                  : ''
-              }
-              onRowClick={(row) => handleEdit(row.id)}
-            />
-          </>
-        )}
+      <div className={shellStyles.content}>
+        <DataTable
+          columns={columns}
+          data={filteredList}
+          searchKey=""
+          getRowClassName={(row) => {
+            const s = (row.status || '').toLowerCase();
+            if (s === 'closed') return shellStyles.rowDim;
+            if (s === 'void') return shellStyles.rowDim;
+            return '';
+          }}
+          onRowClick={(row) => handleEdit(row.id)}
+        />
       </div>
 
       <ConfirmModal

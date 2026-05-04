@@ -6,7 +6,6 @@ import { createColumns } from './columns';
 import { KMModal } from './KMModals';
 import { KMDetail } from './KMDetail';
 import ConfirmModal from '../Shared/ConfirmModal';
-import { BackButton } from '@/components/ui/BackButton';
 import styles from './KM.module.css';
 
 const KM: React.FC = () => {
@@ -90,7 +89,6 @@ const KM: React.FC = () => {
         <>
           <div className={styles.header}>
             <div className={styles.headerLeft}>
-              <BackButton />
               <h1>{t('km.title') || 'Knowledge Management'}</h1>
             </div>
             <div className={styles.headerRight}>

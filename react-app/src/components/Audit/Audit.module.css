@@ -21,23 +21,6 @@
   z-index: 10;
 }
 
-.headerLeft {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.headerLeft h1 {
-  font-size: 28px;
-  font-weight: 800;
-  color: #0f172a;
-  margin: 0;
-  letter-spacing: -0.02em;
-  background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
 .searchContainer {
   position: relative;
   display: flex;
