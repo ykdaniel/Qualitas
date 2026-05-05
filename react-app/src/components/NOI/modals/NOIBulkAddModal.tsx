@@ -5,6 +5,7 @@ import { useContractorsStore } from '../../../store/contractorsStore';
 import { useITPStore } from '../../../store/itpStore';
 import type { NOIItem } from '../../../store/noiStore';
 import styles from '../NOI.module.css';
+import formStyles from '../../Shared/FormShell.module.css';
 import { BulkNOIRow } from '../NOITypes';
 
 export interface NOIBulkAddModalProps {
@@ -92,49 +93,49 @@ export const NOIBulkAddModal: React.FC<NOIBulkAddModalProps> = ({ onSave, onClos
     };
 
     return (
-        <div className={styles.modalOverlay}>
-            <div className={styles.modalContent} style={{ maxWidth: '900px', width: '90%' }} onClick={(e) => e.stopPropagation()}>
-                <div className={styles.modalHeader}>
+        <div className={formStyles.modalOverlay}>
+            <div className={formStyles.modalContent} style={{ maxWidth: '900px', width: '90%' }} onClick={(e) => e.stopPropagation()}>
+                <div className={formStyles.modalHeader}>
                     <h2>{t('noi.bulkAdd')}</h2>
-                    <button className={styles.closeButton} onClick={onClose}>×</button>
+                    <button className={formStyles.closeButton} onClick={onClose}>×</button>
                 </div>
-                <div className={styles.modalBody}>
-                    <p className={styles.formRequiredHint}>{t('form.requiredHint')}</p>
-                    <div className={styles.formSection}>
-                        <h3 className={styles.sectionTitle}>{t('noi.print.commonSection')}</h3>
-                        <div className={styles.formGrid}>
-                            <div className={styles.formGroup}>
-                                <label className={styles.requiredLabel}>{t('common.contractor')}</label>
-                                <select className={styles.formSelect} value={commonData.contractor} onChange={(e) => handleCommonChange('contractor', e.target.value)}>
+                <div className={formStyles.modalBody}>
+                    <p className={formStyles.formRequiredHint}>{t('form.requiredHint')}</p>
+                    <div className={formStyles.formSection}>
+                        <h3 className={formStyles.sectionTitle}>{t('noi.print.commonSection')}</h3>
+                        <div className={formStyles.formGrid}>
+                            <div className={formStyles.formGroup}>
+                                <label className={formStyles.requiredLabel}>{t('common.contractor')}</label>
+                                <select className={formStyles.formSelect} value={commonData.contractor} onChange={(e) => handleCommonChange('contractor', e.target.value)}>
                                     <option value="">{t('common.selectPlaceholder')}</option>
                                     {activeContractors.map((c) => (<option key={c.id} value={c.name}>{c.name}</option>))}
                                 </select>
                             </div>
-                            <div className={styles.formGroup}>
-                                <label className={styles.requiredLabel}>{t('noi.issueDate')}</label>
-                                <input type="date" lang="en" className={styles.formInput} value={commonData.issueDate} onChange={(e) => handleCommonChange('issueDate', e.target.value)} />
+                            <div className={formStyles.formGroup}>
+                                <label className={formStyles.requiredLabel}>{t('noi.issueDate')}</label>
+                                <input type="date" lang="en" className={formStyles.formInput} value={commonData.issueDate} onChange={(e) => handleCommonChange('issueDate', e.target.value)} />
                             </div>
-                            <div className={styles.formGroup}>
+                            <div className={formStyles.formGroup}>
                                 <label>{t('noi.inspectionDate')}</label>
-                                <input type="date" lang="en" className={styles.formInput} value={commonData.inspectionDate} onChange={(e) => handleCommonChange('inspectionDate', e.target.value)} />
+                                <input type="date" lang="en" className={formStyles.formInput} value={commonData.inspectionDate} onChange={(e) => handleCommonChange('inspectionDate', e.target.value)} />
                             </div>
-                            <div className={styles.formGroup}>
+                            <div className={formStyles.formGroup}>
                                 <label>{t('contractors.contact')}</label>
-                                <input type="text" className={styles.formInput} value={commonData.contacts} onChange={(e) => handleCommonChange('contacts', e.target.value)} />
+                                <input type="text" className={formStyles.formInput} value={commonData.contacts} onChange={(e) => handleCommonChange('contacts', e.target.value)} />
                             </div>
-                            <div className={styles.formGroup}>
+                            <div className={formStyles.formGroup}>
                                 <label>{t('contractors.phone')}</label>
-                                <input type="text" className={styles.formInput} value={commonData.phone} onChange={(e) => handleCommonChange('phone', e.target.value)} />
+                                <input type="text" className={formStyles.formInput} value={commonData.phone} onChange={(e) => handleCommonChange('phone', e.target.value)} />
                             </div>
-                            <div className={styles.formGroup}>
+                            <div className={formStyles.formGroup}>
                                 <label>{t('contractors.email')}</label>
-                                <input type="email" className={styles.formInput} value={commonData.email} onChange={(e) => handleCommonChange('email', e.target.value)} />
+                                <input type="email" className={formStyles.formInput} value={commonData.email} onChange={(e) => handleCommonChange('email', e.target.value)} />
                             </div>
                         </div>
                     </div>
-                    <div className={styles.formSection}>
+                    <div className={formStyles.formSection}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                            <h3 className={styles.sectionTitle} style={{ margin: 0 }}>{t('noi.print.listTitle')}</h3>
+                            <h3 className={formStyles.sectionTitle} style={{ margin: 0 }}>{t('noi.print.listTitle')}</h3>
                             <button type="button" onClick={addRow} style={{ padding: '6px 12px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '14px' }}>{t('common.add')}</button>
                         </div>
                         <div style={{ overflowX: 'auto' }}>
@@ -178,7 +179,7 @@ export const NOIBulkAddModal: React.FC<NOIBulkAddModalProps> = ({ onSave, onClos
                                                 </select>
                                             </td>
                                             <td style={{ padding: '4px', borderBottom: '1px solid #e5e7eb' }}>
-                                                <input type="text" className={styles.formInput} style={{ width: '100%', padding: '6px', border: '1px solid #d1d5db', borderRadius: '4px' }} placeholder="HH:mm" value={row.inspectionTime} onChange={(e) => { const val = e.target.value; if (/^[0-9:]*$/.test(val)) handleRowChange(row.id, 'inspectionTime', val); }} />
+                                                <input type="text" className={formStyles.formInput} style={{ width: '100%', padding: '6px', border: '1px solid #d1d5db', borderRadius: '4px' }} placeholder="HH:mm" value={row.inspectionTime} onChange={(e) => { const val = e.target.value; if (/^[0-9:]*$/.test(val)) handleRowChange(row.id, 'inspectionTime', val); }} />
                                             </td>
                                             <td style={{ padding: '4px', borderBottom: '1px solid #e5e7eb', textAlign: 'center' }}>
                                                 <button type="button" onClick={() => removeRow(row.id)} disabled={rows.length <= 1} style={{ padding: '4px 8px', backgroundColor: rows.length <= 1 ? '#e5e7eb' : '#ef4444', color: rows.length <= 1 ? '#9ca3af' : 'white', border: 'none', borderRadius: '4px', cursor: rows.length <= 1 ? 'not-allowed' : 'pointer', fontSize: '12px' }}>{t('common.delete')}</button>
@@ -191,9 +192,9 @@ export const NOIBulkAddModal: React.FC<NOIBulkAddModalProps> = ({ onSave, onClos
                         <div style={{ marginTop: '12px', color: '#6b7280', fontSize: '13px' }}>{t('noi.bulkAddSummary', { count: rows.length })}</div>
                     </div>
                 </div>
-                <div className={styles.modalActions}>
-                    <button className={styles.saveButton} onClick={handleSave} disabled={saving}>{saving ? t('noi.bulkAddSaving') : t('noi.bulkAddAction', { count: rows.length })}</button>
-                    <button className={styles.cancelButton} onClick={onClose}>{t('common.cancel')}</button>
+                <div className={formStyles.modalActions}>
+                    <button className={formStyles.saveButton} onClick={handleSave} disabled={saving}>{saving ? t('noi.bulkAddSaving') : t('noi.bulkAddAction', { count: rows.length })}</button>
+                    <button className={formStyles.cancelButton} onClick={onClose}>{t('common.cancel')}</button>
                 </div>
             </div>
         </div>
