@@ -10,6 +10,7 @@ import { useFATStore } from '../../store/fatStore';
 import type { FATItem, FATDetailItem } from '../../store/fatStore';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './FAT.module.css';
+import formStyles from '../Shared/FormShell.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import { useFATStats } from '../../hooks/useFATStats';
 
@@ -375,13 +376,13 @@ const FATDetailModal: React.FC<FATDetailModalProps> = ({ fatId, details, onSave,
   };
 
   return (
-    <div className={styles.modalOverlay}>
-      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.modalHeader}>
+    <div className={formStyles.modalOverlay}>
+      <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
+        <div className={formStyles.modalHeader}>
           <h2>{t('fat.detailModalTitle')}</h2>
-          <button className={styles.closeButton} onClick={onClose}>×</button>
+          <button className={formStyles.closeButton} onClick={onClose}>×</button>
         </div>
-        <div className={styles.modalBody}>
+        <div className={formStyles.modalBody}>
           <div className={styles.tableContainer}>
             <table className={styles.detailTable}>
               <thead>
@@ -491,14 +492,14 @@ const FATDetailModal: React.FC<FATDetailModalProps> = ({ fatId, details, onSave,
               </tbody>
             </table>
           </div>
-          <div className={styles.modalActions}>
+          <div className={formStyles.modalActions}>
             <button className={styles.addRowButton} onClick={handleAddRow}>
               {t('fat.addRow')}
             </button>
-            <button className={styles.saveButton} onClick={handleSave}>
+            <button className={formStyles.saveButton} onClick={handleSave}>
               {t('common.save')}
             </button>
-            <button className={styles.cancelButton} onClick={onClose}>
+            <button className={formStyles.cancelButton} onClick={onClose}>
               {t('common.cancel')}
             </button>
           </div>
@@ -545,30 +546,30 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
   };
 
   return (
-    <div className={styles.modalOverlay}>
-      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.modalHeader}>
+    <div className={formStyles.modalOverlay}>
+      <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
+        <div className={formStyles.modalHeader}>
           <h2>{existingItem ? t('fat.editTitle') : t('fat.addTitle')}</h2>
-          <button className={styles.closeButton} onClick={onClose}>×</button>
+          <button className={formStyles.closeButton} onClick={onClose}>×</button>
         </div>
-        <div className={styles.modalBody}>
-          <div className={styles.formSections}>
-            <div className={styles.formSection}>
-              <h3 className={styles.sectionTitle}>{t('fat.sectionInfo')}</h3>
-              <div className={styles.formGrid}>
-                <div className={styles.formGroup}>
+        <div className={formStyles.modalBody}>
+          <div className={formStyles.formSections}>
+            <div className={formStyles.formSection}>
+              <h3 className={formStyles.sectionTitle}>{t('fat.sectionInfo')}</h3>
+              <div className={formStyles.formGrid}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.equipment')}</label>
                   <input
                     type="text"
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={formData.equipment || ''}
                     onChange={(e) => handleFieldChange('equipment', e.target.value)}
                   />
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.supplier')}</label>
                   <select
-                    className={styles.formSelect}
+                    className={formStyles.formSelect}
                     value={formData.supplier || ''}
                     onChange={(e) => handleFieldChange('supplier', e.target.value)}
                   >
@@ -580,25 +581,25 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
                     ))}
                   </select>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.procedure')}</label>
                   <input
                     type="text"
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={formData.procedure || ''}
                     onChange={(e) => handleFieldChange('procedure', e.target.value)}
                   />
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.location')}</label>
                   <input
                     type="text"
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={formData.location || ''}
                     onChange={(e) => handleFieldChange('location', e.target.value)}
                   />
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.startDate')}</label>
                   <input
                     type={formData.startDate ? 'date' : 'text'}
@@ -608,12 +609,12 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
                     onBlur={(e) => {
                       if (!e.target.value) e.target.type = 'text';
                     }}
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={formData.startDate || ''}
                     onChange={(e) => handleFieldChange('startDate', e.target.value)}
                   />
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.endDate')}</label>
                   <input
                     type={formData.endDate ? 'date' : 'text'}
@@ -623,39 +624,39 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
                     onBlur={(e) => {
                       if (!e.target.value) e.target.type = 'text';
                     }}
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={formData.endDate || ''}
                     onChange={(e) => handleFieldChange('endDate', e.target.value)}
                   />
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.deliveryFrom')}</label>
                   <input
                     type="text"
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={formData.deliveryFrom || ''}
                     onChange={(e) => handleFieldChange('deliveryFrom', e.target.value)}
                   />
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.deliveryTo')}</label>
                   <input
                     type="text"
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={formData.deliveryTo || ''}
                     onChange={(e) => handleFieldChange('deliveryTo', e.target.value)}
                   />
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.siteReadiness')}</label>
                   <input
                     type="text"
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={formData.siteReadiness || ''}
                     onChange={(e) => handleFieldChange('siteReadiness', e.target.value)}
                   />
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.moveInDate')}</label>
                   <input
                     type={formData.moveInDate ? 'date' : 'text'}
@@ -665,15 +666,15 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
                     onBlur={(e) => {
                       if (!e.target.value) e.target.type = 'text';
                     }}
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={formData.moveInDate || ''}
                     onChange={(e) => handleFieldChange('moveInDate', e.target.value)}
                   />
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('common.status')}</label>
                   <select
-                    className={styles.formSelect}
+                    className={formStyles.formSelect}
                     value={formData.status || 'Scheduled'}
                     onChange={(e) => handleFieldChange('status', e.target.value)}
                   >
@@ -687,11 +688,11 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
             </div>
           </div>
         </div>
-        <div className={styles.modalActions}>
-          <button className={styles.saveButton} onClick={handleSave}>
+        <div className={formStyles.modalActions}>
+          <button className={formStyles.saveButton} onClick={handleSave}>
             {t('common.save')}
           </button>
-          <button className={styles.cancelButton} onClick={onClose}>
+          <button className={formStyles.cancelButton} onClick={onClose}>
             {t('common.cancel')}
           </button>
         </div>
@@ -717,63 +718,63 @@ const FATDetailsViewModal: React.FC<FATDetailsViewModalProps> = ({ fatId: _fatId
   }
 
   return (
-    <div className={styles.modalOverlay}>
-      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.modalHeader}>
+    <div className={formStyles.modalOverlay}>
+      <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
+        <div className={formStyles.modalHeader}>
           <h2>{t('fat.detailsTitle')}</h2>
-          <button className={styles.closeButton} onClick={onClose}>×</button>
+          <button className={formStyles.closeButton} onClick={onClose}>×</button>
         </div>
-        <div className={styles.modalBody}>
-          <div className={styles.formSections}>
-            <div className={styles.formSection}>
-              <h3 className={styles.sectionTitle}>{t('fat.sectionBaseInfo')}</h3>
-              <div className={styles.formGrid}>
-                <div className={styles.formGroup}>
+        <div className={formStyles.modalBody}>
+          <div className={formStyles.formSections}>
+            <div className={formStyles.formSection}>
+              <h3 className={formStyles.sectionTitle}>{t('fat.sectionBaseInfo')}</h3>
+              <div className={formStyles.formGrid}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.equipment')}</label>
-                  <div className={styles.readOnlyField}>{fatItem.equipment || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{fatItem.equipment || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.supplier')}</label>
-                  <div className={styles.readOnlyField}>{fatItem.supplier || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{fatItem.supplier || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.procedure')}</label>
-                  <div className={styles.readOnlyField}>{fatItem.procedure || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{fatItem.procedure || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.location')}</label>
-                  <div className={styles.readOnlyField}>{fatItem.location || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{fatItem.location || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.startDate')}</label>
-                  <div className={styles.readOnlyField}>{fatItem.startDate || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{fatItem.startDate || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.endDate')}</label>
-                  <div className={styles.readOnlyField}>{fatItem.endDate || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{fatItem.endDate || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.deliveryFrom')}</label>
-                  <div className={styles.readOnlyField}>{fatItem.deliveryFrom || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{fatItem.deliveryFrom || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.deliveryTo')}</label>
-                  <div className={styles.readOnlyField}>{fatItem.deliveryTo || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{fatItem.deliveryTo || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.siteReadiness')}</label>
-                  <div className={styles.readOnlyField}>{fatItem.siteReadiness || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{fatItem.siteReadiness || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.moveInDate')}</label>
-                  <div className={styles.readOnlyField}>{fatItem.moveInDate || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{fatItem.moveInDate || '-'}</div>
                 </div>
               </div>
             </div>
 
             {fatDetails.length > 0 && (
-              <div className={styles.formSection}>
-                <h3 className={styles.sectionTitle}>{t('fat.sectionDetails')}</h3>
+              <div className={formStyles.formSection}>
+                <h3 className={formStyles.sectionTitle}>{t('fat.sectionDetails')}</h3>
                 <table className={styles.detailTable}>
                   <thead>
                     <tr>
@@ -808,11 +809,11 @@ const FATDetailsViewModal: React.FC<FATDetailsViewModalProps> = ({ fatId: _fatId
             )}
           </div>
         </div>
-        <div className={styles.modalActions}>
-          <button className={styles.printButton} onClick={handlePrint}>
+        <div className={formStyles.modalActions}>
+          <button className={formStyles.printButton} onClick={handlePrint}>
             {t('common.print')}
           </button>
-          <button className={styles.cancelButton} onClick={onClose}>
+          <button className={formStyles.cancelButton} onClick={onClose}>
             {t('common.close')}
           </button>
         </div>

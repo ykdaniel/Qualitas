@@ -1,27 +1,18 @@
 .panel {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: #ffffff;
+  border: 1px solid rgba(184, 148, 90, 0.22);
+  border-radius: 12px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 200px);
   min-height: 400px;
   overflow: hidden;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.panel:hover {
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 1);
 }
 
 .panelHeader {
-  margin-bottom: 24px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(184, 148, 90, 0.18);
 }
 
 .headerTitleGroup {
@@ -31,27 +22,27 @@
 }
 
 .panelTitle {
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 700;
-  color: #1e293b;
+  color: #2d2a24;
   margin: 0;
   letter-spacing: -0.01em;
 }
 
 .badge {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
+  background: linear-gradient(135deg, #b8945a 0%, #8a6a3a 100%);
+  color: #faf7f1;
   padding: 4px 10px;
   border-radius: 20px;
   font-size: 12px;
-  font-weight: 600;
-  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2);
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(138, 106, 58, 0.22);
 }
 
 .panelSubtitle {
-  margin: 4px 0 0 0;
-  font-size: 13px;
-  color: #64748b;
+  margin: 6px 0 0 0;
+  font-size: 12px;
+  color: #8b8275;
   font-weight: 500;
 }
 
@@ -61,49 +52,49 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-right: 8px;
+  gap: 8px;
+  padding-right: 4px;
 }
 
-/* Custom Scrollbar for list */
 .vendorList::-webkit-scrollbar {
   width: 6px;
 }
+
 .vendorList::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.02);
+  background: rgba(184, 148, 90, 0.05);
   border-radius: 4px;
 }
+
 .vendorList::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.5);
+  background: rgba(184, 148, 90, 0.4);
   border-radius: 4px;
 }
+
 .vendorList::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.8);
+  background: rgba(184, 148, 90, 0.65);
 }
 
 .vendorItem {
-  padding: 16px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid rgba(184, 148, 90, 0.18);
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .vendorItem:hover {
-  border-color: #34d399;
-  background: #f0fdf4;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.08);
+  border-color: #b8945a;
+  background: rgba(184, 148, 90, 0.04);
 }
 
 .vendorItem.active {
-  background: linear-gradient(to right, #ecfdf5, #f0fdf4);
-  border-color: #10b981;
-  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15), inset 4px 0 0 #10b981;
+  background: rgba(184, 148, 90, 0.08);
+  border-color: #b8945a;
+  box-shadow: inset 3px 0 0 #b8945a;
 }
 
 .vendorHeader {
@@ -114,21 +105,21 @@
 
 .vendorName {
   font-weight: 600;
-  color: #334155;
-  font-size: 14px;
+  color: #4a4238;
+  font-size: 13px;
 }
 
 .auditCount {
   font-weight: 700;
-  color: #0f172a;
-  font-size: 15px;
+  color: #2d2a24;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
 
 /* Progress Chart */
 .chartTrack {
-  height: 6px;
-  background: #f1f5f9;
+  height: 5px;
+  background: rgba(184, 148, 90, 0.12);
   border-radius: 4px;
   overflow: hidden;
   position: relative;
@@ -137,24 +128,22 @@
 .chartBar {
   height: 100%;
   border-radius: 4px;
-  background: linear-gradient(90deg, #94a3b8, #cbd5e1);
-  transition: width 1s cubic-bezier(0.16, 1, 0.3, 1), background 0.3s ease;
+  background: linear-gradient(90deg, #c8a97a, #b8945a);
+  transition: width 0.4s ease, background 0.2s ease;
 }
 
 .vendorItem:hover .chartBar {
-  background: linear-gradient(90deg, #34d399, #10b981);
+  background: linear-gradient(90deg, #b8945a, #8a6a3a);
 }
 
 .vendorItem.active .chartBar {
-  background: linear-gradient(90deg, #059669, #10b981);
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+  background: linear-gradient(90deg, #8a6a3a, #6b502b);
 }
 
 .allBar {
-  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  background: linear-gradient(90deg, #4a4238, #2d2a24);
 }
 
 .vendorItem.active .allBar {
-  background: linear-gradient(90deg, #1d4ed8, #3b82f6);
-  box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
+  background: linear-gradient(90deg, #2d2a24, #1a1814);
 }

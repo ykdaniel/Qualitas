@@ -46,13 +46,13 @@ const ITPStatsCard: React.FC = () => {
         </div>
         <div className={styles.itpStatsRow}>
           <span className={styles.itpStatsLabel}>{t('dashboard.submitted') || 'Submitted'}</span>
-          <span className={styles.itpStatsValue} style={{ color: '#1e293b', fontSize: '20px', fontWeight: '600' }}>
+          <span className={styles.itpStatsValue}>
             {stats.submitted} ({stats.submittedPercent}%)
           </span>
         </div>
         <div className={styles.itpStatsRow}>
           <span className={styles.itpStatsLabel}>{t('status.approved') || 'Approved'}</span>
-          <span className={styles.itpStatsValue} style={{ color: '#1e293b', fontSize: '20px', fontWeight: '600' }}>
+          <span className={styles.itpStatsValue}>
             {stats.approved} ({stats.approvedPercent}%)
           </span>
         </div>

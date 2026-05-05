@@ -1,12 +1,14 @@
 import { useOBSStore } from '../../store/obsStore';
 import { useDashboardFilterStore } from '../../store/dashboardFilterStore';
 import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import styles from './Dashboard.module.css';
 
 const OBSStatsCard: React.FC = () => {
   const obsList = useOBSStore(state => state.obsList);
   const selectedVendor = useDashboardFilterStore(state => state.selectedVendor);
+  const navigate = useNavigate();
   const { t } = useLanguage();
 
   const stats = useMemo(() => {
@@ -50,13 +52,13 @@ const OBSStatsCard: React.FC = () => {
         </div>
         <div className={styles.obsStatsRow}>
           <span className={styles.obsStatsLabel}>{t('status.open') || 'Open'}</span>
-          <span className={styles.obsStatsValue} style={{ color: '#1e293b', fontSize: '20px', fontWeight: '600' }}>
+          <span className={styles.obsStatsValue}>
             {stats.open} ({stats.openPercent}%)
           </span>
         </div>
         <div className={styles.obsStatsRow}>
           <span className={styles.obsStatsLabel}>{t('status.closed') || 'Closed'}</span>
-          <span className={styles.obsStatsValue} style={{ color: '#1e293b', fontSize: '20px', fontWeight: '600' }}>
+          <span className={styles.obsStatsValue}>
             {stats.closed} ({stats.closedPercent}%)
           </span>
         </div>
@@ -71,6 +73,9 @@ const OBSStatsCard: React.FC = () => {
           ))}
         </div>
       </div>
+      <button className={styles.obsStatsButton} onClick={() => navigate('/obs')}>
+        {t('common.viewDetails') || 'View Details ->'}
+      </button>
     </div>
   );
 };

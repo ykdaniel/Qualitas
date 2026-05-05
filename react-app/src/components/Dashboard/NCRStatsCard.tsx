@@ -1,12 +1,14 @@
 import { useNCRStore } from '../../store/ncrStore';
 import { useDashboardFilterStore } from '../../store/dashboardFilterStore';
 import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import styles from './Dashboard.module.css';
 
 const NCRStatsCard: React.FC = () => {
   const ncrList = useNCRStore(state => state.ncrList);
   const selectedVendor = useDashboardFilterStore(state => state.selectedVendor);
+  const navigate = useNavigate();
   const { t } = useLanguage();
 
   const stats = useMemo(() => {
@@ -50,13 +52,13 @@ const NCRStatsCard: React.FC = () => {
         </div>
         <div className={styles.ncrStatsRow}>
           <span className={styles.ncrStatsLabel}>{t('status.open') || 'Open'}</span>
-          <span className={styles.ncrStatsValue} style={{ color: '#1e293b', fontSize: '20px', fontWeight: '600' }}>
+          <span className={styles.ncrStatsValue}>
             {stats.open} ({stats.openPercent}%)
           </span>
         </div>
         <div className={styles.ncrStatsRow}>
           <span className={styles.ncrStatsLabel}>{t('status.closed') || 'Closed'}</span>
-          <span className={styles.ncrStatsValue} style={{ color: '#1e293b', fontSize: '20px', fontWeight: '600' }}>
+          <span className={styles.ncrStatsValue}>
             {stats.closed} ({stats.closedPercent}%)
           </span>
         </div>
@@ -71,6 +73,9 @@ const NCRStatsCard: React.FC = () => {
           ))}
         </div>
       </div>
+      <button className={styles.ncrStatsButton} onClick={() => navigate('/ncr')}>
+        {t('common.viewDetails') || 'View Details ->'}
+      </button>
     </div>
   );
 };

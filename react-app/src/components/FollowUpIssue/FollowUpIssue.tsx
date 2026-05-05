@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import { Clock, CheckCircle2, BarChart3, Zap, Search } from 'lucide-react';
+import { Clock, CheckCircle2, BarChart3, Search } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useNCRStore } from '../../store/ncrStore';
@@ -10,9 +10,9 @@ import { useNOIStore } from '../../store/noiStore';
 import { useITRStore } from '../../store/itrStore';
 import { useITPStore } from '../../store/itpStore';
 import { usePQPStore } from '../../store/pqpStore';
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './FollowUpIssue.module.css';
+import formStyles from '../Shared/FormShell.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import api from '../../services/api';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
@@ -20,6 +20,31 @@ import { createColumns } from './columns';
 import { useFollowUpIssueStats } from '../../hooks/useFollowUpIssueStats';
 
 type StatusFilter = 'all' | 'open' | 'closed';
+
+const DonutGauge: React.FC<{ percent: number; size?: number }> = ({ percent, size = 28 }) => {
+  const stroke = 4;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference * (1 - Math.max(0, Math.min(100, percent)) / 100);
+  const cx = size / 2;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
+      <circle cx={cx} cy={cx} r={radius} fill="none" stroke="currentColor" strokeOpacity="0.25" strokeWidth={stroke} />
+      <circle
+        cx={cx}
+        cy={cx}
+        r={radius}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={stroke}
+        strokeLinecap="round"
+        strokeDasharray={circumference}
+        strokeDashoffset={offset}
+        transform={`rotate(-90 ${cx} ${cx})`}
+      />
+    </svg>
+  );
+};
 
 interface FollowUpIssueItem {
   id: string;
@@ -240,11 +265,6 @@ const FollowUpIssue: React.FC = () => {
 
   const statistics = useFollowUpIssueStats(issues);
 
-  const pieData = useMemo(() => [
-    { name: 'Open', value: statistics.opening, color: '#f59e0b' },
-    { name: 'Closed', value: statistics.closed, color: '#10b981' },
-  ], [statistics.opening, statistics.closed]);
-
   const handleEdit = (id: string) => {
     setCurrentIssueId(id);
     setIsEditModalOpen(true);
@@ -331,7 +351,7 @@ const FollowUpIssue: React.FC = () => {
       key: 'rate',
       label: t('noi.stats.openRate') || 'Open Rate',
       value: `${statistics.openRate}%`,
-      icon: <Zap size={18} strokeWidth={1.8} />,
+      icon: <DonutGauge percent={statistics.openRate} />,
       accent: '#b8945a',
     },
   ];
@@ -353,71 +373,6 @@ const FollowUpIssue: React.FC = () => {
           </div>
         ))}
       </section>
-
-      <div className={styles.summaryRow}>
-        <div className={styles.chartSection}>
-          <div className={styles.pieChartInner}>
-            {statistics.total > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart margin={{ top: 4, right: 24, bottom: 4, left: 24 }}>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={40}
-                    outerRadius={64}
-                    paddingAngle={2}
-                    dataKey="value"
-                    label={({ cx, cy, midAngle, outerRadius, name, value, percent }) => {
-                      const RADIAN = Math.PI / 180;
-                      const extendLen = 14;   // 徑向延伸長度
-                      const hLen = 24;       // 水平轉折後長度
-                      const sx = cx + outerRadius * Math.cos(-midAngle * RADIAN);
-                      const sy = cy + outerRadius * Math.sin(-midAngle * RADIAN);
-                      const bx = sx + extendLen * Math.cos(-midAngle * RADIAN);
-                      const by = sy + extendLen * Math.sin(-midAngle * RADIAN);
-                      const toRight = bx >= cx;
-                      const tx = bx + (toRight ? hLen : -hLen);
-                      const pct = Math.round((percent ?? 0) * 100);
-                      return (
-                        <g>
-                          <polyline
-                            points={`${sx},${sy} ${bx},${by} ${tx},${by}`}
-                            fill="none"
-                            stroke="#9ca3af"
-                            strokeWidth={1}
-                          />
-                          <text
-                            x={tx}
-                            y={by}
-                            textAnchor={toRight ? 'start' : 'end'}
-                            dominantBaseline="middle"
-                            fill="#1f2937"
-                            fontSize={13}
-                            fontWeight={500}
-                          >
-                            <tspan x={tx} dy="-0.4em" display="block">{name}</tspan>
-                            <tspan x={tx} dy="1.2em" fontSize={12} fill="#6b7280" fontWeight={400}>
-                              {value} 筆 · {pct}%
-                            </tspan>
-                          </text>
-                        </g>
-                      );
-                    }}
-                    labelLine={false}
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className={styles.pieChartEmpty}>{t('common.noData')}</div>
-            )}
-          </div>
-        </div>
-      </div>
 
       <div className={shellStyles.toolbar}>
         <div className={shellStyles.chipGroup}>
@@ -566,31 +521,31 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
   };
 
   return (
-    <div className={styles.modalOverlay}>
-      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.modalHeader}>
+    <div className={formStyles.modalOverlay}>
+      <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
+        <div className={formStyles.modalHeader}>
           <h2>{existingItem ? t('followup.editTitle') : t('followup.addTitle')}</h2>
-          <button className={styles.closeButton} onClick={onClose}>×</button>
+          <button className={formStyles.closeButton} onClick={onClose}>×</button>
         </div>
-        <div className={styles.modalBody}>
-          <div className={styles.formSections}>
-            <div className={styles.formSection}>
-              <h3 className={styles.sectionTitle}>{t('common.baseInfo')}</h3>
-              <div className={styles.formGrid}>
-                <div className={styles.formGroup}>
+        <div className={formStyles.modalBody}>
+          <div className={formStyles.formSections}>
+            <div className={formStyles.formSection}>
+              <h3 className={formStyles.sectionTitle}>{t('common.baseInfo')}</h3>
+              <div className={formStyles.formGrid}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.issueNo')}</label>
                   <input
                     type="text"
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={formData.issueNo || t('form.autoGenerated')}
                     readOnly
                     style={{ backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: formData.issueNo ? '#000000' : '#666666' }}
                   />
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.status')}</label>
                   <select
-                    className={styles.formSelect}
+                    className={formStyles.formSelect}
                     value={formData.status || 'Open'}
                     onChange={(e) => handleFieldChange('status', e.target.value)}
                   >
@@ -598,19 +553,19 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
                     <option value="Closed">Closed</option>
                   </select>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.assignedTo')}</label>
                   <input
                     type="text"
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={formData.assignedTo || ''}
                     onChange={(e) => handleFieldChange('assignedTo', e.target.value)}
                   />
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.vendor')}</label>
                   <select
-                    className={styles.formSelect}
+                    className={formStyles.formSelect}
                     value={formData.vendor || ''}
                     onChange={(e) => handleFieldChange('vendor', e.target.value)}
                   >
@@ -620,10 +575,10 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
                     ))}
                   </select>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.sourceModule')}</label>
                   <select
-                    className={styles.formSelect}
+                    className={formStyles.formSelect}
                     value={formData.sourceModule || ''}
                     onChange={(e) => handleFieldChange('sourceModule', e.target.value)}
                   >
@@ -637,11 +592,11 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
                     <option value="Other">Other</option>
                   </select>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.sourceRef')}</label>
                   {formData.sourceModule && formData.sourceModule !== 'Other' ? (
                     <select
-                      className={styles.formSelect}
+                      className={formStyles.formSelect}
                       value={formData.sourceReferenceNo || ''}
                       onChange={(e) => handleFieldChange('sourceReferenceNo', e.target.value)}
                     >
@@ -656,7 +611,7 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
                   ) : (
                     <input
                       type="text"
-                      className={styles.formInput}
+                      className={formStyles.formInput}
                       value={formData.sourceReferenceNo || ''}
                       onChange={(e) => handleFieldChange('sourceReferenceNo', e.target.value)}
                       placeholder={formData.sourceModule === 'Other' ? "Enter external reference..." : "Select source module first"}
@@ -664,7 +619,7 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
                     />
                   )}
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.createdDate')}</label>
                   <input
                     type={existingItem?.createdAt ? 'date' : 'text'}
@@ -674,13 +629,13 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
                     onBlur={(e) => {
                       if (!e.target.value) e.target.type = 'text';
                     }}
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={existingItem?.createdAt || ''}
                     readOnly
                     style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
                   />
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.dueDate')}</label>
                   <input
                     type={formData.dueDate ? 'date' : 'text'}
@@ -690,21 +645,21 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
                     onBlur={(e) => {
                       if (!e.target.value) e.target.type = 'text';
                     }}
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={formData.dueDate || ''}
                     onChange={(e) => handleFieldChange('dueDate', e.target.value)}
                   />
                 </div>
-                <div className={styles.formGroupFull}>
+                <div className={formStyles.formGroupFull}>
                   <label>{t('followup.description')}</label>
                   <textarea
-                    className={styles.formTextarea}
+                    className={formStyles.formTextarea}
                     value={formData.description || ''}
                     onChange={(e) => handleFieldChange('description', e.target.value)}
                     rows={4}
                   />
                 </div>
-                <div className={styles.formGroupFull}>
+                <div className={formStyles.formGroupFull}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                     <label>{t('followup.action')}</label>
                     <button
@@ -732,7 +687,7 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
                   </div>
                   <textarea
                     ref={actionTextareaRef}
-                    className={styles.formTextarea}
+                    className={formStyles.formTextarea}
                     value={formData.action || ''}
                     onChange={(e) => handleFieldChange('action', e.target.value)}
                     rows={4}
@@ -742,11 +697,11 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
             </div>
           </div>
         </div>
-        <div className={styles.modalActions}>
-          <button className={styles.saveButton} onClick={handleSave}>
+        <div className={formStyles.modalActions}>
+          <button className={formStyles.saveButton} onClick={handleSave}>
             {t('common.save')}
           </button>
-          <button className={styles.cancelButton} onClick={onClose}>
+          <button className={formStyles.cancelButton} onClick={onClose}>
             {t('common.cancel')}
           </button>
         </div>
@@ -772,54 +727,54 @@ const FollowUpIssueDetailsViewModal: React.FC<FollowUpIssueDetailsViewModalProps
   }
 
   return (
-    <div className={styles.modalOverlay}>
-      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.modalHeader}>
+    <div className={formStyles.modalOverlay}>
+      <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
+        <div className={formStyles.modalHeader}>
           <h2>{t('followup.detailsTitle')}</h2>
-          <button className={styles.closeButton} onClick={onClose}>×</button>
+          <button className={formStyles.closeButton} onClick={onClose}>×</button>
         </div>
-        <div className={styles.modalBody}>
-          <div className={styles.formSections}>
-            <div className={styles.formSection}>
-              <h3 className={styles.sectionTitle}>{t('common.baseInfo')}</h3>
-              <div className={styles.formGrid}>
-                <div className={styles.formGroup}>
+        <div className={formStyles.modalBody}>
+          <div className={formStyles.formSections}>
+            <div className={formStyles.formSection}>
+              <h3 className={formStyles.sectionTitle}>{t('common.baseInfo')}</h3>
+              <div className={formStyles.formGrid}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.issueNo')}</label>
-                  <div className={styles.readOnlyField}>{issueItem.issueNo || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{issueItem.issueNo || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.status')}</label>
-                  <div className={styles.readOnlyField}>{issueItem.status || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{issueItem.status || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.assignedTo')}</label>
-                  <div className={styles.readOnlyField}>{issueItem.assignedTo || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{issueItem.assignedTo || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.createdDate')}</label>
-                  <div className={styles.readOnlyField}>{issueItem.createdAt || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{issueItem.createdAt || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.dueDate')}</label>
-                  <div className={styles.readOnlyField}>{issueItem.dueDate || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{issueItem.dueDate || '-'}</div>
                 </div>
-                <div className={styles.formGroupFull}>
+                <div className={formStyles.formGroupFull}>
                   <label>{t('followup.description')}</label>
-                  <div className={styles.readOnlyField}>{issueItem.description || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{issueItem.description || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.action')}</label>
-                  <div className={styles.readOnlyField}>{issueItem.action || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{issueItem.action || '-'}</div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-        <div className={styles.modalActions}>
-          <button className={styles.printButton} onClick={handlePrint}>
+        <div className={formStyles.modalActions}>
+          <button className={formStyles.printButton} onClick={handlePrint}>
             {t('common.print')}
           </button>
-          <button className={styles.cancelButton} onClick={onClose}>
+          <button className={formStyles.cancelButton} onClick={onClose}>
             {t('common.close')}
           </button>
         </div>

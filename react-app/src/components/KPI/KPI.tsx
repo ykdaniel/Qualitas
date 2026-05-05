@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
   LabelList,
 } from 'recharts';
+import { Search } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { usePQPStore } from '../../store/pqpStore';
@@ -17,12 +18,13 @@ import { useITPStore } from '../../store/itpStore';
 import { useOBSStore } from '../../store/obsStore';
 import { useNCRStore } from '../../store/ncrStore';
 import styles from './KPI.module.css';
+import shellStyles from '../Shared/ModuleShell.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns, KPIItem } from './columns';
 
 const VENDOR_COLORS = [
-  '#3b82f6', '#f97316', '#6b7280', '#eab308', '#22d3ee', '#10b981',
-  '#8b5cf6', '#ec4899', '#14b8a6', '#f59e0b',
+  '#2563eb', '#c8753f', '#7a8f5a', '#b8945a', '#0ea5e9', '#059669',
+  '#7c3aed', '#db2777', '#0d9488', '#d97706',
 ];
 
 function parseMonth(dateStr: string | undefined): string | null {
@@ -214,42 +216,40 @@ const KPI: React.FC = () => {
 
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <h1 className={styles.title}>
-            {t('kpi.title')}
-          </h1>
-        </div>
-        <div className={styles.headerRight}>
-          <input
-            type="text"
-            className={styles.searchInput}
-            placeholder={t('common.search') || "Search..."}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          <label className={styles.vendorLabel}>
-            {t('common.contractor')}
-            <select
-              className={styles.vendorSelect}
-              value={selectedVendor}
-              onChange={(e) => setSelectedVendor(e.target.value)}
-            >
-              <option value="all">{t('common.allContractors')}</option>
-              {getActiveContractors().map((c) => (
-                <option key={c.id} value={c.name}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </div>
-
+    <div className={shellStyles.container}>
       <p className={styles.subtitle}>
         {t('kpi.subtitle')}
       </p>
+
+      <div className={shellStyles.toolbar}>
+        <label className={styles.vendorLabel}>
+          {t('common.contractor')}
+          <select
+            className={styles.vendorSelect}
+            value={selectedVendor}
+            onChange={(e) => setSelectedVendor(e.target.value)}
+          >
+            <option value="all">{t('common.allContractors')}</option>
+            {getActiveContractors().map((c) => (
+              <option key={c.id} value={c.name}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className={shellStyles.toolbarRight}>
+          <div className={shellStyles.searchWrap}>
+            <Search size={15} className={shellStyles.searchIcon} strokeWidth={2} />
+            <input
+              type="text"
+              className={shellStyles.searchInput}
+              placeholder={t('common.search') || 'Search...'}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
 
       <div className={styles.weightSection}>
         <button
@@ -318,36 +318,49 @@ const KPI: React.FC = () => {
               {t('kpi.noData')}
             </p>
           ) : (
-            <ResponsiveContainer width="100%" height={400}>
+            <ResponsiveContainer width="100%" height={340}>
               <LineChart
                 data={chartData}
-                margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                margin={{ top: 16, right: 40, left: 60, bottom: 60 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(184, 148, 90, 0.18)" />
                 <XAxis
                   dataKey="month"
-                  tick={{ fill: '#9ca3af', fontSize: 12 }}
+                  tick={{ fill: '#000000', fontSize: 12 }}
                   angle={-45}
                   textAnchor="end"
                   height={60}
                   interval={0}
+                  padding={{ left: 56, right: 32 }}
+                  tickMargin={14}
                 />
                 <YAxis
                   domain={[0, 100]}
-                  tick={{ fill: '#9ca3af', fontSize: 12 }}
+                  tick={{ fill: '#000000', fontSize: 12 }}
                   tickFormatter={(v) => `${v}%`}
+                  tickMargin={16}
                   label={{
                     value: language === 'en' ? 'KPI %' : 'KPI %',
                     angle: -90,
                     position: 'insideLeft',
-                    style: { fill: '#9ca3af' },
+                    offset: -10,
+                    style: { fill: '#000000' },
                   }}
                 />
                 <Tooltip
                   formatter={(value: number | string | null) => (value == null ? '—' : `${value}%`)}
                   labelFormatter={(label) => (`${t('kpi.month')}: ${label}`)}
                 />
-                <Legend />
+                <Legend
+                  iconType="circle"
+                  iconSize={10}
+                  wrapperStyle={{ paddingTop: 12 }}
+                  formatter={(value) => (
+                    <span style={{ color: '#2d2a24', fontSize: 13, fontWeight: 600, marginRight: 8 }}>
+                      {value}
+                    </span>
+                  )}
+                />
                 {vendorKeys.map((vendor, i) => (
                   <Line
                     key={vendor}
@@ -361,8 +374,13 @@ const KPI: React.FC = () => {
                   >
                     <LabelList
                       position="top"
-                      formatter={(v: number | string | null) => (v == null ? '' : `${v}%`)}
-                      style={{ fontSize: 11, fill: '#e5e7eb' }}
+                      offset={8}
+                      formatter={(v: number | string | null) => {
+                        if (v == null) return '';
+                        const n = typeof v === 'number' ? v : parseFloat(v);
+                        return Number.isFinite(n) && n > 0 ? `${v}%` : '';
+                      }}
+                      style={{ fontSize: 11, fill: '#4a4238' }}
                     />
                   </Line>
                 ))}
@@ -372,27 +390,9 @@ const KPI: React.FC = () => {
         </div>
       </div>
 
-      {/* KPI 表格：放在趨勢圖之下 */}
-      <div className={styles.tableWrapper}>
+      <div className={shellStyles.content}>
         <DataTable
           title={t('kpi.tableTitle')}
-          actions={
-            <label className={styles.vendorLabel}>
-              {t('common.contractor')}
-              <select
-                className={styles.vendorSelect}
-                value={selectedVendor}
-                onChange={(e) => setSelectedVendor(e.target.value)}
-              >
-                <option value="all">{t('common.allContractors')}</option>
-                {getActiveContractors().map((c) => (
-                  <option key={c.id} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          }
           columns={useMemo(() => createColumns(sortedMonths, t, language), [sortedMonths, t, language])}
           data={filteredTableRows}
           searchKey=""

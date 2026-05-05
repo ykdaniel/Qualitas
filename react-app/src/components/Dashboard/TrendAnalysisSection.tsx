@@ -77,11 +77,11 @@ const MiniTrendCard: React.FC<MiniTrendCardProps> = ({ title, data, color, dataL
                   <stop offset="95%" stopColor={color} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="month" tick={{ fontSize: 9, fill: '#94a3b8' }} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 9, fill: '#94a3b8' }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(184, 148, 90, 0.18)" />
+              <XAxis dataKey="month" tick={{ fontSize: 9, fill: '#8b8275' }} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 9, fill: '#8b8275' }} />
               <Tooltip
-                contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
+                contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid rgba(184, 148, 90, 0.28)', background: '#ffffff' }}
                 formatter={(v: number) => [v, dataLabel]}
               />
               <Area

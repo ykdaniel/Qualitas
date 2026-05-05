@@ -1,265 +1,50 @@
-.container {
-  min-height: 100vh;
-  background: #f3f4f6;
-  padding: 24px;
-}
-
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 24px;
-  flex-wrap: wrap;
-}
-
-.headerLeft {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.headerRight {
-  display: flex;
-  align-items: center;
-}
-
-.vendorLabel {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #374151;
-}
-
-.backButton {
-  padding: 8px 16px;
-  background: #11998e;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  align-self: flex-start;
-}
-
-.backButton:hover {
-  background: #0d7a72;
-}
-
-.title {
-  font-size: 32px;
-  font-weight: 800;
-  color: #0f172a;
-  letter-spacing: -0.5px;
+.subtitle {
+  font-size: 13px;
+  color: #8b8275;
   margin: 0;
 }
 
-.subtitle {
-  font-size: 15px;
-  color: #64748b;
-  margin: 0 0 20px 0;
+.vendorLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4a4238;
 }
 
 .vendorSelect {
   padding: 8px 32px 8px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid rgba(184, 148, 90, 0.28);
   border-radius: 8px;
-  font-size: 14px;
-  background: white;
-  color: #1f2937;
+  font-size: 13px;
+  background: #ffffff;
+  color: #2d2a24;
   cursor: pointer;
-  min-width: 160px;
+  min-width: 180px;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23374151' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b8275' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .vendorSelect:hover {
-  border-color: #9ca3af;
+  border-color: #b8945a;
 }
 
 .vendorSelect:focus {
   outline: none;
-  border-color: #11998e;
-  box-shadow: 0 0 0 2px rgba(17, 153, 142, 0.2);
-}
-
-/* Q-WorkFlow 區域 — full-width row for the cross-module progress card */
-.workflowSection {
-  margin-bottom: 32px;
-  display: flex;
-  justify-content: stretch;
-}
-
-.workflowSection > * {
-  flex: 1;
-  max-width: 720px;
-}
-
-/* KPI 區域 */
-.kpiSection {
-  margin-bottom: 32px;
+  border-color: #b8945a;
+  box-shadow: 0 0 0 3px rgba(184, 148, 90, 0.15);
 }
 
 .sectionTitle {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
-  color: #1f2937;
-  margin: 0 0 24px 0;
-}
-
-.sectionTitleCollapsible {
-  font-size: 24px;
-  font-weight: 700;
-  color: #1f2937;
-  margin: 0 0 24px 0;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  user-select: none;
-}
-
-.sectionTitleCollapsible:hover {
-  color: #3b82f6;
-}
-
-.sectionTitleChevron {
-  font-size: 14px;
-  color: #6b7280;
-}
-
-.kpiGrid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 24px;
-}
-
-@media (max-width: 1400px) {
-  .kpiGrid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-@media (max-width: 900px) {
-  .kpiGrid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-.kpiCard {
-  background: #ffffff;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  border-left: 4px solid var(--card-accent, #6366f1);
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.06);
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  min-height: 180px;
-}
-
-.kpiCard:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.1);
-}
-
-.kpiHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.kpiLabel {
-  font-size: 14px;
-  font-weight: 600;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.kpiValue {
-  font-size: 22px;
-  font-weight: 700;
-  color: #0f172a;
-  letter-spacing: -0.3px;
-}
-
-.kpiStatusRow {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin: 8px 0;
-}
-
-.kpiStatusItem {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.kpiStatusLabel {
-  font-size: 12px;
-  color: #6b7280;
-  font-weight: 500;
-}
-
-.kpiStatusValue {
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.kpiSeparator {
-  font-size: 24px;
-  color: #d1d5db;
-  font-weight: 400;
-}
-
-.kpiCardContent {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  justify-content: space-evenly;
-  margin-bottom: 20px;
-}
-
-.kpiDescription {
-  font-size: 12px;
-  color: #6b7280;
-  margin: 0;
-  line-height: 1.5;
-}
-
-.kpiCard .viewButton {
-  margin-top: auto;
-  width: 100%;
-  padding: 11px 16px;
-  background: #1e293b;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  letter-spacing: 0.01em;
-}
-
-.kpiCard .viewButton:hover {
-  background: #0f172a;
-  transform: translateY(-1px);
+  color: #2d2a24;
+  margin: 0 0 20px 0;
+  letter-spacing: -0.01em;
 }
 
 /* 圖表區域 */
@@ -270,17 +55,9 @@
 
 .sectionDivider {
   width: 100%;
-  height: 2px;
-  background-color: #e5e7eb;
+  height: 1px;
+  background-color: rgba(184, 148, 90, 0.22);
   margin: 24px 0;
-}
-
-/* Recharts legacy grid */
-.rechartsGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 24px;
-  margin-top: 16px;
 }
 
 /* ── Trend Analysis Section ─────────────────────────────── */
@@ -296,8 +73,8 @@
 }
 
 .trendSubtitle {
-  font-size: 13px;
-  color: #94a3b8;
+  font-size: 12px;
+  color: #8b8275;
   font-weight: 500;
 }
 
@@ -315,15 +92,14 @@
 
 .trendCard {
   background: #ffffff;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  border-radius: 14px;
-  padding: 20px 20px 12px;
-  box-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.06);
-  transition: box-shadow 0.2s ease;
+  border: 1px solid rgba(184, 148, 90, 0.22);
+  border-radius: 12px;
+  padding: 18px 18px 10px;
+  transition: border-color 0.15s ease;
 }
 
 .trendCard:hover {
-  box-shadow: 0 6px 20px -4px rgba(0, 0, 0, 0.1);
+  border-color: rgba(184, 148, 90, 0.4);
 }
 
 .trendCardHeader {
@@ -334,17 +110,17 @@
 }
 
 .trendCardTitle {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
-  color: #64748b;
+  color: #8b8275;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .trendCardTotal {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 800;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.4px;
 }
 
 .trendCardChart {
@@ -358,12 +134,12 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
-  color: #cbd5e1;
-  font-size: 13px;
+  color: #a39786;
+  font-size: 12px;
 }
 
 .trendEmptyState span:first-child {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 300;
 }
 
@@ -398,9 +174,9 @@
 }
 
 .verticalDivider {
-  width: 2px;
+  width: 1px;
   min-height: 100%;
-  background-color: #e5e7eb;
+  background-color: rgba(184, 148, 90, 0.22);
   align-self: stretch;
   flex-shrink: 0;
   margin: 0 12px;
@@ -440,18 +216,10 @@
 .paretoChartContainer {
   width: 100%;
   min-width: 0;
-  background: white;
+  background: #ffffff;
+  border: 1px solid rgba(184, 148, 90, 0.22);
   border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.paretoTitle {
-  font-size: 36px;
-  font-weight: 900;
-  color: #1f2937;
-  text-align: center;
-  margin: 0 0 20px 0;
+  padding: 20px;
 }
 
 .obsChartWrapper {
@@ -479,15 +247,15 @@
 }
 
 .ncrStatsCard {
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.03);
+  background: #ffffff;
+  border: 1px solid rgba(184, 148, 90, 0.22);
+  border-radius: 12px;
+  padding: 20px;
   min-width: 280px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: space-between;
+  gap: 16px;
   overflow: visible;
 }
 
@@ -514,26 +282,12 @@
 }
 
 .ncrStatsValue {
-  font-size: 36px;
-  font-weight: 800;
+  font-size: 24px;
+  font-weight: 700;
   line-height: 1;
   color: #0f172a;
-  letter-spacing: -1px;
+  letter-spacing: -0.4px;
   text-align: right;
-}
-
-.ncrStatsButton {
-  display: none;
-}
-
-.ncrPieChartContainer {
-  width: 100%;
-  margin-top: 100px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  overflow: visible;
 }
 
 .ncrChartLegend {
@@ -544,39 +298,16 @@
   flex-wrap: wrap;
 }
 
-.ncrSectionButton {
-  margin-top: 24px;
-  margin-left: auto;
-  padding: 12px 24px;
-  background: #0f172a;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
-  display: block;
-  width: max-content;
-}
-
-.ncrSectionButton:hover {
-  background: #1e293b;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.25);
-}
-
 .obsStatsCard {
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.03);
+  background: #ffffff;
+  border: 1px solid rgba(184, 148, 90, 0.22);
+  border-radius: 12px;
+  padding: 20px;
   min-width: 280px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: space-between;
+  gap: 16px;
   overflow: visible;
 }
 
@@ -603,22 +334,12 @@
 }
 
 .obsStatsValue {
-  font-size: 36px;
-  font-weight: 800;
+  font-size: 24px;
+  font-weight: 700;
   line-height: 1;
   color: #0f172a;
-  letter-spacing: -1px;
+  letter-spacing: -0.4px;
   text-align: right;
-}
-
-.obsPieChartContainer {
-  width: 100%;
-  margin-top: 100px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  overflow: visible;
 }
 
 .obsChartLegend {
@@ -648,27 +369,26 @@
   font-weight: 500;
 }
 
-.obsSectionButton {
-  margin-top: 24px;
-  margin-left: auto;
+.obsStatsButton,
+.ncrStatsButton {
+  width: 100%;
   padding: 12px 24px;
-  background: #0f172a;
-  color: white;
+  background: #4a4238;
+  color: #faf7f1;
   border: none;
   border-radius: 8px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
-  display: block;
-  width: max-content;
+  transition: background-color 0.2s, transform 0.2s;
+  margin-top: auto;
+  letter-spacing: 0.01em;
 }
 
-.obsSectionButton:hover {
-  background: #1e293b;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.25);
+.obsStatsButton:hover,
+.ncrStatsButton:hover {
+  background: #2d2a24;
+  transform: translateY(-1px);
 }
 
 .itpStatsCard {
@@ -706,33 +426,32 @@
 }
 
 .itpStatsValue {
-  font-size: 36px;
-  font-weight: 800;
+  font-size: 24px;
+  font-weight: 700;
   line-height: 1;
   color: #0f172a;
-  letter-spacing: -1px;
+  letter-spacing: -0.4px;
   text-align: right;
 }
 
 .itpStatsButton {
   width: 100%;
   padding: 12px 24px;
-  background: #0f172a;
-  color: white;
+  background: #4a4238;
+  color: #faf7f1;
   border: none;
   border-radius: 8px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+  transition: background-color 0.2s, transform 0.2s;
   margin-top: auto;
+  letter-spacing: 0.01em;
 }
 
 .itpStatsButton:hover {
-  background: #1e293b;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.25);
+  background: #2d2a24;
+  transform: translateY(-1px);
 }
 
 .pqpStatsCard {
@@ -770,33 +489,32 @@
 }
 
 .pqpStatsValue {
-  font-size: 36px;
-  font-weight: 800;
+  font-size: 24px;
+  font-weight: 700;
   line-height: 1;
   color: #0f172a;
-  letter-spacing: -1px;
+  letter-spacing: -0.4px;
   text-align: right;
 }
 
 .pqpStatsButton {
   width: 100%;
   padding: 12px 24px;
-  background: #0f172a;
-  color: white;
+  background: #4a4238;
+  color: #faf7f1;
   border: none;
   border-radius: 8px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+  transition: background-color 0.2s, transform 0.2s;
   margin-top: auto;
+  letter-spacing: 0.01em;
 }
 
 .pqpStatsButton:hover {
-  background: #1e293b;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.25);
+  background: #2d2a24;
+  transform: translateY(-1px);
 }
 
 .gaugeChartContainer {
@@ -843,29 +561,6 @@
   transform-origin: 50% 100%;
   z-index: 10;
   pointer-events: none;
-}
-
-.needleLine {
-  width: 100%;
-  height: 100%;
-  background: #f59e0b;
-  border-radius: 0;
-  box-shadow: none;
-  position: relative;
-}
-
-.needleLine::before {
-  content: '';
-  position: absolute;
-  bottom: -5px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 10px;
-  height: 10px;
-  background: #f59e0b;
-  border-radius: 50%;
-  box-shadow: none;
-  z-index: 1;
 }
 
 .needleLineRed {

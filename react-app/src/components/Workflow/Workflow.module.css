@@ -1,87 +1,15 @@
-.container {
-  min-height: 100vh;
-  background: #f3f4f6;
-  padding: 24px;
-}
-
 .subtitle {
-  color: #6b7280;
-  font-size: 14px;
-  margin: 0 0 24px 0;
-}
-
-/* ── Stat tiles across the top ─────────────────────────────────── */
-.statRow {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 24px;
-}
-
-.statTile {
-  background: white;
-  border-radius: 10px;
-  padding: 16px 20px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  border-left: 4px solid transparent;
-}
-
-.statTile.total { border-left-color: #64748b; }
-.statTile.bucket_0_25 { border-left-color: #ef4444; }
-.statTile.bucket_26_50 { border-left-color: #f59e0b; }
-.statTile.bucket_51_75 { border-left-color: #3b82f6; }
-.statTile.bucket_76_100 { border-left-color: #10b981; }
-
-.statLabel {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #6b7280;
-  font-weight: 600;
-}
-
-.statValue {
-  font-size: 28px;
-  font-weight: 700;
-  color: #111827;
-  margin-top: 4px;
-}
-
-/* ── Filter chips ──────────────────────────────────────────────── */
-.chipBar {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-
-.chip {
-  padding: 8px 16px;
-  border-radius: 999px;
-  border: 1px solid #d1d5db;
-  background: white;
-  color: #374151;
+  color: #8b8275;
   font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.chip:hover {
-  border-color: #9ca3af;
-}
-
-.chip.active {
-  background: #2563eb;
-  color: white;
-  border-color: #2563eb;
+  margin: 0;
 }
 
 /* ── Tracker table ─────────────────────────────────────────────── */
 .tableWrapper {
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  background: #ffffff;
+  border: 1px solid rgba(184, 148, 90, 0.22);
+  border-radius: 12px;
+  padding: 4px;
   overflow-x: auto;
   overflow-y: visible;
 }

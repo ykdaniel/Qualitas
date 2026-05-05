@@ -9,6 +9,7 @@ import { injectAuthTokenIntoHtml, stripAuthTokenFromHtml } from '../../utils/aut
 import { RichTextEditor } from '../ui/RichTextEditor';
 import { KMAttachment } from '../../types/km';
 import styles from './KMModals.module.css';
+import formStyles from '../Shared/FormShell.module.css';
 import './kmArticle.css';
 
 interface KMModalProps {
@@ -796,11 +797,11 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
     };
 
     return (
-        <div className={styles.modalOverlay}>
-            <div className={styles.modalContent}>
-                <div className={styles.modalHeader}>
+        <div className={formStyles.modalOverlay}>
+            <div className={formStyles.modalContent}>
+                <div className={formStyles.modalHeader}>
                     <h2>{id ? (t('km.edit') || 'Edit Article') : (t('km.create') || 'Create Article')}</h2>
-                    <button type="button" className={styles.closeButton} onClick={onClose}>&times;</button>
+                    <button type="button" className={formStyles.closeButton} onClick={onClose}>&times;</button>
                 </div>
                 <form id="km-edit-form" onSubmit={handleSubmit} className={styles.formBody}>
                     {/* Collapsible "Basic Info" section.
@@ -880,7 +881,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
 
                         {!metaCollapsed && (
                             <div style={{ padding: '4px 16px 16px 16px', background: '#fff', borderTop: '1px solid #e2e8f0' }}>
-                                <div className={styles.formGroup}>
+                                <div className={formStyles.formGroup}>
                                     <label>{t('km.titleField') || 'Title'} *</label>
                                     <input
                                         type="text"
@@ -894,7 +895,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
                                 </div>
 
                                 <div className={styles.formRow}>
-                                    <div className={styles.formGroup}>
+                                    <div className={formStyles.formGroup}>
                                         <label>{t('km.category') || 'Category'}</label>
                                         <select
                                             name="category"
@@ -909,7 +910,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
                                             <option value="Guidelines">Guidelines</option>
                                         </select>
                                     </div>
-                                    <div className={styles.formGroup}>
+                                    <div className={formStyles.formGroup}>
                                         <label>{t('km.tags') || 'Tags (comma separated)'}</label>
                                         <input
                                             type="text"
@@ -920,7 +921,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
                                             className={styles.inputField}
                                         />
                                     </div>
-                                    <div className={styles.formGroup}>
+                                    <div className={formStyles.formGroup}>
                                         <label>{t('common.status') || 'Status'}</label>
                                         <select
                                             name="status"
@@ -936,7 +937,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
                                 </div>
 
                                 <div className={styles.formRow}>
-                                    <div className={styles.formGroup} style={{ flexGrow: 1 }}>
+                                    <div className={formStyles.formGroup} style={{ flexGrow: 1 }}>
                                         <label>本次改版摘要 (Change Summary)</label>
                                         <input
                                             type="text"
@@ -950,7 +951,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
                                 </div>
 
                                 <div className={styles.formRow}>
-                                    <div className={styles.formGroup}>
+                                    <div className={formStyles.formGroup}>
                                         <label>Parent Document (Optional)</label>
                                         <select
                                             name="parent_id"
@@ -964,7 +965,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
                                             ))}
                                         </select>
                                     </div>
-                                    <div className={styles.formGroup}>
+                                    <div className={formStyles.formGroup}>
                                         <label>Chapter No (e.g., 1.0)</label>
                                         <input
                                             type="text"
@@ -1108,7 +1109,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
                         </button>
                     </div>
 
-                    <div className={styles.formGroup}>
+                    <div className={formStyles.formGroup}>
                         <label>Attachments</label>
                         <div className={styles.attachmentUploader}>
                             <input

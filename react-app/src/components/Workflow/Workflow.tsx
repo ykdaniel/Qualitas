@@ -23,6 +23,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { BarChart3, AlertCircle, AlertTriangle, Activity, CheckCircle2 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import {
     fetchWorkflows,
@@ -38,6 +39,21 @@ import {
 } from '../../types/workflow';
 import { getErrorMessage } from '../../utils/errorUtils';
 import styles from './Workflow.module.css';
+import shellStyles from '../Shared/ModuleShell.module.css';
+
+const BUCKET_ACCENT: Record<CompletionBucket, string> = {
+    bucket_0_25: '#b86060',
+    bucket_26_50: '#c8753f',
+    bucket_51_75: '#b8945a',
+    bucket_76_100: '#7a8f5a',
+};
+
+const BUCKET_ICON: Record<CompletionBucket, React.ReactElement> = {
+    bucket_0_25: <AlertCircle size={18} strokeWidth={1.8} />,
+    bucket_26_50: <AlertTriangle size={18} strokeWidth={1.8} />,
+    bucket_51_75: <Activity size={18} strokeWidth={1.8} />,
+    bucket_76_100: <CheckCircle2 size={18} strokeWidth={1.8} />,
+};
 
 type BucketFilter = 'all' | CompletionBucket;
 
@@ -162,57 +178,76 @@ const Workflow: React.FC = () => {
         return t(`workflow.bucket.${key}`) || key;
     };
 
+    const summaryCards = stats ? [
+        {
+            key: 'total',
+            label: t('workflow.total') || 'Total NCRs',
+            value: stats.total,
+            icon: <BarChart3 size={18} strokeWidth={1.8} />,
+            accent: '#8a6a3a',
+        },
+        ...COMPLETION_BUCKETS.map(bucket => ({
+            key: bucket.key,
+            label: bucketLabel(bucket.key),
+            value: stats[bucket.key],
+            icon: BUCKET_ICON[bucket.key],
+            accent: BUCKET_ACCENT[bucket.key],
+        })),
+    ] : [];
+
     return (
-        <div className={styles.container}>
+        <div className={shellStyles.container}>
             <p className={styles.subtitle}>
                 {t('workflow.subtitle') ||
                     'Every NOI becomes a Q-WorkFlow, tracked through 9 canonical checkpoints to final acceptance.'}
             </p>
 
-            {error && <div className={styles.error}>{error}</div>}
-
-            {/* Completion distribution tiles */}
-            {stats && (
-                <div className={styles.statRow}>
-                    <div className={`${styles.statTile} ${styles.total}`}>
-                        <div className={styles.statLabel}>
-                            {t('workflow.total') || 'Total NCRs'}
-                        </div>
-                        <div className={styles.statValue}>{stats.total}</div>
-                    </div>
-                    {COMPLETION_BUCKETS.map(bucket => (
-                        <div
-                            key={bucket.key}
-                            className={`${styles.statTile} ${styles[bucket.key]}`}
-                        >
-                            <div className={styles.statLabel}>
-                                {bucketLabel(bucket.key)}
-                            </div>
-                            <div className={styles.statValue}>
-                                {stats[bucket.key]}
-                            </div>
-                        </div>
-                    ))}
+            {error && (
+                <div className={shellStyles.errorBanner}>
+                    <span>{error}</span>
                 </div>
             )}
 
-            {/* Filter chips */}
-            <div className={styles.chipBar}>
-                <button
-                    className={`${styles.chip} ${bucketFilter === 'all' ? styles.active : ''}`}
-                    onClick={() => setBucketFilter('all')}
-                >
-                    {t('workflow.filterAll') || 'All'}
-                </button>
-                {COMPLETION_BUCKETS.map(bucket => (
+            {stats && (
+                <section className={shellStyles.summaryGrid}>
+                    {summaryCards.map(card => (
+                        <div
+                            key={card.key}
+                            className={shellStyles.summaryCard}
+                            style={{ '--accent': card.accent } as React.CSSProperties}
+                        >
+                            <div className={shellStyles.summaryIcon}>{card.icon}</div>
+                            <div className={shellStyles.summaryBody}>
+                                <div className={shellStyles.summaryLabel}>{card.label}</div>
+                                <div className={shellStyles.summaryValue}>{card.value}</div>
+                            </div>
+                        </div>
+                    ))}
+                </section>
+            )}
+
+            <div className={shellStyles.toolbar}>
+                <div className={shellStyles.chipGroup}>
                     <button
-                        key={bucket.key}
-                        className={`${styles.chip} ${bucketFilter === bucket.key ? styles.active : ''}`}
-                        onClick={() => setBucketFilter(bucket.key)}
+                        type="button"
+                        className={`${shellStyles.chip} ${bucketFilter === 'all' ? shellStyles.chipActive : ''}`}
+                        onClick={() => setBucketFilter('all')}
                     >
-                        {bucketLabel(bucket.key)}
+                        {t('workflow.filterAll') || 'All'}
+                        <span className={shellStyles.chipCount}>{stats?.total ?? 0}</span>
                     </button>
-                ))}
+                    {COMPLETION_BUCKETS.map(bucket => (
+                        <button
+                            key={bucket.key}
+                            type="button"
+                            className={`${shellStyles.chip} ${bucketFilter === bucket.key ? shellStyles.chipActive : ''}`}
+                            onClick={() => setBucketFilter(bucket.key)}
+                        >
+                            {bucketLabel(bucket.key)}
+                            <span className={shellStyles.chipCount}>{stats?.[bucket.key] ?? 0}</span>
+                        </button>
+                    ))}
+                </div>
             </div>
 
             {/* Checkpoint tracker table */}

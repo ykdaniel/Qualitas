@@ -4,6 +4,7 @@ import { useContractorsStore } from '../../store/contractorsStore';
 import { useAuditStore, AuditItem } from '../../store/auditStore';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './Audit.module.css';
+import shellStyles from '../Shared/ModuleShell.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import AuditWizard from './AuditWizard';
@@ -135,32 +136,38 @@ const Audit: React.FC = () => {
     };
 
     return (
-        <div className={styles.container}>
-            <div className={styles.header}>
-                <div className={styles.searchContainer}>
-                    <Search className={styles.searchIcon} size={18} />
-                    <input
-                        type="text"
-                        className={styles.searchInput}
-                        placeholder={t('audit.searchPlaceholder')}
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                </div>
-            </div>
-
+        <div className={shellStyles.container}>
             {/* Error Notification Toast */}
             {error && (
-                <div className={styles.errorAlert}>
+                <div className={shellStyles.errorBanner}>
                     <div className={styles.errorContent}>
-                        <AlertCircle size={20} />
+                        <AlertCircle size={18} />
                         <span>{error}</span>
                     </div>
-                    <button onClick={clearError} className={styles.closeBtn}>
-                        <X size={20} />
+                    <button onClick={clearError} className={styles.closeBtn} aria-label="Dismiss error">
+                        <X size={16} />
                     </button>
                 </div>
             )}
+
+            <div className={shellStyles.toolbar}>
+                <div className={shellStyles.toolbarRight}>
+                    <div className={shellStyles.searchWrap}>
+                        <Search size={15} className={shellStyles.searchIcon} strokeWidth={2} />
+                        <input
+                            type="text"
+                            className={shellStyles.searchInput}
+                            placeholder={t('audit.searchPlaceholder')}
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                    </div>
+                    <button className={shellStyles.addNewButton} onClick={handleAddNew}>
+                        <Plus size={16} />
+                        {t('audit.addNew') || 'Add New'}
+                    </button>
+                </div>
+            </div>
 
             {/* Premium Top Section: Interactive Panels */}
             <div className={styles.topSection}>
@@ -193,19 +200,12 @@ const Audit: React.FC = () => {
             </div>
 
             {/* Audit Data Table Area */}
-            <div className={styles.content}>
+            <div className={shellStyles.content}>
                 <DataTable
                     title={t('audit.listTitle')}
-                    actions={
-                        <button className={styles.addNewButton} onClick={handleAddNew}>
-                            <Plus size={18} />
-                            {t('audit.addNew') || 'Add New'}
-                        </button>
-                    }
                     columns={createColumns(handleEdit, handleDeleteClick, t, activeContractors)}
                     data={filteredData}
                     searchKey=""
-                    getRowClassName={() => styles.normalRow}
                     getRowId={(row: AuditItem) => row.id}
                     onRowClick={(row: AuditItem) => handleEdit(row.id)}
                 />

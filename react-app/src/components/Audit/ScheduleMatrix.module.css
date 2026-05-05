@@ -1,27 +1,18 @@
 .panel {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: #ffffff;
+  border: 1px solid rgba(184, 148, 90, 0.22);
+  border-radius: 12px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 200px);
   min-height: 400px;
   overflow: hidden;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.panel:hover {
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 1);
 }
 
 .panelHeader {
-  margin-bottom: 24px;
+  margin-bottom: 14px;
   padding-bottom: 12px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid rgba(184, 148, 90, 0.18);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -34,9 +25,9 @@
 }
 
 .panelTitle {
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 700;
-  color: #1e293b;
+  color: #2d2a24;
   margin: 0;
   letter-spacing: -0.01em;
 }
@@ -44,57 +35,53 @@
 .navControls {
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: rgba(255, 255, 255, 0.5);
-  backdrop-filter: blur(4px);
-  padding: 4px;
-  border-radius: 20px;
-  border: 1px solid rgba(0, 0, 0, 0.05);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+  gap: 4px;
+  background: rgba(184, 148, 90, 0.06);
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid rgba(184, 148, 90, 0.18);
 }
 
 .navBtn {
   background: transparent;
   border: none;
   cursor: pointer;
-  color: #64748b;
+  color: #8b8275;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s, color 0.2s;
 }
 
 .navBtn:hover {
-  background: white;
-  color: #1e293b;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: #ffffff;
+  color: #4a4238;
 }
 
 .todayBtn {
   background: transparent;
   border: none;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  color: #475569;
+  color: #4a4238;
   cursor: pointer;
   padding: 4px 12px;
-  border-radius: 12px;
-  transition: all 0.2s ease;
+  border-radius: 999px;
+  transition: background-color 0.2s, color 0.2s;
 }
 
 .todayBtn:hover {
-  background: white;
-  color: #0f172a;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: #ffffff;
+  color: #2d2a24;
 }
 
 .monthDisplay {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  color: #64748b;
+  color: #8b8275;
   margin: 0;
 }
 
@@ -104,9 +91,9 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.4);
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid rgba(184, 148, 90, 0.18);
   position: relative;
 }
 
@@ -119,9 +106,9 @@
 }
 
 .skeletonPulse {
-  height: 48px;
+  height: 44px;
   border-radius: 8px;
-  background: linear-gradient(90deg, rgba(226, 232, 240, 0.5) 25%, rgba(203, 213, 225, 0.5) 50%, rgba(226, 232, 240, 0.5) 75%);
+  background: linear-gradient(90deg, rgba(184, 148, 90, 0.08) 25%, rgba(184, 148, 90, 0.18) 50%, rgba(184, 148, 90, 0.08) 75%);
   background-size: 200% 100%;
   animation: skeleton-loading 1.5s infinite ease-in-out;
 }
@@ -139,28 +126,28 @@
   text-align: center;
   height: 100%;
   padding: 40px;
-  color: #64748b;
+  color: #8b8275;
   font-family: inherit;
 }
 
 .emptyIcon {
-  color: #94a3b8;
-  margin-bottom: 16px;
+  color: #a39786;
+  margin-bottom: 12px;
   stroke-width: 1.5;
   opacity: 0.8;
 }
 
 .emptyState h3 {
-  margin: 0 0 8px 0;
-  font-size: 18px;
+  margin: 0 0 6px 0;
+  font-size: 15px;
   font-weight: 600;
-  color: #334155;
+  color: #4a4238;
 }
 
 .emptyState p {
   margin: 0;
-  font-size: 14px;
-  color: #94a3b8;
+  font-size: 13px;
+  color: #a39786;
 }
 
 /* Matrix Table View */
@@ -168,32 +155,25 @@
   flex: 1;
   overflow: auto;
   position: relative;
-  /* Premium scroll shading hint */
-  background: 
-    linear-gradient(to right, white 30%, rgba(255,255,255,0)),
-    linear-gradient(to right, rgba(255,255,255,0), white 70%) 100% 0,
-    radial-gradient(farthest-side at 0 50%, rgba(0,0,0,0.1), rgba(0,0,0,0)),
-    radial-gradient(farthest-side at 100% 50%, rgba(0,0,0,0.1), rgba(0,0,0,0)) 100% 0;
-  background-repeat: no-repeat;
-  background-color: transparent;
-  background-size: 40px 100%, 40px 100%, 14px 100%, 14px 100%;
-  background-attachment: local, local, scroll, scroll;
 }
 
 .matrixScroll::-webkit-scrollbar {
   height: 8px;
   width: 8px;
 }
+
 .matrixScroll::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.02);
+  background: rgba(184, 148, 90, 0.05);
   border-radius: 4px;
 }
+
 .matrixScroll::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.4);
+  background: rgba(184, 148, 90, 0.4);
   border-radius: 4px;
 }
+
 .matrixScroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.8);
+  background: rgba(184, 148, 90, 0.65);
 }
 
 .matrixTable {
@@ -203,27 +183,26 @@
 }
 
 .matrixHeaderCell, .indexCell, .vendorCell, .matrixCell {
-  border-right: 1px solid #e2e8f0;
-  border-bottom: 1px solid #e2e8f0;
+  border-right: 1px solid rgba(184, 148, 90, 0.18);
+  border-bottom: 1px solid rgba(184, 148, 90, 0.18);
 }
 
 .matrixHeaderCell {
   position: sticky;
   top: 0;
-  background: rgba(248, 250, 252, 0.95);
-  backdrop-filter: blur(8px);
+  background: rgba(250, 247, 241, 0.96);
   z-index: 10;
-  padding: 12px 6px;
+  padding: 10px 6px;
   text-align: center;
-  min-width: 60px;
-  border-bottom: 2px solid #cbd5e1;
+  min-width: 56px;
+  border-bottom: 2px solid rgba(184, 148, 90, 0.32);
 }
 
 .indexCorner {
   position: sticky;
   left: 0;
   z-index: 30;
-  background: #f1f5f9;
+  background: #faf7f1;
   min-width: 40px;
 }
 
@@ -231,15 +210,15 @@
   position: sticky;
   left: 40px;
   z-index: 30;
-  background: #f1f5f9;
+  background: #faf7f1;
   min-width: 140px;
   text-align: left;
-  padding-left: 16px;
+  padding-left: 14px;
 }
 
 .dayLabel {
   font-size: 11px;
-  color: #64748b;
+  color: #8b8275;
   text-transform: uppercase;
   display: block;
   font-weight: 600;
@@ -247,50 +226,51 @@
 }
 
 .dateLabel {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
-  color: #1e293b;
+  color: #2d2a24;
 }
 
 .todayCol {
-  background: #fefce8;
-  color: #854d0e;
+  background: rgba(200, 117, 63, 0.08);
 }
-.todayCol .dateLabel { color: #854d0e; }
+
+.todayCol .dateLabel {
+  color: #c8753f;
+}
 
 .indexCell {
   position: sticky;
   left: 0;
-  background: rgba(255, 255, 255, 0.95);
+  background: #ffffff;
   z-index: 20;
   text-align: center;
   font-weight: 500;
-  color: #94a3b8;
-  font-size: 13px;
-  border-right: 1px solid #e2e8f0;
+  color: #a39786;
+  font-size: 12px;
 }
 
 .vendorCell {
   position: sticky;
   left: 40px;
-  background: rgba(255, 255, 255, 0.95);
+  background: #ffffff;
   z-index: 20;
-  padding: 12px 16px;
+  padding: 10px 14px;
   font-weight: 600;
-  color: #334155;
-  font-size: 14px;
-  border-right: 2px solid #cbd5e1;
+  color: #4a4238;
+  font-size: 13px;
+  border-right: 2px solid rgba(184, 148, 90, 0.32);
   white-space: nowrap;
 }
 
 .matrixRow:hover .vendorCell,
 .matrixRow:hover .indexCell {
-  background: #f8fafc;
+  background: rgba(184, 148, 90, 0.04);
 }
 
 .matrixCell {
   padding: 6px;
-  min-width: 60px;
+  min-width: 56px;
   height: 100%;
   background: #ffffff;
   transition: background-color 0.2s ease;
@@ -298,23 +278,23 @@
 }
 
 .matrixRow:hover .matrixCell {
-  background: #f8fafc;
+  background: rgba(184, 148, 90, 0.04);
 }
 
 .todayCell {
-  background: #fffbeb;
+  background: rgba(200, 117, 63, 0.06);
 }
 
 .matrixRow:hover .todayCell {
-  background: #fef3c7;
+  background: rgba(200, 117, 63, 0.12);
 }
 
 .weekendCell {
-  background: #f9fafb;
+  background: rgba(184, 148, 90, 0.03);
 }
 
 .matrixRow:hover .weekendCell {
-  background: #f1f5f9;
+  background: rgba(184, 148, 90, 0.08);
 }
 
 .iconContainer {

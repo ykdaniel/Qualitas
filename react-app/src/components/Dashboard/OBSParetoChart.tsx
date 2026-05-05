@@ -64,17 +64,17 @@ const OBSParetoChart: React.FC = React.memo(() => {
 
   return (
     <div className={styles.paretoChartContainer}>
-      <h3 className={styles.paretoTitle}>OBS Status</h3>
-      <ResponsiveContainer width="100%" height={400}>
-        <ComposedChart data={paretoData} margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
+      <ResponsiveContainer width="100%" height={460}>
+        <ComposedChart data={paretoData} margin={{ top: 16, right: 30, left: 20, bottom: 8 }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis
             dataKey="contractor"
             angle={-45}
             textAnchor="end"
-            height={80}
+            height={120}
             interval={0}
-            dy={10}
+            tickMargin={16}
+            tick={{ fill: '#2d2a24', fontSize: 12 }}
           />
           <YAxis
             yAxisId="left"
@@ -95,7 +95,16 @@ const OBSParetoChart: React.FC = React.memo(() => {
               return [value, name];
             }}
           />
-          <Legend />
+          <Legend
+            iconType="circle"
+            iconSize={10}
+            wrapperStyle={{ paddingTop: 12 }}
+            formatter={(value) => (
+              <span style={{ color: '#2d2a24', fontSize: 13, fontWeight: 600, marginRight: 8 }}>
+                {value}
+              </span>
+            )}
+          />
           <Bar yAxisId="left" dataKey="closed" stackId="a" fill="#10b981" name="Closed" maxBarSize={80}>
             <LabelList
               dataKey="closed"
@@ -128,16 +137,16 @@ const OBSParetoChart: React.FC = React.memo(() => {
             yAxisId="right"
             type="monotone"
             dataKey="cumulativePercent"
-            stroke="#fbbf24"
-            strokeWidth={2}
-            dot={{ fill: '#fbbf24', r: 4 }}
+            stroke="#7c3aed"
+            strokeWidth={2.5}
+            dot={{ fill: '#7c3aed', r: 4 }}
             name="Cumulative %"
           >
             <LabelList
               dataKey="cumulativePercent"
               position="top"
               formatter={(value: number) => `${value}%`}
-              style={{ fill: '#fbbf24', fontSize: 12, fontWeight: 600 }}
+              style={{ fill: '#7c3aed', fontSize: 12, fontWeight: 700 }}
             />
           </Line>
         </ComposedChart>

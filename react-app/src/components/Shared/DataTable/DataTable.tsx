@@ -116,14 +116,15 @@ const DataTableInner = <TData, TValue>({
                         {table.getHeaderGroups().map((headerGroup) => (
                             <TableRow key={headerGroup.id}>
                                 {headerGroup.headers.map((header) => {
+                                    const explicitSize = header.column.columnDef.size;
                                     return (
                                         <TableHead key={header.id} style={{
                                             textAlign: 'center',
-                                            backgroundColor: '#1e3a5f',
-                                            color: 'white',
-                                            border: '1px solid #2d4a6f',
-                                            width: header.getSize(),
-                                            minWidth: header.getSize(),
+                                            backgroundColor: '#4a4238',
+                                            color: '#faf7f1',
+                                            border: '1px solid #2d2a24',
+                                            width: explicitSize,
+                                            minWidth: explicitSize,
                                         }}>
                                             {header.isPlaceholder
                                                 ? null
@@ -146,13 +147,15 @@ const DataTableInner = <TData, TValue>({
                                     className={cn("even:bg-muted/30", getRowClassName?.(row.original), onRowClick && "cursor-pointer")}
                                     onClick={() => onRowClick?.(row.original)}
                                 >
-                                    {row.getVisibleCells().map((cell) => (
+                                    {row.getVisibleCells().map((cell) => {
+                                        const explicitSize = cell.column.columnDef.size;
+                                        return (
                                         <TableCell
                                             key={cell.id}
                                             className="text-center border p-2"
                                             style={{
-                                                width: cell.column.getSize(),
-                                                minWidth: cell.column.getSize(),
+                                                width: explicitSize,
+                                                minWidth: explicitSize,
                                             }}
                                         >
                                             {flexRender(
@@ -160,7 +163,8 @@ const DataTableInner = <TData, TValue>({
                                                 cell.getContext()
                                             )}
                                         </TableCell>
-                                    ))}
+                                        );
+                                    })}
                                 </TableRow>
                             ))
                         ) : (

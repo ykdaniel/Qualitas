@@ -43,7 +43,7 @@ export function DataTableColumnHeader<TData, TValue>({
                     <Button
                         variant="ghost"
                         size="sm"
-                        className="-ml-3 h-8 data-[state=open]:bg-accent data-[state=open]:text-accent-foreground text-white hover:text-white hover:bg-[#2d4a6f]"
+                        className="-ml-3 h-8 text-[#faf7f1] hover:text-[#faf7f1] hover:bg-[#2d2a24]"
                     >
                         <span>{title}</span>
                         {column.getIsSorted() === "desc" ? (

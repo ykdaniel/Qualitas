@@ -70,32 +70,14 @@ const PQPStatsCard: React.FC = () => {
         </div>
         <div className={styles.pqpStatsRow}>
           <span className={styles.pqpStatsLabel}>{t('status.approved') || 'Approved'}</span>
-          <span className={styles.pqpStatsValue} style={{ color: '#1e293b', fontSize: '18px', fontWeight: '600' }}>
+          <span className={styles.pqpStatsValue}>
             {stats.approved} ({stats.approvedPercent}%)
           </span>
         </div>
         <div className={styles.pqpStatsRow}>
-          <span className={styles.pqpStatsLabel}>{t('pqp.status.underReview') || 'Under Review'}</span>
-          <span className={styles.pqpStatsValue} style={{ color: '#f59e0b', fontSize: '18px', fontWeight: '600' }}>
-            {stats.underReview} ({stats.underReviewPercent}%)
-          </span>
-        </div>
-        <div className={styles.pqpStatsRow}>
-          <span className={styles.pqpStatsLabel}>{t('pqp.status.notSubmit') || 'Not Submit'}</span>
-          <span className={styles.pqpStatsValue} style={{ color: '#64748b', fontSize: '18px', fontWeight: '600' }}>
-            {stats.notSubmit} ({stats.notSubmitPercent}%)
-          </span>
-        </div>
-        <div className={styles.pqpStatsRow}>
           <span className={styles.pqpStatsLabel}>{t('status.reject') || 'Reject'}</span>
-          <span className={styles.pqpStatsValue} style={{ color: stats.reject > 0 ? '#dc2626' : '#1e293b', fontSize: '18px', fontWeight: '600' }}>
+          <span className={styles.pqpStatsValue} style={{ color: stats.reject > 0 ? '#dc2626' : undefined }}>
             {stats.reject} ({stats.rejectPercent}%)
-          </span>
-        </div>
-        <div className={styles.pqpStatsRow}>
-          <span className={styles.pqpStatsLabel}>{t('pqp.status.reviseResubmit') || 'Revise & Resubmit'}</span>
-          <span className={styles.pqpStatsValue} style={{ color: stats.reviseResubmit > 0 ? '#ea580c' : '#1e293b', fontSize: '18px', fontWeight: '600' }}>
-            {stats.reviseResubmit} ({stats.reviseResubmitPercent}%)
           </span>
         </div>
       </div>
