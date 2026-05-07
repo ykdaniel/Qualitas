@@ -89,7 +89,7 @@ export const useAuditStore = create<AuditState>((set, get) => ({
     updateAudit: async (id, updates) => {
         try {
             set({ error: null });
-            const response = await api.put(`/audit/${id}/`, updates);
+            const response = await api.put(`/audit/${id}`, updates);
             set((state) => ({
                 auditList: state.auditList.map(a => (a.id === id ? response.data : a))
             }));
@@ -104,7 +104,7 @@ export const useAuditStore = create<AuditState>((set, get) => ({
     deleteAudit: async (id) => {
         try {
             set({ error: null });
-            await api.delete(`/audit/${id}/`);
+            await api.delete(`/audit/${id}`);
             set((state) => ({
                 auditList: state.auditList.filter(a => a.id !== id)
             }));

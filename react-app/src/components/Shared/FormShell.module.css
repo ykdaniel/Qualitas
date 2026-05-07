@@ -31,7 +31,7 @@
   background: #ffffff;
   border-radius: 12px;
   width: 95%;
-  max-width: 1200px;
+  max-width: 1400px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
@@ -136,8 +136,14 @@
 
 .formGrid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 18px;
+}
+
+@media (max-width: 1024px) {
+  .formGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 .formGroup {

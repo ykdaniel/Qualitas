@@ -185,7 +185,7 @@ const NCR: React.FC = () => {
     }
   };
 
-  const columns = useMemo(() => createColumns(handleEdit, confirmDelete, t), [t, handleEdit, confirmDelete]);
+  const columns = useMemo(() => createColumns(confirmDelete, t), [t, confirmDelete]);
 
   const chips: { id: StatusFilter; label: string; count: number }[] = [
     { id: 'all', label: t('common.all') || 'All', count: statistics.total },

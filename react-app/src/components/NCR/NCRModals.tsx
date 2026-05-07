@@ -420,7 +420,10 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 title={t('obs.defectPhotos')}
                                 legacyAttachments={formData.defectPhotos}
                                 onPendingFilesChange={setPendingDefectPhotos}
-                                onDeleteExistingFile={(id) => setDeletedFileIds(prev => [...prev, id])}
+                                onDeleteExistingFile={(id) => {
+                                    setDeletedFileIds(prev => [...prev, id]);
+                                    setFormData(prev => ({ ...prev, defectPhotos: (prev.defectPhotos || []).filter((a: any) => typeof a === 'string' || a?.id !== id) }));
+                                }}
                                 onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'defect')}
                                 accept="image/*"
                             />
@@ -435,7 +438,10 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 title={t('obs.improvementPhotos')}
                                 legacyAttachments={formData.improvementPhotos}
                                 onPendingFilesChange={setPendingImprovementPhotos}
-                                onDeleteExistingFile={(id) => setDeletedFileIds(prev => [...prev, id])}
+                                onDeleteExistingFile={(id) => {
+                                    setDeletedFileIds(prev => [...prev, id]);
+                                    setFormData(prev => ({ ...prev, improvementPhotos: (prev.improvementPhotos || []).filter((a: any) => typeof a === 'string' || a?.id !== id) }));
+                                }}
                                 onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'improvement')}
                                 accept="image/*"
                             />
@@ -451,7 +457,10 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 title={t('obs.attachments')}
                                 legacyAttachments={formData.attachments}
                                 onPendingFilesChange={setPendingAttachments}
-                                onDeleteExistingFile={(id) => setDeletedFileIds(prev => [...prev, id])}
+                                onDeleteExistingFile={(id) => {
+                                    setDeletedFileIds(prev => [...prev, id]);
+                                    setFormData(prev => ({ ...prev, attachments: (prev.attachments || []).filter((a: any) => typeof a === 'string' || a?.id !== id) }));
+                                }}
                                 onRemoveLegacy={handleRemoveLegacyAttachment}
                             />
                         </div>

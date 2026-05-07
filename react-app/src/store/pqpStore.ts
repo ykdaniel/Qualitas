@@ -88,7 +88,7 @@ export const usePQPStore = create<PQPState>((set, get) => ({
 
     updatePQP: async (id: string, updates: Partial<PQPItem>) => {
         try {
-            const response = await api.put(`/pqp/${id}/`, updates);
+            const response = await api.put(`/pqp/${id}`, updates);
             set((state) => ({ pqpList: state.pqpList.map(p => (p.id === id ? response.data : p)) }));
         } catch (error: any) {
             const msg = getErrorMessage(error, 'Failed to update PQP');
@@ -123,7 +123,7 @@ export const usePQPStore = create<PQPState>((set, get) => ({
 
     deletePQP: async (id: string) => {
         try {
-            await api.delete(`/pqp/${id}/`);
+            await api.delete(`/pqp/${id}`);
             set((state) => ({ pqpList: state.pqpList.filter(p => p.id !== id) }));
         } catch (error: any) {
             const msg = getErrorMessage(error, 'Failed to delete PQP');

@@ -907,6 +907,24 @@ const translations: Record<Language, Record<string, string>> = {
     'workflow.checkpoint.accepted': 'Accepted',
     'home.workflow.description': 'Q-WorkFlow tracker — every NOI through 9 checkpoints to acceptance.',
 
+    // Related documents panel
+    'related.title': 'Related Documents',
+    'related.empty': 'No related documents yet.',
+    'related.upstream': 'Upstream',
+    'related.downstream': 'Downstream',
+    'related.error': 'Failed to load related documents.',
+
+    // NOI validation messages
+    'noi.validation.missingPackage': 'Please enter Subject',
+    'noi.validation.missingInspectionDate': 'Please select Inspection Date',
+    'noi.validation.missingInspectionTime': 'Please enter Inspection Time',
+    'noi.validation.missingCheckpoint': 'Please select Checkpoint',
+    'noi.validation.missingEventNumber': 'Please enter Event #',
+    'noi.validation.missingContacts': 'Please enter Contact',
+    'noi.validation.missingPhone': 'Please enter Phone',
+    'noi.validation.missingEmail': 'Please enter Email',
+    'noi.validation.missingNcrSelection': 'Please select NCR Reference (or N/A)',
+
   },
 
   zh: {
@@ -1776,6 +1794,24 @@ const translations: Record<Language, Record<string, string>> = {
     'workflow.checkpoint.accepted': '驗收合格',
     'home.workflow.description': 'Q-WorkFlow 追蹤 — 每張 NOI 走過 9 個檢查點直到驗收完成。',
 
+    // Related documents panel
+    'related.title': '相關文件',
+    'related.empty': '尚無相關文件。',
+    'related.upstream': '上游',
+    'related.downstream': '下游',
+    'related.error': '無法載入相關文件。',
+
+    // NOI validation messages
+    'noi.validation.missingPackage': '請輸入 Subject',
+    'noi.validation.missingInspectionDate': '請選擇檢驗日期',
+    'noi.validation.missingInspectionTime': '請輸入檢驗時間',
+    'noi.validation.missingCheckpoint': '請選擇查驗點',
+    'noi.validation.missingEventNumber': '請輸入 Event #',
+    'noi.validation.missingContacts': '請輸入聯絡人',
+    'noi.validation.missingPhone': '請輸入電話',
+    'noi.validation.missingEmail': '請輸入 Email',
+    'noi.validation.missingNcrSelection': '請選擇 NCR Reference（或 N/A）',
+
   }, // Close zh
 }; // Close translations
 
@@ -1796,7 +1832,17 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   const t = (key: string, params?: Record<string, string | number>): string => {
-    let translation = translations[language][key] || key;
+    const found = translations[language][key];
+    if (import.meta.env.DEV && found === undefined) {
+      const seen = (t as unknown as { _warned?: Set<string> })._warned ?? new Set<string>();
+      const tag = `${language}:${key}`;
+      if (!seen.has(tag)) {
+        seen.add(tag);
+        (t as unknown as { _warned?: Set<string> })._warned = seen;
+        console.warn(`[i18n] Missing translation: "${key}" (${language})`);
+      }
+    }
+    let translation = found ?? key;
     if (params) {
       Object.entries(params).forEach(([paramsKey, value]) => {
         translation = translation.replace(new RegExp(`{${paramsKey}}`, 'g'), String(value));

@@ -21,11 +21,15 @@ const Audit: React.FC = () => {
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [currentAuditId, setCurrentAuditId] = useState<string | null>(null);
-    const { getActiveContractors } = useContractorsStore();
+    const contractors = useContractorsStore(state => state.contractors);
     const [selectedVendorFilter, setSelectedVendorFilter] = useState<string | null>(null);
 
-    // Get active contractors
-    const activeContractors = useMemo(() => getActiveContractors(), [getActiveContractors]);
+    // Get active contractors — depend on the contractors array itself so memo
+    // recomputes once the store finishes fetching.
+    const activeContractors = useMemo(
+        () => contractors.filter(c => c.status === 'active'),
+        [contractors]
+    );
 
     useEffect(() => {
         useAuditStore.getState().fetchAudits();
@@ -53,7 +57,7 @@ const Audit: React.FC = () => {
         message: '',
     });
 
-    // Calendar logic
+    // Calendar logic — month view
     const [viewDate, setViewDate] = useState(new Date());
 
     const changeMonth = useCallback((offset: number) => {
@@ -88,28 +92,60 @@ const Audit: React.FC = () => {
         return data;
     }, [auditList, deferredSearchQuery, selectedVendorFilter]);
 
-    // 3. Matrix Computation — shows ALL audit dates as a fixed reference schedule
+    // 3. Matrix Computation — every day of the viewed month
     const matrixDates = useMemo(() => {
-        const validDates = Array.from(new Set(filteredData.map(a => a.date)))
-            .filter(dateStr => dateStr && !isNaN(new Date(dateStr).getTime()))
-            .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
-
-        return validDates.map(dateStr => {
-            const date = new Date(dateStr);
+        const today = new Date();
+        const year = viewDate.getFullYear();
+        const month = viewDate.getMonth();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        return Array.from({ length: daysInMonth }, (_, i) => {
+            const date = new Date(year, month, i + 1);
             return {
                 date,
-                isToday: date.toDateString() === new Date().toDateString(),
+                isToday: date.toDateString() === today.toDateString(),
                 isWeekend: date.getDay() === 0 || date.getDay() === 6,
                 dayLabel: date.toLocaleDateString('en-US', { weekday: 'short' }),
-                dateLabel: `${date.getMonth() + 1}/${date.getDate()}`
+                dateLabel: `${date.getDate()}`,
             };
         });
-    }, [filteredData]);
+    }, [viewDate]);
 
     const getAuditForMatrix = useCallback((vendorName: string, date: Date) => {
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
         return auditList.find(a => a.contractor === vendorName && a.date === dateStr);
     }, [auditList]);
+
+    // Vendors to show as rows: only Active contractors that have at least one audit.
+    // Sorted ascending by earliest audit date. Each vendor is also flagged
+    // pastUnfinished=true if any of its audits is past-due AND not Completed/Closed,
+    // so the matrix can highlight that row.
+    const SCHEDULE_VENDOR_LIMIT = 5;
+    const FINISHED_STATUSES = new Set(['Completed', 'Closed']);
+    const scheduleVendors = useMemo(() => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayMs = today.getTime();
+        const base = activeContractors.filter(v => (vendorStats[v.name] || 0) > 0);
+        const earliestDateMs = (vendorName: string) => {
+            const dates = auditList
+                .filter(a => a.contractor === vendorName && a.date)
+                .map(a => new Date(a.date).getTime())
+                .filter(t => !isNaN(t));
+            return dates.length === 0 ? Number.POSITIVE_INFINITY : Math.min(...dates);
+        };
+        const hasPastUnfinished = (vendorName: string) =>
+            auditList.some(a =>
+                a.contractor === vendorName &&
+                a.date &&
+                new Date(a.date).getTime() < todayMs &&
+                !FINISHED_STATUSES.has(a.status)
+            );
+        const sorted = [...base]
+            .map(v => ({ ...v, pastUnfinished: hasPastUnfinished(v.name) }))
+            .sort((a, b) => earliestDateMs(a.name) - earliestDateMs(b.name));
+        if (selectedVendorFilter) return sorted.filter(v => v.name === selectedVendorFilter);
+        return sorted.slice(0, SCHEDULE_VENDOR_LIMIT);
+    }, [vendorStats, selectedVendorFilter, activeContractors, auditList]);
 
     // Actions
     const handleAddNew = useCallback(() => {
@@ -171,24 +207,21 @@ const Audit: React.FC = () => {
 
             {/* Premium Top Section: Interactive Panels */}
             <div className={styles.topSection}>
-                {/* Vendor Stats Glass Panel */}
-                <VendorStatsPanel 
+                <VendorStatsPanel
                     stats={vendorStats}
                     maxAudits={maxAudits}
                     activeContractors={activeContractors}
                     selectedVendorFilter={selectedVendorFilter}
                     onSelectVendor={setSelectedVendorFilter}
                     totalAudits={auditList.length}
+                    pastUnfinishedVendors={new Set(scheduleVendors.filter(v => v.pastUnfinished).map(v => v.name))}
                     t={t}
                 />
 
                 {/* Schedule Matrix Glass Panel */}
-                <ScheduleMatrix 
+                <ScheduleMatrix
                     matrixDates={matrixDates}
-                    vendors={selectedVendorFilter 
-                        ? activeContractors.filter(v => v.name === selectedVendorFilter)
-                        : activeContractors.filter(v => (vendorStats[v.name] || 0) > 0)
-                    }
+                    vendors={scheduleVendors}
                     getAuditForMatrix={getAuditForMatrix}
                     viewDate={viewDate}
                     onChangeMonth={changeMonth}

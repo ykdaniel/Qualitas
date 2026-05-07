@@ -407,7 +407,7 @@ const FollowUpIssue: React.FC = () => {
 
       <div className={shellStyles.content}>
         <DataTable
-          columns={createColumns(handleEdit, handleDeleteClick, navigate, t)}
+          columns={createColumns(handleDeleteClick, navigate, t)}
           data={filteredList}
           searchKey=""
           getRowClassName={(row) =>

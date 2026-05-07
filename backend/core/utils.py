@@ -17,6 +17,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 import models
@@ -390,6 +391,12 @@ def generate_reference_no(db: Session, vendor_name: str, doc_type: str, project_
     ).first()
     seq_digits = rule.sequence_digits if rule and rule.sequence_digits else 6
 
+    # 預先算出本次的編號 prefix，用於 self-heal 比對
+    if rule and rule.prefix:
+        expected_prefix = rule.prefix.replace('[ABBREV]', vendor_abbrev)
+    else:
+        expected_prefix = f"{code}-{vendor_abbrev}-{doc_type.upper()}-"
+
     with _reference_seq_lock:
         # 查詢或建立序號記錄
         seq_record = db.query(ReferenceSequence).filter(
@@ -398,11 +405,15 @@ def generate_reference_no(db: Session, vendor_name: str, doc_type: str, project_
             ReferenceSequence.doc == doc_type
         ).with_for_update().first()
 
+        # Self-heal: 跟實際資料表的最大序號比對，避免硬編碼 import 造成計數器落後
+        actual_max = _max_existing_seq(db, doc_type, expected_prefix)
+        existing_seq = seq_record.last_seq if seq_record else 0
+        base_seq = max(existing_seq, actual_max)
+        next_seq = base_seq + 1
+
         if seq_record:
-            seq_record.last_seq += 1
-            next_seq = seq_record.last_seq
+            seq_record.last_seq = next_seq
         else:
-            next_seq = 1
             seq_record = ReferenceSequence(
                 project=code,
                 vendor=vendor_abbrev,
@@ -416,9 +427,47 @@ def generate_reference_no(db: Session, vendor_name: str, doc_type: str, project_
     # 依規則組合編號；若沒有規則則走 fallback
     if rule and rule.prefix:
         seq_str = str(next_seq).zfill(seq_digits)
-        prefix = rule.prefix.replace('[ABBREV]', vendor_abbrev)
-        return f"{prefix}{seq_str}"
+        return f"{expected_prefix}{seq_str}"
 
     # Fallback：維持舊有格式 QTS-ABBREV-DOC-000001
     seq_str = str(next_seq).zfill(6)
-    return f"{code}-{vendor_abbrev}-{doc_type.upper()}-{seq_str}"
+    return f"{expected_prefix}{seq_str}"
+
+
+# 白名單：doc_type → 實體 table name（避免 SQL 注入，且只 self-heal 已知文件類型）
+_DOC_TYPE_TABLES = {
+    'ITP': 'itp',
+    'NOI': 'noi',
+    'NCR': 'ncr',
+    'ITR': 'itr',
+    'PQP': 'pqp',
+    'OBS': 'obs',
+    'FAT': 'fat',
+}
+
+
+def _max_existing_seq(db: Session, doc_type: str, expected_prefix: str) -> int:
+    """
+    Query the actual document table for the largest sequence number whose
+    referenceNo starts with `expected_prefix`. Returns 0 if none.
+
+    Why this exists: ReferenceSequence.last_seq can drift below the real max
+    when records are imported with hardcoded referenceNos (e.g. db_seeder).
+    Without this, the next generated number collides with an existing row.
+    """
+    table = _DOC_TYPE_TABLES.get(doc_type.upper())
+    if not table:
+        return 0
+    try:
+        sql = text(
+            f'SELECT MAX(CAST(SUBSTR("referenceNo", :prefix_len + 1) AS INTEGER)) '
+            f'FROM {table} WHERE "referenceNo" LIKE :pattern'
+        )
+        result = db.execute(sql, {
+            'prefix_len': len(expected_prefix),
+            'pattern': f"{expected_prefix}%",
+        }).scalar()
+        return int(result) if result else 0
+    except Exception as e:
+        logger.warning(f"_max_existing_seq failed for {doc_type}: {e}")
+        return 0

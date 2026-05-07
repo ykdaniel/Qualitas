@@ -136,7 +136,6 @@ const Contractors: React.FC = () => {
 
     const projectColumns = React.useMemo(
         () => createProjectColumns(
-            (p) => { setEditingProject(p); setIsProjectModalOpen(true); },
             (id) => setProjectDeleteModal({ isOpen: true, id }),
             t
         ),
@@ -209,7 +208,7 @@ const Contractors: React.FC = () => {
                             <DataTable
                                 title={t('contractors.title')}
                                 actions={null} // Actions migrated to top bar
-                                columns={createColumns(handleEdit, handleDeleteClick, t)}
+                                columns={createColumns(handleDeleteClick, t)}
                                 data={filteredContractors}
                                 searchKey="" // We handle search externally
                                 getRowId={(row: Contractor) => row.id.toString()}

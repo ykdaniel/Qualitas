@@ -243,7 +243,7 @@ const FAT: React.FC = () => {
 
       <div className={shellStyles.content}>
         <DataTable
-          columns={createColumns(handleEdit, handleAddDetails, handleDeleteClick, t, getActiveContractors())}
+          columns={createColumns(handleAddDetails, handleDeleteClick, t, getActiveContractors())}
           data={filteredFatList}
           searchKey=""
           getRowClassName={(row) =>

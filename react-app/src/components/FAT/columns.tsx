@@ -6,11 +6,10 @@ import { DataTableColumnHeader } from "../Shared/DataTable/DataTableColumnHeader
 // I will define a matching interface here since I will eventually update FAT.tsx to use this.
 import { FATItem } from "../../store/fatStore";
 
-import { Edit, Trash2, PlusSquare } from "lucide-react";
+import { Trash2, PlusSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export const createColumns = (
-    handleEdit: (id: string) => void,
     handleAddDetails: (id: string) => void,
     handleDelete: (id: string) => void,
     t: (key: string) => string,
@@ -130,18 +129,8 @@ export const createColumns = (
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0 text-emerald-500 hover:text-white hover:bg-emerald-500"
-                            onClick={() => handleEdit(fat.id)}
-                            title={t('fat.tooltip.edit')}
-                        >
-                            <Edit className="h-4 w-4" />
-                        </Button>
-
-                        <Button
-                            variant="ghost"
-                            size="sm"
                             className="h-8 w-8 p-0 text-blue-500 hover:text-white hover:bg-blue-500"
-                            onClick={() => handleAddDetails(fat.id)}
+                            onClick={(e) => { e.stopPropagation(); handleAddDetails(fat.id); }}
                             title={t('fat.tooltip.addDetails')}
                         >
                             <PlusSquare className="h-4 w-4" />
@@ -150,7 +139,7 @@ export const createColumns = (
                             variant="ghost"
                             size="sm"
                             className="h-8 w-8 p-0 text-red-500 hover:text-white hover:bg-red-500"
-                            onClick={() => handleDelete(fat.id)}
+                            onClick={(e) => { e.stopPropagation(); handleDelete(fat.id); }}
                             title={t('fat.tooltip.delete')}
                         >
                             <Trash2 className="h-4 w-4" />

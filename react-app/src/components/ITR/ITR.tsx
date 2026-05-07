@@ -91,7 +91,7 @@ const ITR: React.FC = () => {
         setDeleteModal({ isOpen: true, id, message });
     }, [itrList, checklistList, t]);
 
-    const columns = useMemo(() => createColumns(handleEdit, handleDeleteClick, navigate, t), [handleEdit, handleDeleteClick, navigate, t]);
+    const columns = useMemo(() => createColumns(handleDeleteClick, navigate, t), [handleDeleteClick, navigate, t]);
 
     const handleDelete = async () => {
         if (deleteModal.id) {

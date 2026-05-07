@@ -256,6 +256,16 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
 
     const handleDeleteExistingFile = (fileId: string) => {
         setDeletedFileIds(prev => [...prev, fileId]);
+        const filterOut = (arr: any[] | undefined) =>
+            (arr || []).filter((a: any) => typeof a === 'string' || a?.id !== fileId);
+        setFormData(prev => ({
+            ...prev,
+            defectPhotos: filterOut(prev.defectPhotos),
+            improvementPhotos: filterOut(prev.improvementPhotos),
+            drawings: filterOut((prev as any).drawings),
+            certificates: filterOut((prev as any).certificates),
+            attachments: filterOut(prev.attachments),
+        }));
     };
 
     const handleRemoveLegacyPhoto = (index: number, photoType: 'defect' | 'improvement') => {

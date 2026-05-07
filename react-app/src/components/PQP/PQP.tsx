@@ -62,8 +62,8 @@ const PQP: React.FC = () => {
   }, []);
 
   const columns = useMemo(
-    () => createColumns(handleEdit, confirmDelete, t, getActiveContractors),
-    [t, getActiveContractors, handleEdit, confirmDelete],
+    () => createColumns(confirmDelete, t, getActiveContractors),
+    [t, getActiveContractors, confirmDelete],
   );
 
   const handleAddNew = () => {

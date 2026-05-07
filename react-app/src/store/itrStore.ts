@@ -173,7 +173,7 @@ export const useITRStore = create<ITRState>((set, get) => ({
                 delete payload.linkedChecklists;
             }
 
-            const response = await api.put(`/itr/${id}/`, payload);
+            const response = await api.put(`/itr/${id}`, payload);
             const updated = normalizeItem(response.data);
             set((state) => ({ itrList: state.itrList.map(i => i.id === id ? updated : i) }));
         } catch (error: any) {
@@ -185,7 +185,7 @@ export const useITRStore = create<ITRState>((set, get) => ({
 
     deleteITR: async (id: string) => {
         try {
-            await api.delete(`/itr/${id}/`);
+            await api.delete(`/itr/${id}`);
             set((state) => ({ itrList: state.itrList.filter(i => i.id !== id) }));
         } catch (error: any) {
             const msg = getErrorMessage(error, 'Failed to delete ITR');

@@ -13,6 +13,7 @@ interface MatrixDate {
 interface Contractor {
   id: string;
   name: string;
+  pastUnfinished?: boolean;
 }
 
 interface ScheduleMatrixProps {
@@ -54,7 +55,7 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
           </div>
         </div>
         <div className={styles.monthDisplay}>
-          {viewDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+          {viewDate.toLocaleString('en-US', { month: 'long', year: 'numeric' })}
         </div>
       </div>
 
@@ -96,7 +97,7 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
               </thead>
               <tbody>
                 {vendors.map((vendor, vIdx) => (
-                  <tr key={vendor.id} className={styles.matrixRow}>
+                  <tr key={vendor.id} className={`${styles.matrixRow} ${vendor.pastUnfinished ? styles.pastUnfinishedRow : ''}`}>
                     <td className={styles.indexCell}>{vIdx + 1}</td>
                     <td className={styles.vendorCell}>{vendor.name}</td>
                     {matrixDates.map((d, i) => {

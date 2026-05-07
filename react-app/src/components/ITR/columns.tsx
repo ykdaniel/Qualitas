@@ -2,14 +2,13 @@ import { ColumnDef } from "@tanstack/react-table";
 import { ITRItem } from "../../store/itrStore";
 import { DataTableColumnHeader } from "@/components/Shared/DataTable/DataTableColumnHeader";
 import { Button } from "@/components/ui/button";
-import { Pencil, Trash2, FileText, AlertTriangle } from "lucide-react";
+import { Trash2, FileText, AlertTriangle } from "lucide-react";
 import { getLocalizedStatus, formatDateISO } from "../../utils/formatters";
 import { addSevenWorkingDays } from "../../utils/dateUtils";
 import { Checkbox } from "@/components/ui/checkbox";
 
 
 export const createColumns = (
-    handleEdit: (id: string) => void,
     handleDeleteClick: (id: string) => void,
     navigate: (path: string) => void,
     t: (key: string) => string
@@ -157,22 +156,12 @@ export const createColumns = (
                 const itr = row.original;
                 return (
                     <div className="flex items-center justify-center space-x-2">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-100"
-                            onClick={() => handleEdit(itr.id)}
-                            title={t('itr.tooltip.edit')}
-                        >
-                            <Pencil className="h-4 w-4" />
-                        </Button>
-
                         {itr.noiNumber && (
                             <Button
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 text-gray-500 hover:text-gray-600 hover:bg-gray-100"
-                                onClick={() => navigate(`/noi?openId=${encodeURIComponent(itr.noiNumber!)}`)}
+                                onClick={(e) => { e.stopPropagation(); navigate(`/noi?openId=${encodeURIComponent(itr.noiNumber!)}`); }}
                                 title={t('itr.tooltip.viewRelatedNOI')}
                             >
                                 <FileText className="h-4 w-4" />
@@ -183,7 +172,7 @@ export const createColumns = (
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
-                                onClick={() => navigate(`/ncr?openId=${encodeURIComponent(itr.ncrNumber!)}`)}
+                                onClick={(e) => { e.stopPropagation(); navigate(`/ncr?openId=${encodeURIComponent(itr.ncrNumber!)}`); }}
                                 title={t('itr.tooltip.viewRelatedNCR')}
                             >
                                 <AlertTriangle className="h-4 w-4" />
@@ -193,7 +182,7 @@ export const createColumns = (
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-100"
-                            onClick={() => handleDeleteClick(itr.id)}
+                            onClick={(e) => { e.stopPropagation(); handleDeleteClick(itr.id); }}
                             title={t('itr.tooltip.delete')}
                         >
                             <Trash2 className="h-4 w-4" />

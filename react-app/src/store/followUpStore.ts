@@ -72,7 +72,7 @@ export const useFollowUpStore = create<FollowUpState>((set, get) => ({
 
     updateFollowUp: async (id, updates) => {
         try {
-            const response = await api.put(`/followup/${id}/`, updates);
+            const response = await api.put(`/followup/${id}`, updates);
             set((state) => ({
                 followUpList: state.followUpList.map(f => (f.id === id ? response.data : f)),
             }));
@@ -85,7 +85,7 @@ export const useFollowUpStore = create<FollowUpState>((set, get) => ({
 
     deleteFollowUp: async (id) => {
         try {
-            await api.delete(`/followup/${id}/`);
+            await api.delete(`/followup/${id}`);
             set((state) => ({
                 followUpList: state.followUpList.filter(f => f.id !== id),
             }));

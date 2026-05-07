@@ -174,7 +174,7 @@ const Checklist: React.FC = () => {
         }
     }, [deleteRecord, t]);
 
-    const checklistColumns = useMemo(() => createColumns(handleEdit, handleDelete, t), [handleEdit, handleDelete, t]);
+    const checklistColumns = useMemo(() => createColumns(handleDelete, t), [handleDelete, t]);
 
     const chips: { id: ChecklistStatusFilter; label: string; count: number }[] = [
         { id: 'all', label: t('common.all') || 'All', count: stats.total },

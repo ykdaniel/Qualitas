@@ -13,6 +13,7 @@ interface VendorStatsPanelProps {
   selectedVendorFilter: string | null;
   onSelectVendor: (vendor: string | null) => void;
   totalAudits: number;
+  pastUnfinishedVendors?: Set<string>;
   t: (key: string) => string;
 }
 
@@ -23,9 +24,12 @@ const VendorStatsPanel: React.FC<VendorStatsPanelProps> = ({
   selectedVendorFilter,
   onSelectVendor,
   totalAudits,
+  pastUnfinishedVendors,
   t
 }) => {
-  // Only show vendors that actually have audits
+  // Only show Active contractors that actually have audits.
+  // Business rule: inactive contractors cannot be audited, so don't surface
+  // them here even if legacy audit rows still reference them.
   const vendorsWithAudits = useMemo(() => {
     return activeContractors.filter(vendor => (stats[vendor.name] || 0) > 0);
   }, [activeContractors, stats]);
@@ -65,10 +69,11 @@ const VendorStatsPanel: React.FC<VendorStatsPanelProps> = ({
           const percentage = maxAudits > 0 ? (count / maxAudits) * 100 : 0;
           const isActive = selectedVendorFilter === vendor.name;
 
+          const isPastUnfinished = pastUnfinishedVendors?.has(vendor.name);
           return (
             <div
               key={vendor.id}
-              className={`${styles.vendorItem} ${isActive ? styles.active : ''}`}
+              className={`${styles.vendorItem} ${isActive ? styles.active : ''} ${isPastUnfinished ? styles.pastUnfinished : ''}`}
               onClick={() => onSelectVendor(isActive ? null : vendor.name)}
               role="button"
               tabIndex={0}

@@ -81,7 +81,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ searchQuery, tabsCompon
                     <DataTable
                         title={t('iam.userList')}
                         actions={null} // Actions moved to Action Bar
-                        columns={createUserColumns(handleEdit, handleDeleteClick, roles, t)}
+                        columns={createUserColumns(handleDeleteClick, roles, t)}
                         data={filteredUsers}
                         getRowId={(row) => row.id}
                         onRowClick={(row) => handleEdit(row)}

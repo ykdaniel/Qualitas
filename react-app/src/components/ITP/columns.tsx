@@ -1,7 +1,7 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "../Shared/DataTable/DataTableColumnHeader";
 import { ITPItem } from "../../store/itpStore";
-import { Edit, Trash2, Link } from "lucide-react";
+import { Trash2, Link } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -18,7 +18,6 @@ const getLocalizedStatus = (status: string, t: (key: string) => string) => {
 };
 
 export const createColumns = (
-    handleEdit: (id: string) => void,
     handleDelete: (id: string) => void,
     navigate: (path: string) => void,
     t: (key: string) => string,
@@ -154,26 +153,17 @@ export const createColumns = (
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0 text-emerald-500 hover:text-white hover:bg-emerald-500"
-                            onClick={() => handleEdit(itp.id)}
-                            title={t('itp.tooltip.edit')}
-                        >
-                            <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
                             className={cn(
-                                "h-auto px-2 py-1 text-xs gap-1",
+                                "h-8 px-2 gap-1 text-xs",
                                 relatedNoiCount > 0
                                     ? "text-blue-500 hover:text-white hover:bg-blue-500"
                                     : "text-gray-400 bg-gray-100 cursor-not-allowed hover:bg-gray-100 hover:text-gray-400"
                             )}
-                            onClick={() => relatedNoiCount > 0 && navigate('/noi')}
+                            onClick={(e) => { e.stopPropagation(); if (relatedNoiCount > 0) navigate('/noi'); }}
                             disabled={relatedNoiCount === 0}
                             title={relatedNoiCount > 0 ? t('itp.tooltip.viewRelatedNOI').replace('{count}', relatedNoiCount.toString()) : t('itp.tooltip.noRelatedNOI')}
                         >
-                            <Link className="h-3 w-3" />
+                            <Link className="h-4 w-4" />
                             {relatedNoiCount}
                         </Button>
 
@@ -181,7 +171,7 @@ export const createColumns = (
                             variant="ghost"
                             size="sm"
                             className="h-8 w-8 p-0 text-red-500 hover:text-white hover:bg-red-500"
-                            onClick={() => handleDelete(itp.id)}
+                            onClick={(e) => { e.stopPropagation(); handleDelete(itp.id); }}
                             title={t('itp.tooltip.delete')}
                         >
                             <Trash2 className="h-4 w-4" />
@@ -191,6 +181,6 @@ export const createColumns = (
             },
             enableSorting: false,
             enableHiding: false,
-            size: 200, // Make it wider for the group of buttons
+            size: 120,
         },
     ];

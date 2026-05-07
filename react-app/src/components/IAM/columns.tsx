@@ -1,13 +1,12 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "../Shared/DataTable/DataTableColumnHeader";
-import { Edit, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { User, Role } from "../../store/iamStore";
 import { formatRoleName } from "@/utils/formatters";
 
 export const createUserColumns = (
-    handleEdit: (user: User) => void,
     handleDelete: (id: string) => void,
     availableRoles: Role[] = [],
     t: (key: string) => string
@@ -93,21 +92,12 @@ export const createUserColumns = (
             cell: ({ row }) => {
                 const item = row.original;
                 return (
-                    <div className="flex items-center justify-center gap-2">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 text-blue-600 hover:text-white hover:bg-blue-600"
-                            onClick={() => handleEdit(item)}
-                            title={t('common.edit')}
-                        >
-                            <Edit className="h-4 w-4" />
-                        </Button>
+                    <div className="flex items-center justify-center">
                         <Button
                             variant="ghost"
                             size="sm"
                             className="h-8 w-8 p-0 text-red-500 hover:text-white hover:bg-red-500"
-                            onClick={() => handleDelete(item.id)}
+                            onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
                             title={t('common.delete')}
                         >
                             <Trash2 className="h-4 w-4" />
@@ -122,7 +112,6 @@ export const createUserColumns = (
     ];
 
 export const createRoleColumns = (
-    handleEdit: (role: Role) => void,
     handleDelete: (id: string) => void,
     permissionsList: { code: string; description: string }[] = [],
     t: (key: string) => string
@@ -179,21 +168,12 @@ export const createRoleColumns = (
             cell: ({ row }) => {
                 const item = row.original;
                 return (
-                    <div className="flex items-center justify-center gap-2">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 text-blue-600 hover:text-white hover:bg-blue-600"
-                            onClick={() => handleEdit(item)}
-                            title={t('common.edit')}
-                        >
-                            <Edit className="h-4 w-4" />
-                        </Button>
+                    <div className="flex items-center justify-center">
                         <Button
                             variant="ghost"
                             size="sm"
                             className="h-8 w-8 p-0 text-red-500 hover:text-white hover:bg-red-500"
-                            onClick={() => handleDelete(item.id)}
+                            onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
                             title={t('common.delete')}
                         >
                             <Trash2 className="h-4 w-4" />

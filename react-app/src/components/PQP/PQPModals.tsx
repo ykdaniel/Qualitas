@@ -259,7 +259,25 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
                             <FileAttachment
                                 attachments={formData.attachments || [] as any[]}
                                 onPendingFilesChange={(files) => setPendingUploads(files)}
-                                onDeleteExistingFile={async (id) => setDeletedFileIds(prev => [...prev, id])}
+                                onDeleteExistingFile={async (id) => {
+                                    setDeletedFileIds(prev => [...prev, id]);
+                                    setFormData(prev => ({
+                                        ...prev,
+                                        attachments: (prev.attachments || []).filter((a: any) => typeof a === 'string' || a?.id !== id),
+                                    }));
+                                }}
+                                onRemoveLegacy={(legacyIdx) => {
+                                    setFormData(prev => {
+                                        const arr = (prev.attachments || []) as any[];
+                                        let strSeen = -1;
+                                        const filtered = arr.filter((a: any) => {
+                                            if (typeof a !== 'string') return true;
+                                            strSeen += 1;
+                                            return strSeen !== legacyIdx;
+                                        });
+                                        return { ...prev, attachments: filtered };
+                                    });
+                                }}
                                 id="pqp"
                                 entityType="pqp"
                                 category="attachment"

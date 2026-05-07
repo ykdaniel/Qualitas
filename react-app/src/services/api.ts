@@ -189,12 +189,12 @@ export const updateContractor = async (
   id: string,
   data: UpdateContractorPayload
 ): Promise<Contractor> => {
-  const response = await api.put<Contractor>(`/contractors/${id}/`, data);
+  const response = await api.put<Contractor>(`/contractors/${id}`, data);
   return response.data;
 };
 
 export const deleteContractor = async (id: string): Promise<void> => {
-  await api.delete(`/contractors/${id}/`);
+  await api.delete(`/contractors/${id}`);
 };
 
 // --- Projects API ---
@@ -432,7 +432,7 @@ export const getEntityFiles = async (
 };
 
 export const deleteFile = async (fileId: string): Promise<void> => {
-  await api.delete(`/files/${fileId}/`);
+  await api.delete(`/files/${fileId}`);
 };
 
 /**

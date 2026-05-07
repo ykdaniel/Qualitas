@@ -150,14 +150,15 @@ export const validateRequiredFields = (
   data: any,
   status: string,
   rules: FieldValidationRule[]
-): { valid: boolean; message?: string } => {
+): { valid: boolean; message?: string; invalidFields: string[] } => {
+  const invalidFields: string[] = [];
+  let firstMessage: string | undefined;
+
   for (const rule of rules) {
-    // 檢查是否應該忽略此規則
     if (rule.excludedIfStatus && rule.excludedIfStatus.map(s => s.toLowerCase()).includes(status.toLowerCase())) {
       continue;
     }
 
-    // 檢查是否符合必填條件
     let isRequired = rule.required;
     if (rule.requiredIfStatus) {
       isRequired = rule.required || rule.requiredIfStatus.map(s => s.toLowerCase()).includes(status.toLowerCase());
@@ -166,31 +167,29 @@ export const validateRequiredFields = (
     if (isRequired) {
       const value = data[rule.field];
       if (value === undefined || value === null || value === '') {
-        return { valid: false, message: rule.message };
+        invalidFields.push(rule.field);
+        if (!firstMessage) firstMessage = rule.message;
       }
     }
   }
-  return { valid: true };
+
+  return { valid: invalidFields.length === 0, message: firstMessage, invalidFields };
 };
 
 /**
  * NOI 欄位驗證規則 configuration
  */
 export const NOIValidationRules: FieldValidationRule[] = [
-  {
-    field: 'contractor',
-    required: true,
-    message: 'common.selectContractor'
-  },
-  {
-    field: 'issueDate',
-    required: true,
-    message: 'common.selectDate'
-  },
-  {
-    field: 'itpNo',
-    required: true,
-    excludedIfStatus: ['Reject'], // 拒絕狀態下不強制要求 ITP
-    message: 'noi.validation.missingITP'
-  }
+  { field: 'contractor', required: true, message: 'common.selectContractor' },
+  { field: 'issueDate', required: true, message: 'common.selectDate' },
+  { field: 'itpNo', required: true, excludedIfStatus: ['Reject'], message: 'noi.validation.missingITP' },
+  { field: 'package', required: true, message: 'noi.validation.missingPackage' },
+  { field: 'inspectionDate', required: true, message: 'noi.validation.missingInspectionDate' },
+  { field: 'inspectionTime', required: true, message: 'noi.validation.missingInspectionTime' },
+  { field: 'checkpoint', required: true, message: 'noi.validation.missingCheckpoint' },
+  { field: 'eventNumber', required: true, message: 'noi.validation.missingEventNumber' },
+  { field: 'contacts', required: true, message: 'noi.validation.missingContacts' },
+  { field: 'phone', required: true, message: 'noi.validation.missingPhone' },
+  { field: 'email', required: true, message: 'noi.validation.missingEmail' },
+  { field: 'ncrNumber', required: true, message: 'noi.validation.missingNcrSelection' },
 ];

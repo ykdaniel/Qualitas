@@ -100,7 +100,7 @@ export const useFATStore = create<FATState>((set, get) => ({
 
     updateFAT: async (id, updates) => {
         try {
-            const response = await api.put(`/fat/${id}/`, updates);
+            const response = await api.put(`/fat/${id}`, updates);
             set((state) => ({
                 fatList: state.fatList.map(f => (f.id === id ? response.data : f)),
             }));
@@ -113,7 +113,7 @@ export const useFATStore = create<FATState>((set, get) => ({
 
     deleteFAT: async (id) => {
         try {
-            await api.delete(`/fat/${id}/`);
+            await api.delete(`/fat/${id}`);
             set((state) => ({
                 fatList: state.fatList.filter(f => f.id !== id),
                 fatDetails: Object.fromEntries(
@@ -129,7 +129,7 @@ export const useFATStore = create<FATState>((set, get) => ({
 
     saveFATDetails: async (fatId, details) => {
         try {
-            await api.put(`/fat/${fatId}/details/`, details);
+            await api.put(`/fat/${fatId}/details`, details);
             set((state) => ({
                 fatDetails: { ...state.fatDetails, [fatId]: details },
                 fatList: state.fatList.map(f =>

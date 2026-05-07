@@ -92,7 +92,7 @@ export const useOBSStore = create<OBSState>((set, get) => ({
 
     updateOBS: async (id: string, updates: Partial<OBSItem>) => {
         try {
-            const response = await api.put(`/obs/${id}/`, updates);
+            const response = await api.put(`/obs/${id}`, updates);
             const updated = normalizeItem(response.data);
             set((state) => ({ obsList: state.obsList.map(o => o.id === id ? updated : o) }));
         } catch (error: any) {
@@ -104,7 +104,7 @@ export const useOBSStore = create<OBSState>((set, get) => ({
 
     deleteOBS: async (id: string) => {
         try {
-            await api.delete(`/obs/${id}/`);
+            await api.delete(`/obs/${id}`);
             set((state) => ({ obsList: state.obsList.filter(o => o.id !== id) }));
         } catch (error: any) {
             const msg = getErrorMessage(error, 'Failed to delete OBS');

@@ -2,10 +2,9 @@ import { ColumnDef } from "@tanstack/react-table";
 import { NCRItem } from "../../store/ncrStore";
 import { DataTableColumnHeader } from "@/components/Shared/DataTable/DataTableColumnHeader";
 import { Button } from "@/components/ui/button";
-import { Pencil, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 
 export const createColumns = (
-    handleEdit: (id: string) => void,
     confirmDelete: (id: string) => void,
     t: (key: string) => string
 ): ColumnDef<NCRItem>[] => [
@@ -178,22 +177,12 @@ export const createColumns = (
             cell: ({ row }) => {
                 const ncr = row.original;
                 return (
-                    <div className="flex items-center justify-center space-x-2">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-100"
-                            onClick={() => handleEdit(ncr.id)}
-                            title={t('common.edit')}
-                        >
-                            <Pencil className="h-4 w-4" />
-                        </Button>
-
+                    <div className="flex items-center justify-center">
                         <Button
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-100"
-                            onClick={() => confirmDelete(ncr.id)}
+                            onClick={(e) => { e.stopPropagation(); confirmDelete(ncr.id); }}
                             title={t('common.delete')}
                         >
                             <Trash2 className="h-4 w-4" />

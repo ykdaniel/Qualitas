@@ -34,9 +34,16 @@
   align-items: stretch;
 }
 
+.topSectionFull {
+  grid-template-columns: 1fr;
+}
+
 @media (max-width: 1200px) {
   .topSection {
     grid-template-columns: 280px 1fr;
+  }
+  .topSectionFull {
+    grid-template-columns: 1fr;
   }
 }
 

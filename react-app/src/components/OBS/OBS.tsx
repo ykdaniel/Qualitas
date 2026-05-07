@@ -156,7 +156,7 @@ const OBS: React.FC = () => {
   }, [t]);
 
   // Columns memoization
-  const columns = useMemo(() => createColumns(handleEdit, confirmDelete, t, getActiveContractors), [t, getActiveContractors, handleEdit, confirmDelete]);
+  const columns = useMemo(() => createColumns(confirmDelete, t, getActiveContractors), [t, getActiveContractors, confirmDelete]);
 
   const handleDelete = async () => {
     if (deleteModal.id) {

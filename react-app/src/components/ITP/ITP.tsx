@@ -128,13 +128,12 @@ const ITP: React.FC = () => {
   };
 
   const columns = useMemo(() => createColumns(
-    handleEdit,
     confirmDelete,
     navigate,
     t,
     getActiveContractors(),
     noiList,
-  ), [t, getActiveContractors, noiList, navigate, handleEdit, confirmDelete]);
+  ), [t, getActiveContractors, noiList, navigate, confirmDelete]);
 
   const chips: { id: StatusFilter; label: string; count: number }[] = [
     { id: 'all', label: t('common.all') || 'All', count: itpList.length },

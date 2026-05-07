@@ -212,7 +212,7 @@ const NOI: React.FC = () => {
     }
   };
 
-  const columns = useMemo(() => createColumns(handleEdit, handleDeleteClick, t), [t, handleEdit, handleDeleteClick]);
+  const columns = useMemo(() => createColumns(handleDeleteClick, t), [t, handleDeleteClick]);
 
   const chips: { id: StatusFilter; label: string; count: number }[] = [
     { id: 'all', label: t('common.all') || 'All', count: statistics.total },

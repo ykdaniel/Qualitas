@@ -81,7 +81,7 @@ const RoleManagement: React.FC<RoleManagementProps> = ({ searchQuery, tabsCompon
                     <DataTable
                         title={t('iam.roleList')}
                         actions={null} // Actions decoupled to Action bar
-                        columns={createRoleColumns(handleEdit, handleDeleteClick, permissions, t)}
+                        columns={createRoleColumns(handleDeleteClick, permissions, t)}
                         data={filteredRoles}
                         getRowId={(row) => row.id}
                         onRowClick={(row) => handleEdit(row)}

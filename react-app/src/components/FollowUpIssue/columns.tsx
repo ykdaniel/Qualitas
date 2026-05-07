@@ -1,7 +1,7 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "../Shared/DataTable/DataTableColumnHeader";
 import { Button } from "@/components/ui/button";
-import { Edit2, Eye, Trash2 } from "lucide-react";
+import { Eye, Trash2 } from "lucide-react";
 
 export interface FollowUpIssueItem {
     id: string;
@@ -22,7 +22,6 @@ export interface FollowUpIssueItem {
 }
 
 export const createColumns = (
-    handleEdit: (id: string) => void,
     handleDeleteClick: (id: string) => void,
     navigate: (path: string) => void,
     t: (key: string, params?: Record<string, string | number>) => string
@@ -209,21 +208,11 @@ export const createColumns = (
                 }
 
                 return (
-                    <div className="flex justify-center space-x-2">
+                    <div className="flex justify-center">
                         <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleEdit(issue.id)}
-                            title={t('common.edit')}
-                            className="text-blue-500 hover:text-blue-700"
-                        >
-                            <Edit2 className="h-4 w-4" />
-                        </Button>
-
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteClick(issue.id)}
+                            onClick={(e) => { e.stopPropagation(); handleDeleteClick(issue.id); }}
                             title={t('common.delete')}
                             className="text-red-500 hover:text-red-700"
                         >

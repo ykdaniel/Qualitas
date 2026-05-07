@@ -1,13 +1,12 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { ChecklistRecord } from "../../store/checklistStore";
-import { Pencil, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTableColumnHeader } from "@/components/Shared/DataTable/DataTableColumnHeader";
 import { Link } from "react-router-dom";
 
 
 export const createColumns = (
-    onEdit: (record: ChecklistRecord) => void,
     onDelete: (id: string) => void,
     t: (key: string) => string
 ): ColumnDef<ChecklistRecord>[] => [
@@ -99,21 +98,12 @@ export const createColumns = (
             id: "actions",
             header: t('common.operations'),
             cell: ({ row }) => (
-                <div className="flex items-center justify-center space-x-2">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-100"
-                        onClick={() => onEdit(row.original)}
-                        title="Edit"
-                    >
-                        <Pencil className="h-4 w-4" />
-                    </Button>
+                <div className="flex items-center justify-center">
                     <Button
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-100"
-                        onClick={() => onDelete(row.original.id)}
+                        onClick={(e) => { e.stopPropagation(); onDelete(row.original.id); }}
                         title="Delete"
                     >
                         <Trash2 className="h-4 w-4" />

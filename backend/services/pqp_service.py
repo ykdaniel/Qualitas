@@ -13,6 +13,7 @@ import models
 import schemas
 from repositories.pqp_repository import PQPRepository
 from core.utils import (
+    _json_serialize,
     _resolve_vendor_id,
     generate_reference_no,
     log_audit,
@@ -62,10 +63,7 @@ class PQPService:
                    user_id: int = None, username: str = None) -> models.PQP:
         """Create a new PQP with business logic validation"""
         try:
-            data = pqp_create.model_dump()
-            # Attachments are managed via the centralized attachments table;
-            # don't store them redundantly in the PQP row.
-            data.pop('attachments', None)
+            data = _json_serialize(pqp_create.model_dump(), ['attachments'])
             data['status'] = self._normalize_pqp_status(data.get('status')) or "Not Submit"
 
             vendor_name = data.pop('vendor', None)
@@ -111,9 +109,7 @@ class PQPService:
                 )
 
             old_val = {c.name: getattr(db_pqp, c.name) for c in db_pqp.__table__.columns}
-            d = pqp_update.model_dump(exclude_unset=True)
-            # Attachments are managed via the centralized attachments table
-            d.pop('attachments', None)
+            d = _json_serialize(pqp_update.model_dump(exclude_unset=True), ['attachments'])
             if 'status' in d:
                 d['status'] = self._normalize_pqp_status(d.get('status'))
 
