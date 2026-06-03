@@ -1017,6 +1017,12 @@ class Token(BaseModel):
     refresh_token: str
     token_type: str
 
+class AuthResult(BaseModel):
+    """Login/refresh response. The JWTs are delivered ONLY as httpOnly cookies
+    (set via Set-Cookie); they are deliberately NOT echoed in the body so an XSS
+    cannot read them. token_type is kept for client compatibility."""
+    token_type: str = "bearer"
+
 class TokenData(BaseModel):
     username: str | None = None
 

@@ -27,15 +27,12 @@ export const setupLogoutHandler = (handler: () => void) => {
   logoutHandler = handler;
 };
 
-// Request interceptor: attach Bearer token (legacy) AND CSRF header for cookie auth
+// Request interceptor: authentication is carried entirely by the httpOnly
+// access_token cookie (sent automatically via withCredentials). We only need to
+// echo the CSRF cookie back as a header for state-changing requests so the
+// backend's double-submit check passes.
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    // Echo the CSRF cookie back as a header for state-changing requests so the
-    // backend's double-submit check passes when authenticating via cookie.
     const method = (config.method || 'get').toUpperCase();
     if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
       const csrf = readCookie('csrf_token');
@@ -56,14 +53,14 @@ api.interceptors.request.use(
 
 // Track whether a token refresh is already in progress
 let isRefreshing = false;
-let refreshSubscribers: ((token: string) => void)[] = [];
+let refreshSubscribers: (() => void)[] = [];
 
-function onTokenRefreshed(token: string) {
-  refreshSubscribers.forEach((cb) => cb(token));
+function onTokenRefreshed() {
+  refreshSubscribers.forEach((cb) => cb());
   refreshSubscribers = [];
 }
 
-function addRefreshSubscriber(cb: (token: string) => void) {
+function addRefreshSubscriber(cb: () => void) {
   refreshSubscribers.push(cb);
 }
 
@@ -84,17 +81,14 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
 
-      // Refresh token comes from either the httpOnly cookie (auto-attached
-      // via withCredentials) or, for legacy clients, localStorage.
-      const refreshToken = localStorage.getItem('refreshToken');
+      // The refresh token rides in the httpOnly refresh_token cookie (sent
+      // automatically via withCredentials). Nothing token-related is read from
+      // or written to JS-accessible storage.
 
-      // If already refreshing, queue this request until the new token arrives
+      // If already refreshing, queue this request until the refresh completes.
       if (isRefreshing) {
         return new Promise((resolve) => {
-          addRefreshSubscriber((newToken: string) => {
-            if (newToken) {
-              originalRequest.headers.Authorization = `Bearer ${newToken}`;
-            }
+          addRefreshSubscriber(() => {
             resolve(api(originalRequest));
           });
         });
@@ -103,23 +97,13 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        // Send refresh_token in body if we have one (legacy); otherwise rely on the cookie.
-        const res = await axios.post(
-          `${baseURL}/auth/refresh`,
-          refreshToken ? { refresh_token: refreshToken } : {},
-          { withCredentials: true }
-        );
-        const { access_token, refresh_token: newRefresh } = res.data;
-        if (access_token) localStorage.setItem('token', access_token);
-        if (newRefresh) localStorage.setItem('refreshToken', newRefresh);
+        // Cookie-based refresh: the server reads the refresh cookie and replies
+        // with fresh Set-Cookie headers. No tokens travel through the body.
+        await axios.post(`${baseURL}/auth/refresh`, {}, { withCredentials: true });
         isRefreshing = false;
-        onTokenRefreshed(access_token || '');
+        onTokenRefreshed();
 
-        // Retry the original request with the new token (header) — cookie was
-        // already updated by the server's Set-Cookie response.
-        if (access_token) {
-          originalRequest.headers.Authorization = `Bearer ${access_token}`;
-        }
+        // Retry the original request — the new access cookie is already in place.
         return api(originalRequest);
       } catch {
         isRefreshing = false;
@@ -133,8 +117,6 @@ api.interceptors.response.use(
 );
 
 function doLogout() {
-  localStorage.removeItem('token');
-  localStorage.removeItem('refreshToken');
   if (logoutHandler) {
     logoutHandler();
   } else {

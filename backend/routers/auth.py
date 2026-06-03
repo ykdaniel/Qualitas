@@ -37,7 +37,7 @@ LOCKOUT_DURATION = timedelta(minutes=15)
 router = APIRouter(tags=["Auth"])
 logger = logging.getLogger(__name__)
 
-@router.post("/auth/login", response_model=schemas.Token)
+@router.post("/auth/login", response_model=schemas.AuthResult)
 async def login_for_access_token(
     request: Request,
     response: Response,
@@ -160,10 +160,10 @@ async def login_for_access_token(
         token_data = {"sub": user.username, "user_id": user.id}
         access_token = create_access_token(data=token_data, expires_delta=access_token_expires)
         refresh_token = create_refresh_token(data=token_data, expires_delta=refresh_token_expires)
-        # Set httpOnly cookies (preferred path) and also return tokens in body
-        # for backward-compatible Bearer-based clients during migration.
+        # Deliver the JWTs as httpOnly cookies ONLY — never in the response body,
+        # so an XSS cannot exfiltrate them from JS-readable storage.
         set_auth_cookies(response, access_token, refresh_token)
-        return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
+        return {"token_type": "bearer"}
     except HTTPException:
         raise
     except Exception as exc:
@@ -238,7 +238,7 @@ async def logout_all_devices(
 class RefreshRequest(BaseModel):
     refresh_token: str | None = None
 
-@router.post("/auth/refresh", response_model=schemas.Token)
+@router.post("/auth/refresh", response_model=schemas.AuthResult)
 async def refresh_access_token(
     request: Request,
     response: Response,
@@ -247,8 +247,9 @@ async def refresh_access_token(
 ):
     """Use a valid refresh token to get a new access + refresh token pair.
 
-    Refresh token source order: refresh_token cookie → request body. The cookie
-    is the new path; the body remains for backward compatibility.
+    The refresh token is read from the httpOnly refresh_token cookie (the body
+    field is accepted only as a transitional fallback). New tokens are returned
+    as cookies only, never in the body.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -289,11 +290,7 @@ async def refresh_access_token(
     new_access = create_access_token(data=token_data, expires_delta=access_token_expires)
     new_refresh = create_refresh_token(data=token_data, expires_delta=refresh_token_expires)
     set_auth_cookies(response, new_access, new_refresh)
-    return {
-        "access_token": new_access,
-        "refresh_token": new_refresh,
-        "token_type": "bearer",
-    }
+    return {"token_type": "bearer"}
 
 @router.get("/user/profile", response_model=schemas.User)
 async def read_users_me(current_user: schemas.User = Depends(get_current_user)):

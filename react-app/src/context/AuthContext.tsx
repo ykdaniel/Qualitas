@@ -6,7 +6,9 @@ export type { User };
 interface AuthContextType {
   isAuthenticated: boolean;
   user: User | null;
-  login: (accessToken: string, refreshToken?: string) => Promise<void>;
+  /** Call after a successful POST /auth/login. The JWTs are already set as
+   *  httpOnly cookies by the server, so no token values are passed here. */
+  login: () => Promise<void>;
   logout: () => void;
   loading: boolean;
 }
@@ -35,7 +37,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await fetchUser();
       }
     } catch {
-      localStorage.removeItem('token');
       setIsAuthenticated(false);
     } finally {
       setLoading(false);
@@ -53,11 +54,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     verifyToken();
   }, [verifyToken]);
 
-  const login = async (accessToken: string, refreshToken?: string) => {
-    localStorage.setItem('token', accessToken);
-    if (refreshToken) {
-      localStorage.setItem('refreshToken', refreshToken);
-    }
+  const login = async () => {
+    // Cookies were already set by the server's login response; just reflect the
+    // authenticated state and load the profile.
     setIsAuthenticated(true);
     await fetchUser();
   };
@@ -66,8 +65,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Best-effort: tell the server to blacklist the access/refresh tokens and
     // expire the cookies. Don't await — local state should clear regardless.
     api.post('/auth/logout').catch(() => {/* server may already be unreachable */});
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
     setIsAuthenticated(false);
     setUser(null);
   };

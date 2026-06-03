@@ -28,14 +28,14 @@ const Login = () => {
       formData.append('password', password);
       if (otp) formData.append('otp', otp);
 
-      const response = await api.post('/auth/login', formData.toString(), {
+      await api.post('/auth/login', formData.toString(), {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
         }
       });
 
-      const { access_token, refresh_token } = response.data;
-      await login(access_token, refresh_token);
+      // Tokens arrive as httpOnly cookies in the response; nothing to read here.
+      await login();
       navigate('/');
     } catch (err: unknown) {
       // Backend signals "2FA needed" via 401 + detail "2FA code required" (and X-2FA-Required header).

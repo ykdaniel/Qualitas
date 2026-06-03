@@ -89,36 +89,24 @@ plus frontend error handling. Do it as its own focused PR.
 
 ---
 
-## 4. Refresh token in localStorage
+## 4. Refresh token in localStorage  ·  ✅ DONE 2026-06-03
 
-**Where:**
-- `react-app/src/services/api.ts` lines 23, 68, 93-94, 113-114
-- `react-app/src/context/AuthContext.tsx` lines 38, 49, 58-60, 67-68
+JWTs are now delivered **only** as httpOnly cookies — the XSS exfiltration
+surface is closed.
+- Backend `/api/auth/login` + `/api/auth/refresh` set httpOnly `access_token` /
+  `refresh_token` (+ non-httpOnly CSRF) cookies and return `AuthResult`
+  (`{token_type}`) — **no token values in the JSON body** (`routers/auth.py`,
+  `schemas.AuthResult`). Refresh reads the token from the cookie.
+- Frontend carries auth entirely via the cookie (`api.ts` `withCredentials`,
+  CSRF echoed in the `X-CSRF-Token` header); **all `localStorage` token code
+  removed** from `api.ts`, `AuthContext.tsx`, `Login.tsx`. `get_current_user`
+  already reads the cookie (`core/security.py`), and `/auth/verify` re-hydrates
+  auth state on mount/reload.
 
-**Problem:**
-Both `token` (access) and `refreshToken` live in `localStorage`. Any XSS
-(a rogue dependency, a mis-escaped `dangerouslySetInnerHTML`) can
-exfiltrate both. The refresh token has 7-day validity per `core/config.py`,
-so a single theft persists.
-
-**Fix outline:**
-1. Backend `/api/auth/login`: set refresh token via
-   `response.set_cookie('refresh_token', ..., httponly=True, secure=True,
-   samesite='strict', max_age=...)`. Stop returning it in JSON.
-2. Backend `/api/auth/refresh`: read from cookie instead of request body.
-3. Backend: `settings.CORS_ORIGINS` already exists; ensure the FastAPI
-   CORSMiddleware has `allow_credentials=True`.
-4. Frontend `api.ts`: remove all `localStorage.*refreshToken` code; add
-   `credentials: 'include'` to login and refresh fetches. Access token
-   stays in memory (or in a Zustand store), not localStorage, so a page
-   reload triggers a silent refresh via the cookie.
-5. Logout: backend clears the cookie; frontend clears memory state.
-
-**Gotcha:** will invalidate every existing session at deploy time. Do it
-during a maintenance window or announce it.
-
-**Why not now:** medium-sized change touching backend auth + CORS +
-frontend auth + login UX + tests. Should be its own PR with a reviewer.
+**Deploy note:** any session that predates the cookie rollout (localStorage-only,
+no auth cookie) is forced to re-login once the new frontend ships. Sessions that
+logged in after the 2026-06-03 cookie deploy already have cookies and continue
+uninterrupted.
 
 ---
 
@@ -131,11 +119,16 @@ frontend auth + login UX + tests. Should be its own PR with a reviewer.
 - **Existing installs** with the legacy `admin`/`admin` password get a
   loud startup warning on every boot until the password is changed.
 
-**Remaining work:** there is no "force password change on first login"
-mechanism. If the user ignores the warning and keeps `admin`/`admin`,
-nothing stops them. Adding a `must_change_password` flag on the user
-model + a login-flow interceptor would close this. Small job, but it
-touches auth middleware and the login UI.
+**Remaining work:**
+1. _(code)_ there is no "force password change on first login" mechanism. If
+   the user ignores the warning and keeps `admin`/`admin`, nothing stops them.
+   Adding a `must_change_password` flag on the user model + a login-flow
+   interceptor would close this. Small job, but it touches auth middleware and
+   the login UI.
+2. _(ops, do once on prod)_ verify the seeded `admin` account on
+   qualitas.rokusumi.net is NOT still on the legacy `admin` password — check
+   the backend startup logs for the "still using the legacy password" warning;
+   if present, change it via the UI or re-seed with `INITIAL_ADMIN_PASSWORD`.
 
 ---
 
@@ -393,7 +386,11 @@ migration for the mapping table.
 
 ---
 
-### P1 — Formal approval workflow + e-signature  ·  M–L
+### P1 — Formal approval workflow + e-signature  ·  M–L  ·  ⏸ DEFERRED TO LAST
+**Priority decision 2026-06-03:** keep on the backlog but handle **last** —
+do the security follow-ups, architectural debt, and the lighter roadmap items
+(P2+) before starting this. Large, and not blocking other work.
+
 Defines the record **state machine** (e.g. Draft → Submitted → Under Review →
 Approved/Rejected → Closed) that notifications, comments and reports all hang
 off. Core ISO 9001 / client-audit requirement.
