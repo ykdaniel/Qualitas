@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 import schemas
 from core.dependencies import RoleChecker, get_fat_service
 from core.perms import FAT_CREATE, FAT_DELETE, FAT_UPDATE, FAT_VIEW
+from core.scope import Scope, ScopeForbidden, get_scope
 from services.fat_service import FATService
 
 router = APIRouter(
@@ -16,9 +17,16 @@ router = APIRouter(
 def create_fat(
     fat: schemas.FATCreate,
     fat_service: FATService = Depends(get_fat_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(FAT_CREATE))
 ):
-    return fat_service.create_fat(fat_create=fat, user_id=current_user.id, username=current_user.username)
+    try:
+        return fat_service.create_fat(
+            fat_create=fat, user_id=current_user.id, username=current_user.username,
+            scope=scope,
+        )
+    except ScopeForbidden as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
 @router.get("/", response_model=list[schemas.FAT])
 def read_fats(
@@ -29,6 +37,7 @@ def read_fats(
     start_date: str = None,
     end_date: str = None,
     fat_service: FATService = Depends(get_fat_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(FAT_VIEW))
 ):
     fats = fat_service.get_fats(
@@ -37,7 +46,8 @@ def read_fats(
         search=search,
         status=status,
         start_date=start_date,
-        end_date=end_date
+        end_date=end_date,
+        scope=scope,
     )
     return fats
 
@@ -45,9 +55,10 @@ def read_fats(
 def read_fat(
     fat_id: str,
     fat_service: FATService = Depends(get_fat_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(FAT_VIEW))
 ):
-    db_fat = fat_service.get_fat(fat_id=fat_id)
+    db_fat = fat_service.get_fat(fat_id=fat_id, scope=scope)
     if db_fat is None:
         raise HTTPException(status_code=404, detail="FAT not found")
     return db_fat
@@ -57,9 +68,17 @@ def update_fat(
     fat_id: str,
     fat: schemas.FATUpdate,
     fat_service: FATService = Depends(get_fat_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(FAT_UPDATE))
 ):
-    db_fat = fat_service.update_fat(fat_id=fat_id, fat_update=fat, user_id=current_user.id, username=current_user.username)
+    try:
+        db_fat = fat_service.update_fat(
+            fat_id=fat_id, fat_update=fat,
+            user_id=current_user.id, username=current_user.username,
+            scope=scope,
+        )
+    except ScopeForbidden as e:
+        raise HTTPException(status_code=403, detail=str(e))
     if db_fat is None:
         raise HTTPException(status_code=404, detail="FAT not found")
     return db_fat
@@ -68,9 +87,13 @@ def update_fat(
 def delete_fat(
     fat_id: str,
     fat_service: FATService = Depends(get_fat_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(FAT_DELETE))
 ):
-    deleted = fat_service.delete_fat(fat_id=fat_id, user_id=current_user.id, username=current_user.username)
+    deleted = fat_service.delete_fat(
+        fat_id=fat_id, user_id=current_user.id, username=current_user.username,
+        scope=scope,
+    )
     if not deleted:
         raise HTTPException(status_code=404, detail="FAT not found")
     return {"ok": True}
@@ -80,10 +103,18 @@ def update_fat_detail(
     fat_id: str,
     details: list[schemas.FATDetailItem],
     fat_service: FATService = Depends(get_fat_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(FAT_UPDATE))
 ):
     details_data = [item.dict() for item in details]
-    db_fat = fat_service.update_fat_detail(fat_id=fat_id, details=details_data, user_id=current_user.id, username=current_user.username)
+    try:
+        db_fat = fat_service.update_fat_detail(
+            fat_id=fat_id, details=details_data,
+            user_id=current_user.id, username=current_user.username,
+            scope=scope,
+        )
+    except ScopeForbidden as e:
+        raise HTTPException(status_code=403, detail=str(e))
     if db_fat is None:
         raise HTTPException(status_code=404, detail="FAT not found")
     return db_fat

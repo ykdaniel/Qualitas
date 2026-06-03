@@ -5,6 +5,7 @@ from fastapi import HTTPException
 import models
 import schemas
 from repositories.itp_repository import ITPRepository
+from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
 from core.utils import _json_serialize, _resolve_vendor_id, generate_reference_no, log_audit, WorkflowEngine
 from core import error_messages
 from core import validators
@@ -15,13 +16,14 @@ class ITPService:
     def __init__(self, repo: ITPRepository):
         self.repo = repo
 
-    def get_itps(self, skip: int = 0, limit: int = 100, search: str = None, status: str = None, start_date: str = None, end_date: str = None) -> List[models.ITP]:
-        return self.repo.get_all(skip=skip, limit=limit, search=search, status=status, start_date=start_date, end_date=end_date)
+    def get_itps(self, skip: int = 0, limit: int = 100, search: str = None, status: str = None, start_date: str = None, end_date: str = None, scope=None) -> List[models.ITP]:
+        return self.repo.get_all(skip=skip, limit=limit, search=search, status=status, start_date=start_date, end_date=end_date, scope=scope)
 
-    def get_itp(self, itp_id: str) -> Optional[models.ITP]:
-        return self.repo.get_by_id(itp_id)
+    def get_itp(self, itp_id: str, scope=None) -> Optional[models.ITP]:
+        obj = self.repo.get_by_id(itp_id)
+        return obj if record_in_scope(obj, scope) else None
 
-    def create_itp(self, itp_create: schemas.ITPCreate, user_id: int = None, username: str = None) -> models.ITP:
+    def create_itp(self, itp_create: schemas.ITPCreate, user_id: int = None, username: str = None, scope=None) -> models.ITP:
         try:
             data = _json_serialize(itp_create.model_dump(), ['attachments', 'detail_data'])
 
@@ -29,6 +31,10 @@ class ITPService:
             vendor_name = data.pop('vendor', None)
             if vendor_name:
                 data['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
+
+            # P0 data isolation: confine the new record to the caller's scope
+            # (forces vendor_id for contractor users; validates project_id).
+            enforce_create_scope(data, scope)
 
             # Generate Reference No
             if not data.get('referenceNo'):
@@ -50,10 +56,10 @@ class ITPService:
             logger.error(f"Error creating ITP: {e}", exc_info=True)
             raise e
 
-    def update_itp(self, itp_id: str, itp_update: schemas.ITPUpdate, user_id: int = None, username: str = None) -> Optional[models.ITP]:
+    def update_itp(self, itp_id: str, itp_update: schemas.ITPUpdate, user_id: int = None, username: str = None, scope=None) -> Optional[models.ITP]:
         try:
             db_itp = self.repo.get_by_id(itp_id)
-            if not db_itp:
+            if not db_itp or not record_in_scope(db_itp, scope):
                 return None
 
             # State transition check
@@ -68,6 +74,8 @@ class ITPService:
             if 'vendor' in d:
                 vendor_name = d.pop('vendor')
                 d['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
+
+            enforce_update_scope(d, scope)
 
             updated_itp = self.repo.update(db_itp, d)
 
@@ -84,10 +92,10 @@ class ITPService:
             logger.error(f"Error updating ITP {itp_id}: {e}", exc_info=True)
             raise e
 
-    def delete_itp(self, itp_id: str, user_id: int = None, username: str = None) -> bool:
+    def delete_itp(self, itp_id: str, user_id: int = None, username: str = None, scope=None) -> bool:
         try:
             db_itp = self.repo.get_by_id(itp_id)
-            if not db_itp:
+            if not db_itp or not record_in_scope(db_itp, scope):
                 return False
 
             # Check for NOI references before deletion
@@ -106,10 +114,10 @@ class ITPService:
             logger.error(f"Error deleting ITP {itp_id}: {e}", exc_info=True)
             raise e
 
-    def update_itp_detail(self, itp_id: str, detail_body: dict, user_id: int = None, username: str = None) -> Optional[models.ITP]:
+    def update_itp_detail(self, itp_id: str, detail_body: dict, user_id: int = None, username: str = None, scope=None) -> Optional[models.ITP]:
         try:
             db_itp = self.repo.get_by_id(itp_id)
-            if not db_itp:
+            if not db_itp or not record_in_scope(db_itp, scope):
                 return None
             
             import json

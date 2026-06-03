@@ -41,11 +41,13 @@ const UserManagement: React.FC<UserManagementProps> = ({ searchQuery, tabsCompon
         setIsModalOpen(true);
     };
 
-    const handleSave = async (validationData: any, isUpdate: boolean, id?: number) => {
+    const handleSave = async (validationData: any, isUpdate: boolean, id?: number): Promise<number | void> => {
         if (isUpdate && id) {
             await updateUser(id, validationData);
+            return id;
         } else {
-            await createUser(validationData);
+            const result = await createUser(validationData);
+            return result?.id != null ? Number(result.id) : undefined;
         }
     };
 

@@ -20,9 +20,14 @@ class ProjectRepository:
     def get_by_id(self, project_id: str) -> Optional[models.Project]:
         return self.db.query(models.Project).filter(models.Project.id == project_id).first()
 
-    def get_all(self, skip: int = 0, limit: int = 200) -> List[models.Project]:
+    def get_all(self, skip: int = 0, limit: int = 200, scope=None) -> List[models.Project]:
         skip, limit = sanitize_pagination(skip, limit)
-        return self.db.query(models.Project).order_by(models.Project.name).offset(skip).limit(limit).all()
+        query = self.db.query(models.Project)
+        # P0 data isolation: a scoped user only sees their own projects. The
+        # Project's scope key is its own `id` (not a project_id column).
+        if scope is not None and scope.project_ids is not None:
+            query = query.filter(models.Project.id.in_(scope.project_ids))
+        return query.order_by(models.Project.name).offset(skip).limit(limit).all()
 
     def create(self, project: models.Project) -> models.Project:
         self.db.add(project)

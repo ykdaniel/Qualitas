@@ -9,6 +9,7 @@ import {
   CheckSquare, Bell, GitPullRequest, AlertTriangle, Eye, XOctagon,
   Factory, Scale, HardHat, BookOpen, Shield, FileCode2, Trophy, LogOut, Home as HomeIcon,
   Workflow as WorkflowIcon, ChevronDown,
+  ClipboardCheck, Flag, Settings as SettingsIcon,
   type LucideIcon,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -16,7 +17,7 @@ import { useState } from 'react';
 type ModuleId =
   | 'home' | 'dashboard' | 'workflow' | 'kpi' | 'followup' | 'pqp' | 'itp' | 'checklist'
   | 'noi' | 'itr' | 'osd' | 'obs' | 'ncr' | 'fat' | 'audit'
-  | 'contractors' | 'km' | 'iam' | 'document-naming-rules' | 'owner-performance';
+  | 'contractors' | 'km' | 'iam' | 'document-naming-rules' | 'owner-performance' | 'security';
 
 const MODULE_ICONS: Record<ModuleId, LucideIcon> = {
   home: HomeIcon,
@@ -39,6 +40,7 @@ const MODULE_ICONS: Record<ModuleId, LucideIcon> = {
   iam: Shield,
   'document-naming-rules': FileCode2,
   'owner-performance': Trophy,
+  security: Shield,
 };
 
 const AppLayout = () => {
@@ -77,6 +79,7 @@ const AppLayout = () => {
     { id: 'iam' as ModuleId, title: 'IAM', path: '/iam', color: '#667eea' },
     { id: 'contractors' as ModuleId, title: t('contractors.title'), path: '/contractors', color: '#fda085' },
     { id: 'document-naming-rules' as ModuleId, title: t('namingRules.title'), path: '/document-naming-rules', color: '#0ea5e9' },
+    { id: 'security' as ModuleId, title: t('sidebar.security') || 'Security', path: '/settings/security', color: '#b8945a' },
   ], [t]);
 
   const modules = useMemo(
@@ -127,6 +130,7 @@ const AppLayout = () => {
 
   const renderGroupHeader = (
     label: string,
+    Icon: LucideIcon,
     groupActive: boolean,
     open: boolean,
     toggle: () => void,
@@ -137,7 +141,10 @@ const AppLayout = () => {
       onClick={toggle}
       aria-expanded={open}
     >
-      <span className={styles.navGroupLabel}>{label}</span>
+      <span className={styles.navGroupLeft}>
+        <Icon size={15} strokeWidth={2} className={styles.navGroupIcon} />
+        <span className={styles.navGroupLabel}>{label}</span>
+      </span>
       <ChevronDown
         size={14}
         className={`${styles.navGroupCaret} ${open ? styles.navGroupCaretOpen : ''}`}
@@ -162,6 +169,7 @@ const AppLayout = () => {
 
           {renderGroupHeader(
             t('sidebar.section.qc'),
+            ClipboardCheck,
             qcActive,
             qcOpen,
             () => setQcOpen((open) => !open),
@@ -170,6 +178,7 @@ const AppLayout = () => {
 
           {renderGroupHeader(
             t('sidebar.section.findings'),
+            Flag,
             findingsActive,
             findingsOpen,
             () => setFindingsOpen((open) => !open),
@@ -178,6 +187,7 @@ const AppLayout = () => {
 
           {renderGroupHeader(
             t('sidebar.section.settings'),
+            SettingsIcon,
             settingsActive,
             settingsOpen,
             () => setSettingsOpen((open) => !open),

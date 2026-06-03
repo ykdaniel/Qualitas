@@ -89,7 +89,7 @@ const DashboardContent: React.FC<{
       {/* 分隔线 */}
       <div className={styles.sectionDivider}></div>
 
-      {/* PQP 和 ITP 成熟度分析（並排） */}
+      {/* PQP 和 ITP 成熟度分析（上下顯示） */}
       <div className={styles.chartSection}>
         <div className={styles.dualChartContainer}>
           <div className={styles.singleChartSection}>

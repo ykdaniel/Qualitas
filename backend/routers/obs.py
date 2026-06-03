@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 import schemas
 from core.dependencies import RoleChecker, get_obs_service
 from core.perms import OBS_CREATE, OBS_DELETE, OBS_UPDATE, OBS_VIEW
+from core.scope import Scope, ScopeForbidden, get_scope
 from database import get_db
 from services.obs_service import OBSService
 
@@ -24,6 +25,7 @@ def read_obss(
     start_date: str = None,
     end_date: str = None,
     obs_service: OBSService = Depends(get_obs_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(OBS_VIEW))
 ):
     return obs_service.get_obss(
@@ -32,16 +34,18 @@ def read_obss(
         search=search,
         status=status,
         start_date=start_date,
-        end_date=end_date
+        end_date=end_date,
+        scope=scope,
     )
 
 @router.get("/{obs_id}", response_model=schemas.OBS)
 def read_obs(
     obs_id: str,
     obs_service: OBSService = Depends(get_obs_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(OBS_VIEW))
 ):
-    db_obs = obs_service.get_obs(obs_id=obs_id)
+    db_obs = obs_service.get_obs(obs_id=obs_id, scope=scope)
     if db_obs is None:
         raise HTTPException(status_code=404, detail="OBS not found")
     return db_obs
@@ -51,19 +55,26 @@ def read_obs(
 def create_obs(
     obs: schemas.OBSCreate,
     obs_service: OBSService = Depends(get_obs_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(OBS_CREATE))
 ):
-    return obs_service.create_obs(obs_create=obs, user_id=current_user.id, username=current_user.username)
+    try:
+        return obs_service.create_obs(obs_create=obs, user_id=current_user.id, username=current_user.username, scope=scope)
+    except ScopeForbidden as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
 @router.put("/{obs_id}", response_model=schemas.OBS)
 def update_obs(
     obs_id: str,
     obs: schemas.OBSUpdate,
     obs_service: OBSService = Depends(get_obs_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(OBS_UPDATE))
 ):
     try:
-        db_obs = obs_service.update_obs(obs_id=obs_id, obs_update=obs, user_id=current_user.id, username=current_user.username)
+        db_obs = obs_service.update_obs(obs_id=obs_id, obs_update=obs, user_id=current_user.id, username=current_user.username, scope=scope)
+    except ScopeForbidden as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if db_obs is None:
@@ -74,9 +85,10 @@ def update_obs(
 def delete_obs(
     obs_id: str,
     obs_service: OBSService = Depends(get_obs_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(OBS_DELETE))
 ):
-    deleted = obs_service.delete_obs(obs_id=obs_id, user_id=current_user.id, username=current_user.username)
+    deleted = obs_service.delete_obs(obs_id=obs_id, user_id=current_user.id, username=current_user.username, scope=scope)
     if not deleted:
         raise HTTPException(status_code=404, detail="OBS not found")
     return {"ok": True}

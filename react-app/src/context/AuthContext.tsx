@@ -46,12 +46,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Register the logout function to be called on 401 responses
     setupLogoutHandler(logout);
 
-    const token = localStorage.getItem('token');
-    if (token) {
-      verifyToken();
-    } else {
-      setLoading(false);
-    }
+    // Always attempt verification on mount. Auth may now come from the
+    // httpOnly access_token cookie (which JS cannot read), so we can't gate
+    // verification on localStorage being populated — that would make a fresh
+    // tab look "logged out" even when the cookie is still valid.
+    verifyToken();
   }, [verifyToken]);
 
   const login = async (accessToken: string, refreshToken?: string) => {
@@ -64,6 +63,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = () => {
+    // Best-effort: tell the server to blacklist the access/refresh tokens and
+    // expire the cookies. Don't await — local state should clear regardless.
+    api.post('/auth/logout').catch(() => {/* server may already be unreachable */});
     localStorage.removeItem('token');
     localStorage.removeItem('refreshToken');
     setIsAuthenticated(false);

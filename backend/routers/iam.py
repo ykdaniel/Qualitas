@@ -59,7 +59,11 @@ def update_user(
     user_service: UserService = Depends(get_user_service),
     current_user: schemas.User = Depends(RoleChecker(USER_MANAGE))
 ):
-    hashed_password = get_password_hash(user.password) if user.password else None
+    hashed_password = None
+    if user.password:
+        from services.user_service import _validate_password_strength
+        _validate_password_strength(user.password)
+        hashed_password = get_password_hash(user.password)
     db_user = user_service.update_user(
         user_id=user_id,
         user_update=user,
@@ -87,6 +91,36 @@ def delete_user(
     if not success:
         raise HTTPException(status_code=404, detail="User not found")
     return {"ok": True}
+
+# === User data-isolation scope (P0) ===
+@router.get("/users/{user_id}/scope", response_model=schemas.UserScope)
+def read_user_scope(
+    user_id: int,
+    user_service: UserService = Depends(get_user_service),
+    current_user: schemas.User = Depends(RoleChecker(USER_VIEW))
+):
+    scope = user_service.get_user_scope(user_id)
+    if scope is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return scope
+
+@router.put("/users/{user_id}/scope", response_model=schemas.UserScope)
+def set_user_scope(
+    user_id: int,
+    body: schemas.UserScope,
+    user_service: UserService = Depends(get_user_service),
+    current_user: schemas.User = Depends(RoleChecker(USER_MANAGE))
+):
+    try:
+        scope = user_service.set_user_scope(
+            user_id, body.project_ids, body.vendor_id,
+            actor_id=current_user.id, actor_name=current_user.username,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if scope is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return scope
 
 # === Roles ===
 @router.get("/roles/", response_model=list[schemas.Role])

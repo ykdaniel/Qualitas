@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends
 import schemas
 from core.dependencies import RoleChecker, get_workflow_service
 from core.perms import NOI_VIEW
+from core.scope import Scope, get_scope
 from services.workflow_service import WorkflowService
 
 router = APIRouter(
@@ -26,24 +27,26 @@ router = APIRouter(
 @router.get("/stats", response_model=schemas.WorkflowStats)
 def get_workflow_stats(
     workflow_service: WorkflowService = Depends(get_workflow_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(NOI_VIEW)),
 ):
     """Completion-bucket snapshot across every Q-WorkFlow. Powers the
     Dashboard card's four-bucket distribution (0-25 / 26-50 / 51-75 /
     76-100%)."""
-    return workflow_service.get_stats()
+    return workflow_service.get_stats(scope=scope)
 
 
 @router.get("/needs-attention", response_model=list[schemas.WorkflowSummary])
 def get_needs_attention(
     limit: int = 3,
     workflow_service: WorkflowService = Depends(get_workflow_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(NOI_VIEW)),
 ):
     """Lowest-completion non-complete Q-WorkFlows. Powers the Dashboard
     card's "Needs attention" list. Default limit is 3 to match the
     card's three-row layout."""
-    return workflow_service.get_needs_attention(limit=limit)
+    return workflow_service.get_needs_attention(limit=limit, scope=scope)
 
 
 @router.get("/", response_model=list[schemas.WorkflowSummary])
@@ -54,6 +57,7 @@ def list_workflows(
     max_completion: int | None = None,
     vendor_id: str | None = None,
     workflow_service: WorkflowService = Depends(get_workflow_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(NOI_VIEW)),
 ):
     """Paginated Q-WorkFlow list for the ``/workflow`` page.
@@ -66,4 +70,5 @@ def list_workflows(
         min_completion=min_completion,
         max_completion=max_completion,
         vendor_id=vendor_id,
+        scope=scope,
     )

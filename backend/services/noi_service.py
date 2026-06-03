@@ -11,6 +11,7 @@ from typing import List, Optional
 import models
 import schemas
 from repositories.noi_repository import NOIRepository
+from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
 from core.utils import (
     _json_serialize,
     _reference_seq_lock,
@@ -31,7 +32,7 @@ class NOIService:
     def __init__(self, repo: NOIRepository):
         self.repo = repo
 
-    def get_nois(self, skip: int = 0, limit: int = 500, **filters) -> List[models.NOI]:
+    def get_nois(self, skip: int = 0, limit: int = 500, scope=None, **filters) -> List[models.NOI]:
         """
         Get list of NOIs with optional filters
 
@@ -43,9 +44,9 @@ class NOIService:
         Returns:
             List of NOI objects
         """
-        return self.repo.get_all(skip, limit, **filters)
+        return self.repo.get_all(skip, limit, scope=scope, **filters)
 
-    def get_noi(self, noi_id: str) -> Optional[models.NOI]:
+    def get_noi(self, noi_id: str, scope=None) -> Optional[models.NOI]:
         """
         Get a single NOI by ID
 
@@ -55,10 +56,11 @@ class NOIService:
         Returns:
             NOI object if found, None otherwise
         """
-        return self.repo.get_by_id(noi_id)
+        obj = self.repo.get_by_id(noi_id)
+        return obj if record_in_scope(obj, scope) else None
 
     def create_noi(self, noi_create: schemas.NOICreate,
-                   user_id: int = None, username: str = None) -> models.NOI:
+                   user_id: int = None, username: str = None, scope=None) -> models.NOI:
         """
         Create a new NOI with business logic validation
 
@@ -87,6 +89,10 @@ class NOIService:
             vendor_name = data.pop('contractor', None)
             if vendor_name:
                 data['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
+
+            # P0 data isolation: confine the new record to the caller's scope
+            # (forces vendor_id for contractor users; validates project_id).
+            enforce_create_scope(data, scope)
 
             # Validate foreign keys BEFORE allocating a reference number,
             # so failed creates don't leave gaps in the NOI sequence.
@@ -139,7 +145,7 @@ class NOIService:
             raise e
 
     def update_noi(self, noi_id: str, noi_update: schemas.NOIUpdate,
-                   user_id: int = None, username: str = None) -> Optional[models.NOI]:
+                   user_id: int = None, username: str = None, scope=None) -> Optional[models.NOI]:
         """
         Update an existing NOI with validation
 
@@ -164,7 +170,7 @@ class NOIService:
         """
         try:
             db_noi = self.repo.get_by_id(noi_id)
-            if not db_noi:
+            if not db_noi or not record_in_scope(db_noi, scope):
                 return None
 
             # Workflow validation: Check status transition
@@ -214,6 +220,8 @@ class NOIService:
                     d['referenceNo'] = generate_reference_no(self.repo.db, vendor_name, 'NOI')
                 
                 d['vendor_id'] = new_vendor_id
+
+            enforce_update_scope(d, scope)
 
             # Validate itpNo exists if being updated
             if 'itpNo' in d and d['itpNo']:
@@ -311,7 +319,7 @@ class NOIService:
                 f"Failed to create Q-WorkFlow for NOI {noi.id}: {e}"
             )
 
-    def delete_noi(self, noi_id: str, user_id: int = None, username: str = None) -> bool:
+    def delete_noi(self, noi_id: str, user_id: int = None, username: str = None, scope=None) -> bool:
         """
         Delete a NOI with audit logging
 
@@ -328,7 +336,7 @@ class NOIService:
         """
         try:
             db_noi = self.repo.get_by_id(noi_id)
-            if not db_noi:
+            if not db_noi or not record_in_scope(db_noi, scope):
                 return False
 
             # Check for references before deletion

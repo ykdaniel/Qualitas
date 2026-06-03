@@ -2,6 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { Role, User } from '../../store/iamStore';
+import UserScopeSection, { type ScopeValue } from './UserScopeSection';
+import { setUserScope } from '../../services/api';
 import styles from './UserModal.module.css';
 
 const userSchema = z.object({
@@ -16,7 +18,7 @@ const userSchema = z.object({
 interface UserModalProps {
     existingUser: User | null;
     roles: Role[];
-    onSave: (validationData: any, isUpdate: boolean, id?: number) => Promise<void>;
+    onSave: (validationData: any, isUpdate: boolean, id?: number) => Promise<number | void>;
     onClose: () => void;
     t: (key: string) => string;
     loading: boolean;
@@ -25,6 +27,8 @@ interface UserModalProps {
 const UserModal: React.FC<UserModalProps> = ({ existingUser, roles, onSave, onClose, t, loading }) => {
     const [isClosing, setIsClosing] = useState(false);
     const [resetPassword, setResetPassword] = useState(false);
+    // Create mode only: scope chosen before the user exists, persisted post-create.
+    const [pendingScope, setPendingScope] = useState<ScopeValue>({ project_ids: [], vendor_id: null });
 
     const initialForm = useMemo(() => ({
         name: existingUser?.name || '',
@@ -66,8 +70,18 @@ const UserModal: React.FC<UserModalProps> = ({ existingUser, roles, onSave, onCl
                 throw new Error(t('iam.passwordMismatch') || "Passwords don't match");
             }
 
-            await onSave(validationData, !!existingUser, existingUser ? parseInt(existingUser.id) : undefined);
-            
+            const savedId = await onSave(validationData, !!existingUser, existingUser ? parseInt(existingUser.id) : undefined);
+
+            // Create flow: persist the chosen data scope now that the user exists.
+            const hasScope = pendingScope.project_ids.length > 0 || !!pendingScope.vendor_id;
+            if (!existingUser && hasScope && typeof savedId === 'number') {
+                try {
+                    await setUserScope(savedId, pendingScope);
+                } catch (scopeErr: any) {
+                    toast.error(scopeErr?.response?.data?.detail || t('iam.scope.saveFailed') || 'User created, but failed to save data scope');
+                }
+            }
+
             // Animation for successful close
             handleClose();
         } catch (err: any) {
@@ -164,6 +178,14 @@ const UserModal: React.FC<UserModalProps> = ({ existingUser, roles, onSave, onCl
                                 rows={2}
                                 required
                             />
+                        </div>
+
+                        <div className={`${styles.formGroup} ${styles.fullWidth}`}>
+                            {existingUser ? (
+                                <UserScopeSection userId={parseInt(existingUser.id)} t={t} />
+                            ) : (
+                                <UserScopeSection t={t} value={pendingScope} onChange={setPendingScope} />
+                            )}
                         </div>
                     </div>
 

@@ -11,6 +11,7 @@ from sqlalchemy import asc, desc, func
 from sqlalchemy.orm import Session, joinedload
 
 import models
+from core.scope import apply_scope
 from core.utils import sanitize_pagination, sanitize_search_term
 
 
@@ -68,6 +69,7 @@ class ITRRepository:
         sort_by: str = "raiseDate",
         sort_order: str = "desc",
         project_id: Optional[str] = None,
+        scope=None,
         **filters,
     ) -> Tuple[List[models.ITR], int]:
         """
@@ -119,6 +121,10 @@ class ITRRepository:
             query = query.filter(models.ITR.raiseDate >= filters['start_date'])
         if filters.get('end_date'):
             query = query.filter(models.ITR.raiseDate <= filters['end_date'])
+
+        # P0 data isolation: restrict to the caller's project/contractor scope.
+        # Applied BEFORE the count so total_count reflects the scoped result set.
+        query = apply_scope(query, models.ITR, scope)
 
         # Total count before pagination
         total_count = query.count()

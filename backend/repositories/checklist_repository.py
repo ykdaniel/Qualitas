@@ -8,6 +8,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session, joinedload
 
 import models
+from core.scope import apply_scope
 from core.utils import sanitize_pagination, sanitize_search_term
 
 
@@ -36,7 +37,7 @@ class ChecklistRepository:
                 .filter(models.Checklist.id == checklist_id)
                 .first())
 
-    def get_all(self, skip: int = 0, limit: int = 500, project_id: str = None, **filters) -> List[models.Checklist]:
+    def get_all(self, skip: int = 0, limit: int = 500, project_id: str = None, scope=None, **filters) -> List[models.Checklist]:
         """
         Get all Checklists with optional filters
 
@@ -83,6 +84,9 @@ class ChecklistRepository:
             query = query.filter(models.Checklist.date >= filters['start_date'])
         if filters.get('end_date'):
             query = query.filter(models.Checklist.date <= filters['end_date'])
+
+        # P0 data isolation: restrict to the caller's project/contractor scope.
+        query = apply_scope(query, models.Checklist, scope)
 
         return query.offset(skip).limit(limit).all()
 

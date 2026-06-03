@@ -1,7 +1,19 @@
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from database import Base
+
+
+class TokenBlacklist(Base):
+    """Persisted JWT revocation list. Survives container restarts; readable
+    across multiple workers — fixes the in-memory blacklist that previously
+    silently re-allowed logged-out tokens after every redeploy.
+    """
+    __tablename__ = "token_blacklist"
+    # SHA-256 hex of the raw token. We never store the token itself so that
+    # a leak of this table doesn't equal a leak of valid sessions.
+    token_hash = Column(String(64), primary_key=True, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
 
 
 class ITP(Base):
@@ -405,12 +417,44 @@ class User(Base):
     role_id = Column(Integer, ForeignKey("roles.id", ondelete="SET NULL"), index=True, nullable=True)  # 加入外鍵約束
     created_at = Column(String, nullable=True)
 
+    # ── Data-isolation scope (P0) ──────────────────────────────────────────
+    # A user tied to a single contractor (external contractor login) only ever
+    # sees rows whose vendor_id matches. NULL = not contractor-scoped (internal
+    # staff / owner). Project scope is the many-to-many `user_projects` table.
+    vendor_id = Column(String, ForeignKey("contractors.id", ondelete="SET NULL"), nullable=True, index=True)
+
+    # Account-lockout fields. Reset on successful login.
+    failed_login_attempts = Column(Integer, nullable=False, default=0)
+    locked_until = Column(DateTime, nullable=True)
+
+    # "Logout of all devices" cutoff. Tokens with iat < this value are rejected.
+    # Lets a user invalidate every active session after a suspected compromise.
+    tokens_valid_after = Column(DateTime, nullable=True)
+
+    # TOTP-based 2FA. `totp_secret` is the base32-encoded shared secret;
+    # `totp_enabled` is set true only after the user has confirmed a working
+    # code (so a half-finished setup doesn't lock anyone out).
+    totp_secret = Column(String, nullable=True)
+    totp_enabled = Column(Boolean, nullable=False, default=False)
+
     # Relationships
     role = relationship("Role", backref="users")
 
     @property
     def role_name(self):
         return self.role.name if self.role else None
+
+
+class UserProject(Base):
+    """Per-user project scope (P0 data isolation). A row grants the user access
+    to that project's records. A user with NO rows here and no vendor_id is
+    treated as unscoped (internal staff / admin) — preserves existing behaviour
+    on rollout. External users (owner / contractor) get explicit rows."""
+    __tablename__ = "user_projects"
+
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    project_id = Column(String, ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True)
+
 
 class Permission(Base):
     __tablename__ = "permissions"

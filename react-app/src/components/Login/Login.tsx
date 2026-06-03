@@ -10,6 +10,8 @@ import styles from './Login.module.css';
 const Login = () => {
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpRequired, setOtpRequired] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { login } = useAuth();
@@ -24,6 +26,7 @@ const Login = () => {
       const formData = new URLSearchParams();
       formData.append('username', account);
       formData.append('password', password);
+      if (otp) formData.append('otp', otp);
 
       const response = await api.post('/auth/login', formData.toString(), {
         headers: {
@@ -35,6 +38,17 @@ const Login = () => {
       await login(access_token, refresh_token);
       navigate('/');
     } catch (err: unknown) {
+      // Backend signals "2FA needed" via 401 + detail "2FA code required" (and X-2FA-Required header).
+      // Show the OTP field and let the user retry with their code.
+      if (isAxiosError(err) && err.response?.status === 401) {
+        const detail = err.response?.data?.detail;
+        const headerFlag = err.response?.headers?.['x-2fa-required'];
+        if (headerFlag === 'true' || (typeof detail === 'string' && detail.toLowerCase().includes('2fa'))) {
+          setOtpRequired(true);
+          setError(detail || '2FA code required');
+          return;
+        }
+      }
       if (isAxiosError(err) && !err.response) {
         setError('Unable to reach backend API. Please confirm backend is running on port 8000.');
         return;
@@ -98,6 +112,24 @@ const Login = () => {
               required
             />
           </div>
+          {otpRequired && (
+            <div className={styles.formGroup}>
+              <label className={styles.label} htmlFor="otp">2FA Code</label>
+              <input
+                id="otp"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                className={styles.input}
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="123456"
+                maxLength={6}
+                autoFocus
+                required
+              />
+            </div>
+          )}
           <button type="submit" className={styles.button} disabled={isSubmitting}>
             {isSubmitting ? t('login.signingIn') : t('login.signIn')}
           </button>

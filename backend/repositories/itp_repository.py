@@ -1,6 +1,7 @@
 from typing import Optional, List
 from sqlalchemy.orm import Session, joinedload
 import models
+from core.scope import apply_scope
 from core.utils import sanitize_pagination, sanitize_search_term
 
 class ITPRepository:
@@ -10,7 +11,7 @@ class ITPRepository:
     def get_by_id(self, itp_id: str) -> Optional[models.ITP]:
         return self.db.query(models.ITP).options(joinedload(models.ITP.vendor_ref)).filter(models.ITP.id == itp_id).first()
 
-    def get_all(self, skip: int = 0, limit: int = 100, search: str = None, status: str = None, start_date: str = None, end_date: str = None, project_id: str = None) -> List[models.ITP]:
+    def get_all(self, skip: int = 0, limit: int = 100, search: str = None, status: str = None, start_date: str = None, end_date: str = None, project_id: str = None, scope=None) -> List[models.ITP]:
         # 驗證分頁參數
         skip, limit = sanitize_pagination(skip, limit)
 
@@ -30,6 +31,10 @@ class ITPRepository:
             query = query.filter(models.ITP.submissionDate >= start_date)
         if end_date:
             query = query.filter(models.ITP.submissionDate <= end_date)
+
+        # P0 data isolation: restrict to the caller's project/contractor scope.
+        query = apply_scope(query, models.ITP, scope)
+
         return query.offset(skip).limit(limit).all()
 
     def create(self, itp: models.ITP) -> models.ITP:

@@ -6,6 +6,7 @@ from typing import Optional
 import schemas
 from core.dependencies import RoleChecker, get_itr_service, get_related_service
 from core.perms import ITR_CREATE, ITR_DELETE, ITR_UPDATE, ITR_VIEW, NCR_CREATE
+from core.scope import Scope, ScopeForbidden, get_scope
 from database import get_db
 from repositories.itr_repository import ITRRepository
 from services.itr_service import ITRService
@@ -29,6 +30,7 @@ def read_itrs(
     vendor_id: Optional[str] = None,
     noi_number: Optional[str] = None,
     itr_service: ITRService = Depends(get_itr_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(ITR_VIEW))
 ):
     return itr_service.get_itrs(
@@ -40,6 +42,7 @@ def read_itrs(
         end_date=end_date,
         vendor_id=vendor_id,
         noi_number=noi_number,
+        scope=scope,
     )
 
 
@@ -56,6 +59,7 @@ def get_itr_stats(
 def batch_update_itrs(
     payload: dict,
     itr_service: ITRService = Depends(get_itr_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(ITR_UPDATE)),
 ):
     ids = payload.get("ids")
@@ -75,11 +79,14 @@ def batch_update_itrs(
                 itr_update=itr_update,
                 user_id=current_user.id,
                 username=current_user.username,
+                scope=scope,
             )
             if db_itr is None:
                 failed.append({"id": itr_id, "error": "ITR not found"})
             else:
                 updated.append(itr_id)
+        except ScopeForbidden as e:
+            failed.append({"id": itr_id, "error": str(e)})
         except ValueError as e:
             failed.append({"id": itr_id, "error": str(e)})
     return {"updated": updated, "failed": failed}
@@ -89,9 +96,10 @@ def batch_update_itrs(
 def read_itr(
     itr_id: str,
     itr_service: ITRService = Depends(get_itr_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(ITR_VIEW))
 ):
-    db_itr = itr_service.get_itr(itr_id=itr_id)
+    db_itr = itr_service.get_itr(itr_id=itr_id, scope=scope)
     if db_itr is None:
         raise HTTPException(status_code=404, detail="ITR not found")
     return db_itr
@@ -101,24 +109,33 @@ def read_itr(
 def create_itr(
     itr: schemas.ITRCreate,
     itr_service: ITRService = Depends(get_itr_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(ITR_CREATE))
 ):
-    return itr_service.create_itr(
-        itr_create=itr, user_id=current_user.id, username=current_user.username
-    )
+    try:
+        return itr_service.create_itr(
+            itr_create=itr, user_id=current_user.id, username=current_user.username,
+            scope=scope,
+        )
+    except ScopeForbidden as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
 @router.put("/{itr_id}", response_model=schemas.ITR)
 def update_itr(
     itr_id: str,
     itr: schemas.ITRUpdate,
     itr_service: ITRService = Depends(get_itr_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(ITR_UPDATE))
 ):
     try:
         db_itr = itr_service.update_itr(
             itr_id=itr_id, itr_update=itr,
-            user_id=current_user.id, username=current_user.username
+            user_id=current_user.id, username=current_user.username,
+            scope=scope,
         )
+    except ScopeForbidden as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if db_itr is None:
@@ -165,10 +182,12 @@ def create_reinspection(
 def delete_itr(
     itr_id: str,
     itr_service: ITRService = Depends(get_itr_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(ITR_DELETE))
 ):
     deleted = itr_service.delete_itr(
-        itr_id=itr_id, user_id=current_user.id, username=current_user.username
+        itr_id=itr_id, user_id=current_user.id, username=current_user.username,
+        scope=scope,
     )
     if not deleted:
         raise HTTPException(status_code=404, detail="ITR not found")
@@ -179,9 +198,14 @@ def read_itr_related(
     itr_id: str,
     max_depth: int = 2,
     related_service: RelatedService = Depends(get_related_service),
+    itr_service: ITRService = Depends(get_itr_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(ITR_VIEW)),
 ):
     """Return upstream/downstream related documents for this ITR."""
+    # Only expose the relation graph for an ITR the caller may actually see.
+    if itr_service.get_itr(itr_id=itr_id, scope=scope) is None:
+        raise HTTPException(status_code=404, detail="ITR not found")
     return related_service.get_related("itr", itr_id, max_depth=max_depth)
 
 # New endpoint: Link Checklist to ITR

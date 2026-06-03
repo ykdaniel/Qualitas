@@ -8,6 +8,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 
 import models
+from core.scope import apply_scope
 from core.utils import sanitize_pagination
 
 
@@ -31,7 +32,7 @@ class AuditRepository:
                 .filter(models.Audit.id == audit_id)
                 .first())
 
-    def get_all(self, skip: int = 0, limit: int = 100, project_id: str = None) -> List[models.Audit]:
+    def get_all(self, skip: int = 0, limit: int = 100, project_id: str = None, scope=None) -> List[models.Audit]:
         """
         Get all Audits
 
@@ -47,6 +48,10 @@ class AuditRepository:
         query = self.db.query(models.Audit)
         if project_id:
             query = query.filter(models.Audit.project_id == project_id)
+
+        # P0 data isolation: restrict to the caller's project/contractor scope.
+        query = apply_scope(query, models.Audit, scope)
+
         return query.offset(skip).limit(limit).all()
 
     def create(self, audit_data: Dict[str, Any]) -> models.Audit:

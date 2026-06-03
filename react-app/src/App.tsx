@@ -29,6 +29,7 @@ const DocumentNamingRules = React.lazy(() => import('./components/DocumentNaming
 const OSD = React.lazy(() => import('./components/OSD/OSD'));
 const Checklist = React.lazy(() => import('./components/Checklist/Checklist'));
 const Workflow = React.lazy(() => import('./components/Workflow/Workflow'));
+const SecuritySettings = React.lazy(() => import('./components/Security/SecuritySettings'));
 
 // --- 404 page ---
 const NotFound = () => {
@@ -94,6 +95,7 @@ function App() {
             <Route path="/document-naming-rules" element={<DocumentNamingRules />} />
             <Route path="/checklist" element={<Checklist />} />
             <Route path="/workflow" element={<Workflow />} />
+            <Route path="/settings/security" element={<SecuritySettings />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

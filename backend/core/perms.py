@@ -77,6 +77,12 @@ FOLLOWUP_DELETE = "followup:delete:all"
 CONTRACTOR_VIEW = "contractors:view:all"
 CONTRACTOR_MANAGE = "contractors:manage:all"
 
+# Knowledge Management Permissions
+KM_VIEW = "km:view:all"
+KM_CREATE = "km:create:all"
+KM_UPDATE = "km:update:all"
+KM_DELETE = "km:delete:all"
+
 # Administrative (IAM)
 USER_MANAGE = "iam:user:manage"
 USER_VIEW = "iam:user:view"
@@ -148,6 +154,11 @@ ALL_PERMISSIONS = [
     {"code": ITR_UPDATE, "description": "更新 ITR 內容"},
     {"code": ITR_DELETE, "description": "刪除 ITR"},
     {"code": ITR_APPROVE, "description": "審核 ITR"},
+
+    {"code": KM_VIEW, "description": "查看知識庫文章"},
+    {"code": KM_CREATE, "description": "建立知識庫文章"},
+    {"code": KM_UPDATE, "description": "更新知識庫文章"},
+    {"code": KM_DELETE, "description": "刪除知識庫文章"},
 
     {"code": USER_VIEW, "description": "查看使用者"},
     {"code": USER_MANAGE, "description": "管理使用者 (增刪改)"},

@@ -9,6 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 import models
+from core.scope import apply_scope
 from core.utils import sanitize_pagination, sanitize_search_term
 
 
@@ -25,7 +26,7 @@ class PQPRepository:
                 .filter(models.PQP.id == pqp_id)
                 .first())
 
-    def get_all(self, skip: int = 0, limit: int = 500, project_id: str = None, **filters) -> List[models.PQP]:
+    def get_all(self, skip: int = 0, limit: int = 500, project_id: str = None, scope=None, **filters) -> List[models.PQP]:
         """Get all PQPs with optional filters"""
         skip, limit = sanitize_pagination(skip, limit)
         query = self.db.query(models.PQP).options(joinedload(models.PQP.vendor_ref))
@@ -51,6 +52,9 @@ class PQPRepository:
             query = query.filter(models.PQP.createdAt >= filters['start_date'])
         if filters.get('end_date'):
             query = query.filter(models.PQP.createdAt <= filters['end_date'])
+
+        # P0 data isolation: restrict to the caller's project/contractor scope.
+        query = apply_scope(query, models.PQP, scope)
 
         return query.offset(skip).limit(limit).all()
 

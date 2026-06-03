@@ -11,6 +11,7 @@ from typing import List, Optional
 import models
 import schemas
 from repositories.followup_repository import FollowUpRepository
+from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
 from core.utils import (
     _resolve_vendor_id,
     generate_reference_no,
@@ -28,16 +29,17 @@ class FollowUpService:
     def __init__(self, repo: FollowUpRepository):
         self.repo = repo
 
-    def get_followups(self, skip: int = 0, limit: int = 500, **filters) -> List[models.FollowUp]:
+    def get_followups(self, skip: int = 0, limit: int = 500, scope=None, **filters) -> List[models.FollowUp]:
         """Get list of FollowUp records with optional filters"""
-        return self.repo.get_all(skip, limit, **filters)
+        return self.repo.get_all(skip, limit, scope=scope, **filters)
 
-    def get_followup(self, followup_id: str) -> Optional[models.FollowUp]:
+    def get_followup(self, followup_id: str, scope=None) -> Optional[models.FollowUp]:
         """Get a single FollowUp by ID"""
-        return self.repo.get_by_id(followup_id)
+        obj = self.repo.get_by_id(followup_id)
+        return obj if record_in_scope(obj, scope) else None
 
     def create_followup(self, followup_create: schemas.FollowUpCreate,
-                        user_id: int = None, username: str = None) -> models.FollowUp:
+                        user_id: int = None, username: str = None, scope=None) -> models.FollowUp:
         """Create a new FollowUp with business logic validation"""
         try:
             data = followup_create.model_dump()
@@ -45,6 +47,10 @@ class FollowUpService:
             vendor_name = data.pop('vendor', None)
             if vendor_name:
                 data['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
+
+            # P0 data isolation: confine the new record to the caller's scope
+            # (forces vendor_id for contractor users; validates project_id).
+            enforce_create_scope(data, scope)
 
             # Validate source reference exists if provided
             validators.validate_followup_source_reference(
@@ -75,11 +81,11 @@ class FollowUpService:
             raise e
 
     def update_followup(self, followup_id: str, followup_update: schemas.FollowUpUpdate,
-                        user_id: int = None, username: str = None) -> Optional[models.FollowUp]:
+                        user_id: int = None, username: str = None, scope=None) -> Optional[models.FollowUp]:
         """Update an existing FollowUp with status transition validation"""
         try:
             db_followup = self.repo.get_by_id(followup_id)
-            if not db_followup:
+            if not db_followup or not record_in_scope(db_followup, scope):
                 return None
 
             # Workflow validation: Check status transition
@@ -96,6 +102,8 @@ class FollowUpService:
             if 'vendor' in data:
                 vendor_name = data.pop('vendor')
                 data['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
+
+            enforce_update_scope(data, scope)
 
             # Validate source reference if being updated
             # Use updated values if provided, otherwise use existing values
@@ -120,11 +128,11 @@ class FollowUpService:
             logger.error(f"Error updating FollowUp {followup_id}: {e}", exc_info=True)
             raise e
 
-    def delete_followup(self, followup_id: str, user_id: int = None, username: str = None) -> bool:
+    def delete_followup(self, followup_id: str, user_id: int = None, username: str = None, scope=None) -> bool:
         """Delete a FollowUp with audit logging"""
         try:
             db_followup = self.repo.get_by_id(followup_id)
-            if not db_followup:
+            if not db_followup or not record_in_scope(db_followup, scope):
                 return False
 
             old_val = {c.name: getattr(db_followup, c.name) for c in db_followup.__table__.columns}

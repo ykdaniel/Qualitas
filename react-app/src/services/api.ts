@@ -6,10 +6,20 @@ const baseURL =
 
 const api = axios.create({
   baseURL,
+  // withCredentials sends auth cookies (httpOnly access_token + non-httpOnly
+  // csrf_token) on every request. Required now that we authenticate via cookie
+  // in addition to legacy Bearer header.
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+// Read a non-httpOnly cookie value by name
+function readCookie(name: string): string | null {
+  const match = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '=([^;]*)'));
+  return match ? decodeURIComponent(match[1]) : null;
+}
 
 let logoutHandler: (() => void) | null = null;
 
@@ -17,12 +27,21 @@ export const setupLogoutHandler = (handler: () => void) => {
   logoutHandler = handler;
 };
 
-// Request interceptor to add token
+// Request interceptor: attach Bearer token (legacy) AND CSRF header for cookie auth
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    // Echo the CSRF cookie back as a header for state-changing requests so the
+    // backend's double-submit check passes when authenticating via cookie.
+    const method = (config.method || 'get').toUpperCase();
+    if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+      const csrf = readCookie('csrf_token');
+      if (csrf) {
+        config.headers['X-CSRF-Token'] = csrf;
+      }
     }
     // Don't override Content-Type if it's already set
     if (!config.headers['Content-Type'] && !config.headers['content-type']) {
@@ -65,19 +84,17 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
 
+      // Refresh token comes from either the httpOnly cookie (auto-attached
+      // via withCredentials) or, for legacy clients, localStorage.
       const refreshToken = localStorage.getItem('refreshToken');
-
-      // No refresh token — logout immediately
-      if (!refreshToken) {
-        doLogout();
-        return Promise.reject(error);
-      }
 
       // If already refreshing, queue this request until the new token arrives
       if (isRefreshing) {
         return new Promise((resolve) => {
           addRefreshSubscriber((newToken: string) => {
-            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            if (newToken) {
+              originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            }
             resolve(api(originalRequest));
           });
         });
@@ -86,17 +103,23 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const res = await axios.post(`${baseURL}/auth/refresh`, {
-          refresh_token: refreshToken,
-        });
+        // Send refresh_token in body if we have one (legacy); otherwise rely on the cookie.
+        const res = await axios.post(
+          `${baseURL}/auth/refresh`,
+          refreshToken ? { refresh_token: refreshToken } : {},
+          { withCredentials: true }
+        );
         const { access_token, refresh_token: newRefresh } = res.data;
-        localStorage.setItem('token', access_token);
-        localStorage.setItem('refreshToken', newRefresh);
+        if (access_token) localStorage.setItem('token', access_token);
+        if (newRefresh) localStorage.setItem('refreshToken', newRefresh);
         isRefreshing = false;
-        onTokenRefreshed(access_token);
+        onTokenRefreshed(access_token || '');
 
-        // Retry the original request with the new token
-        originalRequest.headers.Authorization = `Bearer ${access_token}`;
+        // Retry the original request with the new token (header) — cookie was
+        // already updated by the server's Set-Cookie response.
+        if (access_token) {
+          originalRequest.headers.Authorization = `Bearer ${access_token}`;
+        }
         return api(originalRequest);
       } catch {
         isRefreshing = false;
@@ -298,6 +321,22 @@ export const updateUser = async (id: number, data: UpdateUserPayload): Promise<U
   return response.data;
 };
 
+// P0 data isolation: a user's project / contractor scope.
+export interface UserScope {
+  project_ids: string[];
+  vendor_id: string | null;
+}
+
+export const getUserScope = async (id: number): Promise<UserScope> => {
+  const response = await api.get<UserScope>(`/iam/users/${id}/scope`);
+  return response.data;
+};
+
+export const setUserScope = async (id: number, scope: UserScope): Promise<UserScope> => {
+  const response = await api.put<UserScope>(`/iam/users/${id}/scope`, scope);
+  return response.data;
+};
+
 export interface CreateRolePayload {
   name: string;
   description?: string;
@@ -436,15 +475,28 @@ export const deleteFile = async (fileId: string): Promise<void> => {
 };
 
 /**
- * Append the current auth token as a query parameter to a file URL.
- * This is needed for contexts that cannot set Authorization headers,
- * such as <img src="..."> or <a href="..."> tags.
+ * The backend builds file URLs from ``request.base_url`` (e.g.
+ * ``http://127.0.0.1:8000/api/files/download/...``). Loading that absolute URL
+ * directly in an <img>/<iframe> is cross-origin relative to the app origin, so
+ * the browser does NOT attach the httpOnly auth cookie and the request 401s —
+ * the image silently fails to render.
+ *
+ * Collapse it to a same-origin relative path (``/api/files/download/...``) so
+ * the request flows through the dev proxy / nginx on the app's own origin,
+ * where the cookie is sent automatically. We deliberately do NOT append
+ * ``?token=`` — that would leak the token into history, access logs and Referer.
  */
 export const getAuthenticatedFileUrl = (url: string): string => {
-  const token = localStorage.getItem('token');
-  if (!token || !url) return url;
-  const separator = url.includes('?') ? '&' : '?';
-  return `${url}${separator}token=${encodeURIComponent(token)}`;
+  if (!url) return url;
+  // data:/blob: URLs are already self-contained — leave them untouched.
+  if (url.startsWith('data:') || url.startsWith('blob:')) return url;
+  try {
+    const parsed = new URL(url, window.location.origin);
+    return parsed.pathname + parsed.search + parsed.hash;
+  } catch {
+    // Already a relative path (or unparseable) — return unchanged.
+    return url;
+  }
 };
 
 export default api;

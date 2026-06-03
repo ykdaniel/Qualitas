@@ -559,10 +559,25 @@ class KMService:
         if ext not in self.ALLOWED_EXTENSIONS:
             raise HTTPException(status_code=400, detail=f"File type '{ext}' is not allowed. Allowed: {', '.join(self.ALLOWED_EXTENSIONS)}")
 
-        # Validate file size (read content first)
+        # Read content for both size and magic-byte validation
         contents = file.file.read()
         if len(contents) > self.MAX_FILE_SIZE_MB * 1024 * 1024:
             raise HTTPException(status_code=400, detail=f"File size exceeds {self.MAX_FILE_SIZE_MB}MB limit.")
+
+        # Validate magic bytes — extension alone can be spoofed.
+        # Reuse the file_router validator to keep one source of truth.
+        from routers.file_router import _validate_upload_mime, ALLOWED_MIME_PREFIXES
+        client_mime = file.content_type or ""
+        try:
+            mime = _validate_upload_mime(contents, file.filename or "", client_mime)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Could not validate file type: {e}")
+        if not any(mime.startswith(prefix) for prefix in ALLOWED_MIME_PREFIXES):
+            raise HTTPException(
+                status_code=400,
+                detail=f"File content does not match an allowed type (detected: {mime})",
+            )
+
         file.file.seek(0)  # Reset for writing
 
         # Resolve the base directory of the backend

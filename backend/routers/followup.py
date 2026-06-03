@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 import schemas
 from core.dependencies import RoleChecker, get_followup_service
 from core.perms import FOLLOWUP_CREATE, FOLLOWUP_DELETE, FOLLOWUP_UPDATE, FOLLOWUP_VIEW
+from core.scope import Scope, ScopeForbidden, get_scope
 from database import get_db
 from services.followup_service import FollowUpService
 
@@ -21,17 +22,19 @@ def read_followups(
     skip: int = 0,
     limit: int = 500,
     followup_service: FollowUpService = Depends(get_followup_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(FOLLOWUP_VIEW))
 ):
-    return followup_service.get_followups(skip=skip, limit=limit)
+    return followup_service.get_followups(skip=skip, limit=limit, scope=scope)
 
 @router.get("/{followup_id}", response_model=schemas.FollowUp)
 def read_followup(
     followup_id: str,
     followup_service: FollowUpService = Depends(get_followup_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(FOLLOWUP_VIEW))
 ):
-    db_f = followup_service.get_followup(followup_id=followup_id)
+    db_f = followup_service.get_followup(followup_id=followup_id, scope=scope)
     if db_f is None:
         raise HTTPException(status_code=404, detail="FollowUp not found")
     return db_f
@@ -41,18 +44,26 @@ def read_followup(
 def create_followup(
     followup: schemas.FollowUpCreate,
     followup_service: FollowUpService = Depends(get_followup_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(FOLLOWUP_CREATE))
 ):
-    return followup_service.create_followup(followup_create=followup, user_id=current_user.id, username=current_user.username)
+    try:
+        return followup_service.create_followup(followup_create=followup, user_id=current_user.id, username=current_user.username, scope=scope)
+    except ScopeForbidden as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
 @router.put("/{followup_id}", response_model=schemas.FollowUp)
 def update_followup(
     followup_id: str,
     followup: schemas.FollowUpUpdate,
     followup_service: FollowUpService = Depends(get_followup_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(FOLLOWUP_UPDATE))
 ):
-    db_f = followup_service.update_followup(followup_id=followup_id, followup_update=followup, user_id=current_user.id, username=current_user.username)
+    try:
+        db_f = followup_service.update_followup(followup_id=followup_id, followup_update=followup, user_id=current_user.id, username=current_user.username, scope=scope)
+    except ScopeForbidden as e:
+        raise HTTPException(status_code=403, detail=str(e))
     if db_f is None:
         raise HTTPException(status_code=404, detail="FollowUp not found")
     return db_f
@@ -61,9 +72,10 @@ def update_followup(
 def delete_followup(
     followup_id: str,
     followup_service: FollowUpService = Depends(get_followup_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(FOLLOWUP_DELETE))
 ):
-    deleted = followup_service.delete_followup(followup_id=followup_id, user_id=current_user.id, username=current_user.username)
+    deleted = followup_service.delete_followup(followup_id=followup_id, user_id=current_user.id, username=current_user.username, scope=scope)
     if not deleted:
         raise HTTPException(status_code=404, detail="FollowUp not found")
     return {"ok": True}

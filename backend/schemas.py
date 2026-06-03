@@ -863,6 +863,18 @@ class User(UserBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+class UserScope(BaseModel):
+    """P0 data isolation — a user's project / contractor scope.
+
+    Empty project_ids AND null vendor_id ⇒ unscoped (sees everything), same as
+    an internal/admin user. Set project_ids (and optionally vendor_id) to confine
+    an external owner/contractor login.
+    """
+    project_ids: list[str] = []
+    vendor_id: str | None = None
+
+
 # --- Audit Schemas ---
 class AuditBase(BaseModel):
     project_id: str | None = None

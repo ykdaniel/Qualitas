@@ -12,6 +12,7 @@ from sqlalchemy import inspect
 import models
 import schemas
 from repositories.checklist_repository import ChecklistRepository
+from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
 from core.utils import (
     _json_serialize,
     _resolve_vendor_id,
@@ -30,7 +31,7 @@ class ChecklistService:
     def __init__(self, repo: ChecklistRepository):
         self.repo = repo
 
-    def get_checklists(self, skip: int = 0, limit: int = 500, **filters) -> List[models.Checklist]:
+    def get_checklists(self, skip: int = 0, limit: int = 500, scope=None, **filters) -> List[models.Checklist]:
         """
         Get list of Checklists with optional filters
 
@@ -42,9 +43,9 @@ class ChecklistService:
         Returns:
             List of Checklist objects
         """
-        return self.repo.get_all(skip, limit, **filters)
+        return self.repo.get_all(skip, limit, scope=scope, **filters)
 
-    def get_checklist(self, checklist_id: str) -> Optional[models.Checklist]:
+    def get_checklist(self, checklist_id: str, scope=None) -> Optional[models.Checklist]:
         """
         Get a single Checklist by ID
 
@@ -54,7 +55,8 @@ class ChecklistService:
         Returns:
             Checklist object if found, None otherwise
         """
-        return self.repo.get_by_id(checklist_id)
+        chk = self.repo.get_by_id(checklist_id)
+        return chk if record_in_scope(chk, scope) else None
 
     def get_checklists_by_itr(self, itr_id: str) -> List[models.Checklist]:
         """
@@ -81,7 +83,7 @@ class ChecklistService:
         return self.repo.get_by_noi(noi_number)
 
     def create_checklist(self, checklist_create: schemas.ChecklistCreate,
-                        user_id: int = None, username: str = None) -> models.Checklist:
+                        user_id: int = None, username: str = None, scope=None) -> models.Checklist:
         """
         Create a new Checklist with business logic validation
 
@@ -146,6 +148,11 @@ class ChecklistService:
                 if contractor_name:
                     data['contractor_id'] = _resolve_vendor_id(self.repo.db, contractor_name)
 
+            # P0 data isolation: confine the new record to the caller's scope.
+            # Checklist exposes its contractor FK as `contractor_id` (DB column
+            # is still `vendor_id`).
+            enforce_create_scope(data, scope, vendor_field="contractor_id")
+
             # Create Checklist object
             db_checklist = models.Checklist(**data)
             if not db_checklist.id:
@@ -166,7 +173,7 @@ class ChecklistService:
             raise e
 
     def update_checklist(self, checklist_id: str, checklist_update: schemas.ChecklistUpdate,
-                        user_id: int = None, username: str = None) -> Optional[models.Checklist]:
+                        user_id: int = None, username: str = None, scope=None) -> Optional[models.Checklist]:
         """
         Update an existing Checklist with validation
 
@@ -191,7 +198,7 @@ class ChecklistService:
         """
         try:
             db_checklist = self.repo.get_by_id(checklist_id)
-            if not db_checklist:
+            if not db_checklist or not record_in_scope(db_checklist, scope):
                 return None
 
             # Workflow validation: Check status transition
@@ -215,6 +222,8 @@ class ChecklistService:
                 contractor_name = d.pop('contractor')
                 if contractor_name:
                     d['contractor_id'] = _resolve_vendor_id(self.repo.db, contractor_name)
+
+            enforce_update_scope(d, scope, vendor_field="contractor_id")
 
             # Validate references to other modules if being updated
             if 'itpId' in d and d['itpId']:
@@ -248,7 +257,7 @@ class ChecklistService:
             logger.error(f"Error updating Checklist {checklist_id}: {e}", exc_info=True)
             raise e
 
-    def delete_checklist(self, checklist_id: str, user_id: int = None, username: str = None, reason: str = None) -> bool:
+    def delete_checklist(self, checklist_id: str, user_id: int = None, username: str = None, reason: str = None, scope=None) -> bool:
         """
         Delete a Checklist with audit logging
 
@@ -265,7 +274,7 @@ class ChecklistService:
         """
         try:
             db_checklist = self.repo.get_by_id(checklist_id)
-            if not db_checklist:
+            if not db_checklist or not record_in_scope(db_checklist, scope):
                 return False
 
             # Capture old values for audit using inspect

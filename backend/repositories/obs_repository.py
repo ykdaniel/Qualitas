@@ -8,6 +8,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session, joinedload
 
 import models
+from core.scope import apply_scope
 from core.utils import sanitize_pagination, sanitize_search_term
 
 
@@ -24,7 +25,7 @@ class OBSRepository:
                 .filter(models.OBS.id == obs_id)
                 .first())
 
-    def get_all(self, skip: int = 0, limit: int = 500, project_id: str = None, **filters) -> List[models.OBS]:
+    def get_all(self, skip: int = 0, limit: int = 500, project_id: str = None, scope=None, **filters) -> List[models.OBS]:
         """Get all OBS records with optional filters"""
         skip, limit = sanitize_pagination(skip, limit)
         query = self.db.query(models.OBS).options(joinedload(models.OBS.vendor_ref))
@@ -44,6 +45,9 @@ class OBSRepository:
             query = query.filter(models.OBS.raiseDate >= filters['start_date'])
         if filters.get('end_date'):
             query = query.filter(models.OBS.raiseDate <= filters['end_date'])
+
+        # P0 data isolation: restrict to the caller's project/contractor scope.
+        query = apply_scope(query, models.OBS, scope)
 
         return query.offset(skip).limit(limit).all()
 

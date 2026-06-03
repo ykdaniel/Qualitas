@@ -8,6 +8,28 @@ from crud import log_audit  # Import existing audit logger to maintain legacy co
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+
+def _validate_password_strength(password: str) -> None:
+    """Reject weak passwords. Minimum baseline; adjust thresholds in policy review."""
+    if not password or len(password) < 8:
+        raise HTTPException(
+            status_code=400,
+            detail="Password must be at least 8 characters long",
+        )
+    has_letter = any(c.isalpha() for c in password)
+    has_digit = any(c.isdigit() for c in password)
+    if not (has_letter and has_digit):
+        raise HTTPException(
+            status_code=400,
+            detail="Password must contain both letters and digits",
+        )
+    # Block the obvious defaults that get audited as "still using default password"
+    if password.lower() in {"admin", "admin123", "password", "12345678", "password1"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Password is too common; choose a different one",
+        )
+
 class UserService:
     def __init__(self, repo: UserRepository):
         self.repo = repo
@@ -24,6 +46,59 @@ class UserService:
     def get_users(self, skip: int = 0, limit: int = 100) -> List[models.User]:
         return self.repo.get_all(skip=skip, limit=limit)
 
+    # ── P0 data-isolation scope management ──────────────────────────────────
+    def get_user_scope(self, user_id: int) -> Optional[dict]:
+        """Return {project_ids, vendor_id} for a user, or None if no such user."""
+        user = self.repo.get_by_id(user_id)
+        if not user:
+            return None
+        rows = (
+            self.repo.db.query(models.UserProject.project_id)
+            .filter(models.UserProject.user_id == user_id)
+            .all()
+        )
+        return {"project_ids": [r[0] for r in rows], "vendor_id": user.vendor_id}
+
+    def set_user_scope(self, user_id: int, project_ids: List[str], vendor_id: Optional[str],
+                       actor_id: int = None, actor_name: str = None) -> Optional[dict]:
+        """Replace a user's project scope and contractor binding. Validates that
+        referenced projects / contractor exist. Returns the new scope, or None if
+        the user doesn't exist. Raises ValueError on unknown project/contractor."""
+        user = self.repo.get_by_id(user_id)
+        if not user:
+            return None
+
+        project_ids = list(dict.fromkeys(project_ids or []))  # dedupe, keep order
+        if project_ids:
+            found = {
+                p.id for p in self.repo.db.query(models.Project.id)
+                .filter(models.Project.id.in_(project_ids)).all()
+            }
+            missing = [pid for pid in project_ids if pid not in found]
+            if missing:
+                raise ValueError(f"Unknown project id(s): {', '.join(missing)}")
+        if vendor_id:
+            if not self.repo.db.query(models.Contractor.id).filter(
+                models.Contractor.id == vendor_id
+            ).first():
+                raise ValueError(f"Unknown contractor id: {vendor_id}")
+
+        # Replace the mapping rows.
+        self.repo.db.query(models.UserProject).filter(
+            models.UserProject.user_id == user_id
+        ).delete(synchronize_session=False)
+        for pid in project_ids:
+            self.repo.db.add(models.UserProject(user_id=user_id, project_id=pid))
+        user.vendor_id = vendor_id or None
+        self.repo.db.commit()
+
+        log_audit(
+            self.repo.db, "UPDATE", "UserScope", str(user_id), user.username,
+            new_value={"project_ids": project_ids, "vendor_id": user.vendor_id},
+            user_id=actor_id, username=actor_name,
+        )
+        return {"project_ids": project_ids, "vendor_id": user.vendor_id}
+
     def create_user(
         self,
         user: schemas.UserCreate,
@@ -37,6 +112,7 @@ class UserService:
         if db_user_username:
             raise HTTPException(status_code=400, detail="Username already registered")
 
+        _validate_password_strength(user.password)
         hashed_password = pwd_context.hash(user.password)
         new_user = models.User(
             email=user.email,

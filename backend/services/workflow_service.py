@@ -54,6 +54,7 @@ from typing import Any, Callable, Dict, List, Optional
 from sqlalchemy.orm import Session, selectinload
 
 import models
+from core.scope import apply_scope
 
 logger = logging.getLogger(__name__)
 
@@ -311,6 +312,7 @@ class WorkflowService:
         min_completion: Optional[int] = None,
         max_completion: Optional[int] = None,
         vendor_id: Optional[str] = None,
+        scope=None,
     ) -> List[Dict[str, Any]]:
         """Return a page of Q-WorkFlow summaries. Completion filtering
         happens after computation because the percentage is derived,
@@ -318,7 +320,7 @@ class WorkflowService:
         limit = max(1, min(limit, _MAX_LIMIT))
         skip = max(0, skip)
 
-        qworkflows = self._load_qworkflows(vendor_id=vendor_id)
+        qworkflows = self._load_qworkflows(vendor_id=vendor_id, scope=scope)
         lookups = self._build_lookups(qworkflows)
 
         summaries = [
@@ -336,9 +338,9 @@ class WorkflowService:
 
         return summaries[skip : skip + limit]
 
-    def get_stats(self) -> Dict[str, int]:
+    def get_stats(self, scope=None) -> Dict[str, int]:
         """Completion-distribution stats for the Dashboard card."""
-        qworkflows = self._load_qworkflows()
+        qworkflows = self._load_qworkflows(scope=scope)
         lookups = self._build_lookups(qworkflows)
 
         bucket_counts: Dict[str, int] = {name: 0 for name, _, _ in _BUCKETS}
@@ -351,13 +353,13 @@ class WorkflowService:
 
         return {"total": len(qworkflows), **bucket_counts}
 
-    def get_needs_attention(self, limit: int = 3) -> List[Dict[str, Any]]:
+    def get_needs_attention(self, limit: int = 3, scope=None) -> List[Dict[str, Any]]:
         """Lowest-completion non-complete Q-WorkFlows.
 
         100%-complete ones are excluded — there's nothing left to
         act on. Ties are broken by NOI ``issueDate`` desc so newer
         problem workflows surface over ancient zombies."""
-        qworkflows = self._load_qworkflows()
+        qworkflows = self._load_qworkflows(scope=scope)
         lookups = self._build_lookups(qworkflows)
 
         summaries = [
@@ -375,7 +377,7 @@ class WorkflowService:
     # ─── Internal helpers ─────────────────────────────────────────
 
     def _load_qworkflows(
-        self, vendor_id: Optional[str] = None,
+        self, vendor_id: Optional[str] = None, scope=None,
     ) -> List[models.QWorkflow]:
         """Load all Q-WorkFlows plus the NOI/NCR/ITR graph they span
         in a bounded number of queries (thanks to selectinload)."""
@@ -396,6 +398,9 @@ class WorkflowService:
         )
         if vendor_id:
             query = query.filter(models.NOI.vendor_id == vendor_id)
+        # P0 data isolation: a Q-WorkFlow is owned by its NOI, so scope by the
+        # NOI's project/contractor.
+        query = apply_scope(query, models.NOI, scope)
         # Newest Q-WorkFlow first. Ordering by referenceNo desc gives
         # "most recently created" since numbers are monotonically
         # assigned.

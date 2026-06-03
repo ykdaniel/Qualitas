@@ -32,6 +32,7 @@ from routers import (
     obs,
     pqp,
     projects,
+    two_factor,
     workflow,
 )
 from routers import settings as settings_router
@@ -159,8 +160,44 @@ app.add_middleware(
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
 )
+
+
+# ─── CSRF middleware ──────────────────────────────────────────────────────
+# Double-submit pattern: server-issued csrf_token cookie must equal the
+# X-CSRF-Token header on every state-changing request that uses cookie auth.
+# Bearer-auth requests (Authorization header set, no auth cookie) skip the
+# check because Bearer tokens are CSRF-immune (browser doesn't auto-attach
+# them — attacker can't forge a request that includes them).
+@app.middleware("http")
+async def csrf_protect(request: Request, call_next):
+    from core.auth_cookies import ACCESS_COOKIE_NAME, CSRF_COOKIE_NAME, CSRF_HEADER_NAME
+
+    method = request.method.upper()
+    if method in {"GET", "HEAD", "OPTIONS"}:
+        return await call_next(request)
+
+    # Allow login itself (no cookie yet); the response sets the CSRF cookie.
+    path = request.url.path
+    if path in {"/api/auth/login", "/api/auth/refresh"}:
+        return await call_next(request)
+
+    has_auth_header = request.headers.get("Authorization", "").startswith("Bearer ")
+    has_access_cookie = ACCESS_COOKIE_NAME in request.cookies
+
+    # Cookie auth is in play → require CSRF double-submit.
+    # If only Bearer header is present, Bearer auth is CSRF-immune; skip.
+    if has_access_cookie and not has_auth_header:
+        cookie_csrf = request.cookies.get(CSRF_COOKIE_NAME)
+        header_csrf = request.headers.get(CSRF_HEADER_NAME)
+        if not cookie_csrf or not header_csrf or cookie_csrf != header_csrf:
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "CSRF validation failed"},
+            )
+
+    return await call_next(request)
 
 # Upload directory (served via authenticated route in file_router.py)
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
@@ -186,6 +223,7 @@ api = APIRouter(prefix="/api")
 # Added auth and settings_router
 for router in [
     auth,
+    two_factor,
     settings_router,
     iam,
     itp, ncr, noi, itr, pqp, obs, contractors, followup, audit, checklist, kpi, file_router, fat, km, projects, workflow

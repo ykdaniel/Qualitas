@@ -12,6 +12,7 @@ from typing import List, Optional
 import models
 import schemas
 from repositories.audit_repository import AuditRepository
+from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
 from core.utils import generate_reference_no, WorkflowEngine
 from sqlalchemy.orm import Session
 
@@ -24,7 +25,7 @@ class AuditService:
     def __init__(self, repo: AuditRepository):
         self.repo = repo
 
-    def get_audits(self, skip: int = 0, limit: int = 100) -> List[models.Audit]:
+    def get_audits(self, skip: int = 0, limit: int = 100, scope=None) -> List[models.Audit]:
         """
         Get list of Audits
 
@@ -35,9 +36,9 @@ class AuditService:
         Returns:
             List of Audit objects
         """
-        return self.repo.get_all(skip, limit)
+        return self.repo.get_all(skip, limit, scope=scope)
 
-    def get_audit(self, audit_id: str) -> Optional[models.Audit]:
+    def get_audit(self, audit_id: str, scope=None) -> Optional[models.Audit]:
         """
         Get a single Audit by ID
 
@@ -47,13 +48,15 @@ class AuditService:
         Returns:
             Audit object if found, None otherwise
         """
-        return self.repo.get_by_id(audit_id)
+        obj = self.repo.get_by_id(audit_id)
+        return obj if record_in_scope(obj, scope) else None
 
     def create_audit(
         self,
         audit: schemas.AuditCreate,
         user_id: Optional[int] = None,
-        username: Optional[str] = None
+        username: Optional[str] = None,
+        scope=None
     ) -> models.Audit:
         """
         Create a new Audit
@@ -86,6 +89,10 @@ class AuditService:
             if isinstance(value, list):
                 audit_data[json_field] = json.dumps(value)
 
+        # P0 data isolation: confine the new record to the caller's scope
+        # (forces vendor_id for contractor users; validates project_id).
+        enforce_create_scope(audit_data, scope)
+
         # Create audit record
         db_audit = self.repo.create(audit_data)
 
@@ -109,7 +116,8 @@ class AuditService:
         audit_id: str,
         audit: schemas.AuditUpdate,
         user_id: Optional[int] = None,
-        username: Optional[str] = None
+        username: Optional[str] = None,
+        scope=None
     ) -> Optional[models.Audit]:
         """
         Update an existing Audit
@@ -124,7 +132,7 @@ class AuditService:
             Updated Audit object if found, None otherwise
         """
         db_audit = self.repo.get_by_id(audit_id)
-        if not db_audit:
+        if not db_audit or not record_in_scope(db_audit, scope):
             return None
 
         # Validate status transition if status is being changed
@@ -158,6 +166,8 @@ class AuditService:
                 )
                 logger.info(f"Assigned new auditNo {processed_data['auditNo']} (first contractor assignment)")
 
+        enforce_update_scope(processed_data, scope)
+
         # Update the audit
         updated_audit = self.repo.update(audit_id, processed_data)
 
@@ -181,7 +191,8 @@ class AuditService:
         self,
         audit_id: str,
         user_id: Optional[int] = None,
-        username: Optional[str] = None
+        username: Optional[str] = None,
+        scope=None
     ) -> bool:
         """
         Delete an Audit
@@ -195,7 +206,7 @@ class AuditService:
             True if deleted, False if not found
         """
         db_audit = self.repo.get_by_id(audit_id)
-        if not db_audit:
+        if not db_audit or not record_in_scope(db_audit, scope):
             return False
 
         # Log the deletion

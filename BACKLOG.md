@@ -343,6 +343,190 @@ reporting becomes a hard requirement.
 
 ---
 
+## Product Roadmap — Functional (prioritized)
+
+This is a **feature / product** roadmap (distinct from the architectural debt
+above). Ordering logic: secure "who can see what" first → stand up the record
+**lifecycle + sign-off** → add **collaboration + traceability** → then domain
+depth → finally field/mobile and external-facing output. Estimates are rough,
+solo-dev: **S** ≤1 wk · **M** 1–3 wk · **L** 3–6 wk · **XL** 6 wk+.
+
+### P0 — Multi-project / per-contractor data isolation  ·  M–L  ·  ⚠ GATE
+**DEPLOYED 2026-06-03 to qualitas.rokusumi.net.** Backend + IAM frontend complete.
+Enforcement lives in `core/scope.py` (`get_scope` dependency, `apply_scope`,
+`record_in_scope`, `enforce_create_scope`, `enforce_update_scope`,
+`entity_in_scope`) and is wired through repo→service→router for NCR, NOI, ITR,
+ITP, OBS, PQP, FAT, FollowUp, Audit, Checklist, plus `/projects`, the **Workflow**
+module (Q-WorkFlow scoped by its NOI), and **attachments** (`/files/*` gated by
+the parent record). Create AND update paths block moving a record out of scope.
+Scope model: `user_projects` table + `users.vendor_id`; users with no rows/vendor
+(or admin role) stay unscoped, so existing logins are unchanged. Admin assignment
+API: `GET/PUT /api/iam/users/{id}/scope`, with a frontend screen (`UserScopeSection`)
+in the IAM user editor — assignable both when **creating** and editing a user.
+All four `/{id}/related` endpoints (NCR, NOI, ITP, ITR) gate the root record by
+scope. Tests: `test_scope_isolation`, `test_scope_all_modules`, `test_scope_http`,
+`test_user_scope_api`, `test_scope_extra`, `test_scope_related` (full suite green,
+205 passed).
+_Not scope-checked by design:_ KPI weights and owner-performance — those tables
+have no `project_id`/`vendor_id` dimension (global config / org-wide metric keyed
+by owner+month); they are gated by the `KPI_VIEW`/`KPI_UPDATE` permissions instead.
+
+_Original finding (for context):_ `User` had only `role_id`; no mapping table;
+`RoleChecker` was a function-level gate, not row-level; list endpoints never
+filtered by `project_id`. Any logged-in user saw **all** projects/contractors.
+
+**Why first:** a hard prerequisite before giving any contractor/owner a login —
+otherwise day one they see everyone's data. If the product stays single-org
+all-access forever, this can drop down the list.
+
+**Acceptance criteria:**
+- A user can be scoped to one or more projects (and optionally to a single
+  contractor) via a mapping table; admins are unscoped.
+- Every list/read/update/delete endpoint enforces the scope server-side
+  (not just hidden in the UI) — a scoped user requesting another project's
+  record gets 403/404, verified by an automated test per module.
+- Project selector reflects only the projects the user may see.
+- Contractor-scoped users see only their own records across every module.
+
+**Depends on:** nothing. Touches every router (add a scope dependency) + a
+migration for the mapping table.
+
+---
+
+### P1 — Formal approval workflow + e-signature  ·  M–L
+Defines the record **state machine** (e.g. Draft → Submitted → Under Review →
+Approved/Rejected → Closed) that notifications, comments and reports all hang
+off. Core ISO 9001 / client-audit requirement.
+
+**Acceptance criteria:**
+- Per-module configurable approval chain with ordered roles; a record cannot
+  advance unless the current step is signed; rejection requires a reason and
+  routes the record back.
+- Captured e-signature (name + role + timestamp + hash) rendered into an
+  exportable signed PDF.
+- State transitions are permission-gated and audit-logged.
+- Required fields enforced per stage (can't submit without them).
+
+**Depends on:** P0 (so sign-off identity is correctly scoped).
+
+---
+
+### P2 — In-record comments + in-app notifications  ·  S–M
+Highest CP-value quick win after the lifecycle exists. Closes the biggest
+audit-trail leak: the contractor↔consultant back-and-forth that today happens
+in email/LINE.
+
+**Acceptance criteria:**
+- Threaded comments on every record, with @mention.
+- A notification framework (in-app bell + existing email) fires on: assigned to
+  me, mentioned, state change, due-soon/overdue.
+- Unread badge; mark-as-read; notification preferences per user.
+
+**Depends on:** P1 (state-change events) — but comments can ship independently.
+
+---
+
+### P3 — Per-record history timeline (UI)  ·  S
+The audit log already exists at the data layer (`docs`/`AUDIT_LOGGING.md`); this
+is just surfacing it as a "who / when / changed what / rejection reason"
+timeline on each record. Small, high audit value.
+
+**Acceptance criteria:**
+- Each record has a chronological activity tab: field changes (before→after),
+  state transitions, sign-offs, comments — all attributed and timestamped.
+- Filterable/exportable for a client audit.
+
+**Depends on:** P1 + P2 (so transitions and comments appear in the timeline).
+
+---
+
+### P4 — ITP ↔ NOI scheduling + Hold/Witness points  ·  M
+Domain depth that separates this from a generic form system: ITP hold/witness
+points should drive inspection notices and a schedule, not be re-keyed.
+
+**Acceptance criteria:**
+- ITP line items can be flagged Hold / Witness / Review / Surveillance.
+- A Hold/Witness point can generate a NOI; an inspection calendar shows upcoming
+  inspections with assignee and confirmation status.
+- A work-package view lists all open ITP/NOI/ITR/NCR items and their traceability.
+
+**Depends on:** P0, P1.
+
+---
+
+### P5 — Template library + standardization  ·  M
+Reusable, versioned ITP/Checklist templates per work type, linked to acceptance
+criteria / spec clauses, instantiated per project.
+
+**Acceptance criteria:**
+- Create/version/clone templates; instantiate into a project as live records.
+- Template changes don't mutate already-instantiated records.
+- Standard acceptance-criteria / code-clause library referenceable from a line.
+
+**Depends on:** P0. Can run parallel to P4.
+
+---
+
+### P6 — Mobile / PWA + offline field capture  ·  XL
+Highest transformative value, biggest build. Raise NCR/ITR + photos on site,
+offline, auto-sync on reconnect.
+
+**Acceptance criteria:**
+- Installable PWA; create/edit core records and capture photos with no network.
+- A reliable sync queue with conflict handling (ties into optimistic-concurrency
+  item #3 in the architecture backlog).
+- Mobile-optimized layouts for the field-critical modules.
+
+**Depends on:** P0, P1 stable.
+
+---
+
+### P7 — Spatial: drawing pins + photo markup  ·  M–L
+Adds the spatial dimension QA needs ("which column, which floor"). Best planned
+with P6 (capture + annotate on site).
+
+**Acceptance criteria:**
+- Annotate photos (arrow/circle/text) before attaching.
+- Drop a pin on an uploaded drawing/plan and link it to the record.
+
+**Depends on:** P6 (ideally).
+
+---
+
+### P8 — Reporting depth + owner-facing reports  ·  M
+NCR aging, defect recurrence/root-cause Pareto, contractor scorecards, and a
+scheduled monthly report emailed to the owner.
+
+**Acceptance criteria:**
+- NCR aging + recurrence/Pareto views; exportable contractor scorecard.
+- A monthly summary auto-generated and emailed on schedule.
+
+**Depends on:** P0 (numbers must be correctly scoped before sharing externally)
++ P1 (lifecycle states drive the metrics).
+
+---
+
+### P9 — Multi-channel notifications (LINE / push)  ·  S
+Small add-on once the P2 notification framework exists; big perceived value on
+site (email alone is easy to miss).
+
+**Acceptance criteria:**
+- At least one site-friendly channel (LINE / web-push) in addition to email,
+  per-user opt-in.
+
+**Depends on:** P2.
+
+---
+
+**One-line sequence:**
+`P0 isolation (gate)` → `P1 sign-off` → `P2 comments+notify` → `P3 timeline` →
+`P4 ITP/NOI scheduling` → `P5 templates` → `P6 mobile/offline` →
+`P7 spatial` → `P8 reporting` → `P9 multi-channel`.
+Suggested first milestone: **P1 + P2 + P3** shipped together (after the P0
+gate decision) — users feel it immediately.
+
+---
+
 ## Not on this list (and why)
 
 - **Migrating SQLite → Postgres.** Real production move, not a code

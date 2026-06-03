@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 import schemas
 from database import get_db
+from core.scope import Scope, get_scope, compute_scope, entity_in_scope
 from middleware.auth import get_current_user
 from models import Attachment
 from schemas import AttachmentResponse
@@ -29,18 +30,25 @@ async def _get_current_user_or_none(
     db: Session = Depends(get_db),
 ) -> schemas.User | None:
     """
-    嘗試從 Authorization header 取得使用者，失敗時回傳 None（不拋例外）。
-    供 download 端點同時支援 header 與 query-param token 兩種驗證方式。
+    Try to resolve the authenticated user from (in order):
+      1. Authorization: Bearer ... header (legacy)
+      2. access_token httpOnly cookie (preferred)
+    Returns None if neither is valid — caller handles the fallback to
+    ?token= query-param auth.
     """
-    from fastapi.security import OAuth2PasswordBearer
     from jose import JWTError, jwt
     from core.config import settings as app_settings
+    from core.auth_cookies import ACCESS_COOKIE_NAME
     import crud
 
+    token_str: str | None = None
     auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
+    if auth_header.startswith("Bearer "):
+        token_str = auth_header[7:]
+    if not token_str:
+        token_str = request.cookies.get(ACCESS_COOKIE_NAME)
+    if not token_str:
         return None
-    token_str = auth_header[7:]
     try:
         payload = jwt.decode(token_str, app_settings.SECRET_KEY, algorithms=[app_settings.ALGORITHM])
         username: str = payload.get("sub")
@@ -271,9 +279,13 @@ def get_entity_files(
     entity_id: str,
     category: str | None = None,
     db: Session = Depends(get_db),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(get_current_user),
 ) -> list[AttachmentResponse]:
     """查詢指定實體的所有附件"""
+    # P0 data isolation: don't expose attachments for a parent the caller can't see.
+    if not entity_in_scope(db, entity_type, entity_id, scope):
+        return []
     query = db.query(Attachment).filter(
         Attachment.entity_type == entity_type,
         Attachment.entity_id == entity_id,
@@ -291,6 +303,7 @@ def get_file(
     file_id: str,
     request: Request,
     db: Session = Depends(get_db),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(get_current_user),
 ) -> AttachmentResponse:
     """取得單一附件 metadata"""
@@ -298,7 +311,7 @@ def get_file(
         Attachment.id == file_id,
         Attachment.is_deleted == False,  # noqa: E712 — must use == for SQLAlchemy
     ).first()
-    if not attachment:
+    if not attachment or not entity_in_scope(db, attachment.entity_type, attachment.entity_id, scope):
         raise HTTPException(status_code=404, detail="Attachment not found")
     return _to_response(attachment, request)
 
@@ -307,6 +320,7 @@ def get_file(
 def delete_file(
     file_id: str,
     db: Session = Depends(get_db),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(get_current_user),
 ) -> dict:
     """軟刪除附件（保留磁碟檔案，僅標記為已刪除）"""
@@ -314,7 +328,7 @@ def delete_file(
         Attachment.id == file_id,
         Attachment.is_deleted == False,  # noqa: E712 — must use == for SQLAlchemy
     ).first()
-    if not attachment:
+    if not attachment or not entity_in_scope(db, attachment.entity_type, attachment.entity_id, scope):
         raise HTTPException(status_code=404, detail="Attachment not found")
 
     attachment.is_deleted = True
@@ -327,6 +341,7 @@ def delete_file(
 async def serve_upload(
     file_path: str,
     token: str | None = None,
+    db: Session = Depends(get_db),
     current_user: schemas.User = Depends(_get_current_user_or_none),
 ):
     """
@@ -345,6 +360,14 @@ async def serve_upload(
                 headers={"WWW-Authenticate": "Bearer"},
             )
         current_user = await _resolve_user_from_token(token)
+
+    # P0 data isolation: a scoped user may only download files whose parent
+    # record is within their scope. Looks the file up by its stored path.
+    scope = compute_scope(current_user, db)
+    if not scope.unrestricted:
+        att = db.query(Attachment).filter(Attachment.file_path == file_path).first()
+        if att is None or not entity_in_scope(db, att.entity_type, att.entity_id, scope):
+            raise HTTPException(status_code=404, detail="File not found")
 
     # Resolve and validate to prevent path traversal (e.g. ../../etc/passwd)
     upload_root_resolved = os.path.realpath(UPLOAD_ROOT)

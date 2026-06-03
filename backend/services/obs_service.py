@@ -11,6 +11,7 @@ from typing import List, Optional
 import models
 import schemas
 from repositories.obs_repository import OBSRepository
+from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
 from core.utils import (
     _json_serialize,
     _resolve_vendor_id,
@@ -28,16 +29,17 @@ class OBSService:
     def __init__(self, repo: OBSRepository):
         self.repo = repo
 
-    def get_obss(self, skip: int = 0, limit: int = 500, **filters) -> List[models.OBS]:
+    def get_obss(self, skip: int = 0, limit: int = 500, scope=None, **filters) -> List[models.OBS]:
         """Get list of OBS records with optional filters"""
-        return self.repo.get_all(skip, limit, **filters)
+        return self.repo.get_all(skip, limit, scope=scope, **filters)
 
-    def get_obs(self, obs_id: str) -> Optional[models.OBS]:
+    def get_obs(self, obs_id: str, scope=None) -> Optional[models.OBS]:
         """Get a single OBS by ID"""
-        return self.repo.get_by_id(obs_id)
+        obj = self.repo.get_by_id(obs_id)
+        return obj if record_in_scope(obj, scope) else None
 
     def create_obs(self, obs_create: schemas.OBSCreate,
-                   user_id: int = None, username: str = None) -> models.OBS:
+                   user_id: int = None, username: str = None, scope=None) -> models.OBS:
         """Create a new OBS with business logic validation"""
         try:
             data = _json_serialize(
@@ -48,6 +50,10 @@ class OBSService:
             vendor_name = data.pop('vendor', None)
             if vendor_name:
                 data['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
+
+            # P0 data isolation: confine the new record to the caller's scope
+            # (forces vendor_id for contractor users; validates project_id).
+            enforce_create_scope(data, scope)
 
             if not data.get('documentNumber'):
                 data['documentNumber'] = generate_reference_no(
@@ -71,11 +77,11 @@ class OBSService:
             raise e
 
     def update_obs(self, obs_id: str, obs_update: schemas.OBSUpdate,
-                   user_id: int = None, username: str = None) -> Optional[models.OBS]:
+                   user_id: int = None, username: str = None, scope=None) -> Optional[models.OBS]:
         """Update an existing OBS with validation"""
         try:
             db_obs = self.repo.get_by_id(obs_id)
-            if not db_obs:
+            if not db_obs or not record_in_scope(db_obs, scope):
                 return None
 
             if obs_update.status and not WorkflowEngine.validate_transition(
@@ -93,6 +99,8 @@ class OBSService:
                 vendor_name = d.pop('vendor')
                 d['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
 
+            enforce_update_scope(d, scope)
+
             updated = self.repo.update(db_obs, d)
 
             log_audit(
@@ -108,11 +116,11 @@ class OBSService:
             logger.error(f"Error updating OBS {obs_id}: {e}", exc_info=True)
             raise e
 
-    def delete_obs(self, obs_id: str, user_id: int = None, username: str = None) -> bool:
+    def delete_obs(self, obs_id: str, user_id: int = None, username: str = None, scope=None) -> bool:
         """Delete an OBS with audit logging"""
         try:
             db_obs = self.repo.get_by_id(obs_id)
-            if not db_obs:
+            if not db_obs or not record_in_scope(db_obs, scope):
                 return False
 
             old_val = {c.name: getattr(db_obs, c.name) for c in db_obs.__table__.columns}

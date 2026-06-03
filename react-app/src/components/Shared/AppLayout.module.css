@@ -92,6 +92,23 @@
   background: rgba(184, 148, 90, 0.10);
 }
 
+.navGroupLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.navGroupIcon {
+  color: #a39786;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.navGroupHeaderActive .navGroupIcon {
+  color: var(--card-color, #b8945a);
+}
+
 .navGroupLabel {
   font-size: 11px;
   font-weight: 700;

@@ -7,6 +7,7 @@ import { useNOIStore } from '../../store/noiStore';
 import { useITRStore } from '../../store/itrStore';
 import type { NCRItem } from '../../store/ncrStore';
 import FileAttachment from '../Shared/FileAttachment';
+import ImagePreviewOverlay from '../Shared/ImagePreviewOverlay';
 import RelatedDocuments from '../ui/RelatedDocuments';
 import styles from './NCR.module.css';
 
@@ -154,6 +155,14 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
     const [pendingAttachments, setPendingAttachments] = useState<File[]>([]);
     const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
     const [saving, setSaving] = useState(false);
+
+    // 附件預覽
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [previewName, setPreviewName] = useState<string>('');
+    const handlePreview = (url: string, name?: string) => {
+        setPreviewUrl(url);
+        setPreviewName(name || '');
+    };
 
     const handleFieldChange = (field: keyof NCRDetailData, value: string) => {
         // 勾稽聯動：NCR 關閉後提示 NOI 可轉為 Resolved
@@ -425,6 +434,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     setFormData(prev => ({ ...prev, defectPhotos: (prev.defectPhotos || []).filter((a: any) => typeof a === 'string' || a?.id !== id) }));
                                 }}
                                 onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'defect')}
+                                onPreview={handlePreview}
                                 accept="image/*"
                             />
                         </div>
@@ -443,6 +453,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     setFormData(prev => ({ ...prev, improvementPhotos: (prev.improvementPhotos || []).filter((a: any) => typeof a === 'string' || a?.id !== id) }));
                                 }}
                                 onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'improvement')}
+                                onPreview={handlePreview}
                                 accept="image/*"
                             />
                         </div>
@@ -462,6 +473,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     setFormData(prev => ({ ...prev, attachments: (prev.attachments || []).filter((a: any) => typeof a === 'string' || a?.id !== id) }));
                                 }}
                                 onRemoveLegacy={handleRemoveLegacyAttachment}
+                                onPreview={handlePreview}
                             />
                         </div>
 
@@ -829,6 +841,9 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                     </div>
                 </div >
             </div >
+            {previewUrl && (
+                <ImagePreviewOverlay key={previewUrl} url={previewUrl} name={previewName} onClose={() => setPreviewUrl(null)} />
+            )}
         </div >
     );
 };
@@ -882,6 +897,14 @@ export const NCRDetailsViewModal: React.FC<NCRDetailsViewModalProps> = ({ ncrId:
 
     const handlePrint = () => {
         window.print();
+    };
+
+    // 附件預覽
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [previewName, setPreviewName] = useState<string>('');
+    const handlePreview = (url: string, name?: string) => {
+        setPreviewUrl(url);
+        setPreviewName(name || '');
     };
 
     return (
@@ -948,6 +971,7 @@ export const NCRDetailsViewModal: React.FC<NCRDetailsViewModalProps> = ({ ncrId:
                                 title={t('obs.defectPhotos')}
                                 legacyAttachments={displayData.defectPhotos || []}
                                 readOnly={true}
+                                onPreview={handlePreview}
                                 accept="image/*"
                             />
                         </div>
@@ -960,6 +984,7 @@ export const NCRDetailsViewModal: React.FC<NCRDetailsViewModalProps> = ({ ncrId:
                                 title={t('obs.improvementPhotos')}
                                 legacyAttachments={displayData.improvementPhotos || []}
                                 readOnly={true}
+                                onPreview={handlePreview}
                                 accept="image/*"
                             />
                         </div>
@@ -1085,6 +1110,7 @@ export const NCRDetailsViewModal: React.FC<NCRDetailsViewModalProps> = ({ ncrId:
                                 title={t('obs.attachments')}
                                 legacyAttachments={displayData.attachments || []}
                                 readOnly={true}
+                                onPreview={handlePreview}
                             />
                         </div>
                     </div>
@@ -1098,6 +1124,9 @@ export const NCRDetailsViewModal: React.FC<NCRDetailsViewModalProps> = ({ ncrId:
                     </button>
                 </div>
             </div>
+            {previewUrl && (
+                <ImagePreviewOverlay key={previewUrl} url={previewUrl} name={previewName} onClose={() => setPreviewUrl(null)} />
+            )}
         </div>
     );
 };

@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 import models
 import schemas
 from database import get_db
-from middleware.auth import PermissionChecker, get_current_user
+from core.dependencies import RoleChecker
+from core.security import get_current_user
 
 DEFAULT_NAMING_RULES = [
     {"doc_type": "itp", "prefix": "QTS-RKS-[ABBREV]-ITP-", "sequence_digits": 6},
@@ -40,7 +41,7 @@ def get_naming_rules(
 def update_naming_rules(
     rules: list[schemas.NamingRuleBase],
     db: Session = Depends(get_db),
-    _: bool = Depends(PermissionChecker(["settings:manage:all"]))
+    _user=Depends(RoleChecker("settings:manage:all"))
 ):
     try:
         for rule in rules:

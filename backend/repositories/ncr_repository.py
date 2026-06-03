@@ -8,6 +8,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session, joinedload
 
 import models
+from core.scope import apply_scope
 from core.utils import sanitize_pagination, sanitize_search_term
 
 
@@ -35,7 +36,7 @@ class NCRRepository:
                 .filter(models.NCR.id == ncr_id)
                 .first())
 
-    def get_all(self, skip: int = 0, limit: int = 500, project_id: str = None, **filters) -> List[models.NCR]:
+    def get_all(self, skip: int = 0, limit: int = 500, project_id: str = None, scope=None, **filters) -> List[models.NCR]:
         """
         Get all NCRs with optional filters
 
@@ -73,6 +74,9 @@ class NCRRepository:
             query = query.filter(models.NCR.raiseDate >= filters['start_date'])
         if filters.get('end_date'):
             query = query.filter(models.NCR.raiseDate <= filters['end_date'])
+
+        # P0 data isolation: restrict to the caller's project/contractor scope.
+        query = apply_scope(query, models.NCR, scope)
 
         return query.offset(skip).limit(limit).all()
 

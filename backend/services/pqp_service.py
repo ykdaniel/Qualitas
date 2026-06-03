@@ -12,6 +12,7 @@ from typing import List, Optional
 import models
 import schemas
 from repositories.pqp_repository import PQPRepository
+from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
 from core.utils import (
     _json_serialize,
     _resolve_vendor_id,
@@ -49,18 +50,19 @@ class PQPService:
         }
         return mapping.get(normalized, status)
 
-    def get_pqps(self, skip: int = 0, limit: int = 500, **filters) -> List[models.PQP]:
+    def get_pqps(self, skip: int = 0, limit: int = 500, scope=None, **filters) -> List[models.PQP]:
         """Get list of PQPs with optional filters"""
         if filters.get("status") is not None:
             filters["status"] = self._normalize_pqp_status(filters.get("status"))
-        return self.repo.get_all(skip, limit, **filters)
+        return self.repo.get_all(skip, limit, scope=scope, **filters)
 
-    def get_pqp(self, pqp_id: str) -> Optional[models.PQP]:
+    def get_pqp(self, pqp_id: str, scope=None) -> Optional[models.PQP]:
         """Get a single PQP by ID"""
-        return self.repo.get_by_id(pqp_id)
+        obj = self.repo.get_by_id(pqp_id)
+        return obj if record_in_scope(obj, scope) else None
 
     def create_pqp(self, pqp_create: schemas.PQPCreate,
-                   user_id: int = None, username: str = None) -> models.PQP:
+                   user_id: int = None, username: str = None, scope=None) -> models.PQP:
         """Create a new PQP with business logic validation"""
         try:
             data = _json_serialize(pqp_create.model_dump(), ['attachments'])
@@ -69,6 +71,10 @@ class PQPService:
             vendor_name = data.pop('vendor', None)
             if vendor_name:
                 data['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
+
+            # P0 data isolation: confine the new record to the caller's scope
+            # (forces vendor_id for contractor users; validates project_id).
+            enforce_create_scope(data, scope)
 
             if not data.get('pqpNo'):
                 data['pqpNo'] = generate_reference_no(
@@ -92,11 +98,11 @@ class PQPService:
             raise e
 
     def update_pqp(self, pqp_id: str, pqp_update: schemas.PQPUpdate,
-                   user_id: int = None, username: str = None) -> Optional[models.PQP]:
+                   user_id: int = None, username: str = None, scope=None) -> Optional[models.PQP]:
         """Update an existing PQP with validation"""
         try:
             db_pqp = self.repo.get_by_id(pqp_id)
-            if not db_pqp:
+            if not db_pqp or not record_in_scope(db_pqp, scope):
                 return None
 
             if pqp_update.status and not WorkflowEngine.validate_transition(
@@ -116,6 +122,8 @@ class PQPService:
             if 'vendor' in d:
                 vendor_name = d.pop('vendor')
                 d['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
+
+            enforce_update_scope(d, scope)
 
             updated = self.repo.update(db_pqp, d)
 
@@ -197,11 +205,11 @@ class PQPService:
                 .order_by(models.PQPHistory.version_no.desc())
                 .all())
 
-    def delete_pqp(self, pqp_id: str, user_id: int = None, username: str = None) -> bool:
+    def delete_pqp(self, pqp_id: str, user_id: int = None, username: str = None, scope=None) -> bool:
         """Delete a PQP with audit logging"""
         try:
             db_pqp = self.repo.get_by_id(pqp_id)
-            if not db_pqp:
+            if not db_pqp or not record_in_scope(db_pqp, scope):
                 return False
 
             old_val = {c.name: getattr(db_pqp, c.name) for c in db_pqp.__table__.columns}

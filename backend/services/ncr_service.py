@@ -13,6 +13,7 @@ from typing import List, Optional
 import models
 import schemas
 from repositories.ncr_repository import NCRRepository
+from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
 from core.utils import (
     _json_serialize,
     _resolve_vendor_id,
@@ -30,7 +31,7 @@ class NCRService:
     def __init__(self, repo: NCRRepository):
         self.repo = repo
 
-    def get_ncrs(self, skip: int = 0, limit: int = 500, **filters) -> List[models.NCR]:
+    def get_ncrs(self, skip: int = 0, limit: int = 500, scope=None, **filters) -> List[models.NCR]:
         """
         Get list of NCRs with optional filters
 
@@ -42,9 +43,9 @@ class NCRService:
         Returns:
             List of NCR objects
         """
-        return self.repo.get_all(skip, limit, **filters)
+        return self.repo.get_all(skip, limit, scope=scope, **filters)
 
-    def get_ncr(self, ncr_id: str) -> Optional[models.NCR]:
+    def get_ncr(self, ncr_id: str, scope=None) -> Optional[models.NCR]:
         """
         Get a single NCR by ID
 
@@ -54,10 +55,11 @@ class NCRService:
         Returns:
             NCR object if found, None otherwise
         """
-        return self.repo.get_by_id(ncr_id)
+        ncr = self.repo.get_by_id(ncr_id)
+        return ncr if record_in_scope(ncr, scope) else None
 
     def create_ncr(self, ncr_create: schemas.NCRCreate,
-                   user_id: int = None, username: str = None) -> models.NCR:
+                   user_id: int = None, username: str = None, scope=None) -> models.NCR:
         """
         Create a new NCR with business logic validation
 
@@ -89,6 +91,10 @@ class NCRService:
             vendor_name = data.pop('vendor', None)
             if vendor_name:
                 data['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
+
+            # P0 data isolation: confine the new record to the caller's scope
+            # (forces vendor_id for contractor users; validates project_id).
+            enforce_create_scope(data, scope)
 
             # Validate foreign keys BEFORE allocating a reference number,
             # so failed creates don't leave gaps in the NCR sequence.
@@ -125,7 +131,7 @@ class NCRService:
             raise e
 
     def update_ncr(self, ncr_id: str, ncr_update: schemas.NCRUpdate,
-                   user_id: int = None, username: str = None) -> Optional[models.NCR]:
+                   user_id: int = None, username: str = None, scope=None) -> Optional[models.NCR]:
         """
         Update an existing NCR with validation
 
@@ -150,7 +156,7 @@ class NCRService:
         """
         try:
             db_ncr = self.repo.get_by_id(ncr_id)
-            if not db_ncr:
+            if not db_ncr or not record_in_scope(db_ncr, scope):
                 return None
 
             # Workflow validation: Check status transition
@@ -188,6 +194,8 @@ class NCRService:
             if 'vendor' in d:
                 vendor_name = d.pop('vendor')
                 d['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
+
+            enforce_update_scope(d, scope)
 
             # --- Validate required fields when transitioning to Closed ---
             if is_transitioning_to_closed:
@@ -250,7 +258,7 @@ class NCRService:
             logger.error(f"Error updating NCR {ncr_id}: {e}", exc_info=True)
             raise e
 
-    def delete_ncr(self, ncr_id: str, user_id: int = None, username: str = None) -> bool:
+    def delete_ncr(self, ncr_id: str, user_id: int = None, username: str = None, scope=None) -> bool:
         """
         Delete a NCR with audit logging
 
@@ -267,7 +275,7 @@ class NCRService:
         """
         try:
             db_ncr = self.repo.get_by_id(ncr_id)
-            if not db_ncr:
+            if not db_ncr or not record_in_scope(db_ncr, scope):
                 return False
 
             # Only Void NCRs can be deleted — deleting Open/In Progress/Resolved/Closed

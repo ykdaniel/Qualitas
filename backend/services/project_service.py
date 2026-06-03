@@ -22,8 +22,8 @@ class ProjectService:
     def __init__(self, repo: ProjectRepository):
         self.repo = repo
 
-    def get_projects(self, skip: int = 0, limit: int = 200) -> List[models.Project]:
-        return self.repo.get_all(skip, limit)
+    def get_projects(self, skip: int = 0, limit: int = 200, scope=None) -> List[models.Project]:
+        return self.repo.get_all(skip, limit, scope=scope)
 
     def get_project(self, project_id: str) -> Optional[models.Project]:
         return self.repo.get_by_id(project_id)

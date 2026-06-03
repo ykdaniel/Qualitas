@@ -10,26 +10,32 @@ interface ITPGaugeChartProps {
 
 const ITPGaugeChart: React.FC<ITPGaugeChartProps> = React.memo(({ approved, maturity }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [chartHeight, setChartHeight] = useState(160);
+  const [{ chartHeight, outerRadius, innerRadius }, setDims] = useState({
+    chartHeight: 136, outerRadius: 120, innerRadius: 80,
+  });
 
-  // ResizeObserver: recompute chart height proportional to container width
+  // ResizeObserver: bound the gauge radius by the available width. A half-gauge
+  // spans 2*R horizontally, so if R is tied to height alone (as before) it gets
+  // clipped into a "ribbon" and the needle detaches once the column is narrow
+  // on smaller laptop screens. Deriving R from width keeps the arc, needle and
+  // height proportional and always inside the column.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const w = entry.contentRect.width;
-        // height ≈ 40% of width, clamped to [120, 220]
-        setChartHeight(Math.max(120, Math.min(Math.round(w * 0.4), 220)));
+        const outer = Math.max(48, Math.min(Math.floor(w / 2) - 4, 120));
+        setDims({
+          chartHeight: outer + 16,            // arc radius + room for the pivot dot
+          outerRadius: outer,
+          innerRadius: Math.round(outer * 0.667),  // 80 / 120 ≈ 0.667
+        });
       }
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-
-  // Compute radii proportional to chartHeight (same ratios as original hardcoded values)
-  const outerRadius = Math.round(chartHeight * 0.75);   // 120 / 160 = 0.75
-  const innerRadius = Math.round(outerRadius * 0.667);  // 80 / 120 ≈ 0.667
 
   const gaugeData = [
     { name: 'Low',    value: 40, color: '#f59e0b' },

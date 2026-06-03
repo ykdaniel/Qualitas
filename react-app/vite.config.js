@@ -10,6 +10,12 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    // Don't ship source maps to production — they expose component names,
+    // file structure, and inline comments that make reverse-engineering
+    // (and finding new attack surface) trivial.
+    sourcemap: false,
+  },
   server: {
     port: 3000,
     host: '0.0.0.0',

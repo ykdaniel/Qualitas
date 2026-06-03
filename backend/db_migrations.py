@@ -63,6 +63,12 @@ def run_migrations():
     _create_qworkflow_table()
     _backfill_qworkflows()
 
+    # 7. Create token_blacklist table (persisted JWT revocation list)
+    _create_token_blacklist_table()
+
+    # 8. P0 data isolation: per-user project scope table + users.vendor_id
+    _create_user_scope()
+
     logger.info("Migrations completed.")
 
 def _add_missing_columns():
@@ -149,6 +155,13 @@ def _add_missing_columns():
                 "followup", "checklist", "audits", "fat", "pqp", "qworkflow",
             ]:
                 _add_column_if_missing(conn, tbl, "project_id", "VARCHAR")
+
+            # User: account-lockout, session-cutoff, and 2FA fields
+            _add_column_if_missing(conn, "users", "failed_login_attempts", "INTEGER NOT NULL DEFAULT 0")
+            _add_column_if_missing(conn, "users", "locked_until", "DATETIME")
+            _add_column_if_missing(conn, "users", "tokens_valid_after", "DATETIME")
+            _add_column_if_missing(conn, "users", "totp_secret", "VARCHAR")
+            _add_column_if_missing(conn, "users", "totp_enabled", "BOOLEAN NOT NULL DEFAULT 0")
 
             conn.commit()
     except Exception as e:
@@ -257,6 +270,47 @@ def _backfill_qworkflows():
             logger.info(f"Backfilled {len(rows)} Q-WorkFlow rows for existing NOIs.")
     except Exception as e:
         logger.warning(f"Q-WorkFlow backfill skipped: {e}")
+
+
+def _create_token_blacklist_table():
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS token_blacklist (
+                    token_hash VARCHAR(64) NOT NULL PRIMARY KEY,
+                    expires_at DATETIME NOT NULL
+                )
+            """))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_token_blacklist_expires_at ON token_blacklist (expires_at)"
+            ))
+            conn.commit()
+    except Exception as e:
+        logger.warning(f"token_blacklist table creation skipped (may already exist): {e}")
+
+
+def _create_user_scope():
+    """P0 data isolation: the user_projects scope table and users.vendor_id.
+
+    Existing users get neither a project row nor a vendor_id, so they remain
+    unscoped (full access) after this migration — nothing breaks on rollout.
+    Scope is applied only to users that are explicitly configured."""
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS user_projects (
+                    user_id INTEGER NOT NULL,
+                    project_id VARCHAR NOT NULL,
+                    PRIMARY KEY (user_id, project_id)
+                )
+            """))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_user_projects_user_id ON user_projects (user_id)"
+            ))
+            _add_column_if_missing(conn, "users", "vendor_id", "VARCHAR")
+            conn.commit()
+    except Exception as e:
+        logger.warning(f"user scope migration skipped (may already exist): {e}")
 
 
 def _create_pqp_history_table():

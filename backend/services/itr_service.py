@@ -13,6 +13,7 @@ from typing import List, Optional
 import models
 import schemas
 from repositories.itr_repository import ITRRepository
+from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
 from core.utils import (
     _json_serialize,
     _resolve_vendor_id,
@@ -30,7 +31,7 @@ class ITRService:
     def __init__(self, repo: ITRRepository):
         self.repo = repo
 
-    def get_itrs(self, skip: int = 0, limit: int = 500, **filters) -> List[models.ITR]:
+    def get_itrs(self, skip: int = 0, limit: int = 500, scope=None, **filters) -> List[models.ITR]:
         """
         Get list of ITRs with optional filters
 
@@ -42,10 +43,10 @@ class ITRService:
         Returns:
             List of ITR objects
         """
-        items, _total = self.repo.get_all(skip, limit, **filters)
+        items, _total = self.repo.get_all(skip, limit, scope=scope, **filters)
         return items
 
-    def get_itr(self, itr_id: str) -> Optional[models.ITR]:
+    def get_itr(self, itr_id: str, scope=None) -> Optional[models.ITR]:
         """
         Get a single ITR by ID
 
@@ -55,7 +56,8 @@ class ITRService:
         Returns:
             ITR object if found, None otherwise
         """
-        return self.repo.get_by_id(itr_id)
+        obj = self.repo.get_by_id(itr_id)
+        return obj if record_in_scope(obj, scope) else None
 
     def get_itr_with_checklists(self, itr_id: str) -> Optional[models.ITR]:
         """
@@ -70,7 +72,7 @@ class ITRService:
         return self.repo.get_with_checklists(itr_id)
 
     def create_itr(self, itr_create: schemas.ITRCreate,
-                   user_id: int = None, username: str = None) -> models.ITR:
+                   user_id: int = None, username: str = None, scope=None) -> models.ITR:
         """
         Create a new ITR with business logic validation
 
@@ -102,6 +104,10 @@ class ITRService:
             vendor_name = data.pop('vendor', None)
             if vendor_name:
                 data['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
+
+            # P0 data isolation: confine the new record to the caller's scope
+            # (forces vendor_id for contractor users; validates project_id).
+            enforce_create_scope(data, scope)
 
             # Validate foreign keys BEFORE allocating a reference number,
             # so failed creates don't leave gaps in the ITR sequence.
@@ -183,7 +189,7 @@ class ITRService:
             )
 
     def update_itr(self, itr_id: str, itr_update: schemas.ITRUpdate,
-                   user_id: int = None, username: str = None) -> Optional[models.ITR]:
+                   user_id: int = None, username: str = None, scope=None) -> Optional[models.ITR]:
         """
         Update an existing ITR with validation
 
@@ -212,7 +218,7 @@ class ITRService:
         """
         try:
             db_itr = self.repo.get_by_id(itr_id)
-            if not db_itr:
+            if not db_itr or not record_in_scope(db_itr, scope):
                 return None
 
             # --- Optimistic locking via _version in detail_data ---
@@ -275,6 +281,8 @@ class ITRService:
                 vendor_name = d.pop('vendor')
                 d['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
 
+            enforce_update_scope(d, scope)
+
             # Validate noiNumber exists if being updated
             if 'noiNumber' in d and d['noiNumber']:
                 noi = self.repo.db.query(models.NOI).filter(
@@ -321,7 +329,7 @@ class ITRService:
             logger.error(f"Error updating ITR {itr_id}: {e}", exc_info=True)
             raise e
 
-    def delete_itr(self, itr_id: str, user_id: int = None, username: str = None) -> bool:
+    def delete_itr(self, itr_id: str, user_id: int = None, username: str = None, scope=None) -> bool:
         """
         Delete an ITR with audit logging
 
@@ -338,7 +346,7 @@ class ITRService:
         """
         try:
             db_itr = self.repo.get_by_id(itr_id)
-            if not db_itr:
+            if not db_itr or not record_in_scope(db_itr, scope):
                 return False
 
             # 勾稽鎖定：刪除 ITR 前確認沒有 NCR 透過 reInspectionNumber 參照此 ITR

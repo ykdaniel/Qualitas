@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from loguru import logger
 
 import models
+from core.scope import apply_scope
 from core.utils import sanitize_pagination, sanitize_search_term
 
 class FATRepository:
@@ -23,7 +24,7 @@ class FATRepository:
             joinedload(models.FAT.vendor_ref)
         ).filter(models.FAT.id == fat_id).first()
 
-    def get_all(self, skip: int = 0, limit: int = 500, project_id: str = None, **filters) -> List[models.FAT]:
+    def get_all(self, skip: int = 0, limit: int = 500, project_id: str = None, scope=None, **filters) -> List[models.FAT]:
         """Fetch multiple FATs with optional exact and fuzzy filters"""
         skip, limit = sanitize_pagination(skip, limit)
         query = self.db.query(models.FAT).options(joinedload(models.FAT.vendor_ref))
@@ -54,6 +55,9 @@ class FATRepository:
         end_date = filters.get('end_date')
         if end_date:
             query = query.filter(models.FAT.endDate <= end_date)
+
+        # P0 data isolation: restrict to the caller's project/contractor scope.
+        query = apply_scope(query, models.FAT, scope)
 
         return query.offset(skip).limit(limit).all()
 

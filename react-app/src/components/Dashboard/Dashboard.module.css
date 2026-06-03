@@ -174,17 +174,15 @@
 }
 
 .verticalDivider {
-  width: 1px;
-  min-height: 100%;
-  background-color: rgba(184, 148, 90, 0.22);
-  align-self: stretch;
-  flex-shrink: 0;
-  margin: 0 12px;
+  /* PQP / ITP are stacked vertically, so the between-column vertical rule is
+     no longer used. */
+  display: none;
 }
 
 .dualChartContainer {
   display: flex;
-  gap: 24px;
+  flex-direction: column;
+  gap: 32px;
   align-items: stretch;
 }
 
@@ -591,9 +589,10 @@
   display: flex;
   align-items: baseline;
   justify-content: center;
-  gap: 15px;
+  flex-wrap: wrap;
+  gap: 4px 15px;
   width: 100%;
-  padding: 0 20px;
+  padding: 0 12px;
   margin-top: 10px;
 }
 
@@ -715,22 +714,18 @@
 }
 
 /* Responsive Design */
+
+/* PQP / ITP are always stacked vertically (each full-width). Within each block
+   the stats card + gauge sit side-by-side until the screen is narrow enough to
+   stack those too. */
 @media (max-width: 1024px) {
-  .dualChartContainer {
-    flex-direction: column;
-  }
-  
   .obsChartWrapper,
   .ncrChartWrapper,
   .itpChartWrapper,
   .pqpChartWrapper {
     flex-direction: column;
   }
-  
-  .verticalDivider {
-    display: none;
-  }
-  
+
   .ncrStatsCard,
   .obsStatsCard,
   .itpStatsCard,
