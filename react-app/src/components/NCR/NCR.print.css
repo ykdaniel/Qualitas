@@ -1,7 +1,9 @@
-/* NCR formal print report (BACKLOG #15, Stage B).
-   The report (.ncr-print-root) is portal-mounted into <body> only while
-   printing. Hidden on screen; in @media print everything else is hidden so only
-   the report sheet prints. A4 portrait. */
+/* NCR formal print report (BACKLOG #15).
+   The report (.ncr-print-root) is portal-mounted into <body> (a sibling of
+   #root) only while printing. On screen it's hidden; in @media print the whole
+   app (#root) is removed from layout via display:none so the report flows from
+   the top of page 1 — visibility:hidden is NOT used because hidden elements
+   still occupy space and would push the report onto a blank second page. */
 
 .ncr-print-root {
     display: none;
@@ -10,32 +12,23 @@
 @media print {
     @page {
         size: A4 portrait;
-        /* Reserve a larger top margin so the fixed running header (repeated on
-           every page) never overlaps the page content. */
-        margin: 22mm 12mm 12mm;
+        /* Reserve top margin for the fixed running header (repeats every page). */
+        margin: 22mm 12mm 14mm;
     }
 
-    /* Hide the whole app, reveal only the report subtree */
-    body * {
-        visibility: hidden !important;
+    /* Remove the entire app from the printed layout. */
+    #root {
+        display: none !important;
     }
 
-    .ncr-print-root,
-    .ncr-print-root * {
-        visibility: visible !important;
-    }
-
-    /* Normal flow (NOT absolute) so multi-page pagination works correctly. */
     .ncr-print-root {
         display: block !important;
-        position: static !important;
         width: 100%;
         background: #fff;
     }
 
-    /* Running header: fixed → repeats on every printed page, parked at the very
-       top of the page (inside the reserved 22mm top margin) so page content
-       flows clear of it. */
+    /* Running header: fixed → repeats on every page, parked in the reserved top
+       margin so page content flows clear of it. */
     .ncr-running-header {
         position: fixed;
         top: 0;
@@ -44,8 +37,7 @@
         background: #fff;
     }
 
-    /* Don't strand a section header at the bottom of a page, and don't split a
-       field box across pages. */
+    /* Don't strand a section header at a page bottom; don't split a field box. */
     .ncr-section-bar {
         break-after: avoid;
         page-break-after: avoid;
@@ -55,7 +47,7 @@
         page-break-inside: avoid;
     }
 
-    /* Force exact colors (status/severity shading, section bars) */
+    /* Force exact colors (severity badge, section bars). */
     * {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
