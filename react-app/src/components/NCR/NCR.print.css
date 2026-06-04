@@ -1,0 +1,40 @@
+/* NCR formal print report (BACKLOG #15, Stage B).
+   The report (.ncr-print-root) is portal-mounted into <body> only while
+   printing. Hidden on screen; in @media print everything else is hidden so only
+   the report sheet prints. A4 portrait. */
+
+.ncr-print-root {
+    display: none;
+}
+
+@media print {
+    @page {
+        size: A4 portrait;
+        margin: 1.2cm;
+    }
+
+    /* Hide the whole app, reveal only the report subtree */
+    body * {
+        visibility: hidden !important;
+    }
+
+    .ncr-print-root,
+    .ncr-print-root * {
+        visibility: visible !important;
+    }
+
+    .ncr-print-root {
+        display: block !important;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        background: #fff;
+    }
+
+    /* Force exact colors (status/severity shading, section bars) */
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+}

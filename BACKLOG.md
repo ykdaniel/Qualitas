@@ -1,4 +1,5 @@
-# Known Architectural Debt / Backlog
+# Known Architectural Debt / 
+
 
 This file tracks known functional and architectural issues that are **not**
 yet fixed. Each item has enough context that future you (or a new
@@ -589,6 +590,62 @@ items overlap the #13 data-model work and should be done together.
 **Suggested split when picked up:** fix the 🔴 bugs first (small, high-value:
 ITR double-bind, binary view status, ghost fields, status-set unification),
 then fold the 🟡/🟢 into the #13 build so the form is reworked once.
+
+---
+
+## 15. NCR formal print report  ·  STAGE B DONE (placeholder header) · STAGE A = TODO
+
+**Status 2026-06-04:** **Stage B implemented** (frontend-only): `NCRPrintTemplate`
++ `NCR.print.css` (A4 portrait, portal into `<body>`, hide app while printing) +
+a **Print button in the edit modal** (`NCRDetailModal`). Report shows identity,
+severity badge, discipline, full disposition/corrective-action body,
+effectiveness, and the 4 signature blocks. **Company header is a placeholder**
+(`[ Company Name ]` + LOGO box). tsc/build clean. Not yet deployed.
+
+**TODO — Stage A (branding setting):** add a configurable company name + logo
+(backend store + Settings UI + logo upload) and wire it into the report header
+(replace the placeholder). No central Settings page exists yet — naming-rules /
+security are standalone pages, so this needs its own page/route + nav entry.
+Optional: a 5th "Closed by" signature block.
+
+
+
+Raised 2026-06-04: **NCR has no working print function.** The print button lives
+only in `NCRDetailsViewModal`, which is **dead code (never rendered)**; the list
+opens the edit modal, which has no print; and there is **no NCR `@media print`
+CSS** (NOI/ITR/ITP/PQP/Checklist all have it).
+
+**✅ DECIDED 2026-06-04 (direction):**
+- Put the **Print button in the edit modal** (`NCRDetailModal`).
+- Produce a **formal report** (company letterhead + signature blocks), not just a
+  raw screen print. User acknowledged this is larger and overlaps roadmap **P1**
+  (e-signature signed PDF).
+
+**Plan (reuse the house pattern):** ITP already does formal print via a React
+portal — `ReactDOM.createPortal` into a `#itp-print-root`, with `ITPDetail.print.css`
+(`@page A4`, hide `#root`, show the portal). Replicate for NCR:
+`#ncr-print-root` + `NCR.print.css` + an A4 report component rendering header +
+identity + body (incl. the new severity / discipline / disposition / effectiveness
+fields) + signature blocks.
+
+**⛔ Blocker — no branding in the system:** there is no company name / logo /
+letterhead anywhere (no settings field, no asset). "公司抬頭" has no data source.
+
+**✅ DECIDED 2026-06-04:**
+1. **Company header → add a configurable branding setting** (company name + logo)
+   in Settings; the report reads it. Cleaner long-term and reusable by other
+   modules' prints. (Build a branding settings store + Settings UI with logo.)
+2. **Page: A4 portrait.**
+3. **Signature blocks (in order):** Raised by · Contractor response (assignedTo) ·
+   Disposition approved by (PQM) · Effectiveness verified by. _(“Closed by” was
+   not offered in the 4-option picker — add it as a 5th block if wanted.)_
+
+**Build stages:**
+- **A. Branding setting** — backend store for company name + logo + Settings UI.
+- **B. NCR report** — `#ncr-print-root` portal + `NCR.print.css` (A4 portrait,
+  hide `#root`) + report layout (header reads branding; body incl. severity /
+  discipline / disposition / effectiveness; the 4 signature blocks) + Print
+  button in `NCRDetailModal`.
 
 ---
 

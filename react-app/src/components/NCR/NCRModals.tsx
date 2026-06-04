@@ -12,6 +12,9 @@ import ImagePreviewOverlay from '../Shared/ImagePreviewOverlay';
 import RelatedDocuments from '../ui/RelatedDocuments';
 import styles from './NCR.module.css';
 
+import ReactDOM from 'react-dom';
+import NCRPrintTemplate from './NCRPrintTemplate';
+import './NCR.print.css';
 import formStyles from '../Shared/FormShell.module.css';
 export interface NCRDetailData {
     ncrNumber: string;
@@ -197,6 +200,19 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         const u = users.find(x => x.id === id);
         return u ? (u.full_name || u.username) : `#${id}`;
     };
+
+    // Formal print report (BACKLOG #15). Mount the report portal, print, unmount.
+    const [isPrinting, setIsPrinting] = useState(false);
+    useEffect(() => {
+        if (!isPrinting) return;
+        const timer = setTimeout(() => window.print(), 100);
+        const onAfterPrint = () => setIsPrinting(false);
+        window.addEventListener('afterprint', onAfterPrint);
+        return () => {
+            clearTimeout(timer);
+            window.removeEventListener('afterprint', onAfterPrint);
+        };
+    }, [isPrinting]);
 
     // 附件預覽
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -968,12 +984,19 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                         <button className={formStyles.saveButton} onClick={handleSave} style={{ marginLeft: '12px' }} disabled={saving}>
                             {saving ? t('obs.saving') : t('common.save')}
                         </button>
+                        <button className={formStyles.printButton} onClick={() => setIsPrinting(true)} style={{ marginLeft: '12px' }} disabled={saving} title={t('common.print') || 'Print'}>
+                            {t('common.print') || 'Print'}
+                        </button>
                         <button className={formStyles.cancelButton} onClick={onClose} disabled={saving}>
                             {t('common.cancel')}
                         </button>
                     </div>
                 </div >
             </div >
+            {isPrinting && ReactDOM.createPortal(
+                <NCRPrintTemplate data={formData} resolveUser={userLabel} />,
+                document.body
+            )}
             {previewUrl && (
                 <ImagePreviewOverlay key={previewUrl} url={previewUrl} name={previewName} onClose={() => setPreviewUrl(null)} />
             )}
