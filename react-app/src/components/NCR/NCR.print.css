@@ -1,49 +1,148 @@
-/* NCR formal print report (BACKLOG #15).
-   The report (.ncr-print-root) is portal-mounted into <body> (a sibling of
-   #root) only while printing. On screen it's hidden; in @media print the whole
-   app (#root) is removed from layout via display:none so the report flows from
-   the top of page 1 — visibility:hidden is NOT used because hidden elements
-   still occupy space and would push the report onto a blank second page. */
+/* NCR formal print report (BACKLOG #15) — bilingual template.
+   The report (.ncr-print-root) is portal-mounted into <body> (sibling of #root)
+   and only shown while printing. All visual rules are scoped under
+   .ncr-print-root so the template's generic table/td/th selectors never leak
+   into the rest of the app. The full masthead lives in the outer table's
+   <thead> so the browser repeats it on every printed page. */
+
+:root {
+    --ncr-ink: #1c1f24;
+    --ncr-muted: #5b6068;
+    --ncr-line: #9aa0a8;
+    --ncr-line-soft: #c9ced4;
+    --ncr-fill: #eef1f4;
+    --ncr-fill-head: #dfe4ea;
+    --ncr-accent: #1f3a5f;
+    --ncr-sev: #b03a2e;
+    --ncr-status: #1f6f8b;
+    --ncr-note: #7a818a;
+}
 
 .ncr-print-root {
     display: none;
 }
 
+/* ---------- report visual styles (scoped) ---------- */
+.ncr-print-root {
+    font-family: "Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    color: var(--ncr-ink);
+    font-size: 9.3px;
+    line-height: 1.5;
+    background: #fff;
+}
+.ncr-print-root * { box-sizing: border-box; }
+
+.ncr-print-root .ncr-report { width: 100%; border-collapse: collapse; }
+.ncr-print-root .head-cell,
+.ncr-print-root .body-cell { border: none; padding: 0; text-align: left; font-weight: 400; }
+
+.ncr-print-root .doc-head {
+    display: flex; align-items: stretch;
+    border-bottom: 2.2px solid var(--ncr-ink);
+    padding-bottom: 6px; margin-bottom: 10px;
+}
+.ncr-print-root .logo-box {
+    width: 78px; min-height: 46px;
+    border: 1px dashed var(--ncr-line-soft);
+    display: flex; align-items: center; justify-content: center;
+    color: #b8bdc4; font-size: 9px; letter-spacing: 1px;
+}
+.ncr-print-root .head-mid { flex: 1; padding: 2px 14px; }
+.ncr-print-root .head-mid .co { font-size: 14px; font-weight: 700; letter-spacing: .5px; }
+.ncr-print-root .head-mid .sub { font-size: 9.5px; color: var(--ncr-muted); margin-top: 2px; }
+.ncr-print-root .head-right { text-align: right; font-size: 9px; line-height: 1.6; min-width: 120px; }
+.ncr-print-root .head-right .docno { font-weight: 700; font-size: 10px; letter-spacing: .3px; }
+
+.ncr-print-root .badge {
+    display: inline-block; padding: 1px 7px; border-radius: 2px;
+    font-weight: 700; font-size: 8.6px; letter-spacing: .4px; color: #fff;
+}
+.ncr-print-root .b-sev { background: var(--ncr-sev); }
+.ncr-print-root .b-status { background: var(--ncr-status); }
+
+.ncr-print-root .title {
+    text-align: center; font-size: 16px; font-weight: 700;
+    letter-spacing: 3px; margin: 4px 0 12px;
+}
+.ncr-print-root .title .en {
+    font-size: 9px; font-weight: 500; letter-spacing: 2px;
+    color: var(--ncr-muted); display: block; margin-top: 2px;
+}
+
+.ncr-print-root .sec-head {
+    background: var(--ncr-fill-head);
+    border-left: 3px solid var(--ncr-accent);
+    padding: 3px 9px; font-weight: 700; font-size: 10px;
+    letter-spacing: .5px; margin: 11px 0 0;
+}
+.ncr-print-root .sec-head .en { font-weight: 500; color: var(--ncr-muted); font-size: 8.6px; letter-spacing: .5px; }
+
+.ncr-print-root table { width: 100%; border-collapse: collapse; margin-top: -1px; }
+.ncr-print-root .ncr-report > thead > tr > th,
+.ncr-print-root .ncr-report > tbody > tr > td { margin-top: 0; }
+.ncr-print-root td, .ncr-print-root th { border: 1px solid var(--ncr-line); padding: 3px 6px; vertical-align: top; }
+.ncr-print-root td.lbl {
+    background: var(--ncr-fill); font-weight: 600; white-space: nowrap;
+    width: 88px; color: #2a2e34;
+}
+.ncr-print-root td.lbl small { display: block; color: var(--ncr-note); font-weight: 500; font-size: 7.6px; letter-spacing: .2px; }
+.ncr-print-root .val { min-height: 14px; }
+.ncr-print-root .blank { color: #aeb3ba; }
+
+.ncr-print-root .subhead { font-weight: 700; font-size: 9px; margin: 6px 0 2px; color: var(--ncr-accent); }
+.ncr-print-root .subhead .en { color: var(--ncr-note); font-weight: 500; font-size: 7.8px; }
+
+.ncr-print-root .field-box { border: 1px solid var(--ncr-line); min-height: 34px; padding: 4px 6px; white-space: pre-wrap; }
+.ncr-print-root .field-box.tall { min-height: 46px; }
+.ncr-print-root .guide { color: #aeb3ba; font-style: normal; }
+
+.ncr-print-root .chk-row { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.ncr-print-root .chk { display: flex; align-items: center; gap: 5px; }
+.ncr-print-root .box { width: 11px; height: 11px; border: 1.4px solid var(--ncr-ink); display: inline-block; position: relative; }
+.ncr-print-root .box.on::after { content: "✓"; position: absolute; top: -3px; left: 0; font-size: 11px; font-weight: 700; }
+
+.ncr-print-root .three-col td { width: 33.33%; }
+.ncr-print-root .note-foot { font-size: 7.8px; color: var(--ncr-note); margin-top: 3px; }
+
+.ncr-print-root .sign-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 4px; }
+.ncr-print-root .sign-cell { border: 1px solid var(--ncr-line); padding: 6px 8px 7px; }
+.ncr-print-root .sign-cell .role { font-weight: 700; font-size: 9px; }
+.ncr-print-root .sign-cell .role .en { color: var(--ncr-note); font-weight: 500; font-size: 7.6px; }
+.ncr-print-root .sign-line { border-bottom: 1px solid var(--ncr-ink); height: 24px; margin: 6px 0 4px; }
+.ncr-print-root .sign-meta { display: flex; justify-content: space-between; font-size: 8px; color: var(--ncr-muted); }
+.ncr-print-root .sign-meta span { flex: 1; }
+.ncr-print-root .req-tag { color: var(--ncr-sev); font-weight: 700; font-size: 7.4px; }
+
+.ncr-print-root .foot {
+    margin-top: 12px; border-top: 1px solid var(--ncr-line-soft); padding-top: 6px;
+    display: flex; justify-content: space-between; gap: 14px; font-size: 7.6px; color: var(--ncr-note);
+}
+.ncr-print-root .foot .legend b { color: #3a3f46; }
+.ncr-print-root .rev-table { width: auto; margin-top: 4px; }
+.ncr-print-root .rev-table td, .ncr-print-root .rev-table th { padding: 2px 8px; font-size: 7.8px; border: 1px solid var(--ncr-line); }
+.ncr-print-root .rev-table th { background: var(--ncr-fill); font-weight: 600; }
+
+/* photo report page */
+.ncr-print-root .photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+.ncr-print-root .photo-item { border: 1px solid var(--ncr-line); padding: 4px; text-align: center; }
+.ncr-print-root .photo-item img { width: 100%; height: auto; max-height: 300px; object-fit: contain; }
+
+/* keep headers with content / boxes intact across page breaks */
+.ncr-print-root tr,
+.ncr-print-root .field-box,
+.ncr-print-root .sign-cell { break-inside: avoid; page-break-inside: avoid; }
+.ncr-print-root .subhead,
+.ncr-print-root .sec-head { break-after: avoid; page-break-after: avoid; }
+
 @media print {
-    @page {
-        size: A4 portrait;
-        margin: 12mm;
-    }
-
-    /* Remove the entire app from the printed layout. */
-    #root {
-        display: none !important;
-    }
-
-    .ncr-print-root {
-        display: block !important;
-        width: 100%;
-        background: #fff;
-    }
-
-    /* The masthead lives in <thead>; this makes the browser repeat it on every
-       printed page (the reliable cross-browser running-header technique). */
-    .ncr-report thead {
-        display: table-header-group;
-    }
-
-    /* Don't strand a section header at a page bottom; don't split a field box. */
-    .ncr-section-bar {
-        break-after: avoid;
-        page-break-after: avoid;
-    }
-    .ncr-block {
-        break-inside: avoid;
-        page-break-inside: avoid;
-    }
-
-    /* Force exact colors (severity badge, section bars). */
-    * {
+    @page { size: A4; margin: 13mm 12mm; }
+    /* Remove the whole app from the printed layout. */
+    #root { display: none !important; }
+    .ncr-print-root { display: block !important; }
+    /* Repeat the masthead (in <thead>) on every page. */
+    .ncr-print-root .ncr-report > thead { display: table-header-group; }
+    /* Force exact colors (badges, fills). */
+    .ncr-print-root * {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
     }
