@@ -336,6 +336,189 @@ reporting becomes a hard requirement.
 
 ---
 
+## 13. NCR field-model gaps (ISO 9001 completeness)  ·  FOR DISCUSSION
+
+Captured 2026-06-04 from a review of the `NCR` model + form. The model is
+already thorough (corrective-action chain `immediateCorrectionAction` →
+`rootCauseAnalysis` → `correctiveActions` → `preventiveAction`, disposition,
+product-integrity statements, defect/improvement photos). These are the gaps
+worth discussing — **not yet decided, do not build until reviewed.**
+
+**🔴 Substantive gaps**
+1. **Severity / classification** — MISSING. The existing `type` field is a
+   *cause* category (Design / Material / Workmanship / Document), not a severity.
+   Without severity there is no triage, no per-severity SLA, and no meaningful
+   KPI / owner reporting.
+
+   **✅ DECIDED 2026-06-04 — ready to build:**
+   - **Two tiers only: `Major` / `Minor`.** No "Observation" tier — observations
+     are a separate record type (the OBS module); keeping it off NCR avoids
+     blurring the two. No numeric 1–4 scale (poor inter-rater consistency; the
+     likelihood axis is meaningless for an already-realized nonconformance).
+   - **Definitions (these MUST be surfaced in the UI so users pick correctly —
+     inline help / tooltip next to the severity selector, both zh + en):**
+     - **Major:** affects fitness-for-purpose / structural integrity / safety /
+       code or contract compliance; OR is a repeat / systemic issue. Requires
+       formal disposition + root cause + owner/PQM sign-off; not closable by the
+       contractor alone.
+     - **Minor:** isolated, easily corrected, no impact on function or integrity.
+       Contractor corrects + QA verifies to close.
+   - **Severity drives the `dueDate` SLA**, auto-filled but overridable:
+     Major → **7 days**, Minor → **14 days** from `raiseDate`. Defaults are a
+     **global configurable setting** (same pattern as `KPIWeight`) so the PQM can
+     tune per project/contract. Manual override of `dueDate` is allowed and
+     **audit-logged**. Not hard-locked (a Major may legitimately need longer,
+     e.g. awaiting a design disposition).
+   - Implementation: nullable `severity` enum column (idempotent
+     `_add_column_if_missing`), a global SLA-days config row, a form select with
+     the inline definitions above, and `dueDate` auto-population on create.
+2. **Accountability identities are name-strings, and closure has no signer** —
+   `raisedBy` / `foundBy` are free text; there is **no `assignedTo`** (who must
+   close it) and **no `closedBy` / `verifiedBy`**. `closeoutDate` records *when*
+   but not *who*. Reminders (`last_reminded_at`) fire but target nobody specific.
+
+   **✅ DECIDED 2026-06-04 — ready to build:**
+   - Add `assignedTo`, `closedBy`, `verifiedBy` as **FK columns to `users.id`**
+     (account links, not free-text names), nullable, **`ondelete=SET NULL`**.
+   - **History is NOT stored on the NCR.** The existing `log_audit` already
+     captures who-did-what-when (with the username snapshotted at the moment),
+     and that audit trail is the immutable system of record. So the FK fields
+     serve the *live* state + workflow (assignee filtering, targeted reminders,
+     showing the current signer); if a user is later deleted the FK goes NULL but
+     the audit log still holds the historical truth. No name-snapshot column.
+   - **`assignedTo` is a person, not an organisation.** The contractor *company*
+     is already on `vendor_id`; `assignedTo` adds *which individual* is on the
+     hook to close it (so reminders/escalation target a real person).
+   - **`closedBy` / `verifiedBy`** are internal QA / PQM — they always have
+     accounts. **`assignedTo`** may be a contractor-side person; that person must
+     have an account to be assignable. If they don't, **create a contractor login
+     for them** (P0 already supports contractor-scoped logins) — do not fall back
+     to free-text.
+3. **No corrective-action effectiveness verification** — ISO 9001 §10.2 requires
+   reviewing whether the corrective action worked. We have `preventiveAction` +
+   `reInspectionNumber` but no explicit "effectiveness verified (Y/N) + by +
+   date". An auditor would raise a finding on this.
+
+   **✅ DECIDED 2026-06-04 — ready to build:**
+   - Add an effectiveness-verification step, **required for ALL NCRs** (not just
+     Major). This is the "did the corrective action actually prevent recurrence?"
+     check done some time *after* the action — distinct from `reInspectionNumber`,
+     which re-inspects the repaired item itself.
+   - Fields:
+     - `effectivenessVerified` — `Pending` / `Yes` / `No` (default Pending).
+     - `effectivenessVerifiedBy` — FK to `users.id` (same convention as gap #2).
+     - `effectivenessVerifiedDate`.
+     - `effectivenessNotes` (optional) — how it was verified, e.g. "next 3 pours
+       inspected, no recurrence".
+   - **Gates closure:** an NCR cannot move to `Closed` until
+     `effectivenessVerified = Yes`. `No` should route it back (re-open / new
+     action). _(Confirm exact gate behaviour at build time.)_
+4. **`productDisposition` is a free string** — should be a controlled enum.
+   Free text blocks aggregation and yields inconsistent wording (重做 / 返工 /
+   rework are all the same thing today).
+
+   **✅ DECIDED 2026-06-04 — ready to build:**
+   - Controlled enum, **4 values** (the standard mutually-exclusive set, framed
+     as "does the nonconforming item stay in the works?"):
+     1. **Use-as-is** 照用 — stays, unchanged (usually needs a concession/waiver).
+     2. **Rework** 重作 — stays, corrected to *fully* meet the original spec.
+     3. **Repair** 修補 — stays, made usable but *not* fully to original spec
+        (requires approval; distinct from Rework — auditors care about this line).
+     4. **Reject** 拒收 — does NOT stay (scrapped OR returned to supplier).
+   - **Merged the old "Reject/Scrap" + "Return to supplier" into one `Reject`** —
+     they are the same *quality* decision ("not used"); scrap-vs-return is only
+     downstream logistics. If tracking scrap-vs-return is ever needed, add it as a
+     sub-note under Reject, NOT as a second top-level option.
+   - Definitions should be surfaced in the UI (same as severity), esp. the
+     Rework-vs-Repair distinction.
+
+**🟡 Data-quality / structural**
+5. **All NCR dates are `Column(String)`** (`raiseDate`, `closeoutDate`,
+   `dueDate`) — no validation, string-based sorting, timezone-ambiguous. Part of
+   the broader SQLite/date debt; overlaps item **#1**.
+
+   **✅ DECIDED 2026-06-04 — ready to build:**
+   - **Now (cheap, low-risk): enforce ISO `YYYY-MM-DD` format** at the Pydantic
+     schema layer for the NCR date fields. This blocks garbage values, makes
+     string sort == chronological order, and keeps SLA/overdue math reliable.
+     These are dates (not timestamps), so timezone is moot.
+   - **Deferred: do NOT migrate `String` → real `DATE` columns in this NCR work.**
+     The whole app stores dates as strings (ITP/ITR/NOI/OBS…); converting only
+     NCR would make it inconsistent and carries migration risk on existing data.
+     The real type migration should be a deliberate **system-wide** effort done
+     alongside backlog item **#1** (FK migration), not piecemeal on NCR.
+6. **`status` is a free string**, only the UI constrains it to
+   Open / In Progress / Closed / Void; nothing enforced server-side → dirty-data
+   risk.
+
+   **✅ DECIDED 2026-06-04 — ready to build:**
+   - **Add one status: `Pending Verification`** (待驗證). Lifecycle becomes:
+     `Open → In Progress → Pending Verification → Closed`, plus `Void`. The new
+     state makes the (now mandatory, per gap #3) "action done, awaiting
+     effectiveness check" phase visible on the board instead of hidden.
+   - **`effectivenessVerified = No` routes back to `In Progress`.** No separate
+     `Reopened` state — reopen/recurrence counting is deferred to gap #7.
+   - **Enforce the status set server-side** (Python `Enum` + Pydantic validation
+     in the create/update schemas, and a guard in the service) to block dirty
+     data. SQLite won't enforce an enum at the column level, so enforcement lives
+     at the schema/service layer.
+   - **Explicitly NOT building the P1 approval state machine** (Draft / Submitted
+     / Under Review / Approved…). That stays in roadmap **P1** (deferred to last).
+     This is just the minimal lifecycle the #1/#3 decisions require.
+7. **No recurrence / systemic-CAPA link** — can't flag a repeat nonconformance
+   or roll several NCRs up to one systemic corrective action for trend analysis.
+
+   **⏸ DEFERRED 2026-06-04 — not in this cut.** Revisit after the core NCR
+   improvements (#1–#6) ship and there is real data, and design it together with
+   reporting (roadmap **P8**). Rationale: a full CAPA object is almost its own
+   module (overlaps P8, cross-module workflow #11, and the existing related-docs
+   graph) — scope creep here; and a half-baked `isRecurring` boolean gives little
+   value without the grouping/analysis behind it. Recurrence analysis is best
+   designed once there's actual data to shape it. (Note: gap #1 already treats a
+   repeat/systemic issue as Major — that judgement stays manual until #7 is built.)
+
+**🟢 Nice-to-have (depends on owner requirements)**
+8. **Discipline / trade classification** for trend analysis — there is
+   `foundLocation` but no discipline. (ITR already has a `discipline` field —
+   but as a *free string*.)
+
+   **✅ DECIDED 2026-06-04 — ready to build:**
+   - **Add `discipline` to NCR now** (cheap; start capturing data immediately so
+     it's ready when reporting/P8 lands — no backfill later). Unlike #7 this is
+     just one classification column, not a design-heavy feature.
+   - **Controlled enum (fixed list), not free string** — the whole value is
+     aggregation; free text (Civil / 土建 / civil) would defeat it.
+   - **Initial list (may be simplified/refined later):** Civil 土建 /
+     Structural 結構 / Mechanical 機械 / Electrical 電氣 / Piping 管路 /
+     Architectural 建築.
+   - **Consistency note:** ITR's existing `discipline` is a free string. NCR will
+     use the controlled list; ITR should adopt the *same* list later — deferred
+     here to avoid scope creep, but flagged so the two don't drift.
+9. **Cost / quantity of nonconformance** — commonly wanted for owner reporting.
+
+   **⏸ DEFERRED 2026-06-04 — not in this cut.** Design together with reporting
+   (roadmap **P8**), and **first settle the process: who fills in cost and how
+   it's estimated.** Rationale: cost is sensitive, low-confidence and contentious
+   (back-charges) — captured ad-hoc it's mostly blank/garbage; and quantity needs
+   a unit (m³ / m / each / m²…) that can't be aggregated across NCRs, so the
+   reporting value is limited. The core (#1–#6) + discipline (#8) already give
+   strong reporting dimensions; cost/quantity is the lowest-value, highest-
+   friction item, so it waits.
+
+**Suggested cheap first cut (if approved, ~half a day, no need to wait for P1):**
+severity enum (#1) + disposition enum (#4) + effectiveness-verified fields (#3)
++ `closedBy` / `verifiedBy` (part of #2). Each is an additive nullable column
+(migration is idempotent `_add_column_if_missing`) plus a few form fields.
+
+**Open questions to settle first:**
+- ~~Severity scheme + whether it drives the SLA~~ → **resolved 2026-06-04, see gap #1.**
+- ~~`assignedTo` / `closedBy` / `verifiedBy`: FK to users vs free-text?~~ →
+  **resolved 2026-06-04 (FK to users), see gap #2.**
+- ~~Disposition enum list?~~ → **resolved 2026-06-04 (4 values, Reject merged),
+  see gap #4.**
+
+---
+
 ## Product Roadmap — Functional (prioritized)
 
 This is a **feature / product** roadmap (distinct from the architectural debt
