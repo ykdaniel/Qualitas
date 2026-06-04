@@ -519,6 +519,63 @@ severity enum (#1) + disposition enum (#4) + effectiveness-verified fields (#3)
 
 ---
 
+## 14. NCR form (NCRModals.tsx) issues  ·  FOR DISCUSSION
+
+Captured 2026-06-04 from a review of `react-app/src/components/NCR/NCRModals.tsx`
+(the edit + view modals). The form is feature-complete (info → photos → personnel
+→ disposition → corrective actions → re-inspection → quality), but has real bugs
+plus structure/UX problems. **Not yet decided — discuss before fixing.** Some
+items overlap the #13 data-model work and should be done together.
+
+**🔴 Bugs (correctness, not taste)**
+1. **ITR number is double-bound to one field, rendered twice, two input types.**
+   `NCRModals.tsx:308` (Info section) is a **dropdown**; `NCRModals.tsx:701`
+   (Re-inspection section) is a **free-text** input — both bound to the same
+   `itrNumber`. Editing one changes the other. Conceptually these are *two
+   different ITRs* (the one that triggered the NCR vs. the one that verifies
+   closure); the form currently **cannot record both**. Likely needs a second
+   field (e.g. `verificationItrNumber`) — overlaps #13.
+2. **View modal shows status as binary.** `NCRModals.tsx:1078` renders
+   `status === 'open' ? Open : Closed`, so In Progress / Resolved / Void all
+   display as "Closed" in the read-only view. Display bug.
+3. **Two "ghost" fields the form can't edit.** `projectQualityManager` (PQM) and
+   `aconex` (external doc-control ref) exist in `NCRDetailData` / init / view
+   data but have **no input** in the edit form — they can never be set.
+4. **Status option set is inconsistent across the app.** The form offers 5
+   (Open / In Progress / **Resolved** / Closed / Void, `NCRModals.tsx:748`); the
+   list-page `columns.tsx` offers 4 (no "Resolved"). Dirty-data / filter gaps.
+   Ties to the #13 #6 decision to enforce one canonical status set server-side.
+
+**🟡 Structure / UX**
+5. **`productDisposition` is mis-grouped** under "Personnel / Location"
+   (`NCRModals.tsx:511`, next to foundBy / serialNumbers) instead of the
+   Disposition section.
+6. **Two ambiguous primary buttons "Publish / Save"** (`NCRModals.tsx:826`).
+   Publish auto-bumps the revision; users can't easily tell when to use which,
+   and "Publish" is a hard-coded English label (untranslated).
+7. **"Required fields" hint with no actual required validation.** The hint shows
+   (`NCRModals.tsx:281`) but subject / contractor / raiseDate / description are
+   never enforced — misleading.
+8. **Closure QC check is frontend-only** (`NCRModals.tsx:222`, requires
+   disposition + re-inspection ref) — bypassable, and not yet wired to the #13
+   #3 effectiveness-verification gate.
+9. **TBC / NA / Add-date buttons inject magic strings** ("To be confirmed",
+   "Not Applicable", a date stamp) into free-text fields — not structured, can't
+   filter "still TBC".
+10. **One very long single-scroll modal** (8 sections, dozens of fields) — hard
+    to fill on a tablet in the field; consider tabs / collapsible sections.
+
+**🟢 Overlaps with #13 (do together)**
+- No severity selector yet (#13 #1); contractor is stored as a **name string**
+  (`NCRModals.tsx:385` uses `contractor.name` as the value, not the id) — rename
+  breaks the link; dates use a fragile text↔date input toggle.
+
+**Suggested split when picked up:** fix the 🔴 bugs first (small, high-value:
+ITR double-bind, binary view status, ghost fields, status-set unification),
+then fold the 🟡/🟢 into the #13 build so the form is reworked once.
+
+---
+
 ## Product Roadmap — Functional (prioritized)
 
 This is a **feature / product** roadmap (distinct from the architectural debt
