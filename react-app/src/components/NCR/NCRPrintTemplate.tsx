@@ -15,6 +15,9 @@ interface NCRPrintTemplateProps {
     data: NCRDetailData;
     /** Resolve a user id (assignedTo / effectivenessVerifiedBy) to a display name. */
     resolveUser: (id: number | null) => string;
+    /** Already-resolved (same-origin) image URLs for the photo report page. */
+    defectPhotos?: string[];
+    improvementPhotos?: string[];
 }
 
 const s: Record<string, React.CSSProperties> = {
@@ -37,6 +40,12 @@ const s: Record<string, React.CSSProperties> = {
     sigLabel: { fontWeight: 700, fontSize: 11, marginBottom: 6 },
     sigLine: { borderBottom: '1px solid #111', height: 26, marginBottom: 4 },
     sigMeta: { display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#374151' },
+    // Running header repeated on every printed page (consistency)
+    runningHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #111', paddingBottom: 4, fontSize: 10, fontWeight: 700, color: '#111' },
+    photoGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 6 },
+    photoItem: { border: '1px solid #111', padding: 4, textAlign: 'center' },
+    photoImg: { width: '100%', height: 'auto', maxHeight: 300, objectFit: 'contain' },
+    photoEmpty: { fontSize: 11, color: '#6b7280', padding: '12px 0' },
 };
 
 const sevBadge = (major: boolean): React.CSSProperties => ({
@@ -77,10 +86,29 @@ const Sig: React.FC<{ label: string; name?: string; date?: string }> = ({ label,
     </div>
 );
 
-const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser }) => {
+const PhotoColumn: React.FC<{ title: string; urls: string[] }> = ({ title, urls }) => (
+    <div>
+        <div style={s.blockLabel}>{title}</div>
+        {urls.length === 0
+            ? <div style={s.photoEmpty}>(No photos)</div>
+            : urls.map((u, i) => (
+                <div key={i} style={{ ...s.photoItem, marginBottom: 8 }}>
+                    <img src={u} style={s.photoImg} alt={`${title} ${i + 1}`} />
+                </div>
+            ))}
+    </div>
+);
+
+const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, defectPhotos = [], improvementPhotos = [] }) => {
     const isMajor = data.severity === 'Major';
+    const hasPhotos = defectPhotos.length > 0 || improvementPhotos.length > 0;
     return (
         <div className="ncr-print-root">
+            {/* Repeats on every printed page (sits in the reserved @page top margin) */}
+            <div className="ncr-running-header" style={s.runningHeader}>
+                <span>[ Company Name ] — Non-Conformance Report</span>
+                <span>{data.ncrNumber || '(auto)'} · Rev {data.rev || '-'}</span>
+            </div>
             <div style={s.page}>
                 {/* Company header — placeholder until Stage A branding lands */}
                 <div style={s.header}>
@@ -169,6 +197,18 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser }
                     <Sig label="5.3 Disposition approved by (PQM)" name={data.projectQualityManager} />
                     <Sig label="5.4 Effectiveness verified by" name={resolveUser(data.effectivenessVerifiedBy)} date={data.effectivenessVerifiedDate} />
                 </div>
+
+                {/* 6 — Photographic record on its own page */}
+                {hasPhotos && (
+                    <div style={{ pageBreakBefore: 'always', breakBefore: 'page' }}>
+                        <div style={s.title}>Photographic Record</div>
+                        <SectionBar n={6} title="Before / After Photos" />
+                        <div style={s.photoGrid}>
+                            <PhotoColumn title="Defect (Before)" urls={defectPhotos} />
+                            <PhotoColumn title="Improvement (After)" urls={improvementPhotos} />
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { getUsers, type User as ApiUser } from '../../services/api';
+import { getUsers, getEntityFiles, getAuthenticatedFileUrl, type User as ApiUser } from '../../services/api';
 import { getNextRevision } from '../../utils/revision';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
@@ -203,9 +203,11 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
 
     // Formal print report (BACKLOG #15). Mount the report portal, print, unmount.
     const [isPrinting, setIsPrinting] = useState(false);
+    const [printDefectPhotos, setPrintDefectPhotos] = useState<string[]>([]);
+    const [printImprovementPhotos, setPrintImprovementPhotos] = useState<string[]>([]);
     useEffect(() => {
         if (!isPrinting) return;
-        const timer = setTimeout(() => window.print(), 100);
+        const timer = setTimeout(() => window.print(), 200);
         const onAfterPrint = () => setIsPrinting(false);
         window.addEventListener('afterprint', onAfterPrint);
         return () => {
@@ -213,6 +215,28 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
             window.removeEventListener('afterprint', onAfterPrint);
         };
     }, [isPrinting]);
+
+    // Gather before/after photos (legacy array + uploaded attachments), resolve
+    // to same-origin URLs, then trigger printing.
+    const handlePrintClick = async () => {
+        const legacyDefect = (formData.defectPhotos || []).filter((p): p is string => typeof p === 'string');
+        const legacyImprove = (formData.improvementPhotos || []).filter((p): p is string => typeof p === 'string');
+        let defect = legacyDefect;
+        let improve = legacyImprove;
+        if (existingItem?.id) {
+            try {
+                const [d, i] = await Promise.all([
+                    getEntityFiles('ncr', existingItem.id, 'defectPhoto'),
+                    getEntityFiles('ncr', existingItem.id, 'improvementPhoto'),
+                ]);
+                defect = [...legacyDefect, ...d.map(f => f.file_url)];
+                improve = [...legacyImprove, ...i.map(f => f.file_url)];
+            } catch {/* fall back to legacy arrays */}
+        }
+        setPrintDefectPhotos(defect.map(getAuthenticatedFileUrl));
+        setPrintImprovementPhotos(improve.map(getAuthenticatedFileUrl));
+        setIsPrinting(true);
+    };
 
     // 附件預覽
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -984,7 +1008,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                         <button className={formStyles.saveButton} onClick={handleSave} style={{ marginLeft: '12px' }} disabled={saving}>
                             {saving ? t('obs.saving') : t('common.save')}
                         </button>
-                        <button className={formStyles.printButton} onClick={() => setIsPrinting(true)} style={{ marginLeft: '12px' }} disabled={saving} title={t('common.print') || 'Print'}>
+                        <button className={formStyles.printButton} onClick={handlePrintClick} style={{ marginLeft: '12px' }} disabled={saving} title={t('common.print') || 'Print'}>
                             {t('common.print') || 'Print'}
                         </button>
                         <button className={formStyles.cancelButton} onClick={onClose} disabled={saving}>
@@ -994,7 +1018,12 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                 </div >
             </div >
             {isPrinting && ReactDOM.createPortal(
-                <NCRPrintTemplate data={formData} resolveUser={userLabel} />,
+                <NCRPrintTemplate
+                    data={formData}
+                    resolveUser={userLabel}
+                    defectPhotos={printDefectPhotos}
+                    improvementPhotos={printImprovementPhotos}
+                />,
                 document.body
             )}
             {previewUrl && (
