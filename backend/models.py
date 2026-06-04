@@ -87,6 +87,17 @@ class NCR(Base):
     finalProductIntegrityStatement = Column(Text, nullable=True)
     reInspectionNumber = Column(String, nullable=True)
     projectQualityManager = Column(String, nullable=True)
+    # NCR field-model improvements (BACKLOG #13)
+    severity = Column(String, nullable=True, index=True)        # Major / Minor
+    discipline = Column(String, nullable=True, index=True)      # Civil / Structural / Mechanical / Electrical / Piping / Architectural
+    assignedTo = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)   # person responsible to close
+    closedBy = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    verifiedBy = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    # Corrective-action effectiveness verification (ISO 9001 §10.2) — required for ALL NCRs
+    effectivenessVerified = Column(String, nullable=True)       # Pending / Yes / No
+    effectivenessVerifiedBy = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    effectivenessVerifiedDate = Column(String, nullable=True)   # YYYY-MM-DD
+    effectivenessNotes = Column(Text, nullable=True)
 
     # Relationships
     vendor_ref = relationship("Contractor", back_populates="ncrs")

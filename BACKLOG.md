@@ -336,7 +336,24 @@ reporting becomes a hard requirement.
 
 ---
 
-## 13. NCR field-model gaps (ISO 9001 completeness)  ·  FOR DISCUSSION
+## 13. NCR field-model gaps (ISO 9001 completeness)  ·  CORE IMPLEMENTED (pending deploy)
+
+**Status 2026-06-04:** core first cut (#1 severity, #2 person FKs, #3
+effectiveness, #4 disposition enum, #5 date format, #6 status) **implemented
+backend + frontend** (218 backend tests pass; frontend tsc/build clean). Not yet
+deployed. Two implementation adaptations vs the original decisions:
+- **#5 was already done** — `validate_date_format` already enforces `YYYY-MM-DD`
+  on the NCR date fields; only added `effectivenessVerifiedDate` to it.
+- **#6 reused the existing `Resolved` workflow state** as the "pending
+  effectiveness verification" state instead of adding a separate "Pending
+  Verification" — the WorkflowEngine already had `Open→In Progress→Resolved→
+  Closed`; adding a duplicate state would have been confusing. Added the
+  `Resolved→In Progress` transition for the effectiveness=No reroute.
+- **SLA days are constants** (`NCR_SLA_DAYS` Major 7 / Minor 14 in `ncr_service`),
+  NOT yet the KPIWeight-style configurable setting — that's a fast-follow.
+- `closedBy` / `verifiedBy` / `effectivenessVerifiedBy` are **stamped
+  server-side** on the relevant action (no manual form picker); only `assignedTo`
+  has a user dropdown.
 
 Captured 2026-06-04 from a review of the `NCR` model + form. The model is
 already thorough (corrective-action chain `immediateCorrectionAction` →
@@ -535,16 +552,15 @@ items overlap the #13 data-model work and should be done together.
    different ITRs* (the one that triggered the NCR vs. the one that verifies
    closure); the form currently **cannot record both**. Likely needs a second
    field (e.g. `verificationItrNumber`) — overlaps #13.
-2. **View modal shows status as binary.** `NCRModals.tsx:1078` renders
-   `status === 'open' ? Open : Closed`, so In Progress / Resolved / Void all
-   display as "Closed" in the read-only view. Display bug.
+2. ~~**View modal shows status as binary.**~~ **FIXED 2026-06-04** — the view
+   modal now maps all five statuses (was `status === 'open' ? Open : Closed`).
 3. **Two "ghost" fields the form can't edit.** `projectQualityManager` (PQM) and
    `aconex` (external doc-control ref) exist in `NCRDetailData` / init / view
    data but have **no input** in the edit form — they can never be set.
-4. **Status option set is inconsistent across the app.** The form offers 5
-   (Open / In Progress / **Resolved** / Closed / Void, `NCRModals.tsx:748`); the
-   list-page `columns.tsx` offers 4 (no "Resolved"). Dirty-data / filter gaps.
-   Ties to the #13 #6 decision to enforce one canonical status set server-side.
+4. ~~**Status option set is inconsistent across the app.**~~ **WITHDRAWN
+   2026-06-04** — re-check shows `columns.tsx` already lists all five incl.
+   Resolved (earlier finding was a grep artifact). The #13 #6 work added
+   server-side enforcement of the canonical set, so this is covered.
 
 **🟡 Structure / UX**
 5. **`productDisposition` is mis-grouped** under "Personnel / Location"

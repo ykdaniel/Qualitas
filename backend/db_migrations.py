@@ -89,6 +89,16 @@ def _add_missing_columns():
             _add_column_if_missing(conn, "ncr", "finalProductIntegrityStatement", "TEXT")
             _add_column_if_missing(conn, "ncr", "reInspectionNumber", "TEXT")
             _add_column_if_missing(conn, "ncr", "projectQualityManager", "TEXT")
+            # NCR field-model improvements (BACKLOG #13)
+            _add_column_if_missing(conn, "ncr", "severity", "VARCHAR")
+            _add_column_if_missing(conn, "ncr", "discipline", "VARCHAR")
+            _add_column_if_missing(conn, "ncr", "assignedTo", "INTEGER")
+            _add_column_if_missing(conn, "ncr", "closedBy", "INTEGER")
+            _add_column_if_missing(conn, "ncr", "verifiedBy", "INTEGER")
+            _add_column_if_missing(conn, "ncr", "effectivenessVerified", "VARCHAR")
+            _add_column_if_missing(conn, "ncr", "effectivenessVerifiedBy", "INTEGER")
+            _add_column_if_missing(conn, "ncr", "effectivenessVerifiedDate", "VARCHAR")
+            _add_column_if_missing(conn, "ncr", "effectivenessNotes", "TEXT")
 
             # NOI
             for col in ["attachments", "remark", "closeoutDate", "ncrNumber", "dueDate", "last_reminded_at"]:

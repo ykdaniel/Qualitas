@@ -144,9 +144,11 @@ class WorkflowEngine:
             "Void": []
         },
         "NCR": {
+            # "Resolved" doubles as the "pending effectiveness verification" state
+            # (BACKLOG #13 #6). Effectiveness = No routes it back to In Progress.
             "Open": ["In Progress", "Void"],
             "In Progress": ["Resolved", "Void"],
-            "Resolved": ["Closed", "Void"],
+            "Resolved": ["Closed", "In Progress", "Void"],
             "Closed": [],
             "Void": []
         },

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { getUsers, type User as ApiUser } from '../../services/api';
 import { getNextRevision } from '../../utils/revision';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
@@ -47,6 +48,16 @@ export interface NCRDetailData {
     improvementPhotos: string[];
     attachments: string[];
     dueDate: string;
+    // NCR field-model improvements (BACKLOG #13)
+    severity: string;            // Major / Minor
+    discipline: string;          // Civil / Structural / ...
+    assignedTo: number | null;   // FK users.id — person responsible to close
+    closedBy: number | null;     // read-only, stamped server-side
+    verifiedBy: number | null;   // read-only, stamped server-side
+    effectivenessVerified: string;       // Pending / Yes / No
+    effectivenessVerifiedBy: number | null;
+    effectivenessVerifiedDate: string;
+    effectivenessNotes: string;
 }
 
 export interface PendingUploads {
@@ -106,6 +117,15 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                 improvementPhotos: existingItem.improvementPhotos || [],
                 attachments: existingItem.attachments || [],
                 dueDate: (existingItem as any).dueDate || '',
+                severity: existingItem.severity || '',
+                discipline: existingItem.discipline || '',
+                assignedTo: existingItem.assignedTo ?? null,
+                closedBy: existingItem.closedBy ?? null,
+                verifiedBy: existingItem.verifiedBy ?? null,
+                effectivenessVerified: existingItem.effectivenessVerified || '',
+                effectivenessVerifiedBy: existingItem.effectivenessVerifiedBy ?? null,
+                effectivenessVerifiedDate: existingItem.effectivenessVerifiedDate || '',
+                effectivenessNotes: existingItem.effectivenessNotes || '',
             };
         }
         // 新項目：ncrNumber 留空，由後端自動產生
@@ -144,6 +164,15 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
             improvementPhotos: [],
             attachments: [],
             dueDate: '',
+            severity: '',
+            discipline: '',
+            assignedTo: null,
+            closedBy: null,
+            verifiedBy: null,
+            effectivenessVerified: 'Pending',
+            effectivenessVerifiedBy: null,
+            effectivenessVerifiedDate: '',
+            effectivenessNotes: '',
         };
     };
 
@@ -155,6 +184,19 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
     const [pendingAttachments, setPendingAttachments] = useState<File[]>([]);
     const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
     const [saving, setSaving] = useState(false);
+
+    // Users for the assignedTo person picker (BACKLOG #13 #2 — FK to users)
+    const [users, setUsers] = useState<ApiUser[]>([]);
+    useEffect(() => {
+        let alive = true;
+        getUsers().then(u => { if (alive) setUsers(u); }).catch(() => {/* non-fatal */});
+        return () => { alive = false; };
+    }, []);
+    const userLabel = (id: number | null) => {
+        if (id == null) return '-';
+        const u = users.find(x => x.id === id);
+        return u ? (u.full_name || u.username) : `#${id}`;
+    };
 
     // 附件預覽
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -228,6 +270,11 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
             // Must have Re-Inspection info (either number or link to new NOI)
             if (!formData.reInspectionNumber) {
                 toast.warning("Cannot close NCR without Re-Inspection / Verification Reference (Strict QC Process).");
+                return;
+            }
+            // BACKLOG #13 #3: effectiveness must be verified before closing
+            if (formData.effectivenessVerified !== 'Yes') {
+                toast.warning(t('ncr.closeNeedsEffectiveness') || "Cannot close NCR until corrective-action effectiveness is verified (set Effectiveness Verified = 'Yes').");
                 return;
             }
         }
@@ -374,6 +421,37 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     </select>
                                 </div>
                                 <div className={formStyles.formGroup}>
+                                    <label>{t('ncr.severity') || 'Severity'}</label>
+                                    <select
+                                        className={formStyles.formSelect}
+                                        value={formData.severity}
+                                        onChange={(e) => handleFieldChange('severity', e.target.value)}
+                                    >
+                                        <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
+                                        <option value="Major">{t('ncr.severity.major') || 'Major 重大'}</option>
+                                        <option value="Minor">{t('ncr.severity.minor') || 'Minor 輕微'}</option>
+                                    </select>
+                                    <p style={{ fontSize: 11, color: '#6b7280', margin: '4px 0 0', lineHeight: 1.4 }}>
+                                        {t('ncr.severity.hint') || 'Major: affects fitness-for-purpose / safety / code or contract compliance, or is a repeat/systemic issue — needs PQM/owner sign-off (SLA 7 days). Minor: isolated, easily corrected, no impact on function — contractor corrects + QA verifies (SLA 14 days).'}
+                                    </p>
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>{t('ncr.discipline') || 'Discipline'}</label>
+                                    <select
+                                        className={formStyles.formSelect}
+                                        value={formData.discipline}
+                                        onChange={(e) => handleFieldChange('discipline', e.target.value)}
+                                    >
+                                        <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
+                                        <option value="Civil">{t('ncr.discipline.civil') || 'Civil 土建'}</option>
+                                        <option value="Structural">{t('ncr.discipline.structural') || 'Structural 結構'}</option>
+                                        <option value="Mechanical">{t('ncr.discipline.mechanical') || 'Mechanical 機械'}</option>
+                                        <option value="Electrical">{t('ncr.discipline.electrical') || 'Electrical 電氣'}</option>
+                                        <option value="Piping">{t('ncr.discipline.piping') || 'Piping 管路'}</option>
+                                        <option value="Architectural">{t('ncr.discipline.architectural') || 'Architectural 建築'}</option>
+                                    </select>
+                                </div>
+                                <div className={formStyles.formGroup}>
                                     <label>{t('obs.contractor')}</label>
                                     <select
                                         className={formStyles.formSelect}
@@ -498,6 +576,19 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                         value={formData.raisedBy}
                                         onChange={(e) => handleFieldChange('raisedBy', e.target.value)}
                                     />
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>{t('ncr.assignedTo') || 'Assigned To'}</label>
+                                    <select
+                                        className={formStyles.formSelect}
+                                        value={formData.assignedTo ?? ''}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, assignedTo: e.target.value ? Number(e.target.value) : null }))}
+                                    >
+                                        <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
+                                        {users.map(u => (
+                                            <option key={u.id} value={u.id}>{u.full_name || u.username}</option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.serialNumbers')}</label>
@@ -689,6 +780,48 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                         value={formData.finalProductIntegrityStatement}
                                         onChange={(e) => handleFieldChange('finalProductIntegrityStatement', e.target.value)}
                                         rows={3}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Effectiveness verification (BACKLOG #13 #3) */}
+                        <div className={formStyles.formSection}>
+                            <h3 className={formStyles.sectionTitle}>{t('ncr.sectionEffectiveness') || 'Effectiveness Verification'}</h3>
+                            <div className={formStyles.formGrid}>
+                                <div className={formStyles.formGroup}>
+                                    <label>{t('ncr.effectivenessVerified') || 'Effectiveness Verified'}</label>
+                                    <select
+                                        className={formStyles.formSelect}
+                                        value={formData.effectivenessVerified}
+                                        onChange={(e) => handleFieldChange('effectivenessVerified', e.target.value)}
+                                    >
+                                        <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
+                                        <option value="Pending">{t('ncr.effectiveness.pending') || 'Pending 待驗證'}</option>
+                                        <option value="Yes">{t('ncr.effectiveness.yes') || 'Yes 有效'}</option>
+                                        <option value="No">{t('ncr.effectiveness.no') || 'No 無效'}</option>
+                                    </select>
+                                    <p style={{ fontSize: 11, color: '#6b7280', margin: '4px 0 0', lineHeight: 1.4 }}>
+                                        {t('ncr.effectiveness.hint') || 'Confirm the corrective action prevented recurrence. An NCR cannot be Closed until this is "Yes"; "No" routes it back to In Progress.'}
+                                    </p>
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label className={formStyles.optionalLabel}>{t('ncr.effectivenessVerifiedDate') || 'Verified Date'}</label>
+                                    <input
+                                        type="date"
+                                        lang="en"
+                                        className={formStyles.formInput}
+                                        value={formData.effectivenessVerifiedDate}
+                                        onChange={(e) => handleFieldChange('effectivenessVerifiedDate', e.target.value)}
+                                    />
+                                </div>
+                                <div className={formStyles.formGroupFull}>
+                                    <label className={formStyles.optionalLabel}>{t('ncr.effectivenessNotes') || 'Verification Notes'}</label>
+                                    <textarea
+                                        className={formStyles.formTextarea}
+                                        value={formData.effectivenessNotes}
+                                        onChange={(e) => handleFieldChange('effectivenessNotes', e.target.value)}
+                                        rows={2}
                                     />
                                 </div>
                             </div>
@@ -893,6 +1026,15 @@ export const NCRDetailsViewModal: React.FC<NCRDetailsViewModalProps> = ({ ncrId:
         improvementPhotos: ncrDetailData?.improvementPhotos || ncrItem?.improvementPhotos || [],
         attachments: ncrDetailData?.attachments || ncrItem?.attachments || [],
         dueDate: ncrDetailData?.dueDate || (ncrItem as any)?.dueDate || '',
+        severity: ncrDetailData?.severity || ncrItem?.severity || '',
+        discipline: ncrDetailData?.discipline || ncrItem?.discipline || '',
+        assignedTo: ncrDetailData?.assignedTo ?? ncrItem?.assignedTo ?? null,
+        closedBy: ncrDetailData?.closedBy ?? ncrItem?.closedBy ?? null,
+        verifiedBy: ncrDetailData?.verifiedBy ?? ncrItem?.verifiedBy ?? null,
+        effectivenessVerified: ncrDetailData?.effectivenessVerified || ncrItem?.effectivenessVerified || '',
+        effectivenessVerifiedBy: ncrDetailData?.effectivenessVerifiedBy ?? ncrItem?.effectivenessVerifiedBy ?? null,
+        effectivenessVerifiedDate: ncrDetailData?.effectivenessVerifiedDate || ncrItem?.effectivenessVerifiedDate || '',
+        effectivenessNotes: ncrDetailData?.effectivenessNotes || ncrItem?.effectivenessNotes || '',
     };
 
     const handlePrint = () => {
@@ -941,6 +1083,14 @@ export const NCRDetailsViewModal: React.FC<NCRDetailsViewModalProps> = ({ ncrId:
                                     <div className={formStyles.readOnlyField}>
                                         {displayData.type ? t(`ncr.type.${displayData.type.toLowerCase()}`) : '-'}
                                     </div>
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>{t('ncr.severity') || 'Severity'}</label>
+                                    <div className={formStyles.readOnlyField}>{displayData.severity || '-'}</div>
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>{t('ncr.discipline') || 'Discipline'}</label>
+                                    <div className={formStyles.readOnlyField}>{displayData.discipline || '-'}</div>
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('common.contractor')}</label>
@@ -1075,12 +1225,25 @@ export const NCRDetailsViewModal: React.FC<NCRDetailsViewModalProps> = ({ ncrId:
                                 <div className={formStyles.formGroup}>
                                     <label>{t('common.status')}</label>
                                     <div className={formStyles.readOnlyField}>
-                                        {displayData.status.toLowerCase() === 'open' ? t('status.open') : t('status.closed')}
+                                        {({
+                                            'open': t('status.open'),
+                                            'in progress': t('status.inProgress'),
+                                            'resolved': t('status.resolved'),
+                                            'closed': t('status.closed'),
+                                            'void': t('status.void'),
+                                        } as Record<string, string>)[displayData.status.toLowerCase()] || displayData.status || '-'}
                                     </div>
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.closeoutDate')}</label>
                                     <div className={formStyles.readOnlyField}>{displayData.closeoutDate || '-'}</div>
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>{t('ncr.effectivenessVerified') || 'Effectiveness Verified'}</label>
+                                    <div className={formStyles.readOnlyField}>
+                                        {displayData.effectivenessVerified || '-'}
+                                        {displayData.effectivenessVerifiedDate ? ` (${displayData.effectivenessVerifiedDate})` : ''}
+                                    </div>
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.integrityRelated')}</label>

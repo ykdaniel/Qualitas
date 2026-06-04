@@ -43,6 +43,16 @@ export interface NCRItem {
     finalProductIntegrityStatement?: string;
     reInspectionNumber?: string;
     projectQualityManager?: string;
+    // NCR field-model improvements (BACKLOG #13)
+    severity?: string;
+    discipline?: string;
+    assignedTo?: number | null;
+    closedBy?: number | null;
+    verifiedBy?: number | null;
+    effectivenessVerified?: string;
+    effectivenessVerifiedBy?: number | null;
+    effectivenessVerifiedDate?: string;
+    effectivenessNotes?: string;
 }
 
 function normalizeItem(item: unknown): NCRItem {

@@ -18,6 +18,28 @@ def validate_date_format(v: str) -> str:
         v = v[:10]
     return v
 
+
+# Controlled value sets for NCR enum-style fields (BACKLOG #13). Empty/None is
+# always allowed (unset); these only reject non-empty out-of-list values.
+NCR_CONTROLLED_VALUES = {
+    "severity": {"Major", "Minor"},
+    "discipline": {"Civil", "Structural", "Mechanical", "Electrical", "Piping", "Architectural"},
+    "productDisposition": {"Use As Is", "Repair", "Rework", "Reject"},
+    "effectivenessVerified": {"Pending", "Yes", "No"},
+    "status": {"Open", "In Progress", "Resolved", "Closed", "Void"},
+}
+
+
+def _validate_ncr_controlled(field_name: str, v):
+    """Reject values outside the controlled list for enum-style NCR fields.
+    Empty / None is allowed (field unset)."""
+    if v is None or v == "":
+        return v
+    allowed = NCR_CONTROLLED_VALUES.get(field_name)
+    if allowed is not None and v not in allowed:
+        raise ValueError(f"{field_name} must be one of {sorted(allowed)}; got '{v}'")
+    return v
+
 class ITPBase(BaseModel):
     project_id: str | None = None
     vendor: str | None = None
@@ -150,11 +172,26 @@ class NCRBase(BaseModel):
     finalProductIntegrityStatement: str | None = None
     reInspectionNumber: str | None = None
     projectQualityManager: str | None = None
+    # NCR field-model improvements (BACKLOG #13)
+    severity: str | None = None                    # Major / Minor
+    discipline: str | None = None                  # Civil / Structural / Mechanical / Electrical / Piping / Architectural
+    assignedTo: int | None = None                  # FK users.id — person responsible to close
+    closedBy: int | None = None                    # FK users.id
+    verifiedBy: int | None = None                  # FK users.id
+    effectivenessVerified: str | None = None       # Pending / Yes / No
+    effectivenessVerifiedBy: int | None = None     # FK users.id
+    effectivenessVerifiedDate: str | None = None   # YYYY-MM-DD
+    effectivenessNotes: str | None = None
 
-    @field_validator('raiseDate', 'closeoutDate', 'dueDate', mode='before')
+    @field_validator('raiseDate', 'closeoutDate', 'dueDate', 'effectivenessVerifiedDate', mode='before')
     @classmethod
     def check_dates(cls, v):
         return validate_date_format(v)
+
+    @field_validator('severity', 'discipline', 'productDisposition', 'effectivenessVerified', 'status', mode='before')
+    @classmethod
+    def check_controlled_values(cls, v, info):
+        return _validate_ncr_controlled(info.field_name, v)
 
     @field_validator('defectPhotos', 'improvementPhotos', 'attachments', mode='before')
     @classmethod
@@ -221,11 +258,26 @@ class NCRUpdate(BaseModel):
     finalProductIntegrityStatement: str | None = None
     reInspectionNumber: str | None = None
     projectQualityManager: str | None = None
+    # NCR field-model improvements (BACKLOG #13)
+    severity: str | None = None
+    discipline: str | None = None
+    assignedTo: int | None = None
+    closedBy: int | None = None
+    verifiedBy: int | None = None
+    effectivenessVerified: str | None = None
+    effectivenessVerifiedBy: int | None = None
+    effectivenessVerifiedDate: str | None = None
+    effectivenessNotes: str | None = None
 
-    @field_validator('raiseDate', 'closeoutDate', 'dueDate', mode='before')
+    @field_validator('raiseDate', 'closeoutDate', 'dueDate', 'effectivenessVerifiedDate', mode='before')
     @classmethod
     def check_dates(cls, v):
         return validate_date_format(v)
+
+    @field_validator('severity', 'discipline', 'productDisposition', 'effectivenessVerified', 'status', mode='before')
+    @classmethod
+    def check_controlled_values(cls, v, info):
+        return _validate_ncr_controlled(info.field_name, v)
 
     @model_validator(mode='after')
     def check_date_ranges(self):

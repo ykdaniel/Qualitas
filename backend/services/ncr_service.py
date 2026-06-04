@@ -7,7 +7,7 @@ Business logic layer for NCR module
 import json
 import uuid
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 import models
@@ -23,6 +23,17 @@ from core.utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+# NCR severity → default SLA days from raiseDate to dueDate (BACKLOG #13 #1).
+# TODO(#13): promote to a global configurable setting (KPIWeight-style) so the
+# PQM can tune per project/contract — currently fixed defaults.
+NCR_SLA_DAYS = {"Major": 7, "Minor": 14}
+
+
+def _add_days(date_str: str, days: int) -> str:
+    """Add `days` to a YYYY-MM-DD date string, returning YYYY-MM-DD."""
+    base = datetime.strptime(date_str[:10], "%Y-%m-%d")
+    return (base + timedelta(days=days)).strftime("%Y-%m-%d")
 
 
 class NCRService:
@@ -95,6 +106,15 @@ class NCRService:
             # P0 data isolation: confine the new record to the caller's scope
             # (forces vendor_id for contractor users; validates project_id).
             enforce_create_scope(data, scope)
+
+            # Auto-fill dueDate from the severity SLA when not explicitly set
+            # (BACKLOG #13 #1). Major → 7 days, Minor → 14 days from raiseDate
+            # (defaults to today if no raiseDate). Overridable: a provided dueDate
+            # is left untouched.
+            if data.get('severity') in NCR_SLA_DAYS and not data.get('dueDate'):
+                base_date = data.get('raiseDate') or datetime.now().strftime("%Y-%m-%d")
+                data['raiseDate'] = data.get('raiseDate') or base_date
+                data['dueDate'] = _add_days(base_date, NCR_SLA_DAYS[data['severity']])
 
             # Validate foreign keys BEFORE allocating a reference number,
             # so failed creates don't leave gaps in the NCR sequence.
@@ -229,9 +249,28 @@ class NCRService:
                         f"{', '.join(missing)}"
                     )
 
-            # Auto-set closeoutDate when transitioning to Closed
+                # Corrective-action effectiveness gate (BACKLOG #13 #3): an NCR
+                # cannot be Closed until its effectiveness has been verified = Yes.
+                final_effectiveness = d.get('effectivenessVerified', db_ncr.effectivenessVerified)
+                if final_effectiveness != 'Yes':
+                    raise ValueError(
+                        "Cannot close NCR: corrective-action effectiveness must be "
+                        "verified (effectivenessVerified = 'Yes') before closing."
+                    )
+
+            # Auto-set closeoutDate + stamp closedBy when transitioning to Closed
             if d.get('status') == 'Closed' and not d.get('closeoutDate') and not db_ncr.closeoutDate:
                 d['closeoutDate'] = datetime.now().strftime('%Y-%m-%d')
+            if is_transitioning_to_closed and not d.get('closedBy') and not db_ncr.closedBy:
+                d['closedBy'] = user_id
+
+            # Stamp who/when verified effectiveness when it's being recorded
+            # (BACKLOG #13 #2/#3) — unless explicitly supplied.
+            if d.get('effectivenessVerified') in ('Yes', 'No'):
+                if not d.get('effectivenessVerifiedBy'):
+                    d['effectivenessVerifiedBy'] = user_id
+                if not d.get('effectivenessVerifiedDate'):
+                    d['effectivenessVerifiedDate'] = datetime.now().strftime('%Y-%m-%d')
 
             # Validate noiNumber exists if being updated
             if 'noiNumber' in d and d['noiNumber']:

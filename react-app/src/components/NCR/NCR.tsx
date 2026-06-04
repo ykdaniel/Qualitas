@@ -123,6 +123,14 @@ const NCR: React.FC = () => {
         finalProductIntegrityStatement: details.finalProductIntegrityStatement,
         reInspectionNumber: details.reInspectionNumber,
         projectQualityManager: details.projectQualityManager,
+        // NCR field-model improvements (BACKLOG #13). closedBy / verifiedBy /
+        // effectivenessVerifiedBy are stamped server-side, so not sent here.
+        severity: details.severity || undefined,
+        discipline: details.discipline || undefined,
+        assignedTo: details.assignedTo ?? undefined,
+        effectivenessVerified: details.effectivenessVerified || undefined,
+        effectivenessVerifiedDate: details.effectivenessVerifiedDate || undefined,
+        effectivenessNotes: details.effectivenessNotes || undefined,
       };
 
       try {
