@@ -27,7 +27,7 @@ const s: Record<string, React.CSSProperties> = {
     docMeta: { textAlign: 'right', fontSize: 11 },
     title: { textAlign: 'center', fontSize: 18, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, margin: '6px 0 14px' },
     table: { width: '100%', borderCollapse: 'collapse', marginBottom: 12 },
-    th: { border: '1px solid #111', padding: '5px 8px', background: '#f3f4f6', textAlign: 'left', fontWeight: 700, width: '22%', verticalAlign: 'top' },
+    th: { border: '1px solid #111', padding: '5px 8px', background: '#f3f4f6', textAlign: 'left', fontWeight: 700, width: '16%', whiteSpace: 'nowrap', verticalAlign: 'top' },
     td: { border: '1px solid #111', padding: '5px 8px', verticalAlign: 'top' },
     sectionTitle: { fontWeight: 800, fontSize: 12, textTransform: 'uppercase', background: '#111', color: '#fff', padding: '4px 8px', marginTop: 10 },
     block: { border: '1px solid #111', borderTop: 'none', padding: '6px 8px', minHeight: 22, whiteSpace: 'pre-wrap' },
@@ -43,11 +43,12 @@ const sevBadge = (major: boolean): React.CSSProperties => ({
     border: '1px solid #111', background: major ? '#fde2e1' : '#e5e7eb',
 });
 
-const Row: React.FC<{ label: string; value?: React.ReactNode }> = ({ label, value }) => (
-    <tr>
+// A single label/value cell pair (used to build a 2-column identity grid).
+const Cell: React.FC<{ label: string; value?: React.ReactNode; span?: number }> = ({ label, value, span }) => (
+    <>
         <th style={s.th}>{label}</th>
-        <td style={s.td}>{value || '-'}</td>
-    </tr>
+        <td style={s.td} colSpan={span}>{value || '-'}</td>
+    </>
 );
 
 const Block: React.FC<{ title: string; value?: string }> = ({ title, value }) => (
@@ -91,17 +92,31 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser }
 
                 <table style={s.table}>
                     <tbody>
-                        <Row label="NCR No." value={data.ncrNumber} />
-                        <Row label="Severity" value={data.severity ? <span style={sevBadge(isMajor)}>{data.severity}</span> : '-'} />
-                        <Row label="Subject" value={data.subject} />
-                        <Row label="Contractor" value={data.contractor} />
-                        <Row label="Discipline" value={data.discipline} />
-                        <Row label="Type" value={data.type} />
-                        <Row label="Raise Date" value={data.raiseDate} />
-                        <Row label="Due Date" value={data.dueDate} />
-                        <Row label="Found Location" value={data.foundLocation} />
-                        <Row label="Reference Standards" value={data.referenceStandards} />
-                        <Row label="ITR / NOI" value={[data.itrNumber, data.noiNumber].filter(Boolean).join(' / ')} />
+                        <tr>
+                            <Cell label="NCR No." value={data.ncrNumber} />
+                            <Cell label="Severity" value={data.severity ? <span style={sevBadge(isMajor)}>{data.severity}</span> : '-'} />
+                        </tr>
+                        <tr>
+                            <Cell label="Subject" value={data.subject} span={3} />
+                        </tr>
+                        <tr>
+                            <Cell label="Contractor" value={data.contractor} />
+                            <Cell label="Discipline" value={data.discipline} />
+                        </tr>
+                        <tr>
+                            <Cell label="Type" value={data.type} />
+                            <Cell label="Found Location" value={data.foundLocation} />
+                        </tr>
+                        <tr>
+                            <Cell label="Raise Date" value={data.raiseDate} />
+                            <Cell label="Due Date" value={data.dueDate} />
+                        </tr>
+                        <tr>
+                            <Cell label="Ref. Standards" value={data.referenceStandards} span={3} />
+                        </tr>
+                        <tr>
+                            <Cell label="ITR / NOI" value={[data.itrNumber, data.noiNumber].filter(Boolean).join(' / ')} span={3} />
+                        </tr>
                     </tbody>
                 </table>
 
@@ -116,10 +131,16 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser }
 
                 <table style={{ ...s.table, marginTop: 12 }}>
                     <tbody>
-                        <Row label="Effectiveness Verified" value={`${data.effectivenessVerified || '-'}${data.effectivenessVerifiedDate ? `  (${data.effectivenessVerifiedDate})` : ''}`} />
-                        <Row label="Effectiveness Notes" value={data.effectivenessNotes} />
-                        <Row label="Re-Inspection No." value={data.reInspectionNumber} />
-                        <Row label="Closeout Date" value={data.closeoutDate} />
+                        <tr>
+                            <Cell label="Effectiveness Verified" value={`${data.effectivenessVerified || '-'}${data.effectivenessVerifiedDate ? `  (${data.effectivenessVerifiedDate})` : ''}`} />
+                            <Cell label="Closeout Date" value={data.closeoutDate} />
+                        </tr>
+                        <tr>
+                            <Cell label="Re-Inspection No." value={data.reInspectionNumber} span={3} />
+                        </tr>
+                        <tr>
+                            <Cell label="Effectiveness Notes" value={data.effectivenessNotes} span={3} />
+                        </tr>
                     </tbody>
                 </table>
 
