@@ -25,23 +25,34 @@
         visibility: visible !important;
     }
 
+    /* Normal flow (NOT absolute) so multi-page pagination works correctly. */
     .ncr-print-root {
         display: block !important;
-        position: absolute;
-        top: 0;
-        left: 0;
+        position: static !important;
         width: 100%;
         background: #fff;
     }
 
-    /* Running header: fixed → repeats on every printed page, sitting in the
-       reserved top margin so page content flows clear of it. */
+    /* Running header: fixed → repeats on every printed page, parked at the very
+       top of the page (inside the reserved 22mm top margin) so page content
+       flows clear of it. */
     .ncr-running-header {
         position: fixed;
-        top: -16mm;
+        top: 0;
         left: 0;
         right: 0;
         background: #fff;
+    }
+
+    /* Don't strand a section header at the bottom of a page, and don't split a
+       field box across pages. */
+    .ncr-section-bar {
+        break-after: avoid;
+        page-break-after: avoid;
+    }
+    .ncr-block {
+        break-inside: avoid;
+        page-break-inside: avoid;
     }
 
     /* Force exact colors (status/severity shading, section bars) */

@@ -63,13 +63,13 @@ const Cell: React.FC<{ label: string; value?: React.ReactNode; span?: number }> 
 
 // Numbered major-section header (light grey bar — print-friendly, not solid black)
 const SectionBar: React.FC<{ n: number; title: string }> = ({ n, title }) => (
-    <div style={s.sectionBar}>{n}. {title}</div>
+    <div className="ncr-section-bar" style={s.sectionBar}>{n}. {title}</div>
 );
 
 // A narrative field: label + bordered box. Empty → a blank writable box (so a
 // freshly-issued NCR prints as a form to be completed, not a wall of "-").
 const Block: React.FC<{ title: string; value?: string }> = ({ title, value }) => (
-    <div>
+    <div className="ncr-block">
         <div style={s.blockLabel}>{title}</div>
         <div style={s.block}>{value || ''}</div>
     </div>
