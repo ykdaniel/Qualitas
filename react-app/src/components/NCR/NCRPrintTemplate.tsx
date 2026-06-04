@@ -103,28 +103,31 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
     const isMajor = data.severity === 'Major';
     const hasPhotos = defectPhotos.length > 0 || improvementPhotos.length > 0;
     return (
-        <div className="ncr-print-root">
-            {/* Repeats on every printed page (sits in the reserved @page top margin) */}
-            <div className="ncr-running-header" style={s.runningHeader}>
-                <span>[ Company Name ] — Non-Conformance Report</span>
-                <span>{data.ncrNumber || '(auto)'} · Rev {data.rev || '-'}</span>
-            </div>
-            <div style={s.page}>
-                {/* Company header — placeholder until Stage A branding lands */}
-                <div style={s.header}>
-                    <div style={s.logoBox}>LOGO</div>
-                    <div style={s.company}>
-                        <div style={s.companyName}>[ Company Name ]</div>
-                        <div style={s.companySub}>Quality Management — Non-Conformance Report</div>
-                    </div>
-                    <div style={s.docMeta}>
-                        <div><strong>{data.ncrNumber || '(auto)'}</strong></div>
-                        <div>Rev: {data.rev || '-'}</div>
-                        <div>Status: {data.status || '-'}</div>
-                    </div>
-                </div>
-
-                <div style={s.title}>Non-Conformance Report</div>
+        <div className="ncr-print-root" style={s.page}>
+            <table className="ncr-report" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                {/* Masthead in <thead> → the browser repeats it on every printed page. */}
+                <thead>
+                    <tr>
+                        <th style={{ padding: 0, border: 'none', textAlign: 'left', fontWeight: 400 }}>
+                            <div style={s.header}>
+                                <div style={s.logoBox}>LOGO</div>
+                                <div style={s.company}>
+                                    <div style={s.companyName}>[ Company Name ]</div>
+                                    <div style={s.companySub}>Quality Management — Non-Conformance Report</div>
+                                </div>
+                                <div style={s.docMeta}>
+                                    <div><strong>{data.ncrNumber || '(auto)'}</strong></div>
+                                    <div>Rev: {data.rev || '-'}</div>
+                                    <div>Status: {data.status || '-'}</div>
+                                </div>
+                            </div>
+                            <div style={s.title}>Non-Conformance Report</div>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style={{ padding: 0, border: 'none', textAlign: 'left' }}>
 
                 {/* 1 — Non-conformance details */}
                 <SectionBar n={1} title="Non-Conformance Details" />
@@ -201,15 +204,17 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                 {/* 6 — Photographic record on its own page */}
                 {hasPhotos && (
                     <div style={{ pageBreakBefore: 'always', breakBefore: 'page' }}>
-                        <div style={s.title}>Photographic Record</div>
-                        <SectionBar n={6} title="Before / After Photos" />
+                        <SectionBar n={6} title="Photographic Record (Before / After)" />
                         <div style={s.photoGrid}>
                             <PhotoColumn title="Defect (Before)" urls={defectPhotos} />
                             <PhotoColumn title="Improvement (After)" urls={improvementPhotos} />
                         </div>
                     </div>
                 )}
-            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     );
 };

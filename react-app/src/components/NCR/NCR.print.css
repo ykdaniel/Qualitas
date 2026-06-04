@@ -12,8 +12,7 @@
 @media print {
     @page {
         size: A4 portrait;
-        /* Reserve top margin for the fixed running header (repeats every page). */
-        margin: 22mm 12mm 14mm;
+        margin: 12mm;
     }
 
     /* Remove the entire app from the printed layout. */
@@ -27,14 +26,10 @@
         background: #fff;
     }
 
-    /* Running header: fixed → repeats on every page, parked in the reserved top
-       margin so page content flows clear of it. */
-    .ncr-running-header {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        background: #fff;
+    /* The masthead lives in <thead>; this makes the browser repeat it on every
+       printed page (the reliable cross-browser running-header technique). */
+    .ncr-report thead {
+        display: table-header-group;
     }
 
     /* Don't strand a section header at a page bottom; don't split a field box. */
