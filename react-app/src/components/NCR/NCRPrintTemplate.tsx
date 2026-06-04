@@ -29,8 +29,9 @@ const s: Record<string, React.CSSProperties> = {
     table: { width: '100%', borderCollapse: 'collapse', marginBottom: 12 },
     th: { border: '1px solid #111', padding: '5px 8px', background: '#f3f4f6', textAlign: 'left', fontWeight: 700, width: '16%', whiteSpace: 'nowrap', verticalAlign: 'top' },
     td: { border: '1px solid #111', padding: '5px 8px', verticalAlign: 'top' },
-    sectionTitle: { fontWeight: 800, fontSize: 12, textTransform: 'uppercase', background: '#111', color: '#fff', padding: '4px 8px', marginTop: 10 },
-    block: { border: '1px solid #111', borderTop: 'none', padding: '6px 8px', minHeight: 22, whiteSpace: 'pre-wrap' },
+    sectionBar: { fontWeight: 800, fontSize: 12, textTransform: 'uppercase', background: '#e5e7eb', color: '#111', padding: '5px 8px', border: '1px solid #111', marginTop: 14, letterSpacing: 0.5 },
+    blockLabel: { fontWeight: 700, fontSize: 10.5, color: '#374151', textTransform: 'uppercase', margin: '8px 0 2px' },
+    block: { border: '1px solid #111', padding: '6px 8px', minHeight: 38, whiteSpace: 'pre-wrap' },
     sigGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, marginTop: 16 },
     sigCell: { border: '1px solid #111', padding: '8px 10px', minHeight: 70 },
     sigLabel: { fontWeight: 700, fontSize: 11, marginBottom: 6 },
@@ -51,11 +52,18 @@ const Cell: React.FC<{ label: string; value?: React.ReactNode; span?: number }> 
     </>
 );
 
+// Numbered major-section header (light grey bar — print-friendly, not solid black)
+const SectionBar: React.FC<{ n: number; title: string }> = ({ n, title }) => (
+    <div style={s.sectionBar}>{n}. {title}</div>
+);
+
+// A narrative field: label + bordered box. Empty → a blank writable box (so a
+// freshly-issued NCR prints as a form to be completed, not a wall of "-").
 const Block: React.FC<{ title: string; value?: string }> = ({ title, value }) => (
-    <>
-        <div style={s.sectionTitle}>{title}</div>
-        <div style={s.block}>{value || '-'}</div>
-    </>
+    <div>
+        <div style={s.blockLabel}>{title}</div>
+        <div style={s.block}>{value || ''}</div>
+    </div>
 );
 
 const Sig: React.FC<{ label: string; name?: string; date?: string }> = ({ label, name, date }) => (
@@ -90,6 +98,8 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser }
 
                 <div style={s.title}>Non-Conformance Report</div>
 
+                {/* 1 — Non-conformance details */}
+                <SectionBar n={1} title="Non-Conformance Details" />
                 <table style={s.table}>
                     <tbody>
                         <tr>
@@ -119,17 +129,24 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser }
                         </tr>
                     </tbody>
                 </table>
+                <Block title="1.1 Description of Non-Conformance" value={data.detailsDescription} />
 
-                <Block title="Description of Non-Conformance" value={data.detailsDescription} />
-                <Block title="Product Disposition" value={data.productDisposition} />
-                <Block title="Repair Method Statement" value={data.repairMethodStatement} />
-                <Block title="Immediate Correction Action" value={data.immediateCorrectionAction} />
-                <Block title="Root Cause Analysis" value={data.rootCauseAnalysis} />
-                <Block title="Corrective Actions" value={data.correctiveActions} />
-                <Block title="Preventive Action" value={data.preventiveAction} />
-                <Block title="Final Product Integrity Statement" value={data.finalProductIntegrityStatement} />
+                {/* 2 — Disposition */}
+                <SectionBar n={2} title="Disposition" />
+                <Block title="2.1 Product Disposition" value={data.productDisposition} />
+                <Block title="2.2 Repair Method Statement" value={data.repairMethodStatement} />
 
-                <table style={{ ...s.table, marginTop: 12 }}>
+                {/* 3 — Root cause & corrective action */}
+                <SectionBar n={3} title="Root Cause & Corrective Action" />
+                <Block title="3.1 Immediate Correction Action" value={data.immediateCorrectionAction} />
+                <Block title="3.2 Root Cause Analysis" value={data.rootCauseAnalysis} />
+                <Block title="3.3 Corrective Actions" value={data.correctiveActions} />
+                <Block title="3.4 Preventive Action" value={data.preventiveAction} />
+
+                {/* 4 — Verification & closure */}
+                <SectionBar n={4} title="Verification & Closure" />
+                <Block title="4.1 Final Product Integrity Statement" value={data.finalProductIntegrityStatement} />
+                <table style={{ ...s.table, marginTop: 8 }}>
                     <tbody>
                         <tr>
                             <Cell label="Effectiveness Verified" value={`${data.effectivenessVerified || '-'}${data.effectivenessVerifiedDate ? `  (${data.effectivenessVerifiedDate})` : ''}`} />
@@ -144,12 +161,13 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser }
                     </tbody>
                 </table>
 
-                {/* Signature blocks (BACKLOG #15) */}
+                {/* 5 — Approvals / signatures */}
+                <SectionBar n={5} title="Approvals" />
                 <div style={s.sigGrid}>
-                    <Sig label="Raised by" name={data.raisedBy || data.foundBy} date={data.raiseDate} />
-                    <Sig label="Contractor response (Assigned)" name={resolveUser(data.assignedTo)} />
-                    <Sig label="Disposition approved by (PQM)" name={data.projectQualityManager} />
-                    <Sig label="Effectiveness verified by" name={resolveUser(data.effectivenessVerifiedBy)} date={data.effectivenessVerifiedDate} />
+                    <Sig label="5.1 Raised by" name={data.raisedBy || data.foundBy} date={data.raiseDate} />
+                    <Sig label="5.2 Contractor response (Assigned)" name={resolveUser(data.assignedTo)} />
+                    <Sig label="5.3 Disposition approved by (PQM)" name={data.projectQualityManager} />
+                    <Sig label="5.4 Effectiveness verified by" name={resolveUser(data.effectivenessVerifiedBy)} date={data.effectivenessVerifiedDate} />
                 </div>
             </div>
         </div>
