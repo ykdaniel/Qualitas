@@ -53,6 +53,29 @@ export interface NCRItem {
     effectivenessVerifiedBy?: number | null;
     effectivenessVerifiedDate?: string;
     effectivenessNotes?: string;
+    // NCR formal-report fields (BACKLOG #15)
+    drawingNo?: string;
+    specNo?: string;
+    poContract?: string;
+    wbs?: string;
+    lineNo?: string;
+    weldJointNo?: string;
+    heatBatchNo?: string;
+    qtyAffected?: string;
+    extent?: string;
+    costScheduleImpact?: string;
+    requirement?: string;
+    asFound?: string;
+    deviation?: string;
+    concessionNo?: string;
+    rcaMethod?: string;
+    directCause?: string;
+    recurrence?: string;
+    recurrenceRef?: string;
+    correctiveActionOwner?: string;
+    correctiveActionTargetDate?: string;
+    preventiveActionOwner?: string;
+    preventiveActionTargetDate?: string;
 }
 
 function normalizeItem(item: unknown): NCRItem {

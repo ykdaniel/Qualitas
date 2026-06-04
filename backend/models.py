@@ -98,6 +98,34 @@ class NCR(Base):
     effectivenessVerifiedBy = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     effectivenessVerifiedDate = Column(String, nullable=True)   # YYYY-MM-DD
     effectivenessNotes = Column(Text, nullable=True)
+    # NCR formal-report fields (BACKLOG #15) — make the template's manual fields persistable
+    # 1.1 Traceability
+    drawingNo = Column(String, nullable=True)
+    specNo = Column(String, nullable=True)
+    poContract = Column(String, nullable=True)
+    wbs = Column(String, nullable=True)
+    lineNo = Column(String, nullable=True)
+    weldJointNo = Column(String, nullable=True)
+    heatBatchNo = Column(String, nullable=True)
+    # 1.2 Impact & extent
+    qtyAffected = Column(String, nullable=True)
+    extent = Column(String, nullable=True)                 # Isolated / Systemic
+    costScheduleImpact = Column(String, nullable=True)
+    # 1.3 Structured description
+    requirement = Column(Text, nullable=True)
+    asFound = Column(Text, nullable=True)
+    deviation = Column(Text, nullable=True)
+    # 2 Disposition
+    concessionNo = Column(String, nullable=True)
+    # 3 Root cause / corrective / preventive detail
+    rcaMethod = Column(String, nullable=True)              # 5 Why / Fishbone / Other
+    directCause = Column(Text, nullable=True)
+    recurrence = Column(String, nullable=True)             # Yes / No
+    recurrenceRef = Column(String, nullable=True)          # linked prior NCR
+    correctiveActionOwner = Column(String, nullable=True)
+    correctiveActionTargetDate = Column(String, nullable=True)
+    preventiveActionOwner = Column(String, nullable=True)
+    preventiveActionTargetDate = Column(String, nullable=True)
 
     # Relationships
     vendor_ref = relationship("Contractor", back_populates="ncrs")

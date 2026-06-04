@@ -130,19 +130,19 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                             <table>
                                 <tbody>
                                     <tr>
-                                        <td className="lbl">圖號<small>Drawing No.</small></td><td className="val"><span className="blank">{DASH}</span></td>
-                                        <td className="lbl">規範號<small>Spec No.</small></td><td className="val"><span className="blank">{DASH}</span></td>
+                                        <td className="lbl">圖號<small>Drawing No.</small></td><td className="val">{val(data.drawingNo)}</td>
+                                        <td className="lbl">規範號<small>Spec No.</small></td><td className="val">{val(data.specNo)}</td>
                                     </tr>
                                     <tr>
-                                        <td className="lbl">PO／合約號<small>PO / Contract</small></td><td className="val"><span className="blank">{DASH}</span></td>
-                                        <td className="lbl">WBS</td><td className="val"><span className="blank">{DASH}</span></td>
+                                        <td className="lbl">PO／合約號<small>PO / Contract</small></td><td className="val">{val(data.poContract)}</td>
+                                        <td className="lbl">WBS</td><td className="val">{val(data.wbs)}</td>
                                     </tr>
                                     <tr>
-                                        <td className="lbl">管線編號<small>Line No.</small></td><td className="val"><span className="blank">{DASH}</span></td>
-                                        <td className="lbl">焊道編號<small>Weld / Joint No.</small></td><td className="val"><span className="blank">{DASH}</span></td>
+                                        <td className="lbl">管線編號<small>Line No.</small></td><td className="val">{val(data.lineNo)}</td>
+                                        <td className="lbl">焊道編號<small>Weld / Joint No.</small></td><td className="val">{val(data.weldJointNo)}</td>
                                     </tr>
                                     <tr>
-                                        <td className="lbl">材料爐號<small>Heat / Batch No.</small></td><td className="val"><span className="blank">{DASH}</span></td>
+                                        <td className="lbl">材料爐號<small>Heat / Batch No.</small></td><td className="val">{val(data.heatBatchNo)}</td>
                                         <td className="lbl">ITR／NOI 編號<small>ITR / NOI No.</small></td><td className="val">{val([data.itrNumber, data.noiNumber].filter(Boolean).join(' / '))}</td>
                                     </tr>
                                 </tbody>
@@ -157,9 +157,12 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                                         <td className="lbl" style={{ width: 'auto' }}>成本／工期影響<small>Cost / Schedule</small></td>
                                     </tr>
                                     <tr>
-                                        <td className="val"><span className="blank">{DASH}</span></td>
-                                        <td className="val"><span className="blank">☐ 單一　☐ 系統性</span></td>
-                                        <td className="val"><span className="blank">{DASH}</span></td>
+                                        <td className="val">{val(data.qtyAffected)}</td>
+                                        <td className="val"><div className="chk-row">
+                                            <Chk on={data.extent === 'Isolated'}>單一 Isolated</Chk>
+                                            <Chk on={data.extent === 'Systemic'}>系統性 Systemic</Chk>
+                                        </div></td>
+                                        <td className="val">{val(data.costScheduleImpact)}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -168,11 +171,11 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                             <table>
                                 <tbody>
                                     <tr><td className="lbl" style={{ width: 96 }}>規範要求<small>Requirement</small></td>
-                                        <td><FieldBox guide="說明圖面／規範／程序書要求為何" /></td></tr>
+                                        <td><FieldBox value={data.requirement} guide="說明圖面／規範／程序書要求為何" /></td></tr>
                                     <tr><td className="lbl">實際情況<small>As-Found</small></td>
-                                        <td><FieldBox value={data.detailsDescription} guide="說明現場實際發現之情況，可附量測值" /></td></tr>
+                                        <td><FieldBox value={data.asFound || data.detailsDescription} guide="說明現場實際發現之情況，可附量測值" /></td></tr>
                                     <tr><td className="lbl">偏差說明<small>Deviation</small></td>
-                                        <td><FieldBox guide="說明實況與要求之差異" /></td></tr>
+                                        <td><FieldBox value={data.deviation} guide="說明實況與要求之差異" /></td></tr>
                                 </tbody>
                             </table>
 
@@ -197,7 +200,7 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                             <table>
                                 <tbody>
                                     <tr><td className="lbl" style={{ width: 120 }}>讓步／偏差核准編號<small>Concession / Deviation No.</small></td>
-                                        <td className="val"><span className="blank">{DASH}</span></td></tr>
+                                        <td className="val">{val(data.concessionNo)}</td></tr>
                                 </tbody>
                             </table>
                             <div className="subhead">2.2 維修方法說明 <span className="en">Repair Method Statement</span></div>
@@ -212,13 +215,21 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                             <table>
                                 <tbody>
                                     <tr><td className="lbl" style={{ width: 96 }}>分析方法<small>Method</small></td>
-                                        <td className="val"><span className="blank">☐ 5 Why　☐ 魚骨圖 Fishbone　☐ 其他 ____________</span></td></tr>
+                                        <td className="val"><div className="chk-row">
+                                            <Chk on={data.rcaMethod === '5 Why'}>5 Why</Chk>
+                                            <Chk on={data.rcaMethod === 'Fishbone'}>魚骨圖 Fishbone</Chk>
+                                            <Chk on={!!data.rcaMethod && data.rcaMethod !== '5 Why' && data.rcaMethod !== 'Fishbone'}>其他 {data.rcaMethod && data.rcaMethod !== '5 Why' && data.rcaMethod !== 'Fishbone' ? data.rcaMethod : '____________'}</Chk>
+                                        </div></td></tr>
                                     <tr><td className="lbl">直接原因<small>Direct Cause</small></td>
-                                        <td><FieldBox guide="直接導致不符合之原因" /></td></tr>
+                                        <td><FieldBox value={data.directCause} guide="直接導致不符合之原因" /></td></tr>
                                     <tr><td className="lbl">系統性根因<small>Root Cause</small></td>
                                         <td><FieldBox value={data.rootCauseAnalysis} guide="制度／流程層面之根本原因" /></td></tr>
                                     <tr><td className="lbl">重複性<small>Recurrence</small></td>
-                                        <td className="val"><span className="blank">☐ 否　☐ 是 → 關聯前次 NCR：____________</span></td></tr>
+                                        <td className="val"><div className="chk-row">
+                                            <Chk on={data.recurrence === 'No'}>否 No</Chk>
+                                            <Chk on={data.recurrence === 'Yes'}>是 Yes</Chk>
+                                            <span style={{ alignSelf: 'center' }}>→ 關聯前次 NCR：{data.recurrenceRef || '____________'}</span>
+                                        </div></td></tr>
                                 </tbody>
                             </table>
 
@@ -227,7 +238,12 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                                 <tbody>
                                     <tr>
                                         <td style={{ width: '64%' }}><FieldBox value={data.correctiveActions} guide="消除根因之矯正措施" /></td>
-                                        <td className="lbl" style={{ width: 'auto' }}>負責人<small>Owner</small><div style={{ height: 14 }} />目標完成日<small>Target Date</small></td>
+                                        <td className="lbl" style={{ width: 'auto' }}>
+                                            負責人<small>Owner</small>
+                                            <div className="val" style={{ background: '#fff', minHeight: 16, margin: '2px 0 6px' }}>{val(data.correctiveActionOwner)}</div>
+                                            目標完成日<small>Target Date</small>
+                                            <div className="val" style={{ background: '#fff', minHeight: 16, marginTop: 2 }}>{val(data.correctiveActionTargetDate)}</div>
+                                        </td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -237,7 +253,12 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                                 <tbody>
                                     <tr>
                                         <td style={{ width: '64%' }}><FieldBox value={data.preventiveAction} guide="防止類似不符合再發之措施" /></td>
-                                        <td className="lbl" style={{ width: 'auto' }}>負責人<small>Owner</small><div style={{ height: 14 }} />目標完成日<small>Target Date</small></td>
+                                        <td className="lbl" style={{ width: 'auto' }}>
+                                            負責人<small>Owner</small>
+                                            <div className="val" style={{ background: '#fff', minHeight: 16, margin: '2px 0 6px' }}>{val(data.preventiveActionOwner)}</div>
+                                            目標完成日<small>Target Date</small>
+                                            <div className="val" style={{ background: '#fff', minHeight: 16, marginTop: 2 }}>{val(data.preventiveActionTargetDate)}</div>
+                                        </td>
                                     </tr>
                                 </tbody>
                             </table>

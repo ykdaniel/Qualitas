@@ -99,6 +99,16 @@ def _add_missing_columns():
             _add_column_if_missing(conn, "ncr", "effectivenessVerifiedBy", "INTEGER")
             _add_column_if_missing(conn, "ncr", "effectivenessVerifiedDate", "VARCHAR")
             _add_column_if_missing(conn, "ncr", "effectivenessNotes", "TEXT")
+            # NCR formal-report fields (BACKLOG #15)
+            for col in ["drawingNo", "specNo", "poContract", "wbs", "lineNo",
+                        "weldJointNo", "heatBatchNo", "qtyAffected", "extent",
+                        "costScheduleImpact", "concessionNo", "rcaMethod",
+                        "recurrence", "recurrenceRef", "correctiveActionOwner",
+                        "correctiveActionTargetDate", "preventiveActionOwner",
+                        "preventiveActionTargetDate"]:
+                _add_column_if_missing(conn, "ncr", col, "VARCHAR")
+            for col in ["requirement", "asFound", "deviation", "directCause"]:
+                _add_column_if_missing(conn, "ncr", col, "TEXT")
 
             # NOI
             for col in ["attachments", "remark", "closeoutDate", "ncrNumber", "dueDate", "last_reminded_at"]:

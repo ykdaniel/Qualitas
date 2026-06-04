@@ -61,6 +61,29 @@ export interface NCRDetailData {
     effectivenessVerifiedBy: number | null;
     effectivenessVerifiedDate: string;
     effectivenessNotes: string;
+    // NCR formal-report fields (BACKLOG #15)
+    drawingNo: string;
+    specNo: string;
+    poContract: string;
+    wbs: string;
+    lineNo: string;
+    weldJointNo: string;
+    heatBatchNo: string;
+    qtyAffected: string;
+    extent: string;              // Isolated / Systemic
+    costScheduleImpact: string;
+    requirement: string;
+    asFound: string;
+    deviation: string;
+    concessionNo: string;
+    rcaMethod: string;
+    directCause: string;
+    recurrence: string;          // Yes / No
+    recurrenceRef: string;
+    correctiveActionOwner: string;
+    correctiveActionTargetDate: string;
+    preventiveActionOwner: string;
+    preventiveActionTargetDate: string;
 }
 
 export interface PendingUploads {
@@ -129,6 +152,28 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                 effectivenessVerifiedBy: existingItem.effectivenessVerifiedBy ?? null,
                 effectivenessVerifiedDate: existingItem.effectivenessVerifiedDate || '',
                 effectivenessNotes: existingItem.effectivenessNotes || '',
+                drawingNo: existingItem.drawingNo || '',
+                specNo: existingItem.specNo || '',
+                poContract: existingItem.poContract || '',
+                wbs: existingItem.wbs || '',
+                lineNo: existingItem.lineNo || '',
+                weldJointNo: existingItem.weldJointNo || '',
+                heatBatchNo: existingItem.heatBatchNo || '',
+                qtyAffected: existingItem.qtyAffected || '',
+                extent: existingItem.extent || '',
+                costScheduleImpact: existingItem.costScheduleImpact || '',
+                requirement: existingItem.requirement || '',
+                asFound: existingItem.asFound || '',
+                deviation: existingItem.deviation || '',
+                concessionNo: existingItem.concessionNo || '',
+                rcaMethod: existingItem.rcaMethod || '',
+                directCause: existingItem.directCause || '',
+                recurrence: existingItem.recurrence || '',
+                recurrenceRef: existingItem.recurrenceRef || '',
+                correctiveActionOwner: existingItem.correctiveActionOwner || '',
+                correctiveActionTargetDate: existingItem.correctiveActionTargetDate || '',
+                preventiveActionOwner: existingItem.preventiveActionOwner || '',
+                preventiveActionTargetDate: existingItem.preventiveActionTargetDate || '',
             };
         }
         // 新項目：ncrNumber 留空，由後端自動產生
@@ -176,6 +221,12 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
             effectivenessVerifiedBy: null,
             effectivenessVerifiedDate: '',
             effectivenessNotes: '',
+            drawingNo: '', specNo: '', poContract: '', wbs: '', lineNo: '',
+            weldJointNo: '', heatBatchNo: '', qtyAffected: '', extent: '',
+            costScheduleImpact: '', requirement: '', asFound: '', deviation: '',
+            concessionNo: '', rcaMethod: '', directCause: '', recurrence: '',
+            recurrenceRef: '', correctiveActionOwner: '', correctiveActionTargetDate: '',
+            preventiveActionOwner: '', preventiveActionTargetDate: '',
         };
     };
 
@@ -532,6 +583,112 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                         value={formData.foundLocation}
                                         onChange={(e) => handleFieldChange('foundLocation', e.target.value)}
                                     />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 報表詳細欄位 (BACKLOG #15) — traceability / impact / description / RCA detail */}
+                        <div className={formStyles.formSection}>
+                            <h3 className={formStyles.sectionTitle}>追溯・影響・描述 / Traceability · Impact · Description</h3>
+                            <div className={formStyles.formGrid}>
+                                {([
+                                    ['drawingNo', '圖號 Drawing No.'], ['specNo', '規範號 Spec No.'],
+                                    ['poContract', 'PO／合約號 PO / Contract'], ['wbs', 'WBS'],
+                                    ['lineNo', '管線編號 Line No.'], ['weldJointNo', '焊道編號 Weld / Joint No.'],
+                                    ['heatBatchNo', '材料爐號 Heat / Batch No.'], ['qtyAffected', '受影響數量 Qty Affected'],
+                                ] as [keyof NCRDetailData, string][]).map(([f, label]) => (
+                                    <div className={formStyles.formGroup} key={f}>
+                                        <label>{label}</label>
+                                        <input type="text" className={formStyles.formInput}
+                                            value={formData[f] as string}
+                                            onChange={(e) => handleFieldChange(f, e.target.value)} />
+                                    </div>
+                                ))}
+                                <div className={formStyles.formGroup}>
+                                    <label>範圍 Isolated / Systemic</label>
+                                    <select className={formStyles.formSelect} value={formData.extent}
+                                        onChange={(e) => handleFieldChange('extent', e.target.value)}>
+                                        <option value="">—</option>
+                                        <option value="Isolated">單一 Isolated</option>
+                                        <option value="Systemic">系統性 Systemic</option>
+                                    </select>
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>成本／工期影響 Cost / Schedule</label>
+                                    <input type="text" className={formStyles.formInput}
+                                        value={formData.costScheduleImpact}
+                                        onChange={(e) => handleFieldChange('costScheduleImpact', e.target.value)} />
+                                </div>
+                                {([
+                                    ['requirement', '規範要求 Requirement'], ['asFound', '實際情況 As-Found'], ['deviation', '偏差說明 Deviation'],
+                                ] as [keyof NCRDetailData, string][]).map(([f, label]) => (
+                                    <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`} key={f}>
+                                        <label>{label}</label>
+                                        <textarea className={formStyles.formTextarea} rows={2}
+                                            value={formData[f] as string}
+                                            onChange={(e) => handleFieldChange(f, e.target.value)} />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 根因詳情 / RCA detail + concession + CA/PA owners */}
+                        <div className={formStyles.formSection}>
+                            <h3 className={formStyles.sectionTitle}>根因與措施詳情 / Root Cause &amp; Action Detail</h3>
+                            <div className={formStyles.formGrid}>
+                                <div className={formStyles.formGroup}>
+                                    <label>讓步／偏差核准編號 Concession No.</label>
+                                    <input type="text" className={formStyles.formInput} value={formData.concessionNo}
+                                        onChange={(e) => handleFieldChange('concessionNo', e.target.value)} />
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>分析方法 RCA Method</label>
+                                    <select className={formStyles.formSelect} value={formData.rcaMethod}
+                                        onChange={(e) => handleFieldChange('rcaMethod', e.target.value)}>
+                                        <option value="">—</option>
+                                        <option value="5 Why">5 Why</option>
+                                        <option value="Fishbone">魚骨圖 Fishbone</option>
+                                        <option value="Other">其他 Other</option>
+                                    </select>
+                                </div>
+                                <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>
+                                    <label>直接原因 Direct Cause</label>
+                                    <textarea className={formStyles.formTextarea} rows={2} value={formData.directCause}
+                                        onChange={(e) => handleFieldChange('directCause', e.target.value)} />
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>重複性 Recurrence</label>
+                                    <select className={formStyles.formSelect} value={formData.recurrence}
+                                        onChange={(e) => handleFieldChange('recurrence', e.target.value)}>
+                                        <option value="">—</option>
+                                        <option value="No">否 No</option>
+                                        <option value="Yes">是 Yes</option>
+                                    </select>
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>關聯前次 NCR Recurrence Ref.</label>
+                                    <input type="text" className={formStyles.formInput} value={formData.recurrenceRef}
+                                        onChange={(e) => handleFieldChange('recurrenceRef', e.target.value)} />
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>矯正措施負責人 CA Owner</label>
+                                    <input type="text" className={formStyles.formInput} value={formData.correctiveActionOwner}
+                                        onChange={(e) => handleFieldChange('correctiveActionOwner', e.target.value)} />
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>矯正目標日 CA Target Date</label>
+                                    <input type="date" lang="en" className={formStyles.formInput} value={formData.correctiveActionTargetDate}
+                                        onChange={(e) => handleFieldChange('correctiveActionTargetDate', e.target.value)} />
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>預防措施負責人 PA Owner</label>
+                                    <input type="text" className={formStyles.formInput} value={formData.preventiveActionOwner}
+                                        onChange={(e) => handleFieldChange('preventiveActionOwner', e.target.value)} />
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>預防目標日 PA Target Date</label>
+                                    <input type="date" lang="en" className={formStyles.formInput} value={formData.preventiveActionTargetDate}
+                                        onChange={(e) => handleFieldChange('preventiveActionTargetDate', e.target.value)} />
                                 </div>
                             </div>
                         </div>
@@ -1087,6 +1244,28 @@ export const NCRDetailsViewModal: React.FC<NCRDetailsViewModalProps> = ({ ncrId:
         effectivenessVerifiedBy: ncrDetailData?.effectivenessVerifiedBy ?? ncrItem?.effectivenessVerifiedBy ?? null,
         effectivenessVerifiedDate: ncrDetailData?.effectivenessVerifiedDate || ncrItem?.effectivenessVerifiedDate || '',
         effectivenessNotes: ncrDetailData?.effectivenessNotes || ncrItem?.effectivenessNotes || '',
+        drawingNo: ncrDetailData?.drawingNo || ncrItem?.drawingNo || '',
+        specNo: ncrDetailData?.specNo || ncrItem?.specNo || '',
+        poContract: ncrDetailData?.poContract || ncrItem?.poContract || '',
+        wbs: ncrDetailData?.wbs || ncrItem?.wbs || '',
+        lineNo: ncrDetailData?.lineNo || ncrItem?.lineNo || '',
+        weldJointNo: ncrDetailData?.weldJointNo || ncrItem?.weldJointNo || '',
+        heatBatchNo: ncrDetailData?.heatBatchNo || ncrItem?.heatBatchNo || '',
+        qtyAffected: ncrDetailData?.qtyAffected || ncrItem?.qtyAffected || '',
+        extent: ncrDetailData?.extent || ncrItem?.extent || '',
+        costScheduleImpact: ncrDetailData?.costScheduleImpact || ncrItem?.costScheduleImpact || '',
+        requirement: ncrDetailData?.requirement || ncrItem?.requirement || '',
+        asFound: ncrDetailData?.asFound || ncrItem?.asFound || '',
+        deviation: ncrDetailData?.deviation || ncrItem?.deviation || '',
+        concessionNo: ncrDetailData?.concessionNo || ncrItem?.concessionNo || '',
+        rcaMethod: ncrDetailData?.rcaMethod || ncrItem?.rcaMethod || '',
+        directCause: ncrDetailData?.directCause || ncrItem?.directCause || '',
+        recurrence: ncrDetailData?.recurrence || ncrItem?.recurrence || '',
+        recurrenceRef: ncrDetailData?.recurrenceRef || ncrItem?.recurrenceRef || '',
+        correctiveActionOwner: ncrDetailData?.correctiveActionOwner || ncrItem?.correctiveActionOwner || '',
+        correctiveActionTargetDate: ncrDetailData?.correctiveActionTargetDate || ncrItem?.correctiveActionTargetDate || '',
+        preventiveActionOwner: ncrDetailData?.preventiveActionOwner || ncrItem?.preventiveActionOwner || '',
+        preventiveActionTargetDate: ncrDetailData?.preventiveActionTargetDate || ncrItem?.preventiveActionTargetDate || '',
     };
 
     const handlePrint = () => {
