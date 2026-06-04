@@ -632,6 +632,8 @@ const translations: Record<Language, Record<string, string>> = {
     'status.underReview': 'Under Review',
     'status.notSubmit': 'Not Submit',
     'status.open': 'Open',
+    'status.inProgress': 'In Progress',
+    'status.resolved': 'Resolved',
     'status.closed': 'Closed',
     'status.void': 'Void',
 
@@ -1575,6 +1577,8 @@ const translations: Record<Language, Record<string, string>> = {
     'status.underReview': '審核中',
     'status.notSubmit': '未提交',
     'status.open': '開啟',
+    'status.inProgress': '進行中',
+    'status.resolved': '已解決',
     'status.closed': '已關閉',
     'status.void': '廢止',
 

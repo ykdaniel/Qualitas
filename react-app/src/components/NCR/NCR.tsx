@@ -198,8 +198,8 @@ const NCR: React.FC = () => {
   const chips: { id: StatusFilter; label: string; count: number }[] = [
     { id: 'all', label: t('common.all') || 'All', count: statistics.total },
     { id: 'open', label: t('obs.statOpen') || 'Open', count: statistics.open },
-    { id: 'inProgress', label: t('common.inProgress') || 'In Progress', count: statistics.inProgress },
-    { id: 'resolved', label: t('common.resolved') || 'Resolved', count: statistics.resolved },
+    { id: 'inProgress', label: t('status.inProgress') || 'In Progress', count: statistics.inProgress },
+    { id: 'resolved', label: t('status.resolved') || 'Resolved', count: statistics.resolved },
     { id: 'closed', label: t('obs.statClosed') || 'Closed', count: statistics.closed },
     { id: 'void', label: t('itp.status.void') || 'Void', count: statistics.void },
   ];
