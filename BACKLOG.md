@@ -336,12 +336,12 @@ reporting becomes a hard requirement.
 
 ---
 
-## 13. NCR field-model gaps (ISO 9001 completeness)  ·  CORE IMPLEMENTED (pending deploy)
+## 13. NCR field-model gaps (ISO 9001 completeness)  ·  CORE DEPLOYED 2026-06-04
 
 **Status 2026-06-04:** core first cut (#1 severity, #2 person FKs, #3
 effectiveness, #4 disposition enum, #5 date format, #6 status) **implemented
-backend + frontend** (218 backend tests pass; frontend tsc/build clean). Not yet
-deployed. Two implementation adaptations vs the original decisions:
+backend + frontend and DEPLOYED to qualitas.rokusumi.net** (218 backend tests
+pass; frontend tsc/build clean). Two implementation adaptations vs the original decisions:
 - **#5 was already done** — `validate_date_format` already enforces `YYYY-MM-DD`
   on the NCR date fields; only added `effectivenessVerifiedDate` to it.
 - **#6 reused the existing `Resolved` workflow state** as the "pending
