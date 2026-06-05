@@ -10,7 +10,8 @@ from core.dependencies import RoleChecker, get_itp_service, get_related_service
 from core.perms import ITP_CREATE, ITP_DELETE, ITP_UPDATE, ITP_VIEW
 from core.scope import Scope, ScopeForbidden, get_scope
 from database import get_db
-from middleware.auth import get_current_user
+# Cookie-aware auth (accepts httpOnly access_token cookie OR legacy Bearer).
+from core.security import get_current_user
 from services.itp_service import ITPService
 from services.related_service import RelatedService
 

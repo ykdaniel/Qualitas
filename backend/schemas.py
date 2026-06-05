@@ -184,13 +184,37 @@ class NCRBase(BaseModel):
     effectivenessVerifiedBy: int | None = None     # FK users.id
     effectivenessVerifiedDate: str | None = None   # YYYY-MM-DD
     effectivenessNotes: str | None = None
+    # NCR formal-report fields (BACKLOG #15) — must live here (not only on
+    # NCRUpdate) so they also persist when an NCR is first created.
+    drawingNo: str | None = None
+    specNo: str | None = None
+    poContract: str | None = None
+    wbs: str | None = None
+    lineNo: str | None = None
+    weldJointNo: str | None = None
+    heatBatchNo: str | None = None
+    qtyAffected: str | None = None
+    extent: str | None = None
+    costScheduleImpact: str | None = None
+    requirement: str | None = None
+    asFound: str | None = None
+    deviation: str | None = None
+    concessionNo: str | None = None
+    rcaMethod: str | None = None
+    directCause: str | None = None
+    recurrence: str | None = None
+    recurrenceRef: str | None = None
+    correctiveActionOwner: str | None = None
+    correctiveActionTargetDate: str | None = None
+    preventiveActionOwner: str | None = None
+    preventiveActionTargetDate: str | None = None
 
-    @field_validator('raiseDate', 'closeoutDate', 'dueDate', 'effectivenessVerifiedDate', mode='before')
+    @field_validator('raiseDate', 'closeoutDate', 'dueDate', 'effectivenessVerifiedDate', 'correctiveActionTargetDate', 'preventiveActionTargetDate', mode='before')
     @classmethod
     def check_dates(cls, v):
         return validate_date_format(v)
 
-    @field_validator('severity', 'discipline', 'productDisposition', 'effectivenessVerified', 'status', mode='before')
+    @field_validator('severity', 'discipline', 'productDisposition', 'effectivenessVerified', 'status', 'extent', 'recurrence', mode='before')
     @classmethod
     def check_controlled_values(cls, v, info):
         return _validate_ncr_controlled(info.field_name, v)

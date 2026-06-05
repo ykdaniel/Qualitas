@@ -59,6 +59,16 @@ const PhotoColumn: React.FC<{ title: string; urls: string[] }> = ({ title, urls 
 const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, defectPhotos = [], improvementPhotos = [] }) => {
     const disp = data.productDisposition;
     const sevText = data.severity === 'Major' ? 'MAJOR 重大' : data.severity === 'Minor' ? 'MINOR 輕微' : '';
+    // Only print the 1.1 Traceability / 1.2 Impact blocks when they carry data,
+    // so NCRs that don't use these formal-report fields print clean instead of
+    // showing a wall of empty dashes. ITR/NOI is included so a linked NCR still
+    // surfaces its references here.
+    const hasTraceability = [
+        data.drawingNo, data.specNo, data.poContract, data.wbs,
+        data.lineNo, data.weldJointNo, data.heatBatchNo,
+        data.itrNumber, data.noiNumber,
+    ].some(Boolean);
+    const hasImpact = [data.qtyAffected, data.extent, data.costScheduleImpact].some(Boolean);
     const hasPhotos = defectPhotos.length > 0 || improvementPhotos.length > 0;
 
     return (
@@ -120,12 +130,15 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                                         <td className="val">{data.dueDate ? data.dueDate : <span className="blank">（開立+SLA，可自動帶）</span>}</td>
                                     </tr>
                                     <tr>
-                                        <td className="lbl">參考標準<small>Ref. Standards</small></td>
-                                        <td className="val" colSpan={3}>{val(data.referenceStandards)}</td>
+                                        <td className="lbl">提出人<small>Raised By</small></td>
+                                        <td className="val">{val(data.raisedBy)}</td>
+                                        <td className="lbl">發現人<small>Found By</small></td>
+                                        <td className="val">{val(data.foundBy)}</td>
                                     </tr>
                                 </tbody>
                             </table>
 
+                            {hasTraceability && (<>
                             <div className="subhead">1.1 追溯資訊 <span className="en">Traceability</span></div>
                             <table>
                                 <tbody>
@@ -147,7 +160,9 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                                     </tr>
                                 </tbody>
                             </table>
+                            </>)}
 
+                            {hasImpact && (<>
                             <div className="subhead">1.2 影響範圍 <span className="en">Impact &amp; Extent</span></div>
                             <table className="three-col">
                                 <tbody>
@@ -166,6 +181,7 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                                     </tr>
                                 </tbody>
                             </table>
+                            </>)}
 
                             <div className="subhead">1.3 不符合描述 <span className="en">Description of Non-Conformance</span></div>
                             <table>

@@ -404,6 +404,9 @@ const translations: Record<Language, Record<string, string>> = {
     'ncr.effectivenessVerifiedDate': 'Verified Date',
     'ncr.effectivenessNotes': 'Verification Notes',
     'ncr.closeNeedsEffectiveness': "Cannot close NCR until corrective-action effectiveness is verified (set Effectiveness Verified = 'Yes').",
+    'ncr.closeNeedsDisposition': 'Cannot close NCR without Product Disposition.',
+    'ncr.closeNeedsReinspection': 'Cannot close NCR without Re-Inspection / Verification Reference (Strict QC Process).',
+    'ncr.fieldRequired': 'This field is required.',
 
 
     // OBS
@@ -1388,6 +1391,9 @@ const translations: Record<Language, Record<string, string>> = {
     'ncr.effectivenessVerifiedDate': '驗證日期',
     'ncr.effectivenessNotes': '驗證備註',
     'ncr.closeNeedsEffectiveness': '矯正措施有效性驗證為「有效」前，無法關閉 NCR。',
+    'ncr.closeNeedsDisposition': '未填寫產品處置方式，無法關閉 NCR。',
+    'ncr.closeNeedsReinspection': '未填寫複驗／驗證編號（嚴格品管流程），無法關閉 NCR。',
+    'ncr.fieldRequired': '此欄位為必填。',
 
     // OBS
     'obs.title': 'OBS 列表',

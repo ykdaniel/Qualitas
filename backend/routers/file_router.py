@@ -18,7 +18,11 @@ from sqlalchemy.orm import Session
 import schemas
 from database import get_db
 from core.scope import Scope, get_scope, compute_scope, entity_in_scope
-from middleware.auth import get_current_user
+# Cookie-aware auth (accepts httpOnly access_token cookie OR legacy Bearer
+# header). middleware.auth.get_current_user is Bearer-only and 401s the
+# cookie-authenticated frontend, which logs the user out when opening a record
+# with attachments.
+from core.security import get_current_user
 from models import Attachment
 from schemas import AttachmentResponse
 

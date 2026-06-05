@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { getUsers, getEntityFiles, getAuthenticatedFileUrl, type User as ApiUser } from '../../services/api';
-import { getNextRevision } from '../../utils/revision';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useNOIStore } from '../../store/noiStore';
@@ -16,75 +17,12 @@ import ReactDOM from 'react-dom';
 import NCRPrintTemplate from './NCRPrintTemplate';
 import './NCR.print.css';
 import formStyles from '../Shared/FormShell.module.css';
-export interface NCRDetailData {
-    ncrNumber: string;
-    itrNumber: string;
-    rev: string;
-    status: string;
-    raiseDate: string;
-    closeoutDate: string;
-    aconex: string;
-    type: string;
-    contractor: string;
-    remark: string;
-    subject: string;
-    referenceStandards: string;
-    detailsDescription: string;
-    foundLocation: string;
-    foundBy: string;
-    raisedBy: string;
-    serialNumbers: string;
-    productDisposition: string;
-    repairMethodStatement: string;
-    immediateCorrectionAction: string;
-    rootCauseAnalysis: string;
-    correctiveActions: string;
-    preventiveAction: string;
-    finalProductIntegrityStatement: string;
-    reInspectionNumber: string;
-    noiNumber: string;
-    productIntegrityRelated: string;
-    permanentProductDeviation: string;
-    impactToOM: string;
-    projectQualityManager: string;
-    defectPhotos: string[];
-    improvementPhotos: string[];
-    attachments: string[];
-    dueDate: string;
-    // NCR field-model improvements (BACKLOG #13)
-    severity: string;            // Major / Minor
-    discipline: string;          // Civil / Structural / ...
-    assignedTo: number | null;   // FK users.id — person responsible to close
-    closedBy: number | null;     // read-only, stamped server-side
-    verifiedBy: number | null;   // read-only, stamped server-side
-    effectivenessVerified: string;       // Pending / Yes / No
-    effectivenessVerifiedBy: number | null;
-    effectivenessVerifiedDate: string;
-    effectivenessNotes: string;
-    // NCR formal-report fields (BACKLOG #15)
-    drawingNo: string;
-    specNo: string;
-    poContract: string;
-    wbs: string;
-    lineNo: string;
-    weldJointNo: string;
-    heatBatchNo: string;
-    qtyAffected: string;
-    extent: string;              // Isolated / Systemic
-    costScheduleImpact: string;
-    requirement: string;
-    asFound: string;
-    deviation: string;
-    concessionNo: string;
-    rcaMethod: string;
-    directCause: string;
-    recurrence: string;          // Yes / No
-    recurrenceRef: string;
-    correctiveActionOwner: string;
-    correctiveActionTargetDate: string;
-    preventiveActionOwner: string;
-    preventiveActionTargetDate: string;
-}
+import { ncrFormSchema, emptyNCRForm, toFormValues, NCR_ERROR_FALLBACKS } from './ncrFormSchema';
+import type { NCRDetailData } from './ncrFormSchema';
+
+// NCRDetailData now lives with the zod schema (single source of truth). Re-export
+// it so existing importers (NCR.tsx, NCRPrintTemplate) keep working unchanged.
+export type { NCRDetailData };
 
 export interface PendingUploads {
     category: string;
@@ -105,132 +43,17 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
     const getNOIList = () => noiList;
     const itrList = useITRStore(state => state.itrList);
 
-    // Initialize form data from existing item
-    const getInitialData = (): NCRDetailData => {
-        if (existingItem) {
-            return {
-                ncrNumber: existingItem.documentNumber || '',  // 既有編號，顯示用
-                itrNumber: existingItem.itrNumber || '',
-                rev: existingItem.rev || '',
-                status: existingItem.status || 'Open',
-                raiseDate: existingItem.raiseDate || '',
-                closeoutDate: existingItem.closeoutDate || '',
-                aconex: existingItem.aconex || '',
-                type: existingItem.type || '',
-                contractor: existingItem.vendor || '',
-                remark: existingItem.remark || '',
-                subject: existingItem.subject || existingItem.description || '',
-                referenceStandards: existingItem.referenceStandards || '',
-                detailsDescription: existingItem.description || '',
-                foundLocation: existingItem.foundLocation || '',
-                foundBy: existingItem.foundBy || '',
-                raisedBy: existingItem.raisedBy || '',
-                serialNumbers: existingItem.serialNumbers || '',
-                productDisposition: existingItem.productDisposition || '',
-                repairMethodStatement: existingItem.repairMethodStatement || '',
-                immediateCorrectionAction: existingItem.immediateCorrectionAction || '',
-                rootCauseAnalysis: existingItem.rootCauseAnalysis || '',
-                correctiveActions: existingItem.correctiveActions || '',
-                preventiveAction: existingItem.preventiveAction || '',
-                finalProductIntegrityStatement: existingItem.finalProductIntegrityStatement || '',
-                reInspectionNumber: existingItem.reInspectionNumber || '',
-                noiNumber: existingItem.noiNumber || '',
-                productIntegrityRelated: existingItem.productIntegrityRelated || '',
-                permanentProductDeviation: existingItem.permanentProductDeviation || '',
-                impactToOM: existingItem.impactToOM || '',
-                projectQualityManager: existingItem.projectQualityManager || '',
-                defectPhotos: existingItem.defectPhotos || [],
-                improvementPhotos: existingItem.improvementPhotos || [],
-                attachments: existingItem.attachments || [],
-                dueDate: (existingItem as any).dueDate || '',
-                severity: existingItem.severity || '',
-                discipline: existingItem.discipline || '',
-                assignedTo: existingItem.assignedTo ?? null,
-                closedBy: existingItem.closedBy ?? null,
-                verifiedBy: existingItem.verifiedBy ?? null,
-                effectivenessVerified: existingItem.effectivenessVerified || '',
-                effectivenessVerifiedBy: existingItem.effectivenessVerifiedBy ?? null,
-                effectivenessVerifiedDate: existingItem.effectivenessVerifiedDate || '',
-                effectivenessNotes: existingItem.effectivenessNotes || '',
-                drawingNo: existingItem.drawingNo || '',
-                specNo: existingItem.specNo || '',
-                poContract: existingItem.poContract || '',
-                wbs: existingItem.wbs || '',
-                lineNo: existingItem.lineNo || '',
-                weldJointNo: existingItem.weldJointNo || '',
-                heatBatchNo: existingItem.heatBatchNo || '',
-                qtyAffected: existingItem.qtyAffected || '',
-                extent: existingItem.extent || '',
-                costScheduleImpact: existingItem.costScheduleImpact || '',
-                requirement: existingItem.requirement || '',
-                asFound: existingItem.asFound || '',
-                deviation: existingItem.deviation || '',
-                concessionNo: existingItem.concessionNo || '',
-                rcaMethod: existingItem.rcaMethod || '',
-                directCause: existingItem.directCause || '',
-                recurrence: existingItem.recurrence || '',
-                recurrenceRef: existingItem.recurrenceRef || '',
-                correctiveActionOwner: existingItem.correctiveActionOwner || '',
-                correctiveActionTargetDate: existingItem.correctiveActionTargetDate || '',
-                preventiveActionOwner: existingItem.preventiveActionOwner || '',
-                preventiveActionTargetDate: existingItem.preventiveActionTargetDate || '',
-            };
-        }
-        // 新項目：ncrNumber 留空，由後端自動產生
-        return {
-            ncrNumber: '',  // 由後端產生
-            itrNumber: '',
-            rev: '',
-            status: 'Open',
-            raiseDate: '',
-            closeoutDate: '',
-            aconex: '',
-            type: '',
-            contractor: '',
-            remark: '',
-            subject: '',
-            referenceStandards: '',
-            detailsDescription: '',
-            foundLocation: '',
-            foundBy: '',
-            raisedBy: '',
-            serialNumbers: '',
-            productDisposition: '',
-            repairMethodStatement: '',
-            immediateCorrectionAction: '',
-            rootCauseAnalysis: '',
-            correctiveActions: '',
-            preventiveAction: '',
-            finalProductIntegrityStatement: '',
-            reInspectionNumber: '',
-            noiNumber: '',
-            productIntegrityRelated: '',
-            permanentProductDeviation: '',
-            impactToOM: '',
-            projectQualityManager: '',
-            defectPhotos: [],
-            improvementPhotos: [],
-            attachments: [],
-            dueDate: '',
-            severity: '',
-            discipline: '',
-            assignedTo: null,
-            closedBy: null,
-            verifiedBy: null,
-            effectivenessVerified: 'Pending',
-            effectivenessVerifiedBy: null,
-            effectivenessVerifiedDate: '',
-            effectivenessNotes: '',
-            drawingNo: '', specNo: '', poContract: '', wbs: '', lineNo: '',
-            weldJointNo: '', heatBatchNo: '', qtyAffected: '', extent: '',
-            costScheduleImpact: '', requirement: '', asFound: '', deviation: '',
-            concessionNo: '', rcaMethod: '', directCause: '', recurrence: '',
-            recurrenceRef: '', correctiveActionOwner: '', correctiveActionTargetDate: '',
-            preventiveActionOwner: '', preventiveActionTargetDate: '',
-        };
-    };
-
-    const [formData, setFormData] = useState<NCRDetailData>(getInitialData());
+    const {
+        register,
+        handleSubmit,
+        watch,
+        setValue,
+        getValues,
+        formState: { errors },
+    } = useForm<NCRDetailData>({
+        resolver: zodResolver(ncrFormSchema),
+        defaultValues: existingItem ? toFormValues(existingItem) : emptyNCRForm,
+    });
 
     // File handling states
     const [pendingDefectPhotos, setPendingDefectPhotos] = useState<File[]>([]);
@@ -238,6 +61,17 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
     const [pendingAttachments, setPendingAttachments] = useState<File[]>([]);
     const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
     const [saving, setSaving] = useState(false);
+
+    // The optional traceability/impact/description fields (everything except the
+    // four required ones) collapse by default to declutter the form, but start
+    // expanded when the record already has data in them so it isn't hidden.
+    const [showDetailFields, setShowDetailFields] = useState(() => {
+        const v = existingItem ? toFormValues(existingItem) : emptyNCRForm;
+        return ([
+            'poContract', 'wbs', 'lineNo', 'weldJointNo', 'heatBatchNo',
+            'costScheduleImpact', 'requirement', 'asFound', 'deviation',
+        ] as (keyof NCRDetailData)[]).some(k => Boolean(v[k]));
+    });
 
     // Users for the assignedTo person picker (BACKLOG #13 #2 — FK to users)
     const [users, setUsers] = useState<ApiUser[]>([]);
@@ -254,6 +88,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
 
     // Formal print report (BACKLOG #15). Mount the report portal, print, unmount.
     const [isPrinting, setIsPrinting] = useState(false);
+    const [printData, setPrintData] = useState<NCRDetailData | null>(null);
     const [printDefectPhotos, setPrintDefectPhotos] = useState<string[]>([]);
     const [printImprovementPhotos, setPrintImprovementPhotos] = useState<string[]>([]);
     useEffect(() => {
@@ -270,8 +105,9 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
     // Gather before/after photos (legacy array + uploaded attachments), resolve
     // to same-origin URLs, then trigger printing.
     const handlePrintClick = async () => {
-        const legacyDefect = (formData.defectPhotos || []).filter((p): p is string => typeof p === 'string');
-        const legacyImprove = (formData.improvementPhotos || []).filter((p): p is string => typeof p === 'string');
+        const current = getValues();
+        const legacyDefect = (current.defectPhotos || []).filter((p): p is string => typeof p === 'string');
+        const legacyImprove = (current.improvementPhotos || []).filter((p): p is string => typeof p === 'string');
         let defect = legacyDefect;
         let improve = legacyImprove;
         if (existingItem?.id) {
@@ -284,6 +120,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                 improve = [...legacyImprove, ...i.map(f => f.file_url)];
             } catch {/* fall back to legacy arrays */}
         }
+        setPrintData(current);
         setPrintDefectPhotos(defect.map(getAuthenticatedFileUrl));
         setPrintImprovementPhotos(improve.map(getAuthenticatedFileUrl));
         setIsPrinting(true);
@@ -297,82 +134,52 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         setPreviewName(name || '');
     };
 
-    const handleFieldChange = (field: keyof NCRDetailData, value: string) => {
-        // 勾稽聯動：NCR 關閉後提示 NOI 可轉為 Resolved
-        if (field === 'status' && value === 'Closed' && formData.noiNumber) {
-            toast.info(`NCR closed. You may now update NOI ${formData.noiNumber} status to "Resolved".`);
-        }
-        setFormData(prev => ({ ...prev, [field]: value }));
-    };
-
     const handleNAButton = (field: keyof NCRDetailData) => {
-        setFormData(prev => ({ ...prev, [field]: 'Not Applicable' }));
+        setValue(field, 'Not Applicable', { shouldDirty: true });
     };
 
     const handleDateButton = (field: keyof NCRDetailData) => {
         const today = new Date();
         const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}_`;
-        setFormData(prev => ({
-            ...prev,
-            [field]: prev[field] ? `${prev[field]}\n${dateStr}` : dateStr
-        }));
+        const cur = (getValues(field) as string) || '';
+        setValue(field, cur ? `${cur}\n${dateStr}` : dateStr, { shouldDirty: true });
     };
 
     const handleTBCButton = (field: keyof NCRDetailData) => {
-        setFormData(prev => ({ ...prev, [field]: 'To be confirmed' }));
+        setValue(field, 'To be confirmed', { shouldDirty: true });
     };
 
     const handleRemoveLegacyPhoto = (index: number, photoType: 'defect' | 'improvement') => {
-        if (photoType === 'defect') {
-            setFormData(prev => ({
-                ...prev,
-                defectPhotos: prev.defectPhotos.filter((_, i) => i !== index)
-            }));
-        } else {
-            setFormData(prev => ({
-                ...prev,
-                improvementPhotos: prev.improvementPhotos.filter((_, i) => i !== index)
-            }));
-        }
+        const key = photoType === 'defect' ? 'defectPhotos' : 'improvementPhotos';
+        const next = (getValues(key) || []).filter((_, i) => i !== index);
+        setValue(key, next, { shouldDirty: true });
     };
 
     const handleRemoveLegacyAttachment = (index: number) => {
-        setFormData(prev => ({
-            ...prev,
-            attachments: prev.attachments.filter((_, i) => i !== index)
-        }));
+        const next = (getValues('attachments') || []).filter((_, i) => i !== index);
+        setValue('attachments', next, { shouldDirty: true });
     };
 
-    const handleSave = async () => {
-        if (!formData.itrNumber && !formData.noiNumber) {
-            // Warn if no link to origin
-            if (!window.confirm('This NCR is not linked to any ITR or NOI. Do you want to continue?')) {
-                return;
-            }
-        }
+    // When the NCR is being closed, the closure-gate fields become required —
+    // show a * on their labels only then (they're optional for an open NCR).
+    const closing = watch('status') === 'Closed';
+    const closeStar = closing ? <span style={{ color: '#dc2626' }}> *</span> : null;
 
-        // Strict QC Logic: Determine Closure Eligibility
-        if (formData.status === 'Closed') {
-            // Must have Disposition
-            if (!formData.productDisposition) {
-                toast.warning("Cannot close NCR without Product Disposition.");
-                return;
-            }
-            // Must have Re-Inspection info (either number or link to new NOI)
-            if (!formData.reInspectionNumber) {
-                toast.warning("Cannot close NCR without Re-Inspection / Verification Reference (Strict QC Process).");
-                return;
-            }
-            // BACKLOG #13 #3: effectiveness must be verified before closing
-            if (formData.effectivenessVerified !== 'Yes') {
-                toast.warning(t('ncr.closeNeedsEffectiveness') || "Cannot close NCR until corrective-action effectiveness is verified (set Effectiveness Verified = 'Yes').");
-                return;
-            }
-        }
+    // Inline error text for a field (closure-gate messages are i18n keys).
+    const errText = (field: keyof NCRDetailData) => {
+        const msg = errors[field]?.message as string | undefined;
+        if (!msg) return null;
+        return (
+            <p style={{ color: '#dc2626', fontSize: 12, margin: '4px 0 0', lineHeight: 1.4 }}>
+                {t(msg) || NCR_ERROR_FALLBACKS[msg] || msg}
+            </p>
+        );
+    };
 
+    const persist = async (values: NCRDetailData) => {
         setSaving(true);
         try {
-            await onSave(formData, [
+            await onSave(values, [
                 { category: 'defectPhoto', files: pendingDefectPhotos },
                 { category: 'improvementPhoto', files: pendingImprovementPhotos },
                 { category: 'attachment', files: pendingAttachments }
@@ -385,27 +192,21 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         }
     };
 
-    const handlePublish = async () => {
-        const nextRev = getNextRevision(formData.rev);
-        if (window.confirm(`Are you sure you want to publish as Revision ${nextRev}?`)) {
-            setSaving(true);
-            try {
-                await onSave({
-                    ...formData,
-                    rev: nextRev,
-                    // Keep current status — don't force Closed (must go through workflow)
-                }, [
-                    { category: 'defectPhoto', files: pendingDefectPhotos },
-                    { category: 'improvementPhoto', files: pendingImprovementPhotos },
-                    { category: 'attachment', files: pendingAttachments }
-                ], deletedFileIds);
-                onClose();
-            } catch (err) {
-                toast.error((err as Error)?.message || t('common.saveFailed'));
-            } finally {
-                setSaving(false);
+    // Save — zod (resolver) enforces the strict QC closure gate before we get here.
+    const onValidSave = async (values: NCRDetailData) => {
+        if (!values.itrNumber && !values.noiNumber) {
+            // Warn if no link to origin
+            if (!window.confirm('This NCR is not linked to any ITR or NOI. Do you want to continue?')) {
+                return;
             }
         }
+        await persist(values);
+    };
+
+    const onInvalid = (errs: typeof errors) => {
+        const keys = Object.values(errs).map((e: any) => e?.message).filter(Boolean) as string[];
+        const first = keys[0];
+        if (first) toast.warning(t(first) || NCR_ERROR_FALLBACKS[first] || first);
     };
 
     return (
@@ -427,9 +228,9 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     <input
                                         type="text"
                                         className={formStyles.formInput}
-                                        value={formData.ncrNumber || t('form.autoGenerated')}
+                                        value={watch('ncrNumber') || t('form.autoGenerated')}
                                         readOnly
-                                        style={{ backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: formData.ncrNumber ? '#000000' : '#666666' }}
+                                        style={{ backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: watch('ncrNumber') ? '#000000' : '#666666' }}
                                     />
                                 </div>
                                 <div className={formStyles.formGroup}>
@@ -437,7 +238,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     <input
                                         type="text"
                                         className={formStyles.formInput}
-                                        value={formData.rev}
+                                        value={watch('rev')}
                                         readOnly
                                         placeholder="-"
                                         style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
@@ -445,11 +246,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.itrNo')}</label>
-                                    <select
-                                        className={formStyles.formSelect}
-                                        value={formData.itrNumber}
-                                        onChange={(e) => handleFieldChange('itrNumber', e.target.value)}
-                                    >
+                                    <select className={formStyles.formSelect} {...register('itrNumber')}>
                                         <option value="">Select ITR No.</option>
                                         {itrList.map((itr) => (
                                             <option key={itr.id} value={itr.documentNumber}>
@@ -460,50 +257,35 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.subject')}</label>
-                                    <input
-                                        type="text"
-                                        className={formStyles.formInput}
-                                        value={formData.subject}
-                                        onChange={(e) => handleFieldChange('subject', e.target.value)}
-                                    />
+                                    <input type="text" className={formStyles.formInput} {...register('subject')} />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.raiseDate')}</label>
                                     <input
-                                        type={formData.raiseDate ? 'date' : 'text'}
+                                        {...register('raiseDate')}
+                                        type={watch('raiseDate') ? 'date' : 'text'}
                                         placeholder="mm/dd/yyyy"
                                         lang="en"
                                         onFocus={(e) => (e.target.type = 'date')}
-                                        onBlur={(e) => {
-                                            if (!e.target.value) e.target.type = 'text';
-                                        }}
+                                        onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
                                         className={formStyles.formInput}
-                                        value={formData.raiseDate}
-                                        onChange={(e) => handleFieldChange('raiseDate', e.target.value)}
                                     />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('common.dueDate')}</label>
                                     <input
-                                        type={formData.dueDate ? 'date' : 'text'}
+                                        {...register('dueDate')}
+                                        type={watch('dueDate') ? 'date' : 'text'}
                                         placeholder="mm/dd/yyyy"
                                         lang="en"
                                         onFocus={(e) => (e.target.type = 'date')}
-                                        onBlur={(e) => {
-                                            if (!e.target.value) e.target.type = 'text';
-                                        }}
+                                        onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
                                         className={formStyles.formInput}
-                                        value={formData.dueDate}
-                                        onChange={(e) => handleFieldChange('dueDate', e.target.value)}
                                     />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.type')}</label>
-                                    <select
-                                        className={formStyles.formSelect}
-                                        value={formData.type}
-                                        onChange={(e) => handleFieldChange('type', e.target.value)}
-                                    >
+                                    <select className={formStyles.formSelect} {...register('type')}>
                                         <option value="">{t('obs.typePlaceholder')}</option>
                                         <option value="Design">{t('ncr.type.design')}</option>
                                         <option value="Material">{t('ncr.type.material')}</option>
@@ -513,11 +295,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.severity') || 'Severity'}</label>
-                                    <select
-                                        className={formStyles.formSelect}
-                                        value={formData.severity}
-                                        onChange={(e) => handleFieldChange('severity', e.target.value)}
-                                    >
+                                    <select className={formStyles.formSelect} {...register('severity')}>
                                         <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
                                         <option value="Major">{t('ncr.severity.major') || 'Major 重大'}</option>
                                         <option value="Minor">{t('ncr.severity.minor') || 'Minor 輕微'}</option>
@@ -528,11 +306,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.discipline') || 'Discipline'}</label>
-                                    <select
-                                        className={formStyles.formSelect}
-                                        value={formData.discipline}
-                                        onChange={(e) => handleFieldChange('discipline', e.target.value)}
-                                    >
+                                    <select className={formStyles.formSelect} {...register('discipline')}>
                                         <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
                                         <option value="Civil">{t('ncr.discipline.civil') || 'Civil 土建'}</option>
                                         <option value="Structural">{t('ncr.discipline.structural') || 'Structural 結構'}</option>
@@ -544,11 +318,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.contractor')}</label>
-                                    <select
-                                        className={formStyles.formSelect}
-                                        value={formData.contractor}
-                                        onChange={(e) => handleFieldChange('contractor', e.target.value)}
-                                    >
+                                    <select className={formStyles.formSelect} {...register('contractor')}>
                                         <option value="">{t('obs.contractorPlaceholder')}</option>
                                         {getActiveContractors().map((contractor) => (
                                             <option key={contractor.id} value={contractor.name}>
@@ -559,77 +329,81 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.refStandards')}</label>
-                                    <input
-                                        type="text"
-                                        className={formStyles.formInput}
-                                        value={formData.referenceStandards}
-                                        onChange={(e) => handleFieldChange('referenceStandards', e.target.value)}
-                                    />
+                                    <input type="text" className={formStyles.formInput} {...register('referenceStandards')} />
                                 </div>
                                 <div className={formStyles.formGroupFull}>
                                     <label>{t('obs.detailsDescription')}</label>
-                                    <textarea
-                                        className={formStyles.formTextarea}
-                                        value={formData.detailsDescription}
-                                        onChange={(e) => handleFieldChange('detailsDescription', e.target.value)}
-                                        rows={4}
-                                    />
+                                    <textarea className={formStyles.formTextarea} rows={4} {...register('detailsDescription')} />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.foundLocation')}</label>
-                                    <input
-                                        type="text"
-                                        className={formStyles.formInput}
-                                        value={formData.foundLocation}
-                                        onChange={(e) => handleFieldChange('foundLocation', e.target.value)}
-                                    />
+                                    <input type="text" className={formStyles.formInput} {...register('foundLocation')} />
                                 </div>
                             </div>
                         </div>
 
-                        {/* 報表詳細欄位 (BACKLOG #15) — traceability / impact / description / RCA detail */}
+                        {/* 報表詳細欄位 (BACKLOG #15) — traceability / impact / description.
+                            drawingNo / specNo / qtyAffected / extent are required and
+                            always shown; the rest are optional and collapse by default. */}
                         <div className={formStyles.formSection}>
                             <h3 className={formStyles.sectionTitle}>追溯・影響・描述 / Traceability · Impact · Description</h3>
                             <div className={formStyles.formGrid}>
-                                {([
-                                    ['drawingNo', '圖號 Drawing No.'], ['specNo', '規範號 Spec No.'],
-                                    ['poContract', 'PO／合約號 PO / Contract'], ['wbs', 'WBS'],
-                                    ['lineNo', '管線編號 Line No.'], ['weldJointNo', '焊道編號 Weld / Joint No.'],
-                                    ['heatBatchNo', '材料爐號 Heat / Batch No.'], ['qtyAffected', '受影響數量 Qty Affected'],
-                                ] as [keyof NCRDetailData, string][]).map(([f, label]) => (
-                                    <div className={formStyles.formGroup} key={f}>
-                                        <label>{label}</label>
-                                        <input type="text" className={formStyles.formInput}
-                                            value={formData[f] as string}
-                                            onChange={(e) => handleFieldChange(f, e.target.value)} />
-                                    </div>
-                                ))}
                                 <div className={formStyles.formGroup}>
-                                    <label>範圍 Isolated / Systemic</label>
-                                    <select className={formStyles.formSelect} value={formData.extent}
-                                        onChange={(e) => handleFieldChange('extent', e.target.value)}>
+                                    <label>圖號 Drawing No. *</label>
+                                    <input type="text" className={formStyles.formInput} {...register('drawingNo')} />
+                                    {errText('drawingNo')}
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>規範號 Spec No. *</label>
+                                    <input type="text" className={formStyles.formInput} {...register('specNo')} />
+                                    {errText('specNo')}
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>受影響數量 Qty Affected *</label>
+                                    <input type="text" className={formStyles.formInput} {...register('qtyAffected')} />
+                                    {errText('qtyAffected')}
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>範圍 Isolated / Systemic *</label>
+                                    <select className={formStyles.formSelect} {...register('extent')}>
                                         <option value="">—</option>
                                         <option value="Isolated">單一 Isolated</option>
                                         <option value="Systemic">系統性 Systemic</option>
                                     </select>
+                                    {errText('extent')}
                                 </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>成本／工期影響 Cost / Schedule</label>
-                                    <input type="text" className={formStyles.formInput}
-                                        value={formData.costScheduleImpact}
-                                        onChange={(e) => handleFieldChange('costScheduleImpact', e.target.value)} />
-                                </div>
+                            </div>
+
+                            <h4
+                                className={formStyles.sectionTitle}
+                                style={{ cursor: 'pointer', userSelect: 'none', fontSize: 13, marginTop: 12 }}
+                                onClick={() => setShowDetailFields(s => !s)}
+                            >
+                                <span style={{ display: 'inline-block', width: 16 }}>{showDetailFields ? '▾' : '▸'}</span>
+                                其他追溯／影響／描述（選填）/ More detail (optional)
+                            </h4>
+                            {showDetailFields && (
+                            <div className={formStyles.formGrid}>
+                                {([
+                                    ['poContract', 'PO／合約號 PO / Contract'], ['wbs', 'WBS'],
+                                    ['lineNo', '管線編號 Line No.'], ['weldJointNo', '焊道編號 Weld / Joint No.'],
+                                    ['heatBatchNo', '材料爐號 Heat / Batch No.'], ['costScheduleImpact', '成本／工期影響 Cost / Schedule'],
+                                ] as [keyof NCRDetailData, string][]).map(([f, label]) => (
+                                    <div className={formStyles.formGroup} key={f}>
+                                        <label>{label}</label>
+                                        <input type="text" className={formStyles.formInput} {...register(f)} />
+                                    </div>
+                                ))}
                                 {([
                                     ['requirement', '規範要求 Requirement'], ['asFound', '實際情況 As-Found'], ['deviation', '偏差說明 Deviation'],
                                 ] as [keyof NCRDetailData, string][]).map(([f, label]) => (
                                     <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`} key={f}>
                                         <label>{label}</label>
-                                        <textarea className={formStyles.formTextarea} rows={2}
-                                            value={formData[f] as string}
-                                            onChange={(e) => handleFieldChange(f, e.target.value)} />
+                                        <textarea className={formStyles.formTextarea} rows={2} {...register(f)} />
                                     </div>
                                 ))}
                             </div>
+                            )}
                         </div>
 
                         {/* 根因詳情 / RCA detail + concession + CA/PA owners */}
@@ -638,13 +412,11 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
                                     <label>讓步／偏差核准編號 Concession No.</label>
-                                    <input type="text" className={formStyles.formInput} value={formData.concessionNo}
-                                        onChange={(e) => handleFieldChange('concessionNo', e.target.value)} />
+                                    <input type="text" className={formStyles.formInput} {...register('concessionNo')} />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>分析方法 RCA Method</label>
-                                    <select className={formStyles.formSelect} value={formData.rcaMethod}
-                                        onChange={(e) => handleFieldChange('rcaMethod', e.target.value)}>
+                                    <select className={formStyles.formSelect} {...register('rcaMethod')}>
                                         <option value="">—</option>
                                         <option value="5 Why">5 Why</option>
                                         <option value="Fishbone">魚骨圖 Fishbone</option>
@@ -653,13 +425,11 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 </div>
                                 <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>
                                     <label>直接原因 Direct Cause</label>
-                                    <textarea className={formStyles.formTextarea} rows={2} value={formData.directCause}
-                                        onChange={(e) => handleFieldChange('directCause', e.target.value)} />
+                                    <textarea className={formStyles.formTextarea} rows={2} {...register('directCause')} />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>重複性 Recurrence</label>
-                                    <select className={formStyles.formSelect} value={formData.recurrence}
-                                        onChange={(e) => handleFieldChange('recurrence', e.target.value)}>
+                                    <select className={formStyles.formSelect} {...register('recurrence')}>
                                         <option value="">—</option>
                                         <option value="No">否 No</option>
                                         <option value="Yes">是 Yes</option>
@@ -667,28 +437,23 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>關聯前次 NCR Recurrence Ref.</label>
-                                    <input type="text" className={formStyles.formInput} value={formData.recurrenceRef}
-                                        onChange={(e) => handleFieldChange('recurrenceRef', e.target.value)} />
+                                    <input type="text" className={formStyles.formInput} {...register('recurrenceRef')} />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>矯正措施負責人 CA Owner</label>
-                                    <input type="text" className={formStyles.formInput} value={formData.correctiveActionOwner}
-                                        onChange={(e) => handleFieldChange('correctiveActionOwner', e.target.value)} />
+                                    <input type="text" className={formStyles.formInput} {...register('correctiveActionOwner')} />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>矯正目標日 CA Target Date</label>
-                                    <input type="date" lang="en" className={formStyles.formInput} value={formData.correctiveActionTargetDate}
-                                        onChange={(e) => handleFieldChange('correctiveActionTargetDate', e.target.value)} />
+                                    <input type="date" lang="en" className={formStyles.formInput} {...register('correctiveActionTargetDate')} />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>預防措施負責人 PA Owner</label>
-                                    <input type="text" className={formStyles.formInput} value={formData.preventiveActionOwner}
-                                        onChange={(e) => handleFieldChange('preventiveActionOwner', e.target.value)} />
+                                    <input type="text" className={formStyles.formInput} {...register('preventiveActionOwner')} />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>預防目標日 PA Target Date</label>
-                                    <input type="date" lang="en" className={formStyles.formInput} value={formData.preventiveActionTargetDate}
-                                        onChange={(e) => handleFieldChange('preventiveActionTargetDate', e.target.value)} />
+                                    <input type="date" lang="en" className={formStyles.formInput} {...register('preventiveActionTargetDate')} />
                                 </div>
                             </div>
                         </div>
@@ -702,11 +467,11 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 entityType={existingItem ? 'ncr' : undefined}
                                 entityId={existingItem?.id}
                                 title={t('obs.defectPhotos')}
-                                legacyAttachments={formData.defectPhotos}
+                                legacyAttachments={watch('defectPhotos')}
                                 onPendingFilesChange={setPendingDefectPhotos}
                                 onDeleteExistingFile={(id) => {
                                     setDeletedFileIds(prev => [...prev, id]);
-                                    setFormData(prev => ({ ...prev, defectPhotos: (prev.defectPhotos || []).filter((a: any) => typeof a === 'string' || a?.id !== id) }));
+                                    setValue('defectPhotos', (getValues('defectPhotos') || []).filter((a: any) => typeof a === 'string' || a?.id !== id), { shouldDirty: true });
                                 }}
                                 onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'defect')}
                                 onPreview={handlePreview}
@@ -721,11 +486,11 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 entityType={existingItem ? 'ncr' : undefined}
                                 entityId={existingItem?.id}
                                 title={t('obs.improvementPhotos')}
-                                legacyAttachments={formData.improvementPhotos}
+                                legacyAttachments={watch('improvementPhotos')}
                                 onPendingFilesChange={setPendingImprovementPhotos}
                                 onDeleteExistingFile={(id) => {
                                     setDeletedFileIds(prev => [...prev, id]);
-                                    setFormData(prev => ({ ...prev, improvementPhotos: (prev.improvementPhotos || []).filter((a: any) => typeof a === 'string' || a?.id !== id) }));
+                                    setValue('improvementPhotos', (getValues('improvementPhotos') || []).filter((a: any) => typeof a === 'string' || a?.id !== id), { shouldDirty: true });
                                 }}
                                 onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'improvement')}
                                 onPreview={handlePreview}
@@ -741,11 +506,11 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 entityType={existingItem ? 'ncr' : undefined}
                                 entityId={existingItem?.id}
                                 title={t('obs.attachments')}
-                                legacyAttachments={formData.attachments}
+                                legacyAttachments={watch('attachments')}
                                 onPendingFilesChange={setPendingAttachments}
                                 onDeleteExistingFile={(id) => {
                                     setDeletedFileIds(prev => [...prev, id]);
-                                    setFormData(prev => ({ ...prev, attachments: (prev.attachments || []).filter((a: any) => typeof a === 'string' || a?.id !== id) }));
+                                    setValue('attachments', (getValues('attachments') || []).filter((a: any) => typeof a === 'string' || a?.id !== id), { shouldDirty: true });
                                 }}
                                 onRemoveLegacy={handleRemoveLegacyAttachment}
                                 onPreview={handlePreview}
@@ -758,28 +523,18 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.foundBy')}</label>
-                                    <input
-                                        type="text"
-                                        className={formStyles.formInput}
-                                        value={formData.foundBy}
-                                        onChange={(e) => handleFieldChange('foundBy', e.target.value)}
-                                    />
+                                    <input type="text" className={formStyles.formInput} {...register('foundBy')} />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.raisedBy')}</label>
-                                    <input
-                                        type="text"
-                                        className={formStyles.formInput}
-                                        value={formData.raisedBy}
-                                        onChange={(e) => handleFieldChange('raisedBy', e.target.value)}
-                                    />
+                                    <input type="text" className={formStyles.formInput} {...register('raisedBy')} />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.assignedTo') || 'Assigned To'}</label>
                                     <select
                                         className={formStyles.formSelect}
-                                        value={formData.assignedTo ?? ''}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, assignedTo: e.target.value ? Number(e.target.value) : null }))}
+                                        value={watch('assignedTo') ?? ''}
+                                        onChange={(e) => setValue('assignedTo', e.target.value ? Number(e.target.value) : null, { shouldDirty: true })}
                                     >
                                         <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
                                         {users.map(u => (
@@ -789,26 +544,18 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.serialNumbers')}</label>
-                                    <input
-                                        type="text"
-                                        className={formStyles.formInput}
-                                        value={formData.serialNumbers}
-                                        onChange={(e) => handleFieldChange('serialNumbers', e.target.value)}
-                                    />
+                                    <input type="text" className={formStyles.formInput} {...register('serialNumbers')} />
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('obs.productDisposition')}</label>
-                                    <select
-                                        className={formStyles.formSelect}
-                                        value={formData.productDisposition}
-                                        onChange={(e) => handleFieldChange('productDisposition', e.target.value)}
-                                    >
+                                    <label>{t('obs.productDisposition')}{closeStar}</label>
+                                    <select className={formStyles.formSelect} {...register('productDisposition')}>
                                         <option value="">{t('common.selectPlaceholder')}</option>
                                         <option value="Use As Is">{t('ncr.disposition.useAsIs')}</option>
                                         <option value="Repair">{t('ncr.disposition.repair')}</option>
                                         <option value="Rework">{t('ncr.disposition.rework')}</option>
                                         <option value="Reject">{t('ncr.disposition.reject')}</option>
                                     </select>
+                                    {errText('productDisposition')}
                                 </div>
                             </div>
                         </div>
@@ -821,163 +568,61 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     <div className={formStyles.labelWithButton}>
                                         <label>{t('ncr.repairMethod')}</label>
                                         <div className={styles.buttonGroup}>
-                                            <button
-                                                type="button"
-                                                className={formStyles.tbcButton}
-                                                onClick={() => handleTBCButton('repairMethodStatement')}
-                                            >
-                                                {t('common.tbc')}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className={formStyles.naButton}
-                                                onClick={() => handleNAButton('repairMethodStatement')}
-                                            >
-                                                {t('common.na')}
-                                            </button>
+                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('repairMethodStatement')}>{t('common.tbc')}</button>
+                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('repairMethodStatement')}>{t('common.na')}</button>
                                         </div>
                                     </div>
-                                    <textarea
-                                        className={formStyles.formTextarea}
-                                        value={formData.repairMethodStatement}
-                                        onChange={(e) => handleFieldChange('repairMethodStatement', e.target.value)}
-                                        rows={3}
-                                    />
+                                    <textarea className={formStyles.formTextarea} rows={3} {...register('repairMethodStatement')} />
                                 </div>
                                 <div className={formStyles.formGroupFull}>
                                     <div className={formStyles.labelWithButton}>
                                         <label>{t('ncr.correctionAction')}</label>
                                         <div className={styles.buttonGroup}>
-                                            <button
-                                                type="button"
-                                                className={formStyles.tbcButton}
-                                                onClick={() => handleTBCButton('immediateCorrectionAction')}
-                                            >
-                                                {t('common.tbc')}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className={formStyles.naButton}
-                                                onClick={() => handleNAButton('immediateCorrectionAction')}
-                                            >
-                                                {t('common.na')}
-                                            </button>
+                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('immediateCorrectionAction')}>{t('common.tbc')}</button>
+                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('immediateCorrectionAction')}>{t('common.na')}</button>
                                         </div>
                                     </div>
-                                    <textarea
-                                        className={formStyles.formTextarea}
-                                        value={formData.immediateCorrectionAction}
-                                        onChange={(e) => handleFieldChange('immediateCorrectionAction', e.target.value)}
-                                        rows={3}
-                                    />
+                                    <textarea className={formStyles.formTextarea} rows={3} {...register('immediateCorrectionAction')} />
                                 </div>
                                 <div className={formStyles.formGroupFull}>
                                     <div className={formStyles.labelWithButton}>
                                         <label>{t('ncr.rootCause')}</label>
                                         <div className={styles.buttonGroup}>
-                                            <button
-                                                type="button"
-                                                className={formStyles.tbcButton}
-                                                onClick={() => handleTBCButton('rootCauseAnalysis')}
-                                            >
-                                                {t('common.tbc')}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className={formStyles.naButton}
-                                                onClick={() => handleNAButton('rootCauseAnalysis')}
-                                            >
-                                                {t('common.na')}
-                                            </button>
+                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('rootCauseAnalysis')}>{t('common.tbc')}</button>
+                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('rootCauseAnalysis')}>{t('common.na')}</button>
                                         </div>
                                     </div>
-                                    <textarea
-                                        className={formStyles.formTextarea}
-                                        value={formData.rootCauseAnalysis}
-                                        onChange={(e) => handleFieldChange('rootCauseAnalysis', e.target.value)}
-                                        rows={4}
-                                    />
+                                    <textarea className={formStyles.formTextarea} rows={4} {...register('rootCauseAnalysis')} />
                                 </div>
                                 <div className={formStyles.formGroupFull}>
                                     <div className={formStyles.labelWithButton}>
                                         <label>{t('ncr.correctiveActions')}</label>
                                         <div className={styles.buttonGroup}>
-                                            <button
-                                                type="button"
-                                                className={formStyles.tbcButton}
-                                                onClick={() => handleTBCButton('correctiveActions')}
-                                            >
-                                                {t('common.tbc')}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className={formStyles.naButton}
-                                                onClick={() => handleNAButton('correctiveActions')}
-                                            >
-                                                {t('common.na')}
-                                            </button>
+                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('correctiveActions')}>{t('common.tbc')}</button>
+                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('correctiveActions')}>{t('common.na')}</button>
                                         </div>
                                     </div>
-                                    <textarea
-                                        className={formStyles.formTextarea}
-                                        value={formData.correctiveActions}
-                                        onChange={(e) => handleFieldChange('correctiveActions', e.target.value)}
-                                        rows={3}
-                                    />
+                                    <textarea className={formStyles.formTextarea} rows={3} {...register('correctiveActions')} />
                                 </div>
                                 <div className={formStyles.formGroupFull}>
                                     <div className={formStyles.labelWithButton}>
                                         <label>{t('ncr.preventiveAction')}</label>
                                         <div className={styles.buttonGroup}>
-                                            <button
-                                                type="button"
-                                                className={formStyles.tbcButton}
-                                                onClick={() => handleTBCButton('preventiveAction')}
-                                            >
-                                                {t('common.tbc')}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className={formStyles.naButton}
-                                                onClick={() => handleNAButton('preventiveAction')}
-                                            >
-                                                {t('common.na')}
-                                            </button>
+                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('preventiveAction')}>{t('common.tbc')}</button>
+                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('preventiveAction')}>{t('common.na')}</button>
                                         </div>
                                     </div>
-                                    <textarea
-                                        className={formStyles.formTextarea}
-                                        value={formData.preventiveAction}
-                                        onChange={(e) => handleFieldChange('preventiveAction', e.target.value)}
-                                        rows={3}
-                                    />
+                                    <textarea className={formStyles.formTextarea} rows={3} {...register('preventiveAction')} />
                                 </div>
                                 <div className={formStyles.formGroupFull}>
                                     <div className={formStyles.labelWithButton}>
                                         <label>{t('ncr.integrityStatement')}</label>
                                         <div className={styles.buttonGroup}>
-                                            <button
-                                                type="button"
-                                                className={formStyles.tbcButton}
-                                                onClick={() => handleTBCButton('finalProductIntegrityStatement')}
-                                            >
-                                                {t('common.tbc')}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className={formStyles.naButton}
-                                                onClick={() => handleNAButton('finalProductIntegrityStatement')}
-                                            >
-                                                {t('common.na')}
-                                            </button>
+                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('finalProductIntegrityStatement')}>{t('common.tbc')}</button>
+                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('finalProductIntegrityStatement')}>{t('common.na')}</button>
                                         </div>
                                     </div>
-                                    <textarea
-                                        className={formStyles.formTextarea}
-                                        value={formData.finalProductIntegrityStatement}
-                                        onChange={(e) => handleFieldChange('finalProductIntegrityStatement', e.target.value)}
-                                        rows={3}
-                                    />
+                                    <textarea className={formStyles.formTextarea} rows={3} {...register('finalProductIntegrityStatement')} />
                                 </div>
                             </div>
                         </div>
@@ -987,12 +632,8 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                             <h3 className={formStyles.sectionTitle}>{t('ncr.sectionEffectiveness') || 'Effectiveness Verification'}</h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.effectivenessVerified') || 'Effectiveness Verified'}</label>
-                                    <select
-                                        className={formStyles.formSelect}
-                                        value={formData.effectivenessVerified}
-                                        onChange={(e) => handleFieldChange('effectivenessVerified', e.target.value)}
-                                    >
+                                    <label>{t('ncr.effectivenessVerified') || 'Effectiveness Verified'}{closeStar}</label>
+                                    <select className={formStyles.formSelect} {...register('effectivenessVerified')}>
                                         <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
                                         <option value="Pending">{t('ncr.effectiveness.pending') || 'Pending 待驗證'}</option>
                                         <option value="Yes">{t('ncr.effectiveness.yes') || 'Yes 有效'}</option>
@@ -1001,25 +642,15 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     <p style={{ fontSize: 11, color: '#6b7280', margin: '4px 0 0', lineHeight: 1.4 }}>
                                         {t('ncr.effectiveness.hint') || 'Confirm the corrective action prevented recurrence. An NCR cannot be Closed until this is "Yes"; "No" routes it back to In Progress.'}
                                     </p>
+                                    {errText('effectivenessVerified')}
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label className={formStyles.optionalLabel}>{t('ncr.effectivenessVerifiedDate') || 'Verified Date'}</label>
-                                    <input
-                                        type="date"
-                                        lang="en"
-                                        className={formStyles.formInput}
-                                        value={formData.effectivenessVerifiedDate}
-                                        onChange={(e) => handleFieldChange('effectivenessVerifiedDate', e.target.value)}
-                                    />
+                                    <input type="date" lang="en" className={formStyles.formInput} {...register('effectivenessVerifiedDate')} />
                                 </div>
                                 <div className={formStyles.formGroupFull}>
                                     <label className={formStyles.optionalLabel}>{t('ncr.effectivenessNotes') || 'Verification Notes'}</label>
-                                    <textarea
-                                        className={formStyles.formTextarea}
-                                        value={formData.effectivenessNotes}
-                                        onChange={(e) => handleFieldChange('effectivenessNotes', e.target.value)}
-                                        rows={2}
-                                    />
+                                    <textarea className={formStyles.formTextarea} rows={2} {...register('effectivenessNotes')} />
                                 </div>
                             </div>
                         </div>
@@ -1030,20 +661,11 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.itrNo')}</label>
-                                    <input
-                                        type="text"
-                                        className={formStyles.formInput}
-                                        value={formData.itrNumber}
-                                        onChange={(e) => handleFieldChange('itrNumber', e.target.value)}
-                                    />
+                                    <input type="text" className={formStyles.formInput} {...register('itrNumber')} />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.noiNo')}</label>
-                                    <select
-                                        className={formStyles.formInput}
-                                        value={formData.noiNumber}
-                                        onChange={(e) => handleFieldChange('noiNumber', e.target.value)}
-                                    >
+                                    <select className={formStyles.formInput} {...register('noiNumber')}>
                                         <option value="">{t('ncr.noiNoPlaceholder')}</option>
                                         {getNOIList().map((noi) => (
                                             <option key={noi.id} value={noi.referenceNo}>
@@ -1053,13 +675,9 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     </select>
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.reinspectionNo')}</label>
-                                    <input
-                                        type="text"
-                                        className={formStyles.formInput}
-                                        value={formData.reInspectionNumber}
-                                        onChange={(e) => handleFieldChange('reInspectionNumber', e.target.value)}
-                                    />
+                                    <label>{t('ncr.reinspectionNo')}{closeStar}</label>
+                                    <input type="text" className={formStyles.formInput} {...register('reInspectionNumber')} />
+                                    {errText('reInspectionNumber')}
                                 </div>
                             </div>
                         </div>
@@ -1072,8 +690,14 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     <label>{t('common.status')}</label>
                                     <select
                                         className={formStyles.formSelect}
-                                        value={formData.status}
-                                        onChange={(e) => handleFieldChange('status', e.target.value)}
+                                        {...register('status', {
+                                            onChange: (e) => {
+                                                // 勾稽聯動：NCR 關閉後提示 NOI 可轉為 Resolved
+                                                if (e.target.value === 'Closed' && getValues('noiNumber')) {
+                                                    toast.info(`NCR closed. You may now update NOI ${getValues('noiNumber')} status to "Resolved".`);
+                                                }
+                                            },
+                                        })}
                                     >
                                         <option value="Open">{t('status.open')}</option>
                                         <option value="In Progress">{t('status.inProgress')}</option>
@@ -1084,21 +708,11 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label className={formStyles.optionalLabel}>{t('obs.closeoutDate')}</label>
-                                    <input
-                                        type="date"
-                                        lang="en"
-                                        className={formStyles.formInput}
-                                        value={formData.closeoutDate}
-                                        onChange={(e) => handleFieldChange('closeoutDate', e.target.value)}
-                                    />
+                                    <input type="date" lang="en" className={formStyles.formInput} {...register('closeoutDate')} />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.integrityRelated')}</label>
-                                    <select
-                                        className={formStyles.formSelect}
-                                        value={formData.productIntegrityRelated}
-                                        onChange={(e) => handleFieldChange('productIntegrityRelated', e.target.value)}
-                                    >
+                                    <select className={formStyles.formSelect} {...register('productIntegrityRelated')}>
                                         <option value="">{t('common.selectPlaceholder')}</option>
                                         <option value="Yes">{t('common.yes')}</option>
                                         <option value="No">{t('common.no')}</option>
@@ -1106,11 +720,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.permanentDeviation')}</label>
-                                    <select
-                                        className={formStyles.formSelect}
-                                        value={formData.permanentProductDeviation}
-                                        onChange={(e) => handleFieldChange('permanentProductDeviation', e.target.value)}
-                                    >
+                                    <select className={formStyles.formSelect} {...register('permanentProductDeviation')}>
                                         <option value="">{t('common.selectPlaceholder')}</option>
                                         <option value="Yes">{t('common.yes')}</option>
                                         <option value="No">{t('common.no')}</option>
@@ -1118,11 +728,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.impactOM')}</label>
-                                    <select
-                                        className={formStyles.formSelect}
-                                        value={formData.impactToOM}
-                                        onChange={(e) => handleFieldChange('impactToOM', e.target.value)}
-                                    >
+                                    <select className={formStyles.formSelect} {...register('impactToOM')}>
                                         <option value="">{t('common.selectPlaceholder')}</option>
                                         <option value="Yes">{t('common.yes')}</option>
                                         <option value="No">{t('common.no')}</option>
@@ -1131,20 +737,9 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 <div className={formStyles.formGroupFull}>
                                     <div className={formStyles.labelWithButton}>
                                         <label className={formStyles.optionalLabel}>{t('common.remark')}</label>
-                                        <button
-                                            type="button"
-                                            className={formStyles.tbcButton}
-                                            onClick={() => handleDateButton('remark')}
-                                        >
-                                            {t('common.addDate')}
-                                        </button>
+                                        <button type="button" className={formStyles.tbcButton} onClick={() => handleDateButton('remark')}>{t('common.addDate')}</button>
                                     </div>
-                                    <textarea
-                                        className={formStyles.formTextarea}
-                                        value={formData.remark}
-                                        onChange={(e) => handleFieldChange('remark', e.target.value)}
-                                        rows={3}
-                                    />
+                                    <textarea className={formStyles.formTextarea} rows={3} {...register('remark')} />
                                 </div>
                             </div>
                         </div>
@@ -1153,16 +748,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                         )}
                     </div>
                     <div className={formStyles.modalActions}>
-                        <button
-                            className={formStyles.saveButton}
-                            onClick={handlePublish}
-                            style={{ backgroundColor: '#4f46e5' }}
-                            title="Publish as next revision"
-                            disabled={saving}
-                        >
-                            Publish
-                        </button>
-                        <button className={formStyles.saveButton} onClick={handleSave} style={{ marginLeft: '12px' }} disabled={saving}>
+                        <button className={formStyles.saveButton} onClick={handleSubmit(onValidSave, onInvalid)} disabled={saving}>
                             {saving ? t('obs.saving') : t('common.save')}
                         </button>
                         <button className={formStyles.printButton} onClick={handlePrintClick} style={{ marginLeft: '12px' }} disabled={saving} title={t('common.print') || 'Print'}>
@@ -1174,9 +760,9 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                     </div>
                 </div >
             </div >
-            {isPrinting && ReactDOM.createPortal(
+            {isPrinting && printData && ReactDOM.createPortal(
                 <NCRPrintTemplate
-                    data={formData}
+                    data={printData}
                     resolveUser={userLabel}
                     defectPhotos={printDefectPhotos}
                     improvementPhotos={printImprovementPhotos}
@@ -1199,74 +785,19 @@ export interface NCRDetailsViewModalProps {
 
 export const NCRDetailsViewModal: React.FC<NCRDetailsViewModalProps> = ({ ncrId: _ncrId, ncrItem, ncrDetailData, onClose }) => {
     const { t } = useLanguage();
-    // Combine data from both sources, with detailData taking precedence
-    const displayData: NCRDetailData = {
-        ncrNumber: ncrDetailData?.ncrNumber || ncrItem?.documentNumber || '',
-        itrNumber: ncrDetailData?.itrNumber || '',
-        rev: ncrDetailData?.rev || (ncrItem as any)?.rev || '',
-        status: ncrDetailData?.status || ncrItem?.status || 'Open',
-        raiseDate: ncrDetailData?.raiseDate || ncrItem?.raiseDate || '',
-        closeoutDate: ncrDetailData?.closeoutDate || ncrItem?.closeoutDate || '',
-        aconex: ncrDetailData?.aconex || ncrItem?.aconex || '',
-        type: ncrDetailData?.type || ncrItem?.type || '',
-        contractor: ncrDetailData?.contractor || ncrItem?.vendor || '',
-        remark: ncrDetailData?.remark || ncrItem?.remark || '',
-        subject: ncrDetailData?.subject || ncrItem?.subject || ncrItem?.description || '',
-        referenceStandards: ncrDetailData?.referenceStandards || '',
-        detailsDescription: ncrDetailData?.detailsDescription || ncrItem?.description || '',
-        foundLocation: ncrDetailData?.foundLocation || ncrItem?.foundLocation || '',
-        foundBy: ncrDetailData?.foundBy || ncrItem?.foundBy || '',
-        raisedBy: ncrDetailData?.raisedBy || ncrItem?.raisedBy || '',
-        serialNumbers: ncrDetailData?.serialNumbers || '',
-        productDisposition: ncrDetailData?.productDisposition || ncrItem?.productDisposition || '',
-        repairMethodStatement: ncrDetailData?.repairMethodStatement || '',
-        immediateCorrectionAction: ncrDetailData?.immediateCorrectionAction || '',
-        rootCauseAnalysis: ncrDetailData?.rootCauseAnalysis || '',
-        correctiveActions: ncrDetailData?.correctiveActions || '',
-        preventiveAction: ncrDetailData?.preventiveAction || '',
-        finalProductIntegrityStatement: ncrDetailData?.finalProductIntegrityStatement || '',
-        reInspectionNumber: ncrDetailData?.reInspectionNumber || '',
-        noiNumber: ncrDetailData?.noiNumber || '',
-        productIntegrityRelated: ncrDetailData?.productIntegrityRelated || ncrItem?.productIntegrityRelated || '',
-        permanentProductDeviation: ncrDetailData?.permanentProductDeviation || ncrItem?.permanentProductDeviation || '',
-        impactToOM: ncrDetailData?.impactToOM || ncrItem?.impactToOM || '',
-        projectQualityManager: ncrDetailData?.projectQualityManager || '',
-        defectPhotos: ncrDetailData?.defectPhotos || ncrItem?.defectPhotos || [],
-        improvementPhotos: ncrDetailData?.improvementPhotos || ncrItem?.improvementPhotos || [],
-        attachments: ncrDetailData?.attachments || ncrItem?.attachments || [],
-        dueDate: ncrDetailData?.dueDate || (ncrItem as any)?.dueDate || '',
-        severity: ncrDetailData?.severity || ncrItem?.severity || '',
-        discipline: ncrDetailData?.discipline || ncrItem?.discipline || '',
-        assignedTo: ncrDetailData?.assignedTo ?? ncrItem?.assignedTo ?? null,
-        closedBy: ncrDetailData?.closedBy ?? ncrItem?.closedBy ?? null,
-        verifiedBy: ncrDetailData?.verifiedBy ?? ncrItem?.verifiedBy ?? null,
-        effectivenessVerified: ncrDetailData?.effectivenessVerified || ncrItem?.effectivenessVerified || '',
-        effectivenessVerifiedBy: ncrDetailData?.effectivenessVerifiedBy ?? ncrItem?.effectivenessVerifiedBy ?? null,
-        effectivenessVerifiedDate: ncrDetailData?.effectivenessVerifiedDate || ncrItem?.effectivenessVerifiedDate || '',
-        effectivenessNotes: ncrDetailData?.effectivenessNotes || ncrItem?.effectivenessNotes || '',
-        drawingNo: ncrDetailData?.drawingNo || ncrItem?.drawingNo || '',
-        specNo: ncrDetailData?.specNo || ncrItem?.specNo || '',
-        poContract: ncrDetailData?.poContract || ncrItem?.poContract || '',
-        wbs: ncrDetailData?.wbs || ncrItem?.wbs || '',
-        lineNo: ncrDetailData?.lineNo || ncrItem?.lineNo || '',
-        weldJointNo: ncrDetailData?.weldJointNo || ncrItem?.weldJointNo || '',
-        heatBatchNo: ncrDetailData?.heatBatchNo || ncrItem?.heatBatchNo || '',
-        qtyAffected: ncrDetailData?.qtyAffected || ncrItem?.qtyAffected || '',
-        extent: ncrDetailData?.extent || ncrItem?.extent || '',
-        costScheduleImpact: ncrDetailData?.costScheduleImpact || ncrItem?.costScheduleImpact || '',
-        requirement: ncrDetailData?.requirement || ncrItem?.requirement || '',
-        asFound: ncrDetailData?.asFound || ncrItem?.asFound || '',
-        deviation: ncrDetailData?.deviation || ncrItem?.deviation || '',
-        concessionNo: ncrDetailData?.concessionNo || ncrItem?.concessionNo || '',
-        rcaMethod: ncrDetailData?.rcaMethod || ncrItem?.rcaMethod || '',
-        directCause: ncrDetailData?.directCause || ncrItem?.directCause || '',
-        recurrence: ncrDetailData?.recurrence || ncrItem?.recurrence || '',
-        recurrenceRef: ncrDetailData?.recurrenceRef || ncrItem?.recurrenceRef || '',
-        correctiveActionOwner: ncrDetailData?.correctiveActionOwner || ncrItem?.correctiveActionOwner || '',
-        correctiveActionTargetDate: ncrDetailData?.correctiveActionTargetDate || ncrItem?.correctiveActionTargetDate || '',
-        preventiveActionOwner: ncrDetailData?.preventiveActionOwner || ncrItem?.preventiveActionOwner || '',
-        preventiveActionTargetDate: ncrDetailData?.preventiveActionTargetDate || ncrItem?.preventiveActionTargetDate || '',
-    };
+    // Combine data from both sources, with detailData taking precedence.
+    // Base mapping is shared with the edit modal via toFormValues().
+    const displayData: NCRDetailData = (() => {
+        const base = ncrItem ? toFormValues(ncrItem) : emptyNCRForm;
+        if (!ncrDetailData) return base;
+        const out = { ...base };
+        (Object.keys(base) as (keyof NCRDetailData)[]).forEach((k) => {
+            const dv = ncrDetailData[k] as unknown;
+            const keep = typeof dv === 'number' ? true : (dv !== undefined && dv !== null && dv !== '');
+            if (keep) (out as any)[k] = dv;
+        });
+        return out;
+    })();
 
     const handlePrint = () => {
         window.print();
