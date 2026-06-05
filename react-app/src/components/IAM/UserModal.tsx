@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { Role, User } from '../../store/iamStore';
 import UserScopeSection, { type ScopeValue } from './UserScopeSection';
 import { setUserScope } from '../../services/api';
+import { getErrorMessage } from '../../utils/errorUtils';
 import styles from './UserModal.module.css';
 
 const userSchema = z.object({
@@ -95,7 +96,10 @@ const UserModal: React.FC<UserModalProps> = ({ existingUser, roles, onSave, onCl
                     toast.error(`Validation failed: ${error.message || 'Unknown error'}`);
                 }
             } else {
-                toast.error(err.message || "An error occurred");
+                // Surface the backend's reason (e.g. "Password must contain both
+                // letters and digits", "Email already registered") instead of the
+                // generic axios "Request failed with status code 400".
+                toast.error(getErrorMessage(err, "An error occurred"));
             }
         }
     };
