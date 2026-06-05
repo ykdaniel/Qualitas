@@ -591,6 +591,50 @@ items overlap the #13 data-model work and should be done together.
 ITR double-bind, binary view status, ghost fields, status-set unification),
 then fold the 🟡/🟢 into the #13 build so the form is reworked once.
 
+**UPDATE 2026-06-05 — RHF + zod refactor, validation, and 7-section reorg shipped.**
+Fixed by this work:
+- #5 `productDisposition` now lives under the Disposition section.
+- #6 the ambiguous **Publish** button was removed — every save goes through
+  validation (it also had a dead rev-bump and bypassed the QC gate).
+- #7 required fields are now real and enforced: drawingNo / specNo / qtyAffected
+  / extent + the closure-gate fields, validated **at closure** via zod, with
+  conditional `*` markers and inline errors (no longer a misleading hint).
+- #8 the closure QC check is now a single zod gate that **includes** the #13 #3
+  effectiveness-verification requirement (+ disposition/recurrence coupling).
+- #1 *partially* — the redundant duplicate ITR input was removed; a distinct
+  `verificationItrNumber` (trigger ITR vs. closure-verifying ITR) is still not
+  modelled.
+- #10 *partially* — form regrouped into 7 lifecycle sections + a collapsible
+  optional block, but it's still one scroll (no tabs).
+- Also fixed outside this section: file-router cookie auth (opening a record
+  with attachments logged the user out), and the BACKLOG #15 fields not
+  persisting on **create** (only update). IAM: created-date column + populate
+  on create + delete-button gating + surfacing backend error detail.
+
+Still open (NCR form / model), roughly by value:
+- **a. Status workflow / state-machine.** `status` is a free dropdown — you can
+  jump Open→Closed, and Resolved vs Closed is undefined. Add legal-transition
+  enforcement and clarify the terminal states.
+- **b. Hardcoded bilingual labels.** The #15 / reorg fields (e.g. "圖號 Drawing
+  No.", the section titles) are literal zh+en strings, not `t()` keys — they
+  don't switch with language. Move into LanguageContext.
+- **c. `qtyAffected` is free text** — make it numeric so it can be aggregated
+  (feeds #12 monthly stats).
+- **d. Closure requires no evidence** — the gate only checks a re-inspection
+  *number*; consider requiring a re-inspection photo / attachment before Closed.
+- **e. Engineering / Design authority approver field is missing** — "Use As Is
+  / Repair" needs sign-off, and print-report cell 6.3 is permanently blank
+  because there's no field. Needs a new column (ideally a user FK) — overlaps
+  #13 / #15.
+- **f. Ghost fields** (item 3 above): `projectQualityManager` / `aconex` still
+  have no edit input.
+- **g. TBC / NA / Add-date magic strings** (item 9 above) are still unstructured.
+- **h. `NCRDetailsViewModal` is dead code** — not routed anywhere, and still
+  uses the pre-reorg layout. Delete it or sync it.
+- Carry-overs tracked elsewhere: ITR/NOI stored as number not `id` (#1 at top),
+  SLA days as constants + string dates (#13), contractor stored as a name
+  string (🟢 above).
+
 ---
 
 ## 15. NCR formal print report  ·  STAGE B DONE (placeholder header) · STAGE A = TODO
