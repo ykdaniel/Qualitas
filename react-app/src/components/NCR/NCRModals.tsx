@@ -69,7 +69,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         const v = existingItem ? toFormValues(existingItem) : emptyNCRForm;
         return ([
             'poContract', 'wbs', 'lineNo', 'weldJointNo', 'heatBatchNo',
-            'costScheduleImpact', 'requirement', 'asFound', 'deviation',
+            'costScheduleImpact',
         ] as (keyof NCRDetailData)[]).some(k => Boolean(v[k]));
     });
 
@@ -235,9 +235,9 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                         {peopleSuggestions.map(name => <option key={name} value={name} />)}
                     </datalist>
                     <div className={formStyles.formSections}>
-                        {/* 不符合項目資訊 */}
+                        {/* ===== 1. 基本資訊 / Identification ===== */}
                         <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>{t('obs.sectionInfo')}</h3>
+                            <h3 className={formStyles.sectionTitle}>基本資訊 / Identification</h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.documentNumber')}</label>
@@ -261,43 +261,28 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     />
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.itrNo')}</label>
-                                    <select className={formStyles.formSelect} {...register('itrNumber')}>
-                                        <option value="">Select ITR No.</option>
-                                        {itrList.map((itr) => (
-                                            <option key={itr.id} value={itr.documentNumber}>
-                                                {itr.documentNumber}
-                                            </option>
-                                        ))}
+                                    <label>{t('common.status')}</label>
+                                    <select
+                                        className={formStyles.formSelect}
+                                        {...register('status', {
+                                            onChange: (e) => {
+                                                // 勾稽聯動：NCR 關閉後提示 NOI 可轉為 Resolved
+                                                if (e.target.value === 'Closed' && getValues('noiNumber')) {
+                                                    toast.info(`NCR closed. You may now update NOI ${getValues('noiNumber')} status to "Resolved".`);
+                                                }
+                                            },
+                                        })}
+                                    >
+                                        <option value="Open">{t('status.open')}</option>
+                                        <option value="In Progress">{t('status.inProgress')}</option>
+                                        <option value="Resolved">{t('status.resolved')}</option>
+                                        <option value="Closed">{t('status.closed')}</option>
+                                        <option value="Void">{t('status.void')}</option>
                                     </select>
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.subject')}</label>
                                     <input type="text" className={formStyles.formInput} {...register('subject')} />
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.raiseDate')}</label>
-                                    <input
-                                        {...register('raiseDate')}
-                                        type={watch('raiseDate') ? 'date' : 'text'}
-                                        placeholder="mm/dd/yyyy"
-                                        lang="en"
-                                        onFocus={(e) => (e.target.type = 'date')}
-                                        onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
-                                        className={formStyles.formInput}
-                                    />
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('common.dueDate')}</label>
-                                    <input
-                                        {...register('dueDate')}
-                                        type={watch('dueDate') ? 'date' : 'text'}
-                                        placeholder="mm/dd/yyyy"
-                                        lang="en"
-                                        onFocus={(e) => (e.target.type = 'date')}
-                                        onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
-                                        className={formStyles.formInput}
-                                    />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.type')}</label>
@@ -344,200 +329,33 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     </select>
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('obs.refStandards')}</label>
-                                    <input type="text" className={formStyles.formInput} {...register('referenceStandards')} />
+                                    <label>{t('ncr.raiseDate')}</label>
+                                    <input
+                                        {...register('raiseDate')}
+                                        type={watch('raiseDate') ? 'date' : 'text'}
+                                        placeholder="mm/dd/yyyy"
+                                        lang="en"
+                                        onFocus={(e) => (e.target.type = 'date')}
+                                        onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
+                                        className={formStyles.formInput}
+                                    />
                                 </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <label>{t('obs.detailsDescription')}</label>
-                                    <textarea className={formStyles.formTextarea} rows={4} {...register('detailsDescription')} />
+                                <div className={formStyles.formGroup}>
+                                    <label>{t('common.dueDate')}</label>
+                                    <input
+                                        {...register('dueDate')}
+                                        type={watch('dueDate') ? 'date' : 'text'}
+                                        placeholder="mm/dd/yyyy"
+                                        lang="en"
+                                        onFocus={(e) => (e.target.type = 'date')}
+                                        onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
+                                        className={formStyles.formInput}
+                                    />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.foundLocation')}</label>
                                     <input type="text" className={formStyles.formInput} {...register('foundLocation')} />
                                 </div>
-                            </div>
-                        </div>
-
-                        {/* 報表詳細欄位 (BACKLOG #15) — traceability / impact / description.
-                            drawingNo / specNo / qtyAffected / extent are required and
-                            always shown; the rest are optional and collapse by default. */}
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>追溯・影響・描述 / Traceability · Impact · Description</h3>
-                            <div className={formStyles.formGrid}>
-                                <div className={formStyles.formGroup}>
-                                    <label>圖號 Drawing No.{closeStar}</label>
-                                    <input type="text" className={formStyles.formInput} {...register('drawingNo')} />
-                                    {errText('drawingNo')}
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>規範號 Spec No.{closeStar}</label>
-                                    <input type="text" className={formStyles.formInput} {...register('specNo')} />
-                                    {errText('specNo')}
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>受影響數量 Qty Affected{closeStar}</label>
-                                    <input type="text" className={formStyles.formInput} {...register('qtyAffected')} />
-                                    {errText('qtyAffected')}
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>範圍 Isolated / Systemic{closeStar}</label>
-                                    <select className={formStyles.formSelect} {...register('extent')}>
-                                        <option value="">—</option>
-                                        <option value="Isolated">單一 Isolated</option>
-                                        <option value="Systemic">系統性 Systemic</option>
-                                    </select>
-                                    {errText('extent')}
-                                </div>
-                            </div>
-
-                            <h4
-                                className={formStyles.sectionTitle}
-                                style={{ cursor: 'pointer', userSelect: 'none', fontSize: 13, marginTop: 12 }}
-                                onClick={() => setShowDetailFields(s => !s)}
-                            >
-                                <span style={{ display: 'inline-block', width: 16 }}>{showDetailFields ? '▾' : '▸'}</span>
-                                其他追溯／影響／描述（選填）/ More detail (optional)
-                            </h4>
-                            {showDetailFields && (
-                            <div className={formStyles.formGrid}>
-                                {([
-                                    ['poContract', 'PO／合約號 PO / Contract'], ['wbs', 'WBS'],
-                                    ['lineNo', '管線編號 Line No.'], ['weldJointNo', '焊道編號 Weld / Joint No.'],
-                                    ['heatBatchNo', '材料爐號 Heat / Batch No.'], ['costScheduleImpact', '成本／工期影響 Cost / Schedule'],
-                                ] as [keyof NCRDetailData, string][]).map(([f, label]) => (
-                                    <div className={formStyles.formGroup} key={f}>
-                                        <label>{label}</label>
-                                        <input type="text" className={formStyles.formInput} {...register(f)} />
-                                    </div>
-                                ))}
-                                {([
-                                    ['requirement', '規範要求 Requirement'], ['asFound', '實際情況 As-Found'], ['deviation', '偏差說明 Deviation'],
-                                ] as [keyof NCRDetailData, string][]).map(([f, label]) => (
-                                    <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`} key={f}>
-                                        <label>{label}</label>
-                                        <textarea className={formStyles.formTextarea} rows={2} {...register(f)} />
-                                    </div>
-                                ))}
-                            </div>
-                            )}
-                        </div>
-
-                        {/* 根因詳情 / RCA detail + concession + CA/PA owners */}
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>根因與措施詳情 / Root Cause &amp; Action Detail</h3>
-                            <div className={formStyles.formGrid}>
-                                <div className={formStyles.formGroup}>
-                                    <label>讓步／偏差核准編號 Concession No.</label>
-                                    <input type="text" className={formStyles.formInput} {...register('concessionNo')} />
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>分析方法 RCA Method</label>
-                                    <select className={formStyles.formSelect} {...register('rcaMethod')}>
-                                        <option value="">—</option>
-                                        <option value="5 Why">5 Why</option>
-                                        <option value="Fishbone">魚骨圖 Fishbone</option>
-                                        <option value="Other">其他 Other</option>
-                                    </select>
-                                </div>
-                                <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>
-                                    <label>直接原因 Direct Cause</label>
-                                    <textarea className={formStyles.formTextarea} rows={2} {...register('directCause')} />
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>重複性 Recurrence</label>
-                                    <select className={formStyles.formSelect} {...register('recurrence')}>
-                                        <option value="">—</option>
-                                        <option value="No">否 No</option>
-                                        <option value="Yes">是 Yes</option>
-                                    </select>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>關聯前次 NCR Recurrence Ref.{recurrenceStar}</label>
-                                    <input type="text" className={formStyles.formInput} {...register('recurrenceRef')} />
-                                    {errText('recurrenceRef')}
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>矯正措施負責人 CA Owner</label>
-                                    <input type="text" className={formStyles.formInput} list="ncr-people" {...register('correctiveActionOwner')} />
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>矯正目標日 CA Target Date</label>
-                                    <input type="date" lang="en" className={formStyles.formInput} {...register('correctiveActionTargetDate')} />
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>預防措施負責人 PA Owner</label>
-                                    <input type="text" className={formStyles.formInput} list="ncr-people" {...register('preventiveActionOwner')} />
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>預防目標日 PA Target Date</label>
-                                    <input type="date" lang="en" className={formStyles.formInput} {...register('preventiveActionTargetDate')} />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 照片上傳 */}
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>{t('obs.defectPhotos')}</h3>
-                            <FileAttachment
-                                id="ncr-defect-photos"
-                                category="defectPhoto"
-                                entityType={existingItem ? 'ncr' : undefined}
-                                entityId={existingItem?.id}
-                                title={t('obs.defectPhotos')}
-                                legacyAttachments={watch('defectPhotos')}
-                                onPendingFilesChange={setPendingDefectPhotos}
-                                onDeleteExistingFile={(id) => {
-                                    setDeletedFileIds(prev => [...prev, id]);
-                                    setValue('defectPhotos', (getValues('defectPhotos') || []).filter((a: any) => typeof a === 'string' || a?.id !== id), { shouldDirty: true });
-                                }}
-                                onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'defect')}
-                                onPreview={handlePreview}
-                                accept="image/*"
-                            />
-                        </div>
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>{t('obs.improvementPhotos')}</h3>
-                            <FileAttachment
-                                id="ncr-improvement-photos"
-                                category="improvementPhoto"
-                                entityType={existingItem ? 'ncr' : undefined}
-                                entityId={existingItem?.id}
-                                title={t('obs.improvementPhotos')}
-                                legacyAttachments={watch('improvementPhotos')}
-                                onPendingFilesChange={setPendingImprovementPhotos}
-                                onDeleteExistingFile={(id) => {
-                                    setDeletedFileIds(prev => [...prev, id]);
-                                    setValue('improvementPhotos', (getValues('improvementPhotos') || []).filter((a: any) => typeof a === 'string' || a?.id !== id), { shouldDirty: true });
-                                }}
-                                onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'improvement')}
-                                onPreview={handlePreview}
-                                accept="image/*"
-                            />
-                        </div>
-
-                        {/* Attachments */}
-                        <div className={formStyles.formSection}>
-                            <FileAttachment
-                                id="ncr-attachments"
-                                category="attachment"
-                                entityType={existingItem ? 'ncr' : undefined}
-                                entityId={existingItem?.id}
-                                title={t('obs.attachments')}
-                                legacyAttachments={watch('attachments')}
-                                onPendingFilesChange={setPendingAttachments}
-                                onDeleteExistingFile={(id) => {
-                                    setDeletedFileIds(prev => [...prev, id]);
-                                    setValue('attachments', (getValues('attachments') || []).filter((a: any) => typeof a === 'string' || a?.id !== id), { shouldDirty: true });
-                                }}
-                                onRemoveLegacy={handleRemoveLegacyAttachment}
-                                onPreview={handlePreview}
-                            />
-                        </div>
-
-                        {/* {t('obs.sectionPersonnelLocation')} */}
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>{t('obs.sectionPersonnelLocation')}</h3>
-                            <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.foundBy')}</label>
                                     <input type="text" className={formStyles.formInput} list="ncr-people" {...register('foundBy')} />
@@ -564,122 +382,19 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     <input type="text" className={formStyles.formInput} {...register('serialNumbers')} />
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('obs.productDisposition')}{closeStar}</label>
-                                    <select className={formStyles.formSelect} {...register('productDisposition')}>
-                                        <option value="">{t('common.selectPlaceholder')}</option>
-                                        <option value="Use As Is">{t('ncr.disposition.useAsIs')}</option>
-                                        <option value="Repair">{t('ncr.disposition.repair')}</option>
-                                        <option value="Rework">{t('ncr.disposition.rework')}</option>
-                                        <option value="Reject">{t('ncr.disposition.reject')}</option>
-                                    </select>
-                                    {errText('productDisposition')}
+                                    <label>{t('obs.refStandards')}</label>
+                                    <input type="text" className={formStyles.formInput} {...register('referenceStandards')} />
                                 </div>
-                            </div>
-                        </div>
-
-                        {/* {t('ncr.sectionDisposition')} */}
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>{t('ncr.sectionDisposition')}</h3>
-                            <div className={formStyles.formGrid}>
-                                <div className={formStyles.formGroupFull}>
-                                    <div className={formStyles.labelWithButton}>
-                                        <label>{t('ncr.repairMethod')}{repairStar}</label>
-                                        <div className={styles.buttonGroup}>
-                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('repairMethodStatement')}>{t('common.tbc')}</button>
-                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('repairMethodStatement')}>{t('common.na')}</button>
-                                        </div>
-                                    </div>
-                                    <textarea className={formStyles.formTextarea} rows={3} {...register('repairMethodStatement')} />
-                                    {errText('repairMethodStatement')}
-                                </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <div className={formStyles.labelWithButton}>
-                                        <label>{t('ncr.correctionAction')}</label>
-                                        <div className={styles.buttonGroup}>
-                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('immediateCorrectionAction')}>{t('common.tbc')}</button>
-                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('immediateCorrectionAction')}>{t('common.na')}</button>
-                                        </div>
-                                    </div>
-                                    <textarea className={formStyles.formTextarea} rows={3} {...register('immediateCorrectionAction')} />
-                                </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <div className={formStyles.labelWithButton}>
-                                        <label>{t('ncr.rootCause')}</label>
-                                        <div className={styles.buttonGroup}>
-                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('rootCauseAnalysis')}>{t('common.tbc')}</button>
-                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('rootCauseAnalysis')}>{t('common.na')}</button>
-                                        </div>
-                                    </div>
-                                    <textarea className={formStyles.formTextarea} rows={4} {...register('rootCauseAnalysis')} />
-                                </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <div className={formStyles.labelWithButton}>
-                                        <label>{t('ncr.correctiveActions')}</label>
-                                        <div className={styles.buttonGroup}>
-                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('correctiveActions')}>{t('common.tbc')}</button>
-                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('correctiveActions')}>{t('common.na')}</button>
-                                        </div>
-                                    </div>
-                                    <textarea className={formStyles.formTextarea} rows={3} {...register('correctiveActions')} />
-                                </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <div className={formStyles.labelWithButton}>
-                                        <label>{t('ncr.preventiveAction')}</label>
-                                        <div className={styles.buttonGroup}>
-                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('preventiveAction')}>{t('common.tbc')}</button>
-                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('preventiveAction')}>{t('common.na')}</button>
-                                        </div>
-                                    </div>
-                                    <textarea className={formStyles.formTextarea} rows={3} {...register('preventiveAction')} />
-                                </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <div className={formStyles.labelWithButton}>
-                                        <label>{t('ncr.integrityStatement')}</label>
-                                        <div className={styles.buttonGroup}>
-                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('finalProductIntegrityStatement')}>{t('common.tbc')}</button>
-                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('finalProductIntegrityStatement')}>{t('common.na')}</button>
-                                        </div>
-                                    </div>
-                                    <textarea className={formStyles.formTextarea} rows={3} {...register('finalProductIntegrityStatement')} />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Effectiveness verification (BACKLOG #13 #3) */}
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>{t('ncr.sectionEffectiveness') || 'Effectiveness Verification'}</h3>
-                            <div className={formStyles.formGrid}>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.effectivenessVerified') || 'Effectiveness Verified'}{closeStar}</label>
-                                    <select className={formStyles.formSelect} {...register('effectivenessVerified')}>
-                                        <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
-                                        <option value="Pending">{t('ncr.effectiveness.pending') || 'Pending 待驗證'}</option>
-                                        <option value="Yes">{t('ncr.effectiveness.yes') || 'Yes 有效'}</option>
-                                        <option value="No">{t('ncr.effectiveness.no') || 'No 無效'}</option>
-                                    </select>
-                                    <p style={{ fontSize: 11, color: '#6b7280', margin: '4px 0 0', lineHeight: 1.4 }}>
-                                        {t('ncr.effectiveness.hint') || 'Confirm the corrective action prevented recurrence. An NCR cannot be Closed until this is "Yes"; "No" routes it back to In Progress.'}
-                                    </p>
-                                    {errText('effectivenessVerified')}
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label className={formStyles.optionalLabel}>{t('ncr.effectivenessVerifiedDate') || 'Verified Date'}</label>
-                                    <input type="date" lang="en" className={formStyles.formInput} {...register('effectivenessVerifiedDate')} />
-                                </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <label className={formStyles.optionalLabel}>{t('ncr.effectivenessNotes') || 'Verification Notes'}</label>
-                                    <textarea className={formStyles.formTextarea} rows={2} {...register('effectivenessNotes')} />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* {t('ncr.sectionReinspection')} */}
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>{t('ncr.sectionReinspection')}</h3>
-                            <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.itrNo')}</label>
-                                    <input type="text" className={formStyles.formInput} {...register('itrNumber')} />
+                                    <select className={formStyles.formSelect} {...register('itrNumber')}>
+                                        <option value="">Select ITR No.</option>
+                                        {itrList.map((itr) => (
+                                            <option key={itr.id} value={itr.documentNumber}>
+                                                {itr.documentNumber}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.noiNo')}</label>
@@ -692,41 +407,104 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                         ))}
                                     </select>
                                 </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.reinspectionNo')}{closeStar}</label>
-                                    <input type="text" className={formStyles.formInput} {...register('reInspectionNumber')} />
-                                    {errText('reInspectionNumber')}
+                            </div>
+                        </div>
+
+                        {/* ===== 2. 不符合描述 / Non-Conformance Description ===== */}
+                        <div className={formStyles.formSection}>
+                            <h3 className={formStyles.sectionTitle}>不符合描述 / Non-Conformance Description</h3>
+                            <div className={formStyles.formGrid}>
+                                <div className={formStyles.formGroupFull}>
+                                    <label>{t('obs.detailsDescription')}</label>
+                                    <textarea className={formStyles.formTextarea} rows={4} {...register('detailsDescription')} />
+                                </div>
+                                <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>
+                                    <label>規範要求 Requirement</label>
+                                    <textarea className={formStyles.formTextarea} rows={2} {...register('requirement')} />
+                                </div>
+                                <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>
+                                    <label>實際情況 As-Found</label>
+                                    <textarea className={formStyles.formTextarea} rows={2} {...register('asFound')} />
+                                </div>
+                                <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>
+                                    <label>偏差說明 Deviation</label>
+                                    <textarea className={formStyles.formTextarea} rows={2} {...register('deviation')} />
                                 </div>
                             </div>
                         </div>
 
-                        {/* {t('ncr.sectionQuality')} */}
+                        {/* ===== 3. 追溯與影響 / Traceability & Impact =====
+                            drawingNo / specNo / qtyAffected / extent required at closure; rest collapse. */}
                         <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>{t('ncr.sectionQuality')}</h3>
+                            <h3 className={formStyles.sectionTitle}>追溯與影響 / Traceability &amp; Impact</h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('common.status')}</label>
-                                    <select
-                                        className={formStyles.formSelect}
-                                        {...register('status', {
-                                            onChange: (e) => {
-                                                // 勾稽聯動：NCR 關閉後提示 NOI 可轉為 Resolved
-                                                if (e.target.value === 'Closed' && getValues('noiNumber')) {
-                                                    toast.info(`NCR closed. You may now update NOI ${getValues('noiNumber')} status to "Resolved".`);
-                                                }
-                                            },
-                                        })}
-                                    >
-                                        <option value="Open">{t('status.open')}</option>
-                                        <option value="In Progress">{t('status.inProgress')}</option>
-                                        <option value="Resolved">{t('status.resolved')}</option>
-                                        <option value="Closed">{t('status.closed')}</option>
-                                        <option value="Void">{t('status.void')}</option>
-                                    </select>
+                                    <label>圖號 Drawing No.{closeStar}</label>
+                                    <input type="text" className={formStyles.formInput} {...register('drawingNo')} />
+                                    {errText('drawingNo')}
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label className={formStyles.optionalLabel}>{t('obs.closeoutDate')}</label>
-                                    <input type="date" lang="en" className={formStyles.formInput} {...register('closeoutDate')} />
+                                    <label>規範號 Spec No.{closeStar}</label>
+                                    <input type="text" className={formStyles.formInput} {...register('specNo')} />
+                                    {errText('specNo')}
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>受影響數量 Qty Affected{closeStar}</label>
+                                    <input type="text" className={formStyles.formInput} {...register('qtyAffected')} />
+                                    {errText('qtyAffected')}
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>範圍 Isolated / Systemic{closeStar}</label>
+                                    <select className={formStyles.formSelect} {...register('extent')}>
+                                        <option value="">—</option>
+                                        <option value="Isolated">單一 Isolated</option>
+                                        <option value="Systemic">系統性 Systemic</option>
+                                    </select>
+                                    {errText('extent')}
+                                </div>
+                            </div>
+                            <h4
+                                className={formStyles.sectionTitle}
+                                style={{ cursor: 'pointer', userSelect: 'none', fontSize: 13, marginTop: 12 }}
+                                onClick={() => setShowDetailFields(s => !s)}
+                            >
+                                <span style={{ display: 'inline-block', width: 16 }}>{showDetailFields ? '▾' : '▸'}</span>
+                                其他追溯／影響（選填）/ More detail (optional)
+                            </h4>
+                            {showDetailFields && (
+                            <div className={formStyles.formGrid}>
+                                {([
+                                    ['poContract', 'PO／合約號 PO / Contract'], ['wbs', 'WBS'],
+                                    ['lineNo', '管線編號 Line No.'], ['weldJointNo', '焊道編號 Weld / Joint No.'],
+                                    ['heatBatchNo', '材料爐號 Heat / Batch No.'], ['costScheduleImpact', '成本／工期影響 Cost / Schedule'],
+                                ] as [keyof NCRDetailData, string][]).map(([f, label]) => (
+                                    <div className={formStyles.formGroup} key={f}>
+                                        <label>{label}</label>
+                                        <input type="text" className={formStyles.formInput} {...register(f)} />
+                                    </div>
+                                ))}
+                            </div>
+                            )}
+                        </div>
+
+                        {/* ===== 4. 處置 / Disposition ===== */}
+                        <div className={formStyles.formSection}>
+                            <h3 className={formStyles.sectionTitle}>{t('ncr.sectionDisposition')}</h3>
+                            <div className={formStyles.formGrid}>
+                                <div className={formStyles.formGroup}>
+                                    <label>{t('obs.productDisposition')}{closeStar}</label>
+                                    <select className={formStyles.formSelect} {...register('productDisposition')}>
+                                        <option value="">{t('common.selectPlaceholder')}</option>
+                                        <option value="Use As Is">{t('ncr.disposition.useAsIs')}</option>
+                                        <option value="Repair">{t('ncr.disposition.repair')}</option>
+                                        <option value="Rework">{t('ncr.disposition.rework')}</option>
+                                        <option value="Reject">{t('ncr.disposition.reject')}</option>
+                                    </select>
+                                    {errText('productDisposition')}
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>讓步／偏差核准編號 Concession No.</label>
+                                    <input type="text" className={formStyles.formInput} {...register('concessionNo')} />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.integrityRelated')}</label>
@@ -754,12 +532,211 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 </div>
                                 <div className={formStyles.formGroupFull}>
                                     <div className={formStyles.labelWithButton}>
+                                        <label>{t('ncr.repairMethod')}{repairStar}</label>
+                                        <div className={styles.buttonGroup}>
+                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('repairMethodStatement')}>{t('common.tbc')}</button>
+                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('repairMethodStatement')}>{t('common.na')}</button>
+                                        </div>
+                                    </div>
+                                    <textarea className={formStyles.formTextarea} rows={3} {...register('repairMethodStatement')} />
+                                    {errText('repairMethodStatement')}
+                                </div>
+                                <div className={formStyles.formGroupFull}>
+                                    <div className={formStyles.labelWithButton}>
+                                        <label>{t('ncr.correctionAction')}</label>
+                                        <div className={styles.buttonGroup}>
+                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('immediateCorrectionAction')}>{t('common.tbc')}</button>
+                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('immediateCorrectionAction')}>{t('common.na')}</button>
+                                        </div>
+                                    </div>
+                                    <textarea className={formStyles.formTextarea} rows={3} {...register('immediateCorrectionAction')} />
+                                </div>
+                                <div className={formStyles.formGroupFull}>
+                                    <div className={formStyles.labelWithButton}>
+                                        <label>{t('ncr.integrityStatement')}</label>
+                                        <div className={styles.buttonGroup}>
+                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('finalProductIntegrityStatement')}>{t('common.tbc')}</button>
+                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('finalProductIntegrityStatement')}>{t('common.na')}</button>
+                                        </div>
+                                    </div>
+                                    <textarea className={formStyles.formTextarea} rows={3} {...register('finalProductIntegrityStatement')} />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ===== 5. 根本原因與矯正·預防措施 / Root Cause & CA/PA ===== */}
+                        <div className={formStyles.formSection}>
+                            <h3 className={formStyles.sectionTitle}>根本原因與矯正·預防措施 / Root Cause &amp; Corrective / Preventive Action</h3>
+                            <div className={formStyles.formGrid}>
+                                <div className={formStyles.formGroup}>
+                                    <label>分析方法 RCA Method</label>
+                                    <select className={formStyles.formSelect} {...register('rcaMethod')}>
+                                        <option value="">—</option>
+                                        <option value="5 Why">5 Why</option>
+                                        <option value="Fishbone">魚骨圖 Fishbone</option>
+                                        <option value="Other">其他 Other</option>
+                                    </select>
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>重複性 Recurrence</label>
+                                    <select className={formStyles.formSelect} {...register('recurrence')}>
+                                        <option value="">—</option>
+                                        <option value="No">否 No</option>
+                                        <option value="Yes">是 Yes</option>
+                                    </select>
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>關聯前次 NCR Recurrence Ref.{recurrenceStar}</label>
+                                    <input type="text" className={formStyles.formInput} {...register('recurrenceRef')} />
+                                    {errText('recurrenceRef')}
+                                </div>
+                                <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>
+                                    <label>直接原因 Direct Cause</label>
+                                    <textarea className={formStyles.formTextarea} rows={2} {...register('directCause')} />
+                                </div>
+                                <div className={formStyles.formGroupFull}>
+                                    <div className={formStyles.labelWithButton}>
+                                        <label>{t('ncr.rootCause')}</label>
+                                        <div className={styles.buttonGroup}>
+                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('rootCauseAnalysis')}>{t('common.tbc')}</button>
+                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('rootCauseAnalysis')}>{t('common.na')}</button>
+                                        </div>
+                                    </div>
+                                    <textarea className={formStyles.formTextarea} rows={4} {...register('rootCauseAnalysis')} />
+                                </div>
+                                <div className={formStyles.formGroupFull}>
+                                    <div className={formStyles.labelWithButton}>
+                                        <label>{t('ncr.correctiveActions')}</label>
+                                        <div className={styles.buttonGroup}>
+                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('correctiveActions')}>{t('common.tbc')}</button>
+                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('correctiveActions')}>{t('common.na')}</button>
+                                        </div>
+                                    </div>
+                                    <textarea className={formStyles.formTextarea} rows={3} {...register('correctiveActions')} />
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>矯正措施負責人 CA Owner</label>
+                                    <input type="text" className={formStyles.formInput} list="ncr-people" {...register('correctiveActionOwner')} />
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>矯正目標日 CA Target Date</label>
+                                    <input type="date" lang="en" className={formStyles.formInput} {...register('correctiveActionTargetDate')} />
+                                </div>
+                                <div className={formStyles.formGroupFull}>
+                                    <div className={formStyles.labelWithButton}>
+                                        <label>{t('ncr.preventiveAction')}</label>
+                                        <div className={styles.buttonGroup}>
+                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('preventiveAction')}>{t('common.tbc')}</button>
+                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('preventiveAction')}>{t('common.na')}</button>
+                                        </div>
+                                    </div>
+                                    <textarea className={formStyles.formTextarea} rows={3} {...register('preventiveAction')} />
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>預防措施負責人 PA Owner</label>
+                                    <input type="text" className={formStyles.formInput} list="ncr-people" {...register('preventiveActionOwner')} />
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>預防目標日 PA Target Date</label>
+                                    <input type="date" lang="en" className={formStyles.formInput} {...register('preventiveActionTargetDate')} />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ===== 6. 驗證與結案 / Verification & Closure ===== */}
+                        <div className={formStyles.formSection}>
+                            <h3 className={formStyles.sectionTitle}>驗證與結案 / Verification &amp; Closure</h3>
+                            <div className={formStyles.formGrid}>
+                                <div className={formStyles.formGroup}>
+                                    <label>{t('ncr.effectivenessVerified') || 'Effectiveness Verified'}{closeStar}</label>
+                                    <select className={formStyles.formSelect} {...register('effectivenessVerified')}>
+                                        <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
+                                        <option value="Pending">{t('ncr.effectiveness.pending') || 'Pending 待驗證'}</option>
+                                        <option value="Yes">{t('ncr.effectiveness.yes') || 'Yes 有效'}</option>
+                                        <option value="No">{t('ncr.effectiveness.no') || 'No 無效'}</option>
+                                    </select>
+                                    <p style={{ fontSize: 11, color: '#6b7280', margin: '4px 0 0', lineHeight: 1.4 }}>
+                                        {t('ncr.effectiveness.hint') || 'Confirm the corrective action prevented recurrence. An NCR cannot be Closed until this is "Yes"; "No" routes it back to In Progress.'}
+                                    </p>
+                                    {errText('effectivenessVerified')}
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label className={formStyles.optionalLabel}>{t('ncr.effectivenessVerifiedDate') || 'Verified Date'}</label>
+                                    <input type="date" lang="en" className={formStyles.formInput} {...register('effectivenessVerifiedDate')} />
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>{t('ncr.reinspectionNo')}{closeStar}</label>
+                                    <input type="text" className={formStyles.formInput} {...register('reInspectionNumber')} />
+                                    {errText('reInspectionNumber')}
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label className={formStyles.optionalLabel}>{t('obs.closeoutDate')}</label>
+                                    <input type="date" lang="en" className={formStyles.formInput} {...register('closeoutDate')} />
+                                </div>
+                                <div className={formStyles.formGroupFull}>
+                                    <label className={formStyles.optionalLabel}>{t('ncr.effectivenessNotes') || 'Verification Notes'}</label>
+                                    <textarea className={formStyles.formTextarea} rows={2} {...register('effectivenessNotes')} />
+                                </div>
+                                <div className={formStyles.formGroupFull}>
+                                    <div className={formStyles.labelWithButton}>
                                         <label className={formStyles.optionalLabel}>{t('common.remark')}</label>
                                         <button type="button" className={formStyles.tbcButton} onClick={() => handleDateButton('remark')}>{t('common.addDate')}</button>
                                     </div>
                                     <textarea className={formStyles.formTextarea} rows={3} {...register('remark')} />
                                 </div>
                             </div>
+                        </div>
+
+                        {/* ===== 7. 照片與附件 / Photos & Attachments ===== */}
+                        <div className={formStyles.formSection}>
+                            <h3 className={formStyles.sectionTitle}>照片與附件 / Photos &amp; Attachments</h3>
+                            <FileAttachment
+                                id="ncr-defect-photos"
+                                category="defectPhoto"
+                                entityType={existingItem ? 'ncr' : undefined}
+                                entityId={existingItem?.id}
+                                title={t('obs.defectPhotos')}
+                                legacyAttachments={watch('defectPhotos')}
+                                onPendingFilesChange={setPendingDefectPhotos}
+                                onDeleteExistingFile={(id) => {
+                                    setDeletedFileIds(prev => [...prev, id]);
+                                    setValue('defectPhotos', (getValues('defectPhotos') || []).filter((a: any) => typeof a === 'string' || a?.id !== id), { shouldDirty: true });
+                                }}
+                                onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'defect')}
+                                onPreview={handlePreview}
+                                accept="image/*"
+                            />
+                            <FileAttachment
+                                id="ncr-improvement-photos"
+                                category="improvementPhoto"
+                                entityType={existingItem ? 'ncr' : undefined}
+                                entityId={existingItem?.id}
+                                title={t('obs.improvementPhotos')}
+                                legacyAttachments={watch('improvementPhotos')}
+                                onPendingFilesChange={setPendingImprovementPhotos}
+                                onDeleteExistingFile={(id) => {
+                                    setDeletedFileIds(prev => [...prev, id]);
+                                    setValue('improvementPhotos', (getValues('improvementPhotos') || []).filter((a: any) => typeof a === 'string' || a?.id !== id), { shouldDirty: true });
+                                }}
+                                onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'improvement')}
+                                onPreview={handlePreview}
+                                accept="image/*"
+                            />
+                            <FileAttachment
+                                id="ncr-attachments"
+                                category="attachment"
+                                entityType={existingItem ? 'ncr' : undefined}
+                                entityId={existingItem?.id}
+                                title={t('obs.attachments')}
+                                legacyAttachments={watch('attachments')}
+                                onPendingFilesChange={setPendingAttachments}
+                                onDeleteExistingFile={(id) => {
+                                    setDeletedFileIds(prev => [...prev, id]);
+                                    setValue('attachments', (getValues('attachments') || []).filter((a: any) => typeof a === 'string' || a?.id !== id), { shouldDirty: true });
+                                }}
+                                onRemoveLegacy={handleRemoveLegacyAttachment}
+                                onPreview={handlePreview}
+                            />
                         </div>
                         {existingItem?.id && (
                             <RelatedDocuments entityType="ncr" entityId={existingItem.id} />
