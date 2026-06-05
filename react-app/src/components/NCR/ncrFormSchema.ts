@@ -17,7 +17,6 @@ import type { NCRItem } from '../../store/ncrStore';
 // .default() here would make the resolver's input type optional and mismatch
 // useForm<NCRDetailData>.
 const str = z.string();
-const reqStr = z.string().min(1, 'ncr.fieldRequired'); // required (non-empty)
 const fkUser = z.number().nullable();
 const fileArr = z.array(z.any());
 
@@ -67,18 +66,18 @@ export const ncrFormSchema = z
         effectivenessVerifiedBy: fkUser,
         effectivenessVerifiedDate: str,
         effectivenessNotes: str,
-        // NCR formal-report fields (BACKLOG #15).
-        // drawingNo / specNo / qtyAffected / extent are required (per spec);
-        // the rest are optional.
-        drawingNo: reqStr,
-        specNo: reqStr,
+        // NCR formal-report fields (BACKLOG #15). drawingNo / specNo /
+        // qtyAffected / extent are required only at closure (see superRefine),
+        // so an open NCR can still be drafted/saved without them.
+        drawingNo: str,
+        specNo: str,
         poContract: str,
         wbs: str,
         lineNo: str,
         weldJointNo: str,
         heatBatchNo: str,
-        qtyAffected: reqStr,
-        extent: reqStr,
+        qtyAffected: str,
+        extent: str,
         costScheduleImpact: str,
         requirement: str,
         asFound: str,
@@ -97,14 +96,26 @@ export const ncrFormSchema = z
     // i18n keys resolved by the form with English fallbacks.
     .superRefine((v, ctx) => {
         if (v.status !== 'Closed') return;
-        if (!v.productDisposition) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['productDisposition'], message: 'ncr.closeNeedsDisposition' });
-        }
-        if (!v.reInspectionNumber) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['reInspectionNumber'], message: 'ncr.closeNeedsReinspection' });
-        }
+        const req = (field: keyof typeof v, message: string) => {
+            if (!v[field]) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message });
+        };
+        // Core closure gate
+        req('productDisposition', 'ncr.closeNeedsDisposition');
+        req('reInspectionNumber', 'ncr.closeNeedsReinspection');
         if (v.effectivenessVerified !== 'Yes') {
             ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['effectivenessVerified'], message: 'ncr.closeNeedsEffectiveness' });
+        }
+        // Traceability/impact must be complete before closing (item 1)
+        req('drawingNo', 'ncr.fieldRequired');
+        req('specNo', 'ncr.fieldRequired');
+        req('qtyAffected', 'ncr.fieldRequired');
+        req('extent', 'ncr.fieldRequired');
+        // Field coupling (item 3)
+        if (v.productDisposition === 'Repair' && !v.repairMethodStatement) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['repairMethodStatement'], message: 'ncr.repairNeedsMethod' });
+        }
+        if (v.recurrence === 'Yes' && !v.recurrenceRef) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['recurrenceRef'], message: 'ncr.recurrenceNeedsRef' });
         }
     });
 
@@ -208,4 +219,6 @@ export const NCR_ERROR_FALLBACKS: Record<string, string> = {
     'ncr.closeNeedsReinspection': 'Cannot close NCR without Re-Inspection / Verification Reference (Strict QC Process).',
     'ncr.closeNeedsEffectiveness': "Cannot close NCR until corrective-action effectiveness is verified (set Effectiveness Verified = 'Yes').",
     'ncr.fieldRequired': 'This field is required.',
+    'ncr.repairNeedsMethod': 'Disposition is "Repair" — a Repair Method Statement is required.',
+    'ncr.recurrenceNeedsRef': 'Recurrence is "Yes" — reference the previous NCR.',
 };

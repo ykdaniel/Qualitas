@@ -163,7 +163,20 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
     // When the NCR is being closed, the closure-gate fields become required —
     // show a * on their labels only then (they're optional for an open NCR).
     const closing = watch('status') === 'Closed';
-    const closeStar = closing ? <span style={{ color: '#dc2626' }}> *</span> : null;
+    const reqMark = <span style={{ color: '#dc2626' }}> *</span>;
+    const closeStar = closing ? reqMark : null;
+    // Coupling stars: only required at closure when the trigger value is set.
+    const repairStar = closing && watch('productDisposition') === 'Repair' ? reqMark : null;
+    const recurrenceStar = closing && watch('recurrence') === 'Yes' ? reqMark : null;
+
+    // Name suggestions for the people fields (raisedBy / foundBy / CA & PA
+    // owners). These stay free text — site/contractor staff aren't always system
+    // users — but a datalist gives autocomplete to cut typos and keep names
+    // consistent. Sourced from system users + active contractors.
+    const peopleSuggestions = Array.from(new Set([
+        ...users.map(u => u.full_name || u.username),
+        ...getActiveContractors().map(c => c.name),
+    ].filter(Boolean)));
 
     // Inline error text for a field (closure-gate messages are i18n keys).
     const errText = (field: keyof NCRDetailData) => {
@@ -218,6 +231,9 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                 </div>
                 <div className={formStyles.modalBody}>
                     <p className={formStyles.formRequiredHint}>{t('form.requiredHint')}</p>
+                    <datalist id="ncr-people">
+                        {peopleSuggestions.map(name => <option key={name} value={name} />)}
+                    </datalist>
                     <div className={formStyles.formSections}>
                         {/* 不符合項目資訊 */}
                         <div className={formStyles.formSection}>
@@ -349,22 +365,22 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                             <h3 className={formStyles.sectionTitle}>追溯・影響・描述 / Traceability · Impact · Description</h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
-                                    <label>圖號 Drawing No. *</label>
+                                    <label>圖號 Drawing No.{closeStar}</label>
                                     <input type="text" className={formStyles.formInput} {...register('drawingNo')} />
                                     {errText('drawingNo')}
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>規範號 Spec No. *</label>
+                                    <label>規範號 Spec No.{closeStar}</label>
                                     <input type="text" className={formStyles.formInput} {...register('specNo')} />
                                     {errText('specNo')}
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>受影響數量 Qty Affected *</label>
+                                    <label>受影響數量 Qty Affected{closeStar}</label>
                                     <input type="text" className={formStyles.formInput} {...register('qtyAffected')} />
                                     {errText('qtyAffected')}
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>範圍 Isolated / Systemic *</label>
+                                    <label>範圍 Isolated / Systemic{closeStar}</label>
                                     <select className={formStyles.formSelect} {...register('extent')}>
                                         <option value="">—</option>
                                         <option value="Isolated">單一 Isolated</option>
@@ -436,12 +452,13 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     </select>
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>關聯前次 NCR Recurrence Ref.</label>
+                                    <label>關聯前次 NCR Recurrence Ref.{recurrenceStar}</label>
                                     <input type="text" className={formStyles.formInput} {...register('recurrenceRef')} />
+                                    {errText('recurrenceRef')}
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>矯正措施負責人 CA Owner</label>
-                                    <input type="text" className={formStyles.formInput} {...register('correctiveActionOwner')} />
+                                    <input type="text" className={formStyles.formInput} list="ncr-people" {...register('correctiveActionOwner')} />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>矯正目標日 CA Target Date</label>
@@ -449,7 +466,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>預防措施負責人 PA Owner</label>
-                                    <input type="text" className={formStyles.formInput} {...register('preventiveActionOwner')} />
+                                    <input type="text" className={formStyles.formInput} list="ncr-people" {...register('preventiveActionOwner')} />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>預防目標日 PA Target Date</label>
@@ -523,11 +540,11 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.foundBy')}</label>
-                                    <input type="text" className={formStyles.formInput} {...register('foundBy')} />
+                                    <input type="text" className={formStyles.formInput} list="ncr-people" {...register('foundBy')} />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.raisedBy')}</label>
-                                    <input type="text" className={formStyles.formInput} {...register('raisedBy')} />
+                                    <input type="text" className={formStyles.formInput} list="ncr-people" {...register('raisedBy')} />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.assignedTo') || 'Assigned To'}</label>
@@ -566,13 +583,14 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroupFull}>
                                     <div className={formStyles.labelWithButton}>
-                                        <label>{t('ncr.repairMethod')}</label>
+                                        <label>{t('ncr.repairMethod')}{repairStar}</label>
                                         <div className={styles.buttonGroup}>
                                             <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('repairMethodStatement')}>{t('common.tbc')}</button>
                                             <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('repairMethodStatement')}>{t('common.na')}</button>
                                         </div>
                                     </div>
                                     <textarea className={formStyles.formTextarea} rows={3} {...register('repairMethodStatement')} />
+                                    {errText('repairMethodStatement')}
                                 </div>
                                 <div className={formStyles.formGroupFull}>
                                     <div className={formStyles.labelWithButton}>

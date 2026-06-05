@@ -407,6 +407,8 @@ const translations: Record<Language, Record<string, string>> = {
     'ncr.closeNeedsDisposition': 'Cannot close NCR without Product Disposition.',
     'ncr.closeNeedsReinspection': 'Cannot close NCR without Re-Inspection / Verification Reference (Strict QC Process).',
     'ncr.fieldRequired': 'This field is required.',
+    'ncr.repairNeedsMethod': 'Disposition is "Repair" — a Repair Method Statement is required.',
+    'ncr.recurrenceNeedsRef': 'Recurrence is "Yes" — reference the previous NCR.',
 
 
     // OBS
@@ -1394,6 +1396,8 @@ const translations: Record<Language, Record<string, string>> = {
     'ncr.closeNeedsDisposition': '未填寫產品處置方式，無法關閉 NCR。',
     'ncr.closeNeedsReinspection': '未填寫複驗／驗證編號（嚴格品管流程），無法關閉 NCR。',
     'ncr.fieldRequired': '此欄位為必填。',
+    'ncr.repairNeedsMethod': '處置為「維修」時，必須填寫維修方法說明。',
+    'ncr.recurrenceNeedsRef': '重複性為「是」時，請填寫關聯的前次 NCR。',
 
     // OBS
     'obs.title': 'OBS 列表',
