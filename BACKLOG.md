@@ -881,6 +881,57 @@ gate decision) — users feel it immediately.
 
 ---
 
+## 16. OBS module (OBSModals.tsx / OBS.tsx) issues  ·  FOR DISCUSSION
+
+Captured 2026-06-05 from a review of the OBS (Observation) module. OBS shares
+the NCR code skeleton but never received the NCR refactor (RHF+zod validation,
+field-model work, print template, NOI/ITR links). It's essentially "NCR before
+the 2026-06-05 work", plus a few OBS-specific bugs.
+
+**Decision needed first — how much should OBS mirror NCR?**
+The OBS data model was copy-pasted from NCR (full disposition / corrective /
+preventive / re-inspection / PQM fields) but only a subset is wired up. Pick a
+direction before fixing:
+- **(A) Lightweight observation** — trim the model to observation/photos/
+  disposition/status/links; delete the unused NCR-style fields.
+- **(B) Mini-NCR** — bring OBS up to NCR's level (RHF+zod, section structure,
+  real print, NOI/ITR dropdown links).
+
+**🔴 Bugs (data loss / broken)**
+1. **`referenceStandards` and `serialNumbers` are entered but never saved.** The
+   form has inputs (`OBSModals.tsx:380,486`) but `OBS.tsx:78-101` payload omits
+   them (and `obsStore.OBSItem` has no such columns) — data silently dropped.
+2. **Publish button is broken** — `OBS.tsx:81` hardcodes `rev: ''`, so the rev
+   bump `handlePublish` computes is discarded; the button is also a hardcoded
+   English "Publish" label. (Same bug NCR had; NCR removed it.)
+3. **Print is raw `window.print()`** (`OBSModals.tsx:215`) — no print template or
+   scoped print CSS, so it prints the whole app UI. (NCR got a real print path.)
+4. **NOI / ITR are free-text inputs** (`OBSModals.tsx:285-303`) — should be
+   dropdown links like NCR; currently typo-prone strings with no real link.
+
+**🟡 Quality / consistency (OBS lags NCR)**
+5. No validation at all — raw `formData` useState, no RHF+zod, no required
+   fields; the "* required" hint is misleading (nothing is enforced).
+6. `productDisposition` is mis-grouped under "Personnel & Location"
+   (`OBSModals.tsx:495`); there is no Disposition section.
+7. `foundBy` / `raisedBy` have no user/contractor autocomplete (NCR now does).
+8. **Ghost fields** — `OBSDetailData` declares repairMethodStatement /
+   immediateCorrectionAction / rootCauseAnalysis / correctiveActions /
+   preventiveAction / finalProductIntegrityStatement / reInspectionNumber /
+   projectQualityManager / aconex, but the form has no inputs and the backend
+   has no columns — dead copy-paste from NCR.
+9. `OBSDetailsViewModal` is dead code (not imported by OBS.tsx).
+10. Status options are hardcoded English ("In Progress" / "Resolved" / "Use As
+    Is" …), not `t()`; Closed→Open reopening is undefined (see #6 above).
+11. `OBSItem` interface is defined twice (obsStore.ts + OBSModals.tsx) and drifts
+    (modal copy lacks noiNumber/itrNumber/dueDate).
+12. Dates are strings with a fragile text↔date input toggle (same as NCR pre-fix).
+
+**Suggested order:** fix the 🔴 bugs first (#1 data-loss is the most urgent),
+then decide A vs B and fold the 🟡 items into that build.
+
+---
+
 ## Not on this list (and why)
 
 - **Migrating SQLite → Postgres.** Real production move, not a code
