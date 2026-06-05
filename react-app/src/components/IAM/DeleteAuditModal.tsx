@@ -60,7 +60,14 @@ const DeleteAuditModal: React.FC<DeleteAuditModalProps> = ({
                     </div>
                 </div>
                 <div className={styles.formActions} style={{ marginTop: '1.5rem' }}>
-                    <button type="button" className={styles.saveButton} onClick={handleConfirm} style={{ backgroundColor: '#ef4444' }}>
+                    <button
+                        type="button"
+                        className={styles.saveButton}
+                        onClick={handleConfirm}
+                        disabled={reason.trim().length < 5}
+                        style={{ backgroundColor: '#ef4444', opacity: reason.trim().length < 5 ? 0.5 : 1, cursor: reason.trim().length < 5 ? 'not-allowed' : 'pointer' }}
+                        title={reason.trim().length < 5 ? 'Enter an audit reason (min 5 characters) first' : undefined}
+                    >
                         {confirmText}
                     </button>
                     <button type="button" className={styles.cancelButton} onClick={onCancel}>

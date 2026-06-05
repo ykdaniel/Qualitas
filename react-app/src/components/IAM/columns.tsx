@@ -80,11 +80,11 @@ export const createUserColumns = (
             },
         },
         {
-            accessorKey: "created_at",
+            accessorKey: "createdAt",
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title={t('iam.createdDate')} />
             ),
-            cell: ({ row }) => <div className="text-center">{row.getValue("created_at")}</div>,
+            cell: ({ row }) => <div className="text-center">{row.getValue("createdAt")}</div>,
         },
         {
             id: "actions",

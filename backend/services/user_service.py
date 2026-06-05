@@ -1,3 +1,4 @@
+from datetime import date
 from typing import List, Optional
 from fastapi import HTTPException
 from passlib.context import CryptContext
@@ -121,6 +122,7 @@ class UserService:
             hashed_password=hashed_password,
             is_active=user.is_active,
             role_id=user.role_id,
+            created_at=date.today().isoformat(),  # stored as YYYY-MM-DD
         )
         
         created_user = self.repo.create(new_user)
