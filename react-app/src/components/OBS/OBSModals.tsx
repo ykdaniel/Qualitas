@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { getNextRevision } from '../../utils/revision';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
+import { useITRStore } from '../../store/itrStore';
+import { useNOIStore } from '../../store/noiStore';
 import FileAttachment from '../Shared/FileAttachment';
-import styles from './OBS.module.css';
 
 import formStyles from '../Shared/FormShell.module.css';
 // OBSItem interface - 應該從 OBSContext 導入，但為了相容性暫時在此定義
@@ -85,6 +85,13 @@ export interface OBSDetailModalProps {
 export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, existingData, existingItem, onSave, onClose }) => {
     const { t } = useLanguage();
     const { getActiveContractors } = useContractorsStore();
+    // NOI / ITR link dropdowns — fetch the lists on mount so the options exist
+    // even if the user hasn't visited those modules yet.
+    const itrList = useITRStore(s => s.itrList);
+    const fetchITRs = useITRStore(s => s.fetchITRs);
+    const noiList = useNOIStore(s => s.noiList);
+    const fetchNOIs = useNOIStore(s => s.fetchNOIs);
+    useEffect(() => { fetchITRs(); fetchNOIs(); }, [fetchITRs, fetchNOIs]);
 
     // Initialize form data from existing data or existing item
     const getInitialData = (): OBSDetailData => {
@@ -211,32 +218,6 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
         }
     };
 
-    const handlePrint = () => {
-        window.print();
-    };
-
-    const handlePublish = async () => {
-        const nextRev = getNextRevision(formData.rev);
-        if (window.confirm(`Are you sure you want to publish as Revision ${nextRev}?`)) {
-            setSaving(true);
-            try {
-                await onSave({
-                    ...formData,
-                    rev: nextRev,
-                }, [
-                    { category: 'defectPhoto', files: pendingDefectPhotos },
-                    { category: 'improvementPhoto', files: pendingImprovementPhotos },
-                    { category: 'attachment', files: pendingAttachments }
-                ], deletedFileIds);
-                onClose();
-            } catch (err) {
-                toast.error((err as Error)?.message || t('common.saveFailed'));
-            } finally {
-                setSaving(false);
-            }
-        }
-    };
-
     return (
         <div className={formStyles.modalOverlay}>
             <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
@@ -283,23 +264,29 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.noiNo')}</label>
-                                    <input
-                                        type="text"
-                                        className={formStyles.formInput}
+                                    <select
+                                        className={formStyles.formSelect}
                                         value={formData.noiNumber || ''}
                                         onChange={(e) => handleFieldChange('noiNumber', e.target.value)}
-                                        placeholder="Optionally link to NOI"
-                                    />
+                                    >
+                                        <option value="">{t('ncr.noiNoPlaceholder') || '—'}</option>
+                                        {noiList.map((noi) => (
+                                            <option key={noi.id} value={noi.referenceNo}>{noi.referenceNo}</option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.itrNo')}</label>
-                                    <input
-                                        type="text"
-                                        className={formStyles.formInput}
+                                    <select
+                                        className={formStyles.formSelect}
                                         value={formData.itrNumber || ''}
                                         onChange={(e) => handleFieldChange('itrNumber', e.target.value)}
-                                        placeholder="Optionally link to ITR"
-                                    />
+                                    >
+                                        <option value="">—</option>
+                                        {itrList.map((itr) => (
+                                            <option key={itr.id} value={itr.documentNumber}>{itr.documentNumber}</option>
+                                        ))}
+                                    </select>
                                 </div>
 
                                 <div className={formStyles.formGroup}>
@@ -375,15 +362,6 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                             </option>
                                         ))}
                                     </select>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('obs.refStandards')}</label>
-                                    <input
-                                        type="text"
-                                        className={formStyles.formInput}
-                                        value={formData.referenceStandards}
-                                        onChange={(e) => handleFieldChange('referenceStandards', e.target.value)}
-                                    />
                                 </div>
                                 <div className={formStyles.formGroupFull}>
                                     <label>{t('obs.detailsDescription')}</label>
@@ -483,15 +461,6 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                     />
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('obs.serialNumbers')}</label>
-                                    <input
-                                        type="text"
-                                        className={formStyles.formInput}
-                                        value={formData.serialNumbers}
-                                        onChange={(e) => handleFieldChange('serialNumbers', e.target.value)}
-                                    />
-                                </div>
-                                <div className={formStyles.formGroup}>
                                     <label>{t('obs.productDisposition')}</label>
                                     <select
                                         className={formStyles.formSelect}
@@ -553,21 +522,8 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                     </div>
                 </div>
                 <div className={formStyles.modalActions}>
-                    <button
-                        type="button"
-                        className={formStyles.saveButton}
-                        onClick={handlePublish}
-                        style={{ backgroundColor: '#4f46e5' }}
-                        title="Publish as next revision"
-                        disabled={saving}
-                    >
-                        Publish
-                    </button>
-                    <button type="button" className={formStyles.saveButton} onClick={handleSave} style={{ marginLeft: '12px' }} disabled={saving}>
+                    <button type="button" className={formStyles.saveButton} onClick={handleSave} disabled={saving}>
                         {saving ? t('obs.saving') : t('common.save')}
-                    </button>
-                    <button type="button" className={formStyles.printButton} onClick={handlePrint} disabled={saving}>
-                        {t('common.print')}
                     </button>
                     <button type="button" className={formStyles.cancelButton} onClick={onClose} disabled={saving}>
                         {t('common.cancel')}
