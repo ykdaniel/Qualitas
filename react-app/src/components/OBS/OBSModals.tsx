@@ -1,73 +1,21 @@
 import React, { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useITRStore } from '../../store/itrStore';
 import { useNOIStore } from '../../store/noiStore';
+import { getUsers, type User as ApiUser } from '../../services/api';
+import type { OBSItem } from '../../store/obsStore';
 import FileAttachment from '../Shared/FileAttachment';
-
 import formStyles from '../Shared/FormShell.module.css';
-// OBSItem interface - 應該從 OBSContext 導入，但為了相容性暫時在此定義
-export interface OBSItem {
-    id: string;
-    vendor: string;
-    documentNumber: string;
-    description: string;
-    rev: string;
-    submit: string;
-    status: string;
-    remark: string;
-    hasDetails?: boolean;
-    raiseDate?: string;
-    closeoutDate?: string;
-    aconex?: string;
-    type?: string;
-    subject?: string;
-    foundBy?: string;
-    raisedBy?: string;
-    foundLocation?: string;
-    productDisposition?: string;
-    productIntegrityRelated?: string;
-    permanentProductDeviation?: string;
-    impactToOM?: string;
-    defectPhotos?: string[];
-    improvementPhotos?: string[];
-    attachments?: string[];
-}
+import { obsFormSchema, emptyOBSForm, toFormValues, OBS_ERROR_FALLBACKS } from './obsFormSchema';
+import type { OBSDetailData } from './obsFormSchema';
 
-export interface OBSDetailData {
-    obsNumber: string;
-    rev: string;
-    status: string;
-    raiseDate: string;
-    closeoutDate: string;
-    aconex: string;
-    type: string;
-    contractor: string;
-    remark: string;
-    subject: string;
-    referenceStandards: string;
-    detailsDescription: string;
-    foundLocation: string;
-    foundBy: string;
-    raisedBy: string;
-    serialNumbers: string;
-    productDisposition: string;
-    repairMethodStatement: string;
-    immediateCorrectionAction: string;
-    rootCauseAnalysis: string;
-    correctiveActions: string;
-    preventiveAction: string;
-    finalProductIntegrityStatement: string;
-    reInspectionNumber: string;
-    noiNumber: string;
-    itrNumber: string;
-    projectQualityManager: string;
-    defectPhotos: string[];
-    improvementPhotos: string[];
-    attachments: string[];
-    dueDate?: string;
-}
+// OBSDetailData lives with the zod schema (single source of truth). Re-export so
+// OBS.tsx keeps importing it from here.
+export type { OBSDetailData };
 
 export interface PendingUploads {
     category: string;
@@ -76,139 +24,74 @@ export interface PendingUploads {
 
 export interface OBSDetailModalProps {
     obsId: string | null;
-    existingData?: OBSDetailData;
     existingItem?: OBSItem;
     onSave: (details: OBSDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => void | Promise<void>;
     onClose: () => void;
 }
 
-export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, existingData, existingItem, onSave, onClose }) => {
+export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, existingItem, onSave, onClose }) => {
     const { t } = useLanguage();
     const { getActiveContractors } = useContractorsStore();
-    // NOI / ITR link dropdowns — fetch the lists on mount so the options exist
-    // even if the user hasn't visited those modules yet.
     const itrList = useITRStore(s => s.itrList);
     const fetchITRs = useITRStore(s => s.fetchITRs);
     const noiList = useNOIStore(s => s.noiList);
     const fetchNOIs = useNOIStore(s => s.fetchNOIs);
     useEffect(() => { fetchITRs(); fetchNOIs(); }, [fetchITRs, fetchNOIs]);
 
-    // Initialize form data from existing data or existing item
-    const getInitialData = (): OBSDetailData => {
-        if (existingData) {
-            return { ...existingData, rev: existingData.rev || '' };
-        }
-        if (existingItem) {
-            return {
-                obsNumber: existingItem.documentNumber || '',
-                rev: existingItem.rev || '',
-                status: existingItem.status || 'Open',
-                raiseDate: existingItem.raiseDate || '',
-                closeoutDate: existingItem.closeoutDate || '',
-                aconex: existingItem.aconex || '',
-                type: existingItem.type || '',
-                contractor: existingItem.vendor || '',
-                remark: existingItem.remark || '',
-                subject: existingItem.subject || existingItem.description || '',
-                referenceStandards: '',
-                detailsDescription: existingItem.description || '',
-                foundLocation: existingItem.foundLocation || '',
-                foundBy: existingItem.foundBy || '',
-                raisedBy: existingItem.raisedBy || '',
-                serialNumbers: '',
-                productDisposition: existingItem.productDisposition || '',
-                repairMethodStatement: '',
-                immediateCorrectionAction: '',
-                rootCauseAnalysis: '',
-                correctiveActions: '',
-                preventiveAction: '',
-                finalProductIntegrityStatement: '',
-                reInspectionNumber: '',
-                noiNumber: '',
-                itrNumber: '',
-                projectQualityManager: '',
-                defectPhotos: existingItem.defectPhotos || [],
-                improvementPhotos: existingItem.improvementPhotos || [],
-                attachments: existingItem.attachments || [],
-                dueDate: (existingItem as any).dueDate || '',
-            };
-        }
-        return {
-            obsNumber: '',
-            rev: '',
-            status: 'Open',
-            raiseDate: '',
-            closeoutDate: '',
-            aconex: '',
-            type: '',
-            contractor: '',
-            remark: '',
-            subject: '',
-            referenceStandards: '',
-            detailsDescription: '',
-            foundLocation: '',
-            foundBy: '',
-            raisedBy: '',
-            serialNumbers: '',
-            productDisposition: '',
-            repairMethodStatement: '',
-            immediateCorrectionAction: '',
-            rootCauseAnalysis: '',
-            correctiveActions: '',
-            preventiveAction: '',
-            finalProductIntegrityStatement: '',
-            reInspectionNumber: '',
-            noiNumber: '',
-            itrNumber: '',
-            projectQualityManager: '',
-            defectPhotos: [],
-            improvementPhotos: [],
-            attachments: [],
-            dueDate: '',
-        };
-    };
+    const {
+        register, handleSubmit, watch, setValue, getValues,
+        formState: { errors },
+    } = useForm<OBSDetailData>({
+        resolver: zodResolver(obsFormSchema),
+        defaultValues: existingItem ? toFormValues(existingItem) : emptyOBSForm,
+    });
 
-    const [formData, setFormData] = useState<OBSDetailData>(getInitialData());
-
-    // File handling states
+    // File handling
     const [pendingDefectPhotos, setPendingDefectPhotos] = useState<File[]>([]);
     const [pendingImprovementPhotos, setPendingImprovementPhotos] = useState<File[]>([]);
     const [pendingAttachments, setPendingAttachments] = useState<File[]>([]);
     const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
     const [saving, setSaving] = useState(false);
 
-    const handleFieldChange = (field: keyof OBSDetailData, value: string) => {
-        setFormData(prev => ({ ...prev, [field]: value }));
+    // People autocomplete: system users + active contractors. Stays free text
+    // (site/contractor staff aren't always system users) — datalist just helps.
+    const [users, setUsers] = useState<ApiUser[]>([]);
+    useEffect(() => {
+        let alive = true;
+        getUsers().then(u => { if (alive) setUsers(u); }).catch(() => {/* non-fatal */});
+        return () => { alive = false; };
+    }, []);
+    const peopleSuggestions = Array.from(new Set([
+        ...users.map(u => u.full_name || u.username),
+        ...getActiveContractors().map(c => c.name),
+    ].filter(Boolean)));
+
+    const errText = (field: keyof OBSDetailData) => {
+        const msg = errors[field]?.message as string | undefined;
+        if (!msg) return null;
+        return (
+            <p style={{ color: '#dc2626', fontSize: 12, margin: '4px 0 0', lineHeight: 1.4 }}>
+                {t(msg) || OBS_ERROR_FALLBACKS[msg] || msg}
+            </p>
+        );
     };
 
-    const handleRemoveLegacyPhoto = (index: number, photoType: 'defect' | 'improvement') => {
-        if (photoType === 'defect') {
-            setFormData(prev => ({
-                ...prev,
-                defectPhotos: prev.defectPhotos.filter((_, i) => i !== index)
-            }));
-        } else {
-            setFormData(prev => ({
-                ...prev,
-                improvementPhotos: prev.improvementPhotos.filter((_, i) => i !== index)
-            }));
-        }
+    const removeLegacy = (key: 'defectPhotos' | 'improvementPhotos' | 'attachments', index: number) => {
+        const next = (getValues(key) || []).filter((_, i) => i !== index);
+        setValue(key, next, { shouldDirty: true });
+    };
+    const deleteExisting = (key: 'defectPhotos' | 'improvementPhotos' | 'attachments', id: string) => {
+        setDeletedFileIds(prev => [...prev, id]);
+        setValue(key, (getValues(key) || []).filter((a: any) => typeof a === 'string' || a?.id !== id), { shouldDirty: true });
     };
 
-    const handleRemoveLegacyAttachment = (index: number) => {
-        setFormData(prev => ({
-            ...prev,
-            attachments: prev.attachments.filter((_, i) => i !== index)
-        }));
-    };
-
-    const handleSave = async () => {
+    const onValid = async (values: OBSDetailData) => {
         setSaving(true);
         try {
-            await onSave(formData, [
+            await onSave(values, [
                 { category: 'defectPhoto', files: pendingDefectPhotos },
                 { category: 'improvementPhoto', files: pendingImprovementPhotos },
-                { category: 'attachment', files: pendingAttachments }
+                { category: 'attachment', files: pendingAttachments },
             ], deletedFileIds);
             onClose();
         } catch (err) {
@@ -217,130 +100,68 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
             setSaving(false);
         }
     };
+    const onInvalid = (errs: typeof errors) => {
+        const first = Object.values(errs).map((e: any) => e?.message).filter(Boolean)[0] as string | undefined;
+        if (first) toast.warning(t(first) || OBS_ERROR_FALLBACKS[first] || first);
+    };
+
+    const dateInput = (field: keyof OBSDetailData) => (
+        <input
+            {...register(field)}
+            type={watch(field) ? 'date' : 'text'}
+            placeholder="mm/dd/yyyy"
+            lang="en"
+            onFocus={(e) => (e.target.type = 'date')}
+            onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
+            className={formStyles.formInput}
+        />
+    );
 
     return (
         <div className={formStyles.modalOverlay}>
             <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
                 <div className={formStyles.modalHeader}>
-                    <h2>{existingData || existingItem ? t('obs.editTitle') : t('obs.addTitle')}</h2>
+                    <h2>{existingItem ? t('obs.editTitle') : t('obs.addTitle')}</h2>
                     <button className={formStyles.closeButton} onClick={onClose} disabled={saving}>×</button>
                 </div>
                 <div className={formStyles.modalBody}>
                     <p className={formStyles.formRequiredHint}>{t('form.requiredHint')}</p>
+                    <datalist id="obs-people">
+                        {peopleSuggestions.map(name => <option key={name} value={name} />)}
+                    </datalist>
                     <div className={formStyles.formSections}>
-                        {/* 不符合項目資訊 */}
+                        {/* ===== 1. 觀察資訊 / Observation ===== */}
                         <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>{t('obs.sectionInfo')}</h3>
+                            <h3 className={formStyles.sectionTitle}>觀察資訊 / Observation</h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.refNo')}</label>
                                     <input
                                         type="text"
                                         className={formStyles.formInput}
-                                        value={formData.obsNumber || t('form.autoGenerated')}
+                                        value={watch('obsNumber') || t('form.autoGenerated')}
                                         readOnly
-                                        style={{ backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: formData.obsNumber ? '#000000' : '#666666' }}
+                                        style={{ backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: watch('obsNumber') ? '#000000' : '#666666' }}
                                     />
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>Rev</label>
-                                    <input
-                                        type="text"
-                                        className={formStyles.formInput}
-                                        value={formData.rev}
-                                        readOnly
-                                        placeholder="-"
-                                        style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
-                                    />
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('obs.subject')}</label>
-                                    <input
-                                        type="text"
-                                        className={formStyles.formInput}
-                                        value={formData.subject}
-                                        onChange={(e) => handleFieldChange('subject', e.target.value)}
-                                    />
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.noiNo')}</label>
-                                    <select
-                                        className={formStyles.formSelect}
-                                        value={formData.noiNumber || ''}
-                                        onChange={(e) => handleFieldChange('noiNumber', e.target.value)}
-                                    >
-                                        <option value="">{t('ncr.noiNoPlaceholder') || '—'}</option>
-                                        {noiList.map((noi) => (
-                                            <option key={noi.id} value={noi.referenceNo}>{noi.referenceNo}</option>
-                                        ))}
+                                    <label>{t('obs.status')}</label>
+                                    <select className={formStyles.formSelect} {...register('status')}>
+                                        <option value="Open">{t('status.open')}</option>
+                                        <option value="In Progress">{t('status.inProgress')}</option>
+                                        <option value="Resolved">{t('status.resolved')}</option>
+                                        <option value="Closed">{t('status.closed')}</option>
+                                        <option value="Void">{t('status.void')}</option>
                                     </select>
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.itrNo')}</label>
-                                    <select
-                                        className={formStyles.formSelect}
-                                        value={formData.itrNumber || ''}
-                                        onChange={(e) => handleFieldChange('itrNumber', e.target.value)}
-                                    >
-                                        <option value="">—</option>
-                                        {itrList.map((itr) => (
-                                            <option key={itr.id} value={itr.documentNumber}>{itr.documentNumber}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('obs.raiseDate')}</label>
-                                    <input
-                                        type={formData.raiseDate ? 'date' : 'text'}
-                                        placeholder="mm/dd/yyyy"
-                                        lang="en"
-                                        onFocus={(e) => (e.target.type = 'date')}
-                                        onBlur={(e) => {
-                                            if (!e.target.value) e.target.type = 'text';
-                                        }}
-                                        className={formStyles.formInput}
-                                        value={formData.raiseDate}
-                                        onChange={(e) => handleFieldChange('raiseDate', e.target.value)}
-                                    />
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('common.dueDate')}</label>
-                                    <input
-                                        type={formData.dueDate ? 'date' : 'text'}
-                                        placeholder="mm/dd/yyyy"
-                                        lang="en"
-                                        onFocus={(e) => (e.target.type = 'date')}
-                                        onBlur={(e) => {
-                                            if (!e.target.value) e.target.type = 'text';
-                                        }}
-                                        className={formStyles.formInput}
-                                        value={formData.dueDate || ''}
-                                        onChange={(e) => handleFieldChange('dueDate', e.target.value)}
-                                    />
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('obs.closeoutDate')}</label>
-                                    <input
-                                        type={formData.closeoutDate ? 'date' : 'text'}
-                                        placeholder="mm/dd/yyyy"
-                                        lang="en"
-                                        onFocus={(e) => (e.target.type = 'date')}
-                                        onBlur={(e) => {
-                                            if (!e.target.value) e.target.type = 'text';
-                                        }}
-                                        className={formStyles.formInput}
-                                        value={formData.closeoutDate}
-                                        onChange={(e) => handleFieldChange('closeoutDate', e.target.value)}
-                                    />
+                                    <label>{t('obs.subject')} <span style={{ color: '#dc2626' }}>*</span></label>
+                                    <input type="text" className={formStyles.formInput} {...register('subject')} />
+                                    {errText('subject')}
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.type')}</label>
-                                    <select
-                                        className={formStyles.formSelect}
-                                        value={formData.type}
-                                        onChange={(e) => handleFieldChange('type', e.target.value)}
-                                    >
+                                    <select className={formStyles.formSelect} {...register('type')}>
                                         <option value="">{t('obs.typePlaceholder')}</option>
                                         <option value="Design">{t('ncr.type.design')}</option>
                                         <option value="Material">{t('ncr.type.material')}</option>
@@ -350,276 +171,133 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.contractor')}</label>
-                                    <select
-                                        className={formStyles.formSelect}
-                                        value={formData.contractor}
-                                        onChange={(e) => handleFieldChange('contractor', e.target.value)}
-                                    >
+                                    <select className={formStyles.formSelect} {...register('contractor')}>
                                         <option value="">{t('obs.contractorPlaceholder')}</option>
-                                        {getActiveContractors().map((contractor) => (
-                                            <option key={contractor.id} value={contractor.name}>
-                                                {contractor.name}
-                                            </option>
+                                        {getActiveContractors().map((c) => (
+                                            <option key={c.id} value={c.name}>{c.name}</option>
                                         ))}
                                     </select>
                                 </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <label>{t('obs.detailsDescription')}</label>
-                                    <textarea
-                                        className={formStyles.formTextarea}
-                                        value={formData.detailsDescription}
-                                        onChange={(e) => handleFieldChange('detailsDescription', e.target.value)}
-                                        rows={4}
-                                    />
-                                </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.foundLocation')}</label>
-                                    <input
-                                        type="text"
-                                        className={formStyles.formInput}
-                                        value={formData.foundLocation}
-                                        onChange={(e) => handleFieldChange('foundLocation', e.target.value)}
-                                    />
+                                    <input type="text" className={formStyles.formInput} {...register('foundLocation')} />
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>{t('obs.foundBy')}</label>
+                                    <input type="text" className={formStyles.formInput} list="obs-people" {...register('foundBy')} />
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>{t('obs.raisedBy')}</label>
+                                    <input type="text" className={formStyles.formInput} list="obs-people" {...register('raisedBy')} />
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>{t('obs.raiseDate')}</label>
+                                    {dateInput('raiseDate')}
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>{t('common.dueDate')}</label>
+                                    {dateInput('dueDate')}
+                                </div>
+                                <div className={formStyles.formGroupFull}>
+                                    <label>{t('obs.detailsDescription')} <span style={{ color: '#dc2626' }}>*</span></label>
+                                    <textarea className={formStyles.formTextarea} rows={4} {...register('detailsDescription')} />
+                                    {errText('detailsDescription')}
                                 </div>
                             </div>
                         </div>
 
-                        {/* 照片上傳 */}
+                        {/* ===== 2. 處理 / Response ===== */}
                         <div className={formStyles.formSection}>
+                            <h3 className={formStyles.sectionTitle}>處理 / Response</h3>
+                            <div className={formStyles.formGrid}>
+                                <div className={formStyles.formGroupFull}>
+                                    <label>{t('obs.recommendedAction') || 'Recommended Action'}</label>
+                                    <textarea className={formStyles.formTextarea} rows={2} {...register('productDisposition')} />
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label className={formStyles.optionalLabel}>{t('obs.closeoutDate')}</label>
+                                    {dateInput('closeoutDate')}
+                                </div>
+                                <div className={formStyles.formGroupFull}>
+                                    <label className={formStyles.optionalLabel}>{t('common.remark')}</label>
+                                    <textarea className={formStyles.formTextarea} rows={3} {...register('remark')} />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ===== 3. 連結 / Links (optional) ===== */}
+                        <div className={formStyles.formSection}>
+                            <h3 className={formStyles.sectionTitle}>連結 / Links（選填）</h3>
+                            <div className={formStyles.formGrid}>
+                                <div className={formStyles.formGroup}>
+                                    <label>{t('ncr.noiNo')}</label>
+                                    <select className={formStyles.formSelect} {...register('noiNumber')}>
+                                        <option value="">{t('ncr.noiNoPlaceholder') || '—'}</option>
+                                        {noiList.map((noi) => (
+                                            <option key={noi.id} value={noi.referenceNo}>{noi.referenceNo}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>{t('ncr.itrNo')}</label>
+                                    <select className={formStyles.formSelect} {...register('itrNumber')}>
+                                        <option value="">—</option>
+                                        {itrList.map((itr) => (
+                                            <option key={itr.id} value={itr.documentNumber}>{itr.documentNumber}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ===== 4. 照片與附件 / Photos & Attachments ===== */}
+                        <div className={formStyles.formSection}>
+                            <h3 className={formStyles.sectionTitle}>照片與附件 / Photos &amp; Attachments</h3>
                             <FileAttachment
                                 id="obs-defect-photos"
                                 category="defectPhoto"
                                 entityType={existingItem ? 'obs' : undefined}
                                 entityId={existingItem?.id}
                                 title={t('obs.defectPhotos')}
-                                legacyAttachments={formData.defectPhotos}
+                                legacyAttachments={watch('defectPhotos')}
                                 onPendingFilesChange={setPendingDefectPhotos}
-                                onDeleteExistingFile={(id) => {
-                                    setDeletedFileIds(prev => [...prev, id]);
-                                    setFormData(prev => ({ ...prev, defectPhotos: (prev.defectPhotos || []).filter((a: any) => typeof a === 'string' || a?.id !== id) }));
-                                }}
-                                onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'defect')}
+                                onDeleteExistingFile={(id) => deleteExisting('defectPhotos', id)}
+                                onRemoveLegacy={(index) => removeLegacy('defectPhotos', index)}
                                 accept="image/*"
                             />
-                        </div>
-                        <div className={formStyles.formSection}>
                             <FileAttachment
                                 id="obs-improvement-photos"
                                 category="improvementPhoto"
                                 entityType={existingItem ? 'obs' : undefined}
                                 entityId={existingItem?.id}
                                 title={t('obs.improvementPhotos')}
-                                legacyAttachments={formData.improvementPhotos}
+                                legacyAttachments={watch('improvementPhotos')}
                                 onPendingFilesChange={setPendingImprovementPhotos}
-                                onDeleteExistingFile={(id) => {
-                                    setDeletedFileIds(prev => [...prev, id]);
-                                    setFormData(prev => ({ ...prev, improvementPhotos: (prev.improvementPhotos || []).filter((a: any) => typeof a === 'string' || a?.id !== id) }));
-                                }}
-                                onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'improvement')}
+                                onDeleteExistingFile={(id) => deleteExisting('improvementPhotos', id)}
+                                onRemoveLegacy={(index) => removeLegacy('improvementPhotos', index)}
                                 accept="image/*"
                             />
-                        </div>
-
-                        {/* Attachments */}
-                        <div className={formStyles.formSection}>
                             <FileAttachment
                                 id="obs-attachments"
                                 category="attachment"
                                 entityType={existingItem ? 'obs' : undefined}
                                 entityId={existingItem?.id}
                                 title={t('obs.attachments')}
-                                legacyAttachments={formData.attachments}
+                                legacyAttachments={watch('attachments')}
                                 onPendingFilesChange={setPendingAttachments}
-                                onDeleteExistingFile={(id) => {
-                                    setDeletedFileIds(prev => [...prev, id]);
-                                    setFormData(prev => ({ ...prev, attachments: (prev.attachments || []).filter((a: any) => typeof a === 'string' || a?.id !== id) }));
-                                }}
-                                onRemoveLegacy={handleRemoveLegacyAttachment}
+                                onDeleteExistingFile={(id) => deleteExisting('attachments', id)}
+                                onRemoveLegacy={(index) => removeLegacy('attachments', index)}
                             />
-                        </div>
-
-                        {/* 人員與位置資訊 */}
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>{t('obs.sectionPersonnelLocation')}</h3>
-                            <div className={formStyles.formGrid}>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('obs.foundBy')}</label>
-                                    <input
-                                        type="text"
-                                        className={formStyles.formInput}
-                                        value={formData.foundBy}
-                                        onChange={(e) => handleFieldChange('foundBy', e.target.value)}
-                                    />
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('obs.raisedBy')}</label>
-                                    <input
-                                        type="text"
-                                        className={formStyles.formInput}
-                                        value={formData.raisedBy}
-                                        onChange={(e) => handleFieldChange('raisedBy', e.target.value)}
-                                    />
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('obs.productDisposition')}</label>
-                                    <select
-                                        className={formStyles.formSelect}
-                                        value={formData.productDisposition}
-                                        onChange={(e) => handleFieldChange('productDisposition', e.target.value)}
-                                    >
-                                        <option value="">{t('obs.productDispositionPlaceholder')}</option>
-                                        <option value="Use As Is">Use As Is</option>
-                                        <option value="Repair">Repair</option>
-                                        <option value="Rework">Rework</option>
-                                        <option value="Reject">Reject</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Quality Assessment */}
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>{t('pqp.qualityAssessment')}</h3>
-                            <div className={formStyles.formGrid}>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('obs.status')}</label>
-                                    <select
-                                        className={formStyles.formSelect}
-                                        value={formData.status}
-                                        onChange={(e) => handleFieldChange('status', e.target.value)}
-                                    >
-                                        <option value="Open">{t('status.open')}</option>
-                                        <option value="In Progress">In Progress</option>
-                                        <option value="Resolved">Resolved</option>
-                                        <option value="Closed">{t('status.closed')}</option>
-                                        <option value="Void">{t('status.void')}</option>
-                                    </select>
-                                </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <div className={formStyles.labelWithButton}>
-                                        <label className={formStyles.optionalLabel}>{t('common.remark')}</label>
-                                        <button
-                                            type="button"
-                                            className={formStyles.tbcButton}
-                                            onClick={() => {
-                                                const dateStr = new Date().toLocaleDateString();
-                                                const newRemark = formData.remark ? `${formData.remark}\n${dateStr}: ` : `${dateStr}: `;
-                                                handleFieldChange('remark', newRemark);
-                                            }}
-                                        >
-                                            {t('common.addDate')}
-                                        </button>
-                                    </div>
-                                    <textarea
-                                        className={formStyles.formTextarea}
-                                        value={formData.remark}
-                                        onChange={(e) => handleFieldChange('remark', e.target.value)}
-                                        rows={3}
-                                    />
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </div>
                 <div className={formStyles.modalActions}>
-                    <button type="button" className={formStyles.saveButton} onClick={handleSave} disabled={saving}>
+                    <button type="button" className={formStyles.saveButton} onClick={handleSubmit(onValid, onInvalid)} disabled={saving}>
                         {saving ? t('obs.saving') : t('common.save')}
                     </button>
                     <button type="button" className={formStyles.cancelButton} onClick={onClose} disabled={saving}>
                         {t('common.cancel')}
                     </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-export interface OBSDetailsViewModalProps {
-    obsId: string;
-    obsItem: OBSItem | undefined;
-    obsDetailData?: OBSDetailData;
-    onClose: () => void;
-}
-
-export const OBSDetailsViewModal: React.FC<OBSDetailsViewModalProps> = ({ obsItem, onClose }) => {
-    const { t } = useLanguage();
-    if (!obsItem) return null;
-    return (
-        <div className={formStyles.modalOverlay} onClick={onClose}>
-            <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
-                <div className={formStyles.modalHeader}>
-                    <h2>{t('obs.viewTitle')}</h2>
-                    <button type="button" className={formStyles.closeButton} onClick={onClose}>×</button>
-                </div>
-                <div className={formStyles.modalBody}>
-                    <div className={formStyles.formSections}>
-                        <div className={formStyles.formSection}>
-                            <div className={formStyles.formGrid}>
-                                <div className={formStyles.formGroup}><label>{t('obs.refNo')}</label><div className={formStyles.readOnlyField}>{obsItem.documentNumber}</div></div>
-                                <div className={formStyles.formGroup}><label>{t('obs.status')}</label><div className={formStyles.readOnlyField}>{obsItem.status}</div></div>
-                                <div className={formStyles.formGroup}><label>{t('obs.contractor')}</label><div className={formStyles.readOnlyField}>{obsItem.vendor}</div></div>
-                                <div className={formStyles.formGroup}><label>{t('obs.type')}</label><div className={formStyles.readOnlyField}>{obsItem.type || '-'}</div></div>
-                                <div className={formStyles.formGroup}><label>{t('obs.subject')}</label><div className={formStyles.readOnlyField}>{obsItem.subject || obsItem.description || '-'}</div></div>
-                                <div className={formStyles.formGroup}><label>{t('obs.raiseDate')}</label><div className={formStyles.readOnlyField}>{obsItem.raiseDate || '-'}</div></div>
-                                <div className={formStyles.formGroup}><label>{t('obs.closeoutDate')}</label><div className={formStyles.readOnlyField}>{obsItem.closeoutDate || '-'}</div></div>
-                                <div className={formStyles.formGroup}><label>{t('obs.foundBy')}</label><div className={formStyles.readOnlyField}>{obsItem.foundBy || '-'}</div></div>
-                                <div className={formStyles.formGroup}><label>{t('obs.raisedBy')}</label><div className={formStyles.readOnlyField}>{obsItem.raisedBy || '-'}</div></div>
-                                <div className={formStyles.formGroup}><label>{t('obs.productDisposition')}</label><div className={formStyles.readOnlyField}>{obsItem.productDisposition || '-'}</div></div>
-                            </div>
-                        </div>
-                        {/* 關聯追溯 */}
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>{t('ncr.sectionReinspection') || 'Related Links'}</h3>
-                            <div className={formStyles.formGrid}>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.noiNo')}</label>
-                                    <div className={formStyles.readOnlyField}>{(obsItem as any).noiNumber || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.itrNo')}</label>
-                                    <div className={formStyles.readOnlyField}>{(obsItem as any).itrNumber || '-'}</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className={formStyles.formSection}>
-                            <FileAttachment
-                                id="obs-defect-photos-view"
-                                category="defectPhoto"
-                                entityType="obs"
-                                entityId={obsItem.id}
-                                title={t('obs.defectPhotos')}
-                                legacyAttachments={obsItem.defectPhotos || []}
-                                readOnly={true}
-                                accept="image/*"
-                            />
-                        </div>
-                        <div className={formStyles.formSection}>
-                            <FileAttachment
-                                id="obs-improvement-photos-view"
-                                category="improvementPhoto"
-                                entityType="obs"
-                                entityId={obsItem.id}
-                                title={t('obs.improvementPhotos')}
-                                legacyAttachments={obsItem.improvementPhotos || []}
-                                readOnly={true}
-                                accept="image/*"
-                            />
-                        </div>
-                        <div className={formStyles.formSection}>
-                            <FileAttachment
-                                id="obs-attachments-view"
-                                category="attachment"
-                                entityType="obs"
-                                entityId={obsItem.id}
-                                title={t('obs.attachments')}
-                                legacyAttachments={obsItem.attachments || []}
-                                readOnly={true}
-                            />
-                        </div>
-                    </div>
-                </div>
-                <div className={formStyles.modalActions}>
-                    <button type="button" className={formStyles.cancelButton} onClick={onClose}>{t('common.cancel')}</button>
                 </div>
             </div>
         </div>

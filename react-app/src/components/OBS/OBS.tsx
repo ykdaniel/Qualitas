@@ -5,7 +5,6 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useOBSStore } from '../../store/obsStore';
 import type { OBSItem as ContextOBSItem } from '../../store/obsStore';
-import styles from './OBS.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import ConfirmModal from '../Shared/ConfirmModal';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
@@ -286,7 +285,6 @@ const OBS: React.FC = () => {
       {isEditModalOpen && currentObsId && (
         <OBSDetailModal
           obsId={currentObsId}
-          existingData={undefined}
           existingItem={currentObsId === 'new' ? undefined : obsList.find(item => item.id === currentObsId)}
           onSave={handleSaveOBSDetails}
           onClose={() => {
