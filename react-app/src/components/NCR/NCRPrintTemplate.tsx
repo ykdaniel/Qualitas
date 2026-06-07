@@ -186,10 +186,10 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                             <div className="subhead">1.3 不符合描述 <span className="en">Description of Non-Conformance</span></div>
                             <table>
                                 <tbody>
-                                    <tr><td className="lbl" style={{ width: 96 }}>規範要求<small>Requirement</small></td>
+                                    <tr><td className="lbl" style={{ width: 96 }}>不符合描述<small>Description</small></td>
+                                        <td><FieldBox value={data.detailsDescription} guide="說明不符合之情況，可附量測值" /></td></tr>
+                                    <tr><td className="lbl">規範要求<small>Requirement</small></td>
                                         <td><FieldBox value={data.requirement} guide="說明圖面／規範／程序書要求為何" /></td></tr>
-                                    <tr><td className="lbl">實際情況<small>As-Found</small></td>
-                                        <td><FieldBox value={data.asFound || data.detailsDescription} guide="說明現場實際發現之情況，可附量測值" /></td></tr>
                                     <tr><td className="lbl">偏差說明<small>Deviation</small></td>
                                         <td><FieldBox value={data.deviation} guide="說明實況與要求之差異" /></td></tr>
                                 </tbody>

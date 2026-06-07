@@ -454,10 +454,6 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     <textarea className={formStyles.formTextarea} rows={2} {...register('requirement')} />
                                 </div>
                                 <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>
-                                    <label>實際情況 As-Found</label>
-                                    <textarea className={formStyles.formTextarea} rows={2} {...register('asFound')} />
-                                </div>
-                                <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>
                                     <label>偏差說明 Deviation</label>
                                     <textarea className={formStyles.formTextarea} rows={2} {...register('deviation')} />
                                 </div>
