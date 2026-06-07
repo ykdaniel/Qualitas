@@ -259,6 +259,9 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                 </div>
                 <div className={formStyles.modalBody}>
                     <p className={formStyles.formRequiredHint}>{t('form.requiredHint')}</p>
+                    <p style={{ fontSize: 11.5, color: '#6b7280', margin: '2px 0 0', lineHeight: 1.4 }}>
+                        狀態由「驗證與結案」自動決定;標 * 者為結案時必填。/ Status is auto-set from Verification &amp; Closure; * fields are required to close.
+                    </p>
                     <datalist id="ncr-people">
                         {peopleSuggestions.map(name => <option key={name} value={name} />)}
                     </datalist>
