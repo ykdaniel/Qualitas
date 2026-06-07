@@ -218,14 +218,12 @@ export function toFormValues(item: NCRItem): NCRDetailData {
  * The closure gate (superRefine, triggered by effectivenessVerified==='Yes')
  * guarantees disposition + reInspection are present, so 'Yes' → Closed is valid.
  */
-export function deriveNCRStatus(
-    v: Pick<NCRDetailData, 'effectivenessVerified' | 'productDisposition' | 'correctiveActions' | 'repairMethodStatement' | 'immediateCorrectionAction'>,
-): string {
-    if (v.effectivenessVerified === 'Yes') return 'Closed';
-    if (v.effectivenessVerified === 'No') return 'In Progress';   // routed back
-    const handled = [v.productDisposition, v.correctiveActions, v.repairMethodStatement, v.immediateCorrectionAction]
-        .some(x => (x || '').trim());
-    return handled ? 'Resolved' : 'Open';
+export function deriveNCRStatus(v: Pick<NCRDetailData, 'effectivenessVerified'>): string {
+    // Driven only by the explicit QA review (effectivenessVerified), not by
+    // whether data fields happen to be filled.
+    if (v.effectivenessVerified === 'Yes') return 'Closed';   // reviewed & passed
+    if (v.effectivenessVerified === 'No') return 'In Progress'; // reviewed & sent back
+    return 'Open';                                             // not yet verified
 }
 
 /** English fallbacks for the closure-gate error keys, matching the old toasts. */

@@ -156,7 +156,7 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
     // Live status badge — derived from verification & closure (Void = override).
     const derivedStatus = voided
         ? 'Void'
-        : deriveOBSStatus({ verified: watch('verified'), productDisposition: watch('productDisposition') });
+        : deriveOBSStatus({ verified: watch('verified') });
     const statusText = ({
         'Open': t('status.open'), 'In Progress': t('status.inProgress'),
         'Resolved': t('status.resolved'), 'Closed': t('status.closed'), 'Void': t('status.void'),

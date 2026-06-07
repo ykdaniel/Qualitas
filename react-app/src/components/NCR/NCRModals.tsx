@@ -229,13 +229,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
     };
 
     // Live status badge — derived from verification & closure (Void = override).
-    const derivedStatus = voided ? 'Void' : deriveNCRStatus({
-        effectivenessVerified: watch('effectivenessVerified'),
-        productDisposition: watch('productDisposition'),
-        correctiveActions: watch('correctiveActions'),
-        repairMethodStatement: watch('repairMethodStatement'),
-        immediateCorrectionAction: watch('immediateCorrectionAction'),
-    });
+    const derivedStatus = voided ? 'Void' : deriveNCRStatus({ effectivenessVerified: watch('effectivenessVerified') });
     const statusText = ({
         'Open': t('status.open'), 'In Progress': t('status.inProgress'),
         'Resolved': t('status.resolved'), 'Closed': t('status.closed'), 'Void': t('status.void'),
