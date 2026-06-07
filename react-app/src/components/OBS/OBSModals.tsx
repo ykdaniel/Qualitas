@@ -249,8 +249,11 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                             <h3 className={formStyles.sectionTitle}>處置 / Response</h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroupFull}>
-                                    <label>{t('obs.recommendedAction') || 'Recommended Action'}</label>
+                                    <label>{t('obs.actionTaken') || 'Action Taken'}（承攬商 By Contractor）</label>
                                     <textarea className={formStyles.formTextarea} rows={2} {...register('productDisposition')} />
+                                    <p style={{ fontSize: 11, color: '#6b7280', margin: '4px 0 0', lineHeight: 1.4 }}>
+                                        {t('obs.actionTakenHint') || 'To be filled by the contractor.'}
+                                    </p>
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label className={formStyles.optionalLabel}>{t('obs.closeoutDate')}</label>

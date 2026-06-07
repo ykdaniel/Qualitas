@@ -76,9 +76,9 @@ const OBSPrintTemplate: React.FC<OBSPrintTemplateProps> = ({ data, defectPhotos 
                             <div className="sec-head">2. 觀察描述 <span className="en">Description</span></div>
                             <div className="field-box">{data.detailsDescription || <span className="guide">（描述觀察內容 Describe the observation）</span>}</div>
 
-                            {/* ===== 3 建議措施 ===== */}
-                            <div className="sec-head">3. 建議措施 <span className="en">Recommended Action</span></div>
-                            <div className="field-box">{data.productDisposition || <span className="guide">（建議的處理方式 Recommended action）</span>}</div>
+                            {/* ===== 3 處理方式（承攬商） ===== */}
+                            <div className="sec-head">3. 處理方式 <span className="en">Action Taken (by Contractor)</span></div>
+                            <div className="field-box">{data.productDisposition || <span className="guide">（由承攬商填寫處理方式 Action taken — by contractor）</span>}</div>
 
                             {data.remark && (<>
                                 <div className="sec-head">備註 <span className="en">Remark</span></div>
