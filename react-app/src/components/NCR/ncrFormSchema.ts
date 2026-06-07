@@ -220,7 +220,7 @@ export function toFormValues(item: NCRItem): NCRDetailData {
  * guarantees disposition + reInspection are present, so 'Yes' → Closed is valid.
  */
 export function deriveNCRStatus(v: Pick<NCRDetailData, 'effectivenessVerified'>): string {
-    // Driven only by the explicit QA review (effectivenessVerified), not by
+    // Driven only by the explicit QC review (effectivenessVerified), not by
     // whether data fields happen to be filled.
     if (v.effectivenessVerified === 'Yes') return 'Closed';   // reviewed & passed
     if (v.effectivenessVerified === 'No') return 'In Progress'; // reviewed & sent back

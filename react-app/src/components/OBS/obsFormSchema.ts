@@ -30,7 +30,7 @@ export const obsFormSchema = z.object({
     closeoutDate: str,
     detailsDescription: z.string().min(1, 'obs.descriptionRequired'),
     productDisposition: str, // UI label = "Action Taken"
-    verified: str,           // Pending / Verified / Rejected (QA closeout)
+    verified: str,           // Pending / Verified / Rejected (QC closeout)
     verifiedDate: str,
     remark: str,
     aconex: str,
@@ -83,7 +83,7 @@ export function toFormValues(item: OBSItem): OBSDetailData {
  * it be picked freely. Void is a manual override handled in the form (not here).
  */
 export function deriveOBSStatus(v: Pick<OBSDetailData, 'verified'>): string {
-    // Driven only by the explicit QA verification, not by whether fields are filled.
+    // Driven only by the explicit QC verification, not by whether fields are filled.
     if (v.verified === 'Verified') return 'Closed';
     if (v.verified === 'Rejected') return 'In Progress'; // sent back to contractor
     return 'Open';

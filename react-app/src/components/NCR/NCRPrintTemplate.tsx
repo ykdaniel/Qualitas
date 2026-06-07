@@ -81,7 +81,7 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                                 <div className="logo-box">LOGO</div>
                                 <div className="head-mid">
                                     <div className="co">［ 公司名稱 Company Name ］</div>
-                                    <div className="sub">品質管理 — 不符合報告　Quality Management — Non-Conformance Report</div>
+                                    <div className="sub">品質管理 — 不符合報告 ｜ Quality Management — Non-Conformance Report</div>
                                 </div>
                                 <div className="head-right">
                                     <div className="docno">{data.ncrNumber || '(自動 auto)'}</div>
@@ -322,7 +322,7 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                                 <SignCell num="6.2" zh="承包商回覆" en="Contractor Response" name={resolveUser(data.assignedTo) !== '-' ? resolveUser(data.assignedTo) : undefined} />
                                 <SignCell num="6.3" zh="工程／設計權責核可" en="Engineering / Design Authority" req="［科用／維修必簽］" />
                                 <SignCell num="6.4" zh="處置核可" en="Disposition Approved (PQM)" name={data.projectQualityManager} />
-                                <SignCell num="6.5" zh="有效性驗證" en="Effectiveness Verified by (QA)" name={resolveUser(data.effectivenessVerifiedBy) !== '-' ? resolveUser(data.effectivenessVerifiedBy) : undefined} date={data.effectivenessVerifiedDate} />
+                                <SignCell num="6.5" zh="有效性驗證" en="Effectiveness Verified by (QC)" name={resolveUser(data.effectivenessVerifiedBy) !== '-' ? resolveUser(data.effectivenessVerifiedBy) : undefined} date={data.effectivenessVerifiedDate} />
                             </div>
 
                             {/* ===== Footer ===== */}

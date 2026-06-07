@@ -275,7 +275,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                     <div className={formStyles.formSections}>
                         {/* ===== 1. 基本資訊 / Identification ===== */}
                         <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>基本資訊 / Identification <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（開立人 / QA）</span></h3>
+                            <h3 className={formStyles.sectionTitle}>基本資訊 / Identification <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（開立人 / QC）</span></h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.documentNumber')}</label>
@@ -329,7 +329,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                         <option value="Minor">{t('ncr.severity.minor') || 'Minor 輕微'}</option>
                                     </select>
                                     <p style={{ fontSize: 11, color: '#6b7280', margin: '4px 0 0', lineHeight: 1.4 }}>
-                                        {t('ncr.severity.hint') || 'Major: affects fitness-for-purpose / safety / code or contract compliance, or is a repeat/systemic issue — needs PQM/owner sign-off (SLA 7 days). Minor: isolated, easily corrected, no impact on function — contractor corrects + QA verifies (SLA 14 days).'}
+                                        {t('ncr.severity.hint') || 'Major: affects fitness-for-purpose / safety / code or contract compliance, or is a repeat/systemic issue — needs PQM/owner sign-off (SLA 7 days). Minor: isolated, easily corrected, no impact on function — contractor corrects + QC verifies (SLA 14 days).'}
                                     </p>
                                     {errText('severity')}
                                 </div>
@@ -442,7 +442,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
 
                         {/* ===== 2. 不符合描述 / Non-Conformance Description ===== */}
                         <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>不符合描述 / Non-Conformance Description <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（開立人 / QA）</span></h3>
+                            <h3 className={formStyles.sectionTitle}>不符合描述 / Non-Conformance Description <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（開立人 / QC）</span></h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroupFull}>
                                     <label>{t('obs.detailsDescription')}{openStar}</label>
@@ -467,7 +467,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                         {/* ===== 3. 追溯與影響 / Traceability & Impact =====
                             drawingNo / specNo / qtyAffected / extent required at closure; rest collapse. */}
                         <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>追溯與影響 / Traceability &amp; Impact <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（開立人 / QA）</span></h3>
+                            <h3 className={formStyles.sectionTitle}>追溯與影響 / Traceability &amp; Impact <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（開立人 / QC）</span></h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
                                     <label>圖號 Drawing No.{closeStar}</label>
@@ -676,7 +676,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
 
                         {/* ===== 6. 驗證與結案 / Verification & Closure ===== */}
                         <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>驗證與結案 / Verification &amp; Closure <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（QA）</span></h3>
+                            <h3 className={formStyles.sectionTitle}>驗證與結案 / Verification &amp; Closure <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（QC）</span></h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.effectivenessVerified') || 'Effectiveness Verified'}</label>
