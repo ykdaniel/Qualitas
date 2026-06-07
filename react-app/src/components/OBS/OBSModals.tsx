@@ -137,8 +137,15 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
         }
     };
     const onInvalid = (errs: typeof errors) => {
-        const first = Object.values(errs).map((e: any) => e?.message).filter(Boolean)[0] as string | undefined;
-        if (first) toast.warning(t(first) || OBS_ERROR_FALLBACKS[first] || first);
+        const fields = Object.keys(errs);
+        if (!fields.length) return;
+        const labelOf = (f: string) => (({
+            subject: t('obs.subject'),
+            detailsDescription: t('obs.detailsDescription'),
+        } as Record<string, string>)[f] || f);
+        toast.warning(`請補齊必填欄位 / Complete required: ${fields.map(labelOf).join('、')}`);
+        const el = document.querySelector(`[name="${fields[0]}"]`) as HTMLElement | null;
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };
 
     const dateInput = (field: keyof OBSDetailData) => (

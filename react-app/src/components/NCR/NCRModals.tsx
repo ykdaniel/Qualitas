@@ -222,10 +222,25 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         await persist({ ...values, status: finalStatus });
     };
 
+    // On a failed close, list every missing field (not just the first) and
+    // scroll to the first one so the user isn't hunting through the long form.
     const onInvalid = (errs: typeof errors) => {
-        const keys = Object.values(errs).map((e: any) => e?.message).filter(Boolean) as string[];
-        const first = keys[0];
-        if (first) toast.warning(t(first) || NCR_ERROR_FALLBACKS[first] || first);
+        const fields = Object.keys(errs);
+        if (!fields.length) return;
+        const labelOf = (f: string) => (({
+            productDisposition: t('obs.productDisposition'),
+            reInspectionNumber: t('ncr.reinspectionNo'),
+            drawingNo: '圖號 Drawing No.',
+            specNo: '規範號 Spec No.',
+            qtyAffected: '受影響數量 Qty Affected',
+            extent: '範圍 Extent',
+            repairMethodStatement: t('ncr.repairMethod'),
+            recurrenceRef: '關聯前次 NCR',
+        } as Record<string, string>)[f] || f);
+        const labels = fields.map(labelOf);
+        toast.warning(`無法結案,請補齊以下欄位 / Cannot close — complete: ${labels.join('、')}`);
+        const el = document.querySelector(`[name="${fields[0]}"]`) as HTMLElement | null;
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };
 
     // Live status badge — derived from verification & closure (Void = override).
