@@ -70,8 +70,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
     const [showDetailFields, setShowDetailFields] = useState(() => {
         const v = existingItem ? toFormValues(existingItem) : emptyNCRForm;
         return ([
-            'poContract', 'wbs', 'lineNo', 'weldJointNo', 'heatBatchNo',
-            'costScheduleImpact',
+            'lineNo', 'weldJointNo', 'heatBatchNo',
         ] as (keyof NCRDetailData)[]).some(k => Boolean(v[k]));
     });
 
@@ -288,17 +287,6 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     />
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>Rev</label>
-                                    <input
-                                        type="text"
-                                        className={formStyles.formInput}
-                                        value={watch('rev')}
-                                        readOnly
-                                        placeholder="-"
-                                        style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
-                                    />
-                                </div>
-                                <div className={formStyles.formGroup}>
                                     <label>{t('common.status')}</label>
                                     <div className={formStyles.readOnlyField}>{statusText}</div>
                                     <p style={{ fontSize: 11, color: '#6b7280', margin: '4px 0 0', lineHeight: 1.4 }}>
@@ -501,9 +489,8 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                             {showDetailFields && (
                             <div className={formStyles.formGrid}>
                                 {([
-                                    ['poContract', 'PO／合約號 PO / Contract'], ['wbs', 'WBS'],
                                     ['lineNo', '管線編號 Line No.'], ['weldJointNo', '焊道編號 Weld / Joint No.'],
-                                    ['heatBatchNo', '材料爐號 Heat / Batch No.'], ['costScheduleImpact', '成本／工期影響 Cost / Schedule'],
+                                    ['heatBatchNo', '材料爐號 Heat / Batch No.'],
                                 ] as [keyof NCRDetailData, string][]).map(([f, label]) => (
                                     <div className={formStyles.formGroup} key={f}>
                                         <label>{label}</label>
@@ -577,16 +564,6 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                         </div>
                                     </div>
                                     <textarea className={formStyles.formTextarea} rows={3} {...register('immediateCorrectionAction')} />
-                                </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <div className={formStyles.labelWithButton}>
-                                        <label>{t('ncr.integrityStatement')}</label>
-                                        <div className={styles.buttonGroup}>
-                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('finalProductIntegrityStatement')}>{t('common.tbc')}</button>
-                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('finalProductIntegrityStatement')}>{t('common.na')}</button>
-                                        </div>
-                                    </div>
-                                    <textarea className={formStyles.formTextarea} rows={3} {...register('finalProductIntegrityStatement')} />
                                 </div>
                             </div>
                         </div>
@@ -980,10 +957,6 @@ export const NCRDetailsViewModal: React.FC<NCRDetailsViewModalProps> = ({ ncrId:
                                 <div className={formStyles.formGroupFull}>
                                     <label>{t('ncr.preventiveAction')}</label>
                                     <div className={formStyles.readOnlyField}>{displayData.preventiveAction || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <label>{t('ncr.integrityStatement')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.finalProductIntegrityStatement || '-'}</div>
                                 </div>
                             </div>
                         </div>

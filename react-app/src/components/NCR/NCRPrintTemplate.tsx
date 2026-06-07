@@ -64,11 +64,11 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
     // showing a wall of empty dashes. ITR/NOI is included so a linked NCR still
     // surfaces its references here.
     const hasTraceability = [
-        data.drawingNo, data.specNo, data.poContract, data.wbs,
+        data.drawingNo, data.specNo,
         data.lineNo, data.weldJointNo, data.heatBatchNo,
         data.itrNumber, data.noiNumber,
     ].some(Boolean);
-    const hasImpact = [data.qtyAffected, data.extent, data.costScheduleImpact].some(Boolean);
+    const hasImpact = [data.qtyAffected, data.extent].some(Boolean);
     const hasPhotos = defectPhotos.length > 0 || improvementPhotos.length > 0;
 
     return (
@@ -147,10 +147,6 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                                         <td className="lbl">規範號<small>Spec No.</small></td><td className="val">{val(data.specNo)}</td>
                                     </tr>
                                     <tr>
-                                        <td className="lbl">PO／合約號<small>PO / Contract</small></td><td className="val">{val(data.poContract)}</td>
-                                        <td className="lbl">WBS</td><td className="val">{val(data.wbs)}</td>
-                                    </tr>
-                                    <tr>
                                         <td className="lbl">管線編號<small>Line No.</small></td><td className="val">{val(data.lineNo)}</td>
                                         <td className="lbl">焊道編號<small>Weld / Joint No.</small></td><td className="val">{val(data.weldJointNo)}</td>
                                     </tr>
@@ -164,12 +160,11 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
 
                             {hasImpact && (<>
                             <div className="subhead">1.2 影響範圍 <span className="en">Impact &amp; Extent</span></div>
-                            <table className="three-col">
+                            <table>
                                 <tbody>
                                     <tr>
-                                        <td className="lbl" style={{ width: 'auto' }}>受影響數量<small>Qty Affected</small></td>
-                                        <td className="lbl" style={{ width: 'auto' }}>範圍<small>Isolated / Systemic</small></td>
-                                        <td className="lbl" style={{ width: 'auto' }}>成本／工期影響<small>Cost / Schedule</small></td>
+                                        <td className="lbl">受影響數量<small>Qty Affected</small></td>
+                                        <td className="lbl">範圍<small>Isolated / Systemic</small></td>
                                     </tr>
                                     <tr>
                                         <td className="val">{val(data.qtyAffected)}</td>
@@ -177,7 +172,6 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                                             <Chk on={data.extent === 'Isolated'}>單一 Isolated</Chk>
                                             <Chk on={data.extent === 'Systemic'}>系統性 Systemic</Chk>
                                         </div></td>
-                                        <td className="val">{val(data.costScheduleImpact)}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -293,8 +287,6 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
 
                             {/* ===== 5 驗證與結案 ===== */}
                             <div className="sec-head">5. 驗證與結案 <span className="en">Verification &amp; Closure</span></div>
-                            <div className="subhead">5.1 最終產品完整性聲明 <span className="en">Final Product Integrity Statement</span></div>
-                            <FieldBox value={data.finalProductIntegrityStatement} guide="確認結案後產品符合預期用途之聲明" />
                             <table style={{ marginTop: 5 }}>
                                 <tbody>
                                     <tr>
@@ -321,7 +313,7 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                                 <SignCell num="6.1" zh="開立人" en="Raised by" name={data.raisedBy || data.foundBy} date={data.raiseDate} />
                                 <SignCell num="6.2" zh="承包商回覆" en="Contractor Response" name={resolveUser(data.assignedTo) !== '-' ? resolveUser(data.assignedTo) : undefined} />
                                 <SignCell num="6.3" zh="工程／設計權責核可" en="Engineering / Design Authority" req="［科用／維修必簽］" />
-                                <SignCell num="6.4" zh="處置核可" en="Disposition Approved (PQM)" name={data.projectQualityManager} />
+                                <SignCell num="6.4" zh="處置核可" en="Disposition Approved (PQM)" />
                                 <SignCell num="6.5" zh="有效性驗證" en="Effectiveness Verified by (QC)" name={resolveUser(data.effectivenessVerifiedBy) !== '-' ? resolveUser(data.effectivenessVerifiedBy) : undefined} date={data.effectivenessVerifiedDate} />
                             </div>
 
