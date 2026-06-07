@@ -92,19 +92,17 @@ export const ncrFormSchema = z
         preventiveActionOwner: str,
         preventiveActionTargetDate: str,
     })
-    // Strict QC closure gate (was handleSave's toast warnings). Messages are
-    // i18n keys resolved by the form with English fallbacks.
+    // Strict QC closure gate. Status is derived (see deriveNCRStatus), so the
+    // gate triggers on the closure intent — effectivenessVerified === 'Yes' —
+    // and guarantees the prerequisites are present before status becomes Closed.
     .superRefine((v, ctx) => {
-        if (v.status !== 'Closed') return;
+        if (v.effectivenessVerified !== 'Yes') return;
         const req = (field: keyof typeof v, message: string) => {
             if (!v[field]) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message });
         };
         // Core closure gate
         req('productDisposition', 'ncr.closeNeedsDisposition');
         req('reInspectionNumber', 'ncr.closeNeedsReinspection');
-        if (v.effectivenessVerified !== 'Yes') {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['effectivenessVerified'], message: 'ncr.closeNeedsEffectiveness' });
-        }
         // Traceability/impact must be complete before closing (item 1)
         req('drawingNo', 'ncr.fieldRequired');
         req('specNo', 'ncr.fieldRequired');
@@ -120,6 +118,7 @@ export const ncrFormSchema = z
     });
 
 export type NCRDetailData = z.infer<typeof ncrFormSchema>;
+// (deriveNCRStatus is defined below, after the type.)
 
 /** Blank form for a new NCR — backend assigns the number; status starts Open. */
 export const emptyNCRForm: NCRDetailData = {
@@ -211,6 +210,22 @@ export function toFormValues(item: NCRItem): NCRDetailData {
         preventiveActionOwner: item.preventiveActionOwner || '',
         preventiveActionTargetDate: item.preventiveActionTargetDate || '',
     };
+}
+
+/**
+ * Derive NCR status from the Verification & Closure state instead of letting it
+ * be picked manually. Void is a manual override handled in the form (not here).
+ * The closure gate (superRefine, triggered by effectivenessVerified==='Yes')
+ * guarantees disposition + reInspection are present, so 'Yes' → Closed is valid.
+ */
+export function deriveNCRStatus(
+    v: Pick<NCRDetailData, 'effectivenessVerified' | 'productDisposition' | 'correctiveActions' | 'repairMethodStatement' | 'immediateCorrectionAction'>,
+): string {
+    if (v.effectivenessVerified === 'Yes') return 'Closed';
+    if (v.effectivenessVerified === 'No') return 'In Progress';   // routed back
+    const handled = [v.productDisposition, v.correctiveActions, v.repairMethodStatement, v.immediateCorrectionAction]
+        .some(x => (x || '').trim());
+    return handled ? 'Resolved' : 'Open';
 }
 
 /** English fallbacks for the closure-gate error keys, matching the old toasts. */

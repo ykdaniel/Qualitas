@@ -17,7 +17,7 @@ import ReactDOM from 'react-dom';
 import NCRPrintTemplate from './NCRPrintTemplate';
 import './NCR.print.css';
 import formStyles from '../Shared/FormShell.module.css';
-import { ncrFormSchema, emptyNCRForm, toFormValues, NCR_ERROR_FALLBACKS } from './ncrFormSchema';
+import { ncrFormSchema, emptyNCRForm, toFormValues, deriveNCRStatus, NCR_ERROR_FALLBACKS } from './ncrFormSchema';
 import type { NCRDetailData } from './ncrFormSchema';
 
 // NCRDetailData now lives with the zod schema (single source of truth). Re-export
@@ -61,6 +61,8 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
     const [pendingAttachments, setPendingAttachments] = useState<File[]>([]);
     const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
     const [saving, setSaving] = useState(false);
+    // Status is derived from the Verification & Closure state; Void is a manual override.
+    const [voided, setVoided] = useState(() => existingItem?.status === 'Void');
 
     // The optional traceability/impact/description fields (everything except the
     // four required ones) collapse by default to declutter the form, but start
@@ -160,9 +162,9 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         setValue('attachments', next, { shouldDirty: true });
     };
 
-    // When the NCR is being closed, the closure-gate fields become required —
-    // show a * on their labels only then (they're optional for an open NCR).
-    const closing = watch('status') === 'Closed';
+    // Closure intent = effectiveness verified "Yes". The closure-gate fields
+    // become required then (status is derived, not picked), so show the * then.
+    const closing = watch('effectivenessVerified') === 'Yes';
     const reqMark = <span style={{ color: '#dc2626' }}> *</span>;
     const closeStar = closing ? reqMark : null;
     // Coupling stars: only required at closure when the trigger value is set.
@@ -213,7 +215,11 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                 return;
             }
         }
-        await persist(values);
+        const finalStatus = voided ? 'Void' : deriveNCRStatus(values);
+        if (finalStatus === 'Closed' && values.noiNumber) {
+            toast.info(`NCR closed. You may now update NOI ${values.noiNumber} status to "Resolved".`);
+        }
+        await persist({ ...values, status: finalStatus });
     };
 
     const onInvalid = (errs: typeof errors) => {
@@ -221,6 +227,19 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         const first = keys[0];
         if (first) toast.warning(t(first) || NCR_ERROR_FALLBACKS[first] || first);
     };
+
+    // Live status badge — derived from verification & closure (Void = override).
+    const derivedStatus = voided ? 'Void' : deriveNCRStatus({
+        effectivenessVerified: watch('effectivenessVerified'),
+        productDisposition: watch('productDisposition'),
+        correctiveActions: watch('correctiveActions'),
+        repairMethodStatement: watch('repairMethodStatement'),
+        immediateCorrectionAction: watch('immediateCorrectionAction'),
+    });
+    const statusText = ({
+        'Open': t('status.open'), 'In Progress': t('status.inProgress'),
+        'Resolved': t('status.resolved'), 'Closed': t('status.closed'), 'Void': t('status.void'),
+    } as Record<string, string>)[derivedStatus] || derivedStatus;
 
     return (
         <div className={formStyles.modalOverlay}>
@@ -262,23 +281,10 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('common.status')}</label>
-                                    <select
-                                        className={formStyles.formSelect}
-                                        {...register('status', {
-                                            onChange: (e) => {
-                                                // 勾稽聯動：NCR 關閉後提示 NOI 可轉為 Resolved
-                                                if (e.target.value === 'Closed' && getValues('noiNumber')) {
-                                                    toast.info(`NCR closed. You may now update NOI ${getValues('noiNumber')} status to "Resolved".`);
-                                                }
-                                            },
-                                        })}
-                                    >
-                                        <option value="Open">{t('status.open')}</option>
-                                        <option value="In Progress">{t('status.inProgress')}</option>
-                                        <option value="Resolved">{t('status.resolved')}</option>
-                                        <option value="Closed">{t('status.closed')}</option>
-                                        <option value="Void">{t('status.void')}</option>
-                                    </select>
+                                    <div className={formStyles.readOnlyField}>{statusText}</div>
+                                    <p style={{ fontSize: 11, color: '#6b7280', margin: '4px 0 0', lineHeight: 1.4 }}>
+                                        （由「驗證與結案」自動判定 / auto-set from Verification &amp; Closure）
+                                    </p>
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.subject')}</label>
@@ -648,7 +654,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                             <h3 className={formStyles.sectionTitle}>驗證與結案 / Verification &amp; Closure</h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.effectivenessVerified') || 'Effectiveness Verified'}{closeStar}</label>
+                                    <label>{t('ncr.effectivenessVerified') || 'Effectiveness Verified'}</label>
                                     <select className={formStyles.formSelect} {...register('effectivenessVerified')}>
                                         <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
                                         <option value="Pending">{t('ncr.effectiveness.pending') || 'Pending 待驗證'}</option>
@@ -683,6 +689,12 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                         <button type="button" className={formStyles.tbcButton} onClick={() => handleDateButton('remark')}>{t('common.addDate')}</button>
                                     </div>
                                     <textarea className={formStyles.formTextarea} rows={3} {...register('remark')} />
+                                </div>
+                                <div className={formStyles.formGroupFull}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400, cursor: 'pointer' }}>
+                                        <input type="checkbox" checked={voided} onChange={(e) => setVoided(e.target.checked)} />
+                                        <span>作廢此 NCR / Void this NCR</span>
+                                    </label>
                                 </div>
                             </div>
                         </div>
