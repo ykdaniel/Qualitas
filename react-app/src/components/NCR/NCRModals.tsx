@@ -655,7 +655,10 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                         <option value="Yes">{t('ncr.effectiveness.yes') || 'Yes 有效'}</option>
                                         <option value="No">{t('ncr.effectiveness.no') || 'No 無效'}</option>
                                     </select>
-                                    <p style={{ fontSize: 11, color: '#6b7280', margin: '4px 0 0', lineHeight: 1.4 }}>
+                                    <p style={{ fontSize: 11.5, color: '#1f3a5f', fontWeight: 600, margin: '5px 0 0' }}>
+                                        設為 Yes 即結案；No 退回處理中 / Set to “Yes” to close
+                                    </p>
+                                    <p style={{ fontSize: 11, color: '#6b7280', margin: '3px 0 0', lineHeight: 1.4 }}>
                                         {t('ncr.effectiveness.hint') || 'Confirm the corrective action prevented recurrence. An NCR cannot be Closed until this is "Yes"; "No" routes it back to In Progress.'}
                                     </p>
                                     {errText('effectivenessVerified')}

@@ -280,6 +280,9 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                         <option value="Verified">通過 Verified</option>
                                         <option value="Rejected">退回 Rejected</option>
                                     </select>
+                                    <p style={{ fontSize: 11.5, color: '#2f6f3e', fontWeight: 600, margin: '5px 0 0' }}>
+                                        設為 Verified 即結案；Rejected 退回處理中 / Set to “Verified” to close
+                                    </p>
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label className={formStyles.optionalLabel}>{t('obs.verifiedDate') || 'Verified Date'}</label>
