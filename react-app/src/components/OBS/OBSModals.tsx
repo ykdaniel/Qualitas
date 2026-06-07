@@ -210,6 +210,14 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                     </select>
                                 </div>
                                 <div className={formStyles.formGroup}>
+                                    <label>{t('obs.raiseDate')}</label>
+                                    {dateInput('raiseDate')}
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>{t('common.dueDate')}</label>
+                                    {dateInput('dueDate')}
+                                </div>
+                                <div className={formStyles.formGroup}>
                                     <label>{t('obs.foundLocation')}</label>
                                     <input type="text" className={formStyles.formInput} {...register('foundLocation')} />
                                 </div>
@@ -220,14 +228,6 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.raisedBy')}</label>
                                     <input type="text" className={formStyles.formInput} list="obs-people" {...register('raisedBy')} />
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('obs.raiseDate')}</label>
-                                    {dateInput('raiseDate')}
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('common.dueDate')}</label>
-                                    {dateInput('dueDate')}
                                 </div>
                             </div>
                         </div>
