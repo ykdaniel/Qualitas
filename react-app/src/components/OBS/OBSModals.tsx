@@ -11,7 +11,7 @@ import FileAttachment from '../Shared/FileAttachment';
 import OBSPrintTemplate from './OBSPrintTemplate';
 import './OBS.print.css';
 import formStyles from '../Shared/FormShell.module.css';
-import { obsFormSchema, emptyOBSForm, toFormValues, OBS_ERROR_FALLBACKS } from './obsFormSchema';
+import { obsFormSchema, emptyOBSForm, toFormValues, deriveOBSStatus, OBS_ERROR_FALLBACKS } from './obsFormSchema';
 import type { OBSDetailData } from './obsFormSchema';
 
 // OBSDetailData lives with the zod schema (single source of truth). Re-export so
@@ -41,6 +41,10 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
         resolver: zodResolver(obsFormSchema),
         defaultValues: existingItem ? toFormValues(existingItem) : emptyOBSForm,
     });
+
+    // Status is derived from the Verification & Closure state (not picked
+    // manually); "Void" is a manual override.
+    const [voided, setVoided] = useState(() => existingItem?.status === 'Void');
 
     // File handling
     const [pendingDefectPhotos, setPendingDefectPhotos] = useState<File[]>([]);
@@ -117,9 +121,10 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
     };
 
     const onValid = async (values: OBSDetailData) => {
+        const finalStatus = voided ? 'Void' : deriveOBSStatus(values);
         setSaving(true);
         try {
-            await onSave(values, [
+            await onSave({ ...values, status: finalStatus }, [
                 { category: 'defectPhoto', files: pendingDefectPhotos },
                 { category: 'improvementPhoto', files: pendingImprovementPhotos },
                 { category: 'attachment', files: pendingAttachments },
@@ -147,6 +152,15 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
             className={formStyles.formInput}
         />
     );
+
+    // Live status badge — derived from verification & closure (Void = override).
+    const derivedStatus = voided
+        ? 'Void'
+        : deriveOBSStatus({ verified: watch('verified'), productDisposition: watch('productDisposition') });
+    const statusText = ({
+        'Open': t('status.open'), 'In Progress': t('status.inProgress'),
+        'Resolved': t('status.resolved'), 'Closed': t('status.closed'), 'Void': t('status.void'),
+    } as Record<string, string>)[derivedStatus] || derivedStatus;
 
     return (
         <div className={formStyles.modalOverlay}>
@@ -177,13 +191,10 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.status')}</label>
-                                    <select className={formStyles.formSelect} {...register('status')}>
-                                        <option value="Open">{t('status.open')}</option>
-                                        <option value="In Progress">{t('status.inProgress')}</option>
-                                        <option value="Resolved">{t('status.resolved')}</option>
-                                        <option value="Closed">{t('status.closed')}</option>
-                                        <option value="Void">{t('status.void')}</option>
-                                    </select>
+                                    <div className={formStyles.readOnlyField}>{statusText}</div>
+                                    <p style={{ fontSize: 11, color: '#6b7280', margin: '4px 0 0', lineHeight: 1.4 }}>
+                                        （由「驗證與結案」自動判定 / auto-set from Verification &amp; Closure）
+                                    </p>
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.subject')} <span style={{ color: '#dc2626' }}>*</span></label>
@@ -281,6 +292,12 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                 <div className={formStyles.formGroupFull}>
                                     <label className={formStyles.optionalLabel}>{t('common.remark')}</label>
                                     <textarea className={formStyles.formTextarea} rows={3} {...register('remark')} />
+                                </div>
+                                <div className={formStyles.formGroupFull}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400, cursor: 'pointer' }}>
+                                        <input type="checkbox" checked={voided} onChange={(e) => setVoided(e.target.checked)} />
+                                        <span>作廢此觀察 / Void this observation</span>
+                                    </label>
                                 </div>
                             </div>
                         </div>

@@ -78,6 +78,17 @@ export function toFormValues(item: OBSItem): OBSDetailData {
     };
 }
 
+/**
+ * Derive the OBS status from the Verification & Closure state instead of letting
+ * it be picked freely. Void is a manual override handled in the form (not here).
+ */
+export function deriveOBSStatus(v: Pick<OBSDetailData, 'verified' | 'productDisposition'>): string {
+    if (v.verified === 'Verified') return 'Closed';
+    if (v.verified === 'Rejected') return 'In Progress';        // sent back to contractor
+    if ((v.productDisposition || '').trim()) return 'In Progress'; // contractor responded
+    return 'Open';
+}
+
 /** English fallbacks for the required-field message keys. */
 export const OBS_ERROR_FALLBACKS: Record<string, string> = {
     'obs.subjectRequired': 'Subject is required.',
