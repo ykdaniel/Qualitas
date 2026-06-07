@@ -168,9 +168,9 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                         {peopleSuggestions.map(name => <option key={name} value={name} />)}
                     </datalist>
                     <div className={formStyles.formSections}>
-                        {/* ===== 1. 觀察資訊 / Observation ===== */}
+                        {/* ===== 1. 基本資訊 / Identification ===== */}
                         <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>觀察資訊 / Observation</h3>
+                            <h3 className={formStyles.sectionTitle}>基本資訊 / Identification</h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.refNo')}</label>
@@ -236,37 +236,6 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                     <label>{t('common.dueDate')}</label>
                                     {dateInput('dueDate')}
                                 </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <label>{t('obs.detailsDescription')} <span style={{ color: '#dc2626' }}>*</span></label>
-                                    <textarea className={formStyles.formTextarea} rows={4} {...register('detailsDescription')} />
-                                    {errText('detailsDescription')}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* ===== 2. 處理 / Response ===== */}
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>處理 / Response</h3>
-                            <div className={formStyles.formGrid}>
-                                <div className={formStyles.formGroupFull}>
-                                    <label>{t('obs.recommendedAction') || 'Recommended Action'}</label>
-                                    <textarea className={formStyles.formTextarea} rows={2} {...register('productDisposition')} />
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label className={formStyles.optionalLabel}>{t('obs.closeoutDate')}</label>
-                                    {dateInput('closeoutDate')}
-                                </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <label className={formStyles.optionalLabel}>{t('common.remark')}</label>
-                                    <textarea className={formStyles.formTextarea} rows={3} {...register('remark')} />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* ===== 3. 連結 / Links (optional) ===== */}
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>連結 / Links（選填）</h3>
-                            <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.noiNo')}</label>
                                     <select className={formStyles.formSelect} {...register('noiNumber')}>
@@ -284,6 +253,37 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                             <option key={itr.id} value={itr.documentNumber}>{itr.documentNumber}</option>
                                         ))}
                                     </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ===== 2. 觀察描述 / Description ===== */}
+                        <div className={formStyles.formSection}>
+                            <h3 className={formStyles.sectionTitle}>觀察描述 / Description</h3>
+                            <div className={formStyles.formGrid}>
+                                <div className={formStyles.formGroupFull}>
+                                    <label>{t('obs.detailsDescription')} <span style={{ color: '#dc2626' }}>*</span></label>
+                                    <textarea className={formStyles.formTextarea} rows={4} {...register('detailsDescription')} />
+                                    {errText('detailsDescription')}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ===== 3. 處置 / Response ===== */}
+                        <div className={formStyles.formSection}>
+                            <h3 className={formStyles.sectionTitle}>處置 / Response</h3>
+                            <div className={formStyles.formGrid}>
+                                <div className={formStyles.formGroupFull}>
+                                    <label>{t('obs.recommendedAction') || 'Recommended Action'}</label>
+                                    <textarea className={formStyles.formTextarea} rows={2} {...register('productDisposition')} />
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label className={formStyles.optionalLabel}>{t('obs.closeoutDate')}</label>
+                                    {dateInput('closeoutDate')}
+                                </div>
+                                <div className={formStyles.formGroupFull}>
+                                    <label className={formStyles.optionalLabel}>{t('common.remark')}</label>
+                                    <textarea className={formStyles.formTextarea} rows={3} {...register('remark')} />
                                 </div>
                             </div>
                         </div>
