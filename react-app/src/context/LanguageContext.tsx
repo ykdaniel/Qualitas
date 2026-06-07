@@ -464,6 +464,10 @@ const translations: Record<Language, Record<string, string>> = {
 
     // FAT
     'fat.title': 'Factory Acceptance Test',
+    'fat.overallResult': 'Overall Result',
+    'fat.result.pass': 'PASS',
+    'fat.result.fail': 'FAIL',
+    'fat.result.pending': 'Pending',
     'fat.listTitle': 'FAT List',
     'fat.statsTitle': 'Status Statistics',
     'fat.addNew': 'Add FAT',
@@ -1459,6 +1463,10 @@ const translations: Record<Language, Record<string, string>> = {
 
     // FAT
     'fat.title': '工廠驗收測試',
+    'fat.overallResult': '整體結果',
+    'fat.result.pass': '通過 PASS',
+    'fat.result.fail': '不通過 FAIL',
+    'fat.result.pending': '尚未完成',
     'fat.listTitle': 'FAT 列表',
     'fat.statsTitle': '狀態統計',
     'fat.addNew': '新增 FAT',

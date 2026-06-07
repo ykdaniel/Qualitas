@@ -4,16 +4,19 @@ import { DataTableColumnHeader } from "../Shared/DataTable/DataTableColumnHeader
 // It is defined in FAT.tsx but not exported. I should probably export it or redefine it.
 // To avoid circular dependency or editing FAT.tsx just for export before refactor, 
 // I will define a matching interface here since I will eventually update FAT.tsx to use this.
-import { FATItem } from "../../store/fatStore";
+import { FATItem, type FATResult } from "../../store/fatStore";
 
 import { Trash2, PlusSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+const RESULT_COLOR: Record<FATResult, string> = { Pass: '#15803d', Fail: '#b91c1c', Pending: '#a16207' };
 
 export const createColumns = (
     handleAddDetails: (id: string) => void,
     handleDelete: (id: string) => void,
     t: (key: string) => string,
-    activeContractors: { name: string }[]
+    activeContractors: { name: string }[],
+    getResult: (id: string) => FATResult
 ): ColumnDef<FATItem>[] => [
         {
             id: "index",
@@ -118,6 +121,18 @@ export const createColumns = (
             filterFn: (row, id, value) => {
                 return value.includes(row.getValue(id));
             },
+        },
+        {
+            id: "overallResult",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title={t('fat.overallResult') || 'Result'} />
+            ),
+            cell: ({ row }) => {
+                const r = getResult(row.original.id);
+                const label = ({ Pass: t('fat.result.pass'), Fail: t('fat.result.fail'), Pending: t('fat.result.pending') } as Record<FATResult, string>)[r] || r;
+                return <div className="text-center" style={{ color: RESULT_COLOR[r], fontWeight: 700 }}>{label}</div>;
+            },
+            enableSorting: false,
         },
         {
             id: "actions",

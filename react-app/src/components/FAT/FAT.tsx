@@ -6,8 +6,11 @@ import { useContractorsStore } from '../../store/contractorsStore';
 import { checkFATReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
-import { useFATStore } from '../../store/fatStore';
+import { useFATStore, deriveFATResult } from '../../store/fatStore';
 import type { FATItem, FATDetailItem } from '../../store/fatStore';
+import ReactDOM from 'react-dom';
+import FATPrintTemplate from './FATPrintTemplate';
+import './FAT.print.css';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './FAT.module.css';
 import formStyles from '../Shared/FormShell.module.css';
@@ -243,7 +246,7 @@ const FAT: React.FC = () => {
 
       <div className={shellStyles.content}>
         <DataTable
-          columns={createColumns(handleAddDetails, handleDeleteClick, t, getActiveContractors())}
+          columns={createColumns(handleAddDetails, handleDeleteClick, t, getActiveContractors(), (id) => deriveFATResult(fatDetails[id]))}
           data={filteredFatList}
           searchKey=""
           getRowClassName={(row) =>
@@ -383,6 +386,18 @@ const FATDetailModal: React.FC<FATDetailModalProps> = ({ fatId, details, onSave,
           <button className={formStyles.closeButton} onClick={onClose}>×</button>
         </div>
         <div className={formStyles.modalBody}>
+          {(() => {
+            const r = deriveFATResult(detailList);
+            const color = r === 'Pass' ? '#15803d' : r === 'Fail' ? '#b91c1c' : '#a16207';
+            const label = ({ Pass: t('fat.result.pass'), Fail: t('fat.result.fail'), Pending: t('fat.result.pending') } as Record<string, string>)[r] || r;
+            return (
+              <div style={{ marginBottom: 10, fontSize: 13 }}>
+                {t('fat.overallResult') || 'Overall Result'}：
+                <span style={{ color, fontWeight: 700 }}>{label}</span>
+                <span style={{ color: '#6b7280', marginLeft: 8, fontSize: 11 }}>（由各項判定自動計算 / auto from item judgments）</span>
+              </div>
+            );
+          })()}
           <div className={styles.tableContainer}>
             <table className={styles.detailTable}>
               <thead>
@@ -709,13 +724,21 @@ interface FATDetailsViewModalProps {
 }
 const FATDetailsViewModal: React.FC<FATDetailsViewModalProps> = ({ fatId: _fatId, fatItem, fatDetails, onClose }) => {
   const { t } = useLanguage();
-  const handlePrint = () => {
-    window.print();
-  };
+  const [isPrinting, setIsPrinting] = useState(false);
+  useEffect(() => {
+    if (!isPrinting) return;
+    const timer = setTimeout(() => window.print(), 200);
+    const onAfterPrint = () => setIsPrinting(false);
+    window.addEventListener('afterprint', onAfterPrint);
+    return () => { clearTimeout(timer); window.removeEventListener('afterprint', onAfterPrint); };
+  }, [isPrinting]);
 
   if (!fatItem) {
     return null;
   }
+  const overallResult = deriveFATResult(fatDetails);
+  const resultColor = overallResult === 'Pass' ? '#15803d' : overallResult === 'Fail' ? '#b91c1c' : '#a16207';
+  const resultLabel = ({ Pass: t('fat.result.pass'), Fail: t('fat.result.fail'), Pending: t('fat.result.pending') } as Record<string, string>)[overallResult] || overallResult;
 
   return (
     <div className={formStyles.modalOverlay}>
@@ -729,6 +752,10 @@ const FATDetailsViewModal: React.FC<FATDetailsViewModalProps> = ({ fatId: _fatId
             <div className={formStyles.formSection}>
               <h3 className={formStyles.sectionTitle}>{t('fat.sectionBaseInfo')}</h3>
               <div className={formStyles.formGrid}>
+                <div className={formStyles.formGroup}>
+                  <label>{t('fat.overallResult') || 'Overall Result'}</label>
+                  <div className={formStyles.readOnlyField} style={{ color: resultColor, fontWeight: 700 }}>{resultLabel}</div>
+                </div>
                 <div className={formStyles.formGroup}>
                   <label>{t('fat.equipment')}</label>
                   <div className={formStyles.readOnlyField}>{fatItem.equipment || '-'}</div>
@@ -810,7 +837,7 @@ const FATDetailsViewModal: React.FC<FATDetailsViewModalProps> = ({ fatId: _fatId
           </div>
         </div>
         <div className={formStyles.modalActions}>
-          <button className={formStyles.printButton} onClick={handlePrint}>
+          <button className={formStyles.printButton} onClick={() => setIsPrinting(true)}>
             {t('common.print')}
           </button>
           <button className={formStyles.cancelButton} onClick={onClose}>
@@ -818,6 +845,10 @@ const FATDetailsViewModal: React.FC<FATDetailsViewModalProps> = ({ fatId: _fatId
           </button>
         </div>
       </div>
+      {isPrinting && ReactDOM.createPortal(
+        <FATPrintTemplate fat={fatItem} details={fatDetails} result={overallResult} />,
+        document.body
+      )}
     </div>
   );
 };

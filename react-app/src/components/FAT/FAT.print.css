@@ -1,0 +1,108 @@
+/* FAT (Factory Acceptance Test) print report. Portal-mounted into <body>,
+   shown only while printing. Scoped under .fat-print-root. Masthead in the
+   outer table's <thead> repeats on every page. */
+
+:root {
+    --fat-ink: #1c1f24;
+    --fat-muted: #5b6068;
+    --fat-line: #9aa0a8;
+    --fat-line-soft: #c9ced4;
+    --fat-fill: #eef1f4;
+    --fat-fill-head: #dfe4ea;
+    --fat-accent: #1f3a5f;
+    --fat-status: #1f6f8b;
+    --fat-note: #7a818a;
+}
+
+.fat-print-root { display: none; }
+
+.fat-print-root {
+    font-family: "Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    color: var(--fat-ink);
+    font-size: 9.3px;
+    line-height: 1.5;
+    background: #fff;
+}
+.fat-print-root * { box-sizing: border-box; }
+
+.fat-print-root .fat-report { width: 100%; border-collapse: collapse; }
+.fat-print-root .head-cell,
+.fat-print-root .body-cell { border: none; padding: 0; text-align: left; font-weight: 400; }
+
+.fat-print-root .doc-head {
+    display: flex; align-items: stretch;
+    border-bottom: 2.2px solid var(--fat-ink);
+    padding-bottom: 6px; margin-bottom: 10px;
+}
+.fat-print-root .logo-box {
+    width: 78px; min-height: 46px;
+    border: 1px dashed var(--fat-line-soft);
+    display: flex; align-items: center; justify-content: center;
+    color: #b8bdc4; font-size: 9px; letter-spacing: 1px;
+}
+.fat-print-root .head-mid { flex: 1; padding: 2px 14px; }
+.fat-print-root .head-mid .co { font-size: 14px; font-weight: 700; letter-spacing: .5px; }
+.fat-print-root .head-mid .sub { font-size: 9.5px; color: var(--fat-muted); margin-top: 2px; }
+.fat-print-root .head-right { text-align: right; font-size: 9px; line-height: 1.6; min-width: 130px; }
+.fat-print-root .head-right .docno { font-weight: 700; font-size: 10px; letter-spacing: .3px; }
+
+.fat-print-root .badge {
+    display: inline-block; padding: 1px 7px; border-radius: 2px;
+    font-weight: 700; font-size: 8.6px; letter-spacing: .4px; color: #fff;
+}
+.fat-print-root .b-status { background: var(--fat-status); }
+.fat-print-root .b-pass { background: #15803d; }
+.fat-print-root .b-fail { background: #b91c1c; }
+.fat-print-root .b-pending { background: #a16207; }
+
+.fat-print-root .title {
+    text-align: center; font-size: 16px; font-weight: 700;
+    letter-spacing: 3px; margin: 4px 0 12px;
+}
+.fat-print-root .title .en {
+    font-size: 9px; font-weight: 500; letter-spacing: 2px;
+    color: var(--fat-muted); display: block; margin-top: 2px;
+}
+
+.fat-print-root .sec-head {
+    background: var(--fat-fill-head);
+    border-left: 3px solid var(--fat-accent);
+    padding: 3px 9px; font-weight: 700; font-size: 10px;
+    letter-spacing: .5px; margin: 11px 0 0;
+}
+.fat-print-root .sec-head .en { font-weight: 500; color: var(--fat-muted); font-size: 8.6px; letter-spacing: .5px; }
+
+.fat-print-root table { width: 100%; border-collapse: collapse; margin-top: -1px; }
+.fat-print-root td, .fat-print-root th { border: 1px solid var(--fat-line); padding: 3px 6px; vertical-align: top; }
+.fat-print-root td.lbl {
+    background: var(--fat-fill); font-weight: 600; white-space: nowrap;
+    width: 96px; color: #2a2e34;
+}
+.fat-print-root td.lbl small { display: block; color: var(--fat-note); font-weight: 500; font-size: 7.6px; letter-spacing: .2px; }
+.fat-print-root .val { min-height: 14px; }
+.fat-print-root .blank { color: #aeb3ba; }
+
+/* items table — compact for 9 columns */
+.fat-print-root .items th { background: var(--fat-fill-head); font-size: 7.8px; padding: 3px 4px; }
+.fat-print-root .items td { font-size: 8px; padding: 2px 4px; }
+.fat-print-root .items .j-pass { color: #15803d; font-weight: 700; }
+.fat-print-root .items .j-fail { color: #b91c1c; font-weight: 700; }
+
+.fat-print-root .foot {
+    margin-top: 12px; border-top: 1px solid var(--fat-line-soft); padding-top: 6px;
+    display: flex; justify-content: space-between; gap: 14px; font-size: 7.6px; color: var(--fat-note);
+}
+
+.fat-print-root tr { break-inside: avoid; page-break-inside: avoid; }
+.fat-print-root .sec-head { break-after: avoid; page-break-after: avoid; }
+
+@media print {
+    @page { size: A4; margin: 13mm 12mm; }
+    #root { display: none !important; }
+    .fat-print-root { display: block !important; }
+    .fat-print-root .fat-report > thead { display: table-header-group; }
+    .fat-print-root * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+}

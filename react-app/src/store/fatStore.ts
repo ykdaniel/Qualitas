@@ -34,6 +34,18 @@ export interface FATDetailItem {
     remarks: string;
 }
 
+/**
+ * Overall FAT verdict derived from the per-item judgments (not stored / not
+ * hand-picked): any Fail → Fail; any unjudged/Pending → Pending; all Pass → Pass.
+ */
+export type FATResult = 'Pass' | 'Fail' | 'Pending';
+export function deriveFATResult(details: FATDetailItem[] | undefined): FATResult {
+    if (!details || details.length === 0) return 'Pending';
+    if (details.some(d => d.fatJudgment === 'Fail')) return 'Fail';
+    if (details.some(d => !d.fatJudgment || d.fatJudgment === 'Pending')) return 'Pending';
+    return 'Pass';
+}
+
 interface FATState {
     fatList: FATItem[];
     fatDetails: { [key: string]: FATDetailItem[] };
