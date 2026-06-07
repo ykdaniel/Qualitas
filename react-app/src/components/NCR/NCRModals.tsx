@@ -162,14 +162,13 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         setValue('attachments', next, { shouldDirty: true });
     };
 
-    // The closure-gate fields are always marked * ("required to close") so the
-    // user can see upfront what's needed — even though it's only enforced when
-    // they set effectivenessVerified = Yes (see the schema superRefine).
-    const reqMark = <span style={{ color: '#dc2626' }}> *</span>;
-    const closeStar = reqMark;
-    // Coupling stars: shown whenever the trigger value is set.
-    const repairStar = watch('productDisposition') === 'Repair' ? reqMark : null;
-    const recurrenceStar = watch('recurrence') === 'Yes' ? reqMark : null;
+    // Two tiers of required, distinguished by colour:
+    //   openStar  (red)   — required to raise/save at all.
+    //   closeStar (amber) — required only to close (enforced when effectiveness=Yes).
+    const openStar = <span style={{ color: '#dc2626' }} title="開立必填 / required to raise"> *</span>;
+    const closeStar = <span style={{ color: '#d97706' }} title="結案必填 / required to close"> *</span>;
+    const repairStar = watch('productDisposition') === 'Repair' ? closeStar : null;
+    const recurrenceStar = watch('recurrence') === 'Yes' ? closeStar : null;
 
     // Name suggestions for the people fields (raisedBy / foundBy / CA & PA
     // owners). These stay free text — site/contractor staff aren't always system
@@ -228,6 +227,12 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         const fields = Object.keys(errs);
         if (!fields.length) return;
         const labelOf = (f: string) => (({
+            subject: t('obs.subject'),
+            type: t('ncr.type'),
+            severity: t('ncr.severity') || 'Severity',
+            contractor: t('obs.contractor'),
+            raiseDate: t('ncr.raiseDate'),
+            detailsDescription: t('obs.detailsDescription'),
             productDisposition: t('obs.productDisposition'),
             reInspectionNumber: t('ncr.reinspectionNo'),
             drawingNo: '圖號 Drawing No.',
@@ -238,7 +243,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
             recurrenceRef: '關聯前次 NCR',
         } as Record<string, string>)[f] || f);
         const labels = fields.map(labelOf);
-        toast.warning(`無法結案,請補齊以下欄位 / Cannot close — complete: ${labels.join('、')}`);
+        toast.warning(`請補齊必填欄位 / Complete required fields: ${labels.join('、')}`);
         const el = document.querySelector(`[name="${fields[0]}"]`) as HTMLElement | null;
         el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };
@@ -260,7 +265,9 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                 <div className={formStyles.modalBody}>
                     <p className={formStyles.formRequiredHint}>{t('form.requiredHint')}</p>
                     <p style={{ fontSize: 11.5, color: '#6b7280', margin: '2px 0 0', lineHeight: 1.4 }}>
-                        狀態由「驗證與結案」自動決定;標 * 者為結案時必填。/ Status is auto-set from Verification &amp; Closure; * fields are required to close.
+                        <span style={{ color: '#dc2626', fontWeight: 600 }}>紅 *</span> 開立必填、
+                        <span style={{ color: '#d97706', fontWeight: 600 }}>橘 *</span> 結案必填;狀態由「驗證與結案」自動決定。
+                        / <span style={{ color: '#dc2626' }}>red *</span> = required to raise, <span style={{ color: '#d97706' }}>amber *</span> = required to close; status auto-set from Verification &amp; Closure.
                     </p>
                     <datalist id="ncr-people">
                         {peopleSuggestions.map(name => <option key={name} value={name} />)}
@@ -268,7 +275,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                     <div className={formStyles.formSections}>
                         {/* ===== 1. 基本資訊 / Identification ===== */}
                         <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>基本資訊 / Identification</h3>
+                            <h3 className={formStyles.sectionTitle}>基本資訊 / Identification <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（開立人 / QA）</span></h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.documentNumber')}</label>
@@ -299,11 +306,12 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     </p>
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('obs.subject')}</label>
+                                    <label>{t('obs.subject')}{openStar}</label>
                                     <input type="text" className={formStyles.formInput} {...register('subject')} />
+                                    {errText('subject')}
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.type')}</label>
+                                    <label>{t('ncr.type')}{openStar}</label>
                                     <select className={formStyles.formSelect} {...register('type')}>
                                         <option value="">{t('obs.typePlaceholder')}</option>
                                         <option value="Design">{t('ncr.type.design')}</option>
@@ -311,9 +319,10 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                         <option value="Workmanship">{t('ncr.type.workmanship')}</option>
                                         <option value="Document">{t('ncr.type.document')}</option>
                                     </select>
+                                    {errText('type')}
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.severity') || 'Severity'}</label>
+                                    <label>{t('ncr.severity') || 'Severity'}{openStar}</label>
                                     <select className={formStyles.formSelect} {...register('severity')}>
                                         <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
                                         <option value="Major">{t('ncr.severity.major') || 'Major 重大'}</option>
@@ -322,6 +331,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     <p style={{ fontSize: 11, color: '#6b7280', margin: '4px 0 0', lineHeight: 1.4 }}>
                                         {t('ncr.severity.hint') || 'Major: affects fitness-for-purpose / safety / code or contract compliance, or is a repeat/systemic issue — needs PQM/owner sign-off (SLA 7 days). Minor: isolated, easily corrected, no impact on function — contractor corrects + QA verifies (SLA 14 days).'}
                                     </p>
+                                    {errText('severity')}
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.discipline') || 'Discipline'}</label>
@@ -336,7 +346,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     </select>
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('obs.contractor')}</label>
+                                    <label>{t('obs.contractor')}{openStar}</label>
                                     <select className={formStyles.formSelect} {...register('contractor')}>
                                         <option value="">{t('obs.contractorPlaceholder')}</option>
                                         {getActiveContractors().map((contractor) => (
@@ -345,9 +355,10 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                             </option>
                                         ))}
                                     </select>
+                                    {errText('contractor')}
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.raiseDate')}</label>
+                                    <label>{t('ncr.raiseDate')}{openStar}</label>
                                     <input
                                         {...register('raiseDate')}
                                         type={watch('raiseDate') ? 'date' : 'text'}
@@ -357,6 +368,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                         onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
                                         className={formStyles.formInput}
                                     />
+                                    {errText('raiseDate')}
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('common.dueDate')}</label>
@@ -430,11 +442,12 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
 
                         {/* ===== 2. 不符合描述 / Non-Conformance Description ===== */}
                         <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>不符合描述 / Non-Conformance Description</h3>
+                            <h3 className={formStyles.sectionTitle}>不符合描述 / Non-Conformance Description <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（開立人 / QA）</span></h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroupFull}>
-                                    <label>{t('obs.detailsDescription')}</label>
+                                    <label>{t('obs.detailsDescription')}{openStar}</label>
                                     <textarea className={formStyles.formTextarea} rows={4} {...register('detailsDescription')} />
+                                    {errText('detailsDescription')}
                                 </div>
                                 <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>
                                     <label>規範要求 Requirement</label>
@@ -454,7 +467,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                         {/* ===== 3. 追溯與影響 / Traceability & Impact =====
                             drawingNo / specNo / qtyAffected / extent required at closure; rest collapse. */}
                         <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>追溯與影響 / Traceability &amp; Impact</h3>
+                            <h3 className={formStyles.sectionTitle}>追溯與影響 / Traceability &amp; Impact <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（開立人 / QA）</span></h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
                                     <label>圖號 Drawing No.{closeStar}</label>
@@ -507,7 +520,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
 
                         {/* ===== 4. 處置 / Disposition ===== */}
                         <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>{t('ncr.sectionDisposition')}</h3>
+                            <h3 className={formStyles.sectionTitle}>{t('ncr.sectionDisposition')} <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（承包商 / Contractor）</span></h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.productDisposition')}{closeStar}</label>
@@ -584,7 +597,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
 
                         {/* ===== 5. 根本原因與矯正·預防措施 / Root Cause & CA/PA ===== */}
                         <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>根本原因與矯正·預防措施 / Root Cause &amp; Corrective / Preventive Action</h3>
+                            <h3 className={formStyles.sectionTitle}>根本原因與矯正·預防措施 / Root Cause &amp; Corrective / Preventive Action <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（承包商 / Contractor）</span></h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
                                     <label>分析方法 RCA Method</label>
@@ -663,7 +676,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
 
                         {/* ===== 6. 驗證與結案 / Verification & Closure ===== */}
                         <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>驗證與結案 / Verification &amp; Closure</h3>
+                            <h3 className={formStyles.sectionTitle}>驗證與結案 / Verification &amp; Closure <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（QA）</span></h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.effectivenessVerified') || 'Effectiveness Verified'}</label>

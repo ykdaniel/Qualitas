@@ -17,6 +17,7 @@ import type { NCRItem } from '../../store/ncrStore';
 // .default() here would make the resolver's input type optional and mismatch
 // useForm<NCRDetailData>.
 const str = z.string();
+const reqStr = z.string().min(1, 'ncr.fieldRequired'); // required at raise (always)
 const fkUser = z.number().nullable();
 const fileArr = z.array(z.any());
 
@@ -26,15 +27,15 @@ export const ncrFormSchema = z
         itrNumber: str,
         rev: str,
         status: str,
-        raiseDate: str,
+        raiseDate: reqStr,        // open-required
         closeoutDate: str,
         aconex: str,
-        type: str,
-        contractor: str,
+        type: reqStr,             // open-required
+        contractor: reqStr,       // open-required
         remark: str,
-        subject: str,
+        subject: reqStr,          // open-required
         referenceStandards: str,
-        detailsDescription: str,
+        detailsDescription: reqStr, // open-required
         foundLocation: str,
         foundBy: str,
         raisedBy: str,
@@ -57,7 +58,7 @@ export const ncrFormSchema = z
         attachments: fileArr,
         dueDate: str,
         // NCR field-model improvements (BACKLOG #13)
-        severity: str,
+        severity: reqStr,         // open-required
         discipline: str,
         assignedTo: fkUser,
         closedBy: fkUser,
