@@ -29,7 +29,9 @@ export const obsFormSchema = z.object({
     dueDate: str,
     closeoutDate: str,
     detailsDescription: z.string().min(1, 'obs.descriptionRequired'),
-    productDisposition: str, // UI label = "Recommended Action"
+    productDisposition: str, // UI label = "Action Taken"
+    verified: str,           // Pending / Verified / Rejected (QA closeout)
+    verifiedDate: str,
     remark: str,
     aconex: str,
     defectPhotos: fileArr,
@@ -43,7 +45,8 @@ export type OBSDetailData = z.infer<typeof obsFormSchema>;
 export const emptyOBSForm: OBSDetailData = {
     obsNumber: '', status: 'Open', subject: '', type: '', contractor: '',
     foundLocation: '', foundBy: '', raisedBy: '', raiseDate: '', dueDate: '',
-    closeoutDate: '', detailsDescription: '', productDisposition: '', remark: '',
+    closeoutDate: '', detailsDescription: '', productDisposition: '',
+    verified: 'Pending', verifiedDate: '', remark: '',
     aconex: '',
     defectPhotos: [], improvementPhotos: [], attachments: [],
 };
@@ -65,6 +68,8 @@ export function toFormValues(item: OBSItem): OBSDetailData {
         closeoutDate: item.closeoutDate || '',
         detailsDescription: item.description || '',
         productDisposition: item.productDisposition || '',
+        verified: item.verified || 'Pending',
+        verifiedDate: item.verifiedDate || '',
         remark: item.remark || '',
         aconex: item.aconex || '',
         defectPhotos: item.defectPhotos || [],

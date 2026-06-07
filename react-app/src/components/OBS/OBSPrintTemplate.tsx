@@ -65,10 +65,6 @@ const OBSPrintTemplate: React.FC<OBSPrintTemplateProps> = ({ data, defectPhotos 
                                         <td className="lbl">開立日期<small>Raise Date</small></td><td className="val">{val(data.raiseDate)}</td>
                                         <td className="lbl">到期日<small>Due Date</small></td><td className="val">{val(data.dueDate)}</td>
                                     </tr>
-                                    <tr>
-                                        <td className="lbl">結案日期<small>Closeout</small></td><td className="val">{val(data.closeoutDate)}</td>
-                                        <td className="lbl">狀態<small>Status</small></td><td className="val">{val(data.status)}</td>
-                                    </tr>
                                 </tbody>
                             </table>
 
@@ -80,15 +76,28 @@ const OBSPrintTemplate: React.FC<OBSPrintTemplateProps> = ({ data, defectPhotos 
                             <div className="sec-head">3. 處理方式 <span className="en">Action Taken (by Contractor)</span></div>
                             <div className="field-box">{data.productDisposition || <span className="guide">（由承攬商填寫處理方式 Action taken — by contractor）</span>}</div>
 
-                            {data.remark && (<>
-                                <div className="sec-head">備註 <span className="en">Remark</span></div>
-                                <div className="field-box">{data.remark}</div>
-                            </>)}
+                            {/* ===== 4 驗證與結案 ===== */}
+                            <div className="sec-head">4. 驗證與結案 <span className="en">Verification &amp; Closure</span></div>
+                            <table>
+                                <tbody>
+                                    <tr>
+                                        <td className="lbl">驗證結果<small>Verified</small></td><td className="val">{val(data.verified)}</td>
+                                        <td className="lbl">驗證日期<small>Verified Date</small></td><td className="val">{val(data.verifiedDate)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td className="lbl">結案日期<small>Closeout</small></td><td className="val">{val(data.closeoutDate)}</td>
+                                        <td className="lbl">狀態<small>Status</small></td><td className="val">{val(data.status)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td className="lbl">備註<small>Remark</small></td><td className="val" colSpan={3}>{val(data.remark)}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
 
                             {/* ===== 照片 ===== */}
                             {hasPhotos && (
                                 <>
-                                    <div className="sec-head">4. 照片 <span className="en">Photos</span></div>
+                                    <div className="sec-head">5. 照片 <span className="en">Photos</span></div>
                                     <div className="photo-grid">
                                         <div>
                                             <div className="subhead">觀察照片 Observation</div>

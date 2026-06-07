@@ -666,8 +666,10 @@ class OBSBase(BaseModel):
     dueDate: str | None = None
     noiNumber: str | None = None
     itrNumber: str | None = None
+    verified: str | None = None          # Pending / Verified / Rejected
+    verifiedDate: str | None = None
 
-    @field_validator('raiseDate', 'closeoutDate', 'dueDate', mode='before')
+    @field_validator('raiseDate', 'closeoutDate', 'dueDate', 'verifiedDate', mode='before')
     @classmethod
     def check_dates(cls, v):
         return validate_date_format(v)
@@ -719,6 +721,8 @@ class OBSUpdate(BaseModel):
     dueDate: str | None = None
     noiNumber: str | None = None
     itrNumber: str | None = None
+    verified: str | None = None
+    verifiedDate: str | None = None
 
     @field_validator('defectPhotos', 'improvementPhotos', 'attachments', mode='before')
     @classmethod

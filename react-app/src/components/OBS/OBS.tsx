@@ -95,6 +95,8 @@ const OBS: React.FC = () => {
       improvementPhotos: details.improvementPhotos,
       attachments: details.attachments,
       dueDate: details.dueDate || undefined,
+      verified: details.verified || undefined,
+      verifiedDate: details.verifiedDate || undefined,
     };
     try {
       let targetId = '';

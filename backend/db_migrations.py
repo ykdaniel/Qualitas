@@ -124,6 +124,8 @@ def _add_missing_columns():
             _add_column_if_missing(conn, "obs", "dueDate", "TEXT")
             _add_column_if_missing(conn, "obs", "last_reminded_at", "TEXT")
             _add_column_if_missing(conn, "obs", "attachments", "TEXT")
+            _add_column_if_missing(conn, "obs", "verified", "VARCHAR")       # Pending / Verified / Rejected
+            _add_column_if_missing(conn, "obs", "verifiedDate", "TEXT")
 
             # ITR
             _add_column_if_missing(conn, "itr", "last_reminded_at", "TEXT")

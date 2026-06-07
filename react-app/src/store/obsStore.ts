@@ -33,6 +33,8 @@ export interface OBSItem {
     noiNumber?: string;
     itrNumber?: string;
     dueDate?: string;
+    verified?: string;        // Pending / Verified / Rejected
+    verifiedDate?: string;
 }
 
 function normalizeItem(item: unknown): OBSItem {

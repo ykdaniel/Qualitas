@@ -255,6 +255,25 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                         {t('obs.actionTakenHint') || 'To be filled by the contractor.'}
                                     </p>
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* ===== 4. 驗證與結案 / Verification & Closure ===== */}
+                        <div className={formStyles.formSection}>
+                            <h3 className={formStyles.sectionTitle}>驗證與結案 / Verification &amp; Closure</h3>
+                            <div className={formStyles.formGrid}>
+                                <div className={formStyles.formGroup}>
+                                    <label>{t('obs.verified') || 'Verified'}</label>
+                                    <select className={formStyles.formSelect} {...register('verified')}>
+                                        <option value="Pending">{t('ncr.effectiveness.pending') || '待驗證 Pending'}</option>
+                                        <option value="Verified">通過 Verified</option>
+                                        <option value="Rejected">退回 Rejected</option>
+                                    </select>
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label className={formStyles.optionalLabel}>{t('obs.verifiedDate') || 'Verified Date'}</label>
+                                    {dateInput('verifiedDate')}
+                                </div>
                                 <div className={formStyles.formGroup}>
                                     <label className={formStyles.optionalLabel}>{t('obs.closeoutDate')}</label>
                                     {dateInput('closeoutDate')}
@@ -266,7 +285,7 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                             </div>
                         </div>
 
-                        {/* ===== 4. 照片與附件 / Photos & Attachments ===== */}
+                        {/* ===== 5. 照片與附件 / Photos & Attachments ===== */}
                         <div className={formStyles.formSection}>
                             <h3 className={formStyles.sectionTitle}>照片與附件 / Photos &amp; Attachments</h3>
                             <FileAttachment

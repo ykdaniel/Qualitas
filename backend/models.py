@@ -349,6 +349,8 @@ class OBS(Base):
     dueDate = Column(String, nullable=True)
     noiNumber = Column(String, nullable=True, index=True)
     itrNumber = Column(String, nullable=True, index=True)
+    verified = Column(String, nullable=True)       # Pending / Verified / Rejected (QA closeout)
+    verifiedDate = Column(String, nullable=True)
 
     # Relationships
     vendor_ref = relationship("Contractor", back_populates="obss")
