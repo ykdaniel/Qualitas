@@ -16,7 +16,6 @@ const DASH = '—';
 const val = (v?: string) => (v ? <>{v}</> : <span className="blank">{DASH}</span>);
 
 const OBSPrintTemplate: React.FC<OBSPrintTemplateProps> = ({ data, defectPhotos = [], improvementPhotos = [] }) => {
-    const hasLinks = Boolean(data.noiNumber || data.itrNumber);
     const hasPhotos = defectPhotos.length > 0 || improvementPhotos.length > 0;
 
     return (
@@ -86,22 +85,10 @@ const OBSPrintTemplate: React.FC<OBSPrintTemplateProps> = ({ data, defectPhotos 
                                 <div className="field-box">{data.remark}</div>
                             </>)}
 
-                            {hasLinks && (<>
-                                <div className="sec-head">4. 關聯文件 <span className="en">Related Links</span></div>
-                                <table>
-                                    <tbody>
-                                        <tr>
-                                            <td className="lbl">NOI 編號<small>NOI No.</small></td><td className="val">{val(data.noiNumber)}</td>
-                                            <td className="lbl">ITR 編號<small>ITR No.</small></td><td className="val">{val(data.itrNumber)}</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </>)}
-
                             {/* ===== 照片 ===== */}
                             {hasPhotos && (
                                 <>
-                                    <div className="sec-head">5. 照片 <span className="en">Photos</span></div>
+                                    <div className="sec-head">4. 照片 <span className="en">Photos</span></div>
                                     <div className="photo-grid">
                                         <div>
                                             <div className="subhead">觀察照片 Observation</div>

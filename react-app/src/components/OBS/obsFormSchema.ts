@@ -31,8 +31,6 @@ export const obsFormSchema = z.object({
     detailsDescription: z.string().min(1, 'obs.descriptionRequired'),
     productDisposition: str, // UI label = "Recommended Action"
     remark: str,
-    noiNumber: str,
-    itrNumber: str,
     aconex: str,
     defectPhotos: fileArr,
     improvementPhotos: fileArr,
@@ -46,7 +44,7 @@ export const emptyOBSForm: OBSDetailData = {
     obsNumber: '', status: 'Open', subject: '', type: '', contractor: '',
     foundLocation: '', foundBy: '', raisedBy: '', raiseDate: '', dueDate: '',
     closeoutDate: '', detailsDescription: '', productDisposition: '', remark: '',
-    noiNumber: '', itrNumber: '', aconex: '',
+    aconex: '',
     defectPhotos: [], improvementPhotos: [], attachments: [],
 };
 
@@ -68,8 +66,6 @@ export function toFormValues(item: OBSItem): OBSDetailData {
         detailsDescription: item.description || '',
         productDisposition: item.productDisposition || '',
         remark: item.remark || '',
-        noiNumber: item.noiNumber || '',
-        itrNumber: item.itrNumber || '',
         aconex: item.aconex || '',
         defectPhotos: item.defectPhotos || [],
         improvementPhotos: item.improvementPhotos || [],

@@ -4,8 +4,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
-import { useITRStore } from '../../store/itrStore';
-import { useNOIStore } from '../../store/noiStore';
 import ReactDOM from 'react-dom';
 import { getUsers, getEntityFiles, getAuthenticatedFileUrl, type User as ApiUser } from '../../services/api';
 import type { OBSItem } from '../../store/obsStore';
@@ -35,11 +33,6 @@ export interface OBSDetailModalProps {
 export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, existingItem, onSave, onClose }) => {
     const { t } = useLanguage();
     const { getActiveContractors } = useContractorsStore();
-    const itrList = useITRStore(s => s.itrList);
-    const fetchITRs = useITRStore(s => s.fetchITRs);
-    const noiList = useNOIStore(s => s.noiList);
-    const fetchNOIs = useNOIStore(s => s.fetchNOIs);
-    useEffect(() => { fetchITRs(); fetchNOIs(); }, [fetchITRs, fetchNOIs]);
 
     const {
         register, handleSubmit, watch, setValue, getValues,
@@ -235,24 +228,6 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                 <div className={formStyles.formGroup}>
                                     <label>{t('common.dueDate')}</label>
                                     {dateInput('dueDate')}
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.noiNo')}</label>
-                                    <select className={formStyles.formSelect} {...register('noiNumber')}>
-                                        <option value="">{t('ncr.noiNoPlaceholder') || '—'}</option>
-                                        {noiList.map((noi) => (
-                                            <option key={noi.id} value={noi.referenceNo}>{noi.referenceNo}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.itrNo')}</label>
-                                    <select className={formStyles.formSelect} {...register('itrNumber')}>
-                                        <option value="">—</option>
-                                        {itrList.map((itr) => (
-                                            <option key={itr.id} value={itr.documentNumber}>{itr.documentNumber}</option>
-                                        ))}
-                                    </select>
                                 </div>
                             </div>
                         </div>
