@@ -160,6 +160,16 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
         />
     );
 
+    // Voiding withdraws the observation, so no fields are required — bypass the
+    // zod resolver and save the current values directly. Otherwise validate.
+    const handleSaveClick = () => {
+        if (voided) {
+            void onValid(getValues());
+        } else {
+            void handleSubmit(onValid, onInvalid)();
+        }
+    };
+
     // Live status badge — derived from verification & closure (Void = override).
     const derivedStatus = voided
         ? 'Void'
@@ -357,7 +367,7 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                     </div>
                 </div>
                 <div className={formStyles.modalActions}>
-                    <button type="button" className={formStyles.saveButton} onClick={handleSubmit(onValid, onInvalid)} disabled={saving}>
+                    <button type="button" className={formStyles.saveButton} onClick={handleSaveClick} disabled={saving}>
                         {saving ? t('obs.saving') : t('common.save')}
                     </button>
                     <button type="button" className={formStyles.printButton} onClick={handlePrintClick} disabled={saving} title={t('common.print') || 'Print'}>

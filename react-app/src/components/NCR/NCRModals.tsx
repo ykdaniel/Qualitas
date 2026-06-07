@@ -206,8 +206,10 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
     };
 
     // Save — zod (resolver) enforces the strict QC closure gate before we get here.
+    // A voided NCR is withdrawn, so it needs no response: skip both the
+    // required-field validation (see handleSaveClick) and the link warning.
     const onValidSave = async (values: NCRDetailData) => {
-        if (!values.itrNumber && !values.noiNumber) {
+        if (!voided && !values.itrNumber && !values.noiNumber) {
             // Warn if no link to origin
             if (!window.confirm('This NCR is not linked to any ITR or NOI. Do you want to continue?')) {
                 return;
@@ -245,6 +247,17 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         toast.warning(`請補齊必填欄位 / Complete required fields: ${labels.join('、')}`);
         const el = document.querySelector(`[name="${fields[0]}"]`) as HTMLElement | null;
         el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+
+    // Voiding withdraws the NCR, so no fields are required — bypass the zod
+    // resolver entirely and save the current values straight away. Otherwise run
+    // the normal validated submit (closure gate + required fields).
+    const handleSaveClick = () => {
+        if (voided) {
+            void onValidSave(getValues());
+        } else {
+            void handleSubmit(onValidSave, onInvalid)();
+        }
     };
 
     // Live status badge — derived from verification & closure (Void = override).
@@ -752,7 +765,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                         )}
                     </div>
                     <div className={formStyles.modalActions}>
-                        <button className={formStyles.saveButton} onClick={handleSubmit(onValidSave, onInvalid)} disabled={saving}>
+                        <button className={formStyles.saveButton} onClick={handleSaveClick} disabled={saving}>
                             {saving ? t('obs.saving') : t('common.save')}
                         </button>
                         <button className={formStyles.printButton} onClick={handlePrintClick} style={{ marginLeft: '12px' }} disabled={saving} title={t('common.print') || 'Print'}>
