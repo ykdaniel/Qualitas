@@ -162,14 +162,14 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         setValue('attachments', next, { shouldDirty: true });
     };
 
-    // Closure intent = effectiveness verified "Yes". The closure-gate fields
-    // become required then (status is derived, not picked), so show the * then.
-    const closing = watch('effectivenessVerified') === 'Yes';
+    // The closure-gate fields are always marked * ("required to close") so the
+    // user can see upfront what's needed — even though it's only enforced when
+    // they set effectivenessVerified = Yes (see the schema superRefine).
     const reqMark = <span style={{ color: '#dc2626' }}> *</span>;
-    const closeStar = closing ? reqMark : null;
-    // Coupling stars: only required at closure when the trigger value is set.
-    const repairStar = closing && watch('productDisposition') === 'Repair' ? reqMark : null;
-    const recurrenceStar = closing && watch('recurrence') === 'Yes' ? reqMark : null;
+    const closeStar = reqMark;
+    // Coupling stars: shown whenever the trigger value is set.
+    const repairStar = watch('productDisposition') === 'Repair' ? reqMark : null;
+    const recurrenceStar = watch('recurrence') === 'Yes' ? reqMark : null;
 
     // Name suggestions for the people fields (raisedBy / foundBy / CA & PA
     // owners). These stay free text — site/contractor staff aren't always system
