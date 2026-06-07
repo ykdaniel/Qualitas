@@ -6,9 +6,12 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useITRStore } from '../../store/itrStore';
 import { useNOIStore } from '../../store/noiStore';
-import { getUsers, type User as ApiUser } from '../../services/api';
+import ReactDOM from 'react-dom';
+import { getUsers, getEntityFiles, getAuthenticatedFileUrl, type User as ApiUser } from '../../services/api';
 import type { OBSItem } from '../../store/obsStore';
 import FileAttachment from '../Shared/FileAttachment';
+import OBSPrintTemplate from './OBSPrintTemplate';
+import './OBS.print.css';
 import formStyles from '../Shared/FormShell.module.css';
 import { obsFormSchema, emptyOBSForm, toFormValues, OBS_ERROR_FALLBACKS } from './obsFormSchema';
 import type { OBSDetailData } from './obsFormSchema';
@@ -52,6 +55,41 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
     const [pendingAttachments, setPendingAttachments] = useState<File[]>([]);
     const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
     const [saving, setSaving] = useState(false);
+
+    // Print: mount the report portal, print, unmount (same pattern as NCR).
+    const [isPrinting, setIsPrinting] = useState(false);
+    const [printData, setPrintData] = useState<OBSDetailData | null>(null);
+    const [printDefectPhotos, setPrintDefectPhotos] = useState<string[]>([]);
+    const [printImprovementPhotos, setPrintImprovementPhotos] = useState<string[]>([]);
+    useEffect(() => {
+        if (!isPrinting) return;
+        const timer = setTimeout(() => window.print(), 200);
+        const onAfterPrint = () => setIsPrinting(false);
+        window.addEventListener('afterprint', onAfterPrint);
+        return () => { clearTimeout(timer); window.removeEventListener('afterprint', onAfterPrint); };
+    }, [isPrinting]);
+
+    const handlePrintClick = async () => {
+        const current = getValues();
+        const legacyDefect = (current.defectPhotos || []).filter((p): p is string => typeof p === 'string');
+        const legacyImprove = (current.improvementPhotos || []).filter((p): p is string => typeof p === 'string');
+        let defect = legacyDefect;
+        let improve = legacyImprove;
+        if (existingItem?.id) {
+            try {
+                const [d, i] = await Promise.all([
+                    getEntityFiles('obs', existingItem.id, 'defectPhoto'),
+                    getEntityFiles('obs', existingItem.id, 'improvementPhoto'),
+                ]);
+                defect = [...legacyDefect, ...d.map(f => f.file_url)];
+                improve = [...legacyImprove, ...i.map(f => f.file_url)];
+            } catch {/* fall back to legacy arrays */}
+        }
+        setPrintData(current);
+        setPrintDefectPhotos(defect.map(getAuthenticatedFileUrl));
+        setPrintImprovementPhotos(improve.map(getAuthenticatedFileUrl));
+        setIsPrinting(true);
+    };
 
     // People autocomplete: system users + active contractors. Stays free text
     // (site/contractor staff aren't always system users) — datalist just helps.
@@ -295,11 +333,22 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                     <button type="button" className={formStyles.saveButton} onClick={handleSubmit(onValid, onInvalid)} disabled={saving}>
                         {saving ? t('obs.saving') : t('common.save')}
                     </button>
+                    <button type="button" className={formStyles.printButton} onClick={handlePrintClick} disabled={saving} title={t('common.print') || 'Print'}>
+                        {t('common.print') || 'Print'}
+                    </button>
                     <button type="button" className={formStyles.cancelButton} onClick={onClose} disabled={saving}>
                         {t('common.cancel')}
                     </button>
                 </div>
             </div>
+            {isPrinting && printData && ReactDOM.createPortal(
+                <OBSPrintTemplate
+                    data={printData}
+                    defectPhotos={printDefectPhotos}
+                    improvementPhotos={printImprovementPhotos}
+                />,
+                document.body
+            )}
         </div>
     );
 };
