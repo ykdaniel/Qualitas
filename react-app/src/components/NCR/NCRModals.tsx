@@ -231,7 +231,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
             severity: t('ncr.severity') || 'Severity',
             contractor: t('obs.contractor'),
             raiseDate: t('ncr.raiseDate'),
-            detailsDescription: t('obs.detailsDescription'),
+            deviation: '偏差說明 Deviation',
             productDisposition: t('obs.productDisposition'),
             reInspectionNumber: t('ncr.reinspectionNo'),
             drawingNo: '圖號 Drawing No.',
@@ -432,18 +432,14 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                         <div className={formStyles.formSection}>
                             <h3 className={formStyles.sectionTitle}>不符合描述 / Non-Conformance Description <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（開立人 / QC）</span></h3>
                             <div className={formStyles.formGrid}>
-                                <div className={formStyles.formGroupFull}>
-                                    <label>{t('obs.detailsDescription')}{openStar}</label>
-                                    <textarea className={formStyles.formTextarea} rows={4} {...register('detailsDescription')} />
-                                    {errText('detailsDescription')}
-                                </div>
                                 <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>
                                     <label>規範要求 Requirement</label>
                                     <textarea className={formStyles.formTextarea} rows={2} {...register('requirement')} />
                                 </div>
                                 <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>
-                                    <label>偏差說明 Deviation</label>
-                                    <textarea className={formStyles.formTextarea} rows={2} {...register('deviation')} />
+                                    <label>偏差說明 Deviation{openStar}</label>
+                                    <textarea className={formStyles.formTextarea} rows={3} {...register('deviation')} />
+                                    {errText('deviation')}
                                 </div>
                             </div>
                         </div>
@@ -871,8 +867,12 @@ export const NCRDetailsViewModal: React.FC<NCRDetailsViewModalProps> = ({ ncrId:
                                     <div className={formStyles.readOnlyField}>{displayData.referenceStandards || '-'}</div>
                                 </div>
                                 <div className={formStyles.formGroupFull}>
-                                    <label>{t('obs.detailsDescription')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.detailsDescription || '-'}</div>
+                                    <label>規範要求 Requirement</label>
+                                    <div className={formStyles.readOnlyField}>{displayData.requirement || '-'}</div>
+                                </div>
+                                <div className={formStyles.formGroupFull}>
+                                    <label>偏差說明 Deviation</label>
+                                    <div className={formStyles.readOnlyField}>{displayData.deviation || displayData.detailsDescription || '-'}</div>
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.foundLocation')}</label>

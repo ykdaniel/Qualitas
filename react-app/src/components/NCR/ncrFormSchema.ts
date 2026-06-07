@@ -35,7 +35,7 @@ export const ncrFormSchema = z
         remark: str,
         subject: reqStr,          // open-required
         referenceStandards: str,
-        detailsDescription: reqStr, // open-required
+        detailsDescription: str,  // legacy column; deviation is the description now
         foundLocation: str,
         foundBy: str,
         raisedBy: str,
@@ -82,7 +82,7 @@ export const ncrFormSchema = z
         costScheduleImpact: str,
         requirement: str,
         asFound: str,
-        deviation: str,
+        deviation: reqStr,        // open-required (the non-conformance description)
         concessionNo: str,
         rcaMethod: str,
         directCause: str,

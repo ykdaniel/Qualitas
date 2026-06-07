@@ -90,7 +90,7 @@ const NCR: React.FC = () => {
 
       const updatedItem: Record<string, unknown> = {
         vendor: details.contractor || '',
-        description: details.subject || details.detailsDescription || '',
+        description: details.subject || details.deviation || details.detailsDescription || '',
         rev: '',
         submit: 'v',
         status: details.status || 'Open',
