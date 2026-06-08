@@ -308,6 +308,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                         <div className={formStyles.formSection}>
                             <h3 className={formStyles.sectionTitle}>基本資訊 / Identification <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（開立人 / QC）</span></h3>
                             <div className={formStyles.formGrid}>
+                                {/* 系統自動 */}
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.documentNumber')}</label>
                                     <input
@@ -325,7 +326,8 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     </label>
                                     <div className={formStyles.readOnlyField}>{statusText}</div>
                                 </div>
-                                <div className={formStyles.formGroup}>
+                                {/* 分類 */}
+                                <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>
                                     <label>{t('obs.subject')}{openStar}</label>
                                     <input type="text" className={formStyles.formInput} {...register('subject')} />
                                     {errText('subject')}
@@ -366,6 +368,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     </select>
                                     {errText('discipline')}
                                 </div>
+                                {/* 單位／人 */}
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.contractor')}{openStar}</label>
                                     <select className={formStyles.formSelect} {...register('contractor')}>
@@ -378,6 +381,31 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     </select>
                                     {errText('contractor')}
                                 </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>{t('obs.raisedBy')}{openStar}</label>
+                                    <input type="text" className={formStyles.formInput} list="ncr-people" {...register('raisedBy')} />
+                                    {errText('raisedBy')}
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>{t('obs.foundBy')}{openStar}</label>
+                                    <input type="text" className={formStyles.formInput} list="ncr-people" {...register('foundBy')} />
+                                    {errText('foundBy')}
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>{t('ncr.assignedTo') || 'Assigned To'}{openStar}</label>
+                                    <select
+                                        className={formStyles.formSelect}
+                                        value={watch('assignedTo') ?? ''}
+                                        onChange={(e) => setValue('assignedTo', e.target.value ? Number(e.target.value) : null, { shouldValidate: true, shouldDirty: true })}
+                                    >
+                                        <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
+                                        {users.map(u => (
+                                            <option key={u.id} value={u.id}>{u.full_name || u.username}</option>
+                                        ))}
+                                    </select>
+                                    {errText('assignedTo')}
+                                </div>
+                                {/* 日期 */}
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.raiseDate')}{openStar}</label>
                                     <input
@@ -398,34 +426,11 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     </label>
                                     <div className={formStyles.readOnlyField}>{computedDueDate || '—'}</div>
                                 </div>
+                                {/* 地點／追溯 */}
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.foundLocation')}{openStar}</label>
                                     <input type="text" className={formStyles.formInput} {...register('foundLocation')} />
                                     {errText('foundLocation')}
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('obs.foundBy')}{openStar}</label>
-                                    <input type="text" className={formStyles.formInput} list="ncr-people" {...register('foundBy')} />
-                                    {errText('foundBy')}
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('obs.raisedBy')}{openStar}</label>
-                                    <input type="text" className={formStyles.formInput} list="ncr-people" {...register('raisedBy')} />
-                                    {errText('raisedBy')}
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.assignedTo') || 'Assigned To'}{openStar}</label>
-                                    <select
-                                        className={formStyles.formSelect}
-                                        value={watch('assignedTo') ?? ''}
-                                        onChange={(e) => setValue('assignedTo', e.target.value ? Number(e.target.value) : null, { shouldValidate: true, shouldDirty: true })}
-                                    >
-                                        <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
-                                        {users.map(u => (
-                                            <option key={u.id} value={u.id}>{u.full_name || u.username}</option>
-                                        ))}
-                                    </select>
-                                    {errText('assignedTo')}
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.serialNumbers')}</label>
