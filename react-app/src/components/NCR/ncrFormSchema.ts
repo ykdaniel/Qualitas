@@ -136,7 +136,7 @@ export const emptyNCRForm: NCRDetailData = {
     effectivenessVerifiedDate: '', effectivenessNotes: '', drawingNo: '', specNo: '',
     poContract: '', wbs: '', lineNo: '', weldJointNo: '', heatBatchNo: '', qtyAffected: '',
     extent: '', costScheduleImpact: '', requirement: '', asFound: '', deviation: '',
-    concessionNo: '', rcaMethod: '', directCause: '', recurrence: '', recurrenceRef: '',
+    concessionNo: 'Not Applicable', rcaMethod: '', directCause: '', recurrence: '', recurrenceRef: '',
     correctiveActionOwner: '', correctiveActionTargetDate: '', preventiveActionOwner: '',
     preventiveActionTargetDate: '',
 };
@@ -201,7 +201,7 @@ export function toFormValues(item: NCRItem): NCRDetailData {
         requirement: item.requirement || '',
         asFound: item.asFound || '',
         deviation: item.deviation || '',
-        concessionNo: item.concessionNo || '',
+        concessionNo: item.concessionNo || 'Not Applicable',
         rcaMethod: item.rcaMethod || '',
         directCause: item.directCause || '',
         recurrence: item.recurrence || '',
