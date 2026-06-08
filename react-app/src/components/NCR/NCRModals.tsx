@@ -511,7 +511,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                             <div className={formStyles.formGrid}>
                                 {([
                                     ['lineNo', '管線編號 Line No.'], ['weldJointNo', '焊道編號 Weld / Joint No.'],
-                                    ['heatBatchNo', '材料爐號 Heat / Batch No.'],
+                                    ['heatBatchNo', '材料批號 Heat / Batch No.'],
                                 ] as [keyof NCRDetailData, string][]).map(([f, label]) => (
                                     <div className={formStyles.formGroup} key={f}>
                                         <label>{label}</label>

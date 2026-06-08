@@ -151,7 +151,7 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                                         <td className="lbl">焊道編號<small>Weld / Joint No.</small></td><td className="val">{val(data.weldJointNo)}</td>
                                     </tr>
                                     <tr>
-                                        <td className="lbl">材料爐號<small>Heat / Batch No.</small></td><td className="val">{val(data.heatBatchNo)}</td>
+                                        <td className="lbl">材料批號<small>Heat / Batch No.</small></td><td className="val">{val(data.heatBatchNo)}</td>
                                         <td className="lbl">ITR／NOI 編號<small>ITR / NOI No.</small></td><td className="val">{val([data.itrNumber, data.noiNumber].filter(Boolean).join(' / '))}</td>
                                     </tr>
                                 </tbody>
