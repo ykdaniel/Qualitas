@@ -696,17 +696,24 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     <textarea className={formStyles.formTextarea} rows={2} {...register('effectivenessNotes')} />
                                 </div>
                                 <div className={formStyles.formGroupFull}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400, cursor: 'pointer' }}>
+                                        <input type="checkbox" checked={voided} onChange={(e) => setVoided(e.target.checked)} />
+                                        <span>作廢此 NCR / Void this NCR</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ===== 備註 / Remark ===== */}
+                        <div className={formStyles.formSection}>
+                            <h3 className={formStyles.sectionTitle}>備註 / Remark</h3>
+                            <div className={formStyles.formGrid}>
+                                <div className={formStyles.formGroupFull}>
                                     <div className={formStyles.labelWithButton}>
                                         <label className={formStyles.optionalLabel}>{t('common.remark')}</label>
                                         <button type="button" className={formStyles.tbcButton} onClick={() => handleDateButton('remark')}>{t('common.addDate')}</button>
                                     </div>
                                     <textarea className={formStyles.formTextarea} rows={3} {...register('remark')} />
-                                </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400, cursor: 'pointer' }}>
-                                        <input type="checkbox" checked={voided} onChange={(e) => setVoided(e.target.checked)} />
-                                        <span>作廢此 NCR / Void this NCR</span>
-                                    </label>
                                 </div>
                             </div>
                         </div>
