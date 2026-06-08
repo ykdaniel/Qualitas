@@ -17,7 +17,7 @@ import ReactDOM from 'react-dom';
 import NCRPrintTemplate from './NCRPrintTemplate';
 import './NCR.print.css';
 import formStyles from '../Shared/FormShell.module.css';
-import { ncrFormSchema, emptyNCRForm, toFormValues, deriveNCRStatus, NCR_ERROR_FALLBACKS } from './ncrFormSchema';
+import { ncrFormSchema, emptyNCRForm, toFormValues, deriveNCRStatus, computeDueDate, NCR_ERROR_FALLBACKS } from './ncrFormSchema';
 import type { NCRDetailData } from './ncrFormSchema';
 
 // NCRDetailData now lives with the zod schema (single source of truth). Re-export
@@ -219,7 +219,8 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         if (finalStatus === 'Closed' && values.noiNumber) {
             toast.info(`NCR closed. You may now update NOI ${values.noiNumber} status to "Resolved".`);
         }
-        await persist({ ...values, status: finalStatus });
+        // Due Date is auto-derived from raise date + severity (not user-editable).
+        await persist({ ...values, status: finalStatus, dueDate: computeDueDate(values.raiseDate, values.severity) });
     };
 
     // On a failed close, list every missing field (not just the first) and
@@ -233,6 +234,12 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
             severity: t('ncr.severity') || 'Severity',
             contractor: t('obs.contractor'),
             raiseDate: t('ncr.raiseDate'),
+            discipline: t('ncr.discipline') || 'Discipline',
+            foundLocation: t('obs.foundLocation'),
+            foundBy: t('obs.foundBy'),
+            raisedBy: t('obs.raisedBy'),
+            assignedTo: t('ncr.assignedTo') || 'Assigned To',
+            referenceStandards: t('obs.refStandards'),
             deviation: '偏差說明 Deviation',
             productDisposition: t('obs.productDisposition'),
             reInspectionNumber: t('ncr.reinspectionNo'),
@@ -262,6 +269,8 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
 
     // Live status badge — derived from verification & closure (Void = override).
     const derivedStatus = voided ? 'Void' : deriveNCRStatus({ effectivenessVerified: watch('effectivenessVerified') });
+    // Due Date auto-derived live from raise date + severity (Major +7 / Minor +14).
+    const computedDueDate = computeDueDate(watch('raiseDate'), watch('severity'));
     const statusText = ({
         'Open': t('status.open'), 'In Progress': t('status.inProgress'),
         'Resolved': t('status.resolved'), 'Closed': t('status.closed'), 'Void': t('status.void'),
@@ -338,7 +347,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     {errText('severity')}
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.discipline') || 'Discipline'}</label>
+                                    <label>{t('ncr.discipline') || 'Discipline'}{openStar}</label>
                                     <select className={formStyles.formSelect} {...register('discipline')}>
                                         <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
                                         <option value="Civil">{t('ncr.discipline.civil') || 'Civil 土建'}</option>
@@ -348,6 +357,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                         <option value="Piping">{t('ncr.discipline.piping') || 'Piping 管路'}</option>
                                         <option value="Architectural">{t('ncr.discipline.architectural') || 'Architectural 建築'}</option>
                                     </select>
+                                    {errText('discipline')}
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.contractor')}{openStar}</label>
@@ -376,48 +386,48 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('common.dueDate')}</label>
-                                    <input
-                                        {...register('dueDate')}
-                                        type={watch('dueDate') ? 'date' : 'text'}
-                                        placeholder="mm/dd/yyyy"
-                                        lang="en"
-                                        onFocus={(e) => (e.target.type = 'date')}
-                                        onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
-                                        className={formStyles.formInput}
-                                    />
+                                    <div className={formStyles.readOnlyField}>{computedDueDate || '—'}</div>
+                                    <p style={{ fontSize: 11, color: '#6b7280', margin: '4px 0 0', lineHeight: 1.4 }}>
+                                        （依嚴重度自動計算 Major +7天 / Minor +14天 / auto from severity）
+                                    </p>
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('obs.foundLocation')}</label>
+                                    <label>{t('obs.foundLocation')}{openStar}</label>
                                     <input type="text" className={formStyles.formInput} {...register('foundLocation')} />
+                                    {errText('foundLocation')}
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('obs.foundBy')}</label>
+                                    <label>{t('obs.foundBy')}{openStar}</label>
                                     <input type="text" className={formStyles.formInput} list="ncr-people" {...register('foundBy')} />
+                                    {errText('foundBy')}
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('obs.raisedBy')}</label>
+                                    <label>{t('obs.raisedBy')}{openStar}</label>
                                     <input type="text" className={formStyles.formInput} list="ncr-people" {...register('raisedBy')} />
+                                    {errText('raisedBy')}
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.assignedTo') || 'Assigned To'}</label>
+                                    <label>{t('ncr.assignedTo') || 'Assigned To'}{openStar}</label>
                                     <select
                                         className={formStyles.formSelect}
                                         value={watch('assignedTo') ?? ''}
-                                        onChange={(e) => setValue('assignedTo', e.target.value ? Number(e.target.value) : null, { shouldDirty: true })}
+                                        onChange={(e) => setValue('assignedTo', e.target.value ? Number(e.target.value) : null, { shouldValidate: true, shouldDirty: true })}
                                     >
                                         <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
                                         {users.map(u => (
                                             <option key={u.id} value={u.id}>{u.full_name || u.username}</option>
                                         ))}
                                     </select>
+                                    {errText('assignedTo')}
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.serialNumbers')}</label>
                                     <input type="text" className={formStyles.formInput} {...register('serialNumbers')} />
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('obs.refStandards')}</label>
+                                    <label>{t('obs.refStandards')}{openStar}</label>
                                     <input type="text" className={formStyles.formInput} {...register('referenceStandards')} />
+                                    {errText('referenceStandards')}
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.itrNo')}</label>

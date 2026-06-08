@@ -97,6 +97,7 @@ const NCR: React.FC = () => {
         remark: details.remark || '',
         hasDetails: true,
         raiseDate: details.raiseDate,
+        dueDate: details.dueDate,
         closeoutDate: details.closeoutDate,
         aconex: details.aconex,
         type: details.type,

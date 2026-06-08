@@ -34,11 +34,11 @@ export const ncrFormSchema = z
         contractor: reqStr,       // open-required
         remark: str,
         subject: reqStr,          // open-required
-        referenceStandards: str,
+        referenceStandards: reqStr, // open-required
         detailsDescription: str,  // legacy column; deviation is the description now
-        foundLocation: str,
-        foundBy: str,
-        raisedBy: str,
+        foundLocation: reqStr,    // open-required
+        foundBy: reqStr,          // open-required
+        raisedBy: reqStr,         // open-required
         serialNumbers: str,
         productDisposition: str,
         repairMethodStatement: str,
@@ -59,8 +59,8 @@ export const ncrFormSchema = z
         dueDate: str,
         // NCR field-model improvements (BACKLOG #13)
         severity: reqStr,         // open-required
-        discipline: str,
-        assignedTo: fkUser,
+        discipline: reqStr,       // open-required
+        assignedTo: fkUser,       // open-required (enforced in superRefine — number|null)
         closedBy: fkUser,
         verifiedBy: fkUser,
         effectivenessVerified: str,
@@ -97,6 +97,11 @@ export const ncrFormSchema = z
     // gate triggers on the closure intent — effectivenessVerified === 'Yes' —
     // and guarantees the prerequisites are present before status becomes Closed.
     .superRefine((v, ctx) => {
+        // assignedTo is open-required but is number|null (not a string), so it
+        // can't use reqStr — enforce it here, always (not just at closure).
+        if (v.assignedTo == null) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['assignedTo'], message: 'ncr.fieldRequired' });
+        }
         if (v.effectivenessVerified !== 'Yes') return;
         const req = (field: keyof typeof v, message: string) => {
             if (!v[field]) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message });
@@ -219,6 +224,23 @@ export function toFormValues(item: NCRItem): NCRDetailData {
  * The closure gate (superRefine, triggered by effectivenessVerified==='Yes')
  * guarantees disposition + reInspection are present, so 'Yes' → Closed is valid.
  */
+/**
+ * Auto-derive the response Due Date from the raise date + severity SLA:
+ * Major = +7 days, Minor (or anything else) = +14 days. Returns '' until both
+ * raiseDate (YYYY-MM-DD) and severity are present. Uses UTC to avoid the
+ * off-by-one that local-time Date math causes on date-only strings.
+ */
+export function computeDueDate(raiseDate: string, severity: string): string {
+    if (!raiseDate || !severity) return '';
+    const parts = raiseDate.split('-').map(Number);
+    if (parts.length !== 3 || parts.some(Number.isNaN)) return '';
+    const [y, m, d] = parts;
+    const base = new Date(Date.UTC(y, m - 1, d));
+    if (Number.isNaN(base.getTime())) return '';
+    base.setUTCDate(base.getUTCDate() + (severity === 'Major' ? 7 : 14));
+    return base.toISOString().slice(0, 10);
+}
+
 export function deriveNCRStatus(v: Pick<NCRDetailData, 'effectivenessVerified'>): string {
     // Driven only by the explicit QC review (effectivenessVerified), not by
     // whether data fields happen to be filled.
