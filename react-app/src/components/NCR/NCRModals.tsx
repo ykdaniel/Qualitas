@@ -189,6 +189,16 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         );
     };
 
+    // Small circled "!" that holds a field's help note in a hover tooltip, so the
+    // form stays clean instead of carrying a paragraph under every field.
+    const infoDot = (text: string) => (
+        <span
+            title={text}
+            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 15, height: 15, borderRadius: '50%', border: '1px solid #9ca3af', color: '#6b7280', fontSize: 10, fontWeight: 700, lineHeight: 1, cursor: 'help', flex: '0 0 auto' }}
+        >!</span>
+    );
+    const labelStyle = { display: 'inline-flex', alignItems: 'center', gap: 6 } as const;
+
     const persist = async (values: NCRDetailData) => {
         setSaving(true);
         try {
@@ -284,11 +294,9 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                     <button className={formStyles.closeButton} onClick={onClose} disabled={saving}>×</button>
                 </div>
                 <div className={formStyles.modalBody}>
-                    <p className={formStyles.formRequiredHint}>{t('form.requiredHint')}</p>
-                    <p style={{ fontSize: 11.5, color: '#6b7280', margin: '2px 0 0', lineHeight: 1.4 }}>
-                        <span style={{ color: '#dc2626', fontWeight: 600 }}>紅 *</span> 開立必填、
-                        <span style={{ color: '#d97706', fontWeight: 600 }}>橘 *</span> 結案必填;狀態由「驗證與結案」自動決定。
-                        / <span style={{ color: '#dc2626' }}>red *</span> = required to raise, <span style={{ color: '#d97706' }}>amber *</span> = required to close; status auto-set from Verification &amp; Closure.
+                    <p className={formStyles.formRequiredHint} style={labelStyle}>
+                        <span>{t('form.requiredHint')}</span>
+                        {infoDot('紅 * 開立必填、橘 * 結案必填;狀態由「驗證與結案」自動決定。/ red * = required to raise, amber * = required to close; status auto-set from Verification & Closure.')}
                     </p>
                     <datalist id="ncr-people">
                         {peopleSuggestions.map(name => <option key={name} value={name} />)}
@@ -309,11 +317,11 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     />
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('common.status')}</label>
+                                    <label style={labelStyle}>
+                                        <span>{t('common.status')}</span>
+                                        {infoDot('由「驗證與結案」自動判定 / auto-set from Verification & Closure')}
+                                    </label>
                                     <div className={formStyles.readOnlyField}>{statusText}</div>
-                                    <p style={{ fontSize: 11, color: '#6b7280', margin: '4px 0 0', lineHeight: 1.4 }}>
-                                        （由「驗證與結案」自動判定 / auto-set from Verification &amp; Closure）
-                                    </p>
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.subject')}{openStar}</label>
@@ -332,12 +340,9 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     {errText('type')}
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                    <label style={labelStyle}>
                                         <span>{t('ncr.severity') || 'Severity'}{openStar}</span>
-                                        <span
-                                            title={t('ncr.severity.hint') || 'Major: affects fitness-for-purpose / safety / code or contract compliance, or is a repeat/systemic issue — needs PQM/owner sign-off (SLA 7 days). Minor: isolated, easily corrected, no impact on function — contractor corrects + QC verifies (SLA 14 days).'}
-                                            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 15, height: 15, borderRadius: '50%', border: '1px solid #9ca3af', color: '#6b7280', fontSize: 10, fontWeight: 700, lineHeight: 1, cursor: 'help' }}
-                                        >!</span>
+                                        {infoDot(t('ncr.severity.hint') || 'Major: affects fitness-for-purpose / safety / code or contract compliance, or is a repeat/systemic issue — needs PQM/owner sign-off (SLA 7 days). Minor: isolated, easily corrected, no impact on function — contractor corrects + QC verifies (SLA 14 days).')}
                                     </label>
                                     <select className={formStyles.formSelect} {...register('severity')}>
                                         <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
@@ -385,11 +390,11 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     {errText('raiseDate')}
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('common.dueDate')}</label>
+                                    <label style={labelStyle}>
+                                        <span>{t('common.dueDate')}</span>
+                                        {infoDot('依嚴重度自動計算 Major +7天 / Minor +14天 / auto from severity')}
+                                    </label>
                                     <div className={formStyles.readOnlyField}>{computedDueDate || '—'}</div>
-                                    <p style={{ fontSize: 11, color: '#6b7280', margin: '4px 0 0', lineHeight: 1.4 }}>
-                                        （依嚴重度自動計算 Major +7天 / Minor +14天 / auto from severity）
-                                    </p>
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.foundLocation')}{openStar}</label>
@@ -667,19 +672,16 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                             <h3 className={formStyles.sectionTitle}>驗證與結案 / Verification &amp; Closure <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（QC）</span></h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.effectivenessVerified') || 'Effectiveness Verified'}</label>
+                                    <label style={labelStyle}>
+                                        <span>{t('ncr.effectivenessVerified') || 'Effectiveness Verified'}</span>
+                                        {infoDot(`設為 Yes 即結案；No 退回處理中 / Set to "Yes" to close. ${t('ncr.effectiveness.hint') || 'Confirm the corrective action prevented recurrence. An NCR cannot be Closed until this is "Yes"; "No" routes it back to In Progress.'}`)}
+                                    </label>
                                     <select className={formStyles.formSelect} {...register('effectivenessVerified')}>
                                         <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
                                         <option value="Pending">{t('ncr.effectiveness.pending') || 'Pending 待驗證'}</option>
                                         <option value="Yes">{t('ncr.effectiveness.yes') || 'Yes 有效'}</option>
                                         <option value="No">{t('ncr.effectiveness.no') || 'No 無效'}</option>
                                     </select>
-                                    <p style={{ fontSize: 11.5, color: '#1f3a5f', fontWeight: 600, margin: '5px 0 0' }}>
-                                        設為 Yes 即結案；No 退回處理中 / Set to “Yes” to close
-                                    </p>
-                                    <p style={{ fontSize: 11, color: '#6b7280', margin: '3px 0 0', lineHeight: 1.4 }}>
-                                        {t('ncr.effectiveness.hint') || 'Confirm the corrective action prevented recurrence. An NCR cannot be Closed until this is "Yes"; "No" routes it back to In Progress.'}
-                                    </p>
                                     {errText('effectivenessVerified')}
                                 </div>
                                 <div className={formStyles.formGroup}>
