@@ -609,7 +609,13 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     {errText('recurrenceRef')}
                                 </div>
                                 <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>
-                                    <label>直接原因 Direct Cause</label>
+                                    <div className={formStyles.labelWithButton}>
+                                        <label>直接原因 Direct Cause</label>
+                                        <div className={styles.buttonGroup}>
+                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('directCause')}>{t('common.tbc')}</button>
+                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('directCause')}>{t('common.na')}</button>
+                                        </div>
+                                    </div>
                                     <textarea className={formStyles.formTextarea} rows={2} {...register('directCause')} />
                                 </div>
                                 <div className={formStyles.formGroupFull}>
