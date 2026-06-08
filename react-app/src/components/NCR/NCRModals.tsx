@@ -526,6 +526,27 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                         <div className={formStyles.formSection}>
                             <h3 className={formStyles.sectionTitle}>{t('ncr.sectionDisposition')} <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（承包商 / Contractor）</span></h3>
                             <div className={formStyles.formGrid}>
+                                <div className={formStyles.formGroupFull}>
+                                    <div className={formStyles.labelWithButton}>
+                                        <label>{t('ncr.correctionAction')}</label>
+                                        <div className={styles.buttonGroup}>
+                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('immediateCorrectionAction')}>{t('common.tbc')}</button>
+                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('immediateCorrectionAction')}>{t('common.na')}</button>
+                                        </div>
+                                    </div>
+                                    <textarea className={formStyles.formTextarea} rows={3} {...register('immediateCorrectionAction')} />
+                                </div>
+                                <div className={formStyles.formGroupFull}>
+                                    <div className={formStyles.labelWithButton}>
+                                        <label>{t('ncr.repairMethod')}{repairStar}</label>
+                                        <div className={styles.buttonGroup}>
+                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('repairMethodStatement')}>{t('common.tbc')}</button>
+                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('repairMethodStatement')}>{t('common.na')}</button>
+                                        </div>
+                                    </div>
+                                    <textarea className={formStyles.formTextarea} rows={3} {...register('repairMethodStatement')} />
+                                    {errText('repairMethodStatement')}
+                                </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.productDisposition')}{closeStar}</label>
                                     <select className={formStyles.formSelect} {...register('productDisposition')}>
@@ -566,27 +587,6 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                             <option value="No">{t('common.no')}</option>
                                         </select>
                                     </div>
-                                </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <div className={formStyles.labelWithButton}>
-                                        <label>{t('ncr.correctionAction')}</label>
-                                        <div className={styles.buttonGroup}>
-                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('immediateCorrectionAction')}>{t('common.tbc')}</button>
-                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('immediateCorrectionAction')}>{t('common.na')}</button>
-                                        </div>
-                                    </div>
-                                    <textarea className={formStyles.formTextarea} rows={3} {...register('immediateCorrectionAction')} />
-                                </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <div className={formStyles.labelWithButton}>
-                                        <label>{t('ncr.repairMethod')}{repairStar}</label>
-                                        <div className={styles.buttonGroup}>
-                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('repairMethodStatement')}>{t('common.tbc')}</button>
-                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('repairMethodStatement')}>{t('common.na')}</button>
-                                        </div>
-                                    </div>
-                                    <textarea className={formStyles.formTextarea} rows={3} {...register('repairMethodStatement')} />
-                                    {errText('repairMethodStatement')}
                                 </div>
                             </div>
                         </div>
