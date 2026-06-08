@@ -425,11 +425,6 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     <input type="text" className={formStyles.formInput} {...register('serialNumbers')} />
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('obs.refStandards')}{openStar}</label>
-                                    <input type="text" className={formStyles.formInput} {...register('referenceStandards')} />
-                                    {errText('referenceStandards')}
-                                </div>
-                                <div className={formStyles.formGroup}>
                                     <label>{t('ncr.itrNo')}</label>
                                     <select className={formStyles.formSelect} {...register('itrNumber')}>
                                         <option value="">Select ITR No.</option>
@@ -458,6 +453,11 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                         <div className={formStyles.formSection}>
                             <h3 className={formStyles.sectionTitle}>不符合描述 / Non-Conformance Description <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（開立人 / QC）</span></h3>
                             <div className={formStyles.formGrid}>
+                                <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>
+                                    <label>{t('obs.refStandards')}{openStar}</label>
+                                    <input type="text" className={formStyles.formInput} {...register('referenceStandards')} />
+                                    {errText('referenceStandards')}
+                                </div>
                                 <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>
                                     <label>規範要求 Requirement</label>
                                     <textarea className={formStyles.formTextarea} rows={2} {...register('requirement')} />
