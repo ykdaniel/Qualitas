@@ -692,7 +692,14 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     <input type="date" lang="en" className={formStyles.formInput} {...register('closeoutDate')} />
                                 </div>
                                 <div className={formStyles.formGroupFull}>
-                                    <label className={formStyles.optionalLabel}>{t('ncr.effectivenessNotes') || 'Verification Notes'}</label>
+                                    <div className={formStyles.labelWithButton}>
+                                        <label className={formStyles.optionalLabel}>{t('ncr.effectivenessNotes') || 'Verification Notes'}</label>
+                                        <div className={styles.buttonGroup}>
+                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleDateButton('effectivenessNotes')}>{t('common.addDate')}</button>
+                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('effectivenessNotes')}>{t('common.tbc')}</button>
+                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('effectivenessNotes')}>{t('common.na')}</button>
+                                        </div>
+                                    </div>
                                     <textarea className={formStyles.formTextarea} rows={2} {...register('effectivenessNotes')} />
                                 </div>
                                 <div className={formStyles.formGroupFull}>
