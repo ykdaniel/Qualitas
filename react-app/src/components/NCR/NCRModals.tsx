@@ -323,15 +323,18 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     {errText('type')}
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.severity') || 'Severity'}{openStar}</label>
+                                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                        <span>{t('ncr.severity') || 'Severity'}{openStar}</span>
+                                        <span
+                                            title={t('ncr.severity.hint') || 'Major: affects fitness-for-purpose / safety / code or contract compliance, or is a repeat/systemic issue — needs PQM/owner sign-off (SLA 7 days). Minor: isolated, easily corrected, no impact on function — contractor corrects + QC verifies (SLA 14 days).'}
+                                            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 15, height: 15, borderRadius: '50%', border: '1px solid #9ca3af', color: '#6b7280', fontSize: 10, fontWeight: 700, lineHeight: 1, cursor: 'help' }}
+                                        >!</span>
+                                    </label>
                                     <select className={formStyles.formSelect} {...register('severity')}>
                                         <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
                                         <option value="Major">{t('ncr.severity.major') || 'Major 重大'}</option>
                                         <option value="Minor">{t('ncr.severity.minor') || 'Minor 輕微'}</option>
                                     </select>
-                                    <p style={{ fontSize: 11, color: '#6b7280', margin: '4px 0 0', lineHeight: 1.4 }}>
-                                        {t('ncr.severity.hint') || 'Major: affects fitness-for-purpose / safety / code or contract compliance, or is a repeat/systemic issue — needs PQM/owner sign-off (SLA 7 days). Minor: isolated, easily corrected, no impact on function — contractor corrects + QC verifies (SLA 14 days).'}
-                                    </p>
                                     {errText('severity')}
                                 </div>
                                 <div className={formStyles.formGroup}>
