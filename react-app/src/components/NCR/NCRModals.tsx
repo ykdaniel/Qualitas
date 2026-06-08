@@ -557,6 +557,16 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 </div>
                                 <div className={formStyles.formGroupFull}>
                                     <div className={formStyles.labelWithButton}>
+                                        <label>{t('ncr.correctionAction')}</label>
+                                        <div className={styles.buttonGroup}>
+                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('immediateCorrectionAction')}>{t('common.tbc')}</button>
+                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('immediateCorrectionAction')}>{t('common.na')}</button>
+                                        </div>
+                                    </div>
+                                    <textarea className={formStyles.formTextarea} rows={3} {...register('immediateCorrectionAction')} />
+                                </div>
+                                <div className={formStyles.formGroupFull}>
+                                    <div className={formStyles.labelWithButton}>
                                         <label>{t('ncr.repairMethod')}{repairStar}</label>
                                         <div className={styles.buttonGroup}>
                                             <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('repairMethodStatement')}>{t('common.tbc')}</button>
@@ -565,16 +575,6 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     </div>
                                     <textarea className={formStyles.formTextarea} rows={3} {...register('repairMethodStatement')} />
                                     {errText('repairMethodStatement')}
-                                </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <div className={formStyles.labelWithButton}>
-                                        <label>{t('ncr.correctionAction')}</label>
-                                        <div className={styles.buttonGroup}>
-                                            <button type="button" className={formStyles.tbcButton} onClick={() => handleTBCButton('immediateCorrectionAction')}>{t('common.tbc')}</button>
-                                            <button type="button" className={formStyles.naButton} onClick={() => handleNAButton('immediateCorrectionAction')}>{t('common.na')}</button>
-                                        </div>
-                                    </div>
-                                    <textarea className={formStyles.formTextarea} rows={3} {...register('immediateCorrectionAction')} />
                                 </div>
                             </div>
                         </div>
@@ -945,12 +945,12 @@ export const NCRDetailsViewModal: React.FC<NCRDetailsViewModalProps> = ({ ncrId:
                             <h3 className={formStyles.sectionTitle}>{t('ncr.sectionDisposition')}</h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroupFull}>
-                                    <label>{t('ncr.repairMethod')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.repairMethodStatement || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroupFull}>
                                     <label>{t('ncr.correctionAction')}</label>
                                     <div className={formStyles.readOnlyField}>{displayData.immediateCorrectionAction || '-'}</div>
+                                </div>
+                                <div className={formStyles.formGroupFull}>
+                                    <label>{t('ncr.repairMethod')}</label>
+                                    <div className={formStyles.readOnlyField}>{displayData.repairMethodStatement || '-'}</div>
                                 </div>
                                 <div className={formStyles.formGroupFull}>
                                     <label>{t('ncr.rootCause')}</label>
