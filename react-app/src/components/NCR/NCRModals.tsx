@@ -529,29 +529,31 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     <label>讓步／偏差核准編號 Concession No.</label>
                                     <input type="text" className={formStyles.formInput} {...register('concessionNo')} />
                                 </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.integrityRelated')}</label>
-                                    <select className={formStyles.formSelect} {...register('productIntegrityRelated')}>
-                                        <option value="">{t('common.selectPlaceholder')}</option>
-                                        <option value="Yes">{t('common.yes')}</option>
-                                        <option value="No">{t('common.no')}</option>
-                                    </select>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.permanentDeviation')}</label>
-                                    <select className={formStyles.formSelect} {...register('permanentProductDeviation')}>
-                                        <option value="">{t('common.selectPlaceholder')}</option>
-                                        <option value="Yes">{t('common.yes')}</option>
-                                        <option value="No">{t('common.no')}</option>
-                                    </select>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.impactOM')}</label>
-                                    <select className={formStyles.formSelect} {...register('impactToOM')}>
-                                        <option value="">{t('common.selectPlaceholder')}</option>
-                                        <option value="Yes">{t('common.yes')}</option>
-                                        <option value="No">{t('common.no')}</option>
-                                    </select>
+                                <div className={formStyles.formGroupFull} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18 }}>
+                                    <div className={formStyles.formGroup}>
+                                        <label>{t('ncr.integrityRelated')}</label>
+                                        <select className={formStyles.formSelect} {...register('productIntegrityRelated')}>
+                                            <option value="">{t('common.selectPlaceholder')}</option>
+                                            <option value="Yes">{t('common.yes')}</option>
+                                            <option value="No">{t('common.no')}</option>
+                                        </select>
+                                    </div>
+                                    <div className={formStyles.formGroup}>
+                                        <label>{t('ncr.permanentDeviation')}</label>
+                                        <select className={formStyles.formSelect} {...register('permanentProductDeviation')}>
+                                            <option value="">{t('common.selectPlaceholder')}</option>
+                                            <option value="Yes">{t('common.yes')}</option>
+                                            <option value="No">{t('common.no')}</option>
+                                        </select>
+                                    </div>
+                                    <div className={formStyles.formGroup}>
+                                        <label>{t('ncr.impactOM')}</label>
+                                        <select className={formStyles.formSelect} {...register('impactToOM')}>
+                                            <option value="">{t('common.selectPlaceholder')}</option>
+                                            <option value="Yes">{t('common.yes')}</option>
+                                            <option value="No">{t('common.no')}</option>
+                                        </select>
+                                    </div>
                                 </div>
                                 <div className={formStyles.formGroupFull}>
                                     <div className={formStyles.labelWithButton}>
@@ -1015,17 +1017,19 @@ export const NCRDetailsViewModal: React.FC<NCRDetailsViewModalProps> = ({ ncrId:
                                         {displayData.effectivenessVerifiedDate ? ` (${displayData.effectivenessVerifiedDate})` : ''}
                                     </div>
                                 </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.integrityRelated')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.productIntegrityRelated || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.permanentDeviation')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.permanentProductDeviation || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.impactOM')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.impactToOM || '-'}</div>
+                                <div className={formStyles.formGroupFull} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18 }}>
+                                    <div className={formStyles.formGroup}>
+                                        <label>{t('ncr.integrityRelated')}</label>
+                                        <div className={formStyles.readOnlyField}>{displayData.productIntegrityRelated || '-'}</div>
+                                    </div>
+                                    <div className={formStyles.formGroup}>
+                                        <label>{t('ncr.permanentDeviation')}</label>
+                                        <div className={formStyles.readOnlyField}>{displayData.permanentProductDeviation || '-'}</div>
+                                    </div>
+                                    <div className={formStyles.formGroup}>
+                                        <label>{t('ncr.impactOM')}</label>
+                                        <div className={formStyles.readOnlyField}>{displayData.impactToOM || '-'}</div>
+                                    </div>
                                 </div>
                                 <div className={formStyles.formGroupFull}>
                                     <label>{t('common.remark')}</label>
