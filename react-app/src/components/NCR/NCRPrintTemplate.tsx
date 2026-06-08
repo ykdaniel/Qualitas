@@ -222,13 +222,7 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                             <div className="subhead">3.2 根因分析 <span className="en">Root Cause Analysis</span></div>
                             <table>
                                 <tbody>
-                                    <tr><td className="lbl" style={{ width: 96 }}>分析方法<small>Method</small></td>
-                                        <td className="val"><div className="chk-row">
-                                            <Chk on={data.rcaMethod === '5 Why'}>5 Why</Chk>
-                                            <Chk on={data.rcaMethod === 'Fishbone'}>魚骨圖 Fishbone</Chk>
-                                            <Chk on={!!data.rcaMethod && data.rcaMethod !== '5 Why' && data.rcaMethod !== 'Fishbone'}>其他 {data.rcaMethod && data.rcaMethod !== '5 Why' && data.rcaMethod !== 'Fishbone' ? data.rcaMethod : '____________'}</Chk>
-                                        </div></td></tr>
-                                    <tr><td className="lbl">直接原因<small>Direct Cause</small></td>
+                                    <tr><td className="lbl" style={{ width: 96 }}>直接原因<small>Direct Cause</small></td>
                                         <td><FieldBox value={data.directCause} guide="直接導致不符合之原因" /></td></tr>
                                     <tr><td className="lbl">系統性根因<small>Root Cause</small></td>
                                         <td><FieldBox value={data.rootCauseAnalysis} guide="制度／流程層面之根本原因" /></td></tr>

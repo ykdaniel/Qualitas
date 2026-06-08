@@ -582,15 +582,6 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                             <h3 className={formStyles.sectionTitle}>根本原因與矯正·預防措施 / Root Cause &amp; Corrective / Preventive Action <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（承包商 / Contractor）</span></h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
-                                    <label>分析方法 RCA Method</label>
-                                    <select className={formStyles.formSelect} {...register('rcaMethod')}>
-                                        <option value="">—</option>
-                                        <option value="5 Why">5 Why</option>
-                                        <option value="Fishbone">魚骨圖 Fishbone</option>
-                                        <option value="Other">其他 Other</option>
-                                    </select>
-                                </div>
-                                <div className={formStyles.formGroup}>
                                     <label>重複性 Recurrence</label>
                                     <select className={formStyles.formSelect} {...register('recurrence')}>
                                         <option value="">—</option>
