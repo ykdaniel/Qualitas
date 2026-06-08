@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 import { getUsers, getEntityFiles, getAuthenticatedFileUrl, type User as ApiUser } from '../../services/api';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
-import { useNOIStore } from '../../store/noiStore';
 import { useITRStore } from '../../store/itrStore';
 import type { NCRItem } from '../../store/ncrStore';
 import FileAttachment from '../Shared/FileAttachment';
@@ -39,8 +38,6 @@ export interface NCRDetailModalProps {
 export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, existingItem, onSave, onClose }) => {
     const { t } = useLanguage();
     const { getActiveContractors } = useContractorsStore();
-    const noiList = useNOIStore(state => state.noiList);
-    const getNOIList = () => noiList;
     const itrList = useITRStore(state => state.itrList);
 
     const {
@@ -219,18 +216,23 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
     // A voided NCR is withdrawn, so it needs no response: skip both the
     // required-field validation (see handleSaveClick) and the link warning.
     const onValidSave = async (values: NCRDetailData) => {
-        if (!voided && !values.itrNumber && !values.noiNumber) {
-            // Warn if no link to origin
-            if (!window.confirm('This NCR is not linked to any ITR or NOI. Do you want to continue?')) {
+        if (!voided && !values.itrNumber) {
+            // Warn if no link to origin (NOI is traced through the ITR)
+            if (!window.confirm('This NCR is not linked to any ITR. Do you want to continue?')) {
                 return;
             }
         }
+        // NOI is reachable through the linked ITR (ITR carries its originating
+        // NOI), so derive it from the chosen ITR instead of asking again. Keep
+        // any existing value as a fallback for legacy records.
+        const linkedItr = itrList.find(i => i.documentNumber === values.itrNumber);
+        const noiNumber = linkedItr?.noiNumber || values.noiNumber || '';
         const finalStatus = voided ? 'Void' : deriveNCRStatus(values);
-        if (finalStatus === 'Closed' && values.noiNumber) {
-            toast.info(`NCR closed. You may now update NOI ${values.noiNumber} status to "Resolved".`);
+        if (finalStatus === 'Closed' && noiNumber) {
+            toast.info(`NCR closed. You may now update NOI ${noiNumber} status to "Resolved".`);
         }
         // Due Date is auto-derived from raise date + severity (not user-editable).
-        await persist({ ...values, status: finalStatus, dueDate: computeDueDate(values.raiseDate, values.severity) });
+        await persist({ ...values, status: finalStatus, noiNumber, dueDate: computeDueDate(values.raiseDate, values.severity) });
     };
 
     // On a failed close, list every missing field (not just the first) and
@@ -430,23 +432,15 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     <input type="text" className={formStyles.formInput} {...register('serialNumbers')} />
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.itrNo')}</label>
+                                    <label style={labelStyle}>
+                                        <span>{t('ncr.itrNo')}</span>
+                                        {infoDot('NOI 由所選 ITR 自動帶出追溯,毋須另選 / NOI is traced automatically from the linked ITR')}
+                                    </label>
                                     <select className={formStyles.formSelect} {...register('itrNumber')}>
                                         <option value="">Select ITR No.</option>
                                         {itrList.map((itr) => (
                                             <option key={itr.id} value={itr.documentNumber}>
                                                 {itr.documentNumber}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.noiNo')}</label>
-                                    <select className={formStyles.formInput} {...register('noiNumber')}>
-                                        <option value="">{t('ncr.noiNoPlaceholder')}</option>
-                                        {getNOIList().map((noi) => (
-                                            <option key={noi.id} value={noi.referenceNo}>
-                                                {noi.referenceNo}
                                             </option>
                                         ))}
                                     </select>
