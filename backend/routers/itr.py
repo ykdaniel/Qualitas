@@ -226,3 +226,23 @@ def link_checklist_to_itr(
     if db_itr is None:
         raise HTTPException(status_code=404, detail="ITR not found")
     return db_itr
+
+
+# §17: Unlink (delete) a checklist instance from an ITR
+@router.delete("/{itr_id}/link-checklist/{checklist_id}", response_model=schemas.ITR)
+def unlink_checklist_from_itr(
+    itr_id: str,
+    checklist_id: str,
+    itr_service: ITRService = Depends(get_itr_service),
+    current_user: schemas.User = Depends(RoleChecker(ITR_UPDATE))
+):
+    """Remove a checklist instance from an ITR (deletes the ITR-owned copy)."""
+    db_itr = itr_service.unlink_checklist(
+        itr_id=itr_id,
+        checklist_id=checklist_id,
+        user_id=current_user.id,
+        username=current_user.username
+    )
+    if db_itr is None:
+        raise HTTPException(status_code=404, detail="ITR or checklist instance not found")
+    return db_itr

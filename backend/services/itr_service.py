@@ -382,38 +382,107 @@ class ITRService:
     def link_checklist(self, itr_id: str, checklist_id: str,
                        user_id: int = None, username: str = None) -> Optional[models.ITR]:
         """
-        Link a Checklist to an ITR
+        Link a checklist *template* to an ITR by creating an INSTANCE (§17).
+
+        The chosen checklist is treated as a blank, reusable template that is
+        shared across projects — it is NEVER mutated. Instead we deep-copy its
+        structure into a fresh Checklist row that belongs to this ITR (``itrId``)
+        and points back to the template (``template_id``). That instance is what
+        the user fills in, and what ``_validate_approval`` / print read — so the
+        table is the single source of truth (no more detail_data JSON snapshot).
 
         Args:
             itr_id: ITR identifier
-            checklist_id: Checklist identifier to link
-            user_id: ID of user performing the action
-            username: Username of user performing the action
+            checklist_id: Checklist TEMPLATE id to instantiate onto the ITR
+            user_id / username: actor for the audit trail
 
         Returns:
-            Updated ITR object if found, None otherwise
-
-        Raises:
-            Exception: If linking fails
+            Updated ITR object, or None if the ITR does not exist.
         """
         try:
             db_itr = self.repo.get_by_id(itr_id)
             if not db_itr:
                 return None
 
-            # Link the checklist
-            updated = self.repo.link_checklist(db_itr, checklist_id)
+            template = self.repo.db.query(models.Checklist).filter(
+                models.Checklist.id == checklist_id
+            ).first()
+            if not template:
+                raise ValueError(f"Checklist template {checklist_id} not found")
 
-            # Log audit trail
+            # If the chosen row is itself an instance, trace back to its template
+            # root so template_id always points at the real blank template.
+            template_id = template.template_id or template.id
+
+            itr_vendor = db_itr.vendor_ref.name if db_itr.vendor_ref else ''
+            instance = models.Checklist(
+                id=str(uuid.uuid4()),
+                recordsNo=generate_reference_no(self.repo.db, itr_vendor, 'CHECKLIST'),
+                activity=template.activity,
+                date=template.date,
+                status='Ongoing',                 # fresh — not yet inspected
+                packageName=template.packageName,
+                location=template.location,
+                itpIndex=template.itpIndex,
+                itpId=template.itpId,
+                itpVersion=template.itpVersion,
+                detail_data=template.detail_data,  # blank item structure (copied)
+                passCount=0,
+                failCount=0,
+                project_id=db_itr.project_id,
+                itrId=db_itr.id,
+                itrNumber=db_itr.documentNumber,
+                template_id=template_id,
+            )
+            self.repo.db.add(instance)
+            self.repo.db.commit()
+            self.repo.db.refresh(db_itr)
+
             log_audit(
                 self.repo.db, "LINK_CHECKLIST", "ITR", itr_id, db_itr.documentNumber,
-                new_value={"checklist_id": checklist_id},
+                new_value={"template_id": template_id, "instance_id": instance.id},
                 user_id=user_id, username=username
             )
-
-            return updated
+            return db_itr
         except Exception as e:
             logger.error(f"Error linking checklist to ITR {itr_id}: {e}", exc_info=True)
+            raise e
+
+    def unlink_checklist(self, itr_id: str, checklist_id: str,
+                         user_id: int = None, username: str = None) -> Optional[models.ITR]:
+        """
+        Remove a checklist instance from an ITR (§17).
+
+        Deletes the instance row (it is an ITR-owned copy, not a template). The
+        instance must actually belong to this ITR; templates and other ITRs'
+        instances are never touched.
+
+        Returns the updated ITR, or None if the ITR or instance is not found.
+        """
+        try:
+            db_itr = self.repo.get_by_id(itr_id)
+            if not db_itr:
+                return None
+
+            instance = self.repo.db.query(models.Checklist).filter(
+                models.Checklist.id == checklist_id,
+                models.Checklist.itrId == itr_id,
+            ).first()
+            if not instance:
+                return None
+
+            self.repo.db.delete(instance)
+            self.repo.db.commit()
+            self.repo.db.refresh(db_itr)
+
+            log_audit(
+                self.repo.db, "UNLINK_CHECKLIST", "ITR", itr_id, db_itr.documentNumber,
+                old_value={"instance_id": checklist_id},
+                user_id=user_id, username=username
+            )
+            return db_itr
+        except Exception as e:
+            logger.error(f"Error unlinking checklist from ITR {itr_id}: {e}", exc_info=True)
             raise e
 
     def create_ncr_from_itr(self, itr_id: str,

@@ -379,6 +379,8 @@ class NOIBase(BaseModel):
     ncrNumber: str | None = None  # 若此 NOI 是針對 NCR 的重新檢驗
     last_reminded_at: str | None = None
     dueDate: str | None = None
+    foundLocation: str | None = None  # §17: 具體檢驗地點（ITR 引用此處）
+    discipline: str | None = None     # §17: 專業別（ITR 引用此處）
 
     @field_validator('issueDate', 'inspectionDate', 'closeoutDate', 'dueDate', mode='before')
     @classmethod
@@ -425,6 +427,8 @@ class NOIUpdate(BaseModel):
     ncrNumber: str | None = None
     last_reminded_at: str | None = None
     dueDate: str | None = None
+    foundLocation: str | None = None  # §17
+    discipline: str | None = None     # §17
 
     @field_validator('attachments', mode='before')
     @classmethod
@@ -912,6 +916,7 @@ class ChecklistBase(BaseModel):
     failCount: int | None = 0
     itrId: str | None = None
     itrNumber: str | None = None
+    template_id: str | None = None  # §17: instance → 來源範本（範本本身為 NULL）
 
 class ChecklistCreate(ChecklistBase):
     pass
@@ -935,6 +940,7 @@ class ChecklistUpdate(BaseModel):
     failCount: int | None = None
     itrId: str | None = None
     itrNumber: str | None = None
+    template_id: str | None = None  # §17
 
 class Checklist(ChecklistBase):
     id: str

@@ -113,6 +113,9 @@ def _add_missing_columns():
             # NOI
             for col in ["attachments", "remark", "closeoutDate", "ncrNumber", "dueDate", "last_reminded_at"]:
                 _add_column_if_missing(conn, "noi", col, "TEXT")
+            # §17: NOI is the single source of inspection basic data
+            _add_column_if_missing(conn, "noi", "foundLocation", "TEXT")
+            _add_column_if_missing(conn, "noi", "discipline", "VARCHAR")
 
             # ITP
             _add_column_if_missing(conn, "itp", "detail_data", "TEXT")
@@ -155,6 +158,8 @@ def _add_missing_columns():
 
             # Checklist
             _add_column_if_missing(conn, "checklist", "noiNumber", "VARCHAR")
+            # §17: template/instance split — instance points back to its template
+            _add_column_if_missing(conn, "checklist", "template_id", "VARCHAR")
 
             # FAT
             _add_column_if_missing(conn, "fat", "last_reminded_at", "TEXT")

@@ -228,30 +228,7 @@ class ITRRepository:
         self.db.delete(itr)
         self.db.commit()
 
-    def link_checklist(self, itr: models.ITR, checklist_id: str) -> models.ITR:
-        """
-        Link a Checklist to an ITR
-
-        Args:
-            itr: ITR object to link to
-            checklist_id: Checklist ID to link
-
-        Returns:
-            Updated ITR object with refreshed state
-        """
-        checklist = self.db.query(models.Checklist).filter(
-            models.Checklist.id == checklist_id
-        ).first()
-
-        if checklist:
-            # Validate checklist is not already linked to a different ITR
-            if checklist.itrId and checklist.itrId != itr.id:
-                raise ValueError(
-                    f"Checklist {checklist_id} is already linked to ITR {checklist.itrId}"
-                )
-            # Set the itrId foreign key on the checklist
-            checklist.itrId = itr.id
-            self.db.commit()
-            self.db.refresh(itr)
-
-        return itr
+    # §17: the old link_checklist() here mutated a (shared, cross-project)
+    # template's itrId in place, which polluted the template. Linking now
+    # creates an ITR-owned *instance copy* instead — see
+    # ITRService.link_checklist / unlink_checklist.

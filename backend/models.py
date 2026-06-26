@@ -189,6 +189,11 @@ class NOI(Base):
     ncrNumber = Column(String, nullable=True, index=True)  # 若此 NOI 是針對 NCR 的重新檢驗
     last_reminded_at = Column(String, nullable=True)
     dueDate = Column(String, nullable=True)
+    # §17: NOI is the single source of inspection "basic data". These two were
+    # previously duplicated on ITR; the ITR header now references the NOI for
+    # them so the data lives in exactly one place.
+    foundLocation = Column(String, nullable=True)   # 具體檢驗地點
+    discipline = Column(String, nullable=True)      # Civil / Mechanical / Electrical …
 
     # Relationships
     itp_ref = relationship("ITP", back_populates="nois")
@@ -589,11 +594,17 @@ class Checklist(Base):
     contractor_id = Column("vendor_id", String, ForeignKey("contractors.id", ondelete="SET NULL"), nullable=True, index=True)
     itrId = Column(String, ForeignKey("itr.id", ondelete="CASCADE"), nullable=True, index=True) # ITR 關聯
     itrNumber = Column(String, nullable=True, index=True)  # 參照 itr.documentNumber（非 FK，避免編號異動時約束斷裂）
+    # §17: template/instance split. A blank reusable template has
+    # template_id NULL && itrId NULL; an ITR-bound *instance* is a copy that
+    # points back (template_id) to the template it was made from. Self-FK with
+    # SET NULL so deleting a template leaves historical instances intact.
+    template_id = Column(String, ForeignKey("checklist.id", ondelete="SET NULL"), nullable=True, index=True)
 
     # Relationships
     noi_ref = relationship("NOI", back_populates="checklists",
                           primaryjoin="foreign(Checklist.noiNumber) == NOI.referenceNo")
     itr_ref = relationship("ITR", back_populates="checklists", foreign_keys=[itrId])
+    template_ref = relationship("Checklist", remote_side=[id], foreign_keys=[template_id])
     vendor_ref = relationship("Contractor")
 
     @property
