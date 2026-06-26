@@ -881,7 +881,31 @@ gate decision) — users feel it immediately.
 
 ---
 
-## 16. OBS module (OBSModals.tsx / OBS.tsx) issues  ·  FOR DISCUSSION
+## 16. OBS module (OBSModals.tsx / OBS.tsx) issues  ·  ✅ DONE 2026-06-26
+
+**Resolution (2026-06-26)** — took a **hybrid of (A)+(B)**: kept the data model
+*lightweight* (A — dropped the NCR-style disposition/root-cause/corrective/
+re-inspection/PQM fields and the free-text NOI/ITR links) but brought the UX up
+to *NCR level* (B — RHF+zod validation via `obsFormSchema.ts`, real scoped print
+template with a closure sign-off, people autocomplete, image preview). Item map:
+- 🔴 #1 ref/serial data loss → **removed** those inputs (not part of lightweight OBS)
+- 🔴 #2 broken Publish → **removed** the button (`rev` is now vestigial, unused by OBS)
+- 🔴 #3 raw print → **OBSPrintTemplate + scoped OBS.print.css** (portal print, like NCR)
+- 🔴 #4 free-text NOI/ITR → **removed** from the form
+- 🟡 #5 no validation → **RHF + zod**, Subject + Description required
+- 🟡 #6 productDisposition mis-grouped → now in its own **處置 / Response** section
+- 🟡 #7 no autocomplete → **`obs-people` datalist** (system users + contractors)
+- 🟡 #8 ghost fields → **gone** (`OBSDetailData` is the trimmed zod type)
+- 🟡 #9 dead OBSDetailsViewModal → **replaced** by the unified read-only `<fieldset>`
+- 🟡 #10 hardcoded English status / reopen → **i18n `t('status.*')`**; Void filter+stat added
+- 🟡 #11 OBSItem defined twice → single type in `obsStore.ts`, imported everywhere
+- 🟡 #12 date string toggle → kept the shared NCR `dateInput` helper (consistent)
+
+Plus new: **closure photo gate** (both observation + improvement photo required to
+close) and IAM **read-only gating** (`obs:update:all` / `obs:approve:all`).
+Shipped in `feat(obs): complete the §16 OBS review` (+ `feat(iam)` for the gating).
+
+---
 
 Captured 2026-06-05 from a review of the OBS (Observation) module. OBS shares
 the NCR code skeleton but never received the NCR refactor (RHF+zod validation,
