@@ -116,14 +116,20 @@ class NCRService:
                 data['raiseDate'] = data.get('raiseDate') or base_date
                 data['dueDate'] = _add_days(base_date, NCR_SLA_DAYS[data['severity']])
 
-            # Validate foreign keys BEFORE allocating a reference number,
-            # so failed creates don't leave gaps in the NCR sequence.
+            # noiNumber is auto-derived from the linked ITR (NOI is traced
+            # through the ITR), so a dangling reference — NOI deleted/renamed —
+            # is a data issue the user can't fix from the NCR form. Drop it
+            # instead of failing the whole save.
             if data.get('noiNumber'):
                 noi = self.repo.db.query(models.NOI).filter(
                     models.NOI.referenceNo == data['noiNumber']
                 ).first()
                 if not noi:
-                    raise ValueError(f"NOI with reference number '{data['noiNumber']}' not found")
+                    logger.warning(
+                        "NCR create: dropping dangling noiNumber %r (no matching NOI)",
+                        data['noiNumber'],
+                    )
+                    data['noiNumber'] = ''
 
             # Generate Reference No automatically if not provided
             if not data.get('documentNumber'):
@@ -272,13 +278,18 @@ class NCRService:
                 if not d.get('effectivenessVerifiedDate'):
                     d['effectivenessVerifiedDate'] = datetime.now().strftime('%Y-%m-%d')
 
-            # Validate noiNumber exists if being updated
+            # noiNumber is auto-derived from the linked ITR, so a dangling
+            # reference must not block the update — drop it (see create above).
             if 'noiNumber' in d and d['noiNumber']:
                 noi = self.repo.db.query(models.NOI).filter(
                     models.NOI.referenceNo == d['noiNumber']
                 ).first()
                 if not noi:
-                    raise ValueError(f"NOI with reference number '{d['noiNumber']}' not found")
+                    logger.warning(
+                        "NCR update: dropping dangling noiNumber %r (no matching NOI)",
+                        d['noiNumber'],
+                    )
+                    d['noiNumber'] = ''
 
             # Update the record
             updated = self.repo.update(db_ncr, d)

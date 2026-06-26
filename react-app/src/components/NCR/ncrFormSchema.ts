@@ -189,7 +189,7 @@ export function toFormValues(item: NCRItem): NCRDetailData {
         assignedTo: item.assignedTo ?? null,
         closedBy: item.closedBy ?? null,
         verifiedBy: item.verifiedBy ?? null,
-        effectivenessVerified: item.effectivenessVerified || '',
+        effectivenessVerified: item.effectivenessVerified || 'Pending',
         effectivenessVerifiedBy: item.effectivenessVerifiedBy ?? null,
         effectivenessVerifiedDate: item.effectivenessVerifiedDate || '',
         effectivenessNotes: item.effectivenessNotes || '',
