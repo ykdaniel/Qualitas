@@ -10,6 +10,9 @@ interface ChecklistSnapshotModalProps {
     onSave: (updatedSnapshot: any) => void;
     initialData: any;
     readOnly?: boolean;
+    /** §17: render inline (as an in-form accordion panel) instead of a centered
+     *  popup overlay, so the ITR reads as one continuous record. */
+    inline?: boolean;
 }
 
 export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
@@ -17,7 +20,8 @@ export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
     onClose,
     onSave,
     initialData,
-    readOnly = false
+    readOnly = false,
+    inline = false
 }) => {
     const { t } = useLanguage();
     // Local state for the snapshot being edited
@@ -54,9 +58,10 @@ export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
         onClose();
     };
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className={`${styles.modalContent} w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl rounded-lg bg-white`}> {/* Increased width and fixed height behavior */}
+    const panel = (
+            <div className={inline
+                ? "w-full overflow-hidden flex flex-col rounded-lg bg-white border border-slate-200"
+                : `${styles.modalContent} w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl rounded-lg bg-white`}> {/* Increased width and fixed height behavior */}
                 <div className="flex justify-between items-center p-4 border-b border-slate-200 shrink-0">
                     <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                         {t('checklist.editSnapshot')}
@@ -302,6 +307,11 @@ export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
                     )}
                 </div>
             </div>
+    );
+
+    return inline ? panel : (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            {panel}
         </div>
     );
 };

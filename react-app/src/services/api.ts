@@ -411,6 +411,19 @@ export const deleteChecklist = async (id: string): Promise<void> => {
   await api.delete(`/checklist/${id}/`);
 };
 
+// §17: link a checklist TEMPLATE onto an ITR — the backend creates an
+// ITR-owned instance copy (it never mutates the shared template).
+export const linkChecklistToITR = async (itrId: string, checklistId: string): Promise<any> => {
+  const response = await api.post(`/itr/${itrId}/link-checklist`, null, { params: { checklist_id: checklistId } });
+  return response.data;
+};
+
+// §17: remove a checklist instance from an ITR (deletes the ITR-owned copy).
+export const unlinkChecklistFromITR = async (itrId: string, checklistId: string): Promise<any> => {
+  const response = await api.delete(`/itr/${itrId}/link-checklist/${checklistId}`);
+  return response.data;
+};
+
 // --- File Management API ---
 
 export interface AttachmentInfo {

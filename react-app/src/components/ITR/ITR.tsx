@@ -123,7 +123,8 @@ const ITR: React.FC = () => {
             defectPhotos: details.defectPhotos,
             improvementPhotos: details.improvementPhotos,
             attachments: details.attachments,
-            linkedChecklists: details.linkedChecklists,
+            // §17: checklists are now standalone instance rows (linked via the
+            // link/unlink endpoints), not packed into the ITR payload.
             detail_data: JSON.stringify({
                 referenceStandards: details.referenceStandards,
                 repairMethodStatement: details.repairMethodStatement,

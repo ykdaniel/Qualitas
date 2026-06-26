@@ -110,10 +110,9 @@ export const useITRStore = create<ITRState>((set, get) => ({
                 }
             }
 
-            if (payload.linkedChecklists) {
-                detailData.linkedChecklists = payload.linkedChecklists;
-                delete payload.linkedChecklists;
-            }
+            // §17: checklists are now standalone instance rows (itrId FK), not
+            // packed into detail_data. Drop any stray linkedChecklists field.
+            delete payload.linkedChecklists;
 
             // Always stringify detail_data for backend
             payload.detail_data = JSON.stringify(detailData);
@@ -134,8 +133,13 @@ export const useITRStore = create<ITRState>((set, get) => ({
             const payload = { ...updates } as any;
             const { itrList } = get();
 
-            // Determine if we need to merge detail_data
-            if (payload.linkedChecklists || payload.detail_data) {
+            // §17: checklists are standalone instance rows now, not packed into
+            // detail_data. Drop any stray linkedChecklists field.
+            delete payload.linkedChecklists;
+
+            // Merge detail_data with the existing record so we don't clobber
+            // other extended fields the form didn't touch.
+            if (payload.detail_data) {
                 const existingItem = itrList.find(i => i.id === id);
                 let existingDetail = {};
 
@@ -150,27 +154,15 @@ export const useITRStore = create<ITRState>((set, get) => ({
                 }
 
                 let newDetail = {};
-                if (payload.detail_data) {
-                    try {
-                        newDetail = typeof payload.detail_data === 'string'
-                            ? JSON.parse(payload.detail_data)
-                            : payload.detail_data;
-                    } catch (e) {
-                        console.error("Failed to parse payload detail_data", e);
-                    }
+                try {
+                    newDetail = typeof payload.detail_data === 'string'
+                        ? JSON.parse(payload.detail_data)
+                        : payload.detail_data;
+                } catch (e) {
+                    console.error("Failed to parse payload detail_data", e);
                 }
 
-                const mergedDetail: any = {
-                    ...existingDetail,
-                    ...newDetail,
-                };
-
-                if (payload.linkedChecklists) {
-                    mergedDetail.linkedChecklists = payload.linkedChecklists;
-                }
-
-                payload.detail_data = JSON.stringify(mergedDetail);
-                delete payload.linkedChecklists;
+                payload.detail_data = JSON.stringify({ ...existingDetail, ...newDetail });
             }
 
             const response = await api.put(`/itr/${id}`, payload);
