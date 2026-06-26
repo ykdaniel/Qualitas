@@ -15,6 +15,18 @@ interface OBSPrintTemplateProps {
 const DASH = '—';
 const val = (v?: string) => (v ? <>{v}</> : <span className="blank">{DASH}</span>);
 
+const SignCell: React.FC<{ num: string; zh: string; en: string; name?: string; date?: string }> = ({ num, zh, en, name, date }) => (
+    <div className="sign-cell">
+        <div className="role">{num} {zh} <span className="en">{en}</span></div>
+        <div className="sign-line" />
+        <div className="sign-meta">
+            <span>姓名（職稱）：{name || '____________'}</span>
+            <span style={{ textAlign: 'right' }}>日期：{date || '____________'}</span>
+        </div>
+        <div className="sign-meta"><span>單位 Company：____________</span></div>
+    </div>
+);
+
 const OBSPrintTemplate: React.FC<OBSPrintTemplateProps> = ({ data, defectPhotos = [], improvementPhotos = [] }) => {
     const hasPhotos = defectPhotos.length > 0 || improvementPhotos.length > 0;
 
@@ -70,11 +82,11 @@ const OBSPrintTemplate: React.FC<OBSPrintTemplateProps> = ({ data, defectPhotos 
 
                             {/* ===== 2 觀察描述 ===== */}
                             <div className="sec-head">2. 觀察描述 <span className="en">Description</span></div>
-                            <div className="field-box">{data.detailsDescription || <span className="guide">（描述觀察內容 Describe the observation）</span>}</div>
+                            <div className="field-box fb-desc">{data.detailsDescription || <span className="guide">（描述觀察內容 Describe the observation）</span>}</div>
 
                             {/* ===== 3 處理方式（承攬商） ===== */}
                             <div className="sec-head">3. 處理方式 <span className="en">Action Taken (by Contractor)</span></div>
-                            <div className="field-box">{data.productDisposition || <span className="guide">（由承攬商填寫處理方式 Action taken — by contractor）</span>}</div>
+                            <div className="field-box fb-action">{data.productDisposition || <span className="guide">（由承攬商填寫處理方式 Action taken — by contractor）</span>}</div>
 
                             {/* ===== 4 驗證與結案 ===== */}
                             <div className="sec-head">4. 驗證與結案 <span className="en">Verification &amp; Closure</span></div>
@@ -94,10 +106,17 @@ const OBSPrintTemplate: React.FC<OBSPrintTemplateProps> = ({ data, defectPhotos 
                                 </tbody>
                             </table>
 
+                            {/* ===== 5 結案簽核 ===== */}
+                            <div className="sec-head">5. 結案簽核 <span className="en">Closure Sign-off</span></div>
+                            <div className="sign-grid">
+                                <SignCell num="5.1" zh="承包商" en="Contractor" />
+                                <SignCell num="5.2" zh="開立人" en="Raised by" name={data.raisedBy || data.foundBy} date={data.raiseDate} />
+                            </div>
+
                             {/* ===== 照片 ===== */}
                             {hasPhotos && (
                                 <>
-                                    <div className="sec-head">5. 照片 <span className="en">Photos</span></div>
+                                    <div className="sec-head">6. 照片 <span className="en">Photos</span></div>
                                     <div className="photo-grid">
                                         <div>
                                             <div className="subhead">觀察照片 Observation</div>

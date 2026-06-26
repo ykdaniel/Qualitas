@@ -6,13 +6,16 @@ export const useOBSStats = (obsList: ContextOBSItem[]) => {
     const statusCounts = {
       opening: 0,
       closed: 0,
+      void: 0,
     };
 
     obsList.forEach((item) => {
       const status = (item.status || '').toLowerCase();
       if (status === 'closed') {
         statusCounts.closed++;
-      } else if (status && status !== 'void') {
+      } else if (status === 'void') {
+        statusCounts.void++;
+      } else if (status) {
         statusCounts.opening++;
       }
     });

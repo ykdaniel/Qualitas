@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { toast } from 'sonner';
-import { Clock, CheckCircle2, BarChart3, Zap, Search } from 'lucide-react';
+import { Clock, CheckCircle2, BarChart3, Zap, Search, Ban } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useOBSStore } from '../../store/obsStore';
 import type { OBSItem as ContextOBSItem } from '../../store/obsStore';
@@ -15,10 +16,11 @@ import { uploadFiles, deleteFile } from '../../services/api';
 import { useOBSStats } from '../../hooks/useOBSStats';
 import { getErrorMessage } from '../../utils/errorUtils';
 
-type StatusFilter = 'all' | 'open' | 'closed';
+type StatusFilter = 'all' | 'open' | 'closed' | 'void';
 
 const OBS: React.FC = () => {
   const { t } = useLanguage();
+  const { hasPermission } = useAuth();
   const { getActiveContractors } = useContractorsStore();
   const { obsList, loading, error, refetch, addOBS, updateOBS, deleteOBS } = useOBSStore();
 
@@ -50,7 +52,10 @@ const OBS: React.FC = () => {
     if (statusFilter === 'all') return obsList;
     return obsList.filter((item) => {
       const s = (item.status || '').toLowerCase();
-      return statusFilter === 'closed' ? s === 'closed' : s !== 'closed';
+      if (statusFilter === 'closed') return s === 'closed';
+      if (statusFilter === 'void') return s === 'void';
+      // 'open' = active (not closed, not void)
+      return s !== 'closed' && s !== 'void';
     });
   }, [obsList, statusFilter]);
 
@@ -174,6 +179,7 @@ const OBS: React.FC = () => {
     { id: 'all', label: t('common.all') || 'All', count: statistics.total },
     { id: 'open', label: t('obs.statOpen') || 'Open', count: statistics.opening },
     { id: 'closed', label: t('obs.statClosed') || 'Closed', count: statistics.closed },
+    { id: 'void', label: t('itp.status.void') || 'Void', count: statistics.void },
   ];
 
   const summary = [
@@ -190,6 +196,13 @@ const OBS: React.FC = () => {
       value: statistics.closed,
       icon: <CheckCircle2 size={18} strokeWidth={1.8} />,
       accent: '#7a8f5a',
+    },
+    {
+      key: 'void',
+      label: t('itp.status.void') || 'Void',
+      value: statistics.void,
+      icon: <Ban size={18} strokeWidth={1.8} />,
+      accent: '#9aa0a8',
     },
     {
       key: 'total',
@@ -282,17 +295,28 @@ const OBS: React.FC = () => {
         cancelText={t('common.cancel')}
       />
 
-      {isEditModalOpen && currentObsId && (
-        <OBSDetailModal
-          obsId={currentObsId}
-          existingItem={currentObsId === 'new' ? undefined : obsList.find(item => item.id === currentObsId)}
-          onSave={handleSaveOBSDetails}
-          onClose={() => {
-            setIsEditModalOpen(false);
-            setCurrentObsId(null);
-          }}
-        />
-      )}
+      {isEditModalOpen && currentObsId && (() => {
+        const editingItem = currentObsId === 'new' ? undefined : obsList.find(item => item.id === currentObsId);
+        // Read-only when the user lacks edit rights, or the record is locked
+        // (Closed/Void) and they lack the higher approve permission.
+        const status = (editingItem?.status || '').toLowerCase();
+        const locked = status === 'closed' || status === 'void';
+        const canEdit = currentObsId === 'new'
+          ? true
+          : locked ? hasPermission('obs:approve:all') : hasPermission('obs:update:all');
+        return (
+          <OBSDetailModal
+            obsId={currentObsId}
+            existingItem={editingItem}
+            readOnly={!canEdit}
+            onSave={handleSaveOBSDetails}
+            onClose={() => {
+              setIsEditModalOpen(false);
+              setCurrentObsId(null);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 };

@@ -71,7 +71,10 @@
 }
 .obs-print-root .sec-head .en { font-weight: 500; color: var(--obs-muted); font-size: 8.6px; letter-spacing: .5px; }
 
-.obs-print-root table { width: 100%; border-collapse: collapse; margin-top: -1px; }
+/* Fixed layout so the two value columns split the remaining width evenly
+   (88px labels + equal values) instead of stretching to fit content. */
+.obs-print-root table { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: -1px; }
+.obs-print-root .val { word-break: break-word; }
 .obs-print-root td, .obs-print-root th { border: 1px solid var(--obs-line); padding: 3px 6px; vertical-align: top; }
 .obs-print-root td.lbl {
     background: var(--obs-fill); font-weight: 600; white-space: nowrap;
@@ -82,7 +85,20 @@
 .obs-print-root .blank { color: #aeb3ba; }
 
 .obs-print-root .field-box { border: 1px solid var(--obs-line); min-height: 34px; padding: 4px 6px; white-space: pre-wrap; }
+/* Give the two narrative boxes a fixed base height so short/empty content still
+   fills the page consistently — keeps every printed OBS the same shape. */
+.obs-print-root .field-box.fb-desc { min-height: 92px; }
+.obs-print-root .field-box.fb-action { min-height: 72px; }
 .obs-print-root .guide { color: #aeb3ba; }
+
+/* closure sign-off (mirrors the NCR report) */
+.obs-print-root .sign-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 4px; }
+.obs-print-root .sign-cell { border: 1px solid var(--obs-line); padding: 6px 8px 7px; }
+.obs-print-root .sign-cell .role { font-weight: 700; font-size: 9px; }
+.obs-print-root .sign-cell .role .en { color: var(--obs-muted); font-weight: 500; font-size: 7.6px; }
+.obs-print-root .sign-line { border-bottom: 1px solid var(--obs-ink); height: 24px; margin: 6px 0 4px; }
+.obs-print-root .sign-meta { display: flex; justify-content: space-between; font-size: 8px; color: var(--obs-muted); }
+.obs-print-root .sign-meta span { flex: 1; }
 
 .obs-print-root .foot {
     margin-top: 12px; border-top: 1px solid var(--obs-line-soft); padding-top: 6px;
@@ -97,6 +113,7 @@
 
 /* keep rows / boxes intact across page breaks */
 .obs-print-root tr,
+.obs-print-root .sign-cell,
 .obs-print-root .field-box { break-inside: avoid; page-break-inside: avoid; }
 .obs-print-root .sec-head { break-after: avoid; page-break-after: avoid; }
 

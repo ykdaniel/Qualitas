@@ -8,6 +8,7 @@ import ReactDOM from 'react-dom';
 import { getUsers, getEntityFiles, getAuthenticatedFileUrl, type User as ApiUser } from '../../services/api';
 import type { OBSItem } from '../../store/obsStore';
 import FileAttachment from '../Shared/FileAttachment';
+import ImagePreviewOverlay from '../Shared/ImagePreviewOverlay';
 import OBSPrintTemplate from './OBSPrintTemplate';
 import './OBS.print.css';
 import formStyles from '../Shared/FormShell.module.css';
@@ -28,9 +29,12 @@ export interface OBSDetailModalProps {
     existingItem?: OBSItem;
     onSave: (details: OBSDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => void | Promise<void>;
     onClose: () => void;
+    /** Open the form locked for viewing only — every field disabled, no Save.
+     *  Driven by the caller from IAM permission + record status. */
+    readOnly?: boolean;
 }
 
-export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, existingItem, onSave, onClose }) => {
+export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, existingItem, onSave, onClose, readOnly = false }) => {
     const { t } = useLanguage();
     const { getActiveContractors } = useContractorsStore();
 
@@ -52,6 +56,14 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
     const [pendingAttachments, setPendingAttachments] = useState<File[]>([]);
     const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
     const [saving, setSaving] = useState(false);
+
+    // Attachment image preview (parity with NCR).
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [previewName, setPreviewName] = useState<string>('');
+    const handlePreview = (url: string, name?: string) => {
+        setPreviewUrl(url);
+        setPreviewName(name || '');
+    };
 
     // Print: mount the report portal, print, unmount (same pattern as NCR).
     const [isPrinting, setIsPrinting] = useState(false);
@@ -111,6 +123,16 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
         );
     };
 
+    // Small circled "!" holding a field's help note in a hover tooltip — keeps the
+    // form clean (same pattern as the NCR form).
+    const infoDot = (text: string) => (
+        <span
+            title={text}
+            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 15, height: 15, borderRadius: '50%', border: '1px solid #9ca3af', color: '#6b7280', fontSize: 10, fontWeight: 700, lineHeight: 1, cursor: 'help', flex: '0 0 auto' }}
+        >!</span>
+    );
+    const labelStyle = { display: 'inline-flex', alignItems: 'center', gap: 6 } as const;
+
     const removeLegacy = (key: 'defectPhotos' | 'improvementPhotos' | 'attachments', index: number) => {
         const next = (getValues(key) || []).filter((_, i) => i !== index);
         setValue(key, next, { shouldDirty: true });
@@ -122,9 +144,43 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
 
     const onValid = async (values: OBSDetailData) => {
         const finalStatus = voided ? 'Void' : deriveOBSStatus(values);
+        // Closure photo gate: an OBS can only close with BOTH an observation
+        // (defect) photo and an improvement photo as evidence. Voided records are
+        // withdrawn so they skip it. Photos may be already-saved server files,
+        // pending uploads in this save, or legacy URL strings on the record.
+        if (!voided && finalStatus === 'Closed') {
+            const legacyCount = (key: 'defectPhotos' | 'improvementPhotos') =>
+                ((getValues(key) as unknown[]) || []).filter(a => typeof a === 'string').length;
+            let serverDefect = 0, serverImprove = 0;
+            if (existingItem?.id) {
+                try {
+                    const [d, i] = await Promise.all([
+                        getEntityFiles('obs', existingItem.id, 'defectPhoto'),
+                        getEntityFiles('obs', existingItem.id, 'improvementPhoto'),
+                    ]);
+                    const del = new Set(deletedFileIds);
+                    serverDefect = d.filter(f => !del.has(f.id)).length;
+                    serverImprove = i.filter(f => !del.has(f.id)).length;
+                } catch {/* fall back to pending + legacy counts */}
+            }
+            const defectTotal = serverDefect + pendingDefectPhotos.length + legacyCount('defectPhotos');
+            const improveTotal = serverImprove + pendingImprovementPhotos.length + legacyCount('improvementPhotos');
+            const missing: string[] = [];
+            if (defectTotal === 0) missing.push(t('obs.defectPhotos') || '觀察照片');
+            if (improveTotal === 0) missing.push(t('obs.improvementPhotos') || '改善照片');
+            if (missing.length) {
+                toast.warning(`結案需附照片 / Closure requires both photos: ${missing.join('、')}`);
+                return;
+            }
+        }
+        // On close, stamp the close-out / verified dates with today if left blank.
+        const today = new Date();
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        const closeoutDate = finalStatus === 'Closed' && !values.closeoutDate ? todayStr : values.closeoutDate;
+        const verifiedDate = values.verified === 'Verified' && !values.verifiedDate ? todayStr : values.verifiedDate;
         setSaving(true);
         try {
-            await onSave({ ...values, status: finalStatus }, [
+            await onSave({ ...values, status: finalStatus, closeoutDate, verifiedDate }, [
                 { category: 'defectPhoto', files: pendingDefectPhotos },
                 { category: 'improvementPhoto', files: pendingImprovementPhotos },
                 { category: 'attachment', files: pendingAttachments },
@@ -183,22 +239,25 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
         <div className={formStyles.modalOverlay}>
             <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
                 <div className={formStyles.modalHeader}>
-                    <h2>{existingItem ? t('obs.editTitle') : t('obs.addTitle')}</h2>
+                    <h2>{readOnly ? '檢視觀察 / View Observation' : existingItem ? t('obs.editTitle') : t('obs.addTitle')}</h2>
                     <button className={formStyles.closeButton} onClick={onClose} disabled={saving}>×</button>
                 </div>
                 <div className={formStyles.modalBody}>
-                    <p className={formStyles.formRequiredHint}>{t('form.requiredHint')}</p>
-                    <p style={{ fontSize: 11.5, color: '#6b7280', margin: '2px 0 0', lineHeight: 1.4 }}>
-                        狀態由「驗證與結案」自動決定;結案請將驗證結果設為 Verified。/ Status is auto-set from Verification &amp; Closure; set Verified to close.
-                    </p>
+                    {!readOnly && (
+                        <p className={formStyles.formRequiredHint}>{t('form.requiredHint')}</p>
+                    )}
                     <datalist id="obs-people">
                         {peopleSuggestions.map(name => <option key={name} value={name} />)}
                     </datalist>
+                    {/* A single disabled fieldset locks every field/button below in
+                        one shot when readOnly. */}
+                    <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
                     <div className={formStyles.formSections}>
                         {/* ===== 1. 基本資訊 / Identification ===== */}
                         <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>基本資訊 / Identification</h3>
+                            <h3 className={formStyles.sectionTitle}>基本資訊 / Identification <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（開立人 / QC）</span></h3>
                             <div className={formStyles.formGrid}>
+                                {/* 系統自動 */}
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.refNo')}</label>
                                     <input
@@ -210,13 +269,14 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                     />
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('obs.status')}</label>
+                                    <label style={labelStyle}>
+                                        <span>{t('obs.status')}</span>
+                                        {infoDot('由「驗證與結案」自動判定 / auto-set from Verification & Closure')}
+                                    </label>
                                     <div className={formStyles.readOnlyField}>{statusText}</div>
-                                    <p style={{ fontSize: 11, color: '#6b7280', margin: '4px 0 0', lineHeight: 1.4 }}>
-                                        （由「驗證與結案」自動判定 / auto-set from Verification &amp; Closure）
-                                    </p>
                                 </div>
-                                <div className={formStyles.formGroup}>
+                                {/* 分類 */}
+                                <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>
                                     <label>{t('obs.subject')} <span style={{ color: '#dc2626' }}>*</span></label>
                                     <input type="text" className={formStyles.formInput} {...register('subject')} />
                                     {errText('subject')}
@@ -231,6 +291,7 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                         <option value="Document">{t('ncr.type.document')}</option>
                                     </select>
                                 </div>
+                                {/* 單位／人 */}
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.contractor')}</label>
                                     <select className={formStyles.formSelect} {...register('contractor')}>
@@ -241,6 +302,15 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                     </select>
                                 </div>
                                 <div className={formStyles.formGroup}>
+                                    <label>{t('obs.raisedBy')}</label>
+                                    <input type="text" className={formStyles.formInput} list="obs-people" {...register('raisedBy')} />
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label>{t('obs.foundBy')}</label>
+                                    <input type="text" className={formStyles.formInput} list="obs-people" {...register('foundBy')} />
+                                </div>
+                                {/* 日期 */}
+                                <div className={formStyles.formGroup}>
                                     <label>{t('obs.raiseDate')}</label>
                                     {dateInput('raiseDate')}
                                 </div>
@@ -248,24 +318,17 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                     <label>{t('common.dueDate')}</label>
                                     {dateInput('dueDate')}
                                 </div>
+                                {/* 地點 */}
                                 <div className={formStyles.formGroup}>
                                     <label>{t('obs.foundLocation')}</label>
                                     <input type="text" className={formStyles.formInput} {...register('foundLocation')} />
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('obs.foundBy')}</label>
-                                    <input type="text" className={formStyles.formInput} list="obs-people" {...register('foundBy')} />
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('obs.raisedBy')}</label>
-                                    <input type="text" className={formStyles.formInput} list="obs-people" {...register('raisedBy')} />
                                 </div>
                             </div>
                         </div>
 
                         {/* ===== 2. 觀察描述 / Description ===== */}
                         <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>觀察描述 / Description</h3>
+                            <h3 className={formStyles.sectionTitle}>觀察描述 / Description <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（開立人 / QC）</span></h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroupFull}>
                                     <label>{t('obs.detailsDescription')} <span style={{ color: '#dc2626' }}>*</span></label>
@@ -277,32 +340,29 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
 
                         {/* ===== 3. 處置 / Response ===== */}
                         <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>處置 / Response</h3>
+                            <h3 className={formStyles.sectionTitle}>處置 / Response <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（承包商 / Contractor）</span></h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroupFull}>
-                                    <label>{t('obs.actionTaken') || 'Action Taken'}（承攬商 By Contractor）</label>
+                                    <label>{t('obs.actionTaken') || 'Action Taken'}</label>
                                     <textarea className={formStyles.formTextarea} rows={2} {...register('productDisposition')} />
-                                    <p style={{ fontSize: 11, color: '#6b7280', margin: '4px 0 0', lineHeight: 1.4 }}>
-                                        {t('obs.actionTakenHint') || 'To be filled by the contractor.'}
-                                    </p>
                                 </div>
                             </div>
                         </div>
 
                         {/* ===== 4. 驗證與結案 / Verification & Closure ===== */}
                         <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>驗證與結案 / Verification &amp; Closure</h3>
+                            <h3 className={formStyles.sectionTitle}>驗證與結案 / Verification &amp; Closure <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（QC）</span></h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
-                                    <label>{t('obs.verified') || 'Verified'}</label>
+                                    <label style={labelStyle}>
+                                        <span>{t('obs.verified') || 'Verified'}</span>
+                                        {infoDot('設為 Verified 即結案；Rejected 退回處理中 / Set to "Verified" to close; "Rejected" routes it back to In Progress.')}
+                                    </label>
                                     <select className={formStyles.formSelect} {...register('verified')}>
                                         <option value="Pending">{t('ncr.effectiveness.pending') || '待驗證 Pending'}</option>
                                         <option value="Verified">通過 Verified</option>
                                         <option value="Rejected">退回 Rejected</option>
                                     </select>
-                                    <p style={{ fontSize: 11.5, color: '#2f6f3e', fontWeight: 600, margin: '5px 0 0' }}>
-                                        設為 Verified 即結案；Rejected 退回處理中 / Set to “Verified” to close
-                                    </p>
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label className={formStyles.optionalLabel}>{t('obs.verifiedDate') || 'Verified Date'}</label>
@@ -313,14 +373,21 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                     {dateInput('closeoutDate')}
                                 </div>
                                 <div className={formStyles.formGroupFull}>
-                                    <label className={formStyles.optionalLabel}>{t('common.remark')}</label>
-                                    <textarea className={formStyles.formTextarea} rows={3} {...register('remark')} />
-                                </div>
-                                <div className={formStyles.formGroupFull}>
                                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400, cursor: 'pointer' }}>
                                         <input type="checkbox" checked={voided} onChange={(e) => setVoided(e.target.checked)} />
                                         <span>作廢此觀察 / Void this observation</span>
                                     </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ===== 備註 / Remark ===== */}
+                        <div className={formStyles.formSection}>
+                            <h3 className={formStyles.sectionTitle}>備註 / Remark</h3>
+                            <div className={formStyles.formGrid}>
+                                <div className={formStyles.formGroupFull}>
+                                    <label className={formStyles.optionalLabel}>{t('common.remark')}</label>
+                                    <textarea className={formStyles.formTextarea} rows={3} {...register('remark')} />
                                 </div>
                             </div>
                         </div>
@@ -338,6 +405,7 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                 onPendingFilesChange={setPendingDefectPhotos}
                                 onDeleteExistingFile={(id) => deleteExisting('defectPhotos', id)}
                                 onRemoveLegacy={(index) => removeLegacy('defectPhotos', index)}
+                                onPreview={handlePreview}
                                 accept="image/*"
                             />
                             <FileAttachment
@@ -350,6 +418,7 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                 onPendingFilesChange={setPendingImprovementPhotos}
                                 onDeleteExistingFile={(id) => deleteExisting('improvementPhotos', id)}
                                 onRemoveLegacy={(index) => removeLegacy('improvementPhotos', index)}
+                                onPreview={handlePreview}
                                 accept="image/*"
                             />
                             <FileAttachment
@@ -362,14 +431,18 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                 onPendingFilesChange={setPendingAttachments}
                                 onDeleteExistingFile={(id) => deleteExisting('attachments', id)}
                                 onRemoveLegacy={(index) => removeLegacy('attachments', index)}
+                                onPreview={handlePreview}
                             />
                         </div>
                     </div>
+                    </fieldset>
                 </div>
                 <div className={formStyles.modalActions}>
-                    <button type="button" className={formStyles.saveButton} onClick={handleSaveClick} disabled={saving}>
-                        {saving ? t('obs.saving') : t('common.save')}
-                    </button>
+                    {!readOnly && (
+                        <button type="button" className={formStyles.saveButton} onClick={handleSaveClick} disabled={saving}>
+                            {saving ? t('obs.saving') : t('common.save')}
+                        </button>
+                    )}
                     <button type="button" className={formStyles.printButton} onClick={handlePrintClick} disabled={saving} title={t('common.print') || 'Print'}>
                         {t('common.print') || 'Print'}
                     </button>
@@ -385,6 +458,9 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                     improvementPhotos={printImprovementPhotos}
                 />,
                 document.body
+            )}
+            {previewUrl && (
+                <ImagePreviewOverlay key={previewUrl} url={previewUrl} name={previewName} onClose={() => setPreviewUrl(null)} />
             )}
         </div>
     );
