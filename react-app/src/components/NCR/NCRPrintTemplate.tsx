@@ -300,13 +300,10 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                             </table>
 
                             {/* ===== 6 簽核 ===== */}
-                            <div className="sec-head">6. 簽核 <span className="en">Approvals</span></div>
+                            <div className="sec-head">6. 結案簽核 <span className="en">Closure Sign-off</span></div>
                             <div className="sign-grid">
-                                <SignCell num="6.1" zh="開立人" en="Raised by" name={data.raisedBy || data.foundBy} date={data.raiseDate} />
-                                <SignCell num="6.2" zh="承包商回覆" en="Contractor Response" name={resolveUser(data.assignedTo) !== '-' ? resolveUser(data.assignedTo) : undefined} />
-                                <SignCell num="6.3" zh="工程／設計權責核可" en="Engineering / Design Authority" req="［科用／維修必簽］" />
-                                <SignCell num="6.4" zh="處置核可" en="Disposition Approved (PQM)" />
-                                <SignCell num="6.5" zh="有效性驗證" en="Effectiveness Verified by (QC)" name={resolveUser(data.effectivenessVerifiedBy) !== '-' ? resolveUser(data.effectivenessVerifiedBy) : undefined} date={data.effectivenessVerifiedDate} />
+                                <SignCell num="6.1" zh="承包商" en="Contractor" name={resolveUser(data.assignedTo) !== '-' ? resolveUser(data.assignedTo) : undefined} />
+                                <SignCell num="6.2" zh="開立人" en="Raised by" name={data.raisedBy || data.foundBy} date={data.raiseDate} />
                             </div>
 
                             {/* ===== Footer ===== */}

@@ -92,13 +92,16 @@
 .ncr-print-root .subhead { font-weight: 700; font-size: 9px; margin: 6px 0 2px; color: var(--ncr-accent); }
 .ncr-print-root .subhead .en { color: var(--ncr-note); font-weight: 500; font-size: 7.8px; }
 
-.ncr-print-root .field-box { border: 1px solid var(--ncr-line); min-height: 34px; padding: 4px 6px; white-space: pre-wrap; }
-.ncr-print-root .field-box.tall { min-height: 46px; }
+/* Give the narrative boxes a solid base height so short/empty content still
+   fills the page — keeps every printed NCR the same shape regardless of how
+   much was written. */
+.ncr-print-root .field-box { border: 1px solid var(--ncr-line); min-height: 48px; padding: 4px 6px; white-space: pre-wrap; }
+.ncr-print-root .field-box.tall { min-height: 64px; }
 /* When a field-box sits inside a *data* table cell, that cell already draws the
    border and padding — drop the box's own so we don't get a box-inside-a-box.
    Exclude .body-cell (the outer layout wrapper) so standalone field-boxes that
    live directly in it keep their border. */
-.ncr-print-root td:not(.body-cell) > .field-box { border: none; padding: 0; min-height: 28px; }
+.ncr-print-root td:not(.body-cell) > .field-box { border: none; padding: 0; min-height: 44px; }
 .ncr-print-root .guide { color: #aeb3ba; font-style: normal; }
 
 .ncr-print-root .chk-row { display: flex; flex-wrap: wrap; gap: 4px 16px; }
