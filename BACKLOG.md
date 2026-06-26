@@ -956,6 +956,118 @@ then decide A vs B and fold the 🟡 items into that build.
 
 ---
 
+## 17. ITR ↔ Checklist architecture: basic data + template/instance  ·  DESIGN AGREED 2026-06-26 · FOR BUILD
+
+Captured 2026-06-26 from a structural review of the ITR module. The ITR backend
+is the most mature of the QA modules (real WorkflowEngine, optimistic locking,
+`_validate_approval`, re-inspection chains, `create_ncr_from_itr`, NOI as a real
+FK), but two structural defects make the current shape **not** correct.
+
+### Defect 1 — checklist has two unsynced sources of truth
+
+- **Relational:** `Checklist` table linked via `itrId` FK. Backend approval
+  validation reads THIS (`itr_service.py:178`, called from `update_itr:257`).
+  Rows only get `itrId` via the `link_checklist` endpoint, whose repo method
+  **mutates the template row's `itrId`** (`itr_repository.py:253`) — i.e. it
+  *moves* a shared, cross-project template into one ITR = pollutes the template.
+- **JSON snapshot:** the ITR form deep-copies a template into
+  `detail_data.linkedChecklists` (`itrStore.ts:113`) and even **strips `itrId`**
+  off the snapshot (`ITRModals.tsx:580`). The form display + approval gate read
+  this JSON (`ITRModals.tsx:228`), NOT the table.
+
+Consequence: a user links passing checklists in the modal → they land in JSON
+only; the `Checklist` table stays empty; `_validate_approval` then blocks
+approval with "no linked checklists" even though the UI shows them. The two
+stores can disagree; the frontend snapshot route was a workaround for the
+template-polluting backend link, not a design.
+
+### Defect 2 — basic data is duplicated across ITR and Checklist
+
+`ITR` and `Checklist` both carry vendor / NOI / location / date / package
+columns — the same inspection-event data entered and stored twice, free to drift.
+
+### Decided architecture — one source per concern, layered references
+
+```
+ITP  inspection plan (defines checkpoints)
+ └─ NOI  ★ SINGLE SOURCE of basic data (vendor / package / date / checkpoint / type)
+      └─ ITR  the report — REFERENCES the NOI for its header (stores no basic data of its own)
+           └─ Checklist INSTANCE — copies the template's items + holds this inspection's results;
+              belongs to the ITR (itrId); has NO basic data (derives via ITR → NOI)
+                 └─ references ▸ Checklist TEMPLATE (blank, cross-project, project_id NULL, NEVER written)
+```
+
+Three "stored once":
+- **Template** is blank and only *referenced* (via `template_id`) — never mutated.
+- **ITR header** is *referenced* from the NOI — not re-stored on the ITR.
+- **Checklist instance** holds only template_id + items + per-item results — no basic data.
+
+So basic data lives once (NOI); the inspection record lives once (the instance,
+owned by the ITR); the blank form lives once (the template).
+
+### Field-level reconciliation (basic data)
+
+**A — NOI already has it → ITR references, stops self-storing:** vendor
+(`NOI.vendor_id`), type, eventNumber/checkpoint, inspection date
+(`NOI.inspectionDate`), ITP/version (`NOI.itpNo`), package.
+
+**B — genuinely ITR report-level, stays on ITR (not "basic data"):**
+documentNumber, inspectionResult, status/workflow, preparedBy/reviewedBy/
+approvedBy, ncrNumber, closeoutDate, re-inspection fields, photos/attachments,
+remark, aconex (ITR doc-control no.), raisedBy (report author ≠ NOI contacts).
+
+**C — NOI lacked it; DECIDED 2026-06-26 → add BOTH to NOI** (they describe the
+inspection event, so they belong at NOI level; keeps ITR header 100% referenced,
+zero duplication):
+- `foundLocation` (specific inspection location) → add to NOI
+- `discipline` (Civil / Mechanical / Electrical …) → add to NOI
+
+### Build outline (doc only — no code yet)
+
+1. **Schema:** add `foundLocation`, `discipline` to NOI. Add `template_id`
+   (self-FK) to `Checklist`. Convention: template = `template_id NULL && itrId
+   NULL && project_id NULL`; instance = both `itrId` + `template_id` set.
+2. **Backend link:** rewrite `link_checklist` to **create a new instance row**
+   (deep-copy template items, set `itrId` + `template_id` + the ITR's project)
+   instead of mutating the template's `itrId`. `_validate_approval` keeps reading
+   the table — now correctly populated.
+3. **ITR header:** resolve basic-data fields from the linked NOI (display/derive),
+   stop persisting ITR's own copies.
+4. **Frontend:** ITR form links/unlinks via the endpoint (no more
+   `detail_data.linkedChecklists`); inspection results save to the instance row;
+   display / approval gate / print all read the instance.
+5. **Migration:** for each ITR, convert `detail_data.linkedChecklists` JSON into
+   real instance rows (`itrId` + best-effort `template_id`), then drop the JSON.
+
+### UI layout — one complete ITR record (UX unchanged for the user)
+
+```
+ITR No. ………                      status
+── basic data (referenced from NOI) ──
+vendor / NOI / date / location / package / ITP / discipline
+══════════════════════════════════════
+Inspection items   [＋ reference a template ▾]
+  ▼ Template A-v2                 Pass 8/8   [remove]
+     1. weld appearance      [O] [X] [N/A]      ← filled inline, saved to the instance
+     2. dimension  [_12.5_]  [O] [X] [N/A]
+  ▶ Template B-v1                 Fail 3/5   [remove]
+══════════════════════════════════════
+photos / attachments · result · sign-off
+```
+
+Inline accordion (no separate "checklist box"); collapsed rows keep the form
+short, expand to fill. Reads/prints as a single ITR inspection report.
+
+### Notes / risks
+
+- Standalone checklists not under an ITR (NOI/ITP only) keep their own basic
+  columns; only ITR-instances defer to the NOI.
+- `detail_data` on ITR keeps only `_version` (optimistic lock) after migration.
+- Frontend still on raw `useState` (no `itrFormSchema.ts`); fold the RHF+zod
+  migration into step 4 for parity with NCR/OBS.
+
+---
+
 ## Not on this list (and why)
 
 - **Migrating SQLite → Postgres.** Real production move, not a code
