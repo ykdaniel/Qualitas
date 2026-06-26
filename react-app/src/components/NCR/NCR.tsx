@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Clock, CheckCircle2, BarChart3, Zap, Search } from 'lucide-react';
+import { Clock, CheckCircle2, BarChart3, Zap, Search, Ban } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 
 import { useNCRStore } from '../../store/ncrStore';
 import type { NCRItem } from '../../store/ncrStore';
@@ -22,6 +23,7 @@ type StatusFilter = 'all' | 'open' | 'inProgress' | 'resolved' | 'closed' | 'voi
 
 const NCR: React.FC = () => {
   const { t } = useLanguage();
+  const { hasPermission } = useAuth();
 
   const { ncrList, loading, error, refetch, addNCR, updateNCR, deleteNCR } = useNCRStore();
   const itrList = useITRStore(state => state.itrList);
@@ -244,6 +246,13 @@ const NCR: React.FC = () => {
       accent: '#7a8f5a',
     },
     {
+      key: 'void',
+      label: t('itp.status.void') || 'Void',
+      value: statistics.void,
+      icon: <Ban size={18} strokeWidth={1.8} />,
+      accent: '#9aa0a8',
+    },
+    {
       key: 'total',
       label: t('obs.statTotal') || 'Total',
       value: statistics.total,
@@ -346,17 +355,28 @@ const NCR: React.FC = () => {
         cancelText={t('common.cancel')}
       />
 
-      {isEditModalOpen && currentNcrId && (
-        <NCRDetailModal
-          ncrId={currentNcrId}
-          existingItem={currentNcrId !== 'new' ? ncrList.find(item => item.id === currentNcrId) : undefined}
-          onSave={handleSaveNCRDetails}
-          onClose={() => {
-            setIsEditModalOpen(false);
-            setCurrentNcrId(null);
-          }}
-        />
-      )}
+      {isEditModalOpen && currentNcrId && (() => {
+        const editingItem = currentNcrId !== 'new' ? ncrList.find(item => item.id === currentNcrId) : undefined;
+        // Read-only when the user lacks edit rights, or the record is locked
+        // (Closed/Void) and they lack the higher close/reopen permission.
+        const status = (editingItem?.status || '').toLowerCase();
+        const locked = status === 'closed' || status === 'void';
+        const canEdit = currentNcrId === 'new'
+          ? true
+          : locked ? hasPermission('ncr:close:all') : hasPermission('ncr:update:all');
+        return (
+          <NCRDetailModal
+            ncrId={currentNcrId}
+            existingItem={editingItem}
+            readOnly={!canEdit}
+            onSave={handleSaveNCRDetails}
+            onClose={() => {
+              setIsEditModalOpen(false);
+              setCurrentNcrId(null);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 };

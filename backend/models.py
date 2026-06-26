@@ -485,6 +485,12 @@ class User(Base):
     def role_name(self):
         return self.role.name if self.role else None
 
+    @property
+    def permissions(self):
+        """Flat list of the user's permission codes (via their role), so the
+        frontend can gate UI on them. Empty when the user has no role."""
+        return self.role.permissions if self.role else []
+
 
 class UserProject(Base):
     """Per-user project scope (P0 data isolation). A row grants the user access

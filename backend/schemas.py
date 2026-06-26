@@ -964,6 +964,7 @@ class UserUpdate(BaseModel):
 class User(UserBase):
     id: int
     role_name: str | None = None
+    permissions: list[str] = []
     created_at: str | None = None
 
     model_config = ConfigDict(from_attributes=True)

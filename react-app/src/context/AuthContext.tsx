@@ -11,6 +11,9 @@ interface AuthContextType {
   login: () => Promise<void>;
   logout: () => void;
   loading: boolean;
+  /** True if the current user's role grants the given permission code
+   *  (e.g. "ncr:update:all"). False while logged out or still loading. */
+  hasPermission: (code: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -69,8 +72,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser(null);
   };
 
+  const hasPermission = useCallback(
+    (code: string) => !!user?.permissions?.includes(code),
+    [user],
+  );
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, logout, loading }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, login, logout, loading, hasPermission }}>
       {!loading && children}
     </AuthContext.Provider>
   );

@@ -33,9 +33,12 @@ export interface NCRDetailModalProps {
     existingItem?: NCRItem;
     onSave: (details: NCRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => void | Promise<void>;
     onClose: () => void;
+    /** Open the form locked for viewing only — every field disabled, no Save.
+     *  Driven by the caller from IAM permission + record status. */
+    readOnly?: boolean;
 }
 
-export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, existingItem, onSave, onClose }) => {
+export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, existingItem, onSave, onClose, readOnly = false }) => {
     const { t } = useLanguage();
     const { getActiveContractors } = useContractorsStore();
     const itrList = useITRStore(state => state.itrList);
@@ -231,8 +234,12 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         if (finalStatus === 'Closed' && noiNumber) {
             toast.info(`NCR closed. You may now update NOI ${noiNumber} status to "Resolved".`);
         }
+        // On close, stamp the close-out date with today if the user left it blank.
+        const today = new Date();
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        const closeoutDate = finalStatus === 'Closed' && !values.closeoutDate ? todayStr : values.closeoutDate;
         // Due Date is auto-derived from raise date + severity (not user-editable).
-        await persist({ ...values, status: finalStatus, noiNumber, dueDate: computeDueDate(values.raiseDate, values.severity) });
+        await persist({ ...values, status: finalStatus, noiNumber, closeoutDate, dueDate: computeDueDate(values.raiseDate, values.severity) });
     };
 
     // On a failed close, list every missing field (not just the first) and
@@ -292,17 +299,22 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         <div className={formStyles.modalOverlay}>
             <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
                 <div className={formStyles.modalHeader}>
-                    <h2>{existingItem ? t('ncr.editTitle') : t('ncr.addTitle')}</h2>
+                    <h2>{readOnly ? t('ncr.viewTitle') : existingItem ? t('ncr.editTitle') : t('ncr.addTitle')}</h2>
                     <button className={formStyles.closeButton} onClick={onClose} disabled={saving}>×</button>
                 </div>
                 <div className={formStyles.modalBody}>
+                    {!readOnly && (
                     <p className={formStyles.formRequiredHint} style={labelStyle}>
                         <span>{t('form.requiredHint')}</span>
                         {infoDot('紅 * 開立必填、橘 * 結案必填;狀態由「驗證與結案」自動決定。/ red * = required to raise, amber * = required to close; status auto-set from Verification & Closure.')}
                     </p>
+                    )}
                     <datalist id="ncr-people">
                         {peopleSuggestions.map(name => <option key={name} value={name} />)}
                     </datalist>
+                    {/* A single disabled fieldset locks every input/select/textarea
+                        and inline button below in one shot when readOnly. */}
+                    <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
                     <div className={formStyles.formSections}>
                         {/* ===== 1. 基本資訊 / Identification ===== */}
                         <div className={formStyles.formSection}>
@@ -394,6 +406,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 <div className={formStyles.formGroup}>
                                     <label>{t('ncr.assignedTo') || 'Assigned To'}{openStar}</label>
                                     <select
+                                        name="assignedTo"
                                         className={formStyles.formSelect}
                                         value={watch('assignedTo') ?? ''}
                                         onChange={(e) => setValue('assignedTo', e.target.value ? Number(e.target.value) : null, { shouldValidate: true, shouldDirty: true })}
@@ -791,10 +804,13 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                             <RelatedDocuments entityType="ncr" entityId={existingItem.id} />
                         )}
                     </div>
+                    </fieldset>
                     <div className={formStyles.modalActions}>
-                        <button className={formStyles.saveButton} onClick={handleSaveClick} disabled={saving}>
-                            {saving ? t('obs.saving') : t('common.save')}
-                        </button>
+                        {!readOnly && (
+                            <button className={formStyles.saveButton} onClick={handleSaveClick} disabled={saving}>
+                                {saving ? t('obs.saving') : t('common.save')}
+                            </button>
+                        )}
                         <button className={formStyles.printButton} onClick={handlePrintClick} style={{ marginLeft: '12px' }} disabled={saving} title={t('common.print') || 'Print'}>
                             {t('common.print') || 'Print'}
                         </button>
@@ -817,287 +833,5 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                 <ImagePreviewOverlay key={previewUrl} url={previewUrl} name={previewName} onClose={() => setPreviewUrl(null)} />
             )}
         </div >
-    );
-};
-
-export interface NCRDetailsViewModalProps {
-    ncrId: string;
-    ncrItem?: NCRItem;
-    ncrDetailData?: NCRDetailData;
-    onClose: () => void;
-}
-
-export const NCRDetailsViewModal: React.FC<NCRDetailsViewModalProps> = ({ ncrId: _ncrId, ncrItem, ncrDetailData, onClose }) => {
-    const { t } = useLanguage();
-    // Combine data from both sources, with detailData taking precedence.
-    // Base mapping is shared with the edit modal via toFormValues().
-    const displayData: NCRDetailData = (() => {
-        const base = ncrItem ? toFormValues(ncrItem) : emptyNCRForm;
-        if (!ncrDetailData) return base;
-        const out = { ...base };
-        (Object.keys(base) as (keyof NCRDetailData)[]).forEach((k) => {
-            const dv = ncrDetailData[k] as unknown;
-            const keep = typeof dv === 'number' ? true : (dv !== undefined && dv !== null && dv !== '');
-            if (keep) (out as any)[k] = dv;
-        });
-        return out;
-    })();
-
-    const handlePrint = () => {
-        window.print();
-    };
-
-    // 附件預覽
-    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-    const [previewName, setPreviewName] = useState<string>('');
-    const handlePreview = (url: string, name?: string) => {
-        setPreviewUrl(url);
-        setPreviewName(name || '');
-    };
-
-    return (
-        <div className={formStyles.modalOverlay}>
-            <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
-                <div className={formStyles.modalHeader}>
-                    <h2>{t('ncr.viewTitle')}</h2>
-                    <button className={formStyles.closeButton} onClick={onClose}>×</button>
-                </div>
-                <div className={formStyles.modalBody}>
-                    <div className={formStyles.formSections}>
-                        {/* 不符合項目資訊 */}
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>{t('obs.sectionInfo')}</h3>
-                            <div className={formStyles.formGrid}>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.itrNo')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.itrNumber || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('itr.ncrNo')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.ncrNumber || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('obs.subject')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.subject || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.raiseDate')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.raiseDate || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.type')}</label>
-                                    <div className={formStyles.readOnlyField}>
-                                        {displayData.type ? t(`ncr.type.${displayData.type.toLowerCase()}`) : '-'}
-                                    </div>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.severity') || 'Severity'}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.severity || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.discipline') || 'Discipline'}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.discipline || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('common.contractor')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.contractor || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('obs.refStandards')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.referenceStandards || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <label>規範要求 Requirement</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.requirement || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <label>偏差說明 Deviation</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.deviation || displayData.detailsDescription || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('obs.foundLocation')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.foundLocation || '-'}</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 照片 */}
-                        <div className={formStyles.formSection}>
-                            <FileAttachment
-                                id="ncr-defect-photos-view"
-                                category="defectPhoto"
-                                entityType="ncr"
-                                entityId={ncrItem?.id}
-                                title={t('obs.defectPhotos')}
-                                legacyAttachments={displayData.defectPhotos || []}
-                                readOnly={true}
-                                onPreview={handlePreview}
-                                accept="image/*"
-                            />
-                        </div>
-                        <div className={formStyles.formSection}>
-                            <FileAttachment
-                                id="ncr-improvement-photos-view"
-                                category="improvementPhoto"
-                                entityType="ncr"
-                                entityId={ncrItem?.id}
-                                title={t('obs.improvementPhotos')}
-                                legacyAttachments={displayData.improvementPhotos || []}
-                                readOnly={true}
-                                onPreview={handlePreview}
-                                accept="image/*"
-                            />
-                        </div>
-
-                        {/* {t('obs.sectionPersonnelLocation')} */}
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>{t('obs.sectionPersonnelLocation')}</h3>
-                            <div className={formStyles.formGrid}>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('obs.foundBy')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.foundBy || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('obs.raisedBy')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.raisedBy || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('obs.serialNumbers')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.serialNumbers || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('obs.productDisposition')}</label>
-                                    <div className={formStyles.readOnlyField}>
-                                        {displayData.productDisposition ? t(`ncr.disposition.${displayData.productDisposition.replace(/\s+/g, '').replace(/^./, str => str.toLowerCase())}`) : '-'}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* {t('ncr.sectionDisposition')} */}
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>{t('ncr.sectionDisposition')}</h3>
-                            <div className={formStyles.formGrid}>
-                                <div className={formStyles.formGroupFull}>
-                                    <label>{t('ncr.correctionAction')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.immediateCorrectionAction || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <label>{t('ncr.repairMethod')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.repairMethodStatement || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <label>{t('ncr.rootCause')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.rootCauseAnalysis || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <label>{t('ncr.correctiveActions')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.correctiveActions || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <label>{t('ncr.preventiveAction')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.preventiveAction || '-'}</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* {t('ncr.sectionReinspection')} */}
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>{t('ncr.sectionReinspection')}</h3>
-                            <div className={formStyles.formGrid}>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.itrNo')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.itrNumber || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('itr.ncrNo')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.ncrNumber || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.reinspectionNo')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.reInspectionNumber || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.noiNo')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.noiNumber || '-'}</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* {t('ncr.sectionQuality')} */}
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>{t('ncr.sectionQuality')}</h3>
-                            <div className={formStyles.formGrid}>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('common.status')}</label>
-                                    <div className={formStyles.readOnlyField}>
-                                        {({
-                                            'open': t('status.open'),
-                                            'in progress': t('status.inProgress'),
-                                            'resolved': t('status.resolved'),
-                                            'closed': t('status.closed'),
-                                            'void': t('status.void'),
-                                        } as Record<string, string>)[displayData.status.toLowerCase()] || displayData.status || '-'}
-                                    </div>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('obs.closeoutDate')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.closeoutDate || '-'}</div>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label>{t('ncr.effectivenessVerified') || 'Effectiveness Verified'}</label>
-                                    <div className={formStyles.readOnlyField}>
-                                        {displayData.effectivenessVerified || '-'}
-                                        {displayData.effectivenessVerifiedDate ? ` (${displayData.effectivenessVerifiedDate})` : ''}
-                                    </div>
-                                </div>
-                                <div className={formStyles.formGroupFull} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18 }}>
-                                    <div className={formStyles.formGroup}>
-                                        <label>{t('ncr.integrityRelated')}</label>
-                                        <div className={formStyles.readOnlyField}>{displayData.productIntegrityRelated || '-'}</div>
-                                    </div>
-                                    <div className={formStyles.formGroup}>
-                                        <label>{t('ncr.permanentDeviation')}</label>
-                                        <div className={formStyles.readOnlyField}>{displayData.permanentProductDeviation || '-'}</div>
-                                    </div>
-                                    <div className={formStyles.formGroup}>
-                                        <label>{t('ncr.impactOM')}</label>
-                                        <div className={formStyles.readOnlyField}>{displayData.impactToOM || '-'}</div>
-                                    </div>
-                                </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <label>{t('common.remark')}</label>
-                                    <div className={formStyles.readOnlyField}>{displayData.remark || '-'}</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className={formStyles.formSection}>
-                            <FileAttachment
-                                id="ncr-attachments-view"
-                                category="attachment"
-                                entityType="ncr"
-                                entityId={ncrItem?.id}
-                                title={t('obs.attachments')}
-                                legacyAttachments={displayData.attachments || []}
-                                readOnly={true}
-                                onPreview={handlePreview}
-                            />
-                        </div>
-                    </div>
-                </div>
-                <div className={formStyles.modalActions}>
-                    <button className={formStyles.printButton} onClick={handlePrint}>
-                        {t('common.print')}
-                    </button>
-                    <button className={formStyles.cancelButton} onClick={onClose}>
-                        {t('common.close')}
-                    </button>
-                </div>
-            </div>
-            {previewUrl && (
-                <ImagePreviewOverlay key={previewUrl} url={previewUrl} name={previewName} onClose={() => setPreviewUrl(null)} />
-            )}
-        </div>
     );
 };

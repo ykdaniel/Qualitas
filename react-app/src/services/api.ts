@@ -249,6 +249,9 @@ export interface User {
   email: string;
   role_id: number;
   role_name?: string;
+  /** Permission codes granted via the user's role (e.g. "ncr:update:all").
+   *  Used to gate UI; the backend still enforces them per endpoint. */
+  permissions: string[];
   is_active: boolean;
   full_name?: string;
 }
