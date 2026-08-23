@@ -1,5 +1,6 @@
 import React from 'react';
 import type { NCRDetailData } from './NCRModals';
+import { DASH, statusLabel, val, SignCell } from '../Shared/PrintPrimitives';
 
 /**
  * Formal NCR print report (BACKLOG #15) — bilingual (zh-Hant + en) template.
@@ -15,48 +16,46 @@ interface NCRPrintTemplateProps {
     data: NCRDetailData;
     resolveUser: (id: number | null) => string;
     defectPhotos?: string[];
+    progressPhotos?: string[];
     improvementPhotos?: string[];
+    attachmentFiles?: { name: string; url: string }[];
 }
 
-const DASH = '—';
-const val = (v?: string) => (v ? <>{v}</> : <span className="blank">{DASH}</span>);
-
-const FieldBox: React.FC<{ value?: string; guide?: string; tall?: boolean }> = ({ value, guide, tall }) => (
-    <div className={tall ? 'field-box tall' : 'field-box'}>
-        {value ? value : <span className="guide">{guide}</span>}
-    </div>
-);
+const FieldBox: React.FC<{ value?: string; status?: string; guide?: string; tall?: boolean }> = ({ value, status, guide, tall }) => {
+    const label = statusLabel(status);
+    return (
+        <div className={tall ? 'field-box tall' : 'field-box'}>
+            {value ? value : label ? <span className="guide">{label}</span> : <span className="guide">{guide}</span>}
+        </div>
+    );
+};
 
 const Chk: React.FC<{ on?: boolean; children: React.ReactNode }> = ({ on, children }) => (
     <div className="chk"><span className={on ? 'box on' : 'box'} />{children}</div>
 );
 
-const SignCell: React.FC<{ num: string; zh: string; en: string; name?: string; date?: string; req?: string }> = ({ num, zh, en, name, date, req }) => (
-    <div className="sign-cell">
-        <div className="role">{num} {zh} <span className="en">{en}</span> {req && <span className="req-tag">{req}</span>}</div>
-        <div className="sign-line" />
-        <div className="sign-meta">
-            <span>姓名（職稱）：{name || '____________'}</span>
-            <span style={{ textAlign: 'right' }}>日期：{date || '____________'}</span>
-        </div>
-        <div className="sign-meta"><span>單位 Company：____________</span></div>
-    </div>
-);
-
+// Each stage (before/during/after) gets its own full-width section so photos
+// stay large and legible; multiple photos within a stage wrap into a 2-column
+// grid that grows more rows as needed, instead of shrinking to fit a fixed
+// number of side-by-side stage columns.
 const PhotoColumn: React.FC<{ title: string; urls: string[] }> = ({ title, urls }) => (
-    <div>
+    <div className="photo-section">
         <div className="subhead">{title}</div>
         {urls.length === 0
             ? <div className="field-box"><span className="guide">（無照片 No photos）</span></div>
-            : urls.map((u, i) => (
-                <div key={i} className="photo-item" style={{ marginBottom: 8 }}>
-                    <img src={u} alt={`${title} ${i + 1}`} />
+            : (
+                <div className="photo-grid">
+                    {urls.map((u, i) => (
+                        <div key={i} className="photo-item">
+                            <img src={u} alt={`${title} ${i + 1}`} />
+                        </div>
+                    ))}
                 </div>
-            ))}
+            )}
     </div>
 );
 
-const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, defectPhotos = [], improvementPhotos = [] }) => {
+const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, defectPhotos = [], progressPhotos = [], improvementPhotos = [], attachmentFiles = [] }) => {
     const disp = data.productDisposition;
     const sevText = data.severity === 'Major' ? 'MAJOR 重大' : data.severity === 'Minor' ? 'MINOR 輕微' : '';
     // Only print the 1.1 Traceability / 1.2 Impact blocks when they carry data,
@@ -69,7 +68,7 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
         data.itrNumber, data.noiNumber,
     ].some(Boolean);
     const hasImpact = [data.qtyAffected, data.extent].some(Boolean);
-    const hasPhotos = defectPhotos.length > 0 || improvementPhotos.length > 0;
+    const hasPhotos = defectPhotos.length > 0 || progressPhotos.length > 0 || improvementPhotos.length > 0;
 
     return (
         <div className="ncr-print-root">
@@ -135,6 +134,12 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                                         <td className="lbl">發現人<small>Found By</small></td>
                                         <td className="val">{val(data.foundBy)}</td>
                                     </tr>
+                                    <tr>
+                                        <td className="lbl">專案品質經理<small>PQM</small></td>
+                                        <td className="val">{val(data.projectQualityManager)}</td>
+                                        <td className="lbl">Aconex／文管編號<small>Doc-Control No.</small></td>
+                                        <td className="val">{val(data.aconex)}</td>
+                                    </tr>
                                 </tbody>
                             </table>
 
@@ -167,7 +172,7 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                                         <td className="lbl">範圍<small>Isolated / Systemic</small></td>
                                     </tr>
                                     <tr>
-                                        <td className="val">{val(data.qtyAffected)}</td>
+                                        <td className="val">{val(data.qtyAffected && `${data.qtyAffected}${data.qtyAffectedUnit ? ' ' + data.qtyAffectedUnit : ''}`)}</td>
                                         <td className="val"><div className="chk-row">
                                             <Chk on={data.extent === 'Isolated'}>單一 Isolated</Chk>
                                             <Chk on={data.extent === 'Systemic'}>系統性 Systemic</Chk>
@@ -209,23 +214,25 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                                 <tbody>
                                     <tr><td className="lbl" style={{ width: 120 }}>讓步／偏差核准編號<small>Concession / Deviation No.</small></td>
                                         <td className="val">{val(data.concessionNo)}</td></tr>
+                                    <tr><td className="lbl" style={{ width: 120 }}>業主／工程權責核准<small>Owner / Engineering Approval</small></td>
+                                        <td className="val">{val(data.ownerApproval)}{data.ownerApprovalNotes ? `｜${data.ownerApprovalNotes}` : ''}</td></tr>
                                 </tbody>
                             </table>
                             <div className="subhead">2.2 維修方法說明 <span className="en">Repair Method Statement</span></div>
-                            <FieldBox value={data.repairMethodStatement} guide="若處置為維修，說明維修方法與驗收標準" tall />
+                            <FieldBox value={data.repairMethodStatement} status={data.repairMethodStatementStatus} guide="若處置為維修，說明維修方法與驗收標準" tall />
 
                             {/* ===== 3 根因與矯正 ===== */}
                             <div className="sec-head">3. 根本原因與矯正措施 <span className="en">Root Cause &amp; Corrective Action</span></div>
                             <div className="subhead">3.1 立即處置 <span className="en">Immediate Correction</span></div>
-                            <FieldBox value={data.immediateCorrectionAction} guide="為控制當前不符合所採取之立即措施" />
+                            <FieldBox value={data.immediateCorrectionAction} status={data.immediateCorrectionActionStatus} guide="為控制當前不符合所採取之立即措施" />
 
                             <div className="subhead">3.2 根因分析 <span className="en">Root Cause Analysis</span></div>
                             <table>
                                 <tbody>
                                     <tr><td className="lbl" style={{ width: 96 }}>直接原因<small>Direct Cause</small></td>
-                                        <td><FieldBox value={data.directCause} guide="直接導致不符合之原因" /></td></tr>
+                                        <td><FieldBox value={data.directCause} status={data.directCauseStatus} guide="直接導致不符合之原因" /></td></tr>
                                     <tr><td className="lbl">系統性根因<small>Root Cause</small></td>
-                                        <td><FieldBox value={data.rootCauseAnalysis} guide="制度／流程層面之根本原因" /></td></tr>
+                                        <td><FieldBox value={data.rootCauseAnalysis} status={data.rootCauseAnalysisStatus} guide="制度／流程層面之根本原因" /></td></tr>
                                     <tr><td className="lbl">重複性<small>Recurrence</small></td>
                                         <td className="val"><div className="chk-row">
                                             <Chk on={data.recurrence === 'No'}>否 No</Chk>
@@ -239,7 +246,7 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                             <table>
                                 <tbody>
                                     <tr>
-                                        <td style={{ width: '64%' }}><FieldBox value={data.correctiveActions} guide="消除根因之矯正措施" /></td>
+                                        <td style={{ width: '64%' }}><FieldBox value={data.correctiveActions} status={data.correctiveActionsStatus} guide="消除根因之矯正措施" /></td>
                                         <td className="lbl" style={{ width: 'auto' }}>
                                             負責人<small>Owner</small>
                                             <div className="val" style={{ background: '#fff', minHeight: 16, margin: '2px 0 6px' }}>{val(data.correctiveActionOwner)}</div>
@@ -254,7 +261,7 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                             <table>
                                 <tbody>
                                     <tr>
-                                        <td style={{ width: '64%' }}><FieldBox value={data.preventiveAction} guide="防止類似不符合再發之措施" /></td>
+                                        <td style={{ width: '64%' }}><FieldBox value={data.preventiveAction} status={data.preventiveActionStatus} guide="防止類似不符合再發之措施" /></td>
                                         <td className="lbl" style={{ width: 'auto' }}>
                                             負責人<small>Owner</small>
                                             <div className="val" style={{ background: '#fff', minHeight: 16, margin: '2px 0 6px' }}>{val(data.preventiveActionOwner)}</div>
@@ -270,10 +277,15 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                             <table>
                                 <tbody>
                                     <tr><th className="lbl" style={{ width: 40, textAlign: 'left' }}>項次</th>
-                                        <th className="lbl" style={{ textAlign: 'left' }}>說明 Description</th>
-                                        <th className="lbl" style={{ width: 120, textAlign: 'left' }}>檔名／編號 File / Ref.</th></tr>
-                                    <tr><td>1</td><td><span className="blank">（照片／量測報告／ITR…）</span></td><td>&nbsp;</td></tr>
-                                    <tr><td>2</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+                                        <th className="lbl" style={{ textAlign: 'left' }}>檔名／編號 File / Ref.</th></tr>
+                                    {attachmentFiles.length === 0
+                                        ? <tr><td>1</td><td><span className="blank">（無附件 No attachments）</span></td></tr>
+                                        : attachmentFiles.map((f, i) => (
+                                            <tr key={i}>
+                                                <td>{i + 1}</td>
+                                                <td><a href={f.url} target="_blank" rel="noreferrer">{f.name}</a></td>
+                                            </tr>
+                                        ))}
                                 </tbody>
                             </table>
 
@@ -294,7 +306,7 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                                         <td className="lbl">複驗編號<small>Re-Inspection No.</small></td>
                                         <td className="val">{val(data.reInspectionNumber)}</td>
                                         <td className="lbl">有效性備註<small>Notes</small></td>
-                                        <td className="val">{val(data.effectivenessNotes)}</td>
+                                        <td className="val">{val(data.effectivenessNotes, data.effectivenessNotesStatus)}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -302,8 +314,9 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                             {/* ===== 6 簽核 ===== */}
                             <div className="sec-head">6. 結案簽核 <span className="en">Closure Sign-off</span></div>
                             <div className="sign-grid">
-                                <SignCell num="6.1" zh="承包商" en="Contractor" name={resolveUser(data.assignedTo) !== '-' ? resolveUser(data.assignedTo) : undefined} />
-                                <SignCell num="6.2" zh="開立人" en="Raised by" name={data.raisedBy || data.foundBy} date={data.raiseDate} />
+                                <SignCell num="6.1" zh="承包商" en="Contractor" name={data.contractor || undefined} />
+                                <SignCell num="6.2" zh="開立人" en="Issuer" name={data.raisedBy || data.foundBy} date={data.raiseDate} />
+                                <SignCell num="6.3" zh="業主／工程權責" en="Owner / Engineering Authority" name={data.ownerApprovalBy} date={data.ownerApprovalDate} req={data.ownerApproval || undefined} />
                             </div>
 
                             {/* ===== Footer ===== */}
@@ -322,9 +335,10 @@ const NCRPrintTemplate: React.FC<NCRPrintTemplateProps> = ({ data, resolveUser, 
                             {/* ===== 7 照片頁 ===== */}
                             {hasPhotos && (
                                 <div style={{ pageBreakBefore: 'always', breakBefore: 'page' }}>
-                                    <div className="sec-head">7. 照片紀錄（改善前／後） <span className="en">Photographic Record (Before / After)</span></div>
-                                    <div className="photo-grid">
+                                    <div className="sec-head">7. 照片紀錄（前／中／後） <span className="en">Photographic Record (Before / During / After)</span></div>
+                                    <div className="photo-sections">
                                         <PhotoColumn title="缺失（前）Defect (Before)" urls={defectPhotos} />
+                                        <PhotoColumn title="矯正中（中）In Progress (During)" urls={progressPhotos} />
                                         <PhotoColumn title="改善（後）Improvement (After)" urls={improvementPhotos} />
                                     </div>
                                 </div>

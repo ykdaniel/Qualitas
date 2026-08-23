@@ -1,5 +1,6 @@
 import React from 'react';
 import type { FATItem, FATDetailItem, FATResult } from '../../store/fatStore';
+import { val } from '../Shared/PrintPrimitives';
 
 /**
  * FAT (Factory Acceptance Test) print report — bilingual. Styling in
@@ -12,9 +13,6 @@ interface FATPrintTemplateProps {
     details: FATDetailItem[];
     result: FATResult;
 }
-
-const DASH = '—';
-const val = (v?: string) => (v ? <>{v}</> : <span className="blank">{DASH}</span>);
 
 const FATPrintTemplate: React.FC<FATPrintTemplateProps> = ({ fat, details, result }) => {
     const resultBadge =

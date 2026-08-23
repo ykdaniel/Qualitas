@@ -1,5 +1,6 @@
 import React from 'react';
 import type { OBSDetailData } from './obsFormSchema';
+import { val, SignCell } from '../Shared/PrintPrimitives';
 
 /**
  * OBS (Observation) print report — bilingual, lightweight sibling of the NCR
@@ -11,21 +12,6 @@ interface OBSPrintTemplateProps {
     defectPhotos?: string[];
     improvementPhotos?: string[];
 }
-
-const DASH = '—';
-const val = (v?: string) => (v ? <>{v}</> : <span className="blank">{DASH}</span>);
-
-const SignCell: React.FC<{ num: string; zh: string; en: string; name?: string; date?: string }> = ({ num, zh, en, name, date }) => (
-    <div className="sign-cell">
-        <div className="role">{num} {zh} <span className="en">{en}</span></div>
-        <div className="sign-line" />
-        <div className="sign-meta">
-            <span>姓名（職稱）：{name || '____________'}</span>
-            <span style={{ textAlign: 'right' }}>日期：{date || '____________'}</span>
-        </div>
-        <div className="sign-meta"><span>單位 Company：____________</span></div>
-    </div>
-);
 
 const OBSPrintTemplate: React.FC<OBSPrintTemplateProps> = ({ data, defectPhotos = [], improvementPhotos = [] }) => {
     const hasPhotos = defectPhotos.length > 0 || improvementPhotos.length > 0;
@@ -76,6 +62,9 @@ const OBSPrintTemplate: React.FC<OBSPrintTemplateProps> = ({ data, defectPhotos 
                                     <tr>
                                         <td className="lbl">開立日期<small>Raise Date</small></td><td className="val">{val(data.raiseDate)}</td>
                                         <td className="lbl">到期日<small>Due Date</small></td><td className="val">{val(data.dueDate)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td className="lbl">Aconex／文管編號<small>Aconex No.</small></td><td className="val" colSpan={3}>{val(data.aconex)}</td>
                                     </tr>
                                 </tbody>
                             </table>
