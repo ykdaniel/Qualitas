@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Hammer, CheckCircle2, XCircle, AlertTriangle, BarChart3, Search } from 'lucide-react';
 import { useDebounce } from '../../hooks/useDebounce';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import { useITRStats, isITROverdue } from '../../hooks/useITRStats';
 import { useITRStore } from '../../store/itrStore';
 import type { ITRItem } from '../../store/itrStore';
@@ -21,6 +22,8 @@ type StatusFilter = 'all' | 'inProgress' | 'approved' | 'reject' | 'void' | 'ove
 
 const ITR: React.FC = () => {
     const { t } = useLanguage();
+    const { hasPermission } = useAuth();
+    const canEdit = hasPermission('itr:update:all');
     const navigate = useNavigate();
     const { itrList, loading, error, refetch, addITR, updateITR, deleteITR } = useITRStore();
     const checklistList = useChecklistStore(state => state.records);
@@ -67,6 +70,12 @@ const ITR: React.FC = () => {
 
     const [searchParams, setSearchParams] = useSearchParams();
     const deepLinkAppliedRef = useRef(false);
+    // Set true only when the currently-open modal was reached via ?openId=
+    // (e.g. from Follow Up Issues) — lets onClose send the user back where
+    // they came from via browser history instead of just landing on this
+    // page's plain list, which is otherwise indistinguishable from having
+    // navigated here directly from the sidebar.
+    const openedViaDeepLinkRef = useRef(false);
     useEffect(() => {
         if (deepLinkAppliedRef.current) return;
         const openId = searchParams.get('openId');
@@ -75,6 +84,7 @@ const ITR: React.FC = () => {
         const match = itrList.find(item => item.id === openId);
         if (!match) return;
         handleEdit(openId);
+        openedViaDeepLinkRef.current = true;
         deepLinkAppliedRef.current = true;
         const next = new URLSearchParams(searchParams);
         next.delete('openId');
@@ -120,6 +130,7 @@ const ITR: React.FC = () => {
             noiNumber: details.noiNumber,
             eventNumber: details.eventNumber,
             checkpoint: details.checkpoint,
+            inspectionResult: details.inspectionResult,
             defectPhotos: details.defectPhotos,
             improvementPhotos: details.improvementPhotos,
             attachments: details.attachments,
@@ -327,7 +338,15 @@ const ITR: React.FC = () => {
                     existingItem={currentItrId ? itrList.find(i => i.id === currentItrId) : undefined}
                     itrList={itrList}
                     onSave={handleSaveITRDetails}
-                    onClose={() => setIsEditModalOpen(false)}
+                    onClose={() => {
+                        if (openedViaDeepLinkRef.current) {
+                            openedViaDeepLinkRef.current = false;
+                            navigate(-1);
+                            return;
+                        }
+                        setIsEditModalOpen(false);
+                    }}
+                    readOnly={!canEdit}
                 />
             )}
         </div>

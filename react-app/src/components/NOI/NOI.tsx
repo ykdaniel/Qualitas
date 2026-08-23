@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import ReactDOM from 'react-dom';
 import { toast } from 'sonner';
 import { Clock, CheckCircle2, BarChart3, Zap, Search } from 'lucide-react';
@@ -121,7 +121,14 @@ const NOI: React.FC = () => {
   }, []);
 
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const deepLinkAppliedRef = useRef(false);
+  // Set true only when the currently-open modal was reached via ?openId=
+  // (e.g. from Follow Up Issues) — lets onClose send the user back where
+  // they came from via browser history instead of just landing on this
+  // page's plain list, which is otherwise indistinguishable from having
+  // navigated here directly from the sidebar.
+  const openedViaDeepLinkRef = useRef(false);
   useEffect(() => {
     if (deepLinkAppliedRef.current) return;
     const openId = searchParams.get('openId');
@@ -130,6 +137,7 @@ const NOI: React.FC = () => {
     const match = noiList.find(item => item.id === openId || item.referenceNo === openId);
     if (!match) return;
     handleEdit(match.id);
+    openedViaDeepLinkRef.current = true;
     deepLinkAppliedRef.current = true;
     const next = new URLSearchParams(searchParams);
     next.delete('openId');
@@ -351,6 +359,11 @@ const NOI: React.FC = () => {
           noiList={noiList}
           onSave={handleSaveNOIDetails}
           onClose={() => {
+            if (openedViaDeepLinkRef.current) {
+              openedViaDeepLinkRef.current = false;
+              navigate(-1);
+              return;
+            }
             setIsModalOpen(false);
             setCurrentNoiId(null);
           }}

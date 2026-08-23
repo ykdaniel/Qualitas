@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BarChart3, Send, TrendingUp, ShieldCheck, Search } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
@@ -77,6 +77,29 @@ const ITP: React.FC = () => {
     setCurrentItpId(id);
     setIsEditModalOpen(true);
   }, []);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkAppliedRef = useRef(false);
+  // Set true only when the currently-open modal was reached via ?openId=
+  // (e.g. from Follow Up Issues) — lets onClose send the user back where
+  // they came from via browser history instead of just landing on this
+  // page's plain list, which is otherwise indistinguishable from having
+  // navigated here directly from the sidebar.
+  const openedViaDeepLinkRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkAppliedRef.current) return;
+    const openId = searchParams.get('openId');
+    if (!openId) return;
+    if (itpList.length === 0) return;
+    const match = itpList.find(item => item.id === openId || item.referenceNo === openId);
+    if (!match) return;
+    handleEdit(match.id);
+    openedViaDeepLinkRef.current = true;
+    deepLinkAppliedRef.current = true;
+    const next = new URLSearchParams(searchParams);
+    next.delete('openId');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, itpList, handleEdit, setSearchParams]);
 
   const handleAddNew = async () => {
     const activeContractors = getActiveContractors();
@@ -299,6 +322,11 @@ const ITP: React.FC = () => {
             }
           }}
           onClose={() => {
+            if (openedViaDeepLinkRef.current) {
+              openedViaDeepLinkRef.current = false;
+              navigate(-1);
+              return;
+            }
             setIsEditModalOpen(false);
             setCurrentItpId(null);
           }}

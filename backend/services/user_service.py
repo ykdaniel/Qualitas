@@ -122,6 +122,7 @@ class UserService:
             hashed_password=hashed_password,
             is_active=user.is_active,
             role_id=user.role_id,
+            company_name=user.company_name,
             created_at=date.today().isoformat(),  # stored as YYYY-MM-DD
         )
         

@@ -14,7 +14,7 @@ import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './FollowUpIssue.module.css';
 import formStyles from '../Shared/FormShell.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
-import api from '../../services/api';
+import api, { getUsers, formatUserLabel, type User as ApiUser } from '../../services/api';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { useFollowUpIssueStats } from '../../hooks/useFollowUpIssueStats';
@@ -54,6 +54,7 @@ interface FollowUpIssueItem {
   status: string;
   priority: string;
   assignedTo: string;
+  assignedToUserId?: number | null;
   vendor?: string;
   dueDate: string;
   createdAt: string;
@@ -477,6 +478,7 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
     description: existingItem?.description || '',
     status: existingItem?.status || 'Open',
     assignedTo: existingItem?.assignedTo || '',
+    assignedToUserId: existingItem?.assignedToUserId ?? null,
     vendor: existingItem?.vendor || '',
     dueDate: existingItem?.dueDate || '',
     action: existingItem?.action || '',
@@ -484,8 +486,32 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
   // ... rest of modal logic
   const actionTextareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Users for the assignedTo person picker — same pattern as NCR/OBS/OSD's
+  // own assignedTo pickers (getUsers() requires iam:user:view; if the
+  // current user lacks it this just stays empty, matching those modules'
+  // existing non-fatal degrade).
+  const [users, setUsers] = useState<ApiUser[]>([]);
+  useEffect(() => {
+    let alive = true;
+    getUsers().then(u => { if (alive) setUsers(u); }).catch(() => {/* non-fatal */});
+    return () => { alive = false; };
+  }, []);
+
   const handleFieldChange = (field: keyof FollowUpIssueItem, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleAssigneeChange = (userId: string) => {
+    if (!userId) {
+      setFormData(prev => ({ ...prev, assignedToUserId: null, assignedTo: '' }));
+      return;
+    }
+    const picked = users.find(u => u.id === Number(userId));
+    setFormData(prev => ({
+      ...prev,
+      assignedToUserId: Number(userId),
+      assignedTo: picked?.full_name || picked?.username || '',
+    }));
   };
 
   const handleInsertDate = () => {
@@ -555,12 +581,21 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
                 </div>
                 <div className={formStyles.formGroup}>
                   <label>{t('followup.assignedTo')}</label>
-                  <input
-                    type="text"
-                    className={formStyles.formInput}
-                    value={formData.assignedTo || ''}
-                    onChange={(e) => handleFieldChange('assignedTo', e.target.value)}
-                  />
+                  <select
+                    className={formStyles.formSelect}
+                    value={formData.assignedToUserId ?? ''}
+                    onChange={(e) => handleAssigneeChange(e.target.value)}
+                  >
+                    <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
+                    {users.map(u => (
+                      <option key={u.id} value={u.id}>{formatUserLabel(u)}</option>
+                    ))}
+                  </select>
+                  {!formData.assignedToUserId && formData.assignedTo && (
+                    <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0' }}>
+                      {t('followup.legacyAssignedToHint', { name: formData.assignedTo })}
+                    </p>
+                  )}
                 </div>
                 <div className={formStyles.formGroup}>
                   <label>{t('followup.vendor')}</label>

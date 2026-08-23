@@ -11,6 +11,7 @@ export interface FollowUpIssueItem {
     status: string;
     priority: string;
     assignedTo: string;
+    assignedToUserId?: number | null;
     vendor?: string;
     dueDate: string;
     createdAt: string;
@@ -20,6 +21,48 @@ export interface FollowUpIssueItem {
     sourceReferenceNo?: string;
     isExternal?: boolean;
 }
+
+const getModulePath = (module?: string): string | null => {
+    switch (module?.toUpperCase()) {
+        case 'NCR': return '/ncr';
+        case 'OBS': return '/obs';
+        case 'NOI': return '/noi';
+        case 'ITR': return '/itr';
+        case 'ITP': return '/itp';
+        case 'PQP': return '/pqp';
+        default: return null;
+    }
+};
+
+/** Deep-link straight to the specific record instead of just the module's
+ *  list page. Every module page here (NCR/OBS/NOI/ITR/ITP/PQP) supports
+ *  `?openId=` (see their own useEffect deep-link handlers). NCR/NOI/OBS/
+ *  ITP/PQP accept either the real id or the human-readable reference
+ *  number, so `sourceReferenceNo` (all this module ever stores) works
+ *  directly. ITR's handler only matches by real id, so it's recovered
+ *  from this row's own synthetic id — built elsewhere as
+ *  `itr-${itr.id}` — by stripping the module prefix. */
+const getDeepLinkPath = (issue: FollowUpIssueItem): string | null => {
+    const modulePath = getModulePath(issue.sourceModule);
+    if (!modulePath) return null;
+
+    switch (issue.sourceModule?.toUpperCase()) {
+        case 'NCR':
+        case 'OBS':
+        case 'NOI':
+        case 'ITP':
+        case 'PQP':
+            return issue.sourceReferenceNo
+                ? `${modulePath}?openId=${encodeURIComponent(issue.sourceReferenceNo)}`
+                : modulePath;
+        case 'ITR': {
+            const realId = issue.id.startsWith('itr-') ? issue.id.slice(4) : null;
+            return realId ? `${modulePath}?openId=${encodeURIComponent(realId)}` : modulePath;
+        }
+        default:
+            return modulePath;
+    }
+};
 
 export const createColumns = (
     handleDeleteClick: (id: string) => void,
@@ -53,27 +96,14 @@ export const createColumns = (
             ),
             cell: ({ row }) => {
                 const issue = row.original;
-
-                const getModulePath = (module?: string) => {
-                    switch (module?.toUpperCase()) {
-                        case 'NCR': return '/ncr';
-                        case 'OBS': return '/obs';
-                        case 'NOI': return '/noi';
-                        case 'ITR': return '/itr';
-                        case 'ITP': return '/itp';
-                        case 'PQP': return '/pqp';
-                        default: return null;
-                    }
-                };
-
-                const modulePath = getModulePath(issue.sourceModule);
+                const deepLinkPath = getDeepLinkPath(issue);
 
                 if (issue.isExternal && issue.sourceModule) {
                     return (
                         <span
                             className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                            onClick={() => modulePath && navigate(modulePath)}
-                            style={{ cursor: modulePath ? 'pointer' : 'default' }}
+                            onClick={() => deepLinkPath && navigate(deepLinkPath)}
+                            style={{ cursor: deepLinkPath ? 'pointer' : 'default' }}
                             title={t('followup.tooltip.goToModule', { module: issue.sourceModule })}
                         >
                             {issue.sourceModule}
@@ -98,23 +128,12 @@ export const createColumns = (
             ),
             cell: ({ row }) => {
                 const issue = row.original;
-                const getModulePath = (module?: string) => {
-                    switch (module?.toUpperCase()) {
-                        case 'NCR': return '/ncr';
-                        case 'OBS': return '/obs';
-                        case 'NOI': return '/noi';
-                        case 'ITR': return '/itr';
-                        case 'ITP': return '/itp';
-                        case 'PQP': return '/pqp';
-                        default: return null;
-                    }
-                };
-                const modulePath = getModulePath(issue.sourceModule);
+                const deepLinkPath = getDeepLinkPath(issue);
 
-                if (issue.isExternal && modulePath) {
+                if (issue.isExternal && deepLinkPath) {
                     return (
                         <span
-                            onClick={() => navigate(modulePath)}
+                            onClick={() => navigate(deepLinkPath)}
                             className="cursor-pointer text-blue-500 hover:underline"
                         >
                             {issue.issueNo}
@@ -181,25 +200,14 @@ export const createColumns = (
             header: t('common.operations'),
             cell: ({ row }) => {
                 const issue = row.original;
-                const getModulePath = (module?: string) => {
-                    switch (module?.toUpperCase()) {
-                        case 'NCR': return '/ncr';
-                        case 'OBS': return '/obs';
-                        case 'NOI': return '/noi';
-                        case 'ITR': return '/itr';
-                        case 'ITP': return '/itp';
-                        case 'PQP': return '/pqp';
-                        default: return null;
-                    }
-                };
-                const modulePath = getModulePath(issue.sourceModule);
+                const deepLinkPath = getDeepLinkPath(issue);
 
-                if (issue.isExternal && modulePath) {
+                if (issue.isExternal && deepLinkPath) {
                     return (
                         <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => navigate(modulePath)}
+                            onClick={() => navigate(deepLinkPath)}
                             title={t('followup.tooltip.goToModule', { module: issue.sourceModule })}
                         >
                             <Eye className="h-4 w-4" />

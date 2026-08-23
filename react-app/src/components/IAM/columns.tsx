@@ -26,6 +26,13 @@ export const createUserColumns = (
             cell: ({ row }) => <div className="text-center">{row.getValue("email")}</div>,
         },
         {
+            accessorKey: "display_company",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title={t('iam.companyName')} />
+            ),
+            cell: ({ row }) => <div className="text-center text-muted-foreground">{row.getValue("display_company") || '-'}</div>,
+        },
+        {
             accessorKey: "role",
             header: ({ column }) => (
                 <DataTableColumnHeader

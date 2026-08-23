@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { CheckCircle2, XCircle, BarChart3, TrendingUp, Search } from 'lucide-react';
 import { useContractorsStore } from '../../store/contractorsStore';
@@ -56,6 +57,30 @@ const PQP: React.FC = () => {
     setCurrentPqpId(id);
     setIsEditModalOpen(true);
   }, []);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const deepLinkAppliedRef = useRef(false);
+  // Set true only when the currently-open modal was reached via ?openId=
+  // (e.g. from Follow Up Issues) — lets onClose send the user back where
+  // they came from via browser history instead of just landing on this
+  // page's plain list, which is otherwise indistinguishable from having
+  // navigated here directly from the sidebar.
+  const openedViaDeepLinkRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkAppliedRef.current) return;
+    const openId = searchParams.get('openId');
+    if (!openId) return;
+    if (pqpList.length === 0) return;
+    const match = pqpList.find(item => item.id === openId || item.pqpNo === openId);
+    if (!match) return;
+    handleEdit(match.id);
+    openedViaDeepLinkRef.current = true;
+    deepLinkAppliedRef.current = true;
+    const next = new URLSearchParams(searchParams);
+    next.delete('openId');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, pqpList, handleEdit, setSearchParams]);
 
   const confirmDelete = React.useCallback((id: string) => {
     setDeleteModal({ isOpen: true, id });
@@ -277,6 +302,11 @@ const PQP: React.FC = () => {
             setCurrentPqpId(null);
           }}
           onClose={() => {
+            if (openedViaDeepLinkRef.current) {
+              openedViaDeepLinkRef.current = false;
+              navigate(-1);
+              return;
+            }
             setIsEditModalOpen(false);
             setCurrentPqpId(null);
           }}

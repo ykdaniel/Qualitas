@@ -11,6 +11,11 @@ export interface User {
     role_id?: number;
     status: 'active' | 'inactive';
     createdAt: string;
+    /** Editable, cosmetic-only company label for internal staff. */
+    company_name?: string | null;
+    /** Resolved "Name / Company" label source — real vendor name for
+     *  contractor-scoped users, else company_name. Read-only from the API. */
+    display_company?: string | null;
 }
 
 export interface Role {
@@ -74,6 +79,8 @@ export const useIAMStore = create<IAMState>((set, get) => ({
                 role_id: u.role_id ?? undefined,
                 status: u.is_active ? 'active' as const : 'inactive' as const,
                 createdAt: (u as any).created_at || new Date().toISOString().split('T')[0],
+                company_name: u.company_name,
+                display_company: u.display_company,
             }));
             set({ users: formattedUsers, loading: false });
         } catch (err: any) {
@@ -127,6 +134,8 @@ export const useIAMStore = create<IAMState>((set, get) => ({
                 role_id: u.role_id ?? undefined,
                 status: u.is_active ? 'active' as const : 'inactive' as const,
                 createdAt: (u as any).created_at || new Date().toISOString().split('T')[0],
+                company_name: u.company_name,
+                display_company: u.display_company,
             }));
             const formattedRoles: Role[] = rolesData.map(r => ({
                 id: String(r.id),
@@ -156,6 +165,7 @@ export const useIAMStore = create<IAMState>((set, get) => ({
             ).join('').slice(0, 12) + 'Aa1!',
             role_id: payload.role_id,
             is_active: payload.status === 'active',
+            company_name: payload.company_name || null,
         };
         const result = await apiService.createUser(apiPayload);
         const newUser: User = {
@@ -166,6 +176,8 @@ export const useIAMStore = create<IAMState>((set, get) => ({
             role_id: payload.role_id,
             status: result.is_active ? 'active' : 'inactive',
             createdAt: (result as any).created_at || new Date().toISOString().split('T')[0],
+            company_name: result.company_name,
+            display_company: result.display_company,
         };
         set((state) => ({ users: [...state.users, newUser] }));
         return result;
@@ -178,6 +190,7 @@ export const useIAMStore = create<IAMState>((set, get) => ({
         if (payload.status !== undefined) apiPayload.is_active = payload.status === 'active';
         if (payload.role_id !== undefined) apiPayload.role_id = payload.role_id;
         if (payload.password) apiPayload.password = payload.password;
+        if (payload.company_name !== undefined) apiPayload.company_name = payload.company_name;
 
         const result = await apiService.updateUser(id, apiPayload);
         const updatedUser: User = {
@@ -188,6 +201,8 @@ export const useIAMStore = create<IAMState>((set, get) => ({
             role_id: payload.role_id || 0,
             status: result.is_active ? 'active' : 'inactive',
             createdAt: (result as any).created_at || new Date().toISOString().split('T')[0],
+            company_name: result.company_name,
+            display_company: result.display_company,
         };
         set((state) => ({
             users: state.users.map(u => (u.id === String(id) ? updatedUser : u)),

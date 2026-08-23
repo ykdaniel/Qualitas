@@ -254,6 +254,13 @@ export interface User {
   permissions: string[];
   is_active: boolean;
   full_name?: string;
+  /** Editable, cosmetic-only company label — only meaningful for internal
+   *  staff (no vendor_id). Prefer `display_company` for showing a user's
+   *  company; this is the raw settable field. */
+  company_name?: string | null;
+  /** Resolved "Name / Company" label source: the user's real vendor name
+   *  when contractor-scoped, else their `company_name`. Read-only. */
+  display_company?: string | null;
 }
 
 export interface Role {
@@ -276,6 +283,15 @@ export const getUsers = async (): Promise<User[]> => {
   return response.data;
 };
 
+/** "Name / Company" label for a user-picker option — the shared format
+ *  used everywhere a real user account is selected (NCR/OBS/ITR/Follow Up
+ *  Issues assignee pickers, etc.). Falls back to plain name when the user
+ *  has no company on file (internal staff with no company_name set). */
+export const formatUserLabel = (u: User): string => {
+  const name = u.full_name || u.username;
+  return u.display_company ? `${name} / ${u.display_company}` : name;
+};
+
 export const getRoles = async (): Promise<Role[]> => {
   const response = await api.get<Role[]>('/iam/roles/');
   return response.data;
@@ -292,6 +308,7 @@ export interface CreateUserPayload {
   password?: string;
   role_id: number;
   is_active: boolean;
+  company_name?: string | null;
 }
 
 export type UpdateUserPayload = Partial<CreateUserPayload>
@@ -451,7 +468,7 @@ export const uploadFiles = async (
   formData.append('category', category);
   files.forEach((file) => formData.append('files', file));
 
-  const response = await api.post<AttachmentInfo[]>('/files/upload/', formData, {
+  const response = await api.post<AttachmentInfo[]>('/files/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return response.data;

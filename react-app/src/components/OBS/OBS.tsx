@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Clock, CheckCircle2, BarChart3, Zap, Search, Ban } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
@@ -69,6 +70,30 @@ const OBS: React.FC = () => {
     setCurrentObsId(id);
     setIsEditModalOpen(true);
   }, []);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const deepLinkAppliedRef = useRef(false);
+  // Set true only when the currently-open modal was reached via ?openId=
+  // (e.g. from Follow Up Issues) — lets onClose send the user back where
+  // they came from via browser history instead of just landing on this
+  // page's plain list, which is otherwise indistinguishable from having
+  // navigated here directly from the sidebar.
+  const openedViaDeepLinkRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkAppliedRef.current) return;
+    const openId = searchParams.get('openId');
+    if (!openId) return;
+    if (obsList.length === 0) return;
+    const match = obsList.find(item => item.id === openId || item.documentNumber === openId);
+    if (!match) return;
+    handleEdit(match.id);
+    openedViaDeepLinkRef.current = true;
+    deepLinkAppliedRef.current = true;
+    const next = new URLSearchParams(searchParams);
+    next.delete('openId');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, obsList, handleEdit, setSearchParams]);
 
   const handleAddNew = () => {
     setCurrentObsId('new');
@@ -263,9 +288,11 @@ const OBS: React.FC = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <button className={shellStyles.addNewButton} onClick={handleAddNew}>
-            {t('obs.addNew')}
-          </button>
+          {hasPermission('obs:create:all') && (
+            <button className={shellStyles.addNewButton} onClick={handleAddNew}>
+              {t('obs.addNew')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -302,7 +329,7 @@ const OBS: React.FC = () => {
         const status = (editingItem?.status || '').toLowerCase();
         const locked = status === 'closed' || status === 'void';
         const canEdit = currentObsId === 'new'
-          ? true
+          ? hasPermission('obs:create:all')
           : locked ? hasPermission('obs:approve:all') : hasPermission('obs:update:all');
         return (
           <OBSDetailModal
@@ -311,6 +338,11 @@ const OBS: React.FC = () => {
             readOnly={!canEdit}
             onSave={handleSaveOBSDetails}
             onClose={() => {
+              if (openedViaDeepLinkRef.current) {
+                openedViaDeepLinkRef.current = false;
+                navigate(-1);
+                return;
+              }
               setIsEditModalOpen(false);
               setCurrentObsId(null);
             }}

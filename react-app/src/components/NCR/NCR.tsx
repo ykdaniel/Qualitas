@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Clock, CheckCircle2, BarChart3, Zap, Search, Ban } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
@@ -65,7 +65,14 @@ const NCR: React.FC = () => {
   }, []);
 
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const deepLinkAppliedRef = useRef(false);
+  // Set true only when the currently-open modal was reached via ?openId=
+  // (e.g. from Follow Up Issues) — lets onClose send the user back where
+  // they came from via browser history instead of just landing on this
+  // page's plain list, which is otherwise indistinguishable from having
+  // navigated here directly from the sidebar.
+  const openedViaDeepLinkRef = useRef(false);
   useEffect(() => {
     if (deepLinkAppliedRef.current) return;
     const openId = searchParams.get('openId');
@@ -74,6 +81,7 @@ const NCR: React.FC = () => {
     const match = ncrList.find(item => item.id === openId || item.documentNumber === openId);
     if (!match) return;
     handleEdit(match.id);
+    openedViaDeepLinkRef.current = true;
     deepLinkAppliedRef.current = true;
     const next = new URLSearchParams(searchParams);
     next.delete('openId');
@@ -114,15 +122,24 @@ const NCR: React.FC = () => {
         noiNumber: details.noiNumber,
         itrNumber: details.itrNumber,
         defectPhotos: details.defectPhotos,
+        progressPhotos: details.progressPhotos,
         improvementPhotos: details.improvementPhotos,
         attachments: details.attachments,
         referenceStandards: details.referenceStandards,
         serialNumbers: details.serialNumbers,
         repairMethodStatement: details.repairMethodStatement,
+        // Sent as-is (not `|| undefined`) so clearing a status to '' actually
+        // reaches the backend — axios drops undefined keys entirely, which
+        // would make the auto-clear-on-type behavior never persist.
+        repairMethodStatementStatus: details.repairMethodStatementStatus,
         immediateCorrectionAction: details.immediateCorrectionAction,
+        immediateCorrectionActionStatus: details.immediateCorrectionActionStatus,
         rootCauseAnalysis: details.rootCauseAnalysis,
+        rootCauseAnalysisStatus: details.rootCauseAnalysisStatus,
         correctiveActions: details.correctiveActions,
+        correctiveActionsStatus: details.correctiveActionsStatus,
         preventiveAction: details.preventiveAction,
+        preventiveActionStatus: details.preventiveActionStatus,
         finalProductIntegrityStatement: details.finalProductIntegrityStatement,
         reInspectionNumber: details.reInspectionNumber,
         projectQualityManager: details.projectQualityManager,
@@ -134,6 +151,7 @@ const NCR: React.FC = () => {
         effectivenessVerified: details.effectivenessVerified || undefined,
         effectivenessVerifiedDate: details.effectivenessVerifiedDate || undefined,
         effectivenessNotes: details.effectivenessNotes || undefined,
+        effectivenessNotesStatus: details.effectivenessNotesStatus,
         // NCR formal-report fields (BACKLOG #15)
         drawingNo: details.drawingNo || undefined,
         specNo: details.specNo || undefined,
@@ -143,14 +161,24 @@ const NCR: React.FC = () => {
         weldJointNo: details.weldJointNo || undefined,
         heatBatchNo: details.heatBatchNo || undefined,
         qtyAffected: details.qtyAffected || undefined,
+        // No `|| undefined` below: these can be legitimately cleared back to
+        // '' (e.g. the disposition-change effect resets ownerApproval*), and
+        // axios drops `undefined` keys entirely — that silently kept the old
+        // stale value on the backend instead of persisting the clear.
+        qtyAffectedUnit: details.qtyAffectedUnit,
         extent: details.extent || undefined,
         costScheduleImpact: details.costScheduleImpact || undefined,
         requirement: details.requirement || undefined,
         asFound: details.asFound || undefined,
         deviation: details.deviation || undefined,
         concessionNo: details.concessionNo || undefined,
+        ownerApproval: details.ownerApproval,
+        ownerApprovalBy: details.ownerApprovalBy,
+        ownerApprovalDate: details.ownerApprovalDate,
+        ownerApprovalNotes: details.ownerApprovalNotes,
         rcaMethod: details.rcaMethod || undefined,
         directCause: details.directCause || undefined,
+        directCauseStatus: details.directCauseStatus,
         recurrence: details.recurrence || undefined,
         recurrenceRef: details.recurrenceRef || undefined,
         correctiveActionOwner: details.correctiveActionOwner || undefined,
@@ -320,9 +348,11 @@ const NCR: React.FC = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
-            {t('ncr.addNew')}
-          </button>
+          {hasPermission('ncr:create:all') && (
+            <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+              {t('ncr.addNew')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -362,7 +392,7 @@ const NCR: React.FC = () => {
         const status = (editingItem?.status || '').toLowerCase();
         const locked = status === 'closed' || status === 'void';
         const canEdit = currentNcrId === 'new'
-          ? true
+          ? hasPermission('ncr:create:all')
           : locked ? hasPermission('ncr:close:all') : hasPermission('ncr:update:all');
         return (
           <NCRDetailModal
@@ -371,6 +401,11 @@ const NCR: React.FC = () => {
             readOnly={!canEdit}
             onSave={handleSaveNCRDetails}
             onClose={() => {
+              if (openedViaDeepLinkRef.current) {
+                openedViaDeepLinkRef.current = false;
+                navigate(-1);
+                return;
+              }
               setIsEditModalOpen(false);
               setCurrentNcrId(null);
             }}

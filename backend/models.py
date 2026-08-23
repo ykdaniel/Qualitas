@@ -70,8 +70,9 @@ class NCR(Base):
     productIntegrityRelated = Column(String, nullable=True)
     permanentProductDeviation = Column(String, nullable=True)
     impactToOM = Column(String, nullable=True)
-    defectPhotos = Column(Text, nullable=True)  # JSON array as string
-    improvementPhotos = Column(Text, nullable=True)
+    defectPhotos = Column(Text, nullable=True)  # JSON array as string — "before"
+    progressPhotos = Column(Text, nullable=True)  # "during" — repair/correction in progress
+    improvementPhotos = Column(Text, nullable=True)  # "after"
     noiNumber = Column(String, ForeignKey("noi.referenceNo", ondelete="CASCADE"), nullable=True)
     itrNumber = Column(String, nullable=True, index=True)  # 連結到觸發此 NCR 的 ITR
     dueDate = Column(String, nullable=True)  # 到期日 (YYYY-MM-DD)
@@ -79,11 +80,22 @@ class NCR(Base):
     last_reminded_at = Column(String, nullable=True)
     referenceStandards = Column(Text, nullable=True)
     serialNumbers = Column(Text, nullable=True)
+    # TBC/N/A used to be written as literal text into these fields (e.g.
+    # "To be confirmed"), making "which fields are still TBC" unqueryable
+    # without fragile string matching. Each now has a companion *Status
+    # column ('TBC' | 'NA' | null) — the text field itself stays either
+    # genuinely blank or holds real content; the button sets status instead
+    # of overwriting the text, and typing into the field clears the status.
     repairMethodStatement = Column(Text, nullable=True)
+    repairMethodStatementStatus = Column(String, nullable=True)
     immediateCorrectionAction = Column(Text, nullable=True)
+    immediateCorrectionActionStatus = Column(String, nullable=True)
     rootCauseAnalysis = Column(Text, nullable=True)
+    rootCauseAnalysisStatus = Column(String, nullable=True)
     correctiveActions = Column(Text, nullable=True)
+    correctiveActionsStatus = Column(String, nullable=True)
     preventiveAction = Column(Text, nullable=True)
+    preventiveActionStatus = Column(String, nullable=True)
     finalProductIntegrityStatement = Column(Text, nullable=True)
     reInspectionNumber = Column(String, nullable=True)
     projectQualityManager = Column(String, nullable=True)
@@ -98,6 +110,7 @@ class NCR(Base):
     effectivenessVerifiedBy = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     effectivenessVerifiedDate = Column(String, nullable=True)   # YYYY-MM-DD
     effectivenessNotes = Column(Text, nullable=True)
+    effectivenessNotesStatus = Column(String, nullable=True)
     # NCR formal-report fields (BACKLOG #15) — make the template's manual fields persistable
     # 1.1 Traceability
     drawingNo = Column(String, nullable=True)
@@ -107,8 +120,11 @@ class NCR(Base):
     lineNo = Column(String, nullable=True)
     weldJointNo = Column(String, nullable=True)
     heatBatchNo = Column(String, nullable=True)
-    # 1.2 Impact & extent
+    # 1.2 Impact & extent — qtyAffected is a numeric-string quantity so it can
+    # feed aggregate stats (BACKLOG #12); the unit ("joint", "m", "pcs", ...)
+    # is free text in its own column so a quantity like "1 joint" isn't lost.
     qtyAffected = Column(String, nullable=True)
+    qtyAffectedUnit = Column(String, nullable=True)
     extent = Column(String, nullable=True)                 # Isolated / Systemic
     costScheduleImpact = Column(String, nullable=True)
     # 1.3 Structured description
@@ -117,9 +133,18 @@ class NCR(Base):
     deviation = Column(Text, nullable=True)
     # 2 Disposition
     concessionNo = Column(String, nullable=True)
+    # Owner / Engineering-Design authority sign-off on the proposed disposition
+    # (required for Use As Is / Repair per the formal print report's note —
+    # print report section 6.3). Distinct from effectivenessVerified, which is
+    # QC's post-fact check of whether the corrective action actually worked.
+    ownerApproval = Column(String, nullable=True)  # Pending / Approved / Rejected
+    ownerApprovalBy = Column(String, nullable=True)
+    ownerApprovalDate = Column(String, nullable=True)
+    ownerApprovalNotes = Column(Text, nullable=True)
     # 3 Root cause / corrective / preventive detail
     rcaMethod = Column(String, nullable=True)              # 5 Why / Fishbone / Other
     directCause = Column(Text, nullable=True)
+    directCauseStatus = Column(String, nullable=True)
     recurrence = Column(String, nullable=True)             # Yes / No
     recurrenceRef = Column(String, nullable=True)          # linked prior NCR
     correctiveActionOwner = Column(String, nullable=True)
@@ -146,7 +171,16 @@ class FollowUp(Base):
     description = Column(String)
     status = Column(String)
     priority = Column(String, nullable=True)
+    # Free-text legacy field — kept for display/search backward-compat with
+    # rows created before assignedToUserId existed. New saves populate both
+    # (the frontend sends the picked user's display name here alongside
+    # their real id), so this stays usable without a join for list display.
     assignedTo = Column(String, nullable=True)
+    # Real FK to the assignee's user account — added so reminders can be
+    # sent to the actual responsible person (see scheduler.py) instead of
+    # only the vendor contact, and so "my open items" can filter reliably
+    # instead of matching free text.
+    assignedToUserId = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     vendor_id = Column(String, ForeignKey("contractors.id", ondelete="SET NULL"), nullable=True, index=True) # 關聯廠商
     dueDate = Column(String, nullable=True)
     createdAt = Column(String)
@@ -158,6 +192,7 @@ class FollowUp(Base):
 
     # Relationships
     vendor_ref = relationship("Contractor", back_populates="followups")
+    assignee = relationship("User", foreign_keys=[assignedToUserId])
 
     @property
     def vendor(self):
@@ -365,6 +400,54 @@ class OBS(Base):
         return self.vendor_ref.name if self.vendor_ref else None
 
 
+class OSD(Base):
+    """Over / Short / Damage Report — records quantity or condition
+    discrepancies found when materials/equipment are received on site.
+    Standalone: resolves via its own disposition/correctiveAction fields,
+    does not escalate into an NCR."""
+    __tablename__ = "osd"
+
+    id = Column(String, primary_key=True, index=True)
+    project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
+    vendor_id = Column(String, ForeignKey("contractors.id", ondelete="SET NULL"), index=True)
+    documentNumber = Column(String, index=True, unique=True)
+    status = Column(String)  # Open / Resolved / Closed / Void
+    remark = Column(String, nullable=True)
+    raiseDate = Column(String, nullable=True)
+    closeoutDate = Column(String, nullable=True)
+    raisedBy = Column(String, nullable=True)
+
+    # Delivery / shipment identity — what arrived and against which document
+    deliveryNoteNo = Column(String, nullable=True)
+    poNumber = Column(String, nullable=True)
+    itemDescription = Column(String, nullable=True)
+    expectedQty = Column(String, nullable=True)
+    receivedQty = Column(String, nullable=True)
+    unit = Column(String, nullable=True)
+    damageDescription = Column(String, nullable=True)
+
+    # Disposition / corrective action — standalone resolution, no NCR link
+    disposition = Column(String, nullable=True)  # Accept/Reject/UseAsIs/ReturnToSupplier/Replace
+    correctiveAction = Column(String, nullable=True)
+    correctiveActionOwner = Column(String, nullable=True)
+    correctiveActionTargetDate = Column(String, nullable=True)
+    resolvedBy = Column(String, nullable=True)
+    resolvedDate = Column(String, nullable=True)
+
+    defectPhotos = Column(Text, nullable=True)
+    improvementPhotos = Column(Text, nullable=True)
+    attachments = Column(Text, nullable=True)
+    dueDate = Column(String, nullable=True)
+    last_reminded_at = Column(String, nullable=True)
+
+    # Relationships
+    vendor_ref = relationship("Contractor", back_populates="osds")
+
+    @property
+    def vendor(self):
+        return self.vendor_ref.name if self.vendor_ref else None
+
+
 class Contractor(Base):
     __tablename__ = "contractors"
 
@@ -394,6 +477,8 @@ class Contractor(Base):
     pqps = relationship("PQP", back_populates="vendor_ref",
                         cascade="save-update, merge", passive_deletes=True)
     obss = relationship("OBS", back_populates="vendor_ref",
+                        cascade="save-update, merge", passive_deletes=True)
+    osds = relationship("OSD", back_populates="vendor_ref",
                         cascade="save-update, merge", passive_deletes=True)
     fats = relationship("FAT", back_populates="vendor_ref",
                         cascade="save-update, merge", passive_deletes=True)
@@ -469,6 +554,15 @@ class User(Base):
     # staff / owner). Project scope is the many-to-many `user_projects` table.
     vendor_id = Column(String, ForeignKey("contractors.id", ondelete="SET NULL"), nullable=True, index=True)
 
+    # Cosmetic-only company label for internal staff (owner/PM etc.) who
+    # have no vendor_id — deliberately NOT the same mechanism as vendor_id,
+    # which drives P0 data-isolation scope. Setting this never changes what
+    # data a user can see; it only supplies a "Name / Company" display label
+    # for staff who aren't tied to a contractor. For contractor-scoped users,
+    # the company shown is derived from vendor_id -> Contractor.name instead
+    # (see `display_company` below), so this stays unset/ignored for them.
+    company_name = Column(String, nullable=True)
+
     # Account-lockout fields. Reset on successful login.
     failed_login_attempts = Column(Integer, nullable=False, default=0)
     locked_until = Column(DateTime, nullable=True)
@@ -485,6 +579,7 @@ class User(Base):
 
     # Relationships
     role = relationship("Role", backref="users")
+    vendor_ref = relationship("Contractor")
 
     @property
     def role_name(self):
@@ -495,6 +590,15 @@ class User(Base):
         """Flat list of the user's permission codes (via their role), so the
         frontend can gate UI on them. Empty when the user has no role."""
         return self.role.permissions if self.role else []
+
+    @property
+    def display_company(self):
+        """"Name / Company" label source. Contractor-scoped users show their
+        real vendor name (already the source of truth for who they are);
+        internal staff fall back to the cosmetic `company_name` field."""
+        if self.vendor_ref:
+            return self.vendor_ref.name
+        return self.company_name
 
 
 class UserProject(Base):

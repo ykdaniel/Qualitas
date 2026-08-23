@@ -9,13 +9,33 @@ MAX_TEXT_LENGTH = 10000  # 一般文字欄位最大長度
 MAX_SHORT_LENGTH = 500   # 短文字欄位最大長度
 
 # 驗證工具函數
-def validate_date_format(v: str) -> str:
+def validate_date_format(v) -> str:
     """驗證日期格式 (YYYY-MM-DD)"""
-    if v and not re.match(r'^\d{4}-\d{2}-\d{2}', v):
+    if not v:
+        return v
+    # mode='before' validators see the raw JSON value, which may not be a
+    # str (e.g. a client sending a number) — coerce before regex/slicing.
+    v = v if isinstance(v, str) else str(v)
+    if not re.match(r'^\d{4}-\d{2}-\d{2}', v):
         raise ValueError('日期格式必須為 YYYY-MM-DD')
     # 若為 datetime string，只取日期部分
-    if v and len(v) > 10:
+    if len(v) > 10:
         v = v[:10]
+    return v
+
+
+def validate_numeric_string(v) -> str:
+    """Reject a non-empty value that isn't a bare number (int or decimal).
+    Used for NCR.qtyAffected — it used to be free text like "1 joint"; the
+    unit now lives in its own qtyAffectedUnit column so this can be a real
+    number for aggregate stats (BACKLOG #12)."""
+    if not v:
+        return v
+    # mode='before' validators see the raw JSON value, which may not be a
+    # str (e.g. a client sending {"qtyAffected": 5}) — coerce before regex.
+    v = v if isinstance(v, str) else str(v)
+    if not re.match(r'^\d+(\.\d+)?$', v.strip()):
+        raise ValueError('qtyAffected must be a plain number (put the unit in qtyAffectedUnit instead)')
     return v
 
 
@@ -26,9 +46,17 @@ NCR_CONTROLLED_VALUES = {
     "discipline": {"Civil", "Structural", "Mechanical", "Electrical", "Piping", "Architectural"},
     "productDisposition": {"Use As Is", "Repair", "Rework", "Reject"},
     "effectivenessVerified": {"Pending", "Yes", "No"},
+    "ownerApproval": {"Pending", "Approved", "Rejected"},
     "status": {"Open", "In Progress", "Resolved", "Closed", "Void"},
     "extent": {"Isolated", "Systemic"},
     "recurrence": {"Yes", "No"},
+    "repairMethodStatementStatus": {"TBC", "NA"},
+    "immediateCorrectionActionStatus": {"TBC", "NA"},
+    "rootCauseAnalysisStatus": {"TBC", "NA"},
+    "correctiveActionsStatus": {"TBC", "NA"},
+    "preventiveActionStatus": {"TBC", "NA"},
+    "effectivenessNotesStatus": {"TBC", "NA"},
+    "directCauseStatus": {"TBC", "NA"},
 }
 
 
@@ -158,6 +186,7 @@ class NCRBase(BaseModel):
     permanentProductDeviation: str | None = None
     impactToOM: str | None = None
     defectPhotos: Any | None = None
+    progressPhotos: Any | None = None
     improvementPhotos: Any | None = None
     noiNumber: str | None = None  # 連結到觸發此 NCR 的 NOI
     itrNumber: str | None = None  # 連結到觸發此 NCR 的 ITR
@@ -167,10 +196,15 @@ class NCRBase(BaseModel):
     referenceStandards: str | None = None
     serialNumbers: str | None = None
     repairMethodStatement: str | None = None
+    repairMethodStatementStatus: str | None = None
     immediateCorrectionAction: str | None = None
+    immediateCorrectionActionStatus: str | None = None
     rootCauseAnalysis: str | None = None
+    rootCauseAnalysisStatus: str | None = None
     correctiveActions: str | None = None
+    correctiveActionsStatus: str | None = None
     preventiveAction: str | None = None
+    preventiveActionStatus: str | None = None
     finalProductIntegrityStatement: str | None = None
     reInspectionNumber: str | None = None
     projectQualityManager: str | None = None
@@ -184,6 +218,7 @@ class NCRBase(BaseModel):
     effectivenessVerifiedBy: int | None = None     # FK users.id
     effectivenessVerifiedDate: str | None = None   # YYYY-MM-DD
     effectivenessNotes: str | None = None
+    effectivenessNotesStatus: str | None = None
     # NCR formal-report fields (BACKLOG #15) — must live here (not only on
     # NCRUpdate) so they also persist when an NCR is first created.
     drawingNo: str | None = None
@@ -194,14 +229,20 @@ class NCRBase(BaseModel):
     weldJointNo: str | None = None
     heatBatchNo: str | None = None
     qtyAffected: str | None = None
+    qtyAffectedUnit: str | None = None
     extent: str | None = None
     costScheduleImpact: str | None = None
     requirement: str | None = None
     asFound: str | None = None
     deviation: str | None = None
     concessionNo: str | None = None
+    ownerApproval: str | None = None
+    ownerApprovalBy: str | None = None
+    ownerApprovalDate: str | None = None
+    ownerApprovalNotes: str | None = None
     rcaMethod: str | None = None
     directCause: str | None = None
+    directCauseStatus: str | None = None
     recurrence: str | None = None
     recurrenceRef: str | None = None
     correctiveActionOwner: str | None = None
@@ -209,17 +250,25 @@ class NCRBase(BaseModel):
     preventiveActionOwner: str | None = None
     preventiveActionTargetDate: str | None = None
 
-    @field_validator('raiseDate', 'closeoutDate', 'dueDate', 'effectivenessVerifiedDate', 'correctiveActionTargetDate', 'preventiveActionTargetDate', mode='before')
+    @field_validator('raiseDate', 'closeoutDate', 'dueDate', 'effectivenessVerifiedDate', 'correctiveActionTargetDate', 'preventiveActionTargetDate', 'ownerApprovalDate', mode='before')
     @classmethod
     def check_dates(cls, v):
         return validate_date_format(v)
 
-    @field_validator('severity', 'discipline', 'productDisposition', 'effectivenessVerified', 'status', 'extent', 'recurrence', mode='before')
+    @field_validator('severity', 'discipline', 'productDisposition', 'effectivenessVerified', 'ownerApproval', 'status', 'extent', 'recurrence',
+                      'repairMethodStatementStatus', 'immediateCorrectionActionStatus', 'rootCauseAnalysisStatus',
+                      'correctiveActionsStatus', 'preventiveActionStatus', 'effectivenessNotesStatus', 'directCauseStatus', mode='before')
     @classmethod
     def check_controlled_values(cls, v, info):
         return _validate_ncr_controlled(info.field_name, v)
 
-    @field_validator('defectPhotos', 'improvementPhotos', 'attachments', mode='before')
+    # NOTE: qtyAffected numeric-string validation intentionally lives on
+    # NCRCreate/NCRUpdate (write paths) only, not here on NCRBase — the read
+    # schema NCR(NCRBase) must still be able to deserialize legacy rows the
+    # qty_affected-split migration flagged as "needs manual cleanup" and left
+    # as unparseable free text, without crashing GET /ncr/.
+
+    @field_validator('defectPhotos', 'progressPhotos', 'improvementPhotos', 'attachments', mode='before')
     @classmethod
     def parse_photos(cls, v):
         if isinstance(v, str):
@@ -245,6 +294,11 @@ class NCRBase(BaseModel):
 class NCRCreate(NCRBase):
     id: str | None = None
 
+    @field_validator('qtyAffected', mode='before')
+    @classmethod
+    def check_qty_affected(cls, v):
+        return validate_numeric_string(v)
+
 class NCRUpdate(BaseModel):
     project_id: str | None = None
     vendor: str | None = None
@@ -268,6 +322,7 @@ class NCRUpdate(BaseModel):
     permanentProductDeviation: str | None = None
     impactToOM: str | None = None
     defectPhotos: Any | None = None
+    progressPhotos: Any | None = None
     improvementPhotos: Any | None = None
     noiNumber: str | None = None
     itrNumber: str | None = None
@@ -277,10 +332,15 @@ class NCRUpdate(BaseModel):
     referenceStandards: str | None = None
     serialNumbers: str | None = None
     repairMethodStatement: str | None = None
+    repairMethodStatementStatus: str | None = None
     immediateCorrectionAction: str | None = None
+    immediateCorrectionActionStatus: str | None = None
     rootCauseAnalysis: str | None = None
+    rootCauseAnalysisStatus: str | None = None
     correctiveActions: str | None = None
+    correctiveActionsStatus: str | None = None
     preventiveAction: str | None = None
+    preventiveActionStatus: str | None = None
     finalProductIntegrityStatement: str | None = None
     reInspectionNumber: str | None = None
     projectQualityManager: str | None = None
@@ -294,6 +354,7 @@ class NCRUpdate(BaseModel):
     effectivenessVerifiedBy: int | None = None
     effectivenessVerifiedDate: str | None = None
     effectivenessNotes: str | None = None
+    effectivenessNotesStatus: str | None = None
     # NCR formal-report fields (BACKLOG #15)
     drawingNo: str | None = None
     specNo: str | None = None
@@ -303,14 +364,20 @@ class NCRUpdate(BaseModel):
     weldJointNo: str | None = None
     heatBatchNo: str | None = None
     qtyAffected: str | None = None
+    qtyAffectedUnit: str | None = None
     extent: str | None = None
     costScheduleImpact: str | None = None
     requirement: str | None = None
     asFound: str | None = None
     deviation: str | None = None
     concessionNo: str | None = None
+    ownerApproval: str | None = None
+    ownerApprovalBy: str | None = None
+    ownerApprovalDate: str | None = None
+    ownerApprovalNotes: str | None = None
     rcaMethod: str | None = None
     directCause: str | None = None
+    directCauseStatus: str | None = None
     recurrence: str | None = None
     recurrenceRef: str | None = None
     correctiveActionOwner: str | None = None
@@ -318,15 +385,22 @@ class NCRUpdate(BaseModel):
     preventiveActionOwner: str | None = None
     preventiveActionTargetDate: str | None = None
 
-    @field_validator('raiseDate', 'closeoutDate', 'dueDate', 'effectivenessVerifiedDate', 'correctiveActionTargetDate', 'preventiveActionTargetDate', mode='before')
+    @field_validator('raiseDate', 'closeoutDate', 'dueDate', 'effectivenessVerifiedDate', 'correctiveActionTargetDate', 'preventiveActionTargetDate', 'ownerApprovalDate', mode='before')
     @classmethod
     def check_dates(cls, v):
         return validate_date_format(v)
 
-    @field_validator('severity', 'discipline', 'productDisposition', 'effectivenessVerified', 'status', 'extent', 'recurrence', mode='before')
+    @field_validator('severity', 'discipline', 'productDisposition', 'effectivenessVerified', 'ownerApproval', 'status', 'extent', 'recurrence',
+                      'repairMethodStatementStatus', 'immediateCorrectionActionStatus', 'rootCauseAnalysisStatus',
+                      'correctiveActionsStatus', 'preventiveActionStatus', 'effectivenessNotesStatus', 'directCauseStatus', mode='before')
     @classmethod
     def check_controlled_values(cls, v, info):
         return _validate_ncr_controlled(info.field_name, v)
+
+    @field_validator('qtyAffected', mode='before')
+    @classmethod
+    def check_qty_affected(cls, v):
+        return validate_numeric_string(v)
 
     @model_validator(mode='after')
     def check_date_ranges(self):
@@ -341,7 +415,7 @@ class NCRUpdate(BaseModel):
                 raise ValueError('Closeout date must be before or equal to due date')
         return self
 
-    @field_validator('defectPhotos', 'improvementPhotos', 'attachments', mode='before')
+    @field_validator('defectPhotos', 'progressPhotos', 'improvementPhotos', 'attachments', mode='before')
     @classmethod
     def parse_photos(cls, v):
         if isinstance(v, str):
@@ -743,6 +817,98 @@ class OBS(OBSBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+# OSD (Over/Short/Damage Report)
+class OSDBase(BaseModel):
+    project_id: str | None = None
+    vendor: str | None = None
+    documentNumber: str | None = None  # 由後端自動產生
+    status: str
+    remark: str | None = None
+    raiseDate: str | None = None
+    closeoutDate: str | None = None
+    raisedBy: str | None = None
+    deliveryNoteNo: str | None = None
+    poNumber: str | None = None
+    itemDescription: str | None = None
+    expectedQty: str | None = None
+    receivedQty: str | None = None
+    unit: str | None = None
+    damageDescription: str | None = None
+    disposition: str | None = None
+    correctiveAction: str | None = None
+    correctiveActionOwner: str | None = None
+    correctiveActionTargetDate: str | None = None
+    resolvedBy: str | None = None
+    resolvedDate: str | None = None
+    defectPhotos: Any | None = None
+    improvementPhotos: Any | None = None
+    attachments: list[str] | None = None
+    dueDate: str | None = None
+
+    @field_validator('raiseDate', 'closeoutDate', 'dueDate', 'correctiveActionTargetDate', 'resolvedDate', mode='before')
+    @classmethod
+    def check_dates(cls, v):
+        return validate_date_format(v)
+
+    @field_validator('defectPhotos', 'improvementPhotos', 'attachments', mode='before')
+    @classmethod
+    def parse_photos(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return []
+        return v
+
+
+class OSDCreate(OSDBase):
+    id: str | None = None
+
+
+class OSDUpdate(BaseModel):
+    project_id: str | None = None
+    vendor: str | None = None
+    # documentNumber 不可更新（由後端自動產生，建立後不可變）
+    status: str | None = None
+    remark: str | None = None
+    raiseDate: str | None = None
+    closeoutDate: str | None = None
+    raisedBy: str | None = None
+    deliveryNoteNo: str | None = None
+    poNumber: str | None = None
+    itemDescription: str | None = None
+    expectedQty: str | None = None
+    receivedQty: str | None = None
+    unit: str | None = None
+    damageDescription: str | None = None
+    disposition: str | None = None
+    correctiveAction: str | None = None
+    correctiveActionOwner: str | None = None
+    correctiveActionTargetDate: str | None = None
+    resolvedBy: str | None = None
+    resolvedDate: str | None = None
+    defectPhotos: Any | None = None
+    improvementPhotos: Any | None = None
+    attachments: list[str] | None = None
+    last_reminded_at: str | None = None
+    dueDate: str | None = None
+
+    @field_validator('defectPhotos', 'improvementPhotos', 'attachments', mode='before')
+    @classmethod
+    def parse_photos(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return []
+        return v
+
+
+class OSD(OSDBase):
+    id: str
+    model_config = ConfigDict(from_attributes=True)
+
+
 # Contractor
 class ContractorBase(BaseModel):
     package: str | None = None
@@ -805,6 +971,7 @@ class FollowUpBase(BaseModel):
     status: str
     priority: str | None = None
     assignedTo: str | None = None
+    assignedToUserId: int | None = None
     vendor: str | None = None
     dueDate: str | None = None
     createdAt: str
@@ -828,6 +995,7 @@ class FollowUpUpdate(BaseModel):
     status: str | None = None
     priority: str | None = None
     assignedTo: str | None = None
+    assignedToUserId: int | None = None
     vendor: str | None = None
     dueDate: str | None = None
     updatedAt: str | None = None
@@ -953,6 +1121,11 @@ class UserBase(BaseModel):
     full_name: str | None = None
     is_active: bool | None = True
     role_id: int | None = None
+    # Cosmetic-only "Name / Company" label for internal staff with no
+    # vendor_id (contractor-scoped users show their real vendor name
+    # instead — see User.display_company). Never affects data-isolation
+    # scope, unlike vendor_id.
+    company_name: str | None = None
 
 class UserCreate(UserBase):
     password: str
@@ -964,6 +1137,7 @@ class UserUpdate(BaseModel):
     full_name: str | None = None
     is_active: bool | None = None
     role_id: int | None = None
+    company_name: str | None = None
     password: str | None = None
     reason: str | None = None
 
@@ -972,6 +1146,9 @@ class User(UserBase):
     role_name: str | None = None
     permissions: list[str] = []
     created_at: str | None = None
+    # Resolved company label: the user's real vendor name if
+    # contractor-scoped, else their cosmetic company_name.
+    display_company: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -1356,6 +1533,14 @@ class CheckpointState(BaseModel):
     key: str     # e.g. 'noi', 'wh_inspection', 'moc', ...
     state: str   # 'done' | 'current' | 'pending'
     done: bool
+    # For the 5 NCR-derived checkpoints (moc/improvement/reinspection/
+    # itr/close_ncr): id of the first NCR whose own per-NCR predicate
+    # fails, i.e. the specific record actually holding this checkpoint
+    # back. None when the checkpoint isn't NCR-derived, or when every
+    # NCR already satisfies it. Lets the frontend deep-link a checkpoint
+    # marker at the exact blocking record instead of guessing "first/last
+    # linked NCR".
+    blocking_ncr_id: str | None = None
 
 
 class WorkflowSummary(BaseModel):

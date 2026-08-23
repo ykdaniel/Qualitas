@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { Role, User } from '../../store/iamStore';
+import { useContractorsStore } from '../../store/contractorsStore';
 import UserScopeSection, { type ScopeValue } from './UserScopeSection';
 import { setUserScope } from '../../services/api';
 import { getErrorMessage } from '../../utils/errorUtils';
@@ -31,11 +32,28 @@ const UserModal: React.FC<UserModalProps> = ({ existingUser, roles, onSave, onCl
     // Create mode only: scope chosen before the user exists, persisted post-create.
     const [pendingScope, setPendingScope] = useState<ScopeValue>({ project_ids: [], vendor_id: null });
 
+    // Company picker reuses the same Contractors list the Contractors
+    // module manages — company_name is still stored as a plain string
+    // (never vendor_id), so picking a name here never touches P0 scope.
+    // If the existing user's saved company_name isn't in the active list
+    // (renamed/deactivated contractor, or a value typed before this
+    // became a picker), it's added as an extra option so it doesn't
+    // silently vanish from the field.
+    const { getActiveContractors } = useContractorsStore();
+    const contractorNames = useMemo(() => {
+        const names = getActiveContractors().map(c => c.name);
+        if (existingUser?.company_name && !names.includes(existingUser.company_name)) {
+            names.push(existingUser.company_name);
+        }
+        return names;
+    }, [getActiveContractors, existingUser]);
+
     const initialForm = useMemo(() => ({
         name: existingUser?.name || '',
         email: existingUser?.email || '',
         role: existingUser?.role || roles[0]?.name || '',
         status: (existingUser?.status as 'active' | 'inactive') || ('active' as 'active' | 'inactive'),
+        company_name: existingUser?.company_name || '',
         password: '',
         confirmPassword: '',
         reason: ''
@@ -61,6 +79,7 @@ const UserModal: React.FC<UserModalProps> = ({ existingUser, roles, onSave, onCl
                 email: form.email,
                 role_id: roleId,
                 status: form.status,
+                company_name: form.company_name || null,
                 password: (existingUser && !resetPassword) ? undefined : (form.password || undefined),
                 reason: form.reason
             };
@@ -144,6 +163,23 @@ const UserModal: React.FC<UserModalProps> = ({ existingUser, roles, onSave, onCl
                                 <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value as any })}>
                                     <option value="active">{t('iam.status.active') || 'Active'}</option>
                                     <option value="inactive">{t('iam.status.inactive') || 'Inactive'}</option>
+                                </select>
+                                <div className={styles.selectArrow}>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </div>
+                            </div>
+                        </div>
+                        <div className={styles.formGroup}>
+                            <label>{t('iam.companyName')}</label>
+                            <div className={styles.selectWrapper}>
+                                <select
+                                    value={form.company_name}
+                                    onChange={e => setForm({ ...form, company_name: e.target.value })}
+                                >
+                                    <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
+                                    {contractorNames.map(name => (
+                                        <option key={name} value={name}>{name}</option>
+                                    ))}
                                 </select>
                                 <div className={styles.selectArrow}>
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
