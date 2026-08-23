@@ -34,16 +34,16 @@ def graph(db_session, sample_contractor):
     )
 
     noi1 = models.NOI(
-        id="noi-1", package="P01", referenceNo="NOI-TC-001",
+        id="noi-1", package="Weld root", referenceNo="NOI-TC-001",
         issueDate="2025-04-10", inspectionTime="10:00",
         itpNo="ITP-TC-001", inspectionDate="2025-04-15", type="site",
-        vendor_id=vendor_id, status="Scheduled", checkpoint="Weld root",
+        vendor_id=vendor_id, status="Scheduled", checkpoint="H",
     )
     noi2 = models.NOI(
-        id="noi-2", package="P02", referenceNo="NOI-TC-002",
+        id="noi-2", package="Weld cap", referenceNo="NOI-TC-002",
         issueDate="2025-04-11", inspectionTime="11:00",
         itpNo="ITP-TC-001", inspectionDate="2025-04-16", type="site",
-        vendor_id=vendor_id, status="Scheduled", checkpoint="Weld cap",
+        vendor_id=vendor_id, status="Scheduled", checkpoint="H",
     )
     noi_orphan = models.NOI(
         id="noi-orphan", package="P99", referenceNo="NOI-TC-999",
@@ -184,7 +184,8 @@ def test_serialized_entry_shape(service):
         "vendorName", "level", "direction", "primaryDate",
     }
     assert noi_entry["referenceNo"] == "NOI-TC-001"
-    # NOI has no description — title should fall back to checkpoint
+    # NOI has no description column — title should use package (labeled
+    # "Subject" in the UI), not the short checkpoint type code
     assert noi_entry["title"] == "Weld root"
     assert noi_entry["primaryDate"] == "2025-04-15"
     assert noi_entry["vendorName"] == "Test Contractor"

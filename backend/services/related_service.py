@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 import models
+from core.scope import Scope, record_in_scope
 from workflows.relationships import KNOWN_ENTITY_TYPES, edges_from
 
 logger = logging.getLogger(__name__)
@@ -36,9 +37,13 @@ _ENTITY_META: Dict[str, Dict[str, Any]] = {
         "model": models.NOI,
         "reference_field": "referenceNo",
         "date_field": "inspectionDate",
-        # NOI has no description column — checkpoint is the closest
-        # human-readable label, falling back to the package code.
-        "title_fields": ("checkpoint", "package"),
+        # NOI has no dedicated description column, but its "package" field
+        # is what the UI actually labels and fills in as "Subject" (see
+        # noi.package i18n key) — "checkpoint" is a short Hold/Witness/
+        # Surveillance/Review type code (H/W/S/R), not a title, and was
+        # wrongly prioritized here before. Falls back to checkpoint only
+        # when package is genuinely blank.
+        "title_fields": ("package", "checkpoint"),
     },
     "itr": {
         "model": models.ITR,
@@ -64,6 +69,7 @@ class RelatedService:
         entity_type: str,
         entity_id: str,
         max_depth: int = 2,
+        scope: Optional[Scope] = None,
     ) -> Dict[str, List[Dict[str, Any]]]:
         """Return ``{'upstream': [...], 'downstream': [...]}`` for the entity.
 
@@ -71,6 +77,12 @@ class RelatedService:
         unknown type returns empty lists rather than raising — the
         frontend treats "no related docs" and "source not found" the
         same way (UI shows an empty state).
+
+        ``scope`` is the caller's data-isolation scope (see core/scope.py).
+        The root entity's visibility must already be checked by the caller
+        (this only filters the traversed neighbours) — an out-of-scope
+        neighbour is neither returned nor expanded further, so nothing
+        beyond a project/vendor boundary can leak through the graph.
         """
         if entity_type not in KNOWN_ENTITY_TYPES:
             logger.warning("RelatedService: unknown entity_type %r", entity_type)
@@ -81,8 +93,8 @@ class RelatedService:
             return {"upstream": [], "downstream": []}
 
         return {
-            "upstream": self._traverse(entity, entity_type, "upstream", max_depth),
-            "downstream": self._traverse(entity, entity_type, "downstream", max_depth),
+            "upstream": self._traverse(entity, entity_type, "upstream", max_depth, scope),
+            "downstream": self._traverse(entity, entity_type, "downstream", max_depth, scope),
         }
 
     # ─── Private helpers ──────────────────────────────────────────────
@@ -100,6 +112,7 @@ class RelatedService:
         start_type: str,
         direction: str,
         max_depth: int,
+        scope: Optional[Scope] = None,
     ) -> List[Dict[str, Any]]:
         """BFS up to ``max_depth`` hops, skipping already-visited nodes."""
         # Visited set prevents infinite loops if the graph ever gains a
@@ -130,6 +143,12 @@ class RelatedService:
                         if key in visited:
                             continue
                         visited.add(key)
+                        # An out-of-scope neighbour is neither surfaced nor
+                        # expanded — it's dropped from the frontier entirely
+                        # so the graph can't leak project/vendor-restricted
+                        # data through further hops either.
+                        if not record_in_scope(neighbour, scope):
+                            continue
                         out.append(
                             self._serialize(neighbour, edge.target_type, level + 1, direction)
                         )
