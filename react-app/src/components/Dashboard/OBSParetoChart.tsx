@@ -62,6 +62,16 @@ const OBSParetoChart: React.FC = React.memo(() => {
     return dataWithCumulative;
   }, [obsList, selectedVendor]);
 
+  // Recharts' "nice tick" rounding can inflate the left axis well past the
+  // actual max bar (observed: a max of 2 rendering against a 0-4 axis), and
+  // does so inconsistently between otherwise-identical charts. Pass explicit
+  // integer ticks so the axis always matches the data exactly.
+  const leftAxisMax = Math.max(1, Math.ceil(Math.max(0, ...paretoData.map(d => d.total)) * 1.15));
+  const leftAxisTicks = useMemo(
+    () => Array.from({ length: leftAxisMax + 1 }, (_, i) => i),
+    [leftAxisMax]
+  );
+
   return (
     <div className={styles.paretoChartContainer}>
       <ResponsiveContainer width="100%" height={460}>
@@ -79,6 +89,8 @@ const OBSParetoChart: React.FC = React.memo(() => {
           <YAxis
             yAxisId="left"
             allowDecimals={false}
+            domain={[0, leftAxisMax]}
+            ticks={leftAxisTicks}
             label={{ value: 'OBS Count', angle: -90, position: 'insideLeft' }}
           />
           <YAxis

@@ -174,14 +174,15 @@
 }
 
 .verticalDivider {
-  /* PQP / ITP are stacked vertically, so the between-column vertical rule is
-     no longer used. */
-  display: none;
+  width: 1px;
+  align-self: stretch;
+  background-color: rgba(184, 148, 90, 0.22);
+  flex-shrink: 0;
 }
 
 .dualChartContainer {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 32px;
   align-items: stretch;
 }
@@ -203,6 +204,21 @@
 }
 
 .chartContainer {
+  background: transparent;
+  border-radius: 12px;
+  padding: 0;
+  box-shadow: none;
+  /* Fixed-ish width matching the gauge's own max visual size (radius caps at
+     120px — see PQPGaugeChart/ITPGaugeChart) — flex:1 used to stretch this to
+     fill the whole row, leaving a large empty gap around the actual gauge.
+     Only for the PQP/ITP gauge sections — the OBS/NCR Pareto bar charts use
+     .chartContainerFlex instead, since those benefit from the extra width. */
+  flex: 0 1 320px;
+  width: 320px;
+  min-width: 0;
+}
+
+.chartContainerFlex {
   background: transparent;
   border-radius: 12px;
   padding: 0;
@@ -236,12 +252,14 @@
   display: flex;
   gap: 24px;
   align-items: stretch;
+  justify-content: center;
 }
 
 .pqpChartWrapper {
   display: flex;
   gap: 24px;
   align-items: stretch;
+  justify-content: center;
 }
 
 .ncrStatsCard {
@@ -715,10 +733,18 @@
 
 /* Responsive Design */
 
-/* PQP / ITP are always stacked vertically (each full-width). Within each block
-   the stats card + gauge sit side-by-side until the screen is narrow enough to
-   stack those too. */
+/* PQP / ITP sit side-by-side above 1024px. Below that, both the PQP/ITP pair
+   and each pair's own stats-card + gauge stack to full-width — two levels of
+   side-by-side columns don't fit a narrower viewport. */
 @media (max-width: 1024px) {
+  .dualChartContainer {
+    flex-direction: column;
+  }
+
+  .verticalDivider {
+    display: none;
+  }
+
   .obsChartWrapper,
   .ncrChartWrapper,
   .itpChartWrapper,
@@ -732,6 +758,11 @@
   .pqpStatsCard {
     width: 100%;
     min-width: unset;
+  }
+
+  .chartContainer {
+    width: 100%;
+    flex: 1;
   }
 }
 

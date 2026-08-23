@@ -132,7 +132,7 @@ const DashboardContent: React.FC<{
         <h2 className={styles.sectionTitle}>{t('dashboard.obsStatusAnalysis')}</h2>
         <div className={styles.obsChartWrapper}>
           <OBSStatsCard />
-          <div className={styles.chartContainer}>
+          <div className={styles.chartContainerFlex}>
             <OBSParetoChart />
           </div>
         </div>
@@ -146,7 +146,7 @@ const DashboardContent: React.FC<{
         <h2 className={styles.sectionTitle}>{t('dashboard.ncrStatusAnalysis')}</h2>
         <div className={styles.ncrChartWrapper}>
           <NCRStatsCard />
-          <div className={styles.chartContainer}>
+          <div className={styles.chartContainerFlex}>
             <NCRParetoChart />
           </div>
         </div>
