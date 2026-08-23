@@ -30,6 +30,7 @@ from routers import (
     ncr,
     noi,
     obs,
+    osd,
     pqp,
     projects,
     two_factor,
@@ -226,7 +227,7 @@ for router in [
     two_factor,
     settings_router,
     iam,
-    itp, ncr, noi, itr, pqp, obs, contractors, followup, audit, checklist, kpi, file_router, fat, km, projects, workflow
+    itp, ncr, noi, itr, pqp, obs, osd, contractors, followup, audit, checklist, kpi, file_router, fat, km, projects, workflow
 ]:
     api.include_router(router.router)
 
