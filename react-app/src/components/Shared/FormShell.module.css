@@ -221,6 +221,18 @@
   color: #2d2a24;
 }
 
+.statusBadge {
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: rgba(184, 148, 90, 0.16);
+  color: #7a5a1e;
+  border: 1px solid rgba(184, 148, 90, 0.35);
+}
+
 /* ─── Inputs ────────────────────────────────────────────────── */
 
 .formInput,
@@ -251,6 +263,15 @@
   border-color: #b8945a;
   box-shadow: 0 0 0 3px rgba(184, 148, 90, 0.15);
   background: #ffffff;
+}
+
+.formInput:disabled,
+.formSelect:disabled,
+.formTextarea:disabled {
+  background: rgba(184, 148, 90, 0.05);
+  border-color: rgba(184, 148, 90, 0.18);
+  color: #8b8275;
+  cursor: not-allowed;
 }
 
 .formSelect {

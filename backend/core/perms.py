@@ -63,6 +63,12 @@ OBS_UPDATE = "obs:update:all"
 OBS_DELETE = "obs:delete:all"
 OBS_APPROVE = "obs:approve:all"
 
+# OSD Permissions (Over/Short/Damage Report)
+OSD_VIEW = "osd:view:all"
+OSD_CREATE = "osd:create:all"
+OSD_UPDATE = "osd:update:all"
+OSD_DELETE = "osd:delete:all"
+
 # KPI Permissions
 KPI_VIEW = "kpi:view:all"
 KPI_UPDATE = "kpi:update:all"
@@ -140,6 +146,11 @@ ALL_PERMISSIONS = [
     {"code": OBS_UPDATE, "description": "更新 OBS 內容"},
     {"code": OBS_DELETE, "description": "刪除 OBS"},
     {"code": OBS_APPROVE, "description": "審核 OBS"},
+
+    {"code": OSD_VIEW, "description": "查看 OSD 記錄"},
+    {"code": OSD_CREATE, "description": "建立 OSD"},
+    {"code": OSD_UPDATE, "description": "更新 OSD 內容"},
+    {"code": OSD_DELETE, "description": "刪除 OSD"},
 
     {"code": KPI_VIEW, "description": "查看 KPI 數據"},
     {"code": KPI_UPDATE, "description": "更新 KPI 權重"},

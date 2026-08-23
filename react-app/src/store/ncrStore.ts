@@ -28,6 +28,7 @@ export interface NCRItem {
     permanentProductDeviation?: string;
     impactToOM?: string;
     defectPhotos?: string[];
+    progressPhotos?: string[];
     improvementPhotos?: string[];
     noiNumber?: string;
     itrNumber?: string;
@@ -36,10 +37,15 @@ export interface NCRItem {
     referenceStandards?: string;
     serialNumbers?: string;
     repairMethodStatement?: string;
+    repairMethodStatementStatus?: string; // '' | TBC | NA
     immediateCorrectionAction?: string;
+    immediateCorrectionActionStatus?: string;
     rootCauseAnalysis?: string;
+    rootCauseAnalysisStatus?: string;
     correctiveActions?: string;
+    correctiveActionsStatus?: string;
     preventiveAction?: string;
+    preventiveActionStatus?: string;
     finalProductIntegrityStatement?: string;
     reInspectionNumber?: string;
     projectQualityManager?: string;
@@ -53,6 +59,7 @@ export interface NCRItem {
     effectivenessVerifiedBy?: number | null;
     effectivenessVerifiedDate?: string;
     effectivenessNotes?: string;
+    effectivenessNotesStatus?: string;
     // NCR formal-report fields (BACKLOG #15)
     drawingNo?: string;
     specNo?: string;
@@ -62,14 +69,20 @@ export interface NCRItem {
     weldJointNo?: string;
     heatBatchNo?: string;
     qtyAffected?: string;
+    qtyAffectedUnit?: string;
     extent?: string;
     costScheduleImpact?: string;
     requirement?: string;
     asFound?: string;
     deviation?: string;
     concessionNo?: string;
+    ownerApproval?: string;
+    ownerApprovalBy?: string;
+    ownerApprovalDate?: string;
+    ownerApprovalNotes?: string;
     rcaMethod?: string;
     directCause?: string;
+    directCauseStatus?: string;
     recurrence?: string;
     recurrenceRef?: string;
     correctiveActionOwner?: string;
@@ -80,7 +93,7 @@ export interface NCRItem {
 
 function normalizeItem(item: unknown): NCRItem {
     const record = (typeof item === 'object' && item !== null ? { ...item } : {}) as Record<string, unknown>;
-    return parseJsonFields(record, ['defectPhotos', 'improvementPhotos', 'attachments']) as unknown as NCRItem;
+    return parseJsonFields(record, ['defectPhotos', 'progressPhotos', 'improvementPhotos', 'attachments']) as unknown as NCRItem;
 }
 
 interface NCRState {

@@ -175,8 +175,8 @@ class TestWorkflowValidation:
         # ITP: Approved -> Draft is invalid
         assert WorkflowEngine.validate_transition("ITP", "Approved", "Draft") == False
 
-        # NCR: Closed -> Open is invalid
-        assert WorkflowEngine.validate_transition("NCR", "Closed", "Open") == False
+        # NCR: Void is terminal — no transition out of it is valid
+        assert WorkflowEngine.validate_transition("NCR", "Void", "Open") == False
 
     def test_workflow_engine_same_status(self):
         """Same status should always be valid"""

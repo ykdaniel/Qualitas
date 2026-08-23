@@ -187,7 +187,7 @@ def test_noi_create_with_nonexistent_itp_raises(db_session, vendor):
         )
 
 
-def test_ncr_status_transition_rejects_invalid_jump(db_session, vendor):
+def test_ncr_status_transition_allows_direct_close(db_session, vendor):
     ncr_service = NCRService(NCRRepository(db_session))
 
     ncr = ncr_service.create_ncr(
@@ -201,14 +201,197 @@ def test_ncr_status_transition_rejects_invalid_jump(db_session, vendor):
     )
     db_session.commit()
 
-    # Open → Closed is NOT a direct allowed transition (must go through In Progress, Resolved).
+    # deriveNCRStatus() (ncrFormSchema.ts) only ever produces Open / In Progress /
+    # Closed — Effectiveness Verified = Yes closes the NCR in a single save from
+    # either Open or In Progress, so both must be legal direct transitions.
+    # (ncr_service.update_ncr has its own separate closure gate — repairMethodStatement
+    # / reInspectionNumber / improvementPhotos / effectivenessVerified=Yes — that's
+    # independent of the WorkflowEngine transition graph this test targets, so it
+    # must be satisfied here too or this fails for the wrong reason.)
+    updated = ncr_service.update_ncr(
+        ncr.id,
+        schemas.NCRUpdate(
+            status="Closed",
+            productDisposition="Rework",
+            reInspectionNumber="REINSP-001",
+            improvementPhotos=["photo1.jpg"],
+            effectivenessVerified="Yes",
+            drawingNo="DWG-1", specNo="SPEC-1", qtyAffected="1", extent="Isolated",
+        ),
+        user_id=1,
+        username="tester",
+    )
+    assert updated.status == "Closed"
+
+    # A closed NCR stays reachable by ncr:close:all holders (NCR.tsx), and
+    # switching Effectiveness back to No/Pending must be able to reopen it.
+    reopened = ncr_service.update_ncr(
+        ncr.id,
+        schemas.NCRUpdate(status="Open"),
+        user_id=1,
+        username="tester",
+    )
+    assert reopened.status == "Open"
+
+    # Owner-approval and effectiveness are independent derived signals, so a
+    # single save can move status backward too — e.g. In Progress -> Open when
+    # the owner un-rejects while effectiveness is still Pending. Regression
+    # test for a real bug hit during manual verification.
+    to_in_progress = ncr_service.update_ncr(
+        ncr.id, schemas.NCRUpdate(status="In Progress"), user_id=1, username="tester",
+    )
+    assert to_in_progress.status == "In Progress"
+    back_to_open = ncr_service.update_ncr(
+        ncr.id, schemas.NCRUpdate(status="Open"), user_id=1, username="tester",
+    )
+    assert back_to_open.status == "Open"
+
+    # Void remains terminal — nothing transitions out of it.
+    ncr_service.update_ncr(
+        ncr.id, schemas.NCRUpdate(status="Void"), user_id=1, username="tester",
+    )
     with pytest.raises(ValueError, match="Invalid status transition"):
         ncr_service.update_ncr(
             ncr.id,
-            schemas.NCRUpdate(status="Closed"),
+            schemas.NCRUpdate(status="Open"),
             user_id=1,
             username="tester",
         )
+
+
+def test_ncr_use_as_is_requires_owner_approval_to_close(db_session, vendor):
+    ncr_service = NCRService(NCRRepository(db_session))
+
+    ncr = ncr_service.create_ncr(
+        schemas.NCRCreate(
+            description="Weld accepted as-is",
+            vendor="Acme Co",
+            rev="0",
+            submit="initial",
+            status="Open",
+            productDisposition="Use As Is",
+        )
+    )
+    db_session.commit()
+
+    # All the usual closure-gate fields present, effectiveness verified — but
+    # ownerApproval is still unset. Use As Is must not close without it.
+    with pytest.raises(ValueError, match="owner/engineering authority approval"):
+        ncr_service.update_ncr(
+            ncr.id,
+            schemas.NCRUpdate(
+                status="Closed",
+                reInspectionNumber="REINSP-002",
+                improvementPhotos=["photo1.jpg"],
+                effectivenessVerified="Yes",
+                drawingNo="DWG-1", specNo="SPEC-1", qtyAffected="1", extent="Isolated",
+            ),
+            user_id=1,
+            username="tester",
+        )
+
+    # Approve it — now closing succeeds, and the date auto-stamps.
+    updated = ncr_service.update_ncr(
+        ncr.id,
+        schemas.NCRUpdate(
+            status="Closed",
+            reInspectionNumber="REINSP-002",
+            improvementPhotos=["photo1.jpg"],
+            effectivenessVerified="Yes",
+            ownerApproval="Approved",
+            ownerApprovalBy="Jane Owner",
+            drawingNo="DWG-1", specNo="SPEC-1", qtyAffected="1", extent="Isolated",
+        ),
+        user_id=1,
+        username="tester",
+    )
+    assert updated.status == "Closed"
+    assert updated.ownerApproval == "Approved"
+    assert updated.ownerApprovalBy == "Jane Owner"
+    assert updated.ownerApprovalDate  # auto-stamped
+
+
+def test_ncr_rework_disposition_does_not_need_owner_approval(db_session, vendor):
+    ncr_service = NCRService(NCRRepository(db_session))
+
+    ncr = ncr_service.create_ncr(
+        schemas.NCRCreate(
+            description="Rework instead of accept",
+            vendor="Acme Co",
+            rev="0",
+            submit="initial",
+            status="Open",
+            productDisposition="Rework",
+        )
+    )
+    db_session.commit()
+
+    # Rework isn't a technical-change disposition — no owner approval, and no
+    # repairMethodStatement (that's only required for "Repair"), needed.
+    updated = ncr_service.update_ncr(
+        ncr.id,
+        schemas.NCRUpdate(
+            status="Closed",
+            reInspectionNumber="REINSP-003",
+            improvementPhotos=["photo1.jpg"],
+            effectivenessVerified="Yes",
+            drawingNo="DWG-1", specNo="SPEC-1", qtyAffected="1", extent="Isolated",
+        ),
+        user_id=1,
+        username="tester",
+    )
+    assert updated.status == "Closed"
+
+
+def test_ncr_repair_disposition_requires_repair_method_statement(db_session, vendor):
+    """Regression test: the backend closure gate used to require
+    repairMethodStatement unconditionally (disagreeing with the frontend,
+    which only requires it for "Repair") — confirm it's still enforced for
+    Repair specifically, now that the unconditional check was removed."""
+    ncr_service = NCRService(NCRRepository(db_session))
+
+    ncr = ncr_service.create_ncr(
+        schemas.NCRCreate(
+            description="Weld repaired",
+            vendor="Acme Co",
+            rev="0",
+            submit="initial",
+            status="Open",
+            productDisposition="Repair",
+        )
+    )
+    db_session.commit()
+
+    with pytest.raises(ValueError, match="repairMethodStatement"):
+        ncr_service.update_ncr(
+            ncr.id,
+            schemas.NCRUpdate(
+                status="Closed",
+                reInspectionNumber="REINSP-004",
+                improvementPhotos=["photo1.jpg"],
+                effectivenessVerified="Yes",
+                ownerApproval="Approved",
+                drawingNo="DWG-1", specNo="SPEC-1", qtyAffected="1", extent="Isolated",
+            ),
+            user_id=1,
+            username="tester",
+        )
+
+    updated = ncr_service.update_ncr(
+        ncr.id,
+        schemas.NCRUpdate(
+            status="Closed",
+            repairMethodStatement="Reweld and re-inspect.",
+            reInspectionNumber="REINSP-004",
+            improvementPhotos=["photo1.jpg"],
+            effectivenessVerified="Yes",
+            ownerApproval="Approved",
+            drawingNo="DWG-1", specNo="SPEC-1", qtyAffected="1", extent="Isolated",
+        ),
+        user_id=1,
+        username="tester",
+    )
+    assert updated.status == "Closed"
 
 
 def test_ncr_delete_blocked_by_itr_reference(db_session, vendor):

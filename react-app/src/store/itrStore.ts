@@ -35,6 +35,7 @@ export interface ITRItem {
     certificates?: any[]; // Calibration Certificates
     linkedChecklists?: any[]; // Snapshot of linked checklists
     detail_data?: any; // Raw detail data from backend
+    inspectionResult?: string; // Pass / Fail / Conditional — drives Q-Workflow checkpoints 3 & 7
 }
 
 function normalizeItem(item: unknown): ITRItem {

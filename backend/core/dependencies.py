@@ -16,6 +16,7 @@ from repositories.ncr_repository import NCRRepository
 from repositories.itr_repository import ITRRepository
 from repositories.pqp_repository import PQPRepository
 from repositories.obs_repository import OBSRepository
+from repositories.osd_repository import OSDRepository
 from repositories.followup_repository import FollowUpRepository
 from repositories.checklist_repository import ChecklistRepository
 from repositories.contractor_repository import ContractorRepository
@@ -32,6 +33,7 @@ from services.ncr_service import NCRService
 from services.itr_service import ITRService
 from services.pqp_service import PQPService
 from services.obs_service import OBSService
+from services.osd_service import OSDService
 from services.followup_service import FollowUpService
 from services.checklist_service import ChecklistService
 from services.contractor_service import ContractorService
@@ -74,6 +76,10 @@ def get_pqp_service(db: Session = Depends(get_db)) -> PQPService:
 def get_obs_service(db: Session = Depends(get_db)) -> OBSService:
     repo = OBSRepository(db)
     return OBSService(repo)
+
+def get_osd_service(db: Session = Depends(get_db)) -> OSDService:
+    repo = OSDRepository(db)
+    return OSDService(repo)
 
 def get_followup_service(db: Session = Depends(get_db)) -> FollowUpService:
     repo = FollowUpRepository(db)

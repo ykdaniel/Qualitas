@@ -12,6 +12,7 @@ from typing import List, Optional
 
 import models
 import schemas
+from mail_service import send_ncr_rejection_notification
 from repositories.ncr_repository import NCRRepository
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
 from core.utils import (
@@ -95,7 +96,7 @@ class NCRService:
             # Serialize JSON fields
             data = _json_serialize(
                 ncr_create.model_dump(),
-                ['defectPhotos', 'improvementPhotos', 'attachments']
+                ['defectPhotos', 'progressPhotos', 'improvementPhotos', 'attachments']
             )
 
             # Handle vendor name -> vendor_id mapping
@@ -131,6 +132,21 @@ class NCRService:
                     )
                     data['noiNumber'] = ''
 
+            # recurrenceRef is a traceability claim ("this is a repeat of that
+            # prior NCR") — verify it actually resolves to an existing NCR,
+            # same as noiNumber above, so an unverifiable value can't silently
+            # satisfy the "recurrence needs a ref" closure requirement later.
+            if data.get('recurrenceRef'):
+                prior_ncr = self.repo.db.query(models.NCR).filter(
+                    models.NCR.documentNumber == data['recurrenceRef']
+                ).first()
+                if not prior_ncr:
+                    logger.warning(
+                        "NCR create: dropping unverifiable recurrenceRef %r (no matching NCR)",
+                        data['recurrenceRef'],
+                    )
+                    data['recurrenceRef'] = ''
+
             # Generate Reference No automatically if not provided
             if not data.get('documentNumber'):
                 data['documentNumber'] = generate_reference_no(
@@ -157,7 +173,8 @@ class NCRService:
             raise e
 
     def update_ncr(self, ncr_id: str, ncr_update: schemas.NCRUpdate,
-                   user_id: int = None, username: str = None, scope=None) -> Optional[models.NCR]:
+                   user_id: int = None, username: str = None, scope=None,
+                   background_tasks=None) -> Optional[models.NCR]:
         """
         Update an existing NCR with validation
 
@@ -198,21 +215,70 @@ class NCRService:
 
             # Prepare update data
             d = ncr_update.model_dump(exclude_unset=True)
-            d = _json_serialize(d, ['defectPhotos', 'improvementPhotos', 'attachments'])
+            d = _json_serialize(d, ['defectPhotos', 'progressPhotos', 'improvementPhotos', 'attachments'])
+
+            # Recompute dueDate from the severity SLA when severity changes and
+            # the caller didn't explicitly provide a new dueDate — mirrors the
+            # auto-fill in create_ncr. Without this, escalating severity (e.g.
+            # Minor -> Major) via a later update leaves the stale, looser SLA
+            # deadline in place instead of tightening it.
+            if (
+                d.get('severity') in NCR_SLA_DAYS
+                and d.get('severity') != db_ncr.severity
+                and 'dueDate' not in d
+            ):
+                base_date = d.get('raiseDate', db_ncr.raiseDate) or datetime.now().strftime("%Y-%m-%d")
+                d['dueDate'] = _add_days(base_date, NCR_SLA_DAYS[d['severity']])
+
+            # recurrenceRef is a traceability claim ("this is a repeat of that
+            # prior NCR") — unlike noiNumber/itrNumber it previously had no
+            # existence check at all, so a typo or made-up value silently
+            # satisfied the "recurrence needs a ref" closure requirement below.
+            # Must run BEFORE the closure-required-fields check so a dropped
+            # dangling ref is correctly treated as missing, not as already
+            # having satisfied the requirement.
+            if 'recurrenceRef' in d and d['recurrenceRef']:
+                prior_ncr = self.repo.db.query(models.NCR).filter(
+                    models.NCR.documentNumber == d['recurrenceRef']
+                ).first()
+                if not prior_ncr:
+                    logger.warning(
+                        "NCR update: dropping unverifiable recurrenceRef %r (no matching NCR)",
+                        d['recurrenceRef'],
+                    )
+                    d['recurrenceRef'] = ''
 
             # --- Guard: prevent modification of quality fields on an already-Closed NCR ---
             # This check must run BEFORE the "transitioning to Closed" validation so
             # that an update that is NOT changing status but tries to alter these
             # fields on a Closed record is correctly rejected.
             _LOCKED_QUALITY_FIELDS = {
-                'repairMethodStatement', 'rootCauseAnalysis', 'correctiveActions',
-                'reInspectionNumber', 'improvementPhotos',
+                'repairMethodStatement', 'repairMethodStatementStatus',
+                'rootCauseAnalysis', 'rootCauseAnalysisStatus',
+                'correctiveActions', 'correctiveActionsStatus',
+                'reInspectionNumber', 'improvementPhotos', 'ownerApproval',
             }
             is_already_closed = db_ncr.status == 'Closed'
             is_transitioning_to_closed = d.get('status') == 'Closed' and not is_already_closed
 
             if is_already_closed and not is_transitioning_to_closed:
-                changed_locked = _LOCKED_QUALITY_FIELDS & set(d.keys())
+                # Compare against the current DB value, not mere key presence —
+                # the frontend resends the full record on every save, so a
+                # field being "in the payload" doesn't mean it actually changed.
+                changed_locked = {
+                    f for f in (_LOCKED_QUALITY_FIELDS & set(d.keys()))
+                    if d[f] != getattr(db_ncr, f, None)
+                }
+                # Owner rejection of an already-Closed NCR is a designed reopen
+                # path, not a lockable edit: deriveNCRStatus (ncrFormSchema.ts)
+                # explicitly reverts status to 'In Progress' when ownerApproval
+                # flips to 'Rejected', even for a previously-verified/closed
+                # record ("even an already-verified NCR must go back to the
+                # contractor if the owner then rejects it"). Without this
+                # exception that save is unconditionally rejected here, so the
+                # documented reopen flow was silently dead on arrival.
+                if 'ownerApproval' in changed_locked and d.get('ownerApproval') == 'Rejected':
+                    changed_locked.discard('ownerApproval')
                 if changed_locked:
                     raise ValueError("Cannot modify quality fields on a Closed NCR")
 
@@ -224,10 +290,21 @@ class NCRService:
             enforce_update_scope(d, scope)
 
             # --- Validate required fields when transitioning to Closed ---
+            # Kept in lockstep with the frontend's zod superRefine gate
+            # (ncrFormSchema.ts) — the two used to disagree (this gate required
+            # repairMethodStatement unconditionally while the frontend only
+            # required it for "Repair", and didn't check drawingNo/specNo/
+            # qtyAffected/extent at all here or improvementPhotos there), so a
+            # save that passed frontend validation could still 400 here for a
+            # field the user was never told was required, or the reverse.
             if is_transitioning_to_closed:
                 # Merge incoming data with existing record to check final state
-                final_repair = d.get('repairMethodStatement', db_ncr.repairMethodStatement)
+                final_disposition = d.get('productDisposition', db_ncr.productDisposition)
                 final_reinspection = d.get('reInspectionNumber', db_ncr.reInspectionNumber)
+                final_drawing_no = d.get('drawingNo', db_ncr.drawingNo)
+                final_spec_no = d.get('specNo', db_ncr.specNo)
+                final_qty_affected = d.get('qtyAffected', db_ncr.qtyAffected)
+                final_extent = d.get('extent', db_ncr.extent)
                 final_photos_raw = d.get('improvementPhotos', db_ncr.improvementPhotos)
 
                 # improvementPhotos may be a JSON string or a Python list
@@ -242,12 +319,37 @@ class NCRService:
                     final_photos = []
 
                 missing = []
-                if not final_repair or not str(final_repair).strip():
-                    missing.append('repairMethodStatement (改善方案)')
+                if not final_disposition:
+                    missing.append('productDisposition (產品處置)')
+                # repairMethodStatement is only required for "Repair" — matches
+                # the frontend's repairStar / repairNeedsMethod coupling. A
+                # TBC/NA status counts as "addressed" here too, same as the
+                # frontend gate (BACKLOG item 6) — it's an explicit answer,
+                # not a blank field.
+                if final_disposition == 'Repair':
+                    final_repair = d.get('repairMethodStatement', db_ncr.repairMethodStatement)
+                    final_repair_status = d.get('repairMethodStatementStatus', db_ncr.repairMethodStatementStatus)
+                    if (not final_repair or not str(final_repair).strip()) and not final_repair_status:
+                        missing.append('repairMethodStatement (改善方案)')
                 if not final_reinspection or not str(final_reinspection).strip():
                     missing.append('reInspectionNumber (複檢編號)')
+                if not final_drawing_no or not str(final_drawing_no).strip():
+                    missing.append('drawingNo (圖號)')
+                if not final_spec_no or not str(final_spec_no).strip():
+                    missing.append('specNo (規範號)')
+                if not final_qty_affected or not str(final_qty_affected).strip():
+                    missing.append('qtyAffected (受影響數量)')
+                if not final_extent or not str(final_extent).strip():
+                    missing.append('extent (範圍)')
                 if not final_photos:
                     missing.append('improvementPhotos (改善照片)')
+                # recurrence='Yes' claims this NCR is a repeat of a prior one —
+                # require the trace link so that claim is actually verifiable
+                # (matches the frontend's recurrenceNeedsRef check).
+                final_recurrence = d.get('recurrence', db_ncr.recurrence)
+                final_recurrence_ref = d.get('recurrenceRef', db_ncr.recurrenceRef)
+                if final_recurrence == 'Yes' and (not final_recurrence_ref or not str(final_recurrence_ref).strip()):
+                    missing.append('recurrenceRef (關聯前次 NCR)')
 
                 if missing:
                     raise ValueError(
@@ -264,6 +366,20 @@ class NCRService:
                         "verified (effectivenessVerified = 'Yes') before closing."
                     )
 
+                # Owner / Engineering-Design authority sign-off gate (BACKLOG #14
+                # item e): "Use As Is" / "Repair" are technical changes to the
+                # accepted product and need explicit approval before closing —
+                # the print report's disposition note references this (見 6.3).
+                # (final_disposition already computed above.)
+                if final_disposition in ('Use As Is', 'Repair'):
+                    final_owner_approval = d.get('ownerApproval', db_ncr.ownerApproval)
+                    if final_owner_approval != 'Approved':
+                        raise ValueError(
+                            "Cannot close NCR: disposition 'Use As Is' or 'Repair' "
+                            "requires owner/engineering authority approval "
+                            "(ownerApproval = 'Approved') before closing."
+                        )
+
             # Auto-set closeoutDate + stamp closedBy when transitioning to Closed
             if d.get('status') == 'Closed' and not d.get('closeoutDate') and not db_ncr.closeoutDate:
                 d['closeoutDate'] = datetime.now().strftime('%Y-%m-%d')
@@ -278,6 +394,13 @@ class NCRService:
                 if not d.get('effectivenessVerifiedDate'):
                     d['effectivenessVerifiedDate'] = datetime.now().strftime('%Y-%m-%d')
 
+            # Stamp the date when owner/engineering approval is recorded. Not
+            # `ownerApprovalBy` — that's the external owner/engineer's own name,
+            # not necessarily the logged-in user entering it on their behalf.
+            if d.get('ownerApproval') in ('Approved', 'Rejected'):
+                if not d.get('ownerApprovalDate'):
+                    d['ownerApprovalDate'] = datetime.now().strftime('%Y-%m-%d')
+
             # noiNumber is auto-derived from the linked ITR, so a dangling
             # reference must not block the update — drop it (see create above).
             if 'noiNumber' in d and d['noiNumber']:
@@ -291,6 +414,11 @@ class NCRService:
                     )
                     d['noiNumber'] = ''
 
+            # Owner/engineering rejection needs to reach the contractor right
+            # away, not wait for the next scheduler.py batch run — capture the
+            # transition before repo.update() overwrites db_ncr in place.
+            newly_rejected = d.get('ownerApproval') == 'Rejected' and old_val.get('ownerApproval') != 'Rejected'
+
             # Update the record
             updated = self.repo.update(db_ncr, d)
 
@@ -300,6 +428,21 @@ class NCRService:
                 old_value=old_val, new_value=ncr_update.model_dump(exclude_unset=True),
                 user_id=user_id, username=username
             )
+
+            if newly_rejected:
+                vendor_email = updated.vendor_ref.email if updated.vendor_ref else ''
+                # Don't block the HTTP response on a live SMTP round-trip — a
+                # slow/unreachable mail server would otherwise turn a routine
+                # save into a multi-second-to-minute hang for the caller.
+                if background_tasks is not None:
+                    background_tasks.add_task(
+                        send_ncr_rejection_notification,
+                        vendor_email, updated.documentNumber, updated.ownerApprovalNotes or ''
+                    )
+                else:
+                    send_ncr_rejection_notification(
+                        vendor_email, updated.documentNumber, updated.ownerApprovalNotes or ''
+                    )
 
             return updated
         except ValueError as e:

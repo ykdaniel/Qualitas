@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
@@ -45,6 +45,32 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
         resolver: zodResolver(obsFormSchema),
         defaultValues: existingItem ? toFormValues(existingItem) : emptyOBSForm,
     });
+
+    // The form was one long single-scroll modal (5 sections) — split into tabs
+    // grouped along the existing section boundaries, mirroring NCRModals.tsx's
+    // tab split so the two sibling "raise a finding" forms navigate the same
+    // way. Remark folds into the closure tab, same as NCR does.
+    type OBSTabId = 'basic' | 'description' | 'response' | 'closure' | 'attachments';
+    const TABS: { id: OBSTabId; label: string }[] = [
+        { id: 'basic', label: '基本資訊 / Identification' },
+        { id: 'description', label: '觀察描述 / Description' },
+        { id: 'response', label: '處置 / Response' },
+        { id: 'attachments', label: '照片與附件 / Photos & Attachments' },
+        { id: 'closure', label: '驗證與結案 / Verification & Closure' },
+    ];
+    const FIELD_TAB: Partial<Record<keyof OBSDetailData, OBSTabId>> = {
+        subject: 'basic',
+        detailsDescription: 'description',
+    };
+    const [activeTab, setActiveTab] = useState<OBSTabId>('basic');
+    const tabsWithErrors = new Set(
+        Object.keys(errors).map((f) => FIELD_TAB[f as keyof OBSDetailData]).filter(Boolean)
+    );
+    const modalBodyRef = useRef<HTMLDivElement>(null);
+    const goToTab = (tab: OBSTabId) => {
+        setActiveTab(tab);
+        modalBodyRef.current?.scrollTo({ top: 0 });
+    };
 
     // Status is derived from the Verification & Closure state (not picked
     // manually); "Void" is a manual override.
@@ -200,8 +226,12 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
             detailsDescription: t('obs.detailsDescription'),
         } as Record<string, string>)[f] || f);
         toast.warning(`請補齊必填欄位 / Complete required: ${fields.map(labelOf).join('、')}`);
-        const el = document.querySelector(`[name="${fields[0]}"]`) as HTMLElement | null;
-        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const firstTab = FIELD_TAB[fields[0] as keyof OBSDetailData];
+        if (firstTab) goToTab(firstTab);
+        setTimeout(() => {
+            const el = document.querySelector(`[name="${fields[0]}"]`) as HTMLElement | null;
+            el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, firstTab ? 50 : 0);
     };
 
     const dateInput = (field: keyof OBSDetailData) => (
@@ -242,7 +272,22 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                     <h2>{readOnly ? '檢視觀察 / View Observation' : existingItem ? t('obs.editTitle') : t('obs.addTitle')}</h2>
                     <button className={formStyles.closeButton} onClick={onClose} disabled={saving}>×</button>
                 </div>
-                <div className={formStyles.modalBody}>
+                <div className={formStyles.tabsContainer}>
+                    {TABS.map((tab) => (
+                        <button
+                            key={tab.id}
+                            type="button"
+                            className={`${formStyles.tabButton} ${activeTab === tab.id ? formStyles.activeTab : ''}`}
+                            onClick={() => goToTab(tab.id)}
+                        >
+                            {tab.label}
+                            {tabsWithErrors.has(tab.id) && (
+                                <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#dc2626', marginLeft: 6, verticalAlign: 'middle' }} />
+                            )}
+                        </button>
+                    ))}
+                </div>
+                <div className={formStyles.modalBody} ref={modalBodyRef}>
                     {!readOnly && (
                         <p className={formStyles.formRequiredHint}>{t('form.requiredHint')}</p>
                     )}
@@ -252,6 +297,7 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                     {/* A single disabled fieldset locks every field/button below in
                         one shot when readOnly. */}
                     <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
+                    {activeTab === 'basic' && (
                     <div className={formStyles.formSections}>
                         {/* ===== 1. 基本資訊 / Identification ===== */}
                         <div className={formStyles.formSection}>
@@ -323,9 +369,17 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                     <label>{t('obs.foundLocation')}</label>
                                     <input type="text" className={formStyles.formInput} {...register('foundLocation')} />
                                 </div>
+                                <div className={formStyles.formGroup}>
+                                    <label className={formStyles.optionalLabel}>{t('ncr.aconex')}</label>
+                                    <input type="text" className={formStyles.formInput} {...register('aconex')} />
+                                </div>
                             </div>
                         </div>
+                    </div>
+                    )}
 
+                    {activeTab === 'description' && (
+                    <div className={formStyles.formSections}>
                         {/* ===== 2. 觀察描述 / Description ===== */}
                         <div className={formStyles.formSection}>
                             <h3 className={formStyles.sectionTitle}>觀察描述 / Description <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（開立人 / QC）</span></h3>
@@ -337,7 +391,11 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                 </div>
                             </div>
                         </div>
+                    </div>
+                    )}
 
+                    {activeTab === 'response' && (
+                    <div className={formStyles.formSections}>
                         {/* ===== 3. 處置 / Response ===== */}
                         <div className={formStyles.formSection}>
                             <h3 className={formStyles.sectionTitle}>處置 / Response <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（承包商 / Contractor）</span></h3>
@@ -348,50 +406,11 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                 </div>
                             </div>
                         </div>
+                    </div>
+                    )}
 
-                        {/* ===== 4. 驗證與結案 / Verification & Closure ===== */}
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>驗證與結案 / Verification &amp; Closure <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（QC）</span></h3>
-                            <div className={formStyles.formGrid}>
-                                <div className={formStyles.formGroup}>
-                                    <label style={labelStyle}>
-                                        <span>{t('obs.verified') || 'Verified'}</span>
-                                        {infoDot('設為 Verified 即結案；Rejected 退回處理中 / Set to "Verified" to close; "Rejected" routes it back to In Progress.')}
-                                    </label>
-                                    <select className={formStyles.formSelect} {...register('verified')}>
-                                        <option value="Pending">{t('ncr.effectiveness.pending') || '待驗證 Pending'}</option>
-                                        <option value="Verified">通過 Verified</option>
-                                        <option value="Rejected">退回 Rejected</option>
-                                    </select>
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label className={formStyles.optionalLabel}>{t('obs.verifiedDate') || 'Verified Date'}</label>
-                                    {dateInput('verifiedDate')}
-                                </div>
-                                <div className={formStyles.formGroup}>
-                                    <label className={formStyles.optionalLabel}>{t('obs.closeoutDate')}</label>
-                                    {dateInput('closeoutDate')}
-                                </div>
-                                <div className={formStyles.formGroupFull}>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400, cursor: 'pointer' }}>
-                                        <input type="checkbox" checked={voided} onChange={(e) => setVoided(e.target.checked)} />
-                                        <span>作廢此觀察 / Void this observation</span>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* ===== 備註 / Remark ===== */}
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>備註 / Remark</h3>
-                            <div className={formStyles.formGrid}>
-                                <div className={formStyles.formGroupFull}>
-                                    <label className={formStyles.optionalLabel}>{t('common.remark')}</label>
-                                    <textarea className={formStyles.formTextarea} rows={3} {...register('remark')} />
-                                </div>
-                            </div>
-                        </div>
-
+                    {activeTab === 'attachments' && (
+                    <div className={formStyles.formSections}>
                         {/* ===== 5. 照片與附件 / Photos & Attachments ===== */}
                         <div className={formStyles.formSection}>
                             <h3 className={formStyles.sectionTitle}>照片與附件 / Photos &amp; Attachments</h3>
@@ -435,6 +454,54 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                             />
                         </div>
                     </div>
+                    )}
+
+                    {activeTab === 'closure' && (
+                    <div className={formStyles.formSections}>
+                        {/* ===== 4. 驗證與結案 / Verification & Closure ===== */}
+                        <div className={formStyles.formSection}>
+                            <h3 className={formStyles.sectionTitle}>驗證與結案 / Verification &amp; Closure <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（QC）</span></h3>
+                            <div className={formStyles.formGrid}>
+                                <div className={formStyles.formGroup}>
+                                    <label style={labelStyle}>
+                                        <span>{t('obs.verified') || 'Verified'}</span>
+                                        {infoDot('設為 Verified 即結案；Rejected 退回處理中 / Set to "Verified" to close; "Rejected" routes it back to In Progress.')}
+                                    </label>
+                                    <select className={formStyles.formSelect} {...register('verified')}>
+                                        <option value="Pending">{t('ncr.effectiveness.pending') || '待驗證 Pending'}</option>
+                                        <option value="Verified">通過 Verified</option>
+                                        <option value="Rejected">退回 Rejected</option>
+                                    </select>
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label className={formStyles.optionalLabel}>{t('obs.verifiedDate') || 'Verified Date'}</label>
+                                    {dateInput('verifiedDate')}
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label className={formStyles.optionalLabel}>{t('obs.closeoutDate')}</label>
+                                    {dateInput('closeoutDate')}
+                                </div>
+                                <div className={formStyles.formGroupFull}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400, cursor: 'pointer' }}>
+                                        <input type="checkbox" checked={voided} onChange={(e) => setVoided(e.target.checked)} />
+                                        <span>作廢此觀察 / Void this observation</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ===== 備註 / Remark ===== */}
+                        <div className={formStyles.formSection}>
+                            <h3 className={formStyles.sectionTitle}>備註 / Remark</h3>
+                            <div className={formStyles.formGrid}>
+                                <div className={formStyles.formGroupFull}>
+                                    <label className={formStyles.optionalLabel}>{t('common.remark')}</label>
+                                    <textarea className={formStyles.formTextarea} rows={3} {...register('remark')} />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    )}
                     </fieldset>
                 </div>
                 <div className={formStyles.modalActions}>

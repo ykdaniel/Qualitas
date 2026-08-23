@@ -53,11 +53,11 @@ def test_create_ncr_success(ncr_service, mock_repo):
 
 def test_update_ncr_status_transition_fail(ncr_service, mock_repo):
     # Arrange
-    # Current status is Closed
-    mock_db_ncr = models.NCR(id="ncr-123", status="Closed", documentNumber="NCR-001")
+    # Current status is Void (terminal — nothing else allowed)
+    mock_db_ncr = models.NCR(id="ncr-123", status="Void", documentNumber="NCR-001")
     mock_repo.get_by_id.return_value = mock_db_ncr
 
-    # Try to change back to Open (forbidden by WorkflowEngine)
+    # Try to change out of Void (forbidden by WorkflowEngine)
     ncr_update = schemas.NCRUpdate(status="Open")
 
     # Act & Assert
@@ -86,6 +86,128 @@ def test_update_ncr_success(ncr_service, mock_repo):
         assert result.description == "Updated Description"
         mock_repo.update.assert_called_once()
         mock_log.assert_called_once()
+
+def test_update_ncr_sends_rejection_email_on_new_rejection(ncr_service, mock_repo):
+    # Arrange — vendor_ref carries the contractor's email
+    mock_vendor = models.Contractor(id="v-1", name="Acme", email="acme@example.com")
+    mock_db_ncr = models.NCR(
+        id="ncr-123", status="In Progress", documentNumber="NCR-001",
+        ownerApproval=None, vendor_ref=mock_vendor,
+    )
+    mock_repo.get_by_id.return_value = mock_db_ncr
+
+    with patch('services.ncr_service.log_audit'), \
+         patch('services.ncr_service.send_ncr_rejection_notification') as mock_notify:
+        mock_updated = models.NCR(
+            id="ncr-123", documentNumber="NCR-001", ownerApproval="Rejected",
+            ownerApprovalNotes="Not acceptable", vendor_ref=mock_vendor,
+        )
+        mock_repo.update.return_value = mock_updated
+
+        ncr_service.update_ncr(
+            "ncr-123",
+            schemas.NCRUpdate(ownerApproval="Rejected", ownerApprovalNotes="Not acceptable"),
+            user_id=1, username="admin",
+        )
+
+        mock_notify.assert_called_once_with("acme@example.com", "NCR-001", "Not acceptable")
+
+
+def test_update_ncr_drops_unverifiable_recurrence_ref(ncr_service, mock_repo):
+    # recurrenceRef is a traceability claim ("this is a repeat of that prior
+    # NCR") — a value that doesn't resolve to any real NCR must be dropped,
+    # not silently accepted as satisfying the requirement.
+    mock_db_ncr = models.NCR(id="ncr-123", status="Open", documentNumber="NCR-001")
+    mock_repo.get_by_id.return_value = mock_db_ncr
+    mock_repo.db.query.return_value.filter.return_value.first.return_value = None
+
+    with patch('services.ncr_service.log_audit'):
+        mock_repo.update.return_value = models.NCR(
+            id="ncr-123", documentNumber="NCR-001", recurrence="Yes", recurrenceRef="",
+        )
+
+        ncr_service.update_ncr(
+            "ncr-123",
+            schemas.NCRUpdate(recurrence="Yes", recurrenceRef="NCR-DOES-NOT-EXIST"),
+            user_id=1, username="admin",
+        )
+
+        passed_data = mock_repo.update.call_args[0][1]
+        assert passed_data["recurrenceRef"] == ""
+
+
+def test_update_ncr_allows_owner_rejection_to_reopen_closed_ncr(ncr_service, mock_repo):
+    # deriveNCRStatus (ncrFormSchema.ts) explicitly reopens an already-Closed
+    # NCR to 'In Progress' when the owner rejects it — the Closed-record
+    # quality-field lock must not block that specific transition.
+    mock_db_ncr = models.NCR(
+        id="ncr-123", status="Closed", documentNumber="NCR-001",
+        ownerApproval="Approved", repairMethodStatement="done already",
+    )
+    mock_repo.get_by_id.return_value = mock_db_ncr
+
+    with patch('services.ncr_service.log_audit'), \
+         patch('services.ncr_service.send_ncr_rejection_notification'):
+        mock_repo.update.return_value = models.NCR(
+            id="ncr-123", documentNumber="NCR-001", status="In Progress",
+            ownerApproval="Rejected",
+        )
+
+        result = ncr_service.update_ncr(
+            "ncr-123",
+            schemas.NCRUpdate(status="In Progress", ownerApproval="Rejected"),
+            user_id=1, username="admin",
+        )
+
+        assert result.status == "In Progress"
+        mock_repo.update.assert_called_once()
+
+
+def test_update_ncr_still_blocks_other_locked_fields_on_closed_ncr(ncr_service, mock_repo):
+    # The owner-rejection exception must not become a general backdoor —
+    # changing a different locked field on a Closed NCR (with no rejection
+    # in the same payload) must still be rejected.
+    mock_db_ncr = models.NCR(
+        id="ncr-123", status="Closed", documentNumber="NCR-001",
+        ownerApproval="Approved", repairMethodStatement="done already",
+    )
+    mock_repo.get_by_id.return_value = mock_db_ncr
+
+    ncr_update = schemas.NCRUpdate(repairMethodStatement="changed after close")
+
+    with pytest.raises(ValueError) as excinfo:
+        ncr_service.update_ncr("ncr-123", ncr_update, user_id=1, username="admin")
+
+    assert "Cannot modify quality fields on a Closed NCR" in str(excinfo.value)
+    mock_repo.update.assert_not_called()
+
+
+def test_update_ncr_does_not_resend_rejection_email_when_already_rejected(ncr_service, mock_repo):
+    # Arrange — already Rejected before this save; a follow-up save (e.g.
+    # editing the notes) must not re-fire the notification.
+    mock_vendor = models.Contractor(id="v-1", name="Acme", email="acme@example.com")
+    mock_db_ncr = models.NCR(
+        id="ncr-123", status="In Progress", documentNumber="NCR-001",
+        ownerApproval="Rejected", vendor_ref=mock_vendor,
+    )
+    mock_repo.get_by_id.return_value = mock_db_ncr
+
+    with patch('services.ncr_service.log_audit'), \
+         patch('services.ncr_service.send_ncr_rejection_notification') as mock_notify:
+        mock_updated = models.NCR(
+            id="ncr-123", documentNumber="NCR-001", ownerApproval="Rejected",
+            vendor_ref=mock_vendor,
+        )
+        mock_repo.update.return_value = mock_updated
+
+        ncr_service.update_ncr(
+            "ncr-123",
+            schemas.NCRUpdate(ownerApproval="Rejected", remark="typo fix"),
+            user_id=1, username="admin",
+        )
+
+        mock_notify.assert_not_called()
+
 
 def test_delete_ncr_success(ncr_service, mock_repo):
     # Arrange — only Void NCRs can be deleted

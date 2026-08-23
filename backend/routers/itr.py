@@ -214,15 +214,20 @@ def link_checklist_to_itr(
     itr_id: str,
     checklist_id: str,
     itr_service: ITRService = Depends(get_itr_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(ITR_UPDATE))
 ):
     """Link a Checklist to an ITR"""
-    db_itr = itr_service.link_checklist(
-        itr_id=itr_id,
-        checklist_id=checklist_id,
-        user_id=current_user.id,
-        username=current_user.username
-    )
+    try:
+        db_itr = itr_service.link_checklist(
+            itr_id=itr_id,
+            checklist_id=checklist_id,
+            user_id=current_user.id,
+            username=current_user.username,
+            scope=scope,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if db_itr is None:
         raise HTTPException(status_code=404, detail="ITR not found")
     return db_itr
@@ -234,6 +239,7 @@ def unlink_checklist_from_itr(
     itr_id: str,
     checklist_id: str,
     itr_service: ITRService = Depends(get_itr_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(ITR_UPDATE))
 ):
     """Remove a checklist instance from an ITR (deletes the ITR-owned copy)."""
@@ -241,7 +247,8 @@ def unlink_checklist_from_itr(
         itr_id=itr_id,
         checklist_id=checklist_id,
         user_id=current_user.id,
-        username=current_user.username
+        username=current_user.username,
+        scope=scope,
     )
     if db_itr is None:
         raise HTTPException(status_code=404, detail="ITR or checklist instance not found")

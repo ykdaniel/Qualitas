@@ -144,10 +144,14 @@ def enforce_update_scope(data: dict, scope: Optional[Scope], vendor_field: str =
     """
     if scope is None or scope.unrestricted:
         return
-    if scope.project_ids is not None and data.get("project_id"):
+    # Use key-presence (not truthiness) so an explicit null/'' — which would
+    # clear the scoping key entirely and hide the record from every
+    # project/vendor-scoped user, including its own owner — is also treated
+    # as an out-of-scope move, not silently allowed through.
+    if scope.project_ids is not None and "project_id" in data:
         if data["project_id"] not in scope.project_ids:
             raise ScopeForbidden("cannot move record to a project outside your scope")
-    if scope.vendor_id is not None and data.get(vendor_field):
+    if scope.vendor_id is not None and vendor_field in data:
         if data[vendor_field] != scope.vendor_id:
             raise ScopeForbidden("cannot reassign record to another contractor")
 
@@ -172,7 +176,7 @@ def record_in_scope(record, scope: Optional[Scope]) -> bool:
 # access controls.
 _ENTITY_MODELS = {
     "ncr": models.NCR, "noi": models.NOI, "itr": models.ITR, "itp": models.ITP,
-    "obs": models.OBS, "pqp": models.PQP, "fat": models.FAT,
+    "obs": models.OBS, "osd": models.OSD, "pqp": models.PQP, "fat": models.FAT,
     "followup": models.FollowUp, "audit": models.Audit, "checklist": models.Checklist,
 }
 

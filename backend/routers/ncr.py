@@ -1,10 +1,10 @@
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 import schemas
 from core.dependencies import RoleChecker, get_ncr_service, get_related_service
-from core.perms import NCR_CREATE, NCR_DELETE, NCR_UPDATE, NCR_VIEW
+from core.perms import NCR_APPROVE, NCR_CREATE, NCR_DELETE, NCR_UPDATE, NCR_VIEW
 from core.scope import Scope, ScopeForbidden, get_scope
 from database import get_db
 from services.ncr_service import NCRService
@@ -15,6 +15,12 @@ router = APIRouter(
     tags=["NCR"],
     responses={404: {"description": "Not found"}},
 )
+
+# Owner/engineering authority sign-off represents an external party's decision
+# (BACKLOG discussion) — anyone with plain ncr:update:all shouldn't be able to
+# fill it in on the owner's behalf. Gated separately behind ncr:approve:all,
+# which already existed as a defined-but-unwired permission.
+_OWNER_APPROVAL_FIELDS = {'ownerApproval', 'ownerApprovalBy', 'ownerApprovalDate', 'ownerApprovalNotes'}
 
 @router.get("/", response_model=list[schemas.NCR])
 def read_ncrs(
@@ -50,6 +56,15 @@ def read_ncr(
         raise HTTPException(status_code=404, detail="NCR not found")
     return db_ncr
 
+def _require_approve_permission(current_user: "schemas.User") -> None:
+    user_permissions = {p.code for p in current_user.role.permissions_rel}
+    if NCR_APPROVE not in user_permissions:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Operation not permitted. Required: {NCR_APPROVE}",
+        )
+
+
 @router.post("/", response_model=schemas.NCR)
 def create_ncr(
     ncr: schemas.NCRCreate,
@@ -57,6 +72,11 @@ def create_ncr(
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(NCR_CREATE))
 ):
+    payload = ncr.model_dump(exclude_unset=True)
+    # A plain ncr:create:all caller must not be able to pre-approve their own
+    # NCR at creation time — same gate as update_ncr below.
+    if any(payload.get(f) for f in _OWNER_APPROVAL_FIELDS):
+        _require_approve_permission(current_user)
     try:
         return ncr_service.create_ncr(
             ncr_create=ncr, user_id=current_user.id, username=current_user.username,
@@ -69,15 +89,30 @@ def create_ncr(
 def update_ncr(
     ncr_id: str,
     ncr: schemas.NCRUpdate,
+    background_tasks: BackgroundTasks = None,
     ncr_service: NCRService = Depends(get_ncr_service),
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(NCR_UPDATE))
 ):
+    payload = ncr.model_dump(exclude_unset=True)
+    touched = set(payload.keys()) & _OWNER_APPROVAL_FIELDS
+    if touched:
+        # The frontend resends the whole record on every save, so "touched"
+        # (key present) is not "changed" — only gate when an owner-approval
+        # field's value actually differs from what's on record, otherwise a
+        # user without ncr:approve:all can never save an unrelated edit to
+        # an NCR that already has an approval decision on it.
+        existing = ncr_service.get_ncr(ncr_id=ncr_id, scope=scope)
+        changed = existing is None or any(
+            payload.get(f) != getattr(existing, f, None) for f in touched
+        )
+        if changed:
+            _require_approve_permission(current_user)
     try:
         db_ncr = ncr_service.update_ncr(
             ncr_id=ncr_id, ncr_update=ncr,
             user_id=current_user.id, username=current_user.username,
-            scope=scope,
+            scope=scope, background_tasks=background_tasks,
         )
     except ScopeForbidden as e:
         raise HTTPException(status_code=403, detail=str(e))
@@ -115,4 +150,4 @@ def read_ncr_related(
     # Only expose the relation graph for an NCR the caller may actually see.
     if ncr_service.get_ncr(ncr_id=ncr_id, scope=scope) is None:
         raise HTTPException(status_code=404, detail="NCR not found")
-    return related_service.get_related("ncr", ncr_id, max_depth=max_depth)
+    return related_service.get_related("ncr", ncr_id, max_depth=max_depth, scope=scope)

@@ -198,7 +198,7 @@ async def upload_files(
     - category: 檔案分類 (attachment / defectPhoto / improvementPhoto)
     """
     # ── Validate entity_type against known modules ──
-    _VALID_ENTITY_TYPES = {"itp", "ncr", "noi", "itr", "pqp", "obs", "fat",
+    _VALID_ENTITY_TYPES = {"itp", "ncr", "noi", "itr", "pqp", "obs", "osd", "fat",
                            "audit", "checklist", "followup", "km", "contractor"}
     if entity_type not in _VALID_ENTITY_TYPES:
         raise HTTPException(

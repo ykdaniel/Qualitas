@@ -130,7 +130,10 @@
 .ncr-print-root .rev-table td, .ncr-print-root .rev-table th { padding: 2px 8px; font-size: 7.8px; border: 1px solid var(--ncr-line); }
 .ncr-print-root .rev-table th { background: var(--ncr-fill); font-weight: 600; }
 
-/* photo report page */
+/* photo report page — stages (before/during/after) stack full-width so each
+   stays legible; photos within a stage wrap into a 2-column grid that grows
+   more rows as more are attached, instead of shrinking to fit. */
+.ncr-print-root .photo-sections { display: flex; flex-direction: column; gap: 14px; margin-top: 6px; }
 .ncr-print-root .photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
 .ncr-print-root .photo-item { border: 1px solid var(--ncr-line); padding: 4px; text-align: center; }
 .ncr-print-root .photo-item img { width: 100%; height: auto; max-height: 300px; object-fit: contain; }

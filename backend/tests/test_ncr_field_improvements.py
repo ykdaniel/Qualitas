@@ -72,8 +72,9 @@ def test_create_without_severity_does_not_autofill(ncr_service, mock_repo):
 def _resolved_ncr_ready_to_close(**overrides):
     base = dict(
         id="ncr-1", documentNumber="NCR-1", status="Resolved",
-        repairMethodStatement="fixed", reInspectionNumber="ITR-9",
-        improvementPhotos='["after.jpg"]',
+        productDisposition="Rework", repairMethodStatement="fixed",
+        reInspectionNumber="ITR-9", improvementPhotos='["after.jpg"]',
+        drawingNo="DWG-1", specNo="SPEC-1", qtyAffected="1", extent="Isolated",
     )
     base.update(overrides)
     return models.NCR(**base)
@@ -99,6 +100,60 @@ def test_close_succeeds_with_effectiveness_and_stamps_actors(ncr_service, mock_r
         assert applied["effectivenessVerifiedBy"] == 7
         assert applied["effectivenessVerifiedDate"]
         assert applied.get("closeoutDate")
+
+
+# --- repairMethodStatement / TBC-NA status closure-gate consistency (BACKLOG
+# item 6). A TBC/NA status must satisfy the "Repair needs a method statement"
+# gate the same way the old magic-string text used to (it's an explicit
+# answer, not a blank field) — mirrors the frontend's superRefine check in
+# ncrFormSchema.ts, which was updated the same way. ---
+
+def _repair_ncr_ready_to_close(**overrides):
+    base = dict(
+        id="ncr-1", documentNumber="NCR-1", status="Resolved",
+        productDisposition="Repair", repairMethodStatement=None,
+        repairMethodStatementStatus=None,
+        reInspectionNumber="ITR-9", improvementPhotos='["after.jpg"]',
+        drawingNo="DWG-1", specNo="SPEC-1", qtyAffected="1", extent="Isolated",
+        effectivenessVerified="Yes", ownerApproval="Approved",
+    )
+    base.update(overrides)
+    return models.NCR(**base)
+
+
+def test_close_blocked_when_repair_method_statement_and_status_both_blank(ncr_service, mock_repo):
+    mock_repo.get_by_id.return_value = _repair_ncr_ready_to_close()
+    with patch('services.ncr_service.log_audit'):
+        with pytest.raises(ValueError, match="repairMethodStatement"):
+            ncr_service.update_ncr("ncr-1", schemas.NCRUpdate(status="Closed"),
+                                   user_id=7, username="qa")
+
+
+def test_close_succeeds_when_repair_method_statement_status_is_na(ncr_service, mock_repo):
+    mock_repo.get_by_id.return_value = _repair_ncr_ready_to_close(repairMethodStatementStatus="NA")
+    mock_repo.update.side_effect = lambda obj, d: obj
+    with patch('services.ncr_service.log_audit'):
+        ncr_service.update_ncr("ncr-1", schemas.NCRUpdate(status="Closed"),
+                               user_id=7, username="qa")  # should not raise
+
+
+def test_close_succeeds_when_repair_method_statement_text_present(ncr_service, mock_repo):
+    mock_repo.get_by_id.return_value = _repair_ncr_ready_to_close(repairMethodStatement="Grind and re-weld.")
+    mock_repo.update.side_effect = lambda obj, d: obj
+    with patch('services.ncr_service.log_audit'):
+        ncr_service.update_ncr("ncr-1", schemas.NCRUpdate(status="Closed"),
+                               user_id=7, username="qa")  # should not raise
+
+
+# --- Locked quality fields on a Closed NCR now also cover the *Status
+# companion columns (BACKLOG item 6), same lock as their text fields. ---
+
+def test_closed_ncr_blocks_editing_repair_method_statement_status(ncr_service, mock_repo):
+    mock_repo.get_by_id.return_value = _repair_ncr_ready_to_close(status="Closed", repairMethodStatementStatus="NA")
+    with patch('services.ncr_service.log_audit'):
+        with pytest.raises(ValueError, match="Cannot modify quality fields"):
+            ncr_service.update_ncr("ncr-1", schemas.NCRUpdate(repairMethodStatementStatus="TBC"),
+                                   user_id=7, username="qa")
 
 
 # --- Controlled-value (enum) validation ---

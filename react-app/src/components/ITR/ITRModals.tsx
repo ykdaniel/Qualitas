@@ -70,6 +70,7 @@ export interface ITRDetailData {
     drawings: (string | AttachmentInfo)[];
     certificates: (string | AttachmentInfo)[];
     linkedChecklists: any[]; // Snapshot
+    inspectionResult: string; // Pass / Fail / Conditional — drives Q-Workflow checkpoints 3 & 7
 }
 
 export interface ITRDetailModalProps {
@@ -79,9 +80,10 @@ export interface ITRDetailModalProps {
     itrList: ITRItem[];
     onSave: (details: ITRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => void | Promise<void>;
     onClose: () => void;
+    readOnly?: boolean;
 }
 
-export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingData, existingItem, itrList: _propItrList, onSave, onClose }) => {
+export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingData, existingItem, itrList: _propItrList, onSave, onClose, readOnly = false }) => {
     const { t } = useLanguage();
     const { getActiveContractors } = useContractorsStore();
     const navigate = useNavigate();
@@ -140,6 +142,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                 drawings: dd.drawings || existingItem.drawings || [],
                 certificates: dd.certificates || existingItem.certificates || [],
                 linkedChecklists: existingItem.linkedChecklists || dd.linkedChecklists || [],
+                inspectionResult: existingItem.inspectionResult || '',
             };
         }
         // 新項目：itrNumber 留空，由後端自動產生
@@ -178,6 +181,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
             drawings: [],
             certificates: [],
             linkedChecklists: [],
+            inspectionResult: '',
 
         };
     };
@@ -422,6 +426,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                     <button className={formStyles.closeButton} onClick={onClose}>×</button>
                 </div>
                 <div className={formStyles.modalBody}>
+                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
                     {isLocked && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#fef9c3', border: '1px solid #fde047', borderRadius: '6px', padding: '8px 14px', marginBottom: '12px', color: '#854d0e', fontSize: '13px', fontWeight: 600 }}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
@@ -828,6 +833,21 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                             <h3 className={formStyles.sectionTitle}>{t('itr.sectionQuality')}</h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
+                                    <label>{t('itr.inspectionResult')}</label>
+                                    <select
+                                        className={formStyles.formSelect}
+                                        value={formData.inspectionResult || ''}
+                                        onChange={(e) => handleFieldChange('inspectionResult', e.target.value)}
+                                        disabled={isLocked}
+                                        style={isLocked ? { backgroundColor: '#D9D9D9', cursor: 'not-allowed' } : {}}
+                                    >
+                                        <option value="">{t('itr.inspectionResult.unset')}</option>
+                                        <option value="Pass">{t('itr.inspectionResult.pass')}</option>
+                                        <option value="Fail">{t('itr.inspectionResult.fail')}</option>
+                                        <option value="Conditional">{t('itr.inspectionResult.conditional')}</option>
+                                    </select>
+                                </div>
+                                <div className={formStyles.formGroup}>
                                     <label>{t('common.status')}</label>
                                     <div className="flex flex-col gap-2">
                                         <select
@@ -914,25 +934,28 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                             <RelatedDocuments entityType="itr" entityId={existingItem.id} />
                         )}
                     </div>
+                </fieldset>
                 </div>
                 <div className={formStyles.modalActions}>
                     <button className={formStyles.printButton} onClick={handlePrint} style={{ marginRight: 'auto' }}>
                         {t('common.print')}
                     </button>
-                    <button
-                        className={styles.publishButton}
-                        onClick={handlePublish}
-                        title="Publish as next revision"
-                    >
-                        Publish
-                    </button>
-                    {!isLocked && (
+                    {!readOnly && (
+                        <button
+                            className={styles.publishButton}
+                            onClick={handlePublish}
+                            title="Publish as next revision"
+                        >
+                            Publish
+                        </button>
+                    )}
+                    {!isLocked && !readOnly && (
                         <button className={formStyles.saveButton} onClick={handleSave} style={{ marginLeft: '12px' }}>
                             {t('common.save')}
                         </button>
                     )}
                     <button className={formStyles.cancelButton} onClick={onClose}>
-                        {t('common.cancel')}
+                        {readOnly ? t('common.close') : t('common.cancel')}
                     </button>
                 </div>
             </div>

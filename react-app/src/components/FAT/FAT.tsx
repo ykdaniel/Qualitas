@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import { BarChart3, FileCheck, TrendingUp, Search } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { checkFATReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
@@ -24,6 +25,8 @@ type StatusFilter = 'all' | 'scheduled' | 'inProgress' | 'completed' | 'cancelle
 
 const FAT: React.FC = () => {
   const { t } = useLanguage();
+  const { hasPermission } = useAuth();
+  const canEdit = hasPermission('fat:update:all');
   const { getActiveContractors } = useContractorsStore();
   const { fatList, addFAT, updateFAT, deleteFAT, saveFATDetails, fatDetails, fetchFATs } = useFATStore();
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -266,6 +269,7 @@ const FAT: React.FC = () => {
             setIsEditModalOpen(false);
             setCurrentFatId(null);
           }}
+          readOnly={!canEdit}
         />
       )}
 
@@ -278,6 +282,7 @@ const FAT: React.FC = () => {
             setIsDetailsEditModalOpen(false);
             setCurrentFatId(null);
           }}
+          readOnly={!canEdit}
         />
       )}
 
@@ -311,9 +316,10 @@ interface FATDetailModalProps {
   details: FATDetailItem[];
   onSave: (details: FATDetailItem[]) => void;
   onClose: () => void;
+  readOnly?: boolean;
 }
 
-const FATDetailModal: React.FC<FATDetailModalProps> = ({ fatId, details, onSave, onClose }) => {
+const FATDetailModal: React.FC<FATDetailModalProps> = ({ fatId, details, onSave, onClose, readOnly = false }) => {
   const { t } = useLanguage();
   const [detailList, setDetailList] = useState<FATDetailItem[]>(details.length > 0 ? details : [{
     id: '1',
@@ -386,6 +392,7 @@ const FATDetailModal: React.FC<FATDetailModalProps> = ({ fatId, details, onSave,
           <button className={formStyles.closeButton} onClick={onClose}>×</button>
         </div>
         <div className={formStyles.modalBody}>
+        <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
           {(() => {
             const r = deriveFATResult(detailList);
             const color = r === 'Pass' ? '#15803d' : r === 'Fail' ? '#b91c1c' : '#a16207';
@@ -507,15 +514,22 @@ const FATDetailModal: React.FC<FATDetailModalProps> = ({ fatId, details, onSave,
               </tbody>
             </table>
           </div>
+          {!readOnly && (
+            <div className={formStyles.modalActions}>
+              <button className={styles.addRowButton} onClick={handleAddRow}>
+                {t('fat.addRow')}
+              </button>
+            </div>
+          )}
+        </fieldset>
           <div className={formStyles.modalActions}>
-            <button className={styles.addRowButton} onClick={handleAddRow}>
-              {t('fat.addRow')}
-            </button>
-            <button className={formStyles.saveButton} onClick={handleSave}>
-              {t('common.save')}
-            </button>
+            {!readOnly && (
+              <button className={formStyles.saveButton} onClick={handleSave}>
+                {t('common.save')}
+              </button>
+            )}
             <button className={formStyles.cancelButton} onClick={onClose}>
-              {t('common.cancel')}
+              {readOnly ? t('common.close') : t('common.cancel')}
             </button>
           </div>
         </div>
@@ -529,8 +543,9 @@ interface FATEditModalProps {
   existingItem?: FATItem;
   onSave: (updates: Partial<FATItem>) => void;
   onClose: () => void;
+  readOnly?: boolean;
 }
-const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem, onSave, onClose }) => {
+const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem, onSave, onClose, readOnly = false }) => {
   const { t } = useLanguage();
   const { getActiveContractors } = useContractorsStore();
   const [formData, setFormData] = useState<Partial<FATItem>>({
@@ -568,6 +583,7 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
           <button className={formStyles.closeButton} onClick={onClose}>×</button>
         </div>
         <div className={formStyles.modalBody}>
+        <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
           <div className={formStyles.formSections}>
             <div className={formStyles.formSection}>
               <h3 className={formStyles.sectionTitle}>{t('fat.sectionInfo')}</h3>
@@ -702,13 +718,16 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
               </div>
             </div>
           </div>
+        </fieldset>
         </div>
         <div className={formStyles.modalActions}>
-          <button className={formStyles.saveButton} onClick={handleSave}>
-            {t('common.save')}
-          </button>
+          {!readOnly && (
+            <button className={formStyles.saveButton} onClick={handleSave}>
+              {t('common.save')}
+            </button>
+          )}
           <button className={formStyles.cancelButton} onClick={onClose}>
-            {t('common.cancel')}
+            {readOnly ? t('common.close') : t('common.cancel')}
           </button>
         </div>
       </div>

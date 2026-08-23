@@ -144,12 +144,20 @@ class WorkflowEngine:
             "Void": []
         },
         "NCR": {
-            # "Resolved" doubles as the "pending effectiveness verification" state
-            # (BACKLOG #13 #6). Effectiveness = No routes it back to In Progress.
-            "Open": ["In Progress", "Void"],
-            "In Progress": ["Resolved", "Void"],
-            "Resolved": ["Closed", "In Progress", "Void"],
-            "Closed": [],
+            # Status is *derived* (see deriveNCRStatus in ncrFormSchema.ts) from
+            # two independent live signals — effectivenessVerified and
+            # ownerApproval — not advanced through discrete user actions. Any
+            # combination of those two fields can be dialed to any other on a
+            # single save (e.g. owner un-rejects while effectiveness is still
+            # Pending: In Progress -> Open), so this isn't a linear workflow the
+            # way ITP/PQP are. Every non-Void state is reachable from every
+            # other non-Void state; only Void stays a one-way terminal sink —
+            # nothing (including re-deriving from those two fields) can produce
+            # a value that would need to leave Void automatically.
+            "Open": ["In Progress", "Resolved", "Closed", "Void"],
+            "In Progress": ["Open", "Resolved", "Closed", "Void"],
+            "Resolved": ["Open", "In Progress", "Closed", "Void"],
+            "Closed": ["Open", "In Progress", "Resolved", "Void"],
             "Void": []
         },
         "NOI": {
@@ -170,6 +178,12 @@ class WorkflowEngine:
             # Compatible with both simple UI statuses and legacy workflow data
             "Open": ["In Progress", "Resolved", "Closed", "Void"],
             "In Progress": ["Resolved", "Closed", "Open", "Void"],
+            "Resolved": ["Closed", "Open", "Void"],
+            "Closed": ["Open", "Void"],
+            "Void": []
+        },
+        "OSD": {
+            "Open": ["Resolved", "Closed", "Void"],
             "Resolved": ["Closed", "Open", "Void"],
             "Closed": ["Open", "Void"],
             "Void": []
@@ -436,34 +450,39 @@ def generate_reference_no(db: Session, vendor_name: str, doc_type: str, project_
     return f"{expected_prefix}{seq_str}"
 
 
-# 白名單：doc_type → 實體 table name（避免 SQL 注入，且只 self-heal 已知文件類型）
+# 白名單：doc_type → (實體 table name, 編號欄位名)（避免 SQL 注入，且只 self-heal 已知文件類型）
+# Column names differ per table (referenceNo / documentNumber / pqpNo / recordsNo) —
+# using the wrong one makes self-heal silently no-op (caught below), so keep this accurate.
 _DOC_TYPE_TABLES = {
-    'ITP': 'itp',
-    'NOI': 'noi',
-    'NCR': 'ncr',
-    'ITR': 'itr',
-    'PQP': 'pqp',
-    'OBS': 'obs',
-    'FAT': 'fat',
+    'ITP': ('itp', 'referenceNo'),
+    'NOI': ('noi', 'referenceNo'),
+    'NCR': ('ncr', 'documentNumber'),
+    'ITR': ('itr', 'documentNumber'),
+    'PQP': ('pqp', 'pqpNo'),
+    'OBS': ('obs', 'documentNumber'),
+    'CHECKLIST': ('checklist', 'recordsNo'),
+    'OSD': ('osd', 'documentNumber'),
 }
 
 
 def _max_existing_seq(db: Session, doc_type: str, expected_prefix: str) -> int:
     """
     Query the actual document table for the largest sequence number whose
-    referenceNo starts with `expected_prefix`. Returns 0 if none.
+    reference column starts with `expected_prefix`. Returns 0 if none.
 
     Why this exists: ReferenceSequence.last_seq can drift below the real max
-    when records are imported with hardcoded referenceNos (e.g. db_seeder).
-    Without this, the next generated number collides with an existing row.
+    when records are imported with hardcoded reference numbers (e.g.
+    db_seeder). Without this, the next generated number collides with an
+    existing row.
     """
-    table = _DOC_TYPE_TABLES.get(doc_type.upper())
-    if not table:
+    entry = _DOC_TYPE_TABLES.get(doc_type.upper())
+    if not entry:
         return 0
+    table, column = entry
     try:
         sql = text(
-            f'SELECT MAX(CAST(SUBSTR("referenceNo", :prefix_len + 1) AS INTEGER)) '
-            f'FROM {table} WHERE "referenceNo" LIKE :pattern'
+            f'SELECT MAX(CAST(SUBSTR("{column}", :prefix_len + 1) AS INTEGER)) '
+            f'FROM {table} WHERE "{column}" LIKE :pattern'
         )
         result = db.execute(sql, {
             'prefix_len': len(expected_prefix),
