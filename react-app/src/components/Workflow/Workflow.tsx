@@ -127,6 +127,14 @@ const Workflow: React.FC = () => {
         return t(`workflow.checkpoint.${key}`) || key;
     };
 
+    /** The NCR actually holding this checkpoint back, per the backend's
+     * per-NCR predicate (see workflow_service._NCR_RULE_PREDICATES) — not
+     * meaningful for checkpoints that aren't NCR-derived (noi/wh_inspection/
+     * ncr/accepted), which never carry a blocking_ncr_id. */
+    const blockingNcrId = (w: WorkflowSummary, cpKey: CheckpointKey): string | null => {
+        return w.checkpoints.find(c => c.key === cpKey)?.blocking_ncr_id ?? null;
+    };
+
     /** Deep-link a checkpoint marker click to the relevant business form. */
     const handleCheckpointClick = (
         e: React.MouseEvent,
@@ -147,30 +155,42 @@ const Workflow: React.FC = () => {
                     navigate(`/noi?openId=${encodeURIComponent(w.noi_id)}`);
                 }
                 break;
-            case 'itr':
-                // Re-inspection ITR — jump directly at the specific
-                // re-insp report resolved by the backend
-                // (NCR.reInspectionNumber / ITR.originalItrId). Falls
-                // back to any linked ITR if the re-insp set is empty.
-                if (w.reinsp_itr_ids?.length) {
+            case 'itr': {
+                // The blocking NCR (if any) is the one that still needs a
+                // passed re-inspection linked — jump there so the user can
+                // see/fix its reInspectionNumber, rather than guessing which
+                // of possibly several NCRs' re-insp reports reinsp_itr_ids[0]
+                // happens to belong to.
+                const blockingId = blockingNcrId(w, cpKey);
+                if (blockingId) {
+                    navigate(`/ncr?openId=${encodeURIComponent(blockingId)}`);
+                } else if (w.reinsp_itr_ids?.length) {
                     navigate(`/itr?openId=${encodeURIComponent(w.reinsp_itr_ids[0])}`);
                 } else if (w.itr_ids?.length) {
                     navigate(`/itr?openId=${encodeURIComponent(w.itr_ids[w.itr_ids.length - 1])}`);
                 }
                 break;
+            }
             case 'ncr':
             case 'moc':
             case 'improvement':
             case 'reinspection':
-            case 'close_ncr':
-                // NCR-related checkpoints → open the first linked NCR
-                if (w.ncr_ids?.length) {
+            case 'close_ncr': {
+                // NCR-related checkpoints → open the specific NCR blocking
+                // this checkpoint when known, else fall back to the first
+                // linked NCR (matches old behaviour, and is what 'ncr' itself
+                // always uses since that checkpoint has no per-NCR predicate).
+                const blockingId = blockingNcrId(w, cpKey);
+                if (blockingId) {
+                    navigate(`/ncr?openId=${encodeURIComponent(blockingId)}`);
+                } else if (w.ncr_ids?.length) {
                     navigate(`/ncr?openId=${encodeURIComponent(w.ncr_ids[0])}`);
                 } else if (w.noi_id) {
                     // No NCRs — fall back to NOI
                     navigate(`/noi?openId=${encodeURIComponent(w.noi_id)}`);
                 }
                 break;
+            }
         }
     };
 
@@ -261,6 +281,9 @@ const Workflow: React.FC = () => {
                             <th className={styles.stickyCol2}>
                                 {t('workflow.col.noi') || 'NOI'}
                             </th>
+                            <th className={styles.subjectCol}>
+                                {t('workflow.col.subject') || 'Subject'}
+                            </th>
                             {CHECKPOINT_ORDER.map(key => (
                                 <th key={key} className={styles.checkpointHead}>
                                     <span className={styles.checkpointHeadLabel}>
@@ -277,7 +300,7 @@ const Workflow: React.FC = () => {
                         {loading && (
                             <tr>
                                 <td
-                                    colSpan={CHECKPOINT_ORDER.length + 3}
+                                    colSpan={CHECKPOINT_ORDER.length + 4}
                                     className={styles.empty}
                                 >
                                     {t('common.loading') || 'Loading...'}
@@ -287,7 +310,7 @@ const Workflow: React.FC = () => {
                         {!loading && filtered.length === 0 && (
                             <tr>
                                 <td
-                                    colSpan={CHECKPOINT_ORDER.length + 3}
+                                    colSpan={CHECKPOINT_ORDER.length + 4}
                                     className={styles.empty}
                                 >
                                     {t('workflow.empty') ||
@@ -312,6 +335,12 @@ const Workflow: React.FC = () => {
                                         title={`${w.noi_reference_no || ''} · ${w.noi_package || ''}`}
                                     >
                                         {w.noi_reference_no || w.noi_package || '—'}
+                                    </td>
+                                    <td
+                                        className={`${styles.subjectCol} ${styles.subjectCell}`}
+                                        title={w.noi_package || ''}
+                                    >
+                                        {w.noi_package || '—'}
                                     </td>
                                     {w.checkpoints.map((cp, i) => {
                                         const isFirst = i === 0;

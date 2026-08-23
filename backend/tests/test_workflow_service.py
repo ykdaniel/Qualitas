@@ -92,7 +92,7 @@ def workflow_fixture(db_session, sample_contractor):
     db_session.add(noi_happy)
     db_session.add(models.ITR(
         id="itr-happy", vendor_id=vendor_id, documentNumber="ITR-HAPPY",
-        description="pass", rev="A", submit="Initial", status="Pass",
+        description="pass", rev="A", submit="Initial", status="Approved",
         noiNumber="NOI-WF-HAPPY", raiseDate="2026-03-02",
     ))
     _make_qworkflow(db_session, noi_happy, "Q-WorkFlow-000001")
@@ -175,13 +175,13 @@ def workflow_fixture(db_session, sample_contractor):
     db_session.add(noi_full)
     db_session.add(models.ITR(
         id="itr-full", vendor_id=vendor_id, documentNumber="ITR-FULL",
-        description="witnessed", rev="A", submit="Initial", status="Pass",
+        description="witnessed", rev="A", submit="Initial", status="Approved",
         noiNumber="NOI-WF-FULL", raiseDate="2026-03-21",
     ))
     db_session.add(models.ITR(
         id="itr-full-reinsp", vendor_id=vendor_id,
         documentNumber="ITR-FULL-REINSP", description="re-insp",
-        rev="A", submit="Initial", status="Pass",
+        rev="A", submit="Initial", status="Approved",
         inspectionResult="Pass",
         noiNumber="NOI-WF-FULL", raiseDate="2026-03-25",
     ))
@@ -283,6 +283,81 @@ def test_accepted_requires_every_previous_checkpoint(workflow_fixture):
     service = WorkflowService(workflow_fixture)
     done = _done_map(_summary_for(service, "Q-WorkFlow-000002"))
     assert done[CHECKPOINT_ACCEPTED] is False
+
+
+def test_voided_ncr_does_not_block_checkpoints(db_session, sample_contractor):
+    """A Voided NCR is a cancelled entry, not an open obligation — it must
+    not permanently block MoC/Improvement/Re-inspection/ITR/Close-NCR the
+    way an Open one would. Same NOI shape as the happy path, but the NCR
+    is Void with every quality field left blank; the row must still hit
+    100% (regression test for the Void-exclusion fix)."""
+    noi = models.NOI(
+        id="noi-void-ncr", package="P-VOIDNCR", referenceNo="NOI-VOIDNCR",
+        issueDate="2026-03-01", inspectionTime="10:00",
+        itpNo=None, inspectionDate="2026-03-02", type="site",
+        vendor_id=sample_contractor.id, status="Closed",
+    )
+    db_session.add(noi)
+    db_session.add(models.ITR(
+        id="itr-voidncr", vendor_id=sample_contractor.id,
+        documentNumber="ITR-VOIDNCR", description="witnessed", rev="A",
+        submit="Initial", status="Approved",
+        noiNumber="NOI-VOIDNCR", raiseDate="2026-03-02",
+    ))
+    db_session.add(models.NCR(
+        id="ncr-voided", vendor_id=sample_contractor.id,
+        documentNumber="NCR-VOIDED", description="raised in error",
+        rev="A", submit="Initial", status="Void", subject="oops",
+        raiseDate="2026-03-03", noiNumber="NOI-VOIDNCR",
+        # Every quality field left blank — would block every NCR-derived
+        # checkpoint if this NCR weren't excluded as Void.
+    ))
+    _make_qworkflow(db_session, noi, "Q-WorkFlow-999010")
+    db_session.commit()
+
+    service = WorkflowService(db_session)
+    summary = _summary_for(service, "Q-WorkFlow-999010")
+    assert summary["completion_percent"] == 100
+    done = _done_map(summary)
+    for key in CHECKPOINT_ORDER:
+        assert done[key] is True, f"{key} should be done when the only NCR is Void"
+
+
+def test_accepted_blocked_by_non_terminal_itr_status(db_session, sample_contractor):
+    """The 8 numbered checkpoints never look at ITR.status (only
+    inspectionResult), but noi_service.py's own close-gate requires every
+    ITR to reach Approved/Void before the NOI can close. Without
+    reconciling the two, Accepted/100% could show green while the NOI is
+    still genuinely un-closeable — regression test for that fix."""
+    noi = models.NOI(
+        id="noi-itr-open", package="P-ITROPEN", referenceNo="NOI-ITROPEN",
+        issueDate="2026-03-01", inspectionTime="10:00",
+        itpNo=None, inspectionDate="2026-03-02", type="site",
+        vendor_id=sample_contractor.id, status="In Progress",
+    )
+    db_session.add(noi)
+    db_session.add(models.ITR(
+        id="itr-open", vendor_id=sample_contractor.id,
+        documentNumber="ITR-OPEN", description="still open", rev="A",
+        submit="Initial", status="In Progress",
+        noiNumber="NOI-ITROPEN", raiseDate="2026-03-02",
+    ))
+    _make_qworkflow(db_session, noi, "Q-WorkFlow-999011")
+    db_session.commit()
+
+    service = WorkflowService(db_session)
+    summary = _summary_for(service, "Q-WorkFlow-999011")
+    done = _done_map(summary)
+    # No NCRs at all ⇒ every NCR-derived checkpoint auto-satisfies (N/A),
+    # and W/H Inspection passes since an ITR exists — so all 8 numbered
+    # checkpoints are done, but Accepted must still be False because the
+    # ITR itself hasn't reached Approved/Void.
+    for key in CHECKPOINT_ORDER:
+        if key == CHECKPOINT_ACCEPTED:
+            continue
+        assert done[key] is True, f"{key} should be done (N/A shortcut / ITR exists)"
+    assert done[CHECKPOINT_ACCEPTED] is False
+    assert summary["completion_percent"] < 100
 
 
 def test_wh_inspection_requires_linked_itr(db_session, sample_contractor):
@@ -693,6 +768,119 @@ def test_reinspection_itr_resolves_via_typed_path(
         pytest.fail("Q-WorkFlow-900004 not found")
     # ``reinsp_itr_ids`` should expose the re-insp ITR for deep-linking.
     assert "itr-typed-reinsp" in summary["reinsp_itr_ids"]
+
+
+def test_typed_path_reinspection_does_not_cross_satisfy_sibling_ncrs(
+    db_session, sample_contractor,
+):
+    """Two NCRs raised against the SAME failed ITR — a re-inspection
+    filed for one (via the typed originalItrId relationship) must not
+    silently resolve the other's re-inspection checkpoint too. The
+    typed-path fallback is only trustworthy when exactly one NCR traces
+    back to that original ITR; here there are two, so only the explicit
+    string path (NCR.reInspectionNumber) should count."""
+    vendor_id = sample_contractor.id
+    noi = models.NOI(
+        id="noi-siblings", package="P-SIB", referenceNo="NOI-SIB",
+        issueDate="2026-03-01", inspectionTime="10:00",
+        itpNo=None, inspectionDate="2026-03-02", type="site",
+        vendor_id=vendor_id, status="In Progress",
+    )
+    db_session.add(noi)
+    orig_itr = models.ITR(
+        id="itr-sib-orig", vendor_id=vendor_id,
+        documentNumber="ITR-SIB", description="orig",
+        rev="A", submit="Initial", status="Reject",
+        inspectionResult="Fail",
+        noiNumber="NOI-SIB", raiseDate="2026-03-02",
+    )
+    db_session.add(orig_itr)
+    # Re-inspection filed for NCR-A only.
+    db_session.add(models.ITR(
+        id="itr-sib-reinsp", vendor_id=vendor_id,
+        documentNumber="ITR-SIB-REINSP", description="re-insp",
+        rev="A", submit="Initial", status="Closed",
+        inspectionResult="Pass",
+        noiNumber="NOI-SIB", raiseDate="2026-03-10",
+        isReInspection=True, originalItrId="itr-sib-orig",
+    ))
+    common_fields = dict(
+        vendor_id=vendor_id, rev="A", submit="Initial", status="Open",
+        raiseDate="2026-03-03", noiNumber="NOI-SIB", itrNumber="ITR-SIB",
+        rootCauseAnalysis="rca", repairMethodStatement="moc",
+        improvementPhotos=json.dumps(["/uploads/x.jpg"]),
+    )
+    db_session.add(models.NCR(
+        id="ncr-sib-a", documentNumber="NCR-SIB-A", description="a",
+        subject="a", **common_fields,
+    ))
+    db_session.add(models.NCR(
+        id="ncr-sib-b", documentNumber="NCR-SIB-B", description="b",
+        subject="b", **common_fields,
+    ))
+    _make_qworkflow(db_session, noi, "Q-WorkFlow-900005")
+    db_session.commit()
+
+    from services.workflow_service import _rule_itr_reinsp
+    service = WorkflowService(db_session)
+    qwfs = service._load_qworkflows()
+    lookups = service._build_lookups(qwfs)
+    for qwf in qwfs:
+        if qwf.referenceNo == "Q-WorkFlow-900005":
+            ctx = service._make_context(qwf, lookups)
+            # Ambiguous: two NCRs share the same original ITR, and only
+            # one has an actual re-inspection on record. Must NOT resolve.
+            assert _rule_itr_reinsp(ctx) is False
+            break
+    else:  # pragma: no cover
+        pytest.fail("Q-WorkFlow-900005 not found")
+
+
+def test_void_itr_does_not_satisfy_wh_inspection_or_force_ncr(
+    db_session, sample_contractor,
+):
+    """A Voided ITR is a cancelled record, not a completed inspection —
+    it must not count toward W/H Inspection, and a stale Fail result on
+    a Voided ITR must not permanently require an NCR to exist."""
+    vendor_id = sample_contractor.id
+    noi = models.NOI(
+        id="noi-voiditr", package="P-VOIDITR", referenceNo="NOI-VOIDITR",
+        issueDate="2026-03-01", inspectionTime="10:00",
+        itpNo=None, inspectionDate="2026-03-02", type="site",
+        vendor_id=vendor_id, status="Draft",
+    )
+    db_session.add(noi)
+    db_session.add(models.ITR(
+        id="itr-voided", vendor_id=vendor_id,
+        documentNumber="ITR-VOIDED", description="cancelled",
+        rev="A", submit="Initial", status="Void",
+        inspectionResult="Fail",
+        noiNumber="NOI-VOIDITR", raiseDate="2026-03-02",
+    ))
+    _make_qworkflow(db_session, noi, "Q-WorkFlow-900006")
+    db_session.commit()
+
+    service = WorkflowService(db_session)
+    summary = _summary_for(service, "Q-WorkFlow-900006")
+    done = _done_map(summary)
+    # A Voided-only ITR means "no real inspection happened" — W/H
+    # Inspection must still be blocked, same as having zero ITRs.
+    assert done[CHECKPOINT_WH_INSPECTION] is False
+    # And since W/H Inspection itself is un-done, it's the progress
+    # front — NCR (checkpoint 3) renders pending, not done, regardless
+    # of whether the stale Fail would have forced it. Verify the
+    # underlying rule directly: with the Void ITR excluded, no ITR
+    # counts as "failed", so NCR correctly auto-satisfies via N/A.
+    from services.workflow_service import _rule_ncr
+    qwfs = service._load_qworkflows()
+    lookups = service._build_lookups(qwfs)
+    for qwf in qwfs:
+        if qwf.referenceNo == "Q-WorkFlow-900006":
+            ctx = service._make_context(qwf, lookups)
+            assert _rule_ncr(ctx) is True
+            break
+    else:  # pragma: no cover
+        pytest.fail("Q-WorkFlow-900006 not found")
 
 
 def test_list_workflows_filters_by_vendor(workflow_fixture, db_session):

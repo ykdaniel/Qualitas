@@ -51,6 +51,7 @@ import json
 import logging
 from typing import Any, Callable, Dict, List, Optional
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload
 
 import models
@@ -137,13 +138,21 @@ def _inspection_passed(itr: Optional[models.ITR]) -> bool:
     is ``Pass``. Note: ``status`` (the document workflow state) is a
     separate axis — an ITR can be ``status=Closed`` while still having
     ``inspectionResult=Fail``. Re-inspection checkpoints key on the
-    inspection axis, not the document axis."""
-    if itr is None:
+    inspection axis, not the document axis.
+
+    A Voided ITR is excluded regardless of its inspectionResult — Void
+    means the record itself was cancelled/invalidated (wrong NOI,
+    duplicate, mistaken entry), so whatever result it used to carry no
+    longer represents a real inspection outcome. Mirrors how Void NCRs
+    are excluded from checkpoint aggregation via _active_ncrs_for_noi."""
+    if itr is None or (itr.status or "").strip() == "Void":
         return False
     return (itr.inspectionResult or "").strip() == INSPECTION_RESULT_PASS
 
 
 def _inspection_failed(itr: models.ITR) -> bool:
+    if (itr.status or "").strip() == "Void":
+        return False
     return (itr.inspectionResult or "").strip() == INSPECTION_RESULT_FAIL
 
 
@@ -181,8 +190,10 @@ def _rule_wh_inspection(ctx: _CheckpointContext) -> bool:
     # NOI". It doesn't matter whether the ITR passed or failed — an
     # ITR simply means "we went and looked". A failed ITR is still a
     # completed inspection; whether an NCR must then exist is the
-    # concern of the next checkpoint.
-    return len(ctx.itrs) > 0
+    # concern of the next checkpoint. A Voided ITR doesn't count —
+    # Void means the record was cancelled, not that an inspection
+    # actually took place.
+    return any((itr.status or "").strip() != "Void" for itr in ctx.itrs)
 
 
 def _rule_ncr(ctx: _CheckpointContext) -> bool:
@@ -198,22 +209,42 @@ def _rule_ncr(ctx: _CheckpointContext) -> bool:
     return True
 
 
-def _rule_moc(ctx: _CheckpointContext) -> bool:
+def _moc_ok(_ctx: _CheckpointContext, n: models.NCR) -> bool:
     # MoC = Method of Construction / Repair Method Statement. Mapped
     # onto the NCR form's ``repairMethodStatement`` field for
     # historical reasons (the form predates the MoC label).
-    return _all_ncrs(ctx.ncrs, lambda n: _has_text(n.repairMethodStatement))
+    return _has_text(n.repairMethodStatement)
+
+
+def _rule_moc(ctx: _CheckpointContext) -> bool:
+    return _all_ncrs(ctx.ncrs, lambda n: _moc_ok(ctx, n))
+
+
+def _improvement_ok(_ctx: _CheckpointContext, n: models.NCR) -> bool:
+    return _has_photos(n.improvementPhotos)
 
 
 def _rule_improvement(ctx: _CheckpointContext) -> bool:
-    return _all_ncrs(ctx.ncrs, lambda n: _has_photos(n.improvementPhotos))
+    return _all_ncrs(ctx.ncrs, lambda n: _improvement_ok(ctx, n))
+
+
+def _reinspection_text_ok(_ctx: _CheckpointContext, n: models.NCR) -> bool:
+    return _has_text(n.reInspectionNumber)
 
 
 def _rule_reinspection(ctx: _CheckpointContext) -> bool:
-    return _all_ncrs(ctx.ncrs, lambda n: _has_text(n.reInspectionNumber))
+    return _all_ncrs(ctx.ncrs, lambda n: _reinspection_text_ok(ctx, n))
 
 
-def _rule_itr_reinsp(ctx: _CheckpointContext) -> bool:
+def _close_ncr_ok(_ctx: _CheckpointContext, n: models.NCR) -> bool:
+    return (n.status or "").strip() == "Closed"
+
+
+def _rule_close_ncr(ctx: _CheckpointContext) -> bool:
+    return _all_ncrs(ctx.ncrs, lambda n: _close_ncr_ok(ctx, n))
+
+
+def _itr_reinsp_ok(ctx: _CheckpointContext, n: models.NCR) -> bool:
     """Every NCR has a re-inspection ITR that actually passed.
 
     Two accepted paths to "resolved":
@@ -230,32 +261,54 @@ def _rule_itr_reinsp(ctx: _CheckpointContext) -> bool:
     a linked-but-failed re-inspection doesn't clear the checkpoint,
     only a closed-the-loop successful re-inspection does.
 
+    The typed path is only trusted when exactly one NCR traces back to
+    the same original ITR (``NCR.itrNumber``). ``reinsp_itrs_by_original_id``
+    is keyed purely by original-ITR id — it has no way to know which
+    specific NCR a given re-inspection ITR was actually filed for. If two
+    NCRs both point at the same failed ITR, a re-inspection created for
+    one would otherwise silently satisfy the checkpoint for both,
+    including the one that was never actually re-inspected. When that's
+    ambiguous, only the explicit string path (``reInspectionNumber``)
+    counts — same as if the typed path didn't exist at all.
+
     N/A-as-done shortcut still applies: no NCRs ⇒ done.
     """
-    def resolves(n: models.NCR) -> bool:
-        if _has_text(n.reInspectionNumber):
-            itr = ctx.itr_by_doc_no.get(n.reInspectionNumber)
-            if _inspection_passed(itr):
-                return True
-        if _has_text(n.itrNumber):
-            orig = ctx.itr_by_doc_no.get(n.itrNumber)
-            if orig is not None:
-                for reinsp in ctx.reinsp_itrs_by_original_id.get(orig.id, []):
-                    if _inspection_passed(reinsp):
-                        return True
-        return False
-
-    return _all_ncrs(ctx.ncrs, resolves)
+    if _has_text(n.reInspectionNumber):
+        itr = ctx.itr_by_doc_no.get(n.reInspectionNumber)
+        if _inspection_passed(itr):
+            return True
+    if _has_text(n.itrNumber):
+        orig = ctx.itr_by_doc_no.get(n.itrNumber)
+        siblings = sum(1 for other in ctx.ncrs if other.itrNumber == n.itrNumber)
+        if orig is not None and siblings == 1:
+            for reinsp in ctx.reinsp_itrs_by_original_id.get(orig.id, []):
+                if _inspection_passed(reinsp):
+                    return True
+    return False
 
 
-def _rule_close_ncr(ctx: _CheckpointContext) -> bool:
-    return _all_ncrs(
-        ctx.ncrs, lambda n: (n.status or "").strip() == "Closed"
-    )
+def _rule_itr_reinsp(ctx: _CheckpointContext) -> bool:
+    return _all_ncrs(ctx.ncrs, lambda n: _itr_reinsp_ok(ctx, n))
+
+
+def _rule_itr_terminal(ctx: _CheckpointContext) -> bool:
+    """Every ITR against this NOI has reached a terminal document status
+    (Approved or Void) — the exact same condition noi_service.py's
+    close-gate requires (``ITR.status.notin_(['Approved', 'Void'])`` must
+    be empty). The 8 numbered checkpoints never look at ``ITR.status`` at
+    all (only ``inspectionResult``), so without this, "Accepted"/100% could
+    show green while the NOI itself is still un-closeable because an ITR is
+    stuck at In Progress/Reject — two independently-computed "is this NOI
+    done" answers that could disagree. Folded into the Accepted rollup
+    rather than its own numbered checkpoint so the visible 9-checkpoint
+    structure and completion-percentage math don't change.
+    """
+    return all((itr.status or "").strip() in ("Approved", "Void") for itr in ctx.itrs)
 
 
 # Note: _rule_accepted is special-cased in _evaluate_checkpoints — it
-# depends on the previous 8 results, not on the raw context.
+# depends on the previous 8 results (plus _rule_itr_terminal), not on the
+# raw context via the normal per-checkpoint dispatch.
 
 _CHECKPOINT_RULES: Dict[str, _CheckpointRule] = {
     CHECKPOINT_NOI: _rule_noi,
@@ -267,6 +320,29 @@ _CHECKPOINT_RULES: Dict[str, _CheckpointRule] = {
     CHECKPOINT_ITR: _rule_itr_reinsp,
     CHECKPOINT_CLOSE_NCR: _rule_close_ncr,
 }
+
+# Per-NCR predicates for the 5 checkpoints whose aggregate rule is
+# "every NCR satisfies X" — reused to find which *specific* NCR is
+# blocking the checkpoint (see _first_blocking_ncr_id), so the frontend
+# can deep-link straight at it instead of guessing "first linked NCR".
+_NCR_RULE_PREDICATES: Dict[str, Callable[[_CheckpointContext, models.NCR], bool]] = {
+    CHECKPOINT_MOC: _moc_ok,
+    CHECKPOINT_IMPROVEMENT: _improvement_ok,
+    CHECKPOINT_REINSPECTION: _reinspection_text_ok,
+    CHECKPOINT_ITR: _itr_reinsp_ok,
+    CHECKPOINT_CLOSE_NCR: _close_ncr_ok,
+}
+
+
+def _first_blocking_ncr_id(
+    ctx: _CheckpointContext,
+    predicate: Callable[[_CheckpointContext, models.NCR], bool],
+) -> Optional[str]:
+    for n in ctx.ncrs:
+        if not predicate(ctx, n):
+            return n.id
+    return None
+
 
 # Completion buckets for the Dashboard distribution card. Inclusive
 # on both ends of the final bucket so 100% has somewhere to land.
@@ -321,7 +397,7 @@ class WorkflowService:
         skip = max(0, skip)
 
         qworkflows = self._load_qworkflows(vendor_id=vendor_id, scope=scope)
-        lookups = self._build_lookups(qworkflows)
+        lookups = self._build_lookups(qworkflows, scope=scope)
 
         summaries = [
             self._summarise(qwf, lookups) for qwf in qworkflows
@@ -341,7 +417,7 @@ class WorkflowService:
     def get_stats(self, scope=None) -> Dict[str, int]:
         """Completion-distribution stats for the Dashboard card."""
         qworkflows = self._load_qworkflows(scope=scope)
-        lookups = self._build_lookups(qworkflows)
+        lookups = self._build_lookups(qworkflows, scope=scope)
 
         bucket_counts: Dict[str, int] = {name: 0 for name, _, _ in _BUCKETS}
         for qwf in qworkflows:
@@ -360,7 +436,7 @@ class WorkflowService:
         act on. Ties are broken by NOI ``issueDate`` desc so newer
         problem workflows surface over ancient zombies."""
         qworkflows = self._load_qworkflows(scope=scope)
-        lookups = self._build_lookups(qworkflows)
+        lookups = self._build_lookups(qworkflows, scope=scope)
 
         summaries = [
             self._summarise(qwf, lookups) for qwf in qworkflows
@@ -408,7 +484,7 @@ class WorkflowService:
         return query.all()
 
     def _build_extra_ncrs_by_noi(
-        self, qworkflows: List[models.QWorkflow],
+        self, qworkflows: List[models.QWorkflow], scope=None,
     ) -> Dict[str, List[models.NCR]]:
         """Find NCRs that should belong to a NOI via ``NCR.itrNumber``
         but whose ``noiNumber`` is missing (or pointing elsewhere) and
@@ -432,12 +508,19 @@ class WorkflowService:
         if not itr_doc_to_noi_id:
             return {}
 
-        rows = (
+        query = (
             self.db.query(models.NCR)
             .filter(models.NCR.itrNumber.in_(list(itr_doc_to_noi_id.keys())))
-            .filter(models.NCR.noiNumber.is_(None))
-            .all()
+            # ncr_service.py writes '' (not NULL) when it drops a dangling
+            # noiNumber, so both must be treated as "missing" here.
+            .filter(or_(models.NCR.noiNumber.is_(None), models.NCR.noiNumber == ''))
         )
+        # P0 data isolation: itrNumber/noiNumber are free-text (not FK
+        # enforced), so without this an out-of-scope NCR whose itrNumber
+        # happens to match an in-scope ITR's document number would leak
+        # its status into this caller's checkpoint colors.
+        query = apply_scope(query, models.NCR, scope)
+        rows = query.all()
 
         grouped: Dict[str, List[models.NCR]] = {}
         for ncr in rows:
@@ -450,6 +533,7 @@ class WorkflowService:
     def _build_itr_lookup(
         self, qworkflows: List[models.QWorkflow],
         extra_ncrs_by_noi: Dict[str, List[models.NCR]],
+        scope=None,
     ) -> Dict[str, models.ITR]:
         """Pre-resolve every ``NCR.reInspectionNumber`` and
         ``NCR.itrNumber`` → ITR in one query rather than N per rule
@@ -478,15 +562,17 @@ class WorkflowService:
         if not interesting_doc_numbers:
             return {}
 
-        rows = (
+        query = (
             self.db.query(models.ITR)
             .filter(models.ITR.documentNumber.in_(interesting_doc_numbers))
-            .all()
         )
+        # P0 data isolation — see _build_extra_ncrs_by_noi.
+        query = apply_scope(query, models.ITR, scope)
+        rows = query.all()
         return {itr.documentNumber: itr for itr in rows}
 
     def _build_reinsp_by_original(
-        self, itr_by_doc_no: Dict[str, models.ITR],
+        self, itr_by_doc_no: Dict[str, models.ITR], scope=None,
     ) -> Dict[str, List[models.ITR]]:
         """Find every ITR filed as a re-inspection of one of the
         originating ITRs we already loaded (``isReInspection=True`` and
@@ -499,18 +585,43 @@ class WorkflowService:
         original_ids = [itr.id for itr in itr_by_doc_no.values()]
         if not original_ids:
             return {}
-        rows = (
+        query = (
             self.db.query(models.ITR)
             .filter(models.ITR.isReInspection.is_(True))
             .filter(models.ITR.originalItrId.in_(original_ids))
-            .all()
         )
+        # P0 data isolation — see _build_extra_ncrs_by_noi.
+        query = apply_scope(query, models.ITR, scope)
+        rows = query.all()
         grouped: Dict[str, List[models.ITR]] = {}
         for itr in rows:
             if itr.originalItrId is None:
                 continue
             grouped.setdefault(itr.originalItrId, []).append(itr)
         return grouped
+
+    def _active_ncrs_for_noi(
+        self,
+        noi: Optional[models.NOI],
+        lookups: _Lookups,
+    ) -> List[models.NCR]:
+        """NCRs the checkpoint rules (and their summary deep-links) should
+        see for this NOI: linked directly plus the itrNumber-fallback ones,
+        excluding Void.
+
+        A Voided NCR is a cancelled entry, not an open obligation — the
+        NOI's own close-gate already accepts Void NCRs as non-blocking, and
+        ``delete_ncr`` only allows deleting Void ones on the premise that
+        Void "doesn't count" toward completion. Without this exclusion, one
+        erroneously-raised-then-Voided NCR would permanently fail every
+        NCR-derived checkpoint (MoC/Improvement/Re-inspection/ITR/Close) for
+        this NOI, since ``_all_ncrs`` requires every NCR in the list to
+        satisfy the rule.
+        """
+        ncrs = list(noi.ncrs) if noi and noi.ncrs else []
+        if noi is not None:
+            ncrs.extend(lookups.extra_ncrs_by_noi.get(noi.id, []))
+        return [n for n in ncrs if (n.status or "").strip() != "Void"]
 
     def _make_context(
         self,
@@ -519,9 +630,7 @@ class WorkflowService:
     ) -> _CheckpointContext:
         noi = qwf.noi_ref
         itrs = list(noi.itrs) if noi and noi.itrs else []
-        ncrs = list(noi.ncrs) if noi and noi.ncrs else []
-        if noi is not None:
-            ncrs.extend(lookups.extra_ncrs_by_noi.get(noi.id, []))
+        ncrs = self._active_ncrs_for_noi(noi, lookups)
         return _CheckpointContext(
             noi=noi, itrs=itrs, ncrs=ncrs,
             itr_by_doc_no=lookups.itr_by_doc_no,
@@ -529,14 +638,14 @@ class WorkflowService:
         )
 
     def _build_lookups(
-        self, qworkflows: List[models.QWorkflow],
+        self, qworkflows: List[models.QWorkflow], scope=None,
     ) -> _Lookups:
         """Build every cross-NOI lookup needed by the checkpoint rules
         in one coordinated pass, so downstream evaluation is O(1) per
         NCR rather than firing extra queries."""
-        extra_ncrs_by_noi = self._build_extra_ncrs_by_noi(qworkflows)
-        itr_by_doc_no = self._build_itr_lookup(qworkflows, extra_ncrs_by_noi)
-        reinsp_itrs_by_original_id = self._build_reinsp_by_original(itr_by_doc_no)
+        extra_ncrs_by_noi = self._build_extra_ncrs_by_noi(qworkflows, scope)
+        itr_by_doc_no = self._build_itr_lookup(qworkflows, extra_ncrs_by_noi, scope)
+        reinsp_itrs_by_original_id = self._build_reinsp_by_original(itr_by_doc_no, scope)
         return _Lookups(
             itr_by_doc_no=itr_by_doc_no,
             extra_ncrs_by_noi=extra_ncrs_by_noi,
@@ -586,8 +695,14 @@ class WorkflowService:
         for idx, key in enumerate(CHECKPOINT_ORDER):
             if key == CHECKPOINT_ACCEPTED:
                 # If we reach Accepted without finding a blocker, every
-                # prior rule is satisfied ⇒ Accepted is also done; no
-                # current front at all, the whole row is green.
+                # prior rule is satisfied — but Accepted also means "this
+                # NOI could actually be closed right now", which additionally
+                # requires every ITR to have reached Approved/Void (see
+                # _rule_itr_terminal). Otherwise the row would show 100%
+                # while noi_service.py's own close-gate would still reject
+                # closing it.
+                if not _rule_itr_terminal(ctx):
+                    current_idx = idx
                 break
             if not rule_results[key]:
                 current_idx = idx
@@ -603,8 +718,17 @@ class WorkflowService:
                 state = STATE_CURRENT
             else:
                 state = STATE_PENDING
+            blocking_ncr_id: Optional[str] = None
+            predicate = _NCR_RULE_PREDICATES.get(key)
+            if predicate is not None:
+                blocking_ncr_id = _first_blocking_ncr_id(ctx, predicate)
             out.append(
-                {"key": key, "state": state, "done": state == STATE_DONE}
+                {
+                    "key": key,
+                    "state": state,
+                    "done": state == STATE_DONE,
+                    "blocking_ncr_id": blocking_ncr_id,
+                }
             )
         return out
 
@@ -637,9 +761,7 @@ class WorkflowService:
         # from checkpoint markers to the relevant forms. The NCR list
         # includes any "visible via itrNumber fallback" NCRs — matches
         # what the checkpoint rules actually saw.
-        ncrs_for_summary: List[models.NCR] = list(noi.ncrs) if noi and noi.ncrs else []
-        if noi is not None:
-            ncrs_for_summary.extend(lookups.extra_ncrs_by_noi.get(noi.id, []))
+        ncrs_for_summary: List[models.NCR] = self._active_ncrs_for_noi(noi, lookups)
         ncr_ids = [n.id for n in ncrs_for_summary]
         itr_ids = [i.id for i in (noi.itrs or [])] if noi else []
 
@@ -671,6 +793,9 @@ class WorkflowService:
             "reference_no": qwf.referenceNo,
             "noi_id": noi.id if noi else None,
             "noi_reference_no": noi.referenceNo if noi else None,
+            # NOI's "package" field is what the UI actually labels/fills in
+            # as "Subject" — same field related_service.py treats as NOI's
+            # title elsewhere (see its title_fields comment).
             "noi_package": noi.package if noi else None,
             "issue_date": noi.issueDate if noi else None,
             "vendor_name": vendor_name,

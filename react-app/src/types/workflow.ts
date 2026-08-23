@@ -37,6 +37,10 @@ export interface Checkpoint {
     key: CheckpointKey;
     state: CheckpointState;
     done: boolean;
+    // For the 5 NCR-derived checkpoints: id of the first NCR whose own
+    // predicate fails, i.e. the specific record actually blocking this
+    // checkpoint. Null when not NCR-derived, or already satisfied.
+    blocking_ncr_id: string | null;
 }
 
 export interface WorkflowSummary {

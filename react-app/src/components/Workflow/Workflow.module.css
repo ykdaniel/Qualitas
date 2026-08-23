@@ -65,7 +65,8 @@
 }
 
 .table th.stickyCol,
-.table th.stickyCol2 {
+.table th.stickyCol2,
+.table th.percentCol {
   background: #f9fafb;
 }
 
@@ -73,6 +74,16 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* NOI's checkpoint/scope description — not sticky (unlike reference/NOI),
+   since it's supplementary context, not a primary identifier; letting it
+   scroll away with the checkpoint strip keeps the sticky-left group from
+   eating further into the space the 9 checkpoints need. */
+.subjectCol {
+  min-width: 160px;
+  max-width: 220px;
+  text-align: left;
 }
 
 .ncrCell {
@@ -203,9 +214,18 @@
   box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.25);
 }
 
+/* The completion % is the single most important number on this page (it's
+   what "spot the stragglers" is sorted by) — pin it to the right, same as
+   the reference/NOI columns are pinned left, so it's never scrolled out of
+   view behind the 9-checkpoint strip (that strip alone is wider than most
+   viewports at 9 * 88px min-width). */
 .percentCol {
   text-align: center;
   min-width: 64px;
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  border-left: 1px solid #e5e7eb;
 }
 
 .percentCell {
@@ -213,6 +233,11 @@
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   color: #111827;
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: white;
+  border-left: 1px solid #f3f4f6;
 }
 
 .row {
@@ -225,7 +250,8 @@
 }
 
 .row:hover .stickyCol,
-.row:hover .stickyCol2 {
+.row:hover .stickyCol2,
+.row:hover .percentCell {
   background: #f9fafb;
 }
 
