@@ -21,10 +21,13 @@
 }
 
 /* ======== Top Navigation ======== */
-/* Sticky wrapper: keeps Back/Print/Edit + hero card pinned */
+/* Sticky wrapper: keeps Back/Print/Edit + hero card pinned.
+   top: 56px, not 0 — AppLayout's own .topBar (the breadcrumb bar above
+   this page) is already sticky at top:0 with a higher z-index, so
+   sticking here at 0 too just gets hidden behind it on scroll. */
 .stickyHeader {
     position: sticky;
-    top: 0;
+    top: 56px;
     z-index: 20;
     background: #f3f4f6;
     margin: 0 -24px;
@@ -264,6 +267,18 @@
     justify-content: space-between;
 }
 
+/* Force every character in the "{chapter_no} {title}" text — including
+   the "." in "1.0" — to the same dark color. Reported: some browsers'
+   print/PDF export renders the "." in a chapter number as a stray accent
+   color (observed consistently across every chapter, unrelated to any
+   background/::before rule found in this file or kmArticle.css — most
+   likely a WebKit data-detector/system-accent-color artifact rather than
+   anything this stylesheet controls). !important + explicit color on the
+   text node's own span neutralizes it regardless of the actual source. */
+.chapterTitle > span:first-child {
+    color: #1e293b !important;
+}
+
 .chapterEditBtn {
     background: none;
     border: 1px solid transparent;
@@ -410,6 +425,16 @@
     display: flex;
     align-items: center;
     gap: 12px;
+    text-decoration: none;
+    cursor: pointer;
+    border-radius: 8px;
+    padding: 4px;
+    margin: -4px;
+    transition: background-color 0.15s;
+}
+
+.attachmentItem:hover {
+    background-color: #f1f5f9;
 }
 
 .attachmentIconBox {
@@ -595,21 +620,52 @@
         font-weight: 600;
     }
 
-    /* ---- Chapter content ---- */
+    /* ---- Chapter content ----
+       Page break only before TOP-LEVEL chapters (data-depth="0", e.g.
+       "1.0", "2.0"). Applying it to every row used to also break before
+       every nested sub-chapter (4.1, 4.1.1, ...), which produces a lot of
+       near-empty pages for deeply-structured documents — sub-chapters
+       should just flow within their parent's pages. */
     .chapterSection {
-        page-break-before: always;
         margin: 0 !important;
     }
 
-    /* First chapter doesn't need an extra page break — the index page
-       already ends with page-break-after: always, so the first chapter
+    .chapterSection[data-depth="0"] {
+        page-break-before: always;
+    }
+
+    /* First top-level chapter doesn't need an extra page break — the
+       index page already ends with page-break-after: always, so it
        naturally lands on page 2. */
-    .chapterSection:first-of-type {
+    .chapterSection[data-depth="0"]:first-of-type {
         page-break-before: auto;
     }
 
+    /* Avoid a heading stranded alone at the bottom of a page, or a
+       paragraph's last/first line orphaned across a page break. */
+    .chapterTitle {
+        page-break-after: avoid;
+    }
+    .editorContainer :global(p),
+    .editorContainer :global(li) {
+        orphans: 2;
+        widows: 2;
+    }
+
+    /* font-family forced to plain system fonts for print specifically:
+       the screen stack starts with "Calibri" (a licensed Microsoft font
+       not installed on macOS), and print's font-resolution pipeline can
+       pick a different fallback per-character than the on-screen renderer
+       does — observed as the "." in a chapter number like "1.0" coming out
+       in a stray accent color in exported PDFs (both Safari and Chrome,
+       print-only, not reproducible on screen — consistent with a color/
+       emoji-adjacent glyph substitution for the missing-font fallback
+       rather than anything controllable via the `color` property, which
+       is why the color !important below alone didn't fix it). */
     .chapterTitle {
         font-size: 16pt !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial,
+            "Microsoft JhengHei", "微軟正黑體", "PingFang TC", sans-serif !important;
         color: #000 !important;
         border-bottom-color: #000 !important;
         margin-top: 0 !important;

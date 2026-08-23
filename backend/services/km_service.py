@@ -462,17 +462,16 @@ class KMService:
         root_id = book.parent_id or book.id
         root = self.repo.get_by_id(root_id)
         children = self.repo.get_children(root_id)
-        all_chapters = children if children else [root]
 
-        # Build a map: chapter_no → db article
+        # Build a map: chapter_no → db article (multi-chapter books only —
+        # single-chapter books skip per-heading matching entirely below,
+        # since a book with no chapter_no of its own can never match any
+        # heading text by prefix).
         chapter_map = {
             (ch.chapter_no or '').strip(): ch
-            for ch in all_chapters
+            for ch in children
             if ch.chapter_no
         }
-        # Also include root (no chapter_no) for single-chapter books
-        if not children:
-            chapter_map['__root__'] = root
 
         # Save upload to temp file
         contents = file.file.read()
@@ -502,47 +501,77 @@ class KMService:
         from bs4 import BeautifulSoup
         soup = BeautifulSoup(html, 'html.parser')
 
-        # Walk top-level elements, split at h2/h3/h4 headings
+        # Walk top-level elements, split at h2/h3/h4 headings. Anything
+        # before the first heading (a preamble with no heading of its own)
+        # is still captured — under the previous logic it was silently
+        # dropped, since `current` starts as None and elements are only
+        # appended once a heading has been seen.
         sections: list[dict] = []
-        current: dict | None = None
+        current: dict | None = {'heading': '', 'html_parts': []}
 
         for el in soup.body.children if soup.body else []:
             tag = getattr(el, 'name', None)
             if tag in ('h2', 'h3', 'h4'):
-                if current is not None:
+                if current is not None and (current['heading'] or current['html_parts']):
                     sections.append(current)
                 current = {'heading': el.get_text(strip=True), 'html_parts': []}
             elif current is not None and tag:
                 current['html_parts'].append(str(el))
 
-        if current is not None:
+        if current is not None and (current['heading'] or current['html_parts']):
             sections.append(current)
 
-        # Match sections to chapters
         updated = []
         skipped = []
 
-        for sec in sections:
-            heading = sec['heading']
-            content_html = '\n'.join(sec['html_parts'])
+        if not children:
+            # Single-chapter book: there is exactly one possible target
+            # (root itself has no chapter_no to match headings against),
+            # so import the whole document into it rather than trying —
+            # and failing — to match per-heading.
+            combined_html = '\n'.join(
+                (f"<h2>{sec['heading']}</h2>" if sec['heading'] else '')
+                + '\n'.join(sec['html_parts'])
+                for sec in sections
+            )
+            update_data = schemas.KMArticleUpdate(content=combined_html)
+            self.update_article(root.id, update_data)
+            updated.append({'chapter_no': None, 'title': root.title})
+        else:
+            for sec in sections:
+                heading = sec['heading']
+                if not heading:
+                    # Preamble content with no heading can't be matched to
+                    # a specific chapter in a multi-chapter book.
+                    if sec['html_parts']:
+                        skipped.append('(content before first heading)')
+                    continue
+                content_html = '\n'.join(sec['html_parts'])
 
-            # Try to find matching chapter: heading starts with chapter_no
-            matched_ch = None
-            matched_no = None
-            for ch_no, ch in chapter_map.items():
-                if ch_no and heading.startswith(ch_no):
+                # Match heading to chapter_no by prefix, requiring a
+                # boundary right after the prefix (whitespace/punctuation/
+                # end-of-string) so chapter "1" doesn't match a heading
+                # like "15 Other Notes".
+                matched_ch = None
+                matched_no = None
+                for ch_no, ch in chapter_map.items():
+                    if not ch_no or not heading.startswith(ch_no):
+                        continue
+                    rest = heading[len(ch_no):]
+                    if rest and rest[0].isalnum():
+                        continue
                     # Prefer longer (more specific) match
                     if matched_no is None or len(ch_no) > len(matched_no):
                         matched_ch = ch
                         matched_no = ch_no
 
-            if matched_ch is None:
-                skipped.append(heading)
-                continue
+                if matched_ch is None:
+                    skipped.append(heading)
+                    continue
 
-            update_data = schemas.KMArticleUpdate(content=content_html)
-            self.update_article(matched_ch.id, update_data)
-            updated.append({'chapter_no': matched_no, 'title': matched_ch.title})
+                update_data = schemas.KMArticleUpdate(content=content_html)
+                self.update_article(matched_ch.id, update_data)
+                updated.append({'chapter_no': matched_no, 'title': matched_ch.title})
 
         return {
             'updated': updated,
@@ -585,9 +614,15 @@ class KMService:
         upload_dir = os.path.join(base_dir, "uploads", "km")
         os.makedirs(upload_dir, exist_ok=True)
 
-        file_uuid = str(uuid.uuid4())
-        safe_filename = (file.filename or "file").replace(" ", "_")
-        filename = f"km_{file_uuid}_{safe_filename}"
+        # Discard the client-supplied filename for the saved path entirely
+        # (only `ext`, already checked against ALLOWED_EXTENSIONS above,
+        # survives) — the old `.replace(" ", "_")` only stripped spaces,
+        # so a crafted filename like "../../../app/main.py" would still
+        # carry its "/" separators straight into os.path.join, escaping
+        # uploads/km/ when the file is opened for writing. Matches the
+        # same uuid-only pattern file_router.py's generic upload already
+        # uses.
+        filename = f"km_{uuid.uuid4().hex}{ext}"
         file_path = os.path.join(upload_dir, filename)
 
         with open(file_path, "wb") as buffer:

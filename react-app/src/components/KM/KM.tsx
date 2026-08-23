@@ -8,6 +8,14 @@ import { KMDetail } from './KMDetail';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './KM.module.css';
 
+/** Strip HTML tags to get plain text for search matching — DOMParser
+ *  rather than a naive regex/innerHTML so embedded onerror handlers etc.
+ *  in stored content are never executed just to search it. */
+function stripHtmlForSearch(html: string): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  return doc.body.textContent || '';
+}
+
 const KM: React.FC = () => {
   const { t } = useLanguage();
   const { kmList, loading, error, fetchKMs, deleteKM } = useKMStore();
@@ -37,15 +45,29 @@ const KM: React.FC = () => {
   }, [selectedArticleId, kmList]);
 
   // Client-side filtering — exclude child chapters (parent_id present)
+  // from the displayed rows, but a search query still checks INSIDE each
+  // book's chapters (title + body text), not just the book's own
+  // title/articleNo/tags — chapter content is where the actual knowledge
+  // lives, and it was previously unsearchable entirely.
   const filteredData = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
     return kmList.filter(article => {
       // Only show root/parent documents, not child chapters
       if (article.parent_id) return false;
-      const matchesSearch = article.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (article.articleNo && article.articleNo.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (article.tags && article.tags.toLowerCase().includes(searchQuery.toLowerCase()));
       const matchesCategory = categoryFilter === 'All' || article.category === categoryFilter;
-      return matchesSearch && matchesCategory;
+      if (!matchesCategory) return false;
+      if (!query) return true;
+
+      const matchesOwnFields = article.title.toLowerCase().includes(query) ||
+        (article.articleNo && article.articleNo.toLowerCase().includes(query)) ||
+        (article.tags && article.tags.toLowerCase().includes(query));
+      if (matchesOwnFields) return true;
+
+      const children = kmList.filter(k => k.parent_id === article.id);
+      return children.some(ch =>
+        ch.title.toLowerCase().includes(query) ||
+        stripHtmlForSearch(ch.content || '').toLowerCase().includes(query)
+      );
     });
   }, [kmList, searchQuery, categoryFilter]);
 
@@ -103,6 +125,7 @@ const KM: React.FC = () => {
                 <option value="Quality">Quality</option>
                 <option value="Procedure">Procedure</option>
                 <option value="Guidelines">Guidelines</option>
+                <option value="Definition">Definition</option>
               </select>
               <input
                 type="text"

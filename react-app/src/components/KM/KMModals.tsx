@@ -44,7 +44,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
     });
 
     // Dynamic Chapters State
-    const [chapters, setChapters] = useState<Array<{ id?: string, title: string, content: string, chapter_no: string, deleted?: boolean }>>([
+    const [chapters, setChapters] = useState<Array<{ id?: string, title: string, content: string, chapter_no: string, deleted?: boolean, version_no?: number }>>([
         { title: 'Chapter 1', content: '', chapter_no: '1.0' }
     ]);
 
@@ -91,7 +91,8 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
                                 id: c.id,
                                 title: c.title,
                                 content: injectAuthTokenIntoHtml(c.content),
-                                chapter_no: c.chapter_no || ''
+                                chapter_no: c.chapter_no || '',
+                                version_no: c.version_no
                             })));
                         } else {
                             // If it has content itself, convert to first chapter
@@ -679,7 +680,10 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
         }
     };
 
-    const removeAttachment = (indexToRemove: number) => {
+    const removeAttachment = (indexToRemove: number, attachmentLabel: string) => {
+        if (!window.confirm(`確定要移除附件「${attachmentLabel}」嗎？此動作在儲存前可以復原（尚未儲存），但儲存後將無法復原。`)) {
+            return;
+        }
         setFormData(prev => {
             let currentAttachments: KMAttachment[] = [];
             if (typeof prev.attachments === 'string') {
@@ -739,30 +743,28 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
             // test article on 2026-04-11).
             const nextChaptersState: typeof chapters = [];
 
-            for (const ch of chapters) {
-                if (ch.deleted && ch.id) {
-                    await kmService.delete(ch.id);
-                    // Dropped from next state.
-                } else if (ch.deleted && !ch.id) {
-                    // Was added and removed in the same session, nothing to persist.
-                } else if (!ch.deleted && ch.id) {
-                    await kmService.update(ch.id, {
-                        title: ch.title,
-                        content: stripAuthTokenFromHtml(ch.content),
-                        chapter_no: ch.chapter_no,
-                        parent_id: mainId,
-                        category: mainDocData.category,
-                        tags: mainDocData.tags,
-                        status: mainDocData.status
-                    } as KMArticleUpdate);
-                    nextChaptersState.push(ch);
-                } else if (!ch.deleted && !ch.id) {
-                    // Only materialise new sub-chapters if there's more than one
-                    // active chapter, OR the single chapter's title diverges
-                    // from the main doc title (i.e. it's not just the main doc
-                    // masquerading as a chapter).
-                    if (activeChapters.length > 1 || (activeChapters.length === 1 && ch.title !== mainDocData.title)) {
-                        const created = await kmService.create({
+            // If any one chapter call throws partway through, whatever was
+            // already successfully created/updated must still be written
+            // back to state before the error propagates — otherwise the
+            // just-created chapters' new server ids are lost, and retrying
+            // re-POSTs them as brand-new rows (the same "12-chapter mess"
+            // failure mode the comment above describes, just triggered by
+            // a failure instead of a retry). Chapters at/after the one
+            // that failed are pushed through unchanged in the catch below
+            // so they don't just vanish from the form's local state either
+            // — they're untouched on the server, so the local state should
+            // reflect that, not disappear.
+            let loopError: unknown = null;
+            for (let i = 0; i < chapters.length; i++) {
+                const ch = chapters[i];
+                try {
+                    if (ch.deleted && ch.id) {
+                        await kmService.delete(ch.id);
+                        // Dropped from next state.
+                    } else if (ch.deleted && !ch.id) {
+                        // Was added and removed in the same session, nothing to persist.
+                    } else if (!ch.deleted && ch.id) {
+                        const updatedCh = await kmService.update(ch.id, {
                             title: ch.title,
                             content: stripAuthTokenFromHtml(ch.content),
                             chapter_no: ch.chapter_no,
@@ -770,19 +772,48 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
                             category: mainDocData.category,
                             tags: mainDocData.tags,
                             status: mainDocData.status,
-                            attachments: [] // Child chapters don't carry attachments.
-                        } as KMArticleCreate);
-                        // IMPORTANT: remember the new server id so that a
-                        // subsequent Save in the same session UPDATEs this
-                        // row instead of creating another copy.
-                        nextChaptersState.push({ ...ch, id: created?.id });
-                    } else {
-                        nextChaptersState.push(ch);
+                            version_no: ch.version_no
+                        } as KMArticleUpdate);
+                        // Carry the post-save version_no forward so the
+                        // NEXT save in this session (if any) sends the
+                        // right expected version instead of a stale one
+                        // that would spuriously 409 against itself.
+                        nextChaptersState.push({ ...ch, version_no: updatedCh?.version_no ?? ch.version_no });
+                    } else if (!ch.deleted && !ch.id) {
+                        // Only materialise new sub-chapters if there's more than one
+                        // active chapter, OR the single chapter's title diverges
+                        // from the main doc title (i.e. it's not just the main doc
+                        // masquerading as a chapter).
+                        if (activeChapters.length > 1 || (activeChapters.length === 1 && ch.title !== mainDocData.title)) {
+                            const created = await kmService.create({
+                                title: ch.title,
+                                content: stripAuthTokenFromHtml(ch.content),
+                                chapter_no: ch.chapter_no,
+                                parent_id: mainId,
+                                category: mainDocData.category,
+                                tags: mainDocData.tags,
+                                status: mainDocData.status,
+                                attachments: [] // Child chapters don't carry attachments.
+                            } as KMArticleCreate);
+                            // IMPORTANT: remember the new server id so that a
+                            // subsequent Save in the same session UPDATEs this
+                            // row instead of creating another copy.
+                            nextChaptersState.push({ ...ch, id: created?.id, version_no: created?.version_no });
+                        } else {
+                            nextChaptersState.push(ch);
+                        }
                     }
+                } catch (err) {
+                    loopError = err;
+                    // Preserve the failed chapter and everything after it
+                    // (never reached) as-is, so nothing disappears from
+                    // the form even though the save didn't complete.
+                    nextChaptersState.push(...chapters.slice(i));
+                    break;
                 }
             }
-
             setChapters(nextChaptersState);
+            if (loopError) throw loopError;
 
             // Refresh data via store
             await useKMStore.getState().fetchKMs();
@@ -790,7 +821,10 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
             onClose();
 
         } catch (err: any) {
-            toast.error(err.message || 'Error saving KM article and chapters');
+            // err.message alone is just axios's generic "Request failed
+            // with status code 409" — the useful text (e.g. the version
+            // conflict message) is in the backend's response body.
+            toast.error(err?.response?.data?.detail || err.message || 'Error saving KM article and chapters');
         } finally {
             setLoading(false);
         }
@@ -798,7 +832,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
 
     return (
         <div className={formStyles.modalOverlay}>
-            <div className={formStyles.modalContent}>
+            <div className={`${formStyles.modalContent} ${styles.kmModalContent}`}>
                 <div className={formStyles.modalHeader}>
                     <h2>{id ? (t('km.edit') || 'Edit Article') : (t('km.create') || 'Create Article')}</h2>
                     <button type="button" className={formStyles.closeButton} onClick={onClose}>&times;</button>
@@ -908,6 +942,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
                                             <option value="Quality">Quality</option>
                                             <option value="Procedure">Procedure</option>
                                             <option value="Guidelines">Guidelines</option>
+                                            <option value="Definition">Definition</option>
                                         </select>
                                     </div>
                                     <div className={formStyles.formGroup}>
@@ -1140,7 +1175,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
                                         {attList.map((att, idx) => (
                                             <div key={idx} className={styles.attachmentBadge}>
                                                 <span className={styles.attachmentBadgeName}>{att.name || att.filename} ({att.size})</span>
-                                                <button type="button" onClick={() => removeAttachment(idx)} className={styles.attachmentRemoveBtn}>&times;</button>
+                                                <button type="button" onClick={() => removeAttachment(idx, att.name || att.filename || `File_${idx + 1}`)} className={styles.attachmentRemoveBtn}>&times;</button>
                                             </div>
                                         ))}
                                     </div>

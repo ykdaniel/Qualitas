@@ -155,7 +155,7 @@ const AppLayout = () => {
 
   return (
     <div className={styles.shell}>
-      <aside className={styles.sidebar}>
+      <aside className={`${styles.sidebar} no-print`}>
         <div className={styles.sidebarBrand}>
           <div className={styles.logoMark}>Q</div>
           <div>
@@ -197,7 +197,7 @@ const AppLayout = () => {
       </aside>
 
       <div className={styles.mainColumn}>
-        <header className={styles.topBar}>
+        <header className={`${styles.topBar} no-print`}>
           <nav className={styles.breadcrumb} aria-label="breadcrumb">
             <button
               type="button"

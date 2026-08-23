@@ -11,6 +11,13 @@ interface KMHistoryModalProps {
     isOpen: boolean;
     onClose: () => void;
     articleId: string;
+    /** For a multi-chapter book: every chapter is its own KMArticle row
+     *  with its own independent history, keyed to its own id — the book's
+     *  own history alone is essentially always empty once it has real
+     *  chapters, since editing happens at the chapter level. When more
+     *  than one entry is passed, a selector lets the user pick which
+     *  chapter's history to view (defaults to `articleId`). */
+    chapters?: { id: string; title: string; chapter_no?: string | null }[];
 }
 
 /** Strip HTML tags from a string to get plain text for diffing.
@@ -56,30 +63,38 @@ interface ModalState {
     prevVersion?: KMArticleHistory;
 }
 
-export const KMHistoryModal: React.FC<KMHistoryModalProps> = ({ isOpen, onClose, articleId }) => {
+export const KMHistoryModal: React.FC<KMHistoryModalProps> = ({ isOpen, onClose, articleId, chapters }) => {
     const [history, setHistory] = useState<KMArticleHistory[]>([]);
     const [loading, setLoading] = useState(false);
     const [modal, setModal] = useState<ModalState | null>(null);
+    const [selectedId, setSelectedId] = useState(articleId);
 
-    const fetchHistory = useCallback(async () => {
+    // Reset to the book's own id whenever the modal is (re)opened for a
+    // different article, rather than sticking on whatever chapter was last
+    // selected in a previous viewing session.
+    useEffect(() => {
+        setSelectedId(articleId);
+    }, [articleId]);
+
+    const fetchHistory = useCallback(async (id: string) => {
         setLoading(true);
         try {
-            const data = await kmService.getHistory(articleId);
+            const data = await kmService.getHistory(id);
             setHistory(data);
         } catch (error) {
             console.error('Failed to fetch history:', error);
         } finally {
             setLoading(false);
         }
-    }, [articleId]);
+    }, []);
 
     useEffect(() => {
-        if (isOpen && articleId) {
-            fetchHistory();
+        if (isOpen && selectedId) {
+            fetchHistory(selectedId);
         } else {
             setModal(null);
         }
-    }, [isOpen, articleId, fetchHistory]);
+    }, [isOpen, selectedId, fetchHistory]);
 
     if (!isOpen) return null;
 
@@ -221,6 +236,25 @@ export const KMHistoryModal: React.FC<KMHistoryModalProps> = ({ isOpen, onClose,
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                     </button>
                 </div>
+
+                {chapters && chapters.length > 1 && (
+                    <div style={{ padding: '10px 24px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                        <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>
+                            章節（每個章節的版本歷史各自獨立）
+                        </label>
+                        <select
+                            value={selectedId}
+                            onChange={e => setSelectedId(e.target.value)}
+                            style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                        >
+                            {chapters.map(ch => (
+                                <option key={ch.id} value={ch.id}>
+                                    {ch.chapter_no ? `${ch.chapter_no} ` : ''}{ch.title}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}
 
                 <div className={styles.drawerBody}>
                     {loading ? (

@@ -60,4 +60,6 @@ export interface KMArticleUpdate {
   attachments?: KMAttachment[] | string;
   parent_id?: string | null;
   chapter_no?: string | null;
+  version_no?: number;
+  change_summary?: string;
 }

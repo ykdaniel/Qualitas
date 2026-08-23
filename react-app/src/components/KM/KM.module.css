@@ -8,6 +8,17 @@
   padding: 16px 24px 40px;
 }
 
+/* KMDetail.module.css already strips its OWN container's background for
+   print, but this outer wrapper (a separate CSS-modules-scoped .container,
+   despite the same source name) sits above it and was still painting the
+   page gray underneath — nothing in KMDetail's print block can reach it. */
+@media print {
+  .container {
+    background: white !important;
+    padding: 0 !important;
+  }
+}
+
 .header {
   display: flex;
   align-items: center;

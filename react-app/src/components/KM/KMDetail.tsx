@@ -11,6 +11,7 @@ import { KMHistoryModal } from './KMHistoryModal';
 import { SectionToc } from './SectionToc';
 import { extractSectionToc, computeNumberedLevel, stripDecorativeZeros, compareChapterNo } from '../../utils/extractSectionToc';
 import { injectAuthTokenIntoHtml } from '../../utils/authUrl';
+import { getAuthenticatedFileUrl } from '../../services/api';
 import { kmService } from '../../services/kmService';
 import styles from './KMDetail.module.css';
 
@@ -52,7 +53,7 @@ const ChapterSection: React.FC<ChapterSectionProps> = ({
     const depth = Math.max(0, (chNoClean.match(/\./g) || []).length);
 
     return (
-        <div id={`chapter-${chapter.id}`} className={styles.chapterSection} style={{ marginLeft: depth * 32 }}>
+        <div id={`chapter-${chapter.id}`} className={styles.chapterSection} data-depth={depth} style={{ marginLeft: depth * 32 }}>
             {showDivider && <hr className={styles.chapterDivider} />}
             {showTitle && (
                 <h2 className={styles.chapterTitle}>
@@ -446,7 +447,13 @@ export const KMDetail: React.FC<KMDetailProps> = ({ article, onClose, onEdit, on
 
                                     if (Array.isArray(parsedAttachments) && parsedAttachments.length > 0) {
                                         return parsedAttachments.map((att: any, idx: number) => (
-                                            <div key={idx} className={styles.attachmentItem}>
+                                            <a
+                                                key={idx}
+                                                className={styles.attachmentItem}
+                                                href={getAuthenticatedFileUrl(att.url)}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                            >
                                                 <div className={`${styles.attachmentIconBox} ${styles.iconBlue}`}>
                                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                                                 </div>
@@ -454,7 +461,7 @@ export const KMDetail: React.FC<KMDetailProps> = ({ article, onClose, onEdit, on
                                                     <span className={styles.attachmentName}>{att.name || att.filename || `File_${idx + 1}`}</span>
                                                     <span className={styles.attachmentSize}>{att.size || 'Unknown size'}</span>
                                                 </div>
-                                            </div>
+                                            </a>
                                         ));
                                     }
                                 } catch (e) {
@@ -472,11 +479,15 @@ export const KMDetail: React.FC<KMDetailProps> = ({ article, onClose, onEdit, on
                 </div>
             </div>
 
-            {/* History Modal Drawer */}
+            {/* History Modal Drawer. Defaults to the first chapter's history
+                rather than the book's own (a multi-chapter book's own
+                history is essentially always empty — editing happens at
+                the chapter level; see KMHistoryModal's `chapters` prop). */}
             <KMHistoryModal
                 isOpen={isHistoryModalOpen}
                 onClose={() => setIsHistoryModalOpen(false)}
-                articleId={article.id}
+                articleId={sortedChapters[0]?.id || article.id}
+                chapters={sortedChapters.map(ch => ({ id: ch.id, title: ch.title, chapter_no: ch.chapter_no }))}
             />
         </div>
     );

@@ -129,6 +129,17 @@
   cursor: not-allowed;
 }
 
+/* KM documents run long (multi-chapter contract clauses etc.) — the shared
+   FormShell modal cap (1400px / 90vh) leaves too little room to edit
+   comfortably, so give this specific modal near-full-screen space instead
+   of widening the shared modal frame every other module's forms also use. */
+.kmModalContent {
+  width: 98vw;
+  max-width: 1800px;
+  height: 94vh;
+  max-height: 94vh;
+}
+
 /* Fix ReactQuill specific wrappers */
 .editorWrapper {
   display: flex;

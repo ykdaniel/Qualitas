@@ -8,6 +8,17 @@
   color: #2d2a24;
 }
 
+/* .sidebar/.topBar are hidden via the global .no-print class, but that
+   only hides those two children — .shell itself keeps painting this cream
+   background behind whatever page content remains, and print forces exact
+   color rendering (index.css: print-color-adjust: exact), so it still
+   shows through unless reset here too. */
+@media print {
+  .shell {
+    background: white !important;
+  }
+}
+
 /* ─── Sidebar ───────────────────────────────────────────────── */
 
 .sidebar {
