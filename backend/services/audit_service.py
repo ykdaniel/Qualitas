@@ -145,6 +145,24 @@ class AuditService:
 
         # Store old values for audit log
         old_value = {c.name: getattr(db_audit, c.name) for c in db_audit.__table__.columns}
+
+        # Guard: a Closed Audit is a true dead end — WorkflowEngine's Audit
+        # transitions (core/utils.py) define "Closed": [], no reopen path
+        # exists at all (same shape as NOI). Safe to lock unconditionally
+        # (no permission escape hatch) since there's no legitimate
+        # "reopen and edit" flow to accidentally break. Compare against the
+        # DB's current values, not mere key-presence, since the frontend
+        # resends the whole record on every save.
+        if db_audit.status == 'Closed':
+            changed_fields = {
+                k for k, v in update_data.items() if v != old_value.get(k)
+            }
+            if changed_fields:
+                raise ValueError(
+                    f"Cannot modify a closed Audit '{db_audit.auditNo}' — "
+                    f"no fields can be changed once an audit is closed."
+                )
+
         processed_data = {}
 
         for key, value in update_data.items():

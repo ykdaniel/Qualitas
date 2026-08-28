@@ -1,12 +1,14 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { toast } from 'sonner';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import { Plus, Printer, Info, MapPin, CheckCircle, AlertCircle, Trash2, XCircle, HelpCircle, User, Signature, Activity, BarChart3, TrendingUp, Search } from 'lucide-react';
 import { useChecklistStore, ChecklistRecord } from '../../store/checklistStore';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
+import ChecklistPrintTemplate from './ChecklistPrintTemplate';
 import styles from './Checklist.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import { useDebounce } from '../../hooks/useDebounce';
@@ -51,6 +53,7 @@ const itpDatabase: ItpItemDefinition[] = [
 
 const Checklist: React.FC = () => {
     const { t } = useLanguage();
+    const { hasPermission } = useAuth();
     const navigate = useNavigate();
     const { records, deleteRecord, addRecord, updateRecord, refreshRecords } = useChecklistStore();
     const [view, setView] = useState<'list' | 'editor'>('list');
@@ -83,22 +86,25 @@ const Checklist: React.FC = () => {
         return records.filter(r => r.status === target);
     }, [records, statusFilter]);
 
-    // Check for query param 'recordNo' to open specific record
-    const [searchParams] = useSearchParams();
-    const recordNoParam = searchParams.get('recordNo');
+    // Deep-link: open a specific record via ?openId=<id-or-recordsNo>&from=<source>
+    const [searchParams, setSearchParams] = useSearchParams();
     const fromSource = searchParams.get('from');
+    const deepLinkAppliedRef = useRef(false);
 
     React.useEffect(() => {
-        if (recordNoParam && records.length > 0) {
-            const found = records.find(r => r.recordsNo === recordNoParam);
-            if (found) {
-                setEditingRecord(found);
-                setView('editor');
-            } else {
-                toast.error(t('checklist.recordNotFound') || 'Record not found');
-            }
-        }
-    }, [recordNoParam, records, t, fromSource, editingRecord]);
+        if (deepLinkAppliedRef.current) return;
+        const openId = searchParams.get('openId');
+        if (!openId) return;
+        if (records.length === 0) return;
+        const found = records.find(r => r.id === openId || r.recordsNo === openId);
+        if (!found) return;
+        setEditingRecord(found);
+        setView('editor');
+        deepLinkAppliedRef.current = true;
+        const next = new URLSearchParams(searchParams);
+        next.delete('openId');
+        setSearchParams(next, { replace: true });
+    }, [searchParams, records, setSearchParams]);
 
     const handleBack = () => {
         if (fromSource === 'itp' || fromSource === 'itr') {
@@ -266,9 +272,11 @@ const Checklist: React.FC = () => {
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                 />
                             </div>
-                            <button type="button" onClick={handleAddNew} className={shellStyles.addNewButton}>
-                                <Plus size={16} /> {t('checklist.addNew') || 'New Checklist'}
-                            </button>
+                            {hasPermission('checklist:create:all') && (
+                                <button type="button" onClick={handleAddNew} className={shellStyles.addNewButton}>
+                                    <Plus size={16} /> {t('checklist.addNew') || 'New Checklist'}
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -289,6 +297,21 @@ const Checklist: React.FC = () => {
                     record={editingRecord}
                     onCancel={handleBack}
                     saving={saving}
+                    // §17: a bare template (itrId & templateId both null) must never take real
+                    // pass/fail results directly — force read-only regardless of permission,
+                    // so it stays reusable/clean for future "Generate Checklist" links.
+                    isBareTemplate={!!editingRecord && !editingRecord.itrId && !editingRecord.templateId}
+                    readOnly={
+                        (!!editingRecord && !editingRecord.itrId && !editingRecord.templateId)
+                            ? true
+                            : !(
+                                !editingRecord
+                                    ? hasPermission('checklist:create:all')
+                                    : (editingRecord.status === 'Pass' || editingRecord.status === 'Fail')
+                                        ? hasPermission('checklist:close:all')
+                                        : hasPermission('checklist:update:all')
+                            )
+                    }
                     onSave={async (data) => {
                         setSaving(true);
                         try {
@@ -305,6 +328,29 @@ const Checklist: React.FC = () => {
                             setSaving(false);
                         }
                     }}
+                    // Backend locks detail_data/passCount/failCount once Pass/Fail
+                    // (checklist_service.py) — Reopen is the only way back to
+                    // Ongoing, since status has no manual dropdown otherwise
+                    // (it's always re-derived from item results on Save).
+                    canReopen={
+                        !!editingRecord &&
+                        (editingRecord.status === 'Pass' || editingRecord.status === 'Fail') &&
+                        hasPermission('checklist:close:all')
+                    }
+                    onReopen={async () => {
+                        if (!editingRecord) return;
+                        setSaving(true);
+                        try {
+                            await updateRecord(editingRecord.id, { status: 'Ongoing' } as any);
+                            const refreshed = records.find(r => r.id === editingRecord.id);
+                            if (refreshed) setEditingRecord(refreshed);
+                        } catch (err: any) {
+                            const detail = getErrorMessage(err, t('common.saveFailed'));
+                            toast.error(detail);
+                        } finally {
+                            setSaving(false);
+                        }
+                    }}
                     selectedItpIndex={selectedItpIndex}
                     dynamicItpDatabase={dynamicItpDatabase}
                 />
@@ -314,11 +360,15 @@ const Checklist: React.FC = () => {
 };
 
 
-const ChecklistEditor = ({ record, onCancel, onSave, saving, selectedItpIndex, dynamicItpDatabase }: {
+const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, isBareTemplate = false, canReopen = false, onReopen, selectedItpIndex, dynamicItpDatabase }: {
     record: ChecklistRecord | null,
     onCancel: () => void,
     onSave: (data: any) => Promise<void>,
     saving?: boolean,
+    readOnly?: boolean,
+    isBareTemplate?: boolean,
+    canReopen?: boolean,
+    onReopen?: () => Promise<void>,
     selectedItpIndex: number,
     dynamicItpDatabase: ItpItemDefinition[]
 }) => {
@@ -438,13 +488,6 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, selectedItpIndex, d
 
     const handlePrint = () => setIsPrinting(true);
 
-    // 補足空行邏輯 (A4 列印優化)
-    const paddingRows = useMemo(() => {
-        // 使用者要求：Checklist List 列印時 空白欄只要1蘭就好
-        // Change logic to just 1 blank row instead of filling up to 8
-        return [null];
-    }, []);
-
     return (
         <div className={styles.editorWrapper}>
             {/* --- Web view (Editing) --- */}
@@ -459,6 +502,7 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, selectedItpIndex, d
                                 onChange={(e) => setFormData({ ...formData, activity: e.target.value })}
                                 placeholder={t('checklist.activityPlaceholder') || 'Enter Activity Name...'}
                                 list="editor-itp-options"
+                                disabled={readOnly}
                             />
                             <datalist id="editor-itp-options">
                                 {dynamicItpDatabase.map((itp, idx) => (
@@ -483,6 +527,17 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, selectedItpIndex, d
                         >
                             <Printer size={16} /> {t('common.print')}
                         </button>
+                        {canReopen && onReopen && (
+                        <button
+                            disabled={saving}
+                            onClick={onReopen}
+                            className="flex items-center gap-2 px-4 py-2 border border-amber-300 bg-amber-50 text-amber-700 rounded-lg font-bold text-sm hover:bg-amber-100 transition-colors disabled:opacity-50"
+                            title={t('checklist.reopenHint') || 'Switch back to Ongoing so inspection results can be edited again'}
+                        >
+                            {t('checklist.reopen') || 'Reopen'}
+                        </button>
+                        )}
+                        {!readOnly && (
                         <button
                             disabled={saving}
                             onClick={() => onSave({
@@ -508,11 +563,24 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, selectedItpIndex, d
                         >
                             {saving ? t('common.saving') : t('common.save')}
                         </button>
+                        )}
                         <button onClick={onCancel} className="px-4 py-2 text-slate-500 hover:text-slate-800 font-bold text-sm">
                             {t('common.cancel')}
                         </button>
                     </div>
                 </div>
+
+                {isBareTemplate && (
+                    <div style={{
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        margin: '0 0 16px', padding: '10px 16px',
+                        background: '#fef3c7', border: '1px solid #f59e0b',
+                        borderRadius: '8px', color: '#92400e', fontSize: '13px', fontWeight: 600,
+                    }}>
+                        <Info size={16} />
+                        {t('checklist.templateModeBanner') || 'Template Mode — this is a reusable blank template (not yet linked to an ITR). It is locked read-only so it stays clean for future "Generate Checklist" links; pass/fail results can only be entered after it is linked.'}
+                    </div>
+                )}
 
                 <div className={styles.tabsContainer}>
                     <button
@@ -529,6 +597,10 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, selectedItpIndex, d
                         {` (${formData.items.length})`}
                     </button>
                 </div>
+
+                {/* A single disabled fieldset locks every input/select/textarea/button
+                    below in one shot when readOnly (closed record, insufficient permission). */}
+                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
 
                 {/* --- Project Information --- */}
                 {activeTab === 'general' && (
@@ -581,7 +653,10 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, selectedItpIndex, d
                                                 noiNumber: e.target.value,
                                                 packageName: selectedNoi?.package || formData.packageName,
                                                 contractor: selectedNoi?.contractor || formData.contractor,
-                                                location: selectedNoi?.checkpoint || formData.location,
+                                                // NOI has no location field — `checkpoint` is an H/W/S/R
+                                                // inspection-type code, not a place (see
+                                                // feedback_noi_title_field memory). Previously mismapped
+                                                // here; location stays whatever the user types.
                                                 activity: linkedItp?.description || formData.activity
                                             });
                                         }}
@@ -715,7 +790,9 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, selectedItpIndex, d
                                                 <div className="flex justify-center">
                                                     <div
                                                         className={`${styles.statusChip} ${item.result === 'O' ? styles.chipPass : (item.result === 'X' ? styles.chipFail : styles.chipNA)}`}
+                                                        style={readOnly ? { cursor: 'not-allowed', opacity: 0.6 } : undefined}
                                                         onClick={() => {
+                                                            if (readOnly) return;
                                                             const newItems = [...formData.items];
                                                             newItems[idx].result = newItems[idx].result === 'O' ? 'X' : (newItems[idx].result === 'X' ? '/' : 'O');
                                                             setFormData({ ...formData, items: newItems });
@@ -853,178 +930,13 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, selectedItpIndex, d
                         </div>
                     </>
                 )}
+                </fieldset>
             </div>
 
             {/* --- Print View (Portal) --- */}
             {/* Always render portal but hide via CSS to support Ctrl+P */}
             {ReactDOM.createPortal(
-                <div id="checklist-print-root" className={styles.printablePage}>
-                    <table className={styles.headerTable}>
-                        <tbody>
-                            <tr>
-                                <td className={styles.headerCompanyCol}>
-                                    <div className="font-bold text-lg">Qualitas</div>
-                                    <div className="text-[10px] leading-tight text-slate-500 uppercase">Construction Quality Control</div>
-                                </td>
-                                <td className={styles.headerTitleCol}>
-                                    <h2 className="text-xl font-black mb-1 uppercase">Field Inspection Checklist</h2>
-                                    <h3 className="text-sm font-bold text-slate-700 italic">{formData.activity || '[ Activity ]'}</h3>
-                                </td>
-                                <td className={styles.headerInfoCol}>
-                                    <div className={styles.headerInfoRow}>
-                                        <span className={styles.headerInfoLabel}>Doc No.</span>
-                                        <span className={styles.headerInfoValue}>{displayNo}</span>
-                                    </div>
-                                    <div className={styles.headerInfoRow}>
-                                        <span className={styles.headerInfoLabel}>Revision</span>
-                                        <span className={styles.headerInfoValue}>Rev.{formData.revision || '0'}</span>
-                                    </div>
-                                    <div className={styles.headerInfoRow}>
-                                        <span className={styles.headerInfoLabel}>Date</span>
-                                        <span className={styles.headerInfoValue}>{formData.inspectionDate}</span>
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-
-                    <div className={styles.infoGrid}>
-                        <div className={styles.infoItem}>
-                            <div className={styles.infoLabel}>Project Title</div>
-                            <div className={styles.infoValue}>
-                                {formData.projectTitle}
-                            </div>
-                        </div>
-                        <div className={styles.infoItem}>
-                            <div className={styles.infoLabel}>ITR No.</div>
-                            <div className={styles.infoValue}>
-                                {formData.referenceNo}
-                            </div>
-                        </div>
-
-                        <div className={styles.infoItem}>
-                            <div className={styles.infoLabel}>NOI Number</div>
-                            <div className={styles.infoValue}>
-                                {formData.noiNumber}
-                            </div>
-                        </div>
-
-                        <div className={styles.infoItem}>
-                            <div className={styles.infoLabel}>Contractor</div>
-                            <div className={styles.infoValue}>
-                                {formData.contractor}
-                            </div>
-                        </div>
-
-                        <div className={styles.infoItem}>
-                            <div className={styles.infoLabel}>Insp. Date</div>
-                            <div className={styles.infoValue}>
-                                {formData.inspectionDate}
-                            </div>
-                        </div>
-                        <div className={styles.infoItem}>
-                            <div className={styles.infoLabel}>Location</div>
-                            <div className={styles.infoValue}>
-                                {formData.location}
-                            </div>
-                        </div>
-                    </div>
-
-                    <table className={styles.itemsTable}>
-                        <thead>
-                            <tr>
-                                <th style={{ width: '40px' }}>#</th>
-                                <th>Inspection Item</th>
-                                <th>Criteria</th>
-                                <th>Actual Situation</th>
-                                <th style={{ width: '80px' }}>Result</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {formData.items.map((item: any, idx: number) => (
-                                <tr key={idx}>
-                                    <td className="text-center">{item.id}</td>
-                                    <td className="font-bold">{item.item}</td>
-                                    <td>{item.criteria}</td>
-                                    <td>{item.situation}</td>
-                                    <td className="text-center">{item.result}</td>
-                                </tr>
-                            ))}
-                            {paddingRows.map((_, idx) => (
-                                <tr key={`pad-${idx}`} style={{ height: '32px' }}>
-                                    <td className="text-center"></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td className="text-center text-slate-300">/</td>
-                                </tr>
-                            ))}
-                            <tr>
-                                <td colSpan={5} className="text-center font-bold">-END-</td>
-                            </tr>
-                        </tbody>
-                    </table>
-
-                    <div className={styles.footerSection}>
-                        <div className={styles.statementBox}>
-                            <div className="flex flex-col gap-2">
-                                <label className="flex items-start gap-2">
-                                    <input type="checkbox" checked={formData.agreementChecked} readOnly className="mt-1" />
-                                    <span>All inspection has been done and meet the Drawings, Criteria, Standards.</span>
-                                </label>
-                                <label className="flex items-start gap-2">
-                                    <input type="checkbox" checked={!formData.agreementChecked} readOnly className="mt-1" />
-                                    <span>Unfinished improvement, fill in "Non-Conformity Report" to track improvement.</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <table className={styles.signatureTable} style={{ width: '100%', borderBottom: 'none' }}>
-                            <tbody>
-                                <tr>
-                                    <td className={styles.signatureLabelCell}>Re-inspection Date</td>
-                                    <td className={styles.signatureValueCell}>
-                                        <div className="text-center">{formData.agreementChecked ? 'N/A' : formData.reInspectionDate}</div>
-                                    </td>
-                                    <td className={styles.signatureLabelCell}>NCR No.</td>
-                                    <td className={styles.signatureValueCell}>
-                                        <div className="text-center">{formData.agreementChecked ? 'N/A' : formData.ncrNo}</div>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-
-                        <div className={styles.bottomLayout} style={{ marginTop: '-1pt' }}>
-                            <div className={styles.remarkSection}>
-                                <div className="font-bold mb-1">Remarks:</div>
-                                <div className="text-xs">{formData.remarks}</div>
-                            </div>
-
-                            <table className={styles.signatureTable} style={{ width: '70%', borderLeft: 'none' }}>
-                                <tbody>
-                                    <tr>
-                                        <td className={styles.signatureHeaderCell}>Site Engineer</td>
-                                        <td className={styles.signatureHeaderCell}>Construction Leader</td>
-                                    </tr>
-                                    <tr style={{ height: '60px' }}>
-                                        <td></td>
-                                        <td></td>
-                                    </tr>
-                                    <tr>
-                                        <td colSpan={2} className={styles.signatureHeaderCell}>Subcontractor Representative</td>
-                                    </tr>
-                                    <tr style={{ height: '60px' }}>
-                                        <td colSpan={2}></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <div className={styles.watermark}>
-                        Generated by Qualitas Digital Inspection System
-                    </div>
-                </div>,
+                <ChecklistPrintTemplate formData={formData} displayNo={displayNo} />,
                 document.body
             )}
         </div>

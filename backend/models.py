@@ -448,6 +448,39 @@ class OSD(Base):
         return self.vendor_ref.name if self.vendor_ref else None
 
 
+class MeetingMinutes(Base):
+    """會議記錄 — owns meeting structure only (attendees, discussion/decision
+    log). Action items produced by a meeting are created as FollowUp rows
+    (sourceModule="MEETING") instead of a parallel tracker here, so they
+    inherit FollowUp's existing due-date reminders/closure workflow/
+    cross-module aggregated view."""
+    __tablename__ = "meeting_minutes"
+
+    id = Column(String, primary_key=True, index=True)
+    project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
+    vendor_id = Column(String, ForeignKey("contractors.id", ondelete="SET NULL"), nullable=True, index=True)
+    documentNumber = Column(String, index=True, unique=True)
+    status = Column(String)  # Draft / Published
+    title = Column(String, nullable=True)
+    meetingType = Column(String, nullable=True)
+    meetingDate = Column(String, nullable=True)
+    meetingTime = Column(String, nullable=True)
+    location = Column(String, nullable=True)
+    organizer = Column(String, nullable=True)
+    attendees = Column(Text, nullable=True)       # JSON: [{name, company, role}]
+    discussionLog = Column(Text, nullable=True)    # JSON: [{no, topic, discussion, decision}]
+    attachments = Column(Text, nullable=True)
+    createdAt = Column(String, nullable=True)
+    updatedAt = Column(String, nullable=True)
+
+    # Relationships
+    vendor_ref = relationship("Contractor", back_populates="meeting_minutes")
+
+    @property
+    def vendor(self):
+        return self.vendor_ref.name if self.vendor_ref else None
+
+
 class Contractor(Base):
     __tablename__ = "contractors"
 
@@ -483,6 +516,8 @@ class Contractor(Base):
     fats = relationship("FAT", back_populates="vendor_ref",
                         cascade="save-update, merge", passive_deletes=True)
     followups = relationship("FollowUp", back_populates="vendor_ref",
+                             cascade="save-update, merge", passive_deletes=True)
+    meeting_minutes = relationship("MeetingMinutes", back_populates="vendor_ref",
                              cascade="save-update, merge", passive_deletes=True)
 
 

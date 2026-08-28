@@ -4,16 +4,15 @@ import ReactDOM from 'react-dom';
 import { toast } from 'sonner';
 import { Clock, CheckCircle2, BarChart3, Zap, Search } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import { useNOIStore } from '../../store/noiStore';
 import type { NOIItem } from '../../store/noiStore';
 
 import { useNCRStore } from '../../store/ncrStore';
 import { useITRStore } from '../../store/itrStore';
-import { uploadFiles, deleteFile, getAuthenticatedFileUrl } from '../../services/api';
+import { uploadFiles, deleteFile } from '../../services/api';
 import { checkNOIReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
-import { formatTime24h } from '../../utils/formatters';
 import ConfirmModal from '../Shared/ConfirmModal';
-import styles from './NOI.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
@@ -26,12 +25,14 @@ import {
   NOIBulkAddModal,
   NOIDetailData,
 } from './NOIModals';
+import NOIPrintTemplate from './NOIPrintTemplate';
 import { useNOIStats } from '../../hooks/useNOIStats';
 
 type StatusFilter = 'all' | 'open' | 'closed' | 'reject';
 
 const NOI: React.FC = () => {
   const { t } = useLanguage();
+  const { hasPermission } = useAuth();
   const { noiList, loading, error, refetch, addNOI, addBulkNOI, updateNOI, deleteNOI } = useNOIStore();
   const ncrList = useNCRStore(state => state.ncrList);
   const itrList = useITRStore(state => state.itrList);
@@ -312,12 +313,16 @@ const NOI: React.FC = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
-            {t('noi.addNew')}
-          </button>
-          <button type="button" className={shellStyles.addNewButtonAlt} onClick={() => setIsBulkModalOpen(true)}>
-            {t('noi.bulkAdd')}
-          </button>
+          {hasPermission('noi:create:all') && (
+            <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+              {t('noi.addNew')}
+            </button>
+          )}
+          {hasPermission('noi:create:all') && (
+            <button type="button" className={shellStyles.addNewButtonAlt} onClick={() => setIsBulkModalOpen(true)}>
+              {t('noi.bulkAdd')}
+            </button>
+          )}
           <button
             type="button"
             className={shellStyles.addNewButtonAlt}
@@ -351,9 +356,26 @@ const NOI: React.FC = () => {
         />
       </div>
 
-      {isModalOpen && (
+      {isModalOpen && (() => {
+        const editingItem = currentNoiId && currentNoiId !== 'new'
+          ? noiList.find(item => item.id === currentNoiId)
+          : undefined;
+        // Read-only when the user lacks edit rights, or the record is locked
+        // (Closed/Reject) and they lack the higher approve permission.
+        // Closed is a true dead end (backend rejects any field change
+        // unconditionally, no permission bypass — see noi_service.py
+        // update_noi), so it's always read-only here too; Reject still has
+        // a real reopen path, so it stays permission-gated as before.
+        const status = (editingItem?.status || '').toLowerCase();
+        const locked = status === 'closed' || status === 'reject';
+        const canEdit = currentNoiId === 'new'
+          ? hasPermission('noi:create:all')
+          : status === 'closed' ? false
+          : locked ? hasPermission('noi:approve:all') : hasPermission('noi:update:all');
+        return (
         <NOIDetailModal
           noiId={currentNoiId}
+          readOnly={!canEdit}
           existingData={currentNoiId ? noiDetails[currentNoiId] : undefined}
           existingItem={currentNoiId ? noiList.find(item => item.id === currentNoiId) : undefined}
           noiList={noiList}
@@ -379,7 +401,8 @@ const NOI: React.FC = () => {
             }
           }}
         />
-      )}
+        );
+      })()}
 
       <ConfirmModal
         isOpen={deleteModal.isOpen}
@@ -393,97 +416,7 @@ const NOI: React.FC = () => {
 
       {batchPrintData &&
         ReactDOM.createPortal(
-          <div id="noi-batch-print-root" className={styles.noiBatchPrintRoot}>
-            {Object.entries(groupedByContractor).map(([contractor, items], pageIndex) => (
-              <div
-                key={contractor}
-                className={styles.noiBatchPrintPage}
-                style={pageIndex > 0 ? { pageBreakBefore: 'always' } : undefined}
-              >
-                <div className={styles.noiBatchPrintTitle}>
-                  <h1>批次檢驗通知 (NOI)</h1>
-                  <p>列印日期：{new Date().toLocaleDateString('zh-TW')}</p>
-                </div>
-
-                <div className={styles.noiBatchPrintCommon}>
-                  <div className={styles.noiBatchPrintGrid}>
-                    <div className={styles.noiBatchPrintField}>
-                      <label>承包商</label>
-                      <div className={styles.noiBatchPrintValue}>{contractor}</div>
-                    </div>
-                    <div className={styles.noiBatchPrintField}>
-                      <label>發出日期 (Issue Date)</label>
-                      <div className={styles.noiBatchPrintValue}>{items[0]?.issueDate ?? '-'}</div>
-                    </div>
-                    <div className={styles.noiBatchPrintField}>
-                      <label>檢驗日期 (Inspection Date)</label>
-                      <div className={styles.noiBatchPrintValue}>{items[0]?.inspectionDate ?? '-'}</div>
-                    </div>
-                    <div className={styles.noiBatchPrintField}>
-                      <label>聯絡人</label>
-                      <div className={styles.noiBatchPrintValue}>{items[0]?.contacts ?? '-'}</div>
-                    </div>
-                    <div className={styles.noiBatchPrintField}>
-                      <label>電話</label>
-                      <div className={styles.noiBatchPrintValue}>{items[0]?.phone ?? '-'}</div>
-                    </div>
-                    <div className={styles.noiBatchPrintField}>
-                      <label>Email</label>
-                      <div className={styles.noiBatchPrintValue}>{items[0]?.email ?? '-'}</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className={styles.noiBatchPrintList}>
-                  <h3>各筆 NOI 資料</h3>
-                  <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '8px' }}>共 {items.length} 筆</p>
-                  <table className={styles.noiBatchPrintListTable}>
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>Subject</th>
-                        <th>ITP no.</th>
-                        <th>Event #</th>
-                        <th>Checkpoint</th>
-                        <th>檢驗時間</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((noi, index) => (
-                        <tr key={noi.id}>
-                          <td>{index + 1}</td>
-                          <td>{noi.package}</td>
-                          <td>{noi.itpNo}</td>
-                          <td>{noi.eventNumber ?? '-'}</td>
-                          <td>{noi.checkpoint ?? '-'}</td>
-                          <td>{formatTime24h(noi.inspectionTime)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {items.some(n => n.attachments && n.attachments.length > 0) && (
-                  <div className={styles.noiBatchPrintPhotoSection}>
-                    <h3>{t('itp.selfInspection.attachments')} (Photo Record)</h3>
-                    <div className={styles.noiBatchPrintPhotoGrid}>
-                      {items.flatMap(n =>
-                        (n.attachments || []).map((img, imgIdx) => ({
-                          img,
-                          label: `${n.package} - #${imgIdx + 1}`,
-                        }))
-                      ).map((item, idx) => (
-                        <div key={idx} className={styles.noiBatchPrintPhotoItem}>
-                          <img src={getAuthenticatedFileUrl(typeof item.img === 'string' ? item.img : item.img.file_url)} alt={item.label} className={styles.noiBatchPrintPhoto} />
-                          <div className={styles.noiBatchPrintPhotoLabel}>{item.label}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>,
+          <NOIPrintTemplate groupedByContractor={groupedByContractor} />,
           document.body
         )}
 

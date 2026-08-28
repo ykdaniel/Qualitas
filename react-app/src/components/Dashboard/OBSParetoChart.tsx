@@ -27,7 +27,11 @@ const OBSParetoChart: React.FC = React.memo(() => {
       const status = (obs.status || '').toLowerCase();
       if (status === 'closed') {
         contractorStats[contractor].closed++;
-      } else {
+      } else if (status !== 'void') {
+        // Void OBS count toward the contractor's total but are neither
+        // open nor closed — matches OBSStatsCard's own exclusion (the
+        // sidebar stat card this chart sits next to), which previously
+        // disagreed with this chart on what counts as "open".
         contractorStats[contractor].open++;
       }
     });

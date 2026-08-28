@@ -118,6 +118,111 @@ def test_update_checklist_success(checklist_service, mock_repo):
         mock_repo.update.assert_called_once()
         mock_log.assert_called_once()
 
+def test_update_locked_checklist_rejects_result_change(checklist_service, mock_repo):
+    """A Pass/Fail Checklist still has a real reopen path (WorkflowEngine
+    allows Pass/Fail -> Ongoing, "允許回退修改"), so only the inspection
+    results are locked, not the whole record — mirrors OBS's/PQP's
+    reopen-aware locked-fields pattern."""
+    mock_db_chk = models.Checklist(
+        id="chk-123", status="Pass", recordsNo="CHK-01",
+        detail_data=json.dumps({"items": ["orig"]}), passCount=5, failCount=0,
+    )
+    mock_repo.get_by_id.return_value = mock_db_chk
+
+    chk_update = schemas.ChecklistUpdate(detail_data=json.dumps({"items": ["tampered"]}))
+
+    with pytest.raises(ValueError) as excinfo:
+        checklist_service.update_checklist("chk-123", chk_update)
+
+    assert "Pass/Fail Checklist" in str(excinfo.value)
+    mock_repo.update.assert_not_called()
+
+def test_update_locked_checklist_allows_noop_resave(checklist_service, mock_repo):
+    """The frontend resends the whole record every save, so a locked field
+    present with its existing value (no real change) must not be rejected."""
+    mock_db_chk = models.Checklist(
+        id="chk-123", status="Pass", recordsNo="CHK-01",
+        detail_data=json.dumps({"items": ["same"]}), passCount=5, failCount=0,
+    )
+    mock_repo.get_by_id.return_value = mock_db_chk
+
+    class MockColumn:
+        def __init__(self, key):
+            self.key = key
+
+    with patch('services.checklist_service.inspect') as mock_inspect, \
+         patch('services.checklist_service.log_audit') as mock_log:
+        mock_mapper = MagicMock()
+        mock_mapper.column_attrs = [MockColumn("id"), MockColumn("status"), MockColumn("recordsNo")]
+        mock_inspect.return_value = mock_mapper
+
+        chk_update = schemas.ChecklistUpdate(detail_data=json.dumps({"items": ["same"]}), passCount=5)
+        mock_repo.update.return_value = mock_db_chk
+
+        result = checklist_service.update_checklist("chk-123", chk_update, user_id=1, username="admin")
+
+        assert result.status == "Pass"
+        mock_repo.update.assert_called_once()
+        mock_log.assert_called_once()
+
+def test_update_locked_checklist_allows_non_locked_field_change(checklist_service, mock_repo):
+    """Only the inspection-result fields are locked — administrative fields
+    like location stay editable on a Pass/Fail Checklist, matching NCR/OBS/
+    PQP's precedent of not locking every field once closed/approved."""
+    mock_db_chk = models.Checklist(id="chk-123", status="Pass", recordsNo="CHK-01", location="Old Location")
+    mock_repo.get_by_id.return_value = mock_db_chk
+
+    class MockColumn:
+        def __init__(self, key):
+            self.key = key
+
+    with patch('services.checklist_service.inspect') as mock_inspect, \
+         patch('services.checklist_service.log_audit') as mock_log:
+        mock_mapper = MagicMock()
+        mock_mapper.column_attrs = [MockColumn("id"), MockColumn("status"), MockColumn("recordsNo")]
+        mock_inspect.return_value = mock_mapper
+
+        chk_update = schemas.ChecklistUpdate(location="New Location")
+        mock_updated = models.Checklist(id="chk-123", status="Pass", location="New Location")
+        mock_repo.update.return_value = mock_updated
+
+        result = checklist_service.update_checklist("chk-123", chk_update, user_id=1, username="admin")
+
+        assert result.location == "New Location"
+        mock_repo.update.assert_called_once()
+        mock_log.assert_called_once()
+
+def test_update_locked_checklist_allows_reopen_with_result_change(checklist_service, mock_repo):
+    """Explicitly reopening (status -> Ongoing, via the dedicated Reopen
+    action) is the designed escape hatch — inspection results may change
+    in the same save that reopens the record."""
+    mock_db_chk = models.Checklist(
+        id="chk-123", status="Pass", recordsNo="CHK-01",
+        detail_data=json.dumps({"items": ["orig"]}),
+    )
+    mock_repo.get_by_id.return_value = mock_db_chk
+
+    class MockColumn:
+        def __init__(self, key):
+            self.key = key
+
+    with patch('services.checklist_service.WorkflowEngine.validate_transition', return_value=True), \
+         patch('services.checklist_service.inspect') as mock_inspect, \
+         patch('services.checklist_service.log_audit') as mock_log:
+        mock_mapper = MagicMock()
+        mock_mapper.column_attrs = [MockColumn("id"), MockColumn("status"), MockColumn("recordsNo")]
+        mock_inspect.return_value = mock_mapper
+
+        chk_update = schemas.ChecklistUpdate(status="Ongoing", detail_data=json.dumps({"items": ["revised"]}))
+        mock_updated = models.Checklist(id="chk-123", status="Ongoing", detail_data=json.dumps({"items": ["revised"]}))
+        mock_repo.update.return_value = mock_updated
+
+        result = checklist_service.update_checklist("chk-123", chk_update, user_id=1, username="admin")
+
+        assert result.status == "Ongoing"
+        mock_repo.update.assert_called_once()
+        mock_log.assert_called_once()
+
 def test_delete_checklist(checklist_service, mock_repo):
     mock_db_chk = models.Checklist(id="chk-123", recordsNo="CHK-01")
     mock_repo.get_by_id.return_value = mock_db_chk

@@ -9,14 +9,14 @@ import {
   CheckSquare, Bell, GitPullRequest, AlertTriangle, Eye, XOctagon,
   Factory, Scale, HardHat, BookOpen, Shield, FileCode2, Trophy, LogOut, Home as HomeIcon,
   Workflow as WorkflowIcon, ChevronDown,
-  ClipboardCheck, Flag, Settings as SettingsIcon,
+  ClipboardCheck, Flag, Settings as SettingsIcon, Users,
   type LucideIcon,
 } from 'lucide-react';
 import { useState } from 'react';
 
 type ModuleId =
   | 'home' | 'dashboard' | 'workflow' | 'kpi' | 'followup' | 'pqp' | 'itp' | 'checklist'
-  | 'noi' | 'itr' | 'osd' | 'obs' | 'ncr' | 'fat' | 'audit'
+  | 'noi' | 'itr' | 'osd' | 'obs' | 'ncr' | 'fat' | 'audit' | 'meeting-minutes'
   | 'contractors' | 'km' | 'iam' | 'document-naming-rules' | 'owner-performance' | 'security';
 
 const MODULE_ICONS: Record<ModuleId, LucideIcon> = {
@@ -35,6 +35,7 @@ const MODULE_ICONS: Record<ModuleId, LucideIcon> = {
   ncr: XOctagon,
   fat: Factory,
   audit: Scale,
+  'meeting-minutes': Users,
   contractors: HardHat,
   km: BookOpen,
   iam: Shield,
@@ -57,6 +58,7 @@ const AppLayout = () => {
     { id: 'followup' as ModuleId, title: t('followup.title'), path: '/followup', color: '#ff6b6b' },
     { id: 'fat' as ModuleId, title: 'FAT', path: '/fat', color: '#ff9a9e' },
     { id: 'audit' as ModuleId, title: t('audit.title'), path: '/audit', color: '#10b981' },
+    { id: 'meeting-minutes' as ModuleId, title: t('meetingMinutes.title'), path: '/meeting-minutes', color: '#845ec2' },
     { id: 'km' as ModuleId, title: t('km.title'), path: '/km', color: '#a18cd1' },
     { id: 'owner-performance' as ModuleId, title: t('home.ownerPerformance.title'), path: '/owner-performance', color: '#f6d365' },
   ], [t]);

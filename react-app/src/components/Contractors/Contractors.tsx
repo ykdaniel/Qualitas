@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useDeferredValue } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore, Contractor } from '../../store/contractorsStore';
 import { useProjectStore, Project } from '../../store/projectStore';
 import { useITPStore } from '../../store/itpStore';
@@ -23,6 +24,7 @@ import ProjectModal from './ProjectModal';
 
 const Contractors: React.FC = () => {
     const { t } = useLanguage();
+    const { hasPermission } = useAuth();
     const { contractors, addContractor, updateContractor, deleteContractor } = useContractorsStore();
     const { projectList, fetchProjects, addProject, updateProject, deleteProject } = useProjectStore();
 
@@ -183,20 +185,22 @@ const Contractors: React.FC = () => {
                     </div>
 
                     <div className={styles.actionsBox}>
-                        {activeTab === 'contractors' ? (
-                            <button className={styles.addNewButton} onClick={() => {
-                                setEditingId(null);
-                                setFormData({ package: '', name: '', abbreviation: '', scope: '', contactPerson: '', email: '', phone: '', address: '', status: 'active' });
-                                setIsModalOpen(true);
-                            }}>
-                                <Plus size={18} />
-                                {t('contractors.addContractor')}
-                            </button>
-                        ) : (
-                            <button className={`${styles.addNewButton} ${styles.blueBtn}`} onClick={() => { setEditingProject(undefined); setIsProjectModalOpen(true); }}>
-                                <Plus size={18} />
-                                Add Project
-                            </button>
+                        {hasPermission('contractors:manage:all') && (
+                            activeTab === 'contractors' ? (
+                                <button className={styles.addNewButton} onClick={() => {
+                                    setEditingId(null);
+                                    setFormData({ package: '', name: '', abbreviation: '', scope: '', contactPerson: '', email: '', phone: '', address: '', status: 'active' });
+                                    setIsModalOpen(true);
+                                }}>
+                                    <Plus size={18} />
+                                    {t('contractors.addContractor')}
+                                </button>
+                            ) : (
+                                <button className={`${styles.addNewButton} ${styles.blueBtn}`} onClick={() => { setEditingProject(undefined); setIsProjectModalOpen(true); }}>
+                                    <Plus size={18} />
+                                    Add Project
+                                </button>
+                            )
                         )}
                     </div>
                 </div>

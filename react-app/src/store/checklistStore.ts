@@ -25,6 +25,7 @@ export interface ChecklistRecord {
     location: string;
     revision: number;
     noiNumber?: string;
+    templateId?: string;
     data: any;
 }
 
@@ -58,7 +59,12 @@ const normalizeRecord = (r: api.ChecklistRecordApi): ChecklistRecord => ({
     location: r.location || '',
     revision: safeJsonParse(r.detail_data).revision || 0,
     noiNumber: r.noiNumber,
-    data: safeJsonParse(r.detail_data),
+    templateId: r.template_id,
+    // Fallback includes items: [] (not just {}) — ChecklistEditor reads
+    // formData.items unconditionally (e.g. the tab label's .length), so a
+    // record with NULL/corrupt detail_data would otherwise crash the editor
+    // on open instead of just showing an empty checklist.
+    data: safeJsonParse(r.detail_data, { items: [] }),
 });
 
 // HACK: [AUTO-GENERATE] 為與後端約定的編號自動產生標記，未來建議抽離為共用常數

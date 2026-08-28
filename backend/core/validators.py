@@ -169,6 +169,8 @@ def check_contractor_references(db: Session, contractor_id: str, contractor_name
             (models.FAT, 'vendor_id', contractor_id, 'FAT'),
             (models.FollowUp, 'vendor_id', contractor_id, 'FollowUp'),
             (models.Audit, 'vendor_id', contractor_id, 'Audit'),
+            (models.OSD, 'vendor_id', contractor_id, 'OSD'),
+            (models.Checklist, 'contractor_id', contractor_id, 'Checklist'),
         ]
     )
 
@@ -193,9 +195,45 @@ def check_itp_references(db: Session, itp_id: str, itp_reference_no: str) -> Non
     )
 
 
+def check_project_references(db: Session, project_id: str, project_name: str) -> None:
+    """
+    Check if project is referenced by any module before deletion.
+
+    Args:
+        db: Database session
+        project_id: Project ID
+        project_name: Project name (for error message)
+
+    Raises:
+        ValueError: If project has references
+    """
+    check_references_before_delete(
+        db, project_name, 'project',
+        [
+            (models.ITP, 'project_id', project_id, 'ITP'),
+            (models.NCR, 'project_id', project_id, 'NCR'),
+            (models.NOI, 'project_id', project_id, 'NOI'),
+            (models.ITR, 'project_id', project_id, 'ITR'),
+            (models.OBS, 'project_id', project_id, 'OBS'),
+            (models.FollowUp, 'project_id', project_id, 'FollowUp'),
+            (models.Checklist, 'project_id', project_id, 'Checklist'),
+            (models.Audit, 'project_id', project_id, 'Audit'),
+            (models.FAT, 'project_id', project_id, 'FAT'),
+            (models.PQP, 'project_id', project_id, 'PQP'),
+            (models.QWorkflow, 'project_id', project_id, 'QWorkflow'),
+        ]
+    )
+
+
 def check_noi_references(db: Session, noi_reference_no: str) -> None:
     """
     Check if NOI is referenced before deletion.
+
+    Note: QWorkflow is deliberately NOT checked here — it's a 1:1 tracker
+    row auto-created alongside every NOI (not independent user work like
+    NCR/ITR/Checklist), so it would block every single NOI deletion if
+    treated as a blocking reference. Its own row is cleaned up by
+    ``delete_noi`` instead (see noi_service.py).
 
     Args:
         db: Database session
@@ -209,6 +247,34 @@ def check_noi_references(db: Session, noi_reference_no: str) -> None:
         [
             (models.NCR, 'noiNumber', noi_reference_no, 'NCR'),
             (models.ITR, 'noiNumber', noi_reference_no, 'ITR'),
+            (models.Checklist, 'noiNumber', noi_reference_no, 'Checklist'),
+        ]
+    )
+
+
+def check_role_references(db: Session, role_id: int, role_name: str) -> None:
+    """
+    Check if role is still assigned to any user before deletion.
+
+    User.role_id declares ondelete="SET NULL", but SQLite's FK enforcement
+    is off (PRAGMA foreign_keys never set), so it never actually fires —
+    without this check, deleting an in-use Role would leave every assigned
+    User with a dangling role_id, silently locking them out of every
+    permission-gated action (RoleChecker treats a role that fails to
+    resolve as "no role" → 403) with no obvious diagnostic signal.
+
+    Args:
+        db: Database session
+        role_id: Role ID
+        role_name: Role name (for error message)
+
+    Raises:
+        ValueError: If role is still assigned to any user
+    """
+    check_references_before_delete(
+        db, role_name, 'role',
+        [
+            (models.User, 'role_id', role_id, 'User'),
         ]
     )
 
@@ -313,9 +379,14 @@ def validate_followup_source_reference(
             db, models.Audit, 'auditNo', source_reference_no,
             'Audit', 'audit number'
         )
+    elif source_module == "MEETING":
+        validate_reference_exists(
+            db, models.MeetingMinutes, 'documentNumber', source_reference_no,
+            'Meeting Minutes', 'document number'
+        )
     else:
         # Invalid source module type
-        valid_modules = ["NCR", "NOI", "ITR", "ITP", "OBS", "PQP", "FAT", "AUDIT"]
+        valid_modules = ["NCR", "NOI", "ITR", "ITP", "OBS", "PQP", "FAT", "AUDIT", "MEETING"]
         raise ValueError(
             f"Invalid sourceModule '{source_module}'. "
             f"Must be one of: {', '.join(valid_modules)}"

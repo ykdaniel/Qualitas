@@ -12,6 +12,7 @@ from typing import List, Optional
 import models
 import schemas
 from repositories.project_repository import ProjectRepository
+from core import validators
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,18 @@ class ProjectService:
             db_project = self.repo.get_by_id(project_id)
             if not db_project:
                 return False
+            validators.check_project_references(self.repo.db, project_id, db_project.name)
+
+            # Clean up per-user access grants. UserProject.project_id
+            # declares ondelete="CASCADE", but SQLite's FK enforcement is
+            # off (PRAGMA foreign_keys never set) so it never actually
+            # fires. Unlike the business records checked above, a grant
+            # row is bookkeeping, not user work — deleting it is correct
+            # cleanup, not silent data loss.
+            self.repo.db.query(models.UserProject).filter(
+                models.UserProject.project_id == project_id
+            ).delete()
+
             self.repo.delete(db_project)
             return True
         except Exception as e:

@@ -27,6 +27,7 @@ const PQP = React.lazy(() => import('./components/PQP/PQP'));
 const KPI = React.lazy(() => import('./components/KPI/KPI'));
 const DocumentNamingRules = React.lazy(() => import('./components/DocumentNamingRules/DocumentNamingRules'));
 const OSD = React.lazy(() => import('./components/OSD/OSD'));
+const MeetingMinutes = React.lazy(() => import('./components/MeetingMinutes/MeetingMinutes'));
 const Checklist = React.lazy(() => import('./components/Checklist/Checklist'));
 const Workflow = React.lazy(() => import('./components/Workflow/Workflow'));
 const SecuritySettings = React.lazy(() => import('./components/Security/SecuritySettings'));
@@ -86,6 +87,7 @@ function App() {
             <Route path="/contractors" element={<Contractors />} />
             <Route path="/km" element={<KM />} />
             <Route path="/osd" element={<OSD />} />
+            <Route path="/meeting-minutes" element={<MeetingMinutes />} />
             <Route path="/obs" element={<OBS />} />
             <Route path="/ncr" element={<NCR />} />
             <Route path="/itr" element={<ITR />} />

@@ -168,7 +168,9 @@ class ITRService:
 
         Rules:
         - Must have at least one linked checklist
-        - No linked checklist may have status == 'Fail'
+        - Every linked checklist must have status == 'Pass' — an 'Ongoing'
+          (unfilled or incomplete) checklist must not silently allow
+          approval either, not just an explicit 'Fail'.
 
         Raises:
             ValueError: If approval requirements are not met
@@ -182,10 +184,12 @@ class ITRService:
         if not checklists:
             raise ValueError("Cannot approve ITR without any linked checklists")
 
-        failed = [cl.recordsNo for cl in checklists if cl.status == "Fail"]
-        if failed:
+        not_passed = [
+            f"{cl.recordsNo} ({cl.status})" for cl in checklists if cl.status != "Pass"
+        ]
+        if not_passed:
             raise ValueError(
-                f"Cannot approve ITR with failed checklists: {', '.join(failed)}"
+                f"Cannot approve ITR — checklist(s) not passed: {', '.join(not_passed)}"
             )
 
     def update_itr(self, itr_id: str, itr_update: schemas.ITRUpdate,
@@ -365,6 +369,23 @@ class ITRService:
             # Capture old values for audit
             old_val = {c.name: getattr(db_itr, c.name) for c in db_itr.__table__.columns}
 
+            # Clean up owned Checklist instances (§17: an instance is a
+            # deep copy that belongs to this ITR, with no independent
+            # existence — Checklist.itrId declares ondelete="CASCADE" and
+            # the ORM relationship declares cascade="all, delete-orphan",
+            # but SQLite's FK enforcement is off so neither actually fires
+            # without this explicit cleanup).
+            self.repo.db.query(models.Checklist).filter(
+                models.Checklist.itrId == itr_id
+            ).delete()
+
+            # Null out any re-inspection ITRs' back-reference rather than
+            # leaving it dangling (ITR.originalItrId declares
+            # ondelete="SET NULL", same enforcement gap).
+            self.repo.db.query(models.ITR).filter(
+                models.ITR.originalItrId == itr_id
+            ).update({models.ITR.originalItrId: None})
+
             # Delete the record
             self.repo.delete(db_itr)
 
@@ -495,7 +516,8 @@ class ITRService:
             raise e
 
     def create_ncr_from_itr(self, itr_id: str,
-                            user_id: int = None, username: str = None) -> models.NCR:
+                            user_id: int = None, username: str = None,
+                            scope=None) -> Optional[models.NCR]:
         """
         Create an NCR from a failed or rejected ITR.
 
@@ -508,16 +530,17 @@ class ITRService:
             username: Username of user performing the action
 
         Returns:
-            The newly created NCR object
+            The newly created NCR object, or None if the ITR does not
+            exist (or is out of the caller's scope)
 
         Raises:
-            ValueError: If the ITR is not found, or is not in a failed/rejected state
+            ValueError: If the ITR is not in a failed/rejected state
             Exception: If creation fails
         """
         try:
             db_itr = self.repo.get_by_id(itr_id)
-            if not db_itr:
-                raise ValueError(f"ITR '{itr_id}' not found")
+            if not db_itr or not record_in_scope(db_itr, scope):
+                return None
 
             # Only allow NCR creation from a failed or rejected ITR
             if db_itr.inspectionResult != "Fail" and db_itr.status != "Reject":
@@ -532,6 +555,7 @@ class ITRService:
 
             ncr_data = {
                 "vendor_id": db_itr.vendor_id,
+                "project_id": db_itr.project_id,
                 "noiNumber": db_itr.noiNumber,
                 "itrNumber": db_itr.documentNumber,
                 "description": f"NCR raised from failed ITR {db_itr.documentNumber}",
@@ -585,7 +609,8 @@ class ITRService:
             raise e
 
     def create_reinspection(self, itr_id: str,
-                            user_id: int = None, username: str = None) -> models.ITR:
+                            user_id: int = None, username: str = None,
+                            scope=None) -> Optional[models.ITR]:
         """
         Create a re-inspection ITR from a failed or rejected ITR.
 
@@ -598,17 +623,17 @@ class ITRService:
             username: Username of user performing the action
 
         Returns:
-            The newly created re-inspection ITR object
+            The newly created re-inspection ITR object, or None if the
+            original ITR does not exist (or is out of the caller's scope)
 
         Raises:
-            ValueError: If the original ITR is not found, or is not
-                        in a failed/rejected state
+            ValueError: If the original ITR is not in a failed/rejected state
             Exception: If creation fails
         """
         try:
             db_itr = self.repo.get_by_id(itr_id)
-            if not db_itr:
-                raise ValueError(f"ITR '{itr_id}' not found")
+            if not db_itr or not record_in_scope(db_itr, scope):
+                return None
 
             # Only allow re-inspection from a failed or rejected ITR
             if db_itr.inspectionResult != "Fail" and db_itr.status != "Reject":
@@ -626,6 +651,7 @@ class ITRService:
 
             new_itr_data = {
                 "vendor_id": db_itr.vendor_id,
+                "project_id": db_itr.project_id,
                 "noiNumber": db_itr.noiNumber,
                 "subject": db_itr.subject,
                 "description": db_itr.description or '',

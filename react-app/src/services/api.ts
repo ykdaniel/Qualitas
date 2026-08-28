@@ -385,6 +385,7 @@ export interface ChecklistRecordApi {
   itrNumber?: string;
   noiNumber?: string;
   detail_data?: string;
+  template_id?: string; // §17: instance -> 來源範本（範本本身為 NULL）
 }
 
 export interface CreateChecklistPayload {
@@ -438,6 +439,46 @@ export const linkChecklistToITR = async (itrId: string, checklistId: string): Pr
 // §17: remove a checklist instance from an ITR (deletes the ITR-owned copy).
 export const unlinkChecklistFromITR = async (itrId: string, checklistId: string): Promise<any> => {
   const response = await api.delete(`/itr/${itrId}/link-checklist/${checklistId}`);
+  return response.data;
+};
+
+export interface KPIWeight {
+  id: number;
+  pqp_weight: number;
+  itp_weight: number;
+  obs_weight: number;
+  ncr_weight: number;
+  updated_at?: string | null;
+}
+
+export const getKPIWeight = async (): Promise<KPIWeight> => {
+  const response = await api.get('/kpi/weights');
+  return response.data;
+};
+
+export const updateKPIWeight = async (weight: Omit<KPIWeight, 'id' | 'updated_at'>): Promise<KPIWeight> => {
+  const response = await api.put('/kpi/weights', weight);
+  return response.data;
+};
+
+// One meeting can produce several action items in one save — this creates
+// them all as FollowUp rows in a single call rather than N round-trips.
+export const bulkCreateFollowUps = async (items: Record<string, unknown>[]): Promise<any[]> => {
+  const response = await api.post('/followup/bulk/', items);
+  return response.data;
+};
+
+// Auto-create an NCR from a failed/rejected ITR — backend pre-populates
+// vendor, NOI reference, location, etc. from the source ITR.
+export const createNcrFromItr = async (itrId: string): Promise<any> => {
+  const response = await api.post(`/itr/${itrId}/create-ncr`);
+  return response.data;
+};
+
+// Create a re-inspection ITR from a failed/rejected ITR — backend copies
+// vendor, NOI, subject, event/checkpoint, etc. from the source ITR.
+export const createReinspectionItr = async (itrId: string): Promise<any> => {
+  const response = await api.post(`/itr/${itrId}/re-inspect`);
   return response.data;
 };
 

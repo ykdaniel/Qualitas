@@ -27,6 +27,7 @@ from routers import (
     itr,
     km,
     kpi,
+    meeting_minutes,
     ncr,
     noi,
     obs,
@@ -227,7 +228,7 @@ for router in [
     two_factor,
     settings_router,
     iam,
-    itp, ncr, noi, itr, pqp, obs, osd, contractors, followup, audit, checklist, kpi, file_router, fat, km, projects, workflow
+    itp, ncr, noi, itr, pqp, obs, osd, meeting_minutes, contractors, followup, audit, checklist, kpi, file_router, fat, km, projects, workflow
 ]:
     api.include_router(router.router)
 

@@ -7,10 +7,12 @@ import { useChecklistStore } from '../../store/checklistStore';
 import { ShieldCheck, ClipboardCheck, ArrowRight, AlertCircle, Info } from 'lucide-react';
 import { getNextRevision } from '../../utils/revision';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useNOIStore } from '../../store/noiStore';
 import { useNCRStore } from '../../store/ncrStore';
 import { useOBSStore } from '../../store/obsStore';
+import { useITRStore } from '../../store/itrStore';
 import type { ITRItem } from '../../store/itrStore';
 import { useITPStore } from '../../store/itpStore';
 import { validateStatusTransition, ITRStatusTransitions } from '../../utils/statusValidation';
@@ -22,6 +24,8 @@ import {
     updateChecklist,
     linkChecklistToITR,
     unlinkChecklistFromITR,
+    createNcrFromItr,
+    createReinspectionItr,
     type ChecklistRecordApi,
 } from '../../services/api';
 import FileAttachment from '../Shared/FileAttachment';
@@ -78,16 +82,22 @@ export interface ITRDetailModalProps {
     existingData?: ITRDetailData;
     existingItem?: ITRItem;
     itrList: ITRItem[];
-    onSave: (details: ITRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => void | Promise<void>;
+    onSave: (details: ITRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[], publishOnly?: boolean) => void | Promise<void>;
     onClose: () => void;
+    // Plain "close the modal, don't run onClose's deep-link back-navigation" —
+    // used when this modal is about to navigate elsewhere itself (Raise
+    // NCR / Re-inspect), so it doesn't fight with onClose's own navigate(-1)
+    // when this modal happened to be opened via ?openId=.
+    onDismiss?: () => void;
     readOnly?: boolean;
 }
 
-export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingData, existingItem, itrList: _propItrList, onSave, onClose, readOnly = false }) => {
+export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingData, existingItem, itrList: _propItrList, onSave, onClose, onDismiss, readOnly = false }) => {
     const { t } = useLanguage();
+    const { hasPermission } = useAuth();
     const { getActiveContractors } = useContractorsStore();
     const navigate = useNavigate();
-    
+
     const noiList = useNOIStore(state => state.noiList);
     const getNOIList = () => noiList;
     const ncrList = useNCRStore(state => state.ncrList);
@@ -273,6 +283,9 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
     const [approvalWarning, setApprovalWarning] = useState<{ show: boolean; pendingStatus: string }>({ show: false, pendingStatus: '' });
     const [publishConfirm, setPublishConfirm] = useState<{ show: boolean; nextRev: string }>({ show: false, nextRev: '' });
     const [unlinkConfirm, setUnlinkConfirm] = useState<{ show: boolean; id: string | null }>({ show: false, id: null });
+    // Tracks the in-flight "Raise NCR" / "Re-inspect" action (both hit backend
+    // endpoints that pre-populate the new record from this ITR).
+    const [spawning, setSpawning] = useState<'ncr' | 'reinspect' | null>(null);
 
     // 勾稽鎖定：Approved/Void 後全欄鎖定，防止已批准 ITR 被竄改
     const isLocked = formData.status === 'Approved' || formData.status === 'Void';
@@ -392,15 +405,53 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
 
     const doPublish = async (nextRev: string) => {
         try {
-            // Only send fields allowed by the backend lock (type, status, detail_data)
+            // publishOnly=true tells the parent to send ONLY type/status —
+            // the backend rejects any other field on a locked (Approved)
+            // ITR, so the rest of formData must not be included here.
             await onSave({
                 ...formData,
                 type: nextRev,
                 status: 'Approved'
-            }, [], []);  // No file ops during publish
+            }, [], [], true);
             // onClose is handled by parent (handleSaveITRDetails sets isEditModalOpen=false)
         } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
             // Error already shown by parent handleSaveITRDetails toast
+        }
+    };
+
+    const handleRaiseNcr = async () => {
+        if (!existingItem?.id || spawning) return;
+        setSpawning('ncr');
+        try {
+            const ncr = await createNcrFromItr(existingItem.id);
+            toast.success(t('itr.ncrCreated') || `NCR ${ncr.documentNumber} created`);
+            await useNCRStore.getState().refetch();
+            // Use onDismiss (plain close), not onClose — onClose runs a
+            // navigate(-1) when this modal was reached via ?openId=, which
+            // would race with the navigate() below and land somewhere
+            // unrelated to the NCR just created.
+            (onDismiss || onClose)();
+            navigate(`/ncr?openId=${ncr.id}`);
+        } catch (err: any) {
+            toast.error(err?.response?.data?.detail || t('common.saveFailed'));
+        } finally {
+            setSpawning(null);
+        }
+    };
+
+    const handleReinspect = async () => {
+        if (!existingItem?.id || spawning) return;
+        setSpawning('reinspect');
+        try {
+            const newItr = await createReinspectionItr(existingItem.id);
+            toast.success(t('itr.reinspectionCreated') || `Re-inspection ${newItr.documentNumber} created`);
+            await useITRStore.getState().refetch();
+            (onDismiss || onClose)();
+            navigate(`/itr?openId=${newItr.id}`);
+        } catch (err: any) {
+            toast.error(err?.response?.data?.detail || t('common.saveFailed'));
+        } finally {
+            setSpawning(null);
         }
     };
 
@@ -673,11 +724,14 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                                     <div className="flex flex-col gap-1">
                                                         <div className="flex items-center gap-2">
                                                             <span className="font-mono text-xs font-bold text-slate-500 uppercase tracking-wider">{record.recordsNo}</span>
-                                                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${record.status === 'Pass' ? 'bg-green-100 text-green-700' :
+                                                            <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${record.status === 'Pass' ? 'bg-green-100 text-green-700' :
                                                                 record.status === 'Fail' ? 'bg-red-100 text-red-700' :
-                                                                    'bg-blue-100 text-blue-700'
+                                                                    'bg-amber-100 text-amber-700'
                                                                 }`}>
-                                                                {record.status}
+                                                                {record.status === 'Ongoing' && <AlertCircle size={10} />}
+                                                                {record.status === 'Ongoing'
+                                                                    ? (t('checklist.notYetFilled') || 'Not filled')
+                                                                    : record.status}
                                                             </span>
                                                         </div>
                                                         <span className="text-sm font-bold text-slate-800">{record.activity}</span>
@@ -940,6 +994,26 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                     <button className={formStyles.printButton} onClick={handlePrint} style={{ marginRight: 'auto' }}>
                         {t('common.print')}
                     </button>
+                    {existingItem?.id && (formData.inspectionResult === 'Fail' || formData.status === 'Reject') && hasPermission('ncr:create:all') && (
+                        <button
+                            className={formStyles.printButton}
+                            onClick={handleRaiseNcr}
+                            disabled={spawning !== null}
+                            title={t('itr.raiseNcrTitle') || 'Create an NCR pre-filled from this failed ITR'}
+                        >
+                            {spawning === 'ncr' ? (t('common.saving') || 'Saving...') : (t('itr.raiseNcr') || 'Raise NCR')}
+                        </button>
+                    )}
+                    {existingItem?.id && (formData.inspectionResult === 'Fail' || formData.status === 'Reject') && hasPermission('itr:create:all') && (
+                        <button
+                            className={formStyles.printButton}
+                            onClick={handleReinspect}
+                            disabled={spawning !== null}
+                            title={t('itr.reinspectTitle') || 'Create a re-inspection ITR pre-filled from this one'}
+                        >
+                            {spawning === 'reinspect' ? (t('common.saving') || 'Saving...') : (t('itr.reinspect') || 'Re-inspect')}
+                        </button>
+                    )}
                     {!readOnly && (
                         <button
                             className={styles.publishButton}

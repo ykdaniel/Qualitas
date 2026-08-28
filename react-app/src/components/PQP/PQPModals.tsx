@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { usePQPStore } from '../../store/pqpStore';
 import type { PQPItem, PQPHistoryItem } from '../../store/pqpStore';
 import FileAttachment from '../Shared/FileAttachment';
+import PQPPrintTemplate from './PQPPrintTemplate';
 import styles from './PQP.module.css';
+import './PQP.print.css';
 
 import formStyles from '../Shared/FormShell.module.css';
 const getLocalizedStatus = (status: string, t: (key: string) => string) => {
@@ -20,12 +23,14 @@ const getLocalizedStatus = (status: string, t: (key: string) => string) => {
 export interface PQPDetailModalProps {
     pqpId: string;
     existingItem?: PQPItem;
+    readOnly?: boolean;
+    canPublish?: boolean;
     onSave: (updates: Partial<PQPItem>, pendingFiles: File[], deletedFileIds: string[], removedAttachments?: string[]) => void | Promise<void>;
     onPublish?: (id: string, changeSummary?: string) => Promise<void>;
     onClose: () => void;
 }
 
-export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, existingItem, onSave, onPublish, onClose }) => {
+export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, existingItem, readOnly = false, canPublish = true, onSave, onPublish, onClose }) => {
     const { t } = useLanguage();
     const { getActiveContractors } = useContractorsStore();
     const VERSION_OPTIONS = ['Rev1.0', 'Rev2.0', 'Rev3.0', 'Rev4.0'];
@@ -126,6 +131,16 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
         }
     }, [existingItem?.id, getHistory]);
 
+    // Print: mount the report portal, print, unmount (same pattern as NCR/OBS).
+    const [isPrinting, setIsPrinting] = useState(false);
+    useEffect(() => {
+        if (!isPrinting) return;
+        const timer = setTimeout(() => window.print(), 200);
+        const onAfterPrint = () => setIsPrinting(false);
+        window.addEventListener('afterprint', onAfterPrint);
+        return () => { clearTimeout(timer); window.removeEventListener('afterprint', onAfterPrint); };
+    }, [isPrinting]);
+
     const handlePublish = async () => {
         if (!existingItem) {
             // Must save first before publishing
@@ -158,6 +173,9 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
                 <div className={formStyles.modalBody}>
                     <p className={formStyles.formRequiredHint}>{t('form.requiredHint')}</p>
                     <div className={formStyles.formSections}>
+                    {/* A single disabled fieldset locks every input/select/textarea
+                        and inline button below in one shot when readOnly. */}
+                    <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
                         <div className={formStyles.formSection}>
                             <h3 className={formStyles.sectionTitle}>{t('pqp.infoSection')}</h3>
                             <div className={formStyles.formGrid}>
@@ -322,6 +340,7 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
                                 </div>
                             </div>
                         </div>
+                    </fieldset>
                     </div>
                 </div>
                 {existingItem && historyItems.length > 0 && (
@@ -362,6 +381,7 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
                 )}
                 {saveError && <p className={formStyles.saveError}>{saveError}</p>}
                 <div className={formStyles.modalActions}>
+                    {canPublish && (
                     <button
                         type="button"
                         className={formStyles.saveButton}
@@ -372,14 +392,24 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
                     >
                         Publish
                     </button>
+                    )}
+                    {!readOnly && (
                     <button type="button" className={formStyles.saveButton} onClick={handleSave} disabled={saving} style={{ marginLeft: '12px' }}>
                         {saving ? t('pqp.saving') : t('common.save')}
+                    </button>
+                    )}
+                    <button type="button" className={formStyles.printButton} onClick={() => setIsPrinting(true)} disabled={saving} title={t('common.print') || 'Print'}>
+                        {t('common.print') || 'Print'}
                     </button>
                     <button type="button" className={formStyles.cancelButton} onClick={onClose} disabled={saving}>
                         {t('common.cancel')}
                     </button>
                 </div>
             </div>
+            {isPrinting && ReactDOM.createPortal(
+                <PQPPrintTemplate data={formData as PQPItem} history={historyItems} />,
+                document.body
+            )}
         </div>
     );
 };

@@ -215,6 +215,43 @@ def test_update_audit_with_vendor_change(audit_service, mock_repo, sample_audit,
     assert call_args["vendor_id"] == "vendor-002"
 
 
+def test_update_closed_audit_rejects_field_change(audit_service, mock_repo, sample_audit):
+    """A Closed Audit is a true dead end (WorkflowEngine's "Closed": []
+    means no reopen transition exists at all), so any field change should
+    be rejected outright — same shape as NOI's Closed-state hard lock."""
+    sample_audit.status = "Closed"
+    mock_repo.get_by_id = Mock(return_value=sample_audit)
+    mock_repo.update = Mock()
+
+    audit_update = schemas.AuditUpdate(findings="trying to sneak in a change")
+
+    with pytest.raises(ValueError) as excinfo:
+        audit_service.update_audit("audit-001", audit_update, user_id=1, username="testuser")
+
+    assert "closed" in str(excinfo.value).lower()
+    mock_repo.update.assert_not_called()
+
+
+def test_update_closed_audit_allows_noop_resave(audit_service, mock_repo, sample_audit, mock_db):
+    """The frontend resends the whole record on every save, so a field
+    being present in the payload with its existing value (no real change)
+    must not be treated as an attempted edit."""
+    sample_audit.status = "Closed"
+    mock_repo.get_by_id = Mock(return_value=sample_audit)
+    mock_repo.update = Mock(return_value=sample_audit)
+    mock_repo.db = mock_db
+    mock_db.commit = Mock()
+    mock_db.refresh = Mock()
+
+    audit_update = schemas.AuditUpdate(findings=sample_audit.findings)
+
+    result = audit_service.update_audit("audit-001", audit_update, user_id=1, username="testuser")
+
+    assert result is not None
+    assert result.status == "Closed"
+    mock_repo.update.assert_called_once()
+
+
 def test_update_audit_not_found(audit_service, mock_repo):
     """Test updating non-existent audit"""
     mock_repo.get_by_id = Mock(return_value=None)

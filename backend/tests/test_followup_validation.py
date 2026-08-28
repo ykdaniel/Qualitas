@@ -161,7 +161,7 @@ class TestFollowUpSourceValidation:
 
         mock_db = Mock()
 
-        supported_modules = ["NCR", "NOI", "ITR", "ITP", "OBS", "PQP", "FAT", "AUDIT"]
+        supported_modules = ["NCR", "NOI", "ITR", "ITP", "OBS", "PQP", "FAT", "AUDIT", "MEETING"]
 
         for module in supported_modules:
             # Mock record not found (will raise error)

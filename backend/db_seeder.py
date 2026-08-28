@@ -102,6 +102,28 @@ def seed_initial_data():
                 db.add(new_p)
         db.commit()
 
+        # 1b. Backfill: any role that already has checklist:update:all also gets the
+        # new checklist:close:all (added for the Checklist read-only-lock hardening).
+        # Without this, existing non-admin roles would suddenly lose the ability to
+        # touch a closed Checklist the moment the frontend lock ships, since a brand
+        # new permission code starts out granted to nobody but admin.
+        checklist_update_perm = db.query(models.Permission).filter(
+            models.Permission.code == "checklist:update:all"
+        ).first()
+        checklist_close_perm = db.query(models.Permission).filter(
+            models.Permission.code == "checklist:close:all"
+        ).first()
+        if checklist_update_perm and checklist_close_perm:
+            roles_with_update = [
+                r for r in db.query(models.Role).all()
+                if checklist_update_perm in r.permissions_rel
+            ]
+            for role in roles_with_update:
+                if checklist_close_perm not in role.permissions_rel:
+                    role.permissions_rel.append(checklist_close_perm)
+                    logger.info(f"Backfilled checklist:close:all onto role '{role.name}'.")
+            db.commit()
+
         # 2. Create admin role if not exists (case-insensitive lookup)
         admin_role = db.query(models.Role).filter(
             models.Role.name.ilike("admin")

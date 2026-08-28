@@ -126,6 +126,76 @@ class TestCascadeDeleteProtection:
         assert "cannot delete" in str(exc_info.value).lower()
         assert "5 ITP" in str(exc_info.value)
 
+    def test_contractor_delete_with_osd_or_checklist_references(self):
+        """OSD and Checklist were missing from check_contractor_references,
+        so a contractor still used only by an OSD/Checklist record could be
+        deleted anyway, leaving that row's vendor FK dangling forever
+        (SQLite's ondelete=SET NULL never fires — PRAGMA foreign_keys is
+        off). Verify both are now checked."""
+        for referencing_model, label in [
+            (models.OSD, "OSD"),
+            (models.Checklist, "Checklist"),
+        ]:
+            mock_repo = Mock()
+            mock_db = Mock()
+            mock_repo.db = mock_db
+
+            mock_contractor = Mock()
+            mock_contractor.id = "contractor-1"
+            mock_contractor.name = "Test Contractor"
+            mock_contractor.__table__ = Mock()
+            mock_contractor.__table__.columns = []
+            mock_repo.get_by_id.return_value = mock_contractor
+
+            def query_side_effect(model_class, _referencing_model=referencing_model):
+                q = Mock()
+                q.filter.return_value.count.return_value = (
+                    3 if model_class is _referencing_model else 0
+                )
+                return q
+
+            mock_db.query.side_effect = query_side_effect
+
+            service = ContractorService(mock_repo)
+
+            with pytest.raises(ValueError) as exc_info:
+                service.delete_contractor("contractor-1")
+
+            assert f"3 {label}" in str(exc_info.value)
+
+    def test_noi_delete_with_checklist_reference(self):
+        """Checklist.noiNumber was missing from check_noi_references, so a
+        NOI still referenced only by a Checklist record could be deleted
+        anyway, leaving that Checklist's noiNumber pointing at nothing."""
+        from services.noi_service import NOIService
+
+        mock_repo = Mock()
+        mock_db = Mock()
+        mock_repo.db = mock_db
+
+        mock_noi = Mock()
+        mock_noi.id = "noi-1"
+        mock_noi.referenceNo = "NOI-001"
+        mock_noi.__table__ = Mock()
+        mock_noi.__table__.columns = []
+        mock_repo.get_by_id.return_value = mock_noi
+
+        def query_side_effect(model_class):
+            q = Mock()
+            q.filter.return_value.count.return_value = (
+                2 if model_class is models.Checklist else 0
+            )
+            return q
+
+        mock_db.query.side_effect = query_side_effect
+
+        service = NOIService(mock_repo)
+
+        with pytest.raises(ValueError) as exc_info:
+            service.delete_noi("noi-1")
+
+        assert "2 Checklist" in str(exc_info.value)
+
     def test_itp_delete_with_noi_references(self):
         """Deleting ITP with NOI references should fail"""
         from services.itp_service import ITPService

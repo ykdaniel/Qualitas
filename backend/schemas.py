@@ -620,7 +620,7 @@ class ITRUpdate(BaseModel):
     discipline: str | None = None
     version_no: int | None = None
 
-    @field_validator('defectPhotos', 'improvementPhotos', 'attachments', 'detail_data', mode='before')
+    @field_validator('defectPhotos', 'improvementPhotos', 'attachments', mode='before')
     @classmethod
     def parse_photos(cls, v):
         if isinstance(v, str):
@@ -905,6 +905,75 @@ class OSDUpdate(BaseModel):
 
 
 class OSD(OSDBase):
+    id: str
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MeetingMinutesBase(BaseModel):
+    project_id: str | None = None
+    vendor: str | None = None
+    documentNumber: str | None = None  # 由後端自動產生
+    status: str
+    title: str | None = None
+    meetingType: str | None = None
+    meetingDate: str | None = None
+    meetingTime: str | None = None
+    location: str | None = None
+    organizer: str | None = None
+    attendees: Any | None = None
+    discussionLog: Any | None = None
+    attachments: list[str] | None = None
+    createdAt: str | None = None
+    updatedAt: str | None = None
+
+    @field_validator('meetingDate', mode='before')
+    @classmethod
+    def check_dates(cls, v):
+        return validate_date_format(v)
+
+    @field_validator('attendees', 'discussionLog', 'attachments', mode='before')
+    @classmethod
+    def parse_json_fields(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return []
+        return v
+
+
+class MeetingMinutesCreate(MeetingMinutesBase):
+    id: str | None = None
+
+
+class MeetingMinutesUpdate(BaseModel):
+    project_id: str | None = None
+    vendor: str | None = None
+    # documentNumber 不可更新（由後端自動產生，建立後不可變）
+    status: str | None = None
+    title: str | None = None
+    meetingType: str | None = None
+    meetingDate: str | None = None
+    meetingTime: str | None = None
+    location: str | None = None
+    organizer: str | None = None
+    attendees: Any | None = None
+    discussionLog: Any | None = None
+    attachments: list[str] | None = None
+    updatedAt: str | None = None
+
+    @field_validator('attendees', 'discussionLog', 'attachments', mode='before')
+    @classmethod
+    def parse_json_fields(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return []
+        return v
+
+
+class MeetingMinutes(MeetingMinutesBase):
     id: str
     model_config = ConfigDict(from_attributes=True)
 

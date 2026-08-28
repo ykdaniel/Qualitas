@@ -680,7 +680,7 @@ const ITPDetail: React.FC = () => {
                           <button
                             onClick={() => {
                               if (item.record.includes('CHK') || item.record.startsWith('QTS')) {
-                                navigate(`/checklist?recordNo=${item.record}&from=itp`);
+                                navigate(`/checklist?openId=${item.record}&from=itp`);
                                 return;
                               }
                               navigate('/itr');

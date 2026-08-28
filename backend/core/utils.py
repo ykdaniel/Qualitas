@@ -188,6 +188,14 @@ class WorkflowEngine:
             "Closed": ["Open", "Void"],
             "Void": []
         },
+        "MeetingMinutes": {
+            # Published is a true dead end, same shape as NOI's "Closed": [] —
+            # a distributed meeting record must not be silently rewritten
+            # after the fact (see meeting_minutes_service.py's unconditional
+            # lock guard).
+            "Draft": ["Published"],
+            "Published": []
+        },
         "Checklist": {
             "Ongoing": ["Pass", "Fail"],
             "Pass": ["Ongoing"],  # 允許回退修改
@@ -462,6 +470,7 @@ _DOC_TYPE_TABLES = {
     'OBS': ('obs', 'documentNumber'),
     'CHECKLIST': ('checklist', 'recordsNo'),
     'OSD': ('osd', 'documentNumber'),
+    'MEETING': ('meeting_minutes', 'documentNumber'),
 }
 
 

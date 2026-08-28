@@ -13,6 +13,7 @@ import OSDPrintTemplate from './OSDPrintTemplate';
 import './OSD.print.css';
 import formStyles from '../Shared/FormShell.module.css';
 import { osdFormSchema, emptyOSDForm, toFormValues, OSD_ERROR_FALLBACKS } from './osdFormSchema';
+import { checkDateOrder } from '../../utils/dateValidation';
 import type { OSDDetailData } from './osdFormSchema';
 
 export type { OSDDetailData };
@@ -161,6 +162,16 @@ export const OSDDetailModal: React.FC<OSDDetailModalProps> = ({ osdId: _osdId, e
         el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };
 
+    // Every other OSD date is expected on/after raiseDate — flag (don't
+    // block) anything that lands before it, e.g. a closeoutDate typo'd to
+    // predate when the report was even raised.
+    const dateFieldLabels: Partial<Record<keyof OSDDetailData, string>> = {
+        dueDate: t('common.dueDate') || 'Due Date',
+        correctiveActionTargetDate: t('osd.correctiveActionTargetDate') || 'Corrective Action Target Date',
+        resolvedDate: t('osd.resolvedDate') || 'Resolved Date',
+        closeoutDate: t('osd.closeoutDate') || 'Closeout Date',
+    };
+
     const dateInput = (field: keyof OSDDetailData) => (
         <input
             {...register(field)}
@@ -168,7 +179,14 @@ export const OSDDetailModal: React.FC<OSDDetailModalProps> = ({ osdId: _osdId, e
             placeholder="mm/dd/yyyy"
             lang="en"
             onFocus={(e) => (e.target.type = 'date')}
-            onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
+            onBlur={(e) => {
+                if (!e.target.value) e.target.type = 'text';
+                const label = dateFieldLabels[field];
+                if (label) {
+                    const check = checkDateOrder(getValues('raiseDate'), e.target.value, t('osd.raiseDate') || 'Raise Date', label);
+                    if (!check.valid) toast.warning(check.message);
+                }
+            }}
             className={formStyles.formInput}
         />
     );

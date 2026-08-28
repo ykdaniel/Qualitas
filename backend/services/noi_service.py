@@ -258,6 +258,23 @@ class NOIService:
                         f"Please ensure all linked NCRs are Closed or Void first."
                     )
 
+            # Guard: a Closed NOI is a true dead end — WorkflowEngine's NOI
+            # transitions (core/utils.py) define "Closed": [], no reopen path
+            # exists at all (unlike Checklist/OBS, which can go back to
+            # Ongoing/Open). So unlike NCR's _LOCKED_QUALITY_FIELDS (which
+            # only locks specific fields and carves out a reopen exception),
+            # a Closed NOI can safely be locked unconditionally — there's no
+            # legitimate "reopen and edit" flow to accidentally break.
+            # Compare against the DB's current values, not mere key-presence,
+            # since the frontend resends the whole record on every save.
+            if db_noi.status == 'Closed':
+                changed_fields = {f for f in d if d[f] != old_val.get(f)}
+                if changed_fields:
+                    raise ValueError(
+                        f"Cannot modify a closed NOI '{db_noi.referenceNo}' — "
+                        f"no fields can be changed once an NOI is closed."
+                    )
+
             # Update the record
             updated = self.repo.update(db_noi, d)
 
@@ -344,6 +361,14 @@ class NOIService:
 
             # Capture old values for audit
             old_val = {c.name: getattr(db_noi, c.name) for c in db_noi.__table__.columns}
+
+            # Clean up the auto-created 1:1 Q-WorkFlow tracker row. SQLite's
+            # ondelete="CASCADE" on QWorkflow.noi_id never actually fires
+            # (PRAGMA foreign_keys is off), so without this it would be
+            # left permanently orphaned, pointing at a deleted NOI.
+            self.repo.db.query(models.QWorkflow).filter(
+                models.QWorkflow.noi_id == db_noi.id
+            ).delete()
 
             # Delete the record
             self.repo.delete(db_noi)

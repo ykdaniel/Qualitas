@@ -178,6 +178,7 @@ _ENTITY_MODELS = {
     "ncr": models.NCR, "noi": models.NOI, "itr": models.ITR, "itp": models.ITP,
     "obs": models.OBS, "osd": models.OSD, "pqp": models.PQP, "fat": models.FAT,
     "followup": models.FollowUp, "audit": models.Audit, "checklist": models.Checklist,
+    "meeting": models.MeetingMinutes,
 }
 
 

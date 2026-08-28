@@ -8,6 +8,7 @@ import { useOBSStore } from '../../../store/obsStore';
 import { useITRStore } from '../../../store/itrStore';
 import type { NOIItem } from '../../../store/noiStore';
 import { validateStatusTransition, NOIStatusTransitions, NOIStatusTransitionList, validateRequiredFields, NOIValidationRules } from '../../../utils/statusValidation';
+import { checkDateOrder } from '../../../utils/dateValidation';
 import FileAttachment from '../../Shared/FileAttachment';
 import RelatedDocuments from '../../ui/RelatedDocuments';
 import styles from '../NOI.module.css';
@@ -16,6 +17,7 @@ import { NOIDetailData } from '../NOITypes';
 
 export interface NOIDetailModalProps {
     noiId: string | null;
+    readOnly?: boolean;
     existingData?: NOIDetailData;
     existingItem?: NOIItem;
     noiList: NOIItem[];
@@ -24,7 +26,7 @@ export interface NOIDetailModalProps {
     onPrint?: (data: NOIDetailData) => void;
 }
 
-export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, existingData, existingItem, noiList: _noiList, onSave, onClose, onPrint }) => {
+export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, readOnly = false, existingData, existingItem, noiList: _noiList, onSave, onClose, onPrint }) => {
     const { t } = useLanguage();
     const { getActiveContractors } = useContractorsStore();
     const itpList = useITPStore(state => state.itpList);
@@ -127,6 +129,10 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, e
             if (field === 'contractor' && value) {
                 updated.itpNo = '';
             }
+            if (field === 'issueDate' || field === 'inspectionDate') {
+                const check = checkDateOrder(updated.issueDate, updated.inspectionDate, t('noi.issueDate') || 'Issue Date', t('noi.inspectionDate') || 'Inspection Date');
+                if (!check.valid) toast.warning(check.message);
+            }
             return updated;
         });
     };
@@ -211,11 +217,16 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, e
         <div className={formStyles.modalOverlay}>
             <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
                 <div className={formStyles.modalHeader}>
-                    <h2>{existingData || existingItem ? t('noi.editTitle') : t('noi.addTitle')}</h2>
+                    <h2>{readOnly ? t('noi.viewTitle') : existingData || existingItem ? t('noi.editTitle') : t('noi.addTitle')}</h2>
                     <button className={formStyles.closeButton} onClick={onClose}>×</button>
                 </div>
                 <div className={formStyles.modalBody}>
+                    {!readOnly && (
                     <p className={formStyles.formRequiredHint}>{t('form.requiredHint')}</p>
+                    )}
+                    {/* A single disabled fieldset locks every input/select/textarea
+                        and inline button below in one shot when readOnly. */}
+                    <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
                     <div className={formStyles.formSections}>
                         <div className={formStyles.formSection}>
                             <h3 className={formStyles.sectionTitle}>{t('noi.detailsTitle')}</h3>
@@ -226,7 +237,25 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, e
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label className={formStyles.requiredLabel}>{t('common.contractor')}</label>
-                                    <select className={`${formStyles.formSelect}${errors.contractor ? ' ' + formStyles.errorInput : ''}`} value={formData.contractor} onChange={(e) => handleFieldChange('contractor', e.target.value)}>
+                                    <select
+                                        className={`${formStyles.formSelect}${errors.contractor ? ' ' + formStyles.errorInput : ''}`}
+                                        value={formData.contractor}
+                                        onChange={(e) => {
+                                            const selected = getActiveContractors().find(c => c.name === e.target.value);
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                contractor: e.target.value,
+                                                itpNo: '',
+                                                // Default from the contractor's own contact info instead of
+                                                // making the user retype it on every NOI — only fills empty
+                                                // fields, never overwrites a contact already typed for this
+                                                // specific inspection.
+                                                contacts: prev.contacts || selected?.contactPerson || '',
+                                                phone: prev.phone || selected?.phone || '',
+                                                email: prev.email || selected?.email || '',
+                                            }));
+                                        }}
+                                    >
                                         <option value="">{t('common.selectPlaceholder')}</option>
                                         {getActiveContractors().map((contractor) => (
                                             <option key={contractor.id} value={contractor.name}>{contractor.name}</option>
@@ -395,6 +424,7 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, e
                             <RelatedDocuments entityType="noi" entityId={existingItem.id} />
                         )}
                     </div>
+                    </fieldset>
                 </div>
                 <div className={formStyles.modalActions}>
                     {onPrint && (
@@ -406,7 +436,9 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, e
                             {t('common.print')}
                         </button>
                     )}
-                    <button className={formStyles.saveButton} onClick={handleSave} disabled={saving || !isFormValid} title={!isFormValid ? t('form.requiredHint') : undefined}>{saving ? t('common.saving') || 'Saving...' : t('common.save')}</button>
+                    {!readOnly && (
+                        <button className={formStyles.saveButton} onClick={handleSave} disabled={saving || !isFormValid} title={!isFormValid ? t('form.requiredHint') : undefined}>{saving ? t('common.saving') || 'Saving...' : t('common.save')}</button>
+                    )}
                     <button className={formStyles.cancelButton} onClick={onClose} disabled={saving}>{t('common.cancel')}</button>
                 </div>
             </div>

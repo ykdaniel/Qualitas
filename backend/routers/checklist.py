@@ -76,6 +76,8 @@ def update_checklist(
         db_chk = service.update_checklist(chk_id, chk, user_id=current_user.id, username=current_user.username, scope=scope)
     except ScopeForbidden as e:
         raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if db_chk is None:
         raise HTTPException(status_code=404, detail="Checklist not found")
     return db_chk

@@ -255,7 +255,7 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
 
             const newRecordNo = res.data.recordsNo || res.data.records_no;
             toast.success(`Checklist ${newRecordNo} created successfully`);
-            navigate(`/checklist?recordNo=${newRecordNo}&from=itp`);
+            navigate(`/checklist?openId=${newRecordNo}&from=itp`);
         } catch (err: any) {
             toast.error(err?.response?.data?.detail || 'Failed to generate checklist');
         } finally {

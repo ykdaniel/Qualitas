@@ -19,6 +19,7 @@ const userSchema = z.object({
 
 interface UserModalProps {
     existingUser: User | null;
+    readOnly?: boolean;
     roles: Role[];
     onSave: (validationData: any, isUpdate: boolean, id?: number) => Promise<number | void>;
     onClose: () => void;
@@ -26,7 +27,7 @@ interface UserModalProps {
     loading: boolean;
 }
 
-const UserModal: React.FC<UserModalProps> = ({ existingUser, roles, onSave, onClose, t, loading }) => {
+const UserModal: React.FC<UserModalProps> = ({ existingUser, readOnly = false, roles, onSave, onClose, t, loading }) => {
     const [isClosing, setIsClosing] = useState(false);
     const [resetPassword, setResetPassword] = useState(false);
     // Create mode only: scope chosen before the user exists, persisted post-create.
@@ -130,13 +131,14 @@ const UserModal: React.FC<UserModalProps> = ({ existingUser, roles, onSave, onCl
                 onMouseDown={e => e.stopPropagation()}
             >
                 <div className={styles.modalHeader}>
-                    <h2>{existingUser ? t('iam.editUser') : t('iam.addUser')}</h2>
+                    <h2>{readOnly ? t('iam.viewUser') : existingUser ? t('iam.editUser') : t('iam.addUser')}</h2>
                     <button type="button" className={styles.closeIconBtn} onClick={handleClose}>
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                     </button>
                 </div>
-                
+
                 <form onSubmit={handleSubmit} className={styles.modalForm}>
+                    <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
                     <div className={styles.formGrid}>
                         <div className={styles.formGroup}>
                             <label>{t('iam.name')} <span className={styles.required}>*</span></label>
@@ -228,12 +230,15 @@ const UserModal: React.FC<UserModalProps> = ({ existingUser, roles, onSave, onCl
                             )}
                         </div>
                     </div>
+                    </fieldset>
 
                     <div className={styles.formActions}>
                         <button type="button" className={styles.cancelButton} onClick={handleClose} disabled={loading}>{t('common.cancel')}</button>
-                        <button type="submit" className={styles.submitButton} disabled={loading}>
-                            {loading ? (t('common.saving') || 'Saving...') : (existingUser ? t('common.save') : t('common.add'))}
-                        </button>
+                        {!readOnly && (
+                            <button type="submit" className={styles.submitButton} disabled={loading}>
+                                {loading ? (t('common.saving') || 'Saving...') : (existingUser ? t('common.save') : t('common.add'))}
+                            </button>
+                        )}
                     </div>
                 </form>
             </div>

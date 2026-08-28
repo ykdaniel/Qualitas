@@ -6,6 +6,7 @@ import models
 import schemas
 from repositories.user_repository import UserRepository
 from crud import log_audit  # Import existing audit logger to maintain legacy compatibility for now
+from core import validators
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -287,6 +288,11 @@ class UserService:
         db_role = self.repo.get_role_by_id(role_id)
         if not db_role:
             return False
+
+        try:
+            validators.check_role_references(self.repo.db, role_id, db_role.name)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
         old_val = {"name": db_role.name, "permissions": [p.code for p in db_role.permissions_rel]}
         self.repo.delete_role(db_role)

@@ -41,6 +41,14 @@ class FollowUpRepository:
                     (models.FollowUp.issue.ilike(f"%{search_term}%"))
                 )
 
+        # Lets a source module (e.g. Meeting Minutes) look up exactly the
+        # FollowUp rows it produced, to render them read-only when the
+        # source record is reopened.
+        if filters.get('sourceModule'):
+            query = query.filter(models.FollowUp.sourceModule == filters['sourceModule'])
+        if filters.get('sourceReferenceNo'):
+            query = query.filter(models.FollowUp.sourceReferenceNo == filters['sourceReferenceNo'])
+
         # P0 data isolation: restrict to the caller's project/contractor scope.
         query = apply_scope(query, models.FollowUp, scope)
 

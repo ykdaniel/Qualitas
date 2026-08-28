@@ -85,3 +85,96 @@ def test_update_pqp_success(pqp_service, mock_repo):
         assert result.title == "Updated Title"
         mock_repo.update.assert_called_once()
         mock_log.assert_called_once()
+
+
+def test_update_approved_pqp_rejects_content_change(pqp_service, mock_repo):
+    """An Approved PQP's document content is locked — revisions must go
+    through publish_pqp (which snapshots PQPHistory), not a silent swap
+    via plain update. Mirrors OBS's reopen-aware locked-fields pattern."""
+    mock_db_pqp = models.PQP(
+        id="pqp-123", status="Approved", pqpNo="PQP-001",
+        title="Original Title", version="Rev1.0",
+    )
+    mock_repo.get_by_id.return_value = mock_db_pqp
+
+    pqp_update = schemas.PQPUpdate(title="Sneaky Retitle")
+
+    with pytest.raises(ValueError) as excinfo:
+        pqp_service.update_pqp("pqp-123", pqp_update)
+
+    assert "Approved PQP" in str(excinfo.value)
+    mock_repo.update.assert_not_called()
+
+def test_update_approved_pqp_allows_noop_resave(pqp_service, mock_repo):
+    """The frontend resends the whole record every save, so a locked field
+    present with its existing value (no real change) must not be rejected."""
+    mock_db_pqp = models.PQP(
+        id="pqp-123", status="Approved", pqpNo="PQP-001",
+        title="Same Title", version="Rev1.0",
+    )
+    mock_repo.get_by_id.return_value = mock_db_pqp
+
+    with patch('services.pqp_service.log_audit') as mock_log:
+        pqp_update = schemas.PQPUpdate(title="Same Title")
+        mock_repo.update.return_value = mock_db_pqp
+
+        result = pqp_service.update_pqp("pqp-123", pqp_update, user_id=1, username="admin")
+
+        assert result.status == "Approved"
+        mock_repo.update.assert_called_once()
+        mock_log.assert_called_once()
+
+def test_update_approved_pqp_allows_non_locked_field_change(pqp_service, mock_repo):
+    """Only document-content fields are locked — vendor stays editable on
+    an Approved PQP, matching NCR/OBS's precedent of not locking every
+    field once approved/closed."""
+    mock_db_pqp = models.PQP(id="pqp-123", status="Approved", pqpNo="PQP-001")
+    mock_repo.get_by_id.return_value = mock_db_pqp
+
+    with patch('services.pqp_service.log_audit') as mock_log, \
+         patch('services.pqp_service._resolve_vendor_id') as mock_resolve:
+        mock_resolve.return_value = "vendor-uuid-456"
+        pqp_update = schemas.PQPUpdate(vendor="NewVendor")
+        mock_updated_pqp = models.PQP(id="pqp-123", status="Approved", vendor_id="vendor-uuid-456")
+        mock_repo.update.return_value = mock_updated_pqp
+
+        result = pqp_service.update_pqp("pqp-123", pqp_update, user_id=1, username="admin")
+
+        assert result.vendor_id == "vendor-uuid-456"
+        mock_repo.update.assert_called_once()
+        mock_log.assert_called_once()
+
+def test_update_approved_pqp_allows_reopen_with_content_change(pqp_service, mock_repo):
+    """Explicitly sending an Approved PQP back to Under Review is the
+    designed escape hatch — content fields may change in the same save
+    that reopens it."""
+    mock_db_pqp = models.PQP(
+        id="pqp-123", status="Approved", pqpNo="PQP-001", title="Original",
+    )
+    mock_repo.get_by_id.return_value = mock_db_pqp
+
+    with patch('services.pqp_service.log_audit') as mock_log:
+        pqp_update = schemas.PQPUpdate(status="Under Review", title="Revised for rework")
+        mock_updated_pqp = models.PQP(id="pqp-123", status="Under Review", title="Revised for rework")
+        mock_repo.update.return_value = mock_updated_pqp
+
+        result = pqp_service.update_pqp("pqp-123", pqp_update, user_id=1, username="admin")
+
+        assert result.status == "Under Review"
+        mock_repo.update.assert_called_once()
+        mock_log.assert_called_once()
+
+def test_delete_pqp_cleans_up_history(pqp_service, mock_repo):
+    """PQPHistory.pqp_id declares ondelete='CASCADE' and the ORM relationship
+    declares cascade='all, delete-orphan', but SQLite's FK enforcement is
+    off, so neither actually fires. delete_pqp must clean up history rows
+    itself or they're left permanently orphaned."""
+    mock_db_pqp = models.PQP(id="pqp-123", pqpNo="PQP-001")
+    mock_repo.get_by_id.return_value = mock_db_pqp
+
+    result = pqp_service.delete_pqp("pqp-123", user_id=1, username="admin")
+
+    assert result is True
+    mock_repo.db.query.assert_any_call(models.PQPHistory)
+    mock_repo.db.query.return_value.filter.return_value.delete.assert_called()
+    mock_repo.delete.assert_called_once_with(mock_db_pqp)

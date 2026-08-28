@@ -18,6 +18,14 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
+def _require_role_manage_permission(current_user: "schemas.User") -> None:
+    user_permissions = {p.code for p in current_user.role.permissions_rel}
+    if ROLE_MANAGE not in user_permissions:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Operation not permitted. Required: {ROLE_MANAGE}",
+        )
+
 # === Users ===
 @router.get("/users/", response_model=list[schemas.User])
 def read_users(
@@ -59,6 +67,20 @@ def update_user(
     user_service: UserService = Depends(get_user_service),
     current_user: schemas.User = Depends(RoleChecker(USER_MANAGE))
 ):
+    # role_id is a privilege-escalation vector: plain iam:user:manage must not
+    # be enough to hand out (or accept) a more powerful role. Only gate this
+    # one field — compare against the DB value, not mere key-presence, since
+    # the frontend resends the whole record on every save (same reasoning as
+    # NCR's _require_approve_permission).
+    if user.role_id is not None:
+        existing = user_service.get_user(user_id=user_id)
+        if existing is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        if user.role_id != existing.role_id:
+            if user_id == current_user.id:
+                raise HTTPException(status_code=403, detail="Cannot change your own role")
+            _require_role_manage_permission(current_user)
+
     hashed_password = None
     if user.password:
         from services.user_service import _validate_password_strength

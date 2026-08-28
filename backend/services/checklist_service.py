@@ -217,6 +217,30 @@ class ChecklistService:
             d = checklist_update.model_dump(exclude_unset=True)
             d = _json_serialize(d, ['detail_data'])
 
+            # Guard: once Pass/Fail, the actual inspection results are locked
+            # — mirrors OBS's/PQP's reopen-aware _LOCKED_*_FIELDS pattern.
+            # WorkflowEngine.TRANSITIONS["Checklist"] already defines
+            # "Pass"/"Fail": ["Ongoing"] as legal (comment: 允許回退修改), so
+            # this can't be an unconditional lock like NOI's. The frontend
+            # has no manual status dropdown though — status is always
+            # re-derived from item results on save — so the only way back to
+            # Ongoing is a dedicated "Reopen" action that sends status=
+            # 'Ongoing' on its own, which this exempts.
+            _LOCKED_CHECKLIST_FIELDS = {'detail_data', 'passCount', 'failCount'}
+            is_already_locked = db_checklist.status in ('Pass', 'Fail')
+            is_reopening = is_already_locked and d.get('status') not in (None, 'Pass', 'Fail')
+
+            if is_already_locked and not is_reopening:
+                changed_locked = {
+                    f for f in (_LOCKED_CHECKLIST_FIELDS & set(d.keys()))
+                    if d[f] != getattr(db_checklist, f, None)
+                }
+                if changed_locked:
+                    raise ValueError(
+                        "Cannot modify inspection results on a Pass/Fail Checklist — "
+                        "use Reopen to switch it back to Ongoing first."
+                    )
+
             # Handle contractor name -> contractor_id mapping
             if 'contractor' in d:
                 contractor_name = d.pop('contractor')

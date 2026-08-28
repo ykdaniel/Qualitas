@@ -146,6 +146,7 @@ def update_itr(
 def create_ncr_from_itr(
     itr_id: str,
     itr_service: ITRService = Depends(get_itr_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(NCR_CREATE)),
 ):
     """Auto-create an NCR from a failed ITR."""
@@ -154,9 +155,12 @@ def create_ncr_from_itr(
             itr_id=itr_id,
             user_id=current_user.id,
             username=current_user.username,
+            scope=scope,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    if ncr is None:
+        raise HTTPException(status_code=404, detail="ITR not found")
     return ncr
 
 
@@ -164,6 +168,7 @@ def create_ncr_from_itr(
 def create_reinspection(
     itr_id: str,
     itr_service: ITRService = Depends(get_itr_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(ITR_CREATE)),
 ):
     """Create a re-inspection ITR from an existing ITR."""
@@ -172,9 +177,12 @@ def create_reinspection(
             itr_id=itr_id,
             user_id=current_user.id,
             username=current_user.username,
+            scope=scope,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    if new_itr is None:
+        raise HTTPException(status_code=404, detail="ITR not found")
     return new_itr
 
 

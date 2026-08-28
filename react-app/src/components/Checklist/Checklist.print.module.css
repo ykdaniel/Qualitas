@@ -1,0 +1,399 @@
+/* Print-only styles for ChecklistPrintTemplate.tsx (extracted from Checklist.module.css). */
+
+/* 列印區域容器，模擬 A4 */
+.printablePage {
+    background: white;
+    width: 210mm;
+    min-height: 297mm;
+    padding: 15mm;
+    box-sizing: border-box;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+    color: #000;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    position: relative;
+    display: none;
+    /* Hide by default, show only in print */
+}
+
+@page {
+    size: auto;
+    margin: 0mm;
+}
+
+@media print {
+
+    /* Hide the main application */
+    :global(#root) {
+        display: none !important;
+    }
+
+    :global(body) {
+        margin: 0 !important;
+        padding: 0 !important;
+        visibility: visible !important;
+    }
+
+    /* Style the portal root for printing */
+    :global(#checklist-print-root) {
+        display: block !important;
+        position: static !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 10mm !important;
+        /* Adjust padding as needed */
+        visibility: visible !important;
+        background: white !important;
+        color: black !important;
+        z-index: 9999;
+    }
+
+    /* Ensure table inputs are clean for printing */
+    .tableInput,
+    .infoValue textarea,
+    .infoValue input {
+        background: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+        resize: none !important;
+        box-shadow: none !important;
+    }
+}
+
+/* 表頭專業佈局 (3欄) */
+.headerTable {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1pt solid #000;
+    margin-bottom: 0;
+}
+
+.headerTable td {
+    border: 1pt solid #000;
+    padding: 10px;
+    vertical-align: middle;
+}
+
+.headerCompanyCol {
+    width: 25%;
+    text-align: left;
+}
+
+.headerTitleCol {
+    width: 50%;
+    text-align: center;
+}
+
+.headerInfoCol {
+    width: 25%;
+    padding: 0 !important;
+}
+
+.headerInfoRow {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 8px;
+    font-size: 11px;
+}
+
+.headerInfoRow:not(:last-child) {
+    border-bottom: 1pt solid #000;
+}
+
+.headerInfoLabel {
+    font-weight: bold;
+}
+
+.headerInfoValue {
+    font-family: tabular-nums;
+}
+
+/* 格狀資訊區塊 */
+.infoGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 1pt solid #000;
+    border-top: none;
+    /* Already has table border above */
+    margin-bottom: 0;
+    /* Removed margin */
+}
+
+.infoItem {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    border-bottom: 1pt solid #000;
+}
+
+/* 移除最後一行的下邊框 */
+.infoGrid>div:nth-last-child(-n+2) {
+    border-bottom: none;
+}
+
+/* 左側垂直邊框 */
+.infoGrid>div:nth-child(even) {
+    border-left: 1pt solid #000;
+}
+
+.infoLabel {
+    padding: 6px 10px;
+    /* Reduced from 10px */
+    background: #fff;
+    border-right: 1pt solid #000;
+    font-size: 13px;
+    /* Reduced from 14px */
+    font-weight: bold;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.infoValue {
+    padding: 6px 10px;
+    /* Reduced from 10px */
+    font-size: 14px;
+    /* Reduced from 15px */
+    display: flex;
+    align-items: center;
+    font-weight: 500;
+}
+
+.infoValue textarea {
+    width: 100%;
+    border: 1pt solid #e2e8f0;
+    outline: none;
+    font-size: 13px;
+    background: #f8fafc;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-family: inherit;
+    resize: none;
+    transition: all 0.2s;
+    line-height: 1.5;
+}
+
+.infoValue textarea:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+.infoValue textarea:focus {
+    background: #fff;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.infoValue input,
+.reInspectionItem input {
+    width: 100%;
+    border: 1pt solid #e2e8f0;
+    outline: none;
+    font-size: 13px;
+    background: #f8fafc;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.infoValue input {
+    padding: 4px 8px;
+}
+
+.reInspectionItem input {
+    padding: 6px 12px;
+}
+
+.infoValue input:hover,
+.reInspectionItem input:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+.infoValue input:focus,
+.reInspectionItem input:focus {
+    background: #fff;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+@media print {
+
+    .infoValue input,
+    .infoValue textarea,
+    .reInspectionItem input {
+        background: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+        resize: none !important;
+    }
+}
+
+/* 查驗明細表 */
+.itemsTable {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1pt solid #000;
+    margin-bottom: 0;
+    /* Removed margin to close gap with footer */
+    table-layout: fixed;
+    margin-top: -1pt;
+    /* Overlap with infoGrid */
+}
+
+.itemsTable th,
+.itemsTable td {
+    border: 1pt solid #000;
+    padding: 8px 10px;
+    font-size: 13px;
+    word-wrap: break-word;
+}
+
+.itemsTable thead th {
+    background: #f8fafc;
+    font-weight: bold;
+    text-align: center;
+}
+
+@media print {
+    .tableInput {
+        background: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+        resize: none !important;
+    }
+}
+
+/* 查驗結果按紐樣式 */
+
+/* 底部聲明與簽名 */
+.footerSection {
+    margin-top: -1pt;
+    /* Overlap with itemsTable */
+}
+
+.statementBox {
+    border: 1pt solid #000;
+    padding: 6px 10px;
+    /* Reduced padding */
+    margin-bottom: 0;
+    /* Removed gap with signature table */
+    font-size: 12px;
+}
+
+/* Signature Table Styles */
+/* Bottom Layout */
+.bottomLayout {
+    display: flex;
+    border: 1pt solid #000;
+    margin-top: -1pt;
+    /* Changed from 10px to overlap */
+}
+
+/* Signature Table Styles */
+.signatureTable {
+    flex: 1;
+    border-collapse: collapse;
+    border: none;
+    /* Border handled by container */
+    margin-bottom: 0;
+    table-layout: fixed;
+}
+
+.signatureTable td {
+    border: 1pt solid #000;
+    padding: 6px;
+    /* Reduced from 8px */
+    vertical-align: middle;
+}
+
+.signatureLabelCell {
+    font-weight: 700;
+    font-size: 14px;
+    background-color: #fff;
+    white-space: nowrap;
+    padding: 8px;
+    /* Reset padding */
+    text-align: center;
+    /* Center align */
+}
+
+/* Specific column widths for the top 4-column layout */
+.signatureTable tr td:nth-child(1).signatureLabelCell {
+    width: 25%;
+    /* Re-inspection Label (Reduced from 35%) */
+}
+
+.signatureTable tr td:nth-child(2).signatureValueCell {
+    width: 25%;
+    /* Re-inspection Value */
+}
+
+.signatureTable tr td:nth-child(3).signatureLabelCell {
+    width: 15%;
+    /* NCR Label */
+}
+
+.signatureTable tr td:nth-child(4).signatureValueCell {
+    width: 35%;
+    /* NCR Value (Increased to balance) */
+}
+
+.signatureValueCell {
+    position: relative;
+    padding: 0;
+}
+
+.signatureValueCell input {
+    width: 100%;
+    height: 100%;
+    border: none;
+    outline: none;
+    background: transparent;
+    padding: 8px;
+    font-size: 14px;
+    text-align: center;
+}
+
+.signatureHeaderCell {
+    font-weight: 700;
+    font-size: 13px;
+    text-align: center;
+    background-color: #fff;
+    padding: 6px;
+    border-bottom: 1pt solid #000;
+}
+
+.remarkSection {
+    width: 250px;
+    /* Adjusted width */
+    border-right: 1pt solid #000;
+    padding: 8px;
+    font-size: 10px;
+    color: #444;
+    display: flex;
+    flex-direction: column;
+}
+
+.watermark {
+    text-align: center;
+    font-style: italic;
+    color: #cbd5e1;
+    font-size: 10px;
+}
+
+/* Fix double borders in signature section */
+.bottomLayout .signatureTable tr td:last-child {
+    border-right: none;
+}
+
+.bottomLayout .signatureTable tr:last-child td {
+    border-bottom: none;
+}
+
+.bottomLayout .signatureTable tr:first-child td {
+    border-top: none;
+}
+
+.bottomLayout .signatureTable tr td:first-child {
+    border-left: none;
+}

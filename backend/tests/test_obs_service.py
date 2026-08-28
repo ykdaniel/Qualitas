@@ -85,3 +85,81 @@ def test_update_obs_success(obs_service, mock_repo):
         assert result.description == "Updated Obs"
         mock_repo.update.assert_called_once()
         mock_log.assert_called_once()
+
+def test_update_closed_obs_rejects_evidence_change(obs_service, mock_repo):
+    """Closed OBS still has a real reopen path (unlike NOI), so only the
+    substantive improvement-evidence fields are locked, not the whole
+    record — mirrors NCR's _LOCKED_QUALITY_FIELDS pattern."""
+    mock_db_obs = models.OBS(
+        id="obs-123", status="Closed", documentNumber="OBS-001",
+        productDisposition="Repair", improvementPhotos="orig.jpg",
+    )
+    mock_repo.get_by_id.return_value = mock_db_obs
+
+    obs_update = schemas.OBSUpdate(improvementPhotos="tampered.jpg")
+
+    with pytest.raises(ValueError) as excinfo:
+        obs_service.update_obs("obs-123", obs_update)
+
+    assert "Closed observation" in str(excinfo.value)
+    mock_repo.update.assert_not_called()
+
+def test_update_closed_obs_allows_noop_resave(obs_service, mock_repo):
+    """The frontend resends the whole record every save, so a locked field
+    present with its existing value (no real change) must not be rejected."""
+    mock_db_obs = models.OBS(
+        id="obs-123", status="Closed", documentNumber="OBS-001",
+        productDisposition="Repair", description="same value",
+    )
+    mock_repo.get_by_id.return_value = mock_db_obs
+
+    with patch('services.obs_service.log_audit') as mock_log:
+        obs_update = schemas.OBSUpdate(productDisposition="Repair", description="same value")
+        mock_repo.update.return_value = mock_db_obs
+
+        result = obs_service.update_obs("obs-123", obs_update, user_id=1, username="admin")
+
+        assert result.status == "Closed"
+        mock_repo.update.assert_called_once()
+        mock_log.assert_called_once()
+
+def test_update_closed_obs_allows_non_locked_field_change(obs_service, mock_repo):
+    """Only the improvement-evidence fields are locked — administrative
+    fields like remark stay editable on a Closed OBS, matching NCR's
+    precedent of not locking every field once closed."""
+    mock_db_obs = models.OBS(
+        id="obs-123", status="Closed", documentNumber="OBS-001", remark="old",
+    )
+    mock_repo.get_by_id.return_value = mock_db_obs
+
+    with patch('services.obs_service.log_audit') as mock_log:
+        obs_update = schemas.OBSUpdate(remark="new remark")
+        mock_updated_obs = models.OBS(id="obs-123", status="Closed", remark="new remark")
+        mock_repo.update.return_value = mock_updated_obs
+
+        result = obs_service.update_obs("obs-123", obs_update, user_id=1, username="admin")
+
+        assert result.remark == "new remark"
+        mock_repo.update.assert_called_once()
+        mock_log.assert_called_once()
+
+def test_update_closed_obs_allows_reopen_with_evidence_change(obs_service, mock_repo):
+    """Explicitly reopening (status away from Closed) is the designed
+    escape hatch — evidence fields may change in the same save that
+    reopens the record, since that's presumably the point of reopening."""
+    mock_db_obs = models.OBS(
+        id="obs-123", status="Closed", documentNumber="OBS-001",
+        improvementPhotos="orig.jpg",
+    )
+    mock_repo.get_by_id.return_value = mock_db_obs
+
+    with patch('services.obs_service.log_audit') as mock_log:
+        obs_update = schemas.OBSUpdate(status="Open", improvementPhotos="revised.jpg")
+        mock_updated_obs = models.OBS(id="obs-123", status="Open", improvementPhotos="revised.jpg")
+        mock_repo.update.return_value = mock_updated_obs
+
+        result = obs_service.update_obs("obs-123", obs_update, user_id=1, username="admin")
+
+        assert result.status == "Open"
+        mock_repo.update.assert_called_once()
+        mock_log.assert_called_once()

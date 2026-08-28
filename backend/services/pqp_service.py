@@ -119,6 +119,28 @@ class PQPService:
             if 'status' in d:
                 d['status'] = self._normalize_pqp_status(d.get('status'))
 
+            # Guard: once Approved, the document itself is locked — revisions
+            # must go through publish_pqp (which snapshots history), not a
+            # silent swap via plain update. Mirrors OBS's reopen-aware
+            # _LOCKED_OBS_FIELDS pattern (obs_service.py): WorkflowEngine's
+            # "Approved": ["Under Review", "Void"] is a real reopen path, so
+            # this can't be an unconditional lock like NOI's — a save that
+            # explicitly sends the PQP back to Under Review is exempted.
+            _LOCKED_PQP_FIELDS = {'title', 'description', 'version', 'attachments'}
+            is_already_approved = self._normalize_pqp_status(db_pqp.status) == 'Approved'
+            is_reopening = is_already_approved and d.get('status') not in (None, 'Approved')
+
+            if is_already_approved and not is_reopening:
+                changed_locked = {
+                    f for f in (_LOCKED_PQP_FIELDS & set(d.keys()))
+                    if d[f] != getattr(db_pqp, f, None)
+                }
+                if changed_locked:
+                    raise ValueError(
+                        "Cannot modify document content on an Approved PQP — "
+                        "use Publish to create a new revision instead."
+                    )
+
             if 'vendor' in d:
                 vendor_name = d.pop('vendor')
                 d['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
@@ -141,11 +163,11 @@ class PQPService:
             raise e
 
     def publish_pqp(self, pqp_id: str, change_summary: str = None,
-                    user_id: int = None, username: str = None) -> Optional[models.PQP]:
+                    user_id: int = None, username: str = None, scope=None) -> Optional[models.PQP]:
         """Publish a new revision: snapshot current version to history, then bump version"""
         try:
             db_pqp = self.repo.get_by_id(pqp_id)
-            if not db_pqp:
+            if not db_pqp or not record_in_scope(db_pqp, scope):
                 return None
 
             # Determine next version_no
@@ -213,6 +235,17 @@ class PQPService:
                 return False
 
             old_val = {c.name: getattr(db_pqp, c.name) for c in db_pqp.__table__.columns}
+
+            # Clean up owned history snapshots. PQPHistory.pqp_id declares
+            # ondelete="CASCADE" and the ORM relationship declares
+            # cascade="all, delete-orphan", but SQLite's FK enforcement is
+            # off (PRAGMA foreign_keys never set) so neither actually
+            # fires — without this, every history row would be left
+            # orphaned, pqp_id pointing at a deleted PQP.
+            self.repo.db.query(models.PQPHistory).filter(
+                models.PQPHistory.pqp_id == pqp_id
+            ).delete()
+
             self.repo.delete(db_pqp)
 
             log_audit(

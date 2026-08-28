@@ -17,6 +17,7 @@ import styles from './FAT.module.css';
 import formStyles from '../Shared/FormShell.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import { useFATStats } from '../../hooks/useFATStats';
+import { checkDateOrder } from '../../utils/dateValidation';
 
 type StatusFilter = 'all' | 'scheduled' | 'inProgress' | 'completed' | 'cancelled';
 
@@ -241,9 +242,11 @@ const FAT: React.FC = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
-            {t('fat.addNew')}
-          </button>
+          {hasPermission('fat:create:all') && (
+            <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+              {t('fat.addNew')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -563,7 +566,18 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
   });
 
   const handleFieldChange = (field: keyof FATItem, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData(prev => {
+      const updated = { ...prev, [field]: value };
+      if (field === 'startDate' || field === 'endDate') {
+        const check = checkDateOrder(updated.startDate, updated.endDate, t('fat.startDate') || 'Start Date', t('fat.endDate') || 'End Date');
+        if (!check.valid) toast.warning(check.message);
+      }
+      if (field === 'endDate' || field === 'moveInDate') {
+        const check = checkDateOrder(updated.endDate, updated.moveInDate, t('fat.endDate') || 'End Date', t('fat.moveInDate') || 'Move-in Date');
+        if (!check.valid) toast.warning(check.message);
+      }
+      return updated;
+    });
   };
 
   const handleSave = async () => {

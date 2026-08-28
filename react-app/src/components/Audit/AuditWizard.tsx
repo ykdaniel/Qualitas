@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { toast } from 'sonner';
 import {
   MapPin, ClipboardList, CheckCircle, ChevronRight, ChevronLeft,
   Save, FileText, Users, CheckSquare, Plus, Trash2, Edit2, Check, X,
@@ -8,6 +9,7 @@ import { useAuditStore, AuditItem } from '../../store/auditStore';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useProjectStore } from '../../store/projectStore';
 import { useLanguage } from '../../context/LanguageContext';
+import { checkDateOrder } from '../../utils/dateValidation';
 
 const ALL_CATEGORY = '__ALL__';
 const UNCATEGORIZED = '__UNCATEGORIZED__';
@@ -39,11 +41,12 @@ const ISO_CLAUSES = [
 interface AuditWizardProps {
   auditId: string | null;
   existingItem?: AuditItem;
+  readOnly?: boolean;
   onClose: () => void;
   onSaveSuccess: () => void;
 }
 
-export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose, onSaveSuccess }) => {
+export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly = false, onClose, onSaveSuccess }) => {
   const { t } = useLanguage();
   const { addAudit, updateAudit, loading } = useAuditStore();
   const { getActiveContractors } = useContractorsStore();
@@ -179,7 +182,14 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData(prev => {
+      const updated = { ...prev, [name]: value };
+      if (name === 'auditStartDate' || name === 'auditEndDate') {
+        const check = checkDateOrder(updated.auditStartDate, updated.auditEndDate, 'Audit Start Date', 'Audit End Date');
+        if (!check.valid) toast.warning(check.message);
+      }
+      return updated;
+    });
   };
 
   const handleContractorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -394,7 +404,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                   <h2 className="text-2xl font-bold text-slate-800">{t('audit.wizard.step1')}</h2>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="col-span-full">
                     <label className="flex items-baseline gap-2 mb-2">
                        <span className="text-sm font-bold text-slate-800">Audit Doc No</span>
@@ -463,7 +473,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                       <option value="Closed">🔒 Closed（已關閉）</option>
                     </select>
                   </div>
-                </div>
+                </fieldset>
               </div>
             )}
 
@@ -474,7 +484,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                   <Users className="text-teal-600" size={28} />
                   <h2 className="text-2xl font-bold text-slate-800">{t('audit.wizard.step2')} (Carried Out By)</h2>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div>
                     <label className="flex items-baseline gap-2 mb-2">
                        <span className="text-sm font-bold text-slate-800">Project Director</span>
@@ -499,7 +509,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                     </label>
                     <input type="text" name="supportAuditors" value={formData.supportAuditors} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
                   </div>
-                </div>
+                </fieldset>
               </div>
             )}
 
@@ -516,7 +526,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                   </button>
                 </div>
                 
-                <div className="space-y-8 no-print">
+                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="space-y-8 no-print">
                 <div>
                   <label className="flex items-baseline gap-2 mb-2">
                        <span className="text-sm font-bold text-slate-800">Location</span>
@@ -538,7 +548,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                   </label>
                   <textarea name="scopeDescription" value={formData.scopeDescription} onChange={handleInputChange} rows={5} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none resize-none transition-all text-slate-800 font-medium"></textarea>
                 </div>
-                </div>
+                </fieldset>
 
                 {/* Print Only Summary for Steps 1-3 */}
                 <div className="hidden print:block space-y-4">
@@ -618,7 +628,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                 </div>
 
                 {/* Template Selection */}
-                <div className="no-print">
+                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="no-print">
                   <label className="flex items-baseline gap-2 mb-3">
                        <span className="text-sm font-bold text-slate-800">Template Selection</span>
                        <span className="text-xs font-medium text-slate-400">(選用標準模板)</span>
@@ -642,10 +652,10 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                       </button>
                     ))}
                   </div>
-                </div>
+                </fieldset>
 
                 {/* Custom Checklist Items */}
-                <div className="space-y-4">
+                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="space-y-4">
                   <label className="flex items-baseline gap-2 mb-2">
                        <span className="text-sm font-bold text-slate-800">Custom Audit Items</span>
                        <span className="text-xs font-medium text-slate-400">(自定義查檢項目)</span>
@@ -732,7 +742,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                       <div className="text-center py-8 text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50">{t('audit.wizard.noCustomItems')}</div>
                     )}
                   </div>
-                </div>
+                </fieldset>
               </div>
             )}
 
@@ -826,7 +836,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
 
                 {/* Checklist Content */}
                 <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-                  <div className="overflow-x-auto">
+                  <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-100">
@@ -918,8 +928,8 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                         )}
                       </tbody>
                     </table>
-                  </div>
-                  
+                  </fieldset>
+
                   <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-1.5">
@@ -952,6 +962,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                     value={formData.findings}
                     onChange={handleInputChange}
                     rows={5}
+                    disabled={readOnly}
                     className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium resize-y"
                     placeholder={t('audit.findingsPlaceholder') || 'Enter audit findings and summary...'}
                   />
@@ -973,16 +984,21 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
               </div>
               
               <div className="flex items-center gap-4 w-full md:w-auto">
-                {/* 儲存進度按鈕 (Ghost Style) */}
+                {/* 儲存進度按鈕 (Ghost Style) — hidden entirely once Closed:
+                    a true dead end (WorkflowEngine "Closed": []), so there's
+                    nothing left to save, matching the backend's unconditional
+                    lock in audit_service.py. */}
+                {!readOnly && (
                 <button
-                  type="button" 
+                  type="button"
                   onClick={handleSaveDraft}
                   disabled={isDraftSaving || loading}
                   className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-slate-500 bg-transparent hover:bg-slate-50 border border-slate-200 transition-all disabled:opacity-50"
                 >
                   <Save size={18} /> {isDraftSaving ? t('audit.wizard.savingDraft') : t('audit.wizard.saveDraft')}
                 </button>
-                
+                )}
+
                 {draftMessage && (
                   <span className="text-sm font-medium text-slate-500 animate-in fade-in hidden sm:block whitespace-nowrap absolute right-8 bottom-24">
                     {draftMessage}
@@ -993,7 +1009,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                   <button key="btn-next" type="button" onClick={(e) => { e.preventDefault(); nextStep(); }} className="w-full md:w-auto flex items-center justify-center gap-2 px-10 py-3.5 bg-teal-600 text-white rounded-2xl font-bold hover:bg-teal-700 shadow-md shadow-teal-600/20 transition-all active:scale-[0.98]">
                     {t('audit.wizard.nextStep')} <ChevronRight size={20} />
                   </button>
-                ) : (
+                ) : !readOnly ? (
                   <button
                     key="btn-submit"
                     type="submit"
@@ -1002,7 +1018,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, onClose,
                   >
                     {isSaving ? t('audit.wizard.submitting') : t('audit.wizard.submit')} <CheckCircle size={20} />
                   </button>
-                )}
+                ) : null}
               </div>
             </div>
           </form>

@@ -13,6 +13,7 @@ const roleSchema = z.object({
 
 interface RoleModalProps {
     existingRole: Role | null;
+    readOnly?: boolean;
     permissions: { code: string; description: string }[];
     onSave: (validationData: any, isUpdate: boolean, id?: number) => Promise<void>;
     onClose: () => void;
@@ -20,7 +21,7 @@ interface RoleModalProps {
     loading: boolean;
 }
 
-const RoleModal: React.FC<RoleModalProps> = ({ existingRole, permissions, onSave, onClose, t, loading }) => {
+const RoleModal: React.FC<RoleModalProps> = ({ existingRole, readOnly = false, permissions, onSave, onClose, t, loading }) => {
     const [isClosing, setIsClosing] = useState(false);
 
     const initialForm = useMemo(() => ({
@@ -84,13 +85,14 @@ const RoleModal: React.FC<RoleModalProps> = ({ existingRole, permissions, onSave
                 onMouseDown={e => e.stopPropagation()}
             >
                 <div className={styles.modalHeader}>
-                    <h2>{existingRole ? t('iam.editRole') : t('iam.addRole')}</h2>
+                    <h2>{readOnly ? t('iam.viewRole') : existingRole ? t('iam.editRole') : t('iam.addRole')}</h2>
                     <button type="button" className={styles.closeIconBtn} onClick={handleClose}>
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                     </button>
                 </div>
-                
+
                 <form onSubmit={handleSubmit} className={styles.modalForm}>
+                    <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
                     <div className={styles.formGroup}>
                         <label>{t('iam.roleName')} <span className={styles.required}>*</span></label>
                         <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
@@ -139,12 +141,15 @@ const RoleModal: React.FC<RoleModalProps> = ({ existingRole, permissions, onSave
                             required
                         />
                     </div>
-                    
+                    </fieldset>
+
                     <div className={styles.formActions}>
                         <button type="button" className={styles.cancelButton} onClick={handleClose} disabled={loading}>{t('common.cancel')}</button>
-                        <button type="submit" className={styles.submitButton} disabled={loading}>
-                            {loading ? (t('common.saving') || 'Saving...') : (existingRole ? t('common.save') : t('common.add'))}
-                        </button>
+                        {!readOnly && (
+                            <button type="submit" className={styles.submitButton} disabled={loading}>
+                                {loading ? (t('common.saving') || 'Saving...') : (existingRole ? t('common.save') : t('common.add'))}
+                            </button>
+                        )}
                     </div>
                 </form>
             </div>

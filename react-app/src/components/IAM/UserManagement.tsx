@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useDeferredValue } from 'react';
 import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createUserColumns } from './columns';
 import { useIAMStore, User } from '../../store/iamStore';
@@ -16,6 +17,7 @@ interface UserManagementProps {
 
 const UserManagement: React.FC<UserManagementProps> = ({ searchQuery, tabsComponent }) => {
     const { t } = useLanguage();
+    const { hasPermission } = useAuth();
     const { users, roles, createUser, updateUser, deleteUser, loading } = useIAMStore();
     const deferredQuery = useDeferredValue(searchQuery);
 
@@ -71,10 +73,12 @@ const UserManagement: React.FC<UserManagementProps> = ({ searchQuery, tabsCompon
             <div className={styles.actionBar}>
                 {tabsComponent}
                 <div className={styles.actionsBox}>
-                    <button className={styles.addNewButton} onClick={() => { setEditingUser(null); setIsModalOpen(true); }}>
-                        <Plus size={18} />
-                        {t('iam.addUser')}
-                    </button>
+                    {hasPermission('iam:user:manage') && (
+                        <button className={styles.addNewButton} onClick={() => { setEditingUser(null); setIsModalOpen(true); }}>
+                            <Plus size={18} />
+                            {t('iam.addUser')}
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -95,6 +99,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ searchQuery, tabsCompon
             {isModalOpen && (
                 <UserModal
                     existingUser={editingUser}
+                    readOnly={!hasPermission('iam:user:manage')}
                     roles={roles}
                     onSave={handleSave}
                     onClose={() => setIsModalOpen(false)}

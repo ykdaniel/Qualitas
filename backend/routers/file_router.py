@@ -199,7 +199,7 @@ async def upload_files(
     """
     # ── Validate entity_type against known modules ──
     _VALID_ENTITY_TYPES = {"itp", "ncr", "noi", "itr", "pqp", "obs", "osd", "fat",
-                           "audit", "checklist", "followup", "km", "contractor"}
+                           "audit", "checklist", "followup", "km", "contractor", "meeting"}
     if entity_type not in _VALID_ENTITY_TYPES:
         raise HTTPException(
             status_code=400,

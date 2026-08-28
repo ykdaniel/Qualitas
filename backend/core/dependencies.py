@@ -17,6 +17,7 @@ from repositories.itr_repository import ITRRepository
 from repositories.pqp_repository import PQPRepository
 from repositories.obs_repository import OBSRepository
 from repositories.osd_repository import OSDRepository
+from repositories.meeting_minutes_repository import MeetingMinutesRepository
 from repositories.followup_repository import FollowUpRepository
 from repositories.checklist_repository import ChecklistRepository
 from repositories.contractor_repository import ContractorRepository
@@ -34,6 +35,7 @@ from services.itr_service import ITRService
 from services.pqp_service import PQPService
 from services.obs_service import OBSService
 from services.osd_service import OSDService
+from services.meeting_minutes_service import MeetingMinutesService
 from services.followup_service import FollowUpService
 from services.checklist_service import ChecklistService
 from services.contractor_service import ContractorService
@@ -80,6 +82,10 @@ def get_obs_service(db: Session = Depends(get_db)) -> OBSService:
 def get_osd_service(db: Session = Depends(get_db)) -> OSDService:
     repo = OSDRepository(db)
     return OSDService(repo)
+
+def get_meeting_minutes_service(db: Session = Depends(get_db)) -> MeetingMinutesService:
+    repo = MeetingMinutesRepository(db)
+    return MeetingMinutesService(repo)
 
 def get_followup_service(db: Session = Depends(get_db)) -> FollowUpService:
     repo = FollowUpRepository(db)

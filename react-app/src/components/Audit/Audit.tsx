@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useDeferredValue, useEffect, useCallback } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useAuditStore, AuditItem } from '../../store/auditStore';
 import ConfirmModal from '../Shared/ConfirmModal';
@@ -14,6 +15,7 @@ import { Search, Plus, AlertCircle, X } from 'lucide-react';
 
 const Audit: React.FC = () => {
     const { t } = useLanguage();
+    const { hasPermission } = useAuth();
     const { auditList, deleteAudit, error, clearError, loading } = useAuditStore();
     const [searchQuery, setSearchQuery] = useState<string>('');
     // Deferred value prevents search typing from lagging due to expensive re-renders
@@ -198,10 +200,12 @@ const Audit: React.FC = () => {
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
                     </div>
-                    <button className={shellStyles.addNewButton} onClick={handleAddNew}>
-                        <Plus size={16} />
-                        {t('audit.addNew') || 'Add New'}
-                    </button>
+                    {hasPermission('audit:create:all') && (
+                        <button className={shellStyles.addNewButton} onClick={handleAddNew}>
+                            <Plus size={16} />
+                            {t('audit.addNew') || 'Add New'}
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -249,6 +253,11 @@ const Audit: React.FC = () => {
                 <AuditWizard
                     auditId={currentAuditId}
                     existingItem={currentAuditId ? auditList.find(item => item.id === currentAuditId) : undefined}
+                    // Closed is a true dead end (WorkflowEngine's "Closed": []
+                    // for Audit, same shape as NOI) — unconditional lock, no
+                    // permission escape hatch, matching audit_service.py's
+                    // backend guard.
+                    readOnly={currentAuditId ? auditList.find(item => item.id === currentAuditId)?.status === 'Closed' : false}
                     onClose={() => {
                         setIsEditModalOpen(false);
                         setCurrentAuditId(null);

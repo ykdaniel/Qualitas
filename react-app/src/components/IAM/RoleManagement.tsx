@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useDeferredValue } from 'react';
 import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createRoleColumns } from './columns';
 import { useIAMStore, Role } from '../../store/iamStore';
@@ -16,6 +17,7 @@ interface RoleManagementProps {
 
 const RoleManagement: React.FC<RoleManagementProps> = ({ searchQuery, tabsComponent }) => {
     const { t } = useLanguage();
+    const { hasPermission } = useAuth();
     const { roles, permissions, createRole, updateRole, deleteRole, loading } = useIAMStore();
     
     const deferredQuery = useDeferredValue(searchQuery);
@@ -69,10 +71,12 @@ const RoleManagement: React.FC<RoleManagementProps> = ({ searchQuery, tabsCompon
             <div className={styles.actionBar}>
                 {tabsComponent}
                 <div className={styles.actionsBox}>
-                    <button className={styles.addNewButton} onClick={() => { setEditingRole(null); setIsModalOpen(true); }}>
-                        <Plus size={18} />
-                        {t('iam.addRole')}
-                    </button>
+                    {hasPermission('iam:role:manage') && (
+                        <button className={styles.addNewButton} onClick={() => { setEditingRole(null); setIsModalOpen(true); }}>
+                            <Plus size={18} />
+                            {t('iam.addRole')}
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -93,6 +97,7 @@ const RoleManagement: React.FC<RoleManagementProps> = ({ searchQuery, tabsCompon
             {isModalOpen && (
                 <RoleModal
                     existingRole={editingRole}
+                    readOnly={!hasPermission('iam:role:manage')}
                     permissions={permissions}
                     onSave={handleSave}
                     onClose={() => setIsModalOpen(false)}

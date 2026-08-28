@@ -28,6 +28,7 @@ CHECKLIST_VIEW = "checklist:view:all"
 CHECKLIST_CREATE = "checklist:create:all"
 CHECKLIST_UPDATE = "checklist:update:all"
 CHECKLIST_DELETE = "checklist:delete:all"
+CHECKLIST_CLOSE = "checklist:close:all"
 
 # PQP Permissions
 PQP_VIEW = "pqp:view:all"
@@ -68,6 +69,12 @@ OSD_VIEW = "osd:view:all"
 OSD_CREATE = "osd:create:all"
 OSD_UPDATE = "osd:update:all"
 OSD_DELETE = "osd:delete:all"
+
+# Meeting Minutes Permissions
+MEETING_VIEW = "meeting:view:all"
+MEETING_CREATE = "meeting:create:all"
+MEETING_UPDATE = "meeting:update:all"
+MEETING_DELETE = "meeting:delete:all"
 
 # KPI Permissions
 KPI_VIEW = "kpi:view:all"
@@ -121,6 +128,7 @@ ALL_PERMISSIONS = [
     {"code": CHECKLIST_CREATE, "description": "建立 Checklist"},
     {"code": CHECKLIST_UPDATE, "description": "更新 Checklist"},
     {"code": CHECKLIST_DELETE, "description": "刪除 Checklist"},
+    {"code": CHECKLIST_CLOSE, "description": "編輯已結案 (Pass/Fail) 的 Checklist"},
 
     {"code": PQP_VIEW, "description": "查看 PQP 記錄"},
     {"code": PQP_CREATE, "description": "建立 PQP"},
@@ -151,6 +159,10 @@ ALL_PERMISSIONS = [
     {"code": OSD_CREATE, "description": "建立 OSD"},
     {"code": OSD_UPDATE, "description": "更新 OSD 內容"},
     {"code": OSD_DELETE, "description": "刪除 OSD"},
+    {"code": MEETING_VIEW, "description": "查看會議記錄"},
+    {"code": MEETING_CREATE, "description": "建立會議記錄"},
+    {"code": MEETING_UPDATE, "description": "更新會議記錄"},
+    {"code": MEETING_DELETE, "description": "刪除會議記錄"},
 
     {"code": KPI_VIEW, "description": "查看 KPI 數據"},
     {"code": KPI_UPDATE, "description": "更新 KPI 權重"},

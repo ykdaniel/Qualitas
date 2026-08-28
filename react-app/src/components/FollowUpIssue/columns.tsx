@@ -30,9 +30,18 @@ const getModulePath = (module?: string): string | null => {
         case 'ITR': return '/itr';
         case 'ITP': return '/itp';
         case 'PQP': return '/pqp';
+        case 'MEETING': return '/meeting-minutes';
         default: return null;
     }
 };
+
+/** Real FollowUp rows created by Meeting Minutes (or any future module
+ *  that tags sourceModule/sourceReferenceNo on a genuine DB row, not just
+ *  the synthetic cross-module aggregation) are just as click-through-able
+ *  as the virtual `isExternal` rows — both cases carry a real source to
+ *  deep-link to. */
+const isLinkable = (issue: FollowUpIssueItem): boolean =>
+    !!(issue.isExternal || (issue.sourceModule && issue.sourceReferenceNo));
 
 /** Deep-link straight to the specific record instead of just the module's
  *  list page. Every module page here (NCR/OBS/NOI/ITR/ITP/PQP) supports
@@ -98,7 +107,7 @@ export const createColumns = (
                 const issue = row.original;
                 const deepLinkPath = getDeepLinkPath(issue);
 
-                if (issue.isExternal && issue.sourceModule) {
+                if (isLinkable(issue) && issue.sourceModule) {
                     return (
                         <span
                             className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
@@ -130,7 +139,7 @@ export const createColumns = (
                 const issue = row.original;
                 const deepLinkPath = getDeepLinkPath(issue);
 
-                if (issue.isExternal && deepLinkPath) {
+                if (isLinkable(issue) && deepLinkPath) {
                     return (
                         <span
                             onClick={() => navigate(deepLinkPath)}
@@ -203,6 +212,8 @@ export const createColumns = (
                 const deepLinkPath = getDeepLinkPath(issue);
 
                 if (issue.isExternal && deepLinkPath) {
+                    // Synthetic aggregation row — no real FollowUp record to
+                    // delete, only a source to jump to.
                     return (
                         <Button
                             variant="ghost"
@@ -216,7 +227,17 @@ export const createColumns = (
                 }
 
                 return (
-                    <div className="flex justify-center">
+                    <div className="flex justify-center gap-1">
+                        {!issue.isExternal && deepLinkPath && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => { e.stopPropagation(); navigate(deepLinkPath); }}
+                                title={t('followup.tooltip.goToModule', { module: issue.sourceModule })}
+                            >
+                                <Eye className="h-4 w-4" />
+                            </Button>
+                        )}
                         <Button
                             variant="ghost"
                             size="sm"

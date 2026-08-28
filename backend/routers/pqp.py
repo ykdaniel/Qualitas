@@ -15,6 +15,14 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
+def _require_pqp_approve_permission(current_user: "schemas.User") -> None:
+    user_permissions = {p.code for p in current_user.role.permissions_rel}
+    if PQP_APPROVE not in user_permissions:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Operation not permitted. Required: {PQP_APPROVE}",
+        )
+
 # 讀取操作 - 需要認證 VIEW
 @router.get("/", response_model=list[schemas.PQP])
 def read_pqps(
@@ -74,6 +82,16 @@ def update_pqp(
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(PQP_UPDATE))
 ):
+    # Approving is a dedicated action (see publish_pqp, which also snapshots
+    # PQPHistory) — plain pqp:update:all must not be able to reach Approved
+    # via a normal save, same reasoning as NCR's owner-approval field gate.
+    if pqp.status is not None:
+        existing = pqp_service.get_pqp(pqp_id=pqp_id, scope=scope)
+        if existing is not None:
+            target = PQPService._normalize_pqp_status(pqp.status)
+            current = PQPService._normalize_pqp_status(existing.status) or existing.status
+            if target == "Approved" and target != current:
+                _require_pqp_approve_permission(current_user)
     try:
         db_pqp = pqp_service.update_pqp(
             pqp_id=pqp_id, pqp_update=pqp,
@@ -93,6 +111,7 @@ def publish_pqp(
     pqp_id: str,
     body: schemas.PQPPublish = schemas.PQPPublish(),
     pqp_service: PQPService = Depends(get_pqp_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(PQP_APPROVE))
 ):
     try:
@@ -100,7 +119,8 @@ def publish_pqp(
             pqp_id=pqp_id,
             change_summary=body.change_summary,
             user_id=current_user.id,
-            username=current_user.username
+            username=current_user.username,
+            scope=scope,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

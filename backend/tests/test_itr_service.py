@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 from services.itr_service import ITRService
+from core.scope import Scope
 import models
 import schemas
 
@@ -120,6 +121,167 @@ def test_link_checklist_creates_instance_without_polluting_template(itr_service,
         assert template.itrId is None
         mock_repo.db.commit.assert_called_once()
         mock_log.assert_called_once()
+
+
+def test_delete_itr_blocked_by_referencing_ncr(itr_service, mock_repo):
+    """Existing guard: an ITR referenced by an NCR's reInspectionNumber
+    cannot be deleted until that reference is removed."""
+    mock_db_itr = models.ITR(id="itr-123", documentNumber="ITR-001")
+    mock_repo.get_by_id.return_value = mock_db_itr
+
+    referencing_ncr = models.NCR(id="ncr-1", documentNumber="NCR-001", reInspectionNumber="ITR-001")
+    mock_repo.db.query.return_value.filter.return_value.all.return_value = [referencing_ncr]
+
+    with pytest.raises(ValueError) as excinfo:
+        itr_service.delete_itr("itr-123")
+
+    assert "referenced by NCR" in str(excinfo.value)
+    mock_repo.delete.assert_not_called()
+
+
+def test_delete_itr_cleans_up_checklist_instances_and_reinsp_chain(itr_service, mock_repo):
+    """Checklist.itrId (ondelete='CASCADE') and ITR.originalItrId
+    (ondelete='SET NULL') never actually fire — SQLite FK enforcement is
+    off. delete_itr must clean these up itself: delete owned Checklist
+    instances (they have no meaning without the parent ITR — §17), and
+    null out any re-inspection ITRs' back-reference instead of leaving it
+    dangling."""
+    mock_db_itr = models.ITR(id="itr-123", documentNumber="ITR-001")
+    mock_repo.get_by_id.return_value = mock_db_itr
+
+    # No NCR references this ITR, so the existing guard passes through.
+    mock_repo.db.query.return_value.filter.return_value.all.return_value = []
+
+    with patch('services.itr_service.log_audit'):
+        result = itr_service.delete_itr("itr-123", user_id=1, username="admin")
+
+        assert result is True
+        mock_repo.db.query.assert_any_call(models.Checklist)
+        mock_repo.db.query.assert_any_call(models.ITR)
+        mock_repo.db.query.return_value.filter.return_value.delete.assert_called()
+        mock_repo.db.query.return_value.filter.return_value.update.assert_called_once_with(
+            {models.ITR.originalItrId: None}
+        )
+        mock_repo.delete.assert_called_once_with(mock_db_itr)
+
+
+def test_approve_itr_blocked_by_ongoing_checklist(itr_service, mock_repo):
+    """Gap B fix: approval must reject an 'Ongoing' (unfilled/incomplete)
+    checklist too, not just an explicit 'Fail' — an ITR must not be
+    approvable while its linked inspection was never actually completed."""
+    mock_db_itr = models.ITR(id="itr-123", status="In Progress", documentNumber="ITR-001")
+    mock_repo.get_by_id.return_value = mock_db_itr
+
+    ongoing_checklist = models.Checklist(id="cl-1", recordsNo="CL-001", itrId="itr-123", status="Ongoing")
+    mock_repo.db.query.return_value.filter.return_value.all.return_value = [ongoing_checklist]
+
+    itr_update = schemas.ITRUpdate(status="Approved")
+
+    with pytest.raises(ValueError) as excinfo:
+        itr_service.update_itr("itr-123", itr_update)
+
+    assert "not passed" in str(excinfo.value)
+    assert "CL-001" in str(excinfo.value)
+    mock_repo.update.assert_not_called()
+
+
+def test_approve_itr_blocked_by_failed_checklist(itr_service, mock_repo):
+    mock_db_itr = models.ITR(id="itr-123", status="In Progress", documentNumber="ITR-001")
+    mock_repo.get_by_id.return_value = mock_db_itr
+
+    failed_checklist = models.Checklist(id="cl-1", recordsNo="CL-001", itrId="itr-123", status="Fail")
+    mock_repo.db.query.return_value.filter.return_value.all.return_value = [failed_checklist]
+
+    itr_update = schemas.ITRUpdate(status="Approved")
+
+    with pytest.raises(ValueError) as excinfo:
+        itr_service.update_itr("itr-123", itr_update)
+
+    assert "not passed" in str(excinfo.value)
+    mock_repo.update.assert_not_called()
+
+
+def test_approve_itr_succeeds_when_all_checklists_pass(itr_service, mock_repo):
+    mock_db_itr = models.ITR(id="itr-123", status="In Progress", documentNumber="ITR-001")
+    mock_repo.get_by_id.return_value = mock_db_itr
+
+    passed_checklist = models.Checklist(id="cl-1", recordsNo="CL-001", itrId="itr-123", status="Pass")
+    mock_repo.db.query.return_value.filter.return_value.all.return_value = [passed_checklist]
+
+    with patch('services.itr_service.log_audit'):
+        itr_update = schemas.ITRUpdate(status="Approved")
+        mock_repo.update.return_value = models.ITR(id="itr-123", status="Approved")
+
+        result = itr_service.update_itr("itr-123", itr_update, user_id=1, username="admin")
+
+        assert result.status == "Approved"
+        mock_repo.update.assert_called_once()
+
+
+def test_create_ncr_from_itr_blocked_out_of_scope(itr_service, mock_repo):
+    """create-ncr previously took no scope at all — a user could derive an
+    NCR from an ITR outside their project/vendor scope by ID."""
+    mock_db_itr = models.ITR(
+        id="itr-123", documentNumber="ITR-001", status="Reject",
+        inspectionResult="Fail", project_id="OTHER-PROJECT",
+    )
+    mock_repo.get_by_id.return_value = mock_db_itr
+    out_of_scope = Scope(project_ids=frozenset({"P1"}), vendor_id=None)
+
+    result = itr_service.create_ncr_from_itr("itr-123", scope=out_of_scope)
+
+    assert result is None
+    mock_repo.db.add.assert_not_called()
+
+
+def test_create_ncr_from_itr_inherits_project_id(itr_service, mock_repo):
+    """The new NCR must inherit the source ITR's project_id — without it,
+    the created record silently falls outside its expected scope."""
+    mock_db_itr = models.ITR(
+        id="itr-123", documentNumber="ITR-001", status="Reject",
+        inspectionResult="Fail", project_id="P1", vendor_id="vendor-1",
+    )
+    mock_repo.get_by_id.return_value = mock_db_itr
+    in_scope = Scope(project_ids=frozenset({"P1"}), vendor_id=None)
+
+    with patch('services.itr_service.generate_reference_no', return_value="NCR-001"), \
+         patch('services.itr_service.log_audit'):
+        itr_service.create_ncr_from_itr("itr-123", scope=in_scope)
+
+    created_ncr = mock_repo.db.add.call_args[0][0]
+    assert created_ncr.project_id == "P1"
+
+
+def test_create_reinspection_blocked_out_of_scope(itr_service, mock_repo):
+    """re-inspect previously took no scope at all — same IDOR-style gap as
+    create-ncr."""
+    mock_db_itr = models.ITR(
+        id="itr-123", documentNumber="ITR-001", status="Reject",
+        inspectionResult="Fail", project_id="OTHER-PROJECT",
+    )
+    mock_repo.get_by_id.return_value = mock_db_itr
+    out_of_scope = Scope(project_ids=frozenset({"P1"}), vendor_id=None)
+
+    result = itr_service.create_reinspection("itr-123", scope=out_of_scope)
+
+    assert result is None
+    mock_repo.db.add.assert_not_called()
+
+
+def test_create_reinspection_inherits_project_id(itr_service, mock_repo):
+    mock_db_itr = models.ITR(
+        id="itr-123", documentNumber="ITR-001", status="Reject",
+        inspectionResult="Fail", project_id="P1", vendor_id="vendor-1",
+    )
+    mock_repo.get_by_id.return_value = mock_db_itr
+    in_scope = Scope(project_ids=frozenset({"P1"}), vendor_id=None)
+
+    with patch('services.itr_service.generate_reference_no', return_value="ITR-002"), \
+         patch('services.itr_service.log_audit'):
+        itr_service.create_reinspection("itr-123", scope=in_scope)
+
+    created_itr = mock_repo.db.add.call_args[0][0]
+    assert created_itr.project_id == "P1"
 
 
 def test_unlink_checklist_deletes_instance(itr_service, mock_repo):

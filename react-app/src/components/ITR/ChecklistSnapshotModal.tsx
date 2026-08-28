@@ -15,6 +15,17 @@ interface ChecklistSnapshotModalProps {
     inline?: boolean;
 }
 
+/** Mirrors the standalone Checklist page's auto-compute rule (every item
+ * 'O' -> Pass, else Fail), extended to recognize an unanswered item ('-',
+ * the default when a checklist is generated) as 'Ongoing' rather than
+ * silently counting it as a failure. Status must always be derived from
+ * actual item results here, never freely typed — see Gap B. */
+const computeChecklistStatus = (items: any[]): 'Ongoing' | 'Pass' | 'Fail' => {
+    if (!items || items.length === 0) return 'Ongoing';
+    if (items.some((i: any) => !i.result || i.result === '-')) return 'Ongoing';
+    return items.every((i: any) => i.result === 'O') ? 'Pass' : 'Fail';
+};
+
 export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
     isOpen,
     onClose,
@@ -45,10 +56,15 @@ export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
         setFormData((prev: any) => ({ ...prev, [field]: value }));
     };
 
+    const computedStatus = computeChecklistStatus(formData.items);
+
     const handleSave = () => {
-        // Packing items back into data property to maintain structure
+        // Packing items back into data property to maintain structure.
+        // status is always derived from item results (Gap B) — never the
+        // free-typed value a stale formData.status might otherwise carry.
         const payload = {
             ...formData,
+            status: computedStatus,
             data: {
                 ...(formData.data || {}),
                 items: formData.items
@@ -120,16 +136,16 @@ export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
                                 </div>
                                 <div className={styles.formGroup}>
                                     <label className={styles.requiredLabel}>{t('common.status')}</label>
-                                    <select
-                                        className={styles.formSelect}
-                                        value={formData.status || 'Ongoing'}
-                                        onChange={(e) => handleFieldChange('status', e.target.value)}
-                                        disabled={readOnly}
+                                    <div
+                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold w-fit ${computedStatus === 'Pass' ? 'bg-green-100 text-green-700' :
+                                            computedStatus === 'Fail' ? 'bg-red-100 text-red-700' :
+                                                'bg-slate-100 text-slate-500'
+                                            }`}
+                                        title={t('checklist.statusComputedNote') || 'Status is derived from item results and cannot be edited directly.'}
                                     >
-                                        <option value="Ongoing">{t('checklist.status.ongoing')}</option>
-                                        <option value="Pass">{t('checklist.status.pass')}</option>
-                                        <option value="Fail">{t('checklist.status.fail')}</option>
-                                    </select>
+                                        {computedStatus === 'Pass' ? <CheckCircle size={14} /> : computedStatus === 'Fail' ? <XCircle size={14} /> : <HelpCircle size={14} />}
+                                        {computedStatus === 'Pass' ? t('checklist.status.pass') : computedStatus === 'Fail' ? t('checklist.status.fail') : t('checklist.status.ongoing')}
+                                    </div>
                                 </div>
                                 <div className={styles.formGroup}>
                                     <label className={styles.requiredLabel}>{t('common.location')}</label>

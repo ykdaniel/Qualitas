@@ -110,7 +110,22 @@ const ITR: React.FC = () => {
         }
     };
 
-    const handleSaveITRDetails = async (details: ITRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => {
+    const handleSaveITRDetails = async (details: ITRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[], publishOnly?: boolean) => {
+        if (publishOnly) {
+            // Publish only re-versions a locked (Approved) ITR — the backend
+            // rejects any other field on an Approved record, so this must
+            // send *only* type/status, never the full form state.
+            if (!currentItrId) return;
+            try {
+                await updateITR(currentItrId, { type: details.type, status: details.status });
+                setIsEditModalOpen(false);
+            } catch (error) {
+                console.error('Error publishing ITR:', error);
+                toast.error('Failed to publish ITR.');
+            }
+            return;
+        }
+
         const itemData: Omit<ITRItem, 'id'> = {
             vendor: details.contractor || '',
             documentNumber: details.itrNumber || '',
@@ -345,6 +360,20 @@ const ITR: React.FC = () => {
                             return;
                         }
                         setIsEditModalOpen(false);
+                        setCurrentItrId(null);
+                    }}
+                    onDismiss={() => {
+                        // Plain close, used right before this modal navigates
+                        // itself elsewhere (Raise NCR / Re-inspect) — skip
+                        // onClose's deep-link navigate(-1), and reset the
+                        // deep-link guard so a follow-up ?openId= (e.g. the
+                        // just-created re-inspection ITR) can still be picked
+                        // up by the effect above instead of being ignored as
+                        // "already applied this page load".
+                        openedViaDeepLinkRef.current = false;
+                        deepLinkAppliedRef.current = false;
+                        setIsEditModalOpen(false);
+                        setCurrentItrId(null);
                     }}
                     readOnly={!canEdit}
                 />

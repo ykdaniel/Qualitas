@@ -650,7 +650,23 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                         <span>{t('ncr.itrNo')}</span>
                                         {infoDot('NOI 由所選 ITR 自動帶出追溯,毋須另選 / NOI is traced automatically from the linked ITR')}
                                     </label>
-                                    <select className={formStyles.formSelect} {...register('itrNumber')}>
+                                    <select
+                                        className={formStyles.formSelect}
+                                        {...register('itrNumber', {
+                                            onChange: (e) => {
+                                                const itr = itrList.find(i => i.documentNumber === e.target.value);
+                                                if (!itr) return;
+                                                // Fill from the linked ITR instead of making the user
+                                                // retype it — only fills fields still empty, never
+                                                // overwrites something already entered for this NCR.
+                                                const cur = getValues();
+                                                if (!cur.contractor && itr.vendor) setValue('contractor', itr.vendor, { shouldDirty: true });
+                                                if (!cur.foundLocation && itr.foundLocation) setValue('foundLocation', itr.foundLocation, { shouldDirty: true });
+                                                if (!cur.subject && itr.subject) setValue('subject', itr.subject, { shouldDirty: true });
+                                                if (!cur.raiseDate && itr.raiseDate) setValue('raiseDate', itr.raiseDate, { shouldDirty: true });
+                                            },
+                                        })}
+                                    >
                                         <option value="">Select ITR No.</option>
                                         {itrList.map((itr) => (
                                             <option key={itr.id} value={itr.documentNumber}>

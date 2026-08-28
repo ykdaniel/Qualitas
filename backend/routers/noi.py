@@ -101,6 +101,8 @@ def update_noi(
         )
     except ScopeForbidden as e:
         raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if db_noi is None:
         raise HTTPException(status_code=404, detail="NOI not found")
     return db_noi

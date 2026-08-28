@@ -95,6 +95,29 @@ class OBSService:
             d = obs_update.model_dump(exclude_unset=True)
             d = _json_serialize(d, ['defectPhotos', 'improvementPhotos', 'attachments'])
 
+            # Guard: once Closed, the observation's actual substance — the
+            # improvement action taken and its before/after photo evidence —
+            # is locked against tampering, mirroring NCR's
+            # _LOCKED_QUALITY_FIELDS pattern (ncr_service.py). Unlike NOI,
+            # WorkflowEngine's OBS transitions (core/utils.py) define
+            # "Closed": ["Open", "Void"] — a real reopen path — so this can't
+            # be an unconditional whole-record lock like NOI's. The escape
+            # hatch here is simpler than NCR's: OBS already has a real
+            # Closed->Open transition, so a save that explicitly reopens the
+            # record (changes status away from Closed) is exempted outright,
+            # rather than needing NCR's narrow single-field carve-out.
+            _LOCKED_OBS_FIELDS = {'productDisposition', 'defectPhotos', 'improvementPhotos'}
+            is_already_closed = db_obs.status == 'Closed'
+            is_reopening = is_already_closed and d.get('status') not in (None, 'Closed')
+
+            if is_already_closed and not is_reopening:
+                changed_locked = {
+                    f for f in (_LOCKED_OBS_FIELDS & set(d.keys()))
+                    if d[f] != getattr(db_obs, f, None)
+                }
+                if changed_locked:
+                    raise ValueError("Cannot modify improvement/photo evidence on a Closed observation")
+
             if 'vendor' in d:
                 vendor_name = d.pop('vendor')
                 d['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)

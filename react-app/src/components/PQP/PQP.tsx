@@ -6,6 +6,7 @@ import { useContractorsStore } from '../../store/contractorsStore';
 import { usePQPStore } from '../../store/pqpStore';
 import type { PQPItem } from '../../store/pqpStore';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './PQP.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
@@ -21,6 +22,7 @@ type StatusFilter = 'all' | 'notSubmit' | 'underReview' | 'approved' | 'reject' 
 
 const PQP: React.FC = () => {
   const { t } = useLanguage();
+  const { hasPermission } = useAuth();
   const { getActiveContractors } = useContractorsStore();
   const { pqpList, loading, error, refetch, addPQP, updatePQP, publishPQP, deletePQP } = usePQPStore();
 
@@ -257,9 +259,11 @@ const PQP: React.FC = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
-            {t('pqp.addNew')}
-          </button>
+          {hasPermission('pqp:create:all') && (
+            <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+              {t('pqp.addNew')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -291,10 +295,26 @@ const PQP: React.FC = () => {
         cancelText={t('common.cancel')}
       />
 
-      {isEditModalOpen && currentPqpId && (
+      {isEditModalOpen && currentPqpId && (() => {
+        const editingItem = currentPqpId !== 'new' ? pqpList.find(item => item.id === currentPqpId) : undefined;
+        // Read-only when the user lacks edit rights, or the record is
+        // Approved and they lack the higher approve permission. Approved
+        // still has a real reopen path (WorkflowEngine "Approved": ["Under
+        // Review", "Void"]), so this mirrors OBS's fieldset-level soft lock
+        // rather than NOI's unconditional one — the backend's own
+        // Approved-state field lock (pqp_service.py) is reopen-aware to
+        // match.
+        const status = (editingItem?.status || '').toLowerCase();
+        const locked = status === 'approved';
+        const canEdit = currentPqpId === 'new'
+          ? hasPermission('pqp:create:all')
+          : locked ? hasPermission('pqp:approve:all') : hasPermission('pqp:update:all');
+        return (
         <PQPDetailModal
           pqpId={currentPqpId}
-          existingItem={currentPqpId !== 'new' ? pqpList.find(item => item.id === currentPqpId) : undefined}
+          existingItem={editingItem}
+          readOnly={!canEdit}
+          canPublish={hasPermission('pqp:approve:all')}
           onSave={handleSavePQPDetails}
           onPublish={async (id, changeSummary) => {
             await publishPQP(id, changeSummary);
@@ -311,7 +331,8 @@ const PQP: React.FC = () => {
             setCurrentPqpId(null);
           }}
         />
-      )}
+        );
+      })()}
     </div>
   );
 };

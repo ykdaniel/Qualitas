@@ -172,6 +172,18 @@ class KMRepository:
     def delete(self, db_article: models.KMArticle) -> None:
         # Cascade delete: remove all child chapters first
         children = self.get_children(db_article.id)
+
+        # Clean up history snapshots for the book and every chapter.
+        # KMArticleHistory.article_id declares ondelete="CASCADE" and the
+        # ORM relationship declares cascade="all, delete-orphan", but
+        # SQLite's FK enforcement is off (PRAGMA foreign_keys never set)
+        # so neither actually fires — without this, every history row
+        # would be left orphaned, article_id pointing at a deleted row.
+        article_ids = [db_article.id] + [child.id for child in children]
+        self.db.query(models.KMArticleHistory).filter(
+            models.KMArticleHistory.article_id.in_(article_ids)
+        ).delete(synchronize_session=False)
+
         for child in children:
             self.db.delete(child)
         self.db.delete(db_article)

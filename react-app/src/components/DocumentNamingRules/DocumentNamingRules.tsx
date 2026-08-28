@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import { getNamingRules, updateNamingRules, NamingRuleApi } from '../../services/api';
 import styles from './DocumentNamingRules.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
@@ -17,12 +18,14 @@ const DEFAULT_RULE_DEFS = [
   { id: 'fat',       moduleName: 'FAT',              prefix: 'QTS-RKS-[ABBREV]-FAT-', sequenceDigits: 6, descKey: 'namingRules.desc.fat' },
   { id: 'audit',     moduleName: 'Audit',            prefix: 'QTS-RKS-[ABBREV]-AUD-', sequenceDigits: 6, descKey: 'namingRules.desc.audit' },
   { id: 'checklist', moduleName: 'Checklist',        prefix: 'QTS-RKS-[ABBREV]-CHK-', sequenceDigits: 6, descKey: 'namingRules.desc.checklist' },
+  { id: 'osd',       moduleName: 'OSD',              prefix: 'QTS-RKS-[ABBREV]-OSD-', sequenceDigits: 6, descKey: 'namingRules.desc.osd' },
 ];
 
 
 
 const DocumentNamingRules: React.FC = () => {
   const { t } = useLanguage();
+  const { hasPermission } = useAuth();
 
   const buildDefaultRules = (): NamingRuleItem[] =>
     DEFAULT_RULE_DEFS.map((def) => ({ ...def, description: t(def.descKey) }));
@@ -89,8 +92,34 @@ const DocumentNamingRules: React.FC = () => {
   };
 
   const handleSave = async () => {
+    setSaveError('');
+
+    // Basic sanity checks before hitting the API — a bad prefix here has a wide
+    // blast radius (every module's document numbering reads it), and the
+    // backend didn't validate any of this until now.
+    const emptyRule = rules.find((r) => !r.prefix || !r.prefix.trim());
+    if (emptyRule) {
+      setSaveError(`${emptyRule.moduleName}: ${t('namingRules.errorEmptyPrefix') || 'Prefix cannot be empty.'}`);
+      return;
+    }
+    const missingAbbrev = rules.find((r) => !r.prefix.includes('[ABBREV]'));
+    if (missingAbbrev) {
+      setSaveError(`${missingAbbrev.moduleName}: ${t('namingRules.errorMissingAbbrev') || 'Prefix must include the [ABBREV] placeholder.'}`);
+      return;
+    }
+    const seenPrefixes = new Map<string, string>();
+    for (const rule of rules) {
+      const existing = seenPrefixes.get(rule.prefix);
+      if (existing) {
+        setSaveError(
+          `${existing} ${t('namingRules.errorDuplicatePrefix') || 'and'} ${rule.moduleName} ${t('namingRules.errorDuplicatePrefixSuffix') || 'have the same prefix — document numbers would collide.'}`
+        );
+        return;
+      }
+      seenPrefixes.set(rule.prefix, rule.moduleName);
+    }
+
     try {
-      setSaveError('');
       const payload = rules.map((rule) => ({
         doc_type: rule.id,
         prefix: rule.prefix ?? '',
@@ -141,9 +170,11 @@ const DocumentNamingRules: React.FC = () => {
           <DataTable
             title={t('namingRules.title')}
             actions={
-              <button className={styles.saveButton} onClick={handleSave}>
-                {saved ? t('namingRules.saved') : t('namingRules.save')}
-              </button>
+              hasPermission('settings:manage:all') ? (
+                <button className={styles.saveButton} onClick={handleSave}>
+                  {saved ? t('namingRules.saved') : t('namingRules.save')}
+                </button>
+              ) : null
             }
             columns={createColumns(handlePrefixChange, handleSequenceDigitsChange, getExample, t)}
             data={filteredRules}

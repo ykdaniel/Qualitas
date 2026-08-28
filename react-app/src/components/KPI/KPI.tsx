@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   LineChart,
   Line,
@@ -11,12 +11,15 @@ import {
   LabelList,
 } from 'recharts';
 import { Search } from 'lucide-react';
+import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { usePQPStore } from '../../store/pqpStore';
 import { useITPStore } from '../../store/itpStore';
 import { useOBSStore } from '../../store/obsStore';
 import { useNCRStore } from '../../store/ncrStore';
+import { getKPIWeight, updateKPIWeight } from '../../services/api';
 import styles from './KPI.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
@@ -40,6 +43,7 @@ const DEFAULT_WEIGHTS = { pqp: 0.25, itp: 0.25, obs: 0.25, ncr: 0.25 };
 
 const KPI: React.FC = () => {
   const { t, language } = useLanguage();
+  const { hasPermission } = useAuth();
   const { getActiveContractors } = useContractorsStore();
   const pqpList = usePQPStore(state => state.pqpList);
   const itpList = useITPStore(state => state.itpList);
@@ -49,6 +53,42 @@ const KPI: React.FC = () => {
   const [weights, setWeights] = useState(DEFAULT_WEIGHTS);
   const [showWeights, setShowWeights] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState<string>('all');
+  const [savingWeights, setSavingWeights] = useState(false);
+  const canEditWeights = hasPermission('kpi:update:all');
+
+  // Weights used to live only in local state and silently reset to
+  // DEFAULT_WEIGHTS on every reload — the backend GET/PUT /kpi/weights
+  // endpoints existed but nothing ever called them. Load the saved value on
+  // mount so a customized weighting actually persists across sessions.
+  useEffect(() => {
+    getKPIWeight()
+      .then((w) => {
+        setWeights({
+          pqp: w.pqp_weight / 100,
+          itp: w.itp_weight / 100,
+          obs: w.obs_weight / 100,
+          ncr: w.ncr_weight / 100,
+        });
+      })
+      .catch(() => { /* fall back to DEFAULT_WEIGHTS if the fetch fails */ });
+  }, []);
+
+  const handleSaveWeights = async () => {
+    setSavingWeights(true);
+    try {
+      await updateKPIWeight({
+        pqp_weight: Math.round(weights.pqp * 100),
+        itp_weight: Math.round(weights.itp * 100),
+        obs_weight: Math.round(weights.obs * 100),
+        ncr_weight: Math.round(weights.ncr * 100),
+      });
+      toast.success(t('kpi.weightsSaved') || 'Weights saved');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || (err as Error)?.message || t('kpi.weightsSaveFailed') || 'Failed to save weights');
+    } finally {
+      setSavingWeights(false);
+    }
+  };
 
   const { chartData, vendorKeys, sortedMonths, vendorRates } = useMemo(() => {
     const filterByVendor = <T extends { vendor?: string }>(list: T[]): T[] => {
@@ -71,49 +111,62 @@ const KPI: React.FC = () => {
 
     const getVendor = (item: { vendor?: string }) => (item.vendor || 'Unknown').trim() || 'Unknown';
 
+    // Void records are excluded from every sub-metric's denominator (not just
+    // the "closed"/"approved" numerator) — a voided record isn't part of the
+    // active population a vendor's performance is being measured against,
+    // and counting it in `total` without ever counting it as closed/approved
+    // silently drags the score down for something that isn't the vendor's
+    // outstanding work.
     const pqpByVendorMonth: Record<string, Record<string, { approved: number; total: number }>> = {};
     filteredPqp.forEach((item) => {
+      const status = (item.status || '').toLowerCase();
+      if (status === 'void') return;
       const month = parseMonth(item.updatedAt || item.createdAt);
       const vendor = getVendor(item);
       if (!month) return;
       if (!pqpByVendorMonth[vendor]) pqpByVendorMonth[vendor] = {};
       if (!pqpByVendorMonth[vendor][month]) pqpByVendorMonth[vendor][month] = { approved: 0, total: 0 };
       pqpByVendorMonth[vendor][month].total++;
-      if ((item.status || '').toLowerCase() === 'approved') pqpByVendorMonth[vendor][month].approved++;
+      if (status === 'approved') pqpByVendorMonth[vendor][month].approved++;
     });
 
     const itpByVendorMonth: Record<string, Record<string, { closed: number; total: number }>> = {};
     filteredItp.forEach((item) => {
+      const s = (item.status || '').toLowerCase();
+      if (s === 'void') return;
       const month = parseMonth(item.submissionDate);
       const vendor = getVendor(item);
       if (!month) return;
       if (!itpByVendorMonth[vendor]) itpByVendorMonth[vendor] = {};
       if (!itpByVendorMonth[vendor][month]) itpByVendorMonth[vendor][month] = { closed: 0, total: 0 };
       itpByVendorMonth[vendor][month].total++;
-      const s = (item.status || '').toLowerCase();
       if (s === 'approved' || s === 'approved with comments' || s === 'submitted') itpByVendorMonth[vendor][month].closed++;
     });
 
     const obsByVendorMonth: Record<string, Record<string, { closed: number; total: number }>> = {};
     filteredObs.forEach((item) => {
+      const status = (item.status || '').toLowerCase();
+      if (status === 'void') return;
       const month = parseMonth(item.closeoutDate || item.raiseDate);
       const vendor = getVendor(item);
       if (!month) return;
       if (!obsByVendorMonth[vendor]) obsByVendorMonth[vendor] = {};
       if (!obsByVendorMonth[vendor][month]) obsByVendorMonth[vendor][month] = { closed: 0, total: 0 };
       obsByVendorMonth[vendor][month].total++;
-      if ((item.status || '').toLowerCase() === 'closed') obsByVendorMonth[vendor][month].closed++;
+      if (status === 'closed') obsByVendorMonth[vendor][month].closed++;
     });
 
     const ncrByVendorMonth: Record<string, Record<string, { closed: number; total: number }>> = {};
     filteredNcr.forEach((item) => {
+      const status = (item.status || '').toLowerCase();
+      if (status === 'void') return;
       const month = parseMonth(item.closeoutDate || item.raiseDate);
       const vendor = getVendor(item);
       if (!month) return;
       if (!ncrByVendorMonth[vendor]) ncrByVendorMonth[vendor] = {};
       if (!ncrByVendorMonth[vendor][month]) ncrByVendorMonth[vendor][month] = { closed: 0, total: 0 };
       ncrByVendorMonth[vendor][month].total++;
-      if ((item.status || '').toLowerCase() === 'closed') ncrByVendorMonth[vendor][month].closed++;
+      if (status === 'closed') ncrByVendorMonth[vendor][month].closed++;
     });
 
     const allMonths = new Set<string>();
@@ -261,6 +314,7 @@ const KPI: React.FC = () => {
           {showWeights ? ' ▼' : ' ▶'}
         </button>
         {showWeights && (
+          <>
           <div className={styles.weightGrid}>
             <label>
               <span>PQP</span>
@@ -270,6 +324,7 @@ const KPI: React.FC = () => {
                 max={100}
                 value={Math.round(weights.pqp * 100)}
                 onChange={(e) => handleWeightChange('pqp', Number(e.target.value))}
+                disabled={!canEditWeights}
               />
               %
             </label>
@@ -281,6 +336,7 @@ const KPI: React.FC = () => {
                 max={100}
                 value={Math.round(weights.itp * 100)}
                 onChange={(e) => handleWeightChange('itp', Number(e.target.value))}
+                disabled={!canEditWeights}
               />
               %
             </label>
@@ -292,6 +348,7 @@ const KPI: React.FC = () => {
                 max={100}
                 value={Math.round(weights.obs * 100)}
                 onChange={(e) => handleWeightChange('obs', Number(e.target.value))}
+                disabled={!canEditWeights}
               />
               %
             </label>
@@ -303,10 +360,23 @@ const KPI: React.FC = () => {
                 max={100}
                 value={Math.round(weights.ncr * 100)}
                 onChange={(e) => handleWeightChange('ncr', Number(e.target.value))}
+                disabled={!canEditWeights}
               />
               %
             </label>
           </div>
+          {canEditWeights && (
+            <button
+              type="button"
+              className={styles.weightToggle}
+              onClick={handleSaveWeights}
+              disabled={savingWeights}
+              style={{ marginTop: 8 }}
+            >
+              {savingWeights ? (t('common.saving') || 'Saving...') : (t('common.save') || 'Save')}
+            </button>
+          )}
+          </>
         )}
       </div>
 
