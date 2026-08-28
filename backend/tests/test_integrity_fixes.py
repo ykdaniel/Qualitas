@@ -44,14 +44,19 @@ class TestReferentialIntegrity:
         assert "not found" in str(exc_info.value).lower()
         assert "ITP" in str(exc_info.value)
 
-    def test_ncr_create_with_invalid_noi_number(self):
-        """Creating NCR with non-existent NOI should fail"""
+    def test_ncr_create_with_invalid_noi_number_drops_it(self):
+        """Creating NCR with a non-existent NOI no longer fails the save —
+        noiNumber is auto-derived from the linked ITR, so a dangling
+        reference is a data issue the user can't fix from the NCR form.
+        ncr_service.py's create_ncr silently clears it instead (see the
+        comment above that block), introduced in 3811912a."""
         mock_repo = Mock()
         mock_db = Mock()
         mock_repo.db = mock_db
 
         # Mock query to return None (NOI not found)
         mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_repo.create.side_effect = lambda ncr: ncr
 
         service = NCRService(mock_repo)
 
@@ -63,12 +68,10 @@ class TestReferentialIntegrity:
             noiNumber="NOI-NONEXISTENT"  # This NOI doesn't exist
         )
 
-        # Should raise ValueError (FK validation runs before reference-no generation)
-        with pytest.raises(ValueError) as exc_info:
-            service.create_ncr(ncr_data)
+        with patch('services.ncr_service.generate_reference_no', return_value="NCR-001"):
+            created = service.create_ncr(ncr_data)
 
-        assert "not found" in str(exc_info.value).lower()
-        assert "NOI" in str(exc_info.value)
+        assert created.noiNumber == ""
 
     def test_itr_create_with_invalid_noi_number(self):
         """Creating ITR with non-existent NOI should fail"""

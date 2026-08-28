@@ -96,32 +96,35 @@ def test_create_itp_generates_sequential_reference_numbers(db_session, vendor):
     assert tails[2] == tails[1] + 1
 
 
-def test_failed_ncr_create_does_not_burn_sequence_number(db_session, vendor):
-    """Regression test for the FK-validation-order bug.
-
-    Before the fix, a failed create (invalid noiNumber) would still allocate
-    a reference number, leaving gaps in the NCR sequence.
+def test_ncr_create_with_dangling_noi_drops_it_and_keeps_sequence_intact(db_session, vendor):
+    """A dangling noiNumber no longer fails the create (see ncr_service.py's
+    "drop it instead of failing the whole save" comment, introduced in
+    3811912a) — it's silently cleared instead. This test now verifies that
+    updated contract, and keeps the original regression coverage: reference
+    numbers still allocate one-per-successful-create, with no gaps or
+    double-allocation, across consecutive creates.
     """
     ncr_service = NCRService(NCRRepository(db_session))
 
-    # Attempt 1: deliberately broken noiNumber → should raise, no sequence burned.
-    with pytest.raises(ValueError, match="not found"):
-        ncr_service.create_ncr(
-            schemas.NCRCreate(
-                description="Bad reference",
-                vendor="Acme Co",
-                rev="0",
-                submit="initial",
-                status="Open",
-                noiNumber="NOI-DOES-NOT-EXIST",
-            ),
-            user_id=1,
-            username="tester",
-        )
-    db_session.rollback()
+    # Attempt 1: dangling noiNumber → succeeds, noiNumber cleared, gets seq 1.
+    first = ncr_service.create_ncr(
+        schemas.NCRCreate(
+            description="Bad reference",
+            vendor="Acme Co",
+            rev="0",
+            submit="initial",
+            status="Open",
+            noiNumber="NOI-DOES-NOT-EXIST",
+        ),
+        user_id=1,
+        username="tester",
+    )
+    db_session.commit()
+    assert first.noiNumber == ""
+    assert int(first.documentNumber.split("-")[-1]) == 1
 
-    # Attempt 2: valid create should still get the first NCR number, not the second.
-    ok = ncr_service.create_ncr(
+    # Attempt 2: valid create should get the next number, not skip one.
+    second = ncr_service.create_ncr(
         schemas.NCRCreate(
             description="Good reference",
             vendor="Acme Co",
@@ -134,8 +137,8 @@ def test_failed_ncr_create_does_not_burn_sequence_number(db_session, vendor):
     )
     db_session.commit()
 
-    tail = int(ok.documentNumber.split("-")[-1])
-    assert tail == 1, f"Expected sequence 000001 but got {ok.documentNumber}"
+    tail = int(second.documentNumber.split("-")[-1])
+    assert tail == 2, f"Expected sequence 000002 but got {second.documentNumber}"
 
 
 def test_noi_create_with_real_itp_reference(db_session, vendor):
