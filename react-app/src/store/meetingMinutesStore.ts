@@ -13,7 +13,11 @@ export interface Attendee {
 
 export interface DiscussionLogEntry {
     no: string;
-    topic: string;
+    /** Free-text "topic + discussion" combined field (current shape). */
+    content?: string;
+    /** Legacy shape (pre-merge) — kept optional so old saved rows still
+     * render; new entries only ever write `content`. */
+    topic?: string;
     discussion?: string;
     decision?: string;
     owner?: string;

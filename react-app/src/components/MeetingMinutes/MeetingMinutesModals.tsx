@@ -71,7 +71,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
     const [attendees, setAttendees] = useState<Attendee[]>(existingItem?.attendees || []);
     const [newAttendee, setNewAttendee] = useState<Attendee>({ name: '', company: '', role: '' });
     const [discussionLog, setDiscussionLog] = useState<DiscussionLogEntry[]>(existingItem?.discussionLog || []);
-    const [newDiscussion, setNewDiscussion] = useState<DiscussionLogEntry>({ no: '', topic: '', discussion: '', decision: '', owner: '', status: 'Open' });
+    const [newDiscussion, setNewDiscussion] = useState<DiscussionLogEntry>({ no: '', content: '', owner: '', status: 'Open' });
 
     // Action items: a brand-new meeting has no documentNumber yet, so drafts
     // are held locally and bulk-submitted right after the meeting itself is
@@ -119,9 +119,9 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
     };
 
     const addDiscussionRow = () => {
-        if (!newDiscussion.topic.trim()) return;
+        if (!newDiscussion.content?.trim()) return;
         setDiscussionLog(prev => [...prev, { ...newDiscussion, no: String(prev.length + 1) }]);
-        setNewDiscussion({ no: '', topic: '', discussion: '', decision: '', owner: '', status: 'Open' });
+        setNewDiscussion({ no: '', content: '', owner: '', status: 'Open' });
     };
     const removeDiscussionRow = (idx: number) => {
         setDiscussionLog(prev => prev.filter((_, i) => i !== idx).map((d, i) => ({ ...d, no: String(i + 1) })));
@@ -295,14 +295,15 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                             {/* 討論/決議紀錄 */}
                             <div className={formStyles.formSection}>
                                 <h3 className={formStyles.sectionTitle}>{t('meetingMinutes.discussionSection')}</h3>
-                                {discussionLog.map((d, idx) => (
+                                {discussionLog.map((d, idx) => {
+                                    const content = d.content || [d.topic, d.discussion, d.decision].filter(Boolean).join('\n');
+                                    return (
                                     <div key={idx} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 10, marginBottom: 8 }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                            <strong>{d.no}. {d.topic}</strong>
+                                            <strong>{d.no}.</strong>
                                             <button type="button" onClick={() => removeDiscussionRow(idx)} style={{ color: '#ef4444' }}><Trash2 size={16} /></button>
                                         </div>
-                                        {d.discussion && <p style={{ margin: '4px 0', color: '#64748b' }}>{t('meetingMinutes.discussion')}: {d.discussion}</p>}
-                                        {d.decision && <p style={{ margin: '4px 0', color: '#334155' }}>{t('meetingMinutes.decision')}: {d.decision}</p>}
+                                        {content && <p style={{ margin: '4px 0', color: '#334155', whiteSpace: 'pre-wrap' }}>{content}</p>}
                                         {(d.owner || d.status) && (
                                             <p style={{ margin: '4px 0', color: '#334155' }}>
                                                 {d.owner && <>{t('meetingMinutes.itemOwner')}: {d.owner}　</>}
@@ -310,11 +311,10 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                                             </p>
                                         )}
                                     </div>
-                                ))}
+                                    );
+                                })}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, border: '1px dashed #cbd5e1', borderRadius: 8, padding: 10 }}>
-                                    <input className={formStyles.formInput} placeholder={t('meetingMinutes.topic')} value={newDiscussion.topic} onChange={(e) => setNewDiscussion(prev => ({ ...prev, topic: e.target.value }))} />
-                                    <textarea className={formStyles.formTextarea} placeholder={t('meetingMinutes.discussion')} rows={2} value={newDiscussion.discussion} onChange={(e) => setNewDiscussion(prev => ({ ...prev, discussion: e.target.value }))} />
-                                    <textarea className={formStyles.formTextarea} placeholder={t('meetingMinutes.decision')} rows={2} value={newDiscussion.decision} onChange={(e) => setNewDiscussion(prev => ({ ...prev, decision: e.target.value }))} />
+                                    <textarea className={formStyles.formTextarea} placeholder={t('meetingMinutes.topicDiscussion')} rows={3} value={newDiscussion.content} onChange={(e) => setNewDiscussion(prev => ({ ...prev, content: e.target.value }))} />
                                     <div style={{ display: 'flex', gap: 8 }}>
                                         <input className={formStyles.formInput} list="meeting-attendee-people" placeholder={t('meetingMinutes.itemOwner')} value={newDiscussion.owner} onChange={(e) => setNewDiscussion(prev => ({ ...prev, owner: e.target.value }))} style={{ flex: 2 }} />
                                         <select className={formStyles.formSelect} value={newDiscussion.status} onChange={(e) => setNewDiscussion(prev => ({ ...prev, status: e.target.value }))} style={{ flex: 1 }}>

@@ -100,20 +100,16 @@ const MeetingMinutesPrintTemplate: React.FC<MeetingMinutesPrintTemplateProps> = 
                                 <tbody>
                                     <tr>
                                         <th style={{ width: '6%' }}>項次 No.</th>
-                                        <th style={{ width: '15%' }}>議題 Topic</th>
-                                        <th style={{ width: '26%' }}>討論 Discussion</th>
-                                        <th style={{ width: '26%' }}>決議 Decision</th>
-                                        <th style={{ width: '15%' }}>負責人 Owner</th>
+                                        <th style={{ width: '52%' }}>議題討論 Topic / Discussion</th>
+                                        <th style={{ width: '22%' }}>負責人 Owner</th>
                                         <th>狀態 Status</th>
                                     </tr>
                                     {discussionLog.length === 0
-                                        ? <tr><td colSpan={6}><span className="blank">（無資料 No discussion items）</span></td></tr>
+                                        ? <tr><td colSpan={4}><span className="blank">（無資料 No discussion items）</span></td></tr>
                                         : discussionLog.map((d, i) => (
                                             <tr key={i}>
                                                 <td>{val(d.no)}</td>
-                                                <td>{val(d.topic)}</td>
-                                                <td>{val(d.discussion)}</td>
-                                                <td>{val(d.decision)}</td>
+                                                <td style={{ whiteSpace: 'pre-wrap' }}>{val(d.content || [d.topic, d.discussion, d.decision].filter(Boolean).join('\n'))}</td>
                                                 <td>{val(d.owner)}</td>
                                                 <td>{d.status === 'Closed' ? '已完成 Closed' : d.status === 'Open' ? '待辦 Open' : val(d.status)}</td>
                                             </tr>
