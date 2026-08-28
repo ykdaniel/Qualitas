@@ -100,9 +100,9 @@ const MeetingMinutesPrintTemplate: React.FC<MeetingMinutesPrintTemplateProps> = 
                                 <tbody>
                                     <tr>
                                         <th style={{ width: '6%' }}>項次 No.</th>
-                                        <th style={{ width: '52%' }}>議題討論 Topic / Discussion</th>
-                                        <th style={{ width: '22%' }}>負責人 Owner</th>
-                                        <th>狀態 Status</th>
+                                        <th style={{ width: '68%' }}>議題討論 Topic / Discussion</th>
+                                        <th style={{ width: '14%' }}>負責人 Owner</th>
+                                        <th style={{ width: '12%' }}>狀態 Status</th>
                                     </tr>
                                     {discussionLog.length === 0
                                         ? <tr><td colSpan={4}><span className="blank">（無資料 No discussion items）</span></td></tr>
