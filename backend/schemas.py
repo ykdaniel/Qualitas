@@ -913,6 +913,7 @@ class MeetingMinutesBase(BaseModel):
     project_id: str | None = None
     vendor: str | None = None
     documentNumber: str | None = None  # 由後端自動產生
+    rev: str | None = None  # user-editable plain text (see BACKLOG #18)
     status: str
     title: str | None = None
     meetingType: str | None = None
@@ -950,6 +951,7 @@ class MeetingMinutesUpdate(BaseModel):
     project_id: str | None = None
     vendor: str | None = None
     # documentNumber 不可更新（由後端自動產生，建立後不可變）
+    rev: str | None = None
     status: str | None = None
     title: str | None = None
     meetingType: str | None = None

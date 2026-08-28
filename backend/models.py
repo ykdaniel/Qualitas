@@ -460,6 +460,7 @@ class MeetingMinutes(Base):
     project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
     vendor_id = Column(String, ForeignKey("contractors.id", ondelete="SET NULL"), nullable=True, index=True)
     documentNumber = Column(String, index=True, unique=True)
+    rev = Column(String, nullable=True)  # user-editable, plain text (no auto-series logic — see BACKLOG #18)
     status = Column(String)  # Draft / Published
     title = Column(String, nullable=True)
     meetingType = Column(String, nullable=True)

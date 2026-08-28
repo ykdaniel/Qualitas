@@ -1070,6 +1070,16 @@ short, expand to fill. Reads/prints as a single ITR inspection report.
 
 ## 18. Meeting Minutes: recurring occurrences (shared documentNumber + rev) · DESIGN AGREED 2026-08-29 · DEFERRED (schema-risk gate)
 
+**UPDATE 2026-08-29:** a plain `rev` column (`String, nullable=True`, no
+uniqueness/constraint changes) was added to `MeetingMinutes` and exposed as
+a normal editable form field — closes the immediate "nowhere to type a
+revision" gap. This is deliberately **not** the recurring-series design
+below — no shared `documentNumber`, no auto "New Occurrence" copy, no
+composite-unique migration. `rev` is just free text the user manages
+themselves, same as any other field. The design below (series sharing one
+`documentNumber`, auto-incrementing `rev`, "New Occurrence" button) is
+still fully deferred for the reason stated.
+
 Captured 2026-08-29 from a discussion about reusing IAM person data across
 modules. That narrower ask turned out to already be solved everywhere a real
 FK person-picker exists (`formatUserLabel()` in `react-app/src/services/api.ts`

@@ -23,6 +23,7 @@ export interface ActionItemDraft {
 }
 
 export interface MeetingMinutesDetailData {
+    rev: string;
     status: string;
     title: string;
     meetingType: string;
@@ -59,6 +60,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
     const { addFollowUp } = useFollowUpStore();
 
     const [formData, setFormData] = useState({
+        rev: existingItem?.rev || '',
         status: existingItem?.status || 'Draft',
         title: existingItem?.title || '',
         meetingType: existingItem?.meetingType || '',
@@ -237,13 +239,21 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                                             <option value="Published">Published</option>
                                         </select>
                                     </div>
+                                    <div className={formStyles.formGroup}>
+                                        <label>{t('meetingMinutes.rev')}</label>
+                                        <input type="text" className={formStyles.formInput} value={formData.rev} onChange={(e) => handleFieldChange('rev', e.target.value)} />
+                                    </div>
                                     <div className={formStyles.formGroupFull}>
                                         <label>{t('meetingMinutes.meetingTitle')}</label>
                                         <input type="text" className={formStyles.formInput} value={formData.title} onChange={(e) => handleFieldChange('title', e.target.value)} />
                                     </div>
                                     <div className={formStyles.formGroup}>
                                         <label>{t('meetingMinutes.meetingType')}</label>
-                                        <input type="text" className={formStyles.formInput} value={formData.meetingType} onChange={(e) => handleFieldChange('meetingType', e.target.value)} />
+                                        <select className={formStyles.formSelect} value={formData.meetingType} onChange={(e) => handleFieldChange('meetingType', e.target.value)}>
+                                            <option value="">-- {t('common.pleaseSelect') || 'Select'} --</option>
+                                            <option value="週會">{t('meetingMinutes.typeWeekly')}</option>
+                                            <option value="月會">{t('meetingMinutes.typeMonthly')}</option>
+                                        </select>
                                     </div>
                                     <div className={formStyles.formGroup}>
                                         <label>{t('common.contractor')}</label>
@@ -424,6 +434,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                 <MeetingMinutesPrintTemplate
                     data={{
                         documentNumber: existingItem.documentNumber,
+                        rev: formData.rev,
                         status: formData.status,
                         title: formData.title,
                         vendor: formData.contractor,

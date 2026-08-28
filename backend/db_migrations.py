@@ -230,6 +230,11 @@ def _add_missing_columns():
             # with no vendor_id — see models.py User.display_company.
             _add_column_if_missing(conn, "users", "company_name", "VARCHAR")
 
+            # Meeting Minutes: plain user-editable revision label (no
+            # auto-series/shared-documentNumber logic — that's deferred,
+            # see BACKLOG #18).
+            _add_column_if_missing(conn, "meeting_minutes", "rev", "VARCHAR")
+
             conn.commit()
     except Exception as e:
         logger.warning(f"Migration warning: {e}")

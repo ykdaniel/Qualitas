@@ -28,6 +28,7 @@ export interface MeetingMinutesItem {
     id: string;
     vendor?: string;
     documentNumber: string;
+    rev?: string;
     status: string;
     title?: string;
     meetingType?: string;
