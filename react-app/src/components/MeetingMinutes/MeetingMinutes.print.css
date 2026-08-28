@@ -88,6 +88,10 @@
 .mom-print-root .list-table th {
     background: var(--mom-fill-head); font-weight: 700; text-align: left;
 }
+.mom-print-root .list-table th .en {
+    display: block; font-weight: 500; color: var(--mom-muted);
+    font-size: 7.6px; letter-spacing: .2px; margin-top: 1px;
+}
 .mom-print-root .list-table td { vertical-align: top; }
 
 .mom-print-root .sign-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 4px; }
