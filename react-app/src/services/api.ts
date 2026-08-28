@@ -482,6 +482,18 @@ export const createReinspectionItr = async (itrId: string): Promise<any> => {
   return response.data;
 };
 
+// Formal .docx export of an NCR report (BACKLOG #18 pilot) — mirrors
+// kmService.exportDocx's blob-download pattern.
+export const exportNcrDocx = async (ncrId: string, filename: string): Promise<void> => {
+  const response = await api.get(`/ncr/${ncrId}/export-docx`, { responseType: 'blob' });
+  const url = URL.createObjectURL(new Blob([response.data]));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filename}.docx`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 // --- File Management API ---
 
 export interface AttachmentInfo {

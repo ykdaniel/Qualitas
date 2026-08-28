@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { getUsers, getEntityFiles, getAuthenticatedFileUrl, formatUserLabel, type User as ApiUser } from '../../services/api';
+import { getUsers, getEntityFiles, getAuthenticatedFileUrl, formatUserLabel, exportNcrDocx, type User as ApiUser } from '../../services/api';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
@@ -193,6 +193,21 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         setPrintImprovementPhotos(improve.map(getAuthenticatedFileUrl));
         setPrintAttachments(attachmentFiles.map(f => ({ name: f.name, url: getAuthenticatedFileUrl(f.url) })));
         setIsPrinting(true);
+    };
+
+    // Formal .docx export (BACKLOG #18 pilot) — server builds the same
+    // 7-section report directly with python-docx, embedded photos included.
+    const [exportingDocx, setExportingDocx] = useState(false);
+    const handleExportDocxClick = async () => {
+        if (!existingItem?.id || exportingDocx) return;
+        setExportingDocx(true);
+        try {
+            await exportNcrDocx(existingItem.id, getValues('ncrNumber') || 'NCR');
+        } catch {
+            toast.error(t('common.saveFailed') || 'Export failed');
+        } finally {
+            setExportingDocx(false);
+        }
     };
 
     // 附件預覽
@@ -1143,6 +1158,11 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                         <button className={formStyles.printButton} onClick={handlePrintClick} style={{ marginLeft: '12px' }} disabled={saving} title={t('common.print') || 'Print'}>
                             {t('common.print') || 'Print'}
                         </button>
+                        {existingItem?.id && (
+                            <button className={formStyles.printButton} onClick={handleExportDocxClick} style={{ marginLeft: '12px' }} disabled={saving || exportingDocx} title={t('common.exportWord') || 'Export Word'}>
+                                {exportingDocx ? (t('common.saving') || '...') : (t('common.exportWord') || 'Export Word')}
+                            </button>
+                        )}
                         <button className={formStyles.cancelButton} onClick={onClose} disabled={saving}>
                             {t('common.cancel')}
                         </button>

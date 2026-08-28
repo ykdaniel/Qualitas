@@ -1068,6 +1068,226 @@ short, expand to fill. Reads/prints as a single ITR inspection report.
 
 ---
 
+## 18. Meeting Minutes: recurring occurrences (shared documentNumber + rev) · DESIGN AGREED 2026-08-29 · DEFERRED (schema-risk gate)
+
+Captured 2026-08-29 from a discussion about reusing IAM person data across
+modules. That narrower ask turned out to already be solved everywhere a real
+FK person-picker exists (`formatUserLabel()` in `react-app/src/services/api.ts`
+already shows "name / company" in every such dropdown's option label — no
+field anywhere duplicates it, nothing to fix). The concrete pain point that
+surfaced instead: **Meeting Minutes has no concept of a recurring series.**
+
+**The problem:**
+Every Meeting Minutes record is fully independent — a weekly project meeting
+gets a brand-new `documentNumber` each week (`backend/models.py:454`,
+via `generate_reference_no`) and a from-scratch free-text attendee list
+(`attendees` — `backend/models.py:470`, JSON `[{name, company, role}]`,
+no IAM link at all). There's no way to see that five separate documents are
+actually "the same weekly meeting, five occurrences apart," and attendees —
+usually the same handful of people every week — get retyped from zero each
+time.
+
+**Decided design (ready to build):**
+- Recurring occurrences **share one `documentNumber`** for the life of the
+  series; a new `rev` column (`rev = Column(String, nullable=True)`, matching
+  the existing NCR/NOI/ITR convention) increments per occurrence. Each
+  occurrence's date goes into `title` so occurrences stay human-distinguishable
+  in lists — no grouping UI needed.
+- A **"New Occurrence" action** (mirrors ITR's raise-NCR/re-inspect
+  click-to-derive pattern, `react-app/src/components/ITR/ITRModals.tsx:422-450`
+  + `react-app/src/services/api.ts:473-482`) creates a new Draft row that
+  copies **vendor, project, meetingType, organizer, location, and the full
+  attendee list** from the source occurrence — confirmed with the user
+  2026-08-29. `discussionLog` is deliberately **not** carried forward (fresh
+  agenda every occurrence). `meetingDate` is deliberately **left blank**, not
+  defaulted to today (also confirmed 2026-08-29) — the user fills in the
+  actual date.
+- **Display format (confirmed 2026-08-29, revised after a worked example):**
+  wherever `documentNumber` is shown, append `rev` in parentheses right
+  after it as one combined string, file-name-style — e.g.
+  `MOM-XXX-001 (1.0)`, `MOM-XXX-001 (2.0)` — not a separate rev
+  column/field. **`rev` format matches PQP's `X.0` convention**: the first
+  occurrence in a series is `"1.0"` (1-based, not 0-based), and each "New
+  Occurrence" bumps the integer part by 1 (`"1.0"` → `"2.0"` → `"3.0"` …).
+  There is **no minor-version concept** (no `"1.1"` for an in-week
+  correction) — the trailing `.0` is constant, only the integer part moves.
+- **Attendee auto-fill (bundle in, independent small feature):** add a
+  `meeting-attendee-people` `<datalist>` to the attendee-name input in
+  `MeetingMinutesModals.tsx`, sourced from the `users` state already fetched
+  for the action-item assignee picker (~line 82) — no extra API call. On
+  `onBlur`, if the typed name exactly matches an existing `User`, auto-fill
+  `company` from that user's `display_company` **only if company is
+  currently empty** (never clobber a manually-typed external guest's
+  company). Mirrors the existing OBS/NCR free-text+datalist pattern
+  (`obs-people`/`ncr-people`) but adds the reactive auto-fill those don't
+  have today.
+
+**⛔ Why not now — the blocking risk:**
+`MeetingMinutes.documentNumber` is currently `Column(String, index=True,
+unique=True)` (`backend/models.py:462`) — a hard single-column unique
+constraint. Making a series share one `documentNumber` requires loosening
+this to a composite `UNIQUE(documentNumber, rev)`. SQLite can't
+`ALTER TABLE ... DROP CONSTRAINT`, so this needs a raw `DROP INDEX` (found by
+introspecting `sqlite_master`/`PRAGMA index_list` rather than hardcoding
+SQLAlchemy's auto-generated index name) followed by
+`CREATE UNIQUE INDEX ... ON meeting_minutes (documentNumber, rev)` — **the
+first time this codebase has ever loosened a constraint** rather than only
+adding columns/indexes/tables (every existing step in
+`backend/db_migrations.py` is additive). On a live production SQLite DB with
+existing data, a silently-failed `DROP INDEX` would leave the old constraint
+in place and make every "New Occurrence" write fail with an `IntegrityError`
+despite the migration log claiming success — this needs to be logged at
+`error` level (not the usual `warning`) and manually verified post-deploy via
+`PRAGMA index_list('meeting_minutes')`. User's call 2026-08-29: defer rather
+than accept this risk right now.
+
+**What to do when you tackle it (full implementation-ready plan):**
+
+1. **`backend/models.py:462`** — drop `unique=True` from `documentNumber`
+   (keep `index=True`); add `rev = Column(String, nullable=True)` right after.
+2. **`backend/schemas.py`** (`MeetingMinutesBase`, ~line 912) — add
+   `rev: str | None = None`; deliberately exclude it from
+   `MeetingMinutesUpdate` (same treatment as `documentNumber` — immutable
+   after creation, only set by `create` / `new-occurrence`).
+3. **`backend/db_migrations.py`** — new step 13 in `run_migrations()`, a new
+   `_add_meeting_minutes_rev_and_loosen_unique()` function:
+   - `_add_column_if_missing(conn, "meeting_minutes", "rev", "VARCHAR")`.
+   - Backfill: `UPDATE meeting_minutes SET rev = '1.0' WHERE rev IS NULL`
+     (existing rows predate this feature — each is the sole/first occurrence
+     of its own series, so `"1.0"` is correct, not `"0.0"`. Safe to backfill
+     everything to the same value — the OLD single-column unique constraint
+     still guarantees no two rows share a `documentNumber` at this point in
+     the migration, so no collision risk).
+   - Introspect `sqlite_master` + `PRAGMA index_list("meeting_minutes")` for
+     every **unique** index whose column list (`PRAGMA index_info`) is
+     exactly `["documentNumber"]`, and `DROP INDEX IF EXISTS` each one found
+     — don't hardcode a name.
+   - `CREATE UNIQUE INDEX IF NOT EXISTS ix_meeting_minutes_documentNumber_rev_unique ON meeting_minutes (documentNumber, rev)`.
+   - Log the index-drop step at `logger.error` on failure (not `warning`,
+     unlike every other step in this file) — a failure here silently defeats
+     the whole feature rather than being a harmless no-op.
+4. **`backend/repositories/meeting_minutes_repository.py`** — new
+   `get_all_by_document_number(document_number)` method.
+5. **`backend/services/meeting_minutes_service.py`**:
+   - `create_meeting_minutes`: default `data['rev'] = '1.0'` when not
+     provided (first-in-series row).
+   - New `create_new_occurrence(meeting_id, user_id, username, scope)`:
+     fetch source row + `record_in_scope` check → compute the next rev by
+     parsing the integer part of every sibling's `rev` (format is always
+     `"N.0"` — no minor versions), taking the max, and bumping by 1:
+     `max_n = max(int(float(row.rev or 0)) for row in siblings); next_rev = f"{max_n + 1}.0"`
+     across all rows sharing the source's `documentNumber` → build new row
+     (new uuid, same `documentNumber`, `rev=next_rev`, `status="Draft"`,
+     `title = f"{base_title} - {today}"` with a regex strip of any prior
+     trailing `" - YYYY-MM-DD"` so chained occurrences don't accumulate
+     dates, `meetingDate=None`, `discussionLog=None`, all other fields
+     copied from source) → commit, catching `IntegrityError` → clean
+     `ValueError` ("another occurrence was just created, please retry")
+     rather than a raw 500 → `log_audit` both sides (new row + a
+     `CREATE_OCCURRENCE` marker on the source).
+6. **`backend/routers/meeting_minutes.py`** — new
+   `POST /{meeting_id}/new-occurrence`, mirroring
+   `POST /itr/{itr_id}/re-inspect` (`backend/routers/itr.py:167-184`)
+   field-for-field: `MEETING_CREATE` permission dependency, `scope`
+   dependency, `ValueError`→400, `None`→404.
+7. **`react-app/src/services/api.ts`** — new
+   `createMeetingMinutesOccurrence(meetingId)` → `POST
+   /meeting-minutes/${meetingId}/new-occurrence`.
+8. **`react-app/src/components/MeetingMinutes/MeetingMinutesModals.tsx`**:
+   - "New Occurrence" button in the detail modal's footer (mirrors ITR's
+     raise-NCR button placement), gated on `meeting:create:all` permission;
+     on click, POST → toast → close modal → navigate to
+     `/meeting-minutes?openId=${created.id}` for the new Draft row. Needs an
+     `onDismiss` prop (same reason ITR's modal has one,
+     `ITRModals.tsx:91`) to avoid racing the deep-link close-navigate.
+   - Attendee auto-fill: `handleAttendeeNameBlur` + `meeting-attendee-people`
+     `<datalist>` as described above.
+   - Read-only info section: render as `${existingItem.documentNumber} (${existingItem.rev ?? '1.0'})`
+     — one combined string, not a separate field.
+9. **`react-app/src/components/MeetingMinutes/columns.tsx`** — no new `rev`
+   column; change the existing `documentNumber` cell renderer to
+   `${row.getValue('documentNumber')} (${row.original.rev ?? '1.0'})`.
+10. **`react-app/src/store/meetingMinutesStore.ts`** — add `rev?: string;`
+    to `MeetingMinutesItem`.
+11. **`react-app/src/context/LanguageContext.tsx`** — add
+    `meetingMinutes.rev`, `meetingMinutes.newOccurrence`,
+    `meetingMinutes.newOccurrenceTitle`, `meetingMinutes.occurrenceCreated`
+    to both the `en` and `zh` blocks.
+12. No print template exists yet for Meeting Minutes (unlike ITR/NCR/OBS) —
+    `rev` display in print is N/A until one is built.
+
+**Post-deploy verification when built:** `pytest -q` green; on the NAS,
+`PRAGMA index_list('meeting_minutes')` confirms the old single-column unique
+index is gone and the composite one exists; manually create two occurrences
+of the same series and confirm both share `documentNumber` with
+`rev` `1.0`/`2.0` and no `IntegrityError`.
+
+---
+
+## 19. Word (.docx) export can't reach pixel parity with the PDF/print output · EVALUATED 2026-08-29 · DEFERRED
+
+Captured 2026-08-29 building the NCR `.docx` export pilot (module hardening —
+see `backend/core/docx_builder.py`, `services/ncr_service.py::export_docx`,
+`GET /ncr/{id}/export-docx`, "匯出 Word" button in `NCRModals.tsx`). The
+export is **shipped and working** — same 7-section content as
+`NCRPrintTemplate.tsx` (identity / traceability / impact / description /
+disposition / root-cause / corrective-action / attachments / verification /
+sign-off / photos), built directly with python-docx, embedded photos
+included, iterated with the user on field order/pairing, vertical-centering,
+and fonts (Calibri + 標楷體). What it does **not** do: look pixel-identical
+to the PDF/print output — colors, spacing, borders, checkbox glyphs are
+Word's own approximation of the print template's CSS, not a copy of it.
+
+**Why it can't easily get closer — two options investigated, both dead-ended:**
+
+1. **Convert the print template's HTML to `.docx` via `htmldocx`** (the
+   technique `services/km_service.py::export_docx` already uses for KM
+   articles) instead of hand-building with python-docx. **Blocker A:**
+   `NCR.print.css` uses `display: flex` (masthead `.doc-head`, checkbox rows,
+   sign-off meta) and `display: grid` (`.sign-grid`, `.photo-grid`) —
+   `htmldocx` doesn't understand either, so those sections would render
+   broken/stacked, not side-by-side. **Blocker B (found after the user
+   initially chose this path — see below):** read `htmldocx`'s source
+   (`h2d.py`) — it only reads literal inline `style="..."` HTML attributes
+   (`text-align`, `margin-left`, `color`, `background-color`), **not CSS
+   classes or stylesheets at all**. So even after rewriting the flex/grid
+   sections as real `<table>`s, every other visual detail driven by
+   `NCR.print.css` classes (label shading, section-heading background,
+   borders, badge pills) would still need to be duplicated as inline styles
+   on every element — a full second template, not a smaller conversion. And
+   `htmldocx` doesn't reliably handle table-cell borders or vertical
+   alignment at all (things the current python-docx build already controls
+   directly), so switching risked ending up *less* faithful, not more —
+   while also requiring edits to the **live, already-shipped** print/PDF
+   template (real regression risk to a working feature) for an uncertain
+   payoff.
+2. **Server-render the real print HTML straight to PDF** (headless
+   browser / WeasyPrint-style) instead of `.docx` — would be genuinely
+   pixel-identical to the print output, but produces a `.pdf`, not a `.docx`
+   — doesn't satisfy "Word file" even though it would satisfy "looks like
+   the PDF."
+
+**Decided 2026-08-29:** don't pursue either path right now. Ship the current
+python-docx NCR export as-is (content-complete, visually approximate, no
+risk to the live print feature) and defer exact visual parity.
+
+**What to do when you tackle it:**
+- If the ask resurfaces as "the Word file should look closer to the PDF":
+  keep iterating the existing `docx_builder.py` primitives directly (colors/
+  spacing/border weights are already fully under our control there) rather
+  than reopening the `htmldocx` route — it has a lower ceiling, not a
+  higher one, for this specific print template's flex/grid-heavy CSS.
+- If the ask resurfaces as "I actually want a PDF, Word was just the closest
+  thing I knew to ask for": build the real server-rendered PDF path
+  instead (option 2 above) — that's the one technique that gives true
+  pixel parity, just not as a `.docx`.
+- Either way, don't attempt to convert `NCRPrintTemplate.tsx`'s HTML via
+  `htmldocx` without first fully inlining every style per element — a
+  partial attempt (tables only, classes left as-is) will silently drop most
+  of the visual design and look worse than the current export, not better.
+
+---
+
 ## Not on this list (and why)
 
 - **Migrating SQLite → Postgres.** Real production move, not a code

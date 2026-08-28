@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { toast } from 'sonner';
 import { Plus, Trash2 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useFollowUpStore } from '../../store/followUpStore';
-import { getUsers, formatUserLabel, bulkCreateFollowUps, type User as ApiUser } from '../../services/api';
+import { getUsers, formatUserLabel, bulkCreateFollowUps, getEntityFiles, getAuthenticatedFileUrl, type User as ApiUser } from '../../services/api';
 import api from '../../services/api';
 import type { MeetingMinutesItem, Attendee, DiscussionLogEntry } from '../../store/meetingMinutesStore';
 import FileAttachment from '../Shared/FileAttachment';
+import MeetingMinutesPrintTemplate from './MeetingMinutesPrintTemplate';
 import formStyles from '../Shared/FormShell.module.css';
+import './MeetingMinutes.print.css';
 
 export interface ActionItemDraft {
     title: string;
@@ -184,6 +187,29 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
         } finally {
             setSaving(false);
         }
+    };
+
+    // Print: mount the report portal, print, unmount (same pattern as NCR/OBS).
+    const [isPrinting, setIsPrinting] = useState(false);
+    const [printAttachments, setPrintAttachments] = useState<{ name: string; url: string }[]>([]);
+    useEffect(() => {
+        if (!isPrinting) return;
+        const timer = setTimeout(() => window.print(), 200);
+        const onAfterPrint = () => setIsPrinting(false);
+        window.addEventListener('afterprint', onAfterPrint);
+        return () => { clearTimeout(timer); window.removeEventListener('afterprint', onAfterPrint); };
+    }, [isPrinting]);
+
+    const handlePrintClick = async () => {
+        let files: { name: string; url: string }[] = [];
+        if (existingItem?.id) {
+            try {
+                const a = await getEntityFiles('meeting', existingItem.id, 'attachment');
+                files = a.map(f => ({ name: f.file_name, url: getAuthenticatedFileUrl(f.file_url) }));
+            } catch {/* no attachments to show */}
+        }
+        setPrintAttachments(files);
+        setIsPrinting(true);
     };
 
     return (
@@ -366,11 +392,35 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                             {saving ? t('common.saving') : t('common.save')}
                         </button>
                     )}
+                    {existingItem?.id && (
+                        <button type="button" className={formStyles.printButton} onClick={handlePrintClick} disabled={saving} title={t('common.print') || 'Print'}>
+                            {t('common.print') || 'Print'}
+                        </button>
+                    )}
                     <button type="button" className={formStyles.cancelButton} onClick={onClose} disabled={saving}>
                         {t('common.cancel')}
                     </button>
                 </div>
             </div>
+            {isPrinting && existingItem && ReactDOM.createPortal(
+                <MeetingMinutesPrintTemplate
+                    data={{
+                        documentNumber: existingItem.documentNumber,
+                        status: formData.status,
+                        title: formData.title,
+                        vendor: formData.contractor,
+                        meetingType: formData.meetingType,
+                        meetingDate: formData.meetingDate,
+                        meetingTime: formData.meetingTime,
+                        location: formData.location,
+                        organizer: formData.organizer,
+                    }}
+                    attendees={attendees}
+                    discussionLog={discussionLog}
+                    attachmentFiles={printAttachments}
+                />,
+                document.body
+            )}
         </div>
     );
 };

@@ -502,3 +502,172 @@ class NCRService:
         except Exception as e:
             logger.error(f"Error deleting NCR {ncr_id}: {e}", exc_info=True)
             raise e
+
+    def export_docx(self, ncr_id: str, scope=None):
+        """
+        Generate a formal .docx report for one NCR — same 7-section content
+        as NCRPrintTemplate.tsx (BACKLOG #15 / #18 pilot), built directly
+        with python-docx via core/docx_builder.py rather than converting the
+        HTML print template (htmldocx doesn't handle the CSS-grid sections
+        the print template uses — see BACKLOG.md for the write-up).
+
+        Returns a StreamingResponse; raises ValueError (→ 404 in the router)
+        if the NCR doesn't exist or isn't in the caller's scope.
+        """
+        import os as _os
+        from core import docx_builder as db
+
+        ncr = self.repo.get_by_id(ncr_id)
+        if not ncr or not record_in_scope(ncr, scope):
+            raise ValueError("NCR not found")
+
+        upload_root = _os.path.join(
+            _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "uploads"
+        )
+
+        def _parse_json_list(raw):
+            if not raw:
+                return []
+            try:
+                parsed = json.loads(raw)
+                return parsed if isinstance(parsed, list) else []
+            except (TypeError, ValueError):
+                return []
+
+        def _photo_paths(legacy_field: str, category: str) -> list:
+            legacy = [u for u in _parse_json_list(legacy_field) if isinstance(u, str)]
+            attachments = self.repo.db.query(models.Attachment).filter(
+                models.Attachment.entity_type == "ncr",
+                models.Attachment.entity_id == ncr_id,
+                models.Attachment.category == category,
+                models.Attachment.is_deleted == False,  # noqa: E712
+            ).all()
+            urls = legacy + [a.file_path for a in attachments]
+            paths = []
+            for u in urls:
+                p = db.resolve_local_upload_path(u, upload_root)
+                if p:
+                    paths.append(p)
+            return paths
+
+        defect_photos = _photo_paths(ncr.defectPhotos, "defectPhoto")
+        progress_photos = _photo_paths(ncr.progressPhotos, "progressPhoto")
+        improvement_photos = _photo_paths(ncr.improvementPhotos, "improvementPhoto")
+
+        sev_text = "MAJOR 重大" if ncr.severity == "Major" else "MINOR 輕微" if ncr.severity == "Minor" else db.DASH
+
+        doc = db.new_document()
+        db.add_masthead(
+            doc, "不符合報告", "NON-CONFORMANCE REPORT",
+            doc_no=ncr.documentNumber, rev=ncr.rev, status=ncr.status,
+        )
+
+        # 1. Non-conformance details
+        db.add_section_heading(doc, "1", "不符合細節", "Non-Conformance Details")
+        db.add_field_grid(doc, [
+            [("Aconex／文管編號", "Doc-Control No.", ncr.aconex), ("NCR 編號", "NCR No.", ncr.documentNumber)],
+            [("主旨", "Subject", ncr.subject)],
+            [("承包商", "Contractor", ncr.vendor), ("專業類別", "Discipline", ncr.discipline)],
+            [("類型", "Type", ncr.type), ("發現位置", "Found Location", ncr.foundLocation)],
+            [("開立日期", "Raise Date", ncr.raiseDate), ("回覆期限", "Response Due", ncr.dueDate)],
+            [("發現人", "Found By", ncr.foundBy), ("提出人", "Raised By", ncr.raisedBy)],
+            [("嚴重度", "Severity", sev_text)],
+        ])
+
+        has_traceability = any([ncr.drawingNo, ncr.specNo, ncr.lineNo, ncr.weldJointNo, ncr.heatBatchNo, ncr.itrNumber, ncr.noiNumber])
+        if has_traceability:
+            db.add_subsection_heading(doc, "1.1 追溯資訊", "Traceability")
+            db.add_field_grid(doc, [
+                [("圖號", "Drawing No.", ncr.drawingNo), ("規範號", "Spec No.", ncr.specNo)],
+                [("管線編號", "Line No.", ncr.lineNo), ("焊道編號", "Weld / Joint No.", ncr.weldJointNo)],
+                [("材料批號", "Heat / Batch No.", ncr.heatBatchNo),
+                 ("ITR／NOI 編號", "ITR / NOI No.", " / ".join(filter(None, [ncr.itrNumber, ncr.noiNumber])))],
+            ])
+
+        has_impact = any([ncr.qtyAffected, ncr.extent])
+        if has_impact:
+            db.add_subsection_heading(doc, "1.2 影響範圍", "Impact & Extent")
+            qty = f"{ncr.qtyAffected}{' ' + ncr.qtyAffectedUnit if ncr.qtyAffectedUnit else ''}" if ncr.qtyAffected else None
+            db.add_field_grid(doc, [[("受影響數量", "Qty Affected", qty), ("範圍", "Isolated / Systemic", ncr.extent)]])
+
+        db.add_subsection_heading(doc, "1.3 不符合描述", "Description of Non-Conformance")
+        db.add_field_box(doc, ncr.requirement, guide="說明圖面／規範／程序書要求為何")
+        db.add_field_box(doc, ncr.deviation, guide="說明實況與要求之差異")
+
+        # 2. Disposition
+        db.add_section_heading(doc, "2", "處置", "Disposition")
+        db.add_subsection_heading(doc, "2.1 產品處置", "Product Disposition")
+        disp = ncr.productDisposition
+        db.add_checkbox_row(doc, [
+            ("科用 Use As Is", disp == "Use As Is"), ("返工 Rework", disp == "Rework"),
+            ("維修 Repair", disp == "Repair"), ("報廢 Reject / Scrap", disp == "Reject"),
+        ])
+        db.add_field_grid(doc, [
+            [("讓步／偏差核准編號", "Concession / Deviation No.", ncr.concessionNo)],
+            [("業主／工程權責核准", "Owner / Engineering Approval",
+              (ncr.ownerApproval or "") + (f"｜{ncr.ownerApprovalNotes}" if ncr.ownerApprovalNotes else ""))],
+        ])
+        db.add_subsection_heading(doc, "2.2 維修方法說明", "Repair Method Statement")
+        db.add_field_box(doc, ncr.repairMethodStatement, guide="若處置為維修，說明維修方法與驗收標準", tall=True)
+
+        # 3. Root cause & corrective action
+        db.add_section_heading(doc, "3", "根本原因與矯正措施", "Root Cause & Corrective Action")
+        db.add_subsection_heading(doc, "3.1 立即處置", "Immediate Correction")
+        db.add_field_box(doc, ncr.immediateCorrectionAction, guide="為控制當前不符合所採取之立即措施")
+
+        db.add_subsection_heading(doc, "3.2 根因分析", "Root Cause Analysis")
+        db.add_field_box(doc, ncr.directCause, guide="直接導致不符合之原因")
+        db.add_field_box(doc, ncr.rootCauseAnalysis, guide="制度／流程層面之根本原因")
+        db.add_checkbox_row(doc, [("否 No", ncr.recurrence == "No"), ("是 Yes", ncr.recurrence == "Yes")])
+        if ncr.recurrence == "Yes":
+            db.add_field_grid(doc, [[("關聯前次 NCR", "Recurrence Ref", ncr.recurrenceRef)]])
+
+        db.add_subsection_heading(doc, "3.3 矯正措施", "Corrective Actions")
+        db.add_field_box(doc, ncr.correctiveActions, guide="消除根因之矯正措施")
+        db.add_field_grid(doc, [[("負責人", "Owner", ncr.correctiveActionOwner), ("目標完成日", "Target Date", ncr.correctiveActionTargetDate)]])
+
+        db.add_subsection_heading(doc, "3.4 預防措施", "Preventive Action")
+        db.add_field_box(doc, ncr.preventiveAction, guide="防止類似不符合再發之措施")
+        db.add_field_grid(doc, [[("負責人", "Owner", ncr.preventiveActionOwner), ("目標完成日", "Target Date", ncr.preventiveActionTargetDate)]])
+
+        # 4. Attachments
+        db.add_section_heading(doc, "4", "附件與證據", "Attachments & Evidence")
+        general_attachments = self.repo.db.query(models.Attachment).filter(
+            models.Attachment.entity_type == "ncr",
+            models.Attachment.entity_id == ncr_id,
+            models.Attachment.category == "attachment",
+            models.Attachment.is_deleted == False,  # noqa: E712
+        ).all()
+        legacy_attachment_urls = [u for u in _parse_json_list(ncr.attachments) if isinstance(u, str)]
+        att_names = [a.file_name for a in general_attachments] + [u.split("/")[-1] for u in legacy_attachment_urls]
+        if not att_names:
+            db.add_field_grid(doc, [[("附件", "Attachments", None)]])
+        else:
+            db.add_field_grid(doc, [[(str(i + 1), "", name)] for i, name in enumerate(att_names)])
+
+        # 5. Verification & closure
+        db.add_section_heading(doc, "5", "驗證與結案", "Verification & Closure")
+        db.add_checkbox_row(doc, [("是 Yes", ncr.effectivenessVerified == "Yes"), ("否 No", ncr.effectivenessVerified == "No")])
+        db.add_field_grid(doc, [
+            [("結案日期", "Closeout Date", ncr.closeoutDate)],
+            [("複驗編號", "Re-Inspection No.", ncr.reInspectionNumber), ("有效性備註", "Notes", ncr.effectivenessNotes)],
+        ])
+
+        # 6. Closure sign-off
+        db.add_section_heading(doc, "6", "結案簽核", "Closure Sign-off")
+        db.add_sign_off_grid(doc, [
+            {"num": "6.1", "zh": "承包商", "en": "Contractor", "name": ncr.vendor},
+            {"num": "6.2", "zh": "開立人", "en": "Issuer", "name": ncr.raisedBy or ncr.foundBy, "date": ncr.raiseDate},
+            {"num": "6.3", "zh": "業主／工程權責", "en": "Owner / Engineering Authority",
+             "name": ncr.ownerApprovalBy, "date": ncr.ownerApprovalDate, "req": ncr.ownerApproval},
+        ])
+
+        # 7. Photographic record
+        if defect_photos or progress_photos or improvement_photos:
+            doc.add_page_break()
+            db.add_section_heading(doc, "7", "照片紀錄（前／中／後）", "Photographic Record (Before / During / After)")
+            db.add_photo_section(doc, "缺失（前）Defect (Before)", defect_photos)
+            db.add_photo_section(doc, "矯正中（中）In Progress (During)", progress_photos)
+            db.add_photo_section(doc, "改善（後）Improvement (After)", improvement_photos)
+
+        return db.finalize_response(doc, ncr.documentNumber or "NCR")

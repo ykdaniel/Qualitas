@@ -1,0 +1,120 @@
+/* Meeting Minutes print report — lightweight sibling of the OBS/NCR reports.
+   Portal-mounted into <body> (sibling of #root), shown only while printing.
+   All rules are scoped under .mom-print-root so the generic table/td/th
+   selectors never leak into the app. The masthead lives in the outer table's
+   <thead> so the browser repeats it on every printed page. */
+
+:root {
+    --mom-ink: #1c1f24;
+    --mom-muted: #5b6068;
+    --mom-line: #9aa0a8;
+    --mom-line-soft: #c9ced4;
+    --mom-fill: #eef1f4;
+    --mom-fill-head: #dfe4ea;
+    --mom-accent: #2f5f8f;
+    --mom-status: #1f6f8b;
+    --mom-note: #7a818a;
+}
+
+.mom-print-root { display: none; }
+
+.mom-print-root {
+    font-family: "Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    color: var(--mom-ink);
+    font-size: 9.3px;
+    line-height: 1.5;
+    background: #fff;
+}
+.mom-print-root * { box-sizing: border-box; }
+
+.mom-print-root .mom-report { width: 100%; border-collapse: collapse; }
+.mom-print-root .head-cell,
+.mom-print-root .body-cell { border: none; padding: 0; text-align: left; font-weight: 400; }
+
+.mom-print-root .doc-head {
+    display: flex; align-items: stretch;
+    border-bottom: 2.2px solid var(--mom-ink);
+    padding-bottom: 6px; margin-bottom: 10px;
+}
+.mom-print-root .logo-box {
+    width: 78px; min-height: 46px;
+    border: 1px dashed var(--mom-line-soft);
+    display: flex; align-items: center; justify-content: center;
+    color: #b8bdc4; font-size: 9px; letter-spacing: 1px;
+}
+.mom-print-root .head-mid { flex: 1; padding: 2px 14px; }
+.mom-print-root .head-mid .co { font-size: 14px; font-weight: 700; letter-spacing: .5px; }
+.mom-print-root .head-mid .sub { font-size: 9.5px; color: var(--mom-muted); margin-top: 2px; }
+.mom-print-root .head-right { text-align: right; font-size: 9px; line-height: 1.6; min-width: 120px; }
+.mom-print-root .head-right .docno { font-weight: 700; font-size: 10px; letter-spacing: .3px; }
+
+.mom-print-root .badge {
+    display: inline-block; padding: 1px 7px; border-radius: 2px;
+    font-weight: 700; font-size: 8.6px; letter-spacing: .4px; color: #fff;
+}
+.mom-print-root .b-status { background: var(--mom-status); }
+
+.mom-print-root .title {
+    text-align: center; font-size: 16px; font-weight: 700;
+    letter-spacing: 3px; margin: 4px 0 12px;
+}
+.mom-print-root .title .en {
+    font-size: 9px; font-weight: 500; letter-spacing: 2px;
+    color: var(--mom-muted); display: block; margin-top: 2px;
+}
+
+.mom-print-root .sec-head {
+    background: var(--mom-fill-head);
+    border-left: 3px solid var(--mom-accent);
+    padding: 3px 9px; font-weight: 700; font-size: 10px;
+    letter-spacing: .5px; margin: 11px 0 0;
+}
+.mom-print-root .sec-head .en { font-weight: 500; color: var(--mom-muted); font-size: 8.6px; letter-spacing: .5px; }
+
+.mom-print-root table { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: -1px; }
+.mom-print-root .val { word-break: break-word; }
+.mom-print-root td, .mom-print-root th { border: 1px solid var(--mom-line); padding: 3px 6px; vertical-align: top; }
+.mom-print-root td.lbl {
+    background: var(--mom-fill); font-weight: 600; white-space: nowrap;
+    width: 88px; color: #2a2e34;
+}
+.mom-print-root td.lbl small { display: block; color: var(--mom-note); font-weight: 500; font-size: 7.6px; letter-spacing: .2px; }
+.mom-print-root .val { min-height: 14px; }
+.mom-print-root .blank { color: #aeb3ba; }
+.mom-print-root .guide { color: #aeb3ba; }
+
+/* attendees / discussion-log tables reuse the same td/th look, with a
+   left-aligned header row instead of the shaded label column */
+.mom-print-root .list-table th {
+    background: var(--mom-fill-head); font-weight: 700; text-align: left;
+}
+.mom-print-root .list-table td { vertical-align: top; }
+
+.mom-print-root .sign-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 4px; }
+.mom-print-root .sign-cell { border: 1px solid var(--mom-line); padding: 6px 8px 7px; }
+.mom-print-root .sign-cell .role { font-weight: 700; font-size: 9px; }
+.mom-print-root .sign-cell .role .en { color: var(--mom-muted); font-weight: 500; font-size: 7.6px; }
+.mom-print-root .sign-line { border-bottom: 1px solid var(--mom-ink); height: 24px; margin: 6px 0 4px; }
+.mom-print-root .sign-meta { display: flex; justify-content: space-between; font-size: 8px; color: var(--mom-muted); }
+.mom-print-root .sign-meta span { flex: 1; }
+
+.mom-print-root .foot {
+    margin-top: 12px; border-top: 1px solid var(--mom-line-soft); padding-top: 6px;
+    display: flex; justify-content: space-between; gap: 14px; font-size: 7.6px; color: var(--mom-note);
+}
+
+/* keep rows / boxes intact across page breaks */
+.mom-print-root tr,
+.mom-print-root .sign-cell { break-inside: avoid; page-break-inside: avoid; }
+.mom-print-root .sec-head { break-after: avoid; page-break-after: avoid; }
+
+@media print {
+    @page { size: A4; margin: 13mm 12mm; }
+    #root { display: none !important; }
+    .mom-print-root { display: block !important; }
+    .mom-print-root .mom-report > thead { display: table-header-group; }
+    .mom-print-root * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+}

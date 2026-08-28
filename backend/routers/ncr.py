@@ -1,5 +1,6 @@
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 import schemas
@@ -55,6 +56,19 @@ def read_ncr(
     if db_ncr is None:
         raise HTTPException(status_code=404, detail="NCR not found")
     return db_ncr
+
+@router.get("/{ncr_id}/export-docx", response_class=StreamingResponse)
+def export_ncr_docx(
+    ncr_id: str,
+    ncr_service: NCRService = Depends(get_ncr_service),
+    scope: Scope = Depends(get_scope),
+    current_user: schemas.User = Depends(RoleChecker(NCR_VIEW))
+):
+    """Formal .docx export of the NCR report (BACKLOG #18 pilot)."""
+    try:
+        return ncr_service.export_docx(ncr_id=ncr_id, scope=scope)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 def _require_approve_permission(current_user: "schemas.User") -> None:
     user_permissions = {p.code for p in current_user.role.permissions_rel}
