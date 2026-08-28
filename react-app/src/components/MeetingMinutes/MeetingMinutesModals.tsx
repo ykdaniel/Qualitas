@@ -71,7 +71,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
     const [attendees, setAttendees] = useState<Attendee[]>(existingItem?.attendees || []);
     const [newAttendee, setNewAttendee] = useState<Attendee>({ name: '', company: '', role: '' });
     const [discussionLog, setDiscussionLog] = useState<DiscussionLogEntry[]>(existingItem?.discussionLog || []);
-    const [newDiscussion, setNewDiscussion] = useState<DiscussionLogEntry>({ no: '', topic: '', discussion: '', decision: '' });
+    const [newDiscussion, setNewDiscussion] = useState<DiscussionLogEntry>({ no: '', topic: '', discussion: '', decision: '', owner: '', status: 'Open' });
 
     // Action items: a brand-new meeting has no documentNumber yet, so drafts
     // are held locally and bulk-submitted right after the meeting itself is
@@ -121,7 +121,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
     const addDiscussionRow = () => {
         if (!newDiscussion.topic.trim()) return;
         setDiscussionLog(prev => [...prev, { ...newDiscussion, no: String(prev.length + 1) }]);
-        setNewDiscussion({ no: '', topic: '', discussion: '', decision: '' });
+        setNewDiscussion({ no: '', topic: '', discussion: '', decision: '', owner: '', status: 'Open' });
     };
     const removeDiscussionRow = (idx: number) => {
         setDiscussionLog(prev => prev.filter((_, i) => i !== idx).map((d, i) => ({ ...d, no: String(i + 1) })));
@@ -285,7 +285,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                                     </div>
                                 ))}
                                 <div style={{ display: 'flex', gap: 8 }}>
-                                    <input className={formStyles.formInput} placeholder={t('meetingMinutes.attendeeName')} value={newAttendee.name} onChange={(e) => setNewAttendee(prev => ({ ...prev, name: e.target.value }))} style={{ flex: 2 }} />
+                                    <input className={formStyles.formInput} list="meeting-attendee-people" placeholder={t('meetingMinutes.attendeeName')} value={newAttendee.name} onChange={(e) => setNewAttendee(prev => ({ ...prev, name: e.target.value }))} style={{ flex: 2 }} />
                                     <input className={formStyles.formInput} placeholder={t('meetingMinutes.attendeeCompany')} value={newAttendee.company} onChange={(e) => setNewAttendee(prev => ({ ...prev, company: e.target.value }))} style={{ flex: 2 }} />
                                     <input className={formStyles.formInput} placeholder={t('meetingMinutes.attendeeRole')} value={newAttendee.role} onChange={(e) => setNewAttendee(prev => ({ ...prev, role: e.target.value }))} style={{ flex: 1 }} />
                                     <button type="button" onClick={addAttendeeRow} className={formStyles.printButton}><Plus size={16} /></button>
@@ -303,12 +303,25 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                                         </div>
                                         {d.discussion && <p style={{ margin: '4px 0', color: '#64748b' }}>{t('meetingMinutes.discussion')}: {d.discussion}</p>}
                                         {d.decision && <p style={{ margin: '4px 0', color: '#334155' }}>{t('meetingMinutes.decision')}: {d.decision}</p>}
+                                        {(d.owner || d.status) && (
+                                            <p style={{ margin: '4px 0', color: '#334155' }}>
+                                                {d.owner && <>{t('meetingMinutes.itemOwner')}: {d.owner}　</>}
+                                                {d.status && <>{t('meetingMinutes.itemStatus')}: {d.status === 'Closed' ? t('meetingMinutes.itemStatusClosed') : t('meetingMinutes.itemStatusOpen')}</>}
+                                            </p>
+                                        )}
                                     </div>
                                 ))}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, border: '1px dashed #cbd5e1', borderRadius: 8, padding: 10 }}>
                                     <input className={formStyles.formInput} placeholder={t('meetingMinutes.topic')} value={newDiscussion.topic} onChange={(e) => setNewDiscussion(prev => ({ ...prev, topic: e.target.value }))} />
                                     <textarea className={formStyles.formTextarea} placeholder={t('meetingMinutes.discussion')} rows={2} value={newDiscussion.discussion} onChange={(e) => setNewDiscussion(prev => ({ ...prev, discussion: e.target.value }))} />
                                     <textarea className={formStyles.formTextarea} placeholder={t('meetingMinutes.decision')} rows={2} value={newDiscussion.decision} onChange={(e) => setNewDiscussion(prev => ({ ...prev, decision: e.target.value }))} />
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <input className={formStyles.formInput} list="meeting-attendee-people" placeholder={t('meetingMinutes.itemOwner')} value={newDiscussion.owner} onChange={(e) => setNewDiscussion(prev => ({ ...prev, owner: e.target.value }))} style={{ flex: 2 }} />
+                                        <select className={formStyles.formSelect} value={newDiscussion.status} onChange={(e) => setNewDiscussion(prev => ({ ...prev, status: e.target.value }))} style={{ flex: 1 }}>
+                                            <option value="Open">{t('meetingMinutes.itemStatusOpen')}</option>
+                                            <option value="Closed">{t('meetingMinutes.itemStatusClosed')}</option>
+                                        </select>
+                                    </div>
                                     <button type="button" onClick={addDiscussionRow} className={formStyles.printButton} style={{ alignSelf: 'flex-start' }}><Plus size={16} /> {t('meetingMinutes.addDiscussionItem')}</button>
                                 </div>
                             </div>
@@ -385,6 +398,11 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                             </div>
                         </div>
                     </fieldset>
+                    <datalist id="meeting-attendee-people">
+                        {Array.from(new Set(users.map(u => u.full_name || u.username).filter(Boolean))).map(name => (
+                            <option key={name} value={name} />
+                        ))}
+                    </datalist>
                 </div>
                 <div className={formStyles.modalActions}>
                     {!readOnly && (

@@ -16,6 +16,8 @@ export interface DiscussionLogEntry {
     topic: string;
     discussion?: string;
     decision?: string;
+    owner?: string;
+    status?: string;
 }
 
 export interface MeetingMinutesItem {

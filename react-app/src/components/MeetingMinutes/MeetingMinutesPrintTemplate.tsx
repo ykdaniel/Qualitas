@@ -98,15 +98,24 @@ const MeetingMinutesPrintTemplate: React.FC<MeetingMinutesPrintTemplateProps> = 
                             <div className="sec-head">3. 討論與決議 <span className="en">Discussion &amp; Decisions</span></div>
                             <table className="list-table">
                                 <tbody>
-                                    <tr><th style={{ width: '8%' }}>項次 No.</th><th style={{ width: '20%' }}>議題 Topic</th><th style={{ width: '36%' }}>討論 Discussion</th><th>決議 Decision</th></tr>
+                                    <tr>
+                                        <th style={{ width: '6%' }}>項次 No.</th>
+                                        <th style={{ width: '15%' }}>議題 Topic</th>
+                                        <th style={{ width: '26%' }}>討論 Discussion</th>
+                                        <th style={{ width: '26%' }}>決議 Decision</th>
+                                        <th style={{ width: '15%' }}>負責人 Owner</th>
+                                        <th>狀態 Status</th>
+                                    </tr>
                                     {discussionLog.length === 0
-                                        ? <tr><td colSpan={4}><span className="blank">（無資料 No discussion items）</span></td></tr>
+                                        ? <tr><td colSpan={6}><span className="blank">（無資料 No discussion items）</span></td></tr>
                                         : discussionLog.map((d, i) => (
                                             <tr key={i}>
                                                 <td>{val(d.no)}</td>
                                                 <td>{val(d.topic)}</td>
                                                 <td>{val(d.discussion)}</td>
                                                 <td>{val(d.decision)}</td>
+                                                <td>{val(d.owner)}</td>
+                                                <td>{d.status === 'Closed' ? '已完成 Closed' : d.status === 'Open' ? '待辦 Open' : val(d.status)}</td>
                                             </tr>
                                         ))}
                                 </tbody>
