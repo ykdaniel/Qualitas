@@ -511,3 +511,35 @@ def test_delete_draft_meeting_minutes_does_not_reclaim_non_tail_number(db_sessio
     tail_third = int(third.documentNumber.split("-")[-1])
     tail_second = int(second.documentNumber.split("-")[-1])
     assert tail_third == tail_second + 1
+
+
+def test_deleting_every_draft_resets_the_sequence_to_zero(db_session, vendor):
+    """Regression test for the exact bug reported 2026-08-31: deleting
+    every Draft down to an empty table must let the next create start
+    fresh at 1, not stay stuck wherever the historical peak was. This is
+    what distinguishes the current resync-to-actual-max design from the
+    earlier naive "decrement by one" version (which only fixed the
+    single-tail-delete case)."""
+    service = MeetingMinutesService(MeetingMinutesRepository(db_session))
+
+    created = []
+    for i in range(3):
+        item = service.create_meeting_minutes(
+            schemas.MeetingMinutesCreate(vendor="Acme Co", status="Draft", title=f"item {i}")
+        )
+        db_session.commit()
+        created.append(item)
+
+    # Delete from the tail backwards — the realistic "clean up my test
+    # records" order — each delete should resync the counter down by one.
+    for item in reversed(created):
+        service.delete_meeting_minutes(item.id)
+        db_session.commit()
+
+    fresh = service.create_meeting_minutes(
+        schemas.MeetingMinutesCreate(vendor="Acme Co", status="Draft", title="fresh start")
+    )
+    db_session.commit()
+
+    assert fresh.documentNumber == created[0].documentNumber
+    assert fresh.documentNumber.endswith("000001")

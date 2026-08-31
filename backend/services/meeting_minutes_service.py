@@ -158,11 +158,19 @@ class MeetingMinutesService:
                     f"with status '{db_meeting.status}'. Please Void it first, then delete."
                 )
 
-            if db_meeting.status == 'Draft' and db_meeting.documentNumber:
-                reclaim_reference_no(self.repo.db, db_meeting.vendor or '', 'meeting', db_meeting.documentNumber)
+            is_draft = db_meeting.status == 'Draft'
+            vendor_name = db_meeting.vendor or ''
 
             old_val = {c.name: getattr(db_meeting, c.name) for c in db_meeting.__table__.columns}
             self.repo.delete(db_meeting)
+
+            if is_draft:
+                # Must run AFTER the delete (repo.delete commits) so the
+                # table scan inside reclaim_reference_no correctly excludes
+                # the row that was just removed — see its docstring for why
+                # this resyncs to the actual remaining max rather than a
+                # naive decrement.
+                reclaim_reference_no(self.repo.db, vendor_name, 'meeting')
 
             log_audit(
                 self.repo.db, "DELETE", "MeetingMinutes", meeting_id, db_meeting.documentNumber,

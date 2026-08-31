@@ -462,27 +462,29 @@ def generate_reference_no(db: Session, vendor_name: str, doc_type: str, project_
 
 
 def reclaim_reference_no(db: Session, vendor_name: str, doc_type: str,
-                          document_number: str, project_code: str | None = None) -> bool:
+                          project_code: str | None = None) -> bool:
     """
-    Best-effort "give back" a reference number when the record that held it
-    is deleted while still a Draft — i.e. it was never published/shared, so
-    nobody could have referenced it externally, and re-issuing the same
-    number to the next created record is safe (see BACKLOG discussion
-    2026-08-31: this is deliberately NOT available for Published/Void
-    records — generate_reference_no's "never reuse" behavior stays the
-    default for anything that was ever released).
+    Best-effort "give back" reference number(s) after a record is deleted
+    while still a Draft — i.e. it was never published/shared, so nobody
+    could have referenced its number externally, and re-issuing numbers
+    for this (project, vendor, doc) sequence is safe (see BACKLOG
+    discussion 2026-08-31: this is deliberately NOT available for
+    Published/Void records — generate_reference_no's "never reuse"
+    behavior stays the default for anything that was ever released).
 
-    Only reclaims the number if it's still the *most recently issued* one
-    for this (project, vendor, doc) sequence — i.e. only the tail can be
-    given back. If a newer record already exists past this number, the
-    counter is left alone (decrementing would let the next call re-issue a
-    number that collides with that newer record) — the number just becomes
-    a permanent, unexplained-by-Void gap in that case, same as before this
-    function existed.
+    Call this AFTER the row has actually been deleted+committed (so the
+    table scan below correctly excludes it). Resyncs the sequence counter
+    DOWN to whatever the real current max is among the *remaining* rows —
+    not a naive "decrement by one" — so it correctly handles both "deleted
+    the tail" (resyncs to the next-highest surviving number) and "deleted
+    the last remaining record" (resyncs all the way to 0, so the very next
+    create starts fresh at 1) in one operation. If a newer record still
+    exists past the one that was deleted, actual_max reflects that and the
+    counter is left alone (no lower resync needed) — that number stays a
+    permanent gap, same as before this function existed.
 
-    Returns True if the sequence counter was actually decremented, False
-    if there was nothing to reclaim (parse failure, no matching sequence
-    row, or this wasn't the tail number).
+    Returns True if the counter actually moved down, False otherwise
+    (nothing to reclaim, or the real max wasn't lower than the counter).
     """
     code = project_code or PROJECT_CODE
     vendor_abbrev = get_contractor_abbreviation(db, vendor_name)
@@ -495,14 +497,6 @@ def reclaim_reference_no(db: Session, vendor_name: str, doc_type: str,
     else:
         expected_prefix = f"{code}-{vendor_abbrev}-{doc_type.upper()}-"
 
-    if not document_number.startswith(expected_prefix):
-        return False
-    suffix = document_number[len(expected_prefix):]
-    try:
-        parsed_seq = int(suffix)
-    except ValueError:
-        return False
-
     with _reference_seq_lock:
         seq_record = db.query(ReferenceSequence).filter(
             ReferenceSequence.project == code,
@@ -510,10 +504,14 @@ def reclaim_reference_no(db: Session, vendor_name: str, doc_type: str,
             ReferenceSequence.doc == doc_type
         ).with_for_update().first()
 
-        if not seq_record or seq_record.last_seq != parsed_seq:
+        if not seq_record:
             return False
 
-        seq_record.last_seq = parsed_seq - 1
+        actual_max = _max_existing_seq(db, doc_type, expected_prefix)
+        if actual_max >= seq_record.last_seq:
+            return False
+
+        seq_record.last_seq = actual_max
         db.flush()
         return True
 

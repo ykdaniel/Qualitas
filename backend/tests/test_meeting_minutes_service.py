@@ -145,7 +145,7 @@ def test_delete_meeting_minutes_draft_allowed_and_reclaims_number(meeting_servic
         result = meeting_service.delete_meeting_minutes("mtg-123", user_id=1, username="admin")
 
         assert result is True
-        mock_reclaim.assert_called_once_with(mock_repo.db, '', 'meeting', 'MOM-001')
+        mock_reclaim.assert_called_once_with(mock_repo.db, '', 'meeting')
         mock_repo.delete.assert_called_once_with(mock_db_meeting)
         mock_log.assert_called_once()
 
