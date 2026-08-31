@@ -459,8 +459,12 @@ class MeetingMinutes(Base):
     id = Column(String, primary_key=True, index=True)
     project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
     vendor_id = Column(String, ForeignKey("contractors.id", ondelete="SET NULL"), nullable=True, index=True)
-    documentNumber = Column(String, index=True, unique=True)
-    rev = Column(String, nullable=True)  # user-editable, plain text (no auto-series logic — see BACKLOG #18)
+    # unique=True intentionally dropped 2026-08-31 — recurring occurrences
+    # share one documentNumber across rows, distinguished by rev; real
+    # uniqueness is now the composite (documentNumber, rev) index created
+    # in db_migrations.py. See BACKLOG #18.
+    documentNumber = Column(String, index=True)
+    rev = Column(String, nullable=True)  # "1.0", "2.0", ... — see BACKLOG #18
     status = Column(String)  # Draft / Published
     title = Column(String, nullable=True)
     meetingType = Column(String, nullable=True)

@@ -87,7 +87,7 @@ export const createColumns = (
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title={t('meetingMinutes.refNo')} />
             ),
-            cell: ({ row }) => <div className="text-center">{row.getValue("documentNumber")}</div>,
+            cell: ({ row }) => <div className="text-center">{row.getValue("documentNumber")} ({row.original.rev ?? '1.0'})</div>,
             size: 180,
         },
         {

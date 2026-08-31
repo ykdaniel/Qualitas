@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Plus, Trash2 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useFollowUpStore } from '../../store/followUpStore';
-import { getUsers, formatUserLabel, bulkCreateFollowUps, getEntityFiles, getAuthenticatedFileUrl, type User as ApiUser } from '../../services/api';
+import { useMeetingMinutesStore } from '../../store/meetingMinutesStore';
+import { getUsers, formatUserLabel, bulkCreateFollowUps, getEntityFiles, getAuthenticatedFileUrl, createMeetingMinutesOccurrence, type User as ApiUser } from '../../services/api';
 import api from '../../services/api';
 import type { MeetingMinutesItem, Attendee, DiscussionLogEntry } from '../../store/meetingMinutesStore';
 import FileAttachment from '../Shared/FileAttachment';
@@ -53,13 +55,19 @@ export interface MeetingMinutesDetailModalProps {
     readOnly?: boolean;
     onSave: (details: MeetingMinutesDetailData, pendingFiles: File[], actionItemsDraft: ActionItemDraft[]) => void | Promise<void>;
     onClose: () => void;
+    /** Plain close, skipping onClose's deep-link navigate(-1) — used after
+     * spawning a new occurrence so that navigate() to the new record isn't
+     * raced by an unrelated back-navigation. Mirrors ITRModals.tsx. */
+    onDismiss?: () => void;
 }
 
-export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps> = ({ existingItem, readOnly = false, onSave, onClose }) => {
+export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps> = ({ existingItem, readOnly = false, onSave, onClose, onDismiss }) => {
     const { t } = useLanguage();
     const { hasPermission } = useAuth();
     const { getActiveContractors } = useContractorsStore();
     const { addFollowUp } = useFollowUpStore();
+    const navigate = useNavigate();
+    const [spawningOccurrence, setSpawningOccurrence] = useState(false);
 
     const [formData, setFormData] = useState({
         rev: existingItem?.rev || '',
@@ -254,6 +262,24 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
             toast.error(err?.response?.data?.detail || (err as Error)?.message || t('common.saveFailed'));
         } finally {
             setSaving(false);
+        }
+    };
+
+    // BACKLOG #18: create the next occurrence of this recurring meeting —
+    // backend reuses this record's documentNumber and bumps rev.
+    const handleNewOccurrenceClick = async () => {
+        if (!existingItem?.id || spawningOccurrence) return;
+        setSpawningOccurrence(true);
+        try {
+            const created = await createMeetingMinutesOccurrence(existingItem.id);
+            toast.success(t('meetingMinutes.occurrenceCreated') || `New occurrence created (rev ${created.rev})`);
+            await useMeetingMinutesStore.getState().refetch();
+            (onDismiss || onClose)();
+            navigate(`/meeting-minutes?openId=${created.id}`);
+        } catch (err: any) {
+            toast.error(err?.response?.data?.detail || t('common.saveFailed'));
+        } finally {
+            setSpawningOccurrence(false);
         }
     };
 
@@ -539,6 +565,11 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                     {existingItem?.id && (
                         <button type="button" className={formStyles.printButton} onClick={handlePrintClick} disabled={saving} title={t('common.print') || 'Print'}>
                             {t('common.print') || 'Print'}
+                        </button>
+                    )}
+                    {existingItem?.id && hasPermission('meeting:create:all') && (
+                        <button type="button" className={formStyles.printButton} onClick={handleNewOccurrenceClick} disabled={saving || spawningOccurrence} title={t('meetingMinutes.newOccurrenceTitle') || 'Create the next occurrence of this recurring meeting, reusing its document number'}>
+                            {spawningOccurrence ? (t('common.saving') || '...') : (t('meetingMinutes.newOccurrence') || 'New Occurrence')}
                         </button>
                     )}
                     <button type="button" className={formStyles.cancelButton} onClick={onClose} disabled={saving}>

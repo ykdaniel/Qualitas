@@ -204,3 +204,42 @@ def test_update_void_meeting_minutes_rejects_any_change(meeting_service, mock_re
         meeting_service.update_meeting_minutes("mtg-123", meeting_update)
 
     mock_repo.update.assert_not_called()
+
+def test_create_new_occurrence_bumps_rev_and_carries_fields(meeting_service, mock_repo):
+    """BACKLOG #18: new occurrence shares the source's documentNumber,
+    computes next_rev from the max across all siblings (not just the
+    source's own rev), starts as Draft, carries vendor/project/meetingType/
+    organizer/location/attendees, and does NOT carry discussionLog or
+    meetingDate."""
+    source = models.MeetingMinutes(
+        id="mtg-src", documentNumber="MOM-001", rev="2.0", status="Published",
+        title="Weekly Sync - 2026-08-24", project_id="proj-1", vendor_id="vendor-1",
+        meetingType="Weekly", location="Site Office", organizer="Alice",
+        attendees='[{"name": "Bob", "company": "Acme"}]',
+        discussionLog='[{"no": "1", "level": 0, "content": "old agenda"}]',
+        meetingDate="2026-08-24",
+    )
+    sibling = models.MeetingMinutes(id="mtg-sib", documentNumber="MOM-001", rev="1.0")
+    mock_repo.get_by_id.return_value = source
+    mock_repo.get_all_by_document_number.return_value = [source, sibling]
+
+    with patch('services.meeting_minutes_service.log_audit') as mock_log:
+        result = meeting_service.create_new_occurrence("mtg-src", user_id=1, username="admin")
+
+    mock_repo.get_all_by_document_number.assert_called_once_with("MOM-001")
+    new_meeting = mock_repo.db.add.call_args[0][0]
+    assert new_meeting.documentNumber == "MOM-001"
+    assert new_meeting.rev == "3.0"
+    assert new_meeting.status == "Draft"
+    assert new_meeting.title.startswith("Weekly Sync - ")  # old date suffix stripped, new one appended
+    assert new_meeting.title.count(" - ") == 1
+    assert new_meeting.project_id == "proj-1"
+    assert new_meeting.vendor_id == "vendor-1"
+    assert new_meeting.meetingType == "Weekly"
+    assert new_meeting.location == "Site Office"
+    assert new_meeting.organizer == "Alice"
+    assert new_meeting.attendees == '[{"name": "Bob", "company": "Acme"}]'
+    assert new_meeting.discussionLog is None
+    assert new_meeting.meetingDate is None
+    assert result is new_meeting
+    assert mock_log.call_count == 2  # new row + a marker on the source

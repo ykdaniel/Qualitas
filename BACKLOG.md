@@ -1068,17 +1068,33 @@ short, expand to fill. Reads/prints as a single ITR inspection report.
 
 ---
 
-## 18. Meeting Minutes: recurring occurrences (shared documentNumber + rev) · DESIGN AGREED 2026-08-29 · DEFERRED (schema-risk gate)
+## 18. Meeting Minutes: recurring occurrences (shared documentNumber + rev) · ✅ SHIPPED 2026-08-31
 
-**UPDATE 2026-08-29:** a plain `rev` column (`String, nullable=True`, no
-uniqueness/constraint changes) was added to `MeetingMinutes` and exposed as
-a normal editable form field — closes the immediate "nowhere to type a
-revision" gap. This is deliberately **not** the recurring-series design
-below — no shared `documentNumber`, no auto "New Occurrence" copy, no
-composite-unique migration. `rev` is just free text the user manages
-themselves, same as any other field. The design below (series sharing one
-`documentNumber`, auto-incrementing `rev`, "New Occurrence" button) is
-still fully deferred for the reason stated.
+**UPDATE 2026-08-31: built.** The user hit the real need directly ("9/1
+exists, 9/8 updates based on 9/1, becomes rev 2") and confirmed accepting
+the schema-risk gate below. Delivered per the original design: `models.py`
+dropped `unique=True` from `documentNumber`; `db_migrations.py` gained
+`_loosen_meeting_minutes_documentNumber_unique()` (backfills any NULL
+`rev` to `"1.0"`, introspects and drops the legacy single-column unique
+index, creates the composite `UNIQUE(documentNumber, rev)`); new
+`MeetingMinutesService.create_new_occurrence()` + `POST
+/meeting-minutes/{id}/new-occurrence` + a "建立下次會議 New Occurrence"
+button in the modal footer. Live-DB inspection before building confirmed
+the legacy index (`ix_meeting_minutes_documentNumber`) was a clean
+standalone unique index, safely droppable — no hidden inline constraint.
+6 new tests (mock + real-DB, including an explicit "duplicate
+documentNumber+rev is still rejected" check against the real composite
+index). List/print/modal all display `documentNumber (rev)` combined per
+the confirmed convention.
+
+**UPDATE 2026-08-29 (superseded by the above):** a plain `rev` column
+(`String, nullable=True`, no uniqueness/constraint changes) was added to
+`MeetingMinutes` and exposed as a normal editable form field as a stopgap
+— closed the immediate "nowhere to type a revision" gap before the full
+recurring-series design was built. `rev` stayed editable even after this
+build (not made immutable as the original design text below suggested) —
+"New Occurrence" just pre-fills the computed next value like any other
+field.
 
 Captured 2026-08-29 from a discussion about reusing IAM person data across
 modules. That narrower ask turned out to already be solved everywhere a real

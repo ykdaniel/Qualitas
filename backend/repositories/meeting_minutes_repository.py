@@ -18,6 +18,15 @@ class MeetingMinutesRepository:
     def __init__(self, db: Session):
         self.db = db
 
+    def get_all_by_document_number(self, document_number: str) -> List[models.MeetingMinutes]:
+        """All rows (any status) sharing one recurring-series documentNumber —
+        used to compute the next rev when creating a new occurrence."""
+        return (
+            self.db.query(models.MeetingMinutes)
+            .filter(models.MeetingMinutes.documentNumber == document_number)
+            .all()
+        )
+
     def get_by_id(self, meeting_id: str) -> Optional[models.MeetingMinutes]:
         """Get Meeting Minutes by ID with preloaded relationships"""
         return (self.db.query(models.MeetingMinutes)

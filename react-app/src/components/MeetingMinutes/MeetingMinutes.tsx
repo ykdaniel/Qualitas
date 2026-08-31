@@ -356,6 +356,16 @@ const MeetingMinutes: React.FC = () => {
               setIsEditModalOpen(false);
               setCurrentMeetingId(null);
             }}
+            onDismiss={() => {
+              // Plain close, skips onClose's deep-link navigate(-1); resets
+              // the deep-link guard so a follow-up ?openId= (e.g. for a
+              // just-created occurrence) can still be picked up by the
+              // effect above.
+              openedViaDeepLinkRef.current = false;
+              deepLinkAppliedRef.current = false;
+              setIsEditModalOpen(false);
+              setCurrentMeetingId(null);
+            }}
           />
         );
       })()}

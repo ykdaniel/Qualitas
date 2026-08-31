@@ -4,9 +4,13 @@ Meeting Minutes Service
 Business logic layer for the Meeting Minutes module
 """
 
+import re
 import uuid
 import logging
+from datetime import datetime
 from typing import List, Optional
+
+from sqlalchemy.exc import IntegrityError
 
 import models
 import schemas
@@ -60,6 +64,10 @@ class MeetingMinutesService:
                 data['documentNumber'] = generate_reference_no(
                     self.repo.db, vendor_name or '', 'meeting'
                 )
+            # First occurrence of a series starts at "1.0" (BACKLOG #18) —
+            # create_new_occurrence bumps this for subsequent ones.
+            if not data.get('rev'):
+                data['rev'] = '1.0'
 
             db_meeting = models.MeetingMinutes(**data)
             if not db_meeting.id:
@@ -81,6 +89,102 @@ class MeetingMinutesService:
             return created
         except Exception as e:
             logger.error(f"Error creating Meeting Minutes: {e}", exc_info=True)
+            raise e
+
+    def create_new_occurrence(self, meeting_id: str, user_id: int = None,
+                              username: str = None, scope=None) -> Optional[models.MeetingMinutes]:
+        """
+        Create the next occurrence of a recurring meeting series (BACKLOG
+        #18) — reuses the source row's documentNumber (the whole series
+        shares one document number for its lifetime) and bumps rev
+        ("1.0" -> "2.0" -> ...); carries forward vendor/project/meetingType/
+        organizer/location/attendees so the common case (same people, same
+        format, different week) doesn't need retyping. discussionLog is
+        deliberately NOT carried forward (fresh agenda every occurrence),
+        and meetingDate is deliberately left blank (not defaulted to
+        today) — the user fills in the actual date.
+
+        Unlike ITR's create_reinspection / create_ncr_from_itr (which mint
+        a brand-new documentNumber for a DIFFERENT module and link back via
+        FK), this is deliberately a same-series, same-number derivation —
+        see the unique-index migration in db_migrations.py that makes this
+        legal (composite UNIQUE(documentNumber, rev) instead of a bare
+        UNIQUE(documentNumber)).
+        """
+        try:
+            source = self.repo.get_by_id(meeting_id)
+            if not source or not record_in_scope(source, scope):
+                return None
+
+            siblings = self.repo.get_all_by_document_number(source.documentNumber)
+            max_n = 0
+            for s in siblings:
+                try:
+                    max_n = max(max_n, int(float(s.rev or 0)))
+                except (TypeError, ValueError):
+                    continue
+            next_rev = f"{max_n + 1}.0"
+
+            today = datetime.now().strftime('%Y-%m-%d')
+            # Strip a trailing " - YYYY-MM-DD" this same flow would have
+            # appended on a prior occurrence, so chained occurrences don't
+            # accumulate multiple dates in the title over time.
+            base_title = re.sub(r'\s*[-–]\s*\d{4}-\d{2}-\d{2}\s*$', '', (source.title or '').strip())
+            new_title = f"{base_title} - {today}" if base_title else today
+
+            new_meeting = models.MeetingMinutes(
+                id=str(uuid.uuid4()),
+                project_id=source.project_id,
+                vendor_id=source.vendor_id,
+                documentNumber=source.documentNumber,  # shared, not regenerated
+                rev=next_rev,
+                status="Draft",
+                title=new_title,
+                meetingType=source.meetingType,
+                meetingDate=None,
+                meetingTime=None,
+                location=source.location,
+                organizer=source.organizer,
+                attendees=source.attendees,  # already a JSON string column — plain copy
+                discussionLog=None,
+                attachments=None,
+                createdAt=datetime.now().isoformat(),
+                updatedAt=datetime.now().isoformat(),
+            )
+            # No enforce_create_scope() call needed: every field above is
+            # inherited straight from `source`, which record_in_scope()
+            # already confirmed is within the caller's scope.
+
+            self.repo.db.add(new_meeting)
+            try:
+                self.repo.db.commit()
+            except IntegrityError:
+                self.repo.db.rollback()
+                raise ValueError(
+                    "Another occurrence was just created for this series — please retry."
+                )
+            self.repo.db.refresh(new_meeting)
+
+            log_audit(
+                self.repo.db, "CREATE", "MeetingMinutes", new_meeting.id, new_meeting.documentNumber,
+                new_value={"source": "NEW_OCCURRENCE", "sourceMeetingId": meeting_id, "rev": next_rev},
+                user_id=user_id, username=username
+            )
+            log_audit(
+                self.repo.db, "CREATE_OCCURRENCE", "MeetingMinutes", meeting_id, source.documentNumber,
+                new_value={"newMeetingId": new_meeting.id, "newRev": next_rev},
+                user_id=user_id, username=username
+            )
+            # See create_meeting_minutes' comment: log_audit only add()s,
+            # nothing commits it otherwise — same fix applied here from the
+            # start rather than repeating today's earlier bug.
+            self.repo.db.commit()
+
+            return new_meeting
+        except ValueError as e:
+            raise e
+        except Exception as e:
+            logger.error(f"Error creating new occurrence from Meeting Minutes {meeting_id}: {e}", exc_info=True)
             raise e
 
     def update_meeting_minutes(self, meeting_id: str, meeting_update: schemas.MeetingMinutesUpdate,

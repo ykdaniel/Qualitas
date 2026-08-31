@@ -86,6 +86,11 @@ def run_migrations():
     # "Not Applicable" magic strings into structured *Status columns.
     _structure_ncr_tbc_na_fields()
 
+    # 13. Meeting Minutes: recurring occurrences share one documentNumber
+    # (see BACKLOG #18) — loosen the old single-column unique index into a
+    # composite (documentNumber, rev) one.
+    _loosen_meeting_minutes_documentNumber_unique()
+
     logger.info("Migrations completed.")
 
 def _add_missing_columns():
@@ -694,3 +699,63 @@ def _create_pqp_history_table():
             conn.commit()
     except Exception as e:
         logger.warning(f"PQP history table creation skipped (may already exist): {e}")
+
+
+def _loosen_meeting_minutes_documentNumber_unique():
+    """
+    BACKLOG #18: recurring Meeting Minutes occurrences share one
+    documentNumber across rows, distinguished by rev ("1.0", "2.0", ...) —
+    so the old single-column UNIQUE(documentNumber) has to become a
+    composite UNIQUE(documentNumber, rev). This is the first migration in
+    this codebase to loosen/replace a constraint rather than only add
+    columns/indexes/tables — treated carefully:
+
+    - Backfill rev BEFORE touching the index: the OLD single-column unique
+      constraint still guarantees no two rows share a documentNumber at
+      this point, so backfilling every NULL rev to "1.0" can't collide.
+    - We do NOT hardcode the legacy index's name (confirmed 2026-08-31 via
+      direct inspection of a live deployment that it's
+      `ix_meeting_minutes_documentNumber`, SQLAlchemy's auto-naming
+      convention for `index=True` — but introspect anyway rather than
+      assume, in case this ever runs against a DB where that differs).
+    - Unlike every other step in this file, a failed index-drop is NOT
+      harmless — it would silently defeat the whole feature (every "New
+      Occurrence" write would then violate the still-live old constraint)
+      — logged at error level, not warning.
+    """
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("UPDATE meeting_minutes SET rev = '1.0' WHERE rev IS NULL"))
+            conn.commit()
+
+            try:
+                unique_index_names = [
+                    row[1] for row in conn.execute(
+                        text('PRAGMA index_list("meeting_minutes")')
+                    ).fetchall()
+                    if row[2]  # PRAGMA index_list: seq, name, unique, origin, partial
+                ]
+                for idx_name in unique_index_names:
+                    cols = [
+                        r[2] for r in conn.execute(
+                            text(f'PRAGMA index_info("{idx_name}")')
+                        ).fetchall()
+                    ]
+                    if cols == ["documentNumber"]:
+                        conn.execute(text(f'DROP INDEX IF EXISTS "{idx_name}"'))
+                        logger.info(f"Dropped legacy unique index {idx_name} on meeting_minutes.documentNumber")
+                conn.commit()
+            except Exception as e:
+                logger.error(
+                    f"Could not drop legacy meeting_minutes.documentNumber unique index — "
+                    f"recurring-occurrence creation WILL fail until this is fixed manually: {e}"
+                )
+
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS "
+                "ix_meeting_minutes_documentNumber_rev_unique "
+                "ON meeting_minutes (documentNumber, rev)"
+            ))
+            conn.commit()
+    except Exception as e:
+        logger.warning(f"Meeting Minutes rev/unique migration warning: {e}")

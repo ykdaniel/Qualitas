@@ -63,6 +63,29 @@ def create_meeting_minutes(
     except ScopeForbidden as e:
         raise HTTPException(status_code=403, detail=str(e))
 
+@router.post("/{meeting_id}/new-occurrence", response_model=schemas.MeetingMinutes)
+def create_new_occurrence(
+    meeting_id: str,
+    meeting_service: MeetingMinutesService = Depends(get_meeting_minutes_service),
+    scope: Scope = Depends(get_scope),
+    current_user: schemas.User = Depends(RoleChecker(MEETING_CREATE))
+):
+    """Create the next occurrence of a recurring meeting series — reuses
+    the source row's documentNumber and increments rev; new row starts as
+    Draft (BACKLOG #18)."""
+    try:
+        new_meeting = meeting_service.create_new_occurrence(
+            meeting_id=meeting_id, user_id=current_user.id,
+            username=current_user.username, scope=scope
+        )
+    except ScopeForbidden as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if new_meeting is None:
+        raise HTTPException(status_code=404, detail="Meeting Minutes not found")
+    return new_meeting
+
 @router.put("/{meeting_id}", response_model=schemas.MeetingMinutes)
 def update_meeting_minutes(
     meeting_id: str,

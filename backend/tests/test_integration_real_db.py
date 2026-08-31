@@ -543,3 +543,52 @@ def test_deleting_every_draft_resets_the_sequence_to_zero(db_session, vendor):
 
     assert fresh.documentNumber == created[0].documentNumber
     assert fresh.documentNumber.endswith("000001")
+
+
+def test_new_occurrence_shares_document_number_across_composite_unique(db_session, vendor):
+    """BACKLOG #18, end-to-end against the real schema. `Base.metadata.
+    create_all` (this fixture) only creates tables/columns from the model
+    definitions, not db_migrations.py's manually-managed indexes — so this
+    test recreates the exact composite unique index the migration creates,
+    directly on this in-memory DB, to verify against a real constraint
+    rather than an accidentally-unconstrained table. Confirms: (a) rows
+    sharing one documentNumber genuinely coexist without an
+    IntegrityError, and (b) the composite constraint is real — a literal
+    duplicate (same documentNumber AND rev) is still rejected."""
+    from sqlalchemy import text as sql_text
+    db_session.execute(sql_text(
+        "CREATE UNIQUE INDEX ix_meeting_minutes_documentNumber_rev_unique "
+        "ON meeting_minutes (documentNumber, rev)"
+    ))
+    db_session.commit()
+
+    service = MeetingMinutesService(MeetingMinutesRepository(db_session))
+
+    first = service.create_meeting_minutes(
+        schemas.MeetingMinutesCreate(vendor="Acme Co", status="Draft", title="Weekly Sync")
+    )
+    db_session.commit()
+    assert first.rev == "1.0"
+
+    second = service.create_new_occurrence(first.id, user_id=1, username="tester")
+    assert second.documentNumber == first.documentNumber
+    assert second.rev == "2.0"
+    assert second.status == "Draft"
+    assert second.meetingDate is None
+
+    third = service.create_new_occurrence(second.id, user_id=1, username="tester")
+    assert third.documentNumber == first.documentNumber
+    assert third.rev == "3.0"
+
+    # All three genuinely coexist as separate rows sharing one documentNumber.
+    siblings = MeetingMinutesRepository(db_session).get_all_by_document_number(first.documentNumber)
+    assert {s.rev for s in siblings} == {"1.0", "2.0", "3.0"}
+
+    # The composite constraint is real: an exact duplicate (same number
+    # AND rev) must still be rejected.
+    with pytest.raises(Exception):
+        db_session.execute(sql_text(
+            'INSERT INTO meeting_minutes (id, "documentNumber", rev, status) VALUES (:id, :doc, :rev, :status)'
+        ), {"id": "dup-1", "doc": first.documentNumber, "rev": "1.0", "status": "Draft"})
+        db_session.commit()
+    db_session.rollback()

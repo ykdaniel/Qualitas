@@ -482,6 +482,14 @@ export const createReinspectionItr = async (itrId: string): Promise<any> => {
   return response.data;
 };
 
+// Create the next occurrence of a recurring meeting series (BACKLOG #18) —
+// backend reuses the source row's documentNumber and increments rev;
+// new row starts as Draft.
+export const createMeetingMinutesOccurrence = async (meetingId: string): Promise<any> => {
+  const response = await api.post(`/meeting-minutes/${meetingId}/new-occurrence`);
+  return response.data;
+};
+
 // Formal .docx export of an NCR report (BACKLOG #18 pilot) — mirrors
 // kmService.exportDocx's blob-download pattern.
 export const exportNcrDocx = async (ncrId: string, filename: string): Promise<void> => {
