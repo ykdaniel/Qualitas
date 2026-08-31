@@ -88,7 +88,10 @@ def delete_meeting_minutes(
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(MEETING_DELETE))
 ):
-    deleted = meeting_service.delete_meeting_minutes(meeting_id=meeting_id, user_id=current_user.id, username=current_user.username, scope=scope)
+    try:
+        deleted = meeting_service.delete_meeting_minutes(meeting_id=meeting_id, user_id=current_user.id, username=current_user.username, scope=scope)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if not deleted:
         raise HTTPException(status_code=404, detail="Meeting Minutes not found")
     return {"ok": True}

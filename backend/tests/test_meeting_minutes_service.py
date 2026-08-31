@@ -121,7 +121,9 @@ def test_update_published_meeting_minutes_allows_noop_resave(meeting_service, mo
         mock_log.assert_called_once()
 
 def test_delete_meeting_minutes_success(meeting_service, mock_repo):
-    mock_db_meeting = models.MeetingMinutes(id="mtg-123", status="Draft", documentNumber="MOM-001")
+    """Only a Void record can be deleted — see delete_meeting_minutes'
+    guard (mirrors ncr_service.py's delete_ncr)."""
+    mock_db_meeting = models.MeetingMinutes(id="mtg-123", status="Void", documentNumber="MOM-001")
     mock_repo.get_by_id.return_value = mock_db_meeting
 
     with patch('services.meeting_minutes_service.log_audit') as mock_log:
@@ -130,3 +132,59 @@ def test_delete_meeting_minutes_success(meeting_service, mock_repo):
         assert result is True
         mock_repo.delete.assert_called_once_with(mock_db_meeting)
         mock_log.assert_called_once()
+
+def test_delete_meeting_minutes_blocked_when_not_void(meeting_service, mock_repo):
+    mock_db_meeting = models.MeetingMinutes(id="mtg-123", status="Draft", documentNumber="MOM-001")
+    mock_repo.get_by_id.return_value = mock_db_meeting
+
+    with pytest.raises(ValueError) as excinfo:
+        meeting_service.delete_meeting_minutes("mtg-123", user_id=1, username="admin")
+
+    assert "void" in str(excinfo.value).lower()
+    mock_repo.delete.assert_not_called()
+
+def test_update_published_meeting_minutes_allows_void_transition(meeting_service, mock_repo):
+    """The one legal change on an otherwise-locked Published record: voiding it."""
+    mock_db_meeting = models.MeetingMinutes(
+        id="mtg-123", status="Published", documentNumber="MOM-001", title="original",
+    )
+    mock_repo.get_by_id.return_value = mock_db_meeting
+
+    with patch('services.meeting_minutes_service.log_audit') as mock_log:
+        meeting_update = schemas.MeetingMinutesUpdate(status="Void")
+        mock_repo.update.return_value = mock_db_meeting
+
+        result = meeting_service.update_meeting_minutes("mtg-123", meeting_update, user_id=1, username="admin")
+
+        mock_repo.update.assert_called_once()
+        mock_log.assert_called_once()
+
+def test_update_published_meeting_minutes_rejects_void_plus_other_changes(meeting_service, mock_repo):
+    """Voiding a Published record must not smuggle in other field changes
+    in the same request."""
+    mock_db_meeting = models.MeetingMinutes(
+        id="mtg-123", status="Published", documentNumber="MOM-001", title="original",
+    )
+    mock_repo.get_by_id.return_value = mock_db_meeting
+
+    meeting_update = schemas.MeetingMinutesUpdate(status="Void", title="sneaking in a change too")
+
+    with pytest.raises(ValueError):
+        meeting_service.update_meeting_minutes("mtg-123", meeting_update)
+
+    mock_repo.update.assert_not_called()
+
+def test_update_void_meeting_minutes_rejects_any_change(meeting_service, mock_repo):
+    """Void is a true one-way sink — WorkflowEngine's "Void": [] means no
+    further transitions, and no other field may change either."""
+    mock_db_meeting = models.MeetingMinutes(
+        id="mtg-123", status="Void", documentNumber="MOM-001", title="original",
+    )
+    mock_repo.get_by_id.return_value = mock_db_meeting
+
+    meeting_update = schemas.MeetingMinutesUpdate(title="trying to edit a voided record")
+
+    with pytest.raises(ValueError):
+        meeting_service.update_meeting_minutes("mtg-123", meeting_update)
+
+    mock_repo.update.assert_not_called()

@@ -189,12 +189,15 @@ class WorkflowEngine:
             "Void": []
         },
         "MeetingMinutes": {
-            # Published is a true dead end, same shape as NOI's "Closed": [] —
-            # a distributed meeting record must not be silently rewritten
-            # after the fact (see meeting_minutes_service.py's unconditional
-            # lock guard).
-            "Draft": ["Published"],
-            "Published": []
+            # Published is otherwise a dead end — a distributed meeting
+            # record must not be silently rewritten after the fact (see
+            # meeting_minutes_service.py's lock guard) — except Void, the
+            # one escape valve every terminal-ish state in this app allows
+            # (mirrors NOI's "Void reachable from everywhere" shape). Void
+            # itself is a true one-way sink: nothing reopens it.
+            "Draft": ["Published", "Void"],
+            "Published": ["Void"],
+            "Void": []
         },
         "Checklist": {
             "Ongoing": ["Pass", "Fail"],

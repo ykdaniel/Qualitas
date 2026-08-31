@@ -277,6 +277,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                                         <select className={formStyles.formSelect} value={formData.status} onChange={(e) => handleFieldChange('status', e.target.value)}>
                                             <option value="Draft">Draft</option>
                                             <option value="Published">Published</option>
+                                            <option value="Void">Void</option>
                                         </select>
                                     </div>
                                     <div className={formStyles.formGroup}>

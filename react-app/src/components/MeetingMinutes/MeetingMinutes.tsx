@@ -16,7 +16,7 @@ import { useDebounce } from '../../hooks/useDebounce';
 import { uploadFiles } from '../../services/api';
 import { getErrorMessage } from '../../utils/errorUtils';
 
-type StatusFilter = 'all' | 'draft' | 'published';
+type StatusFilter = 'all' | 'draft' | 'published' | 'void';
 
 const MeetingMinutes: React.FC = () => {
   const { t } = useLanguage();
@@ -195,6 +195,7 @@ const MeetingMinutes: React.FC = () => {
     { id: 'all', label: t('common.all') || 'All', count: meetingList.length },
     { id: 'draft', label: t('meetingMinutes.statusDraft') || 'Draft', count: meetingList.filter(m => (m.status || '').toLowerCase() === 'draft').length },
     { id: 'published', label: t('meetingMinutes.statusPublished') || 'Published', count: meetingList.filter(m => (m.status || '').toLowerCase() === 'published').length },
+    { id: 'void', label: t('meetingMinutes.statusVoid') || 'Void', count: meetingList.filter(m => (m.status || '').toLowerCase() === 'void').length },
   ];
 
   return (

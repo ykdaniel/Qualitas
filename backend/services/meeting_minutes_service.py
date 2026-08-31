@@ -95,21 +95,24 @@ class MeetingMinutesService:
             d = meeting_update.model_dump(exclude_unset=True)
             d = _json_serialize(d, ['attendees', 'discussionLog', 'attachments'])
 
-            # Guard: a Published meeting minute is a true dead end —
-            # WorkflowEngine's MeetingMinutes transitions (core/utils.py)
-            # define "Published": [], no reopen path exists at all (same
-            # shape as NOI's Closed state). Safe to lock unconditionally
-            # (no permission escape hatch) since a distributed meeting
-            # record must not be silently rewritten after the fact.
-            # Compare against the DB's current values, not mere
+            # Guard: Published and Void meeting minutes are locked — a
+            # distributed/voided meeting record must not be silently
+            # rewritten after the fact. The one carve-out: a Published
+            # record may still transition to Void (status field only,
+            # nothing else in the same request) — WorkflowEngine's
+            # validate_transition above already rejects any other status
+            # change from Published, so this only needs to permit that one
+            # legal case. Compare against the DB's current values, not mere
             # key-presence, since the frontend resends the whole record on
             # every save.
-            if db_meeting.status == 'Published':
+            if db_meeting.status in ('Published', 'Void'):
+                voiding = db_meeting.status == 'Published' and meeting_update.status == 'Void'
                 changed_fields = {f for f in d if d[f] != old_val.get(f)}
-                if changed_fields:
+                disallowed = changed_fields - ({'status'} if voiding else set())
+                if disallowed:
                     raise ValueError(
-                        f"Cannot modify a published meeting minute '{db_meeting.documentNumber}' — "
-                        f"no fields can be changed once it has been published."
+                        f"Cannot modify meeting minute '{db_meeting.documentNumber}' "
+                        f"(status: {db_meeting.status})."
                     )
 
             if 'vendor' in d:
@@ -139,6 +142,17 @@ class MeetingMinutesService:
             db_meeting = self.repo.get_by_id(meeting_id)
             if not db_meeting or not record_in_scope(db_meeting, scope):
                 return False
+
+            # Only Void records can be deleted — mirrors ncr_service.py's
+            # delete_ncr guard. Deleting a live Draft/Published record would
+            # silently erase it (and orphan its documentNumber's slot in
+            # the sequence with no visible trace of why); voiding first
+            # keeps the record + number visible for audit purposes.
+            if db_meeting.status != 'Void':
+                raise ValueError(
+                    f"Cannot delete Meeting Minutes '{db_meeting.documentNumber}' "
+                    f"with status '{db_meeting.status}'. Please Void it first, then delete."
+                )
 
             old_val = {c.name: getattr(db_meeting, c.name) for c in db_meeting.__table__.columns}
             self.repo.delete(db_meeting)
