@@ -2,7 +2,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { MeetingMinutesItem } from "../../store/meetingMinutesStore";
 import { DataTableColumnHeader } from "@/components/Shared/DataTable/DataTableColumnHeader";
 import { Button } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
+import { Trash2, Ban } from "lucide-react";
 
 // One row per closed discussion sub-item, aggregated across every
 // currently-loaded meeting — see MeetingMinutes.tsx's "已結案項目" view.
@@ -70,6 +70,7 @@ export const createClosedItemsColumns = (
 
 export const createColumns = (
     confirmDelete: (id: string) => void,
+    confirmVoid: (id: string) => void,
     t: (key: string) => string,
     getActiveContractors: () => { name: string }[]
 ): ColumnDef<MeetingMinutesItem>[] => [
@@ -98,6 +99,7 @@ export const createColumns = (
                     filterOptions={[
                         { label: 'Draft', value: 'Draft' },
                         { label: 'Published', value: 'Published' },
+                        { label: 'Void', value: 'Void' },
                     ]}
                 />
             ),
@@ -162,6 +164,17 @@ export const createColumns = (
                 const meeting = row.original;
                 return (
                     <div className="flex items-center justify-center">
+                        {meeting.status !== 'Void' && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-100"
+                                onClick={(e) => { e.stopPropagation(); confirmVoid(meeting.id); }}
+                                title={t('meetingMinutes.voidAction')}
+                            >
+                                <Ban className="h-4 w-4" />
+                            </Button>
+                        )}
                         <Button
                             variant="ghost"
                             size="icon"

@@ -41,6 +41,11 @@ const MeetingMinutes: React.FC = () => {
     id: null,
     message: '',
   });
+  const [voidModal, setVoidModal] = useState<{ isOpen: boolean; id: string | null; message: string }>({
+    isOpen: false,
+    id: null,
+    message: '',
+  });
 
   const filteredList = useMemo(() => {
     if (statusFilter === 'all') return meetingList;
@@ -177,7 +182,19 @@ const MeetingMinutes: React.FC = () => {
     });
   }, [t]);
 
-  const columns = useMemo(() => createColumns(confirmDelete, t, getActiveContractors), [t, getActiveContractors, confirmDelete]);
+  // Quick-void directly from the list row, no need to open the record —
+  // solves the common case (a mistaken/unused Draft you just want gone):
+  // void then delete are now two clicks from the list instead of opening
+  // the modal to change the status dropdown first.
+  const confirmVoid = React.useCallback((id: string) => {
+    setVoidModal({
+      isOpen: true,
+      id,
+      message: t('meetingMinutes.confirmVoid'),
+    });
+  }, [t]);
+
+  const columns = useMemo(() => createColumns(confirmDelete, confirmVoid, t, getActiveContractors), [t, getActiveContractors, confirmDelete, confirmVoid]);
 
   const handleDelete = async () => {
     if (deleteModal.id) {
@@ -188,6 +205,18 @@ const MeetingMinutes: React.FC = () => {
         toast.error((err as Error)?.message || t('common.deleteFailed'));
       }
       setDeleteModal({ isOpen: false, id: null, message: '' });
+    }
+  };
+
+  const handleVoid = async () => {
+    if (voidModal.id) {
+      try {
+        await updateMeetingMinutes(voidModal.id, { status: 'Void' });
+      } catch (err) {
+        console.error('Failed to void Meeting Minutes:', err);
+        toast.error(getErrorMessage(err, t('common.saveFailed')));
+      }
+      setVoidModal({ isOpen: false, id: null, message: '' });
     }
   };
 
@@ -285,6 +314,16 @@ const MeetingMinutes: React.FC = () => {
         onConfirm={handleDelete}
         onCancel={() => setDeleteModal({ isOpen: false, id: null, message: '' })}
         confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
+      />
+
+      <ConfirmModal
+        isOpen={voidModal.isOpen}
+        title={t('meetingMinutes.voidAction')}
+        message={voidModal.message}
+        onConfirm={handleVoid}
+        onCancel={() => setVoidModal({ isOpen: false, id: null, message: '' })}
+        confirmText={t('meetingMinutes.voidAction')}
         cancelText={t('common.cancel')}
       />
 
