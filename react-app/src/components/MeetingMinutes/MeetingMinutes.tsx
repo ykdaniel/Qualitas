@@ -290,12 +290,15 @@ const MeetingMinutes: React.FC = () => {
 
       {isEditModalOpen && currentMeetingId && (() => {
         const editingItem = currentMeetingId === 'new' ? undefined : meetingList.find(item => item.id === currentMeetingId);
-        // Read-only once Published — a true dead end (WorkflowEngine's
-        // MeetingMinutes "Published": []), so unconditional, no permission
-        // escape hatch, matching the backend guard and the NOI/Audit
-        // pattern used elsewhere in this app.
+        // Read-only once Published or Void — both are dead ends
+        // (WorkflowEngine's MeetingMinutes "Published": ["Void"], "Void":
+        // []), so unconditional, no permission escape hatch, matching the
+        // backend guard and the NOI/Audit pattern used elsewhere in this
+        // app. Published's one exception (voiding it) is handled inside
+        // MeetingMinutesModals.tsx via a dedicated button that bypasses
+        // this readOnly gate, not by loosening it here.
         const status = (editingItem?.status || '').toLowerCase();
-        const locked = status === 'published';
+        const locked = status === 'published' || status === 'void';
         const canEdit = currentMeetingId === 'new'
           ? hasPermission('meeting:create:all')
           : locked ? false : hasPermission('meeting:update:all');

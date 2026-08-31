@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { toast } from 'sonner';
 import { Plus, Trash2 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useFollowUpStore } from '../../store/followUpStore';
 import { getUsers, formatUserLabel, bulkCreateFollowUps, getEntityFiles, getAuthenticatedFileUrl, type User as ApiUser } from '../../services/api';
@@ -56,6 +57,7 @@ export interface MeetingMinutesDetailModalProps {
 
 export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps> = ({ existingItem, readOnly = false, onSave, onClose }) => {
     const { t } = useLanguage();
+    const { hasPermission } = useAuth();
     const { getActiveContractors } = useContractorsStore();
     const { addFollowUp } = useFollowUpStore();
 
@@ -223,6 +225,30 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                 { ...formData, attendees, discussionLog, attachments: [] },
                 pendingFiles,
                 actionItemsDraft,
+            );
+        } catch (err: any) {
+            toast.error(err?.response?.data?.detail || (err as Error)?.message || t('common.saveFailed'));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    // Voiding a Published record is the one change its otherwise-locked
+    // fieldset can't reach (the whole form is disabled once Published —
+    // see the readOnly prop passed in from MeetingMinutes.tsx). This sends
+    // the same unchanged formData as a normal save, just with status
+    // flipped to Void — the backend's diff-check (meeting_minutes_service.py
+    // update_meeting_minutes) only allows exactly this one field to change
+    // on a Published record, so nothing else can sneak through even though
+    // formData is sent in full.
+    const handleVoidClick = async () => {
+        if (!window.confirm(t('meetingMinutes.confirmVoid') || 'Void this meeting minute? This cannot be undone.')) return;
+        setSaving(true);
+        try {
+            await onSave(
+                { ...formData, status: 'Void', attendees, discussionLog, attachments: [] },
+                [],
+                [],
             );
         } catch (err: any) {
             toast.error(err?.response?.data?.detail || (err as Error)?.message || t('common.saveFailed'));
@@ -503,6 +529,11 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                     {!readOnly && (
                         <button type="button" className={formStyles.saveButton} onClick={handleSave} disabled={saving}>
                             {saving ? t('common.saving') : t('common.save')}
+                        </button>
+                    )}
+                    {readOnly && existingItem?.status === 'Published' && hasPermission('meeting:update:all') && (
+                        <button type="button" className={formStyles.cancelButton} onClick={handleVoidClick} disabled={saving} title={t('meetingMinutes.voidAction') || 'Void'}>
+                            {t('meetingMinutes.voidAction') || 'Void'}
                         </button>
                     )}
                     {existingItem?.id && (
