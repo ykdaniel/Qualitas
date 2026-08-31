@@ -71,6 +71,12 @@ class MeetingMinutesService:
                 self.repo.db, "CREATE", "MeetingMinutes", created.id, created.documentNumber,
                 new_value=meeting_create.model_dump(), user_id=user_id, username=username
             )
+            # repo.create() already committed the row itself, but that
+            # happened BEFORE log_audit added its row — without a commit
+            # here, the audit entry silently rolls back when the session
+            # closes (confirmed empirically: audit_logs was completely
+            # empty for MeetingMinutes despite extensive testing).
+            self.repo.db.commit()
 
             return created
         except Exception as e:
@@ -129,6 +135,10 @@ class MeetingMinutesService:
                 old_value=old_val, new_value=meeting_update.model_dump(exclude_unset=True),
                 user_id=user_id, username=username
             )
+            # See create_meeting_minutes' comment — log_audit needs a
+            # commit after it, repo.update()'s own commit happened too
+            # early to cover it.
+            self.repo.db.commit()
 
             return updated
         except ValueError as e:
@@ -176,6 +186,16 @@ class MeetingMinutesService:
                 self.repo.db, "DELETE", "MeetingMinutes", meeting_id, db_meeting.documentNumber,
                 old_value=old_val, user_id=user_id, username=username
             )
+            # reclaim_reference_no only flush()es (it shares the sequence
+            # lock/pattern with generate_reference_no, which also only
+            # flushes — callers there rely on a LATER repo.create/update
+            # commit to persist it) and log_audit only db.add()s ("commit
+            # is handled externally" — see its docstring). self.repo.delete()
+            # above already committed the row deletion itself, but that
+            # commit happened BEFORE these two calls, so nothing has
+            # persisted them yet — without this, both silently roll back
+            # when the request's session closes.
+            self.repo.db.commit()
 
             return True
         except Exception as e:
