@@ -10,7 +10,7 @@ import type { MeetingMinutesItem as ContextMeetingMinutesItem } from '../../stor
 import shellStyles from '../Shared/ModuleShell.module.css';
 import ConfirmModal from '../Shared/ConfirmModal';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
-import { createColumns } from './columns';
+import { createColumns, createClosedItemsColumns, type ClosedItemRow } from './columns';
 import { MeetingMinutesDetailModal, MeetingMinutesDetailData, ActionItemDraft, submitActionItemsDraft } from './MeetingMinutesModals';
 import { useDebounce } from '../../hooks/useDebounce';
 import { uploadFiles } from '../../services/api';
@@ -27,6 +27,7 @@ const MeetingMinutes: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebounce(searchQuery, 500);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [view, setView] = useState<'meetings' | 'closedItems'>('meetings');
 
   React.useEffect(() => {
     refetch({ search: debouncedSearch });
@@ -45,6 +46,42 @@ const MeetingMinutes: React.FC = () => {
     if (statusFilter === 'all') return meetingList;
     return meetingList.filter((item) => (item.status || '').toLowerCase() === statusFilter);
   }, [meetingList, statusFilter]);
+
+  // Closed discussion sub-items aggregated across every currently-loaded
+  // meeting (client-side only — the data is already in `meetingList`, no
+  // backend change needed). Mirrors the level/status filter used in
+  // MeetingMinutesModals.tsx's Closed tab and the print report.
+  const closedItems = useMemo<ClosedItemRow[]>(() => {
+    const rows: ClosedItemRow[] = [];
+    for (const meeting of meetingList) {
+      const log = meeting.discussionLog || [];
+      const majors = log.filter(d => (d.level ?? 0) === 0);
+      const subs = log.filter(d => d.level === 1 && d.status === 'Closed');
+      for (const sub of subs) {
+        const parentNo = sub.no.split('.')[0];
+        const topic = majors.find(m => m.no === parentNo);
+        rows.push({
+          meetingId: meeting.id,
+          documentNumber: meeting.documentNumber,
+          meetingTitle: meeting.title || '',
+          meetingDate: meeting.meetingDate || '',
+          itemNo: sub.no,
+          content: sub.content || '',
+          owner: sub.owner || '',
+          topicTitle: topic?.content || '',
+        });
+      }
+    }
+    if (!debouncedSearch.trim()) return rows;
+    const q = debouncedSearch.trim().toLowerCase();
+    return rows.filter(r =>
+      r.content.toLowerCase().includes(q) ||
+      r.owner.toLowerCase().includes(q) ||
+      r.topicTitle.toLowerCase().includes(q)
+    );
+  }, [meetingList, debouncedSearch]);
+
+  const closedItemsColumns = useMemo(() => createClosedItemsColumns(t), [t]);
 
   const handleEdit = React.useCallback((id: string) => {
     setCurrentMeetingId(id);
@@ -166,9 +203,23 @@ const MeetingMinutes: React.FC = () => {
         <div className={shellStyles.errorBanner}>{error}</div>
       )}
 
+      <div className={shellStyles.chipGroup} style={{ marginBottom: 8 }}>
+        {(['meetings', 'closedItems'] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            className={`${shellStyles.chip} ${view === v ? shellStyles.chipActive : ''}`}
+            onClick={() => setView(v)}
+          >
+            {v === 'meetings' ? t('meetingMinutes.viewMeetings') : t('meetingMinutes.viewClosedItems')}
+            {v === 'closedItems' && <span className={shellStyles.chipCount}>{closedItems.length}</span>}
+          </button>
+        ))}
+      </div>
+
       <div className={shellStyles.toolbar}>
         <div className={shellStyles.chipGroup}>
-          {chips.map((chip) => (
+          {view === 'meetings' && chips.map((chip) => (
             <button
               key={chip.id}
               type="button"
@@ -191,7 +242,7 @@ const MeetingMinutes: React.FC = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          {hasPermission('meeting:create:all') && (
+          {view === 'meetings' && hasPermission('meeting:create:all') && (
             <button className={shellStyles.addNewButton} onClick={handleAddNew}>
               {t('meetingMinutes.addNew')}
             </button>
@@ -204,15 +255,26 @@ const MeetingMinutes: React.FC = () => {
       )}
 
       <div className={shellStyles.content}>
-        <DataTable
-          columns={columns}
-          data={filteredList}
-          searchKey=""
-          getRowClassName={(row) =>
-            (row.status || '').toLowerCase() === 'published' ? shellStyles.rowDim : ''
-          }
-          onRowClick={(row) => handleEdit(row.id)}
-        />
+        {view === 'meetings' ? (
+          <DataTable
+            columns={columns}
+            data={filteredList}
+            searchKey=""
+            getRowClassName={(row) =>
+              (row.status || '').toLowerCase() === 'published' ? shellStyles.rowDim : ''
+            }
+            onRowClick={(row) => handleEdit(row.id)}
+          />
+        ) : closedItems.length === 0 ? (
+          <div className={shellStyles.loadingNote}>{t('meetingMinutes.noClosedItems')}</div>
+        ) : (
+          <DataTable
+            columns={closedItemsColumns}
+            data={closedItems}
+            searchKey=""
+            onRowClick={(row) => handleEdit(row.meetingId)}
+          />
+        )}
       </div>
 
       <ConfirmModal

@@ -4,6 +4,70 @@ import { DataTableColumnHeader } from "@/components/Shared/DataTable/DataTableCo
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 
+// One row per closed discussion sub-item, aggregated across every
+// currently-loaded meeting — see MeetingMinutes.tsx's "已結案項目" view.
+export interface ClosedItemRow {
+    meetingId: string;
+    documentNumber: string;
+    meetingTitle: string;
+    meetingDate: string;
+    itemNo: string;
+    content: string;
+    owner: string;
+    topicTitle: string;
+}
+
+export const createClosedItemsColumns = (
+    t: (key: string) => string,
+): ColumnDef<ClosedItemRow>[] => [
+        {
+            accessorKey: "topicTitle",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title={t('meetingMinutes.closedItemsTopic')} />
+            ),
+            cell: ({ row }) => <div>{row.getValue("topicTitle") || '-'}</div>,
+        },
+        {
+            accessorKey: "content",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title={t('meetingMinutes.topicDiscussion')} />
+            ),
+            cell: ({ row }) => (
+                <div style={{ whiteSpace: 'pre-wrap' }}>
+                    <span style={{ fontWeight: 600, marginRight: 6 }}>{row.original.itemNo}</span>
+                    {row.getValue("content") || '-'}
+                </div>
+            ),
+        },
+        {
+            accessorKey: "owner",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title={t('meetingMinutes.itemOwner')} />
+            ),
+            cell: ({ row }) => <div className="text-center">{row.getValue("owner") || '-'}</div>,
+            size: 120,
+        },
+        {
+            id: "meeting",
+            header: t('meetingMinutes.closedItemsMeeting'),
+            cell: ({ row }) => (
+                <div>
+                    <div>{row.original.documentNumber}</div>
+                    <div style={{ color: '#64748b', fontSize: 12 }}>{row.original.meetingTitle}</div>
+                </div>
+            ),
+            size: 200,
+        },
+        {
+            accessorKey: "meetingDate",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title={t('meetingMinutes.meetingDate')} />
+            ),
+            cell: ({ row }) => <div className="text-center">{row.getValue("meetingDate") || '-'}</div>,
+            size: 110,
+        },
+    ];
+
 export const createColumns = (
     confirmDelete: (id: string) => void,
     t: (key: string) => string,
