@@ -93,6 +93,11 @@
     font-size: 7.6px; letter-spacing: .2px; margin-top: 1px;
 }
 .mom-print-root .list-table td { vertical-align: top; }
+/* major-topic header row spanning the discussion table — sub-items are
+   listed underneath, open ones first then closed ones */
+.mom-print-root .list-table td.topic-row {
+    background: var(--mom-fill); font-weight: 700; color: #2a2e34;
+}
 
 .mom-print-root .sign-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 4px; }
 .mom-print-root .sign-cell { border: 1px solid var(--mom-line); padding: 6px 8px 7px; }

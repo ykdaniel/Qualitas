@@ -73,7 +73,13 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
     const [attendees, setAttendees] = useState<Attendee[]>(existingItem?.attendees || []);
     const [newAttendee, setNewAttendee] = useState<Attendee>({ name: '', company: '', role: '' });
     const [discussionLog, setDiscussionLog] = useState<DiscussionLogEntry[]>(existingItem?.discussionLog || []);
-    const [newDiscussion, setNewDiscussion] = useState<DiscussionLogEntry>({ no: '', content: '', owner: '', status: 'Open' });
+    const [newTopicTitle, setNewTopicTitle] = useState('');
+    const [subItemDrafts, setSubItemDrafts] = useState<Record<string, { content: string; owner: string; status: string }>>({});
+    const [discussionTab, setDiscussionTab] = useState<'active' | 'closed'>('active');
+    const getSubDraft = (parentNo: string) => subItemDrafts[parentNo] || { content: '', owner: '', status: 'Open' };
+    const setSubDraft = (parentNo: string, patch: Partial<{ content: string; owner: string; status: string }>) => {
+        setSubItemDrafts(prev => ({ ...prev, [parentNo]: { ...getSubDraft(parentNo), ...patch } }));
+    };
 
     // Action items: a brand-new meeting has no documentNumber yet, so drafts
     // are held locally and bulk-submitted right after the meeting itself is
@@ -120,13 +126,47 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
         setAttendees(prev => prev.filter((_, i) => i !== idx));
     };
 
-    const addDiscussionRow = () => {
-        if (!newDiscussion.content?.trim()) return;
-        setDiscussionLog(prev => [...prev, { ...newDiscussion, no: String(prev.length + 1) }]);
-        setNewDiscussion({ no: '', content: '', owner: '', status: 'Open' });
+    const addMajorTopic = () => {
+        if (!newTopicTitle.trim()) return;
+        const topLevelCount = discussionLog.filter(d => (d.level ?? 0) === 0).length;
+        setDiscussionLog(prev => [...prev, { no: String(topLevelCount + 1), level: 0, content: newTopicTitle }]);
+        setNewTopicTitle('');
     };
-    const removeDiscussionRow = (idx: number) => {
-        setDiscussionLog(prev => prev.filter((_, i) => i !== idx).map((d, i) => ({ ...d, no: String(i + 1) })));
+    const addSubItem = (parentNo: string) => {
+        const draft = getSubDraft(parentNo);
+        if (!draft.content.trim()) return;
+        const siblingCount = discussionLog.filter(d => d.level === 1 && d.no.startsWith(`${parentNo}.`)).length;
+        setDiscussionLog(prev => [...prev, { no: `${parentNo}.${siblingCount + 1}`, level: 1, content: draft.content, owner: draft.owner, status: draft.status || 'Open' }]);
+        setSubItemDrafts(prev => {
+            const next = { ...prev };
+            delete next[parentNo];
+            return next;
+        });
+    };
+    // Removing by `no` (not array index, since items are now rendered nested
+    // under their major topic and filtered by tab) — always fully renumbers
+    // from scratch so numbering stays contiguous, mirroring the old flat
+    // behavior extended to the major/sub hierarchy. Removing a major topic
+    // also removes its sub-items.
+    const removeDiscussionRow = (no: string) => {
+        setDiscussionLog(prev => {
+            const target = prev.find(d => d.no === no);
+            if (!target) return prev;
+            const isMajor = (target.level ?? 0) === 0;
+            const remaining = isMajor
+                ? prev.filter(d => d.no !== no && !(d.level === 1 && d.no.startsWith(`${no}.`)))
+                : prev.filter(d => d.no !== no);
+            const majors = remaining.filter(d => (d.level ?? 0) === 0);
+            const renumbered: DiscussionLogEntry[] = [];
+            majors.forEach((major, mi) => {
+                const newMajorNo = String(mi + 1);
+                renumbered.push({ ...major, no: newMajorNo });
+                remaining
+                    .filter(d => d.level === 1 && d.no.startsWith(`${major.no}.`))
+                    .forEach((child, ci) => renumbered.push({ ...child, no: `${newMajorNo}.${ci + 1}` }));
+            });
+            return renumbered;
+        });
     };
 
     const handleActionAssigneeChange = (userId: string) => {
@@ -305,35 +345,79 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                             {/* 討論/決議紀錄 */}
                             <div className={formStyles.formSection}>
                                 <h3 className={formStyles.sectionTitle}>{t('meetingMinutes.discussionSection')}</h3>
-                                {discussionLog.map((d, idx) => {
-                                    const content = d.content || [d.topic, d.discussion, d.decision].filter(Boolean).join('\n');
+
+                                <div style={{ display: 'flex', gap: 4, marginBottom: 10, borderBottom: '1px solid #e2e8f0' }}>
+                                    {(['active', 'closed'] as const).map(tab => (
+                                        <button
+                                            key={tab}
+                                            type="button"
+                                            onClick={() => setDiscussionTab(tab)}
+                                            style={{
+                                                padding: '6px 14px', border: 'none', background: 'none', cursor: 'pointer',
+                                                fontWeight: discussionTab === tab ? 700 : 400,
+                                                borderBottom: discussionTab === tab ? '2px solid #92702a' : '2px solid transparent',
+                                                color: discussionTab === tab ? '#92702a' : '#64748b',
+                                            }}
+                                        >
+                                            {tab === 'active' ? t('meetingMinutes.tabActive') : t('meetingMinutes.tabClosed')}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {discussionLog.filter(d => (d.level ?? 0) === 0).map((major) => {
+                                    const allSubs = discussionLog.filter(d => d.level === 1 && d.no.startsWith(`${major.no}.`));
+                                    const visibleSubs = allSubs.filter(d => discussionTab === 'active' ? d.status !== 'Closed' : d.status === 'Closed');
+                                    // Skip a topic in the Closed tab if none of its items are closed; in the
+                                    // Active tab, still show topics with zero sub-items yet so the user can
+                                    // add the first one.
+                                    if (discussionTab === 'closed' && visibleSubs.length === 0) return null;
+                                    const draft = getSubDraft(major.no);
                                     return (
-                                    <div key={idx} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 10, marginBottom: 8 }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                            <strong>{d.no}.</strong>
-                                            <button type="button" onClick={() => removeDiscussionRow(idx)} style={{ color: '#ef4444' }}><Trash2 size={16} /></button>
+                                        <div key={major.no} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 10, marginBottom: 8 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <strong>{major.no}. {major.content}</strong>
+                                                {!readOnly && (
+                                                    <button type="button" onClick={() => removeDiscussionRow(major.no)} style={{ color: '#ef4444' }}><Trash2 size={16} /></button>
+                                                )}
+                                            </div>
+                                            {visibleSubs.map(sub => (
+                                                <div key={sub.no} style={{ marginTop: 8, paddingLeft: 14, borderLeft: '2px solid #e2e8f0' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                        <span style={{ fontWeight: 600 }}>{sub.no}</span>
+                                                        {!readOnly && (
+                                                            <button type="button" onClick={() => removeDiscussionRow(sub.no)} style={{ color: '#ef4444' }}><Trash2 size={14} /></button>
+                                                        )}
+                                                    </div>
+                                                    {sub.content && <p style={{ margin: '4px 0', color: '#334155', whiteSpace: 'pre-wrap' }}>{sub.content}</p>}
+                                                    <p style={{ margin: '4px 0', color: '#64748b', fontSize: 13 }}>
+                                                        {sub.owner && <>{t('meetingMinutes.itemOwner')}: {sub.owner}　</>}
+                                                        {t('meetingMinutes.itemStatus')}: {sub.status === 'Closed' ? t('meetingMinutes.itemStatusClosed') : t('meetingMinutes.itemStatusOpen')}
+                                                    </p>
+                                                </div>
+                                            ))}
+                                            {!readOnly && (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10, paddingLeft: 14, borderLeft: '2px dashed #cbd5e1' }}>
+                                                    <textarea className={formStyles.formTextarea} placeholder={t('meetingMinutes.topicDiscussion')} rows={2} value={draft.content} onChange={(e) => setSubDraft(major.no, { content: e.target.value })} />
+                                                    <div style={{ display: 'flex', gap: 8 }}>
+                                                        <input className={formStyles.formInput} list="meeting-attendee-people" placeholder={t('meetingMinutes.itemOwner')} value={draft.owner} onChange={(e) => setSubDraft(major.no, { owner: e.target.value })} style={{ flex: 2 }} />
+                                                        <select className={formStyles.formSelect} value={draft.status} onChange={(e) => setSubDraft(major.no, { status: e.target.value })} style={{ flex: 1 }}>
+                                                            <option value="Open">{t('meetingMinutes.itemStatusOpen')}</option>
+                                                            <option value="Closed">{t('meetingMinutes.itemStatusClosed')}</option>
+                                                        </select>
+                                                    </div>
+                                                    <button type="button" onClick={() => addSubItem(major.no)} className={formStyles.printButton} style={{ alignSelf: 'flex-start' }}><Plus size={14} /> {t('meetingMinutes.addSubItem')}</button>
+                                                </div>
+                                            )}
                                         </div>
-                                        {content && <p style={{ margin: '4px 0', color: '#334155', whiteSpace: 'pre-wrap' }}>{content}</p>}
-                                        {(d.owner || d.status) && (
-                                            <p style={{ margin: '4px 0', color: '#334155' }}>
-                                                {d.owner && <>{t('meetingMinutes.itemOwner')}: {d.owner}　</>}
-                                                {d.status && <>{t('meetingMinutes.itemStatus')}: {d.status === 'Closed' ? t('meetingMinutes.itemStatusClosed') : t('meetingMinutes.itemStatusOpen')}</>}
-                                            </p>
-                                        )}
-                                    </div>
                                     );
                                 })}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, border: '1px dashed #cbd5e1', borderRadius: 8, padding: 10 }}>
-                                    <textarea className={formStyles.formTextarea} placeholder={t('meetingMinutes.topicDiscussion')} rows={3} value={newDiscussion.content} onChange={(e) => setNewDiscussion(prev => ({ ...prev, content: e.target.value }))} />
-                                    <div style={{ display: 'flex', gap: 8 }}>
-                                        <input className={formStyles.formInput} list="meeting-attendee-people" placeholder={t('meetingMinutes.itemOwner')} value={newDiscussion.owner} onChange={(e) => setNewDiscussion(prev => ({ ...prev, owner: e.target.value }))} style={{ flex: 2 }} />
-                                        <select className={formStyles.formSelect} value={newDiscussion.status} onChange={(e) => setNewDiscussion(prev => ({ ...prev, status: e.target.value }))} style={{ flex: 1 }}>
-                                            <option value="Open">{t('meetingMinutes.itemStatusOpen')}</option>
-                                            <option value="Closed">{t('meetingMinutes.itemStatusClosed')}</option>
-                                        </select>
+
+                                {!readOnly && (
+                                    <div style={{ display: 'flex', gap: 8, border: '1px dashed #cbd5e1', borderRadius: 8, padding: 10 }}>
+                                        <input className={formStyles.formInput} placeholder={t('meetingMinutes.addMajorTopic')} value={newTopicTitle} onChange={(e) => setNewTopicTitle(e.target.value)} style={{ flex: 1 }} />
+                                        <button type="button" onClick={addMajorTopic} className={formStyles.printButton}><Plus size={16} /> {t('meetingMinutes.addMajorTopic')}</button>
                                     </div>
-                                    <button type="button" onClick={addDiscussionRow} className={formStyles.printButton} style={{ alignSelf: 'flex-start' }}><Plus size={16} /> {t('meetingMinutes.addDiscussionItem')}</button>
-                                </div>
+                                )}
                             </div>
 
                             {/* 行動項目 */}

@@ -12,7 +12,8 @@ export interface Attendee {
 }
 
 export interface DiscussionLogEntry {
-    no: string;
+    no: string;             // "1", "1.1", "1.2" — fixed once assigned
+    level?: 0 | 1;           // 0 = major topic, 1 = sub-item (undefined = legacy flat entry, treated as level 0)
     /** Free-text "topic + discussion" combined field (current shape). */
     content?: string;
     /** Legacy shape (pre-merge) — kept optional so old saved rows still
@@ -20,8 +21,8 @@ export interface DiscussionLogEntry {
     topic?: string;
     discussion?: string;
     decision?: string;
-    owner?: string;
-    status?: string;
+    owner?: string;          // sub-items only
+    status?: string;         // sub-items only — 'Open' | 'Closed'
 }
 
 export interface MeetingMinutesItem {

@@ -106,14 +106,29 @@ const MeetingMinutesPrintTemplate: React.FC<MeetingMinutesPrintTemplateProps> = 
                                     </tr>
                                     {discussionLog.length === 0
                                         ? <tr><td colSpan={4}><span className="blank">（無資料 No discussion items）</span></td></tr>
-                                        : discussionLog.map((d, i) => (
-                                            <tr key={i}>
-                                                <td>{val(d.no)}</td>
-                                                <td style={{ whiteSpace: 'pre-wrap' }}>{val(d.content || [d.topic, d.discussion, d.decision].filter(Boolean).join('\n'))}</td>
-                                                <td>{val(d.owner)}</td>
-                                                <td>{d.status === 'Closed' ? '已完成 Closed' : d.status === 'Open' ? '待辦 Open' : val(d.status)}</td>
-                                            </tr>
-                                        ))}
+                                        : discussionLog.filter(d => (d.level ?? 0) === 0).map((major) => {
+                                            const subs = discussionLog.filter(d => d.level === 1 && d.no.startsWith(`${major.no}.`));
+                                            const openSubs = subs.filter(d => d.status !== 'Closed');
+                                            const closedSubs = subs.filter(d => d.status === 'Closed');
+                                            return (
+                                                <React.Fragment key={major.no}>
+                                                    <tr>
+                                                        <td colSpan={4} className="topic-row">{major.no}. {major.content || [major.topic, major.discussion, major.decision].filter(Boolean).join(' / ')}</td>
+                                                    </tr>
+                                                    {[...openSubs, ...closedSubs].map(sub => (
+                                                        <tr key={sub.no}>
+                                                            <td>{val(sub.no)}</td>
+                                                            <td style={{ whiteSpace: 'pre-wrap' }}>{val(sub.content)}</td>
+                                                            <td>{val(sub.owner)}</td>
+                                                            <td>{sub.status === 'Closed' ? '已完成 Closed' : '待辦 Open'}</td>
+                                                        </tr>
+                                                    ))}
+                                                    {subs.length === 0 && (
+                                                        <tr><td colSpan={4}><span className="blank">（無次項目 No sub-items）</span></td></tr>
+                                                    )}
+                                                </React.Fragment>
+                                            );
+                                        })}
                                 </tbody>
                             </table>
 
