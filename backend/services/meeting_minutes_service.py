@@ -16,6 +16,7 @@ from core.utils import (
     _json_serialize,
     _resolve_vendor_id,
     generate_reference_no,
+    reclaim_reference_no,
     log_audit,
     WorkflowEngine
 )
@@ -143,16 +144,22 @@ class MeetingMinutesService:
             if not db_meeting or not record_in_scope(db_meeting, scope):
                 return False
 
-            # Only Void records can be deleted — mirrors ncr_service.py's
-            # delete_ncr guard. Deleting a live Draft/Published record would
-            # silently erase it (and orphan its documentNumber's slot in
-            # the sequence with no visible trace of why); voiding first
-            # keeps the record + number visible for audit purposes.
-            if db_meeting.status != 'Void':
+            # Void records can always be deleted (mirrors ncr_service.py's
+            # delete_ncr guard) — voiding first keeps a *published* record's
+            # number visible for audit purposes instead of it silently
+            # vanishing. Draft is the one exception: it was never published,
+            # so nobody could have referenced its number externally — direct
+            # delete is allowed, and its number is best-effort reclaimed
+            # (see reclaim_reference_no) so it doesn't leave an unexplained
+            # gap the way a published-then-voided record's number does.
+            if db_meeting.status not in ('Void', 'Draft'):
                 raise ValueError(
                     f"Cannot delete Meeting Minutes '{db_meeting.documentNumber}' "
                     f"with status '{db_meeting.status}'. Please Void it first, then delete."
                 )
+
+            if db_meeting.status == 'Draft' and db_meeting.documentNumber:
+                reclaim_reference_no(self.repo.db, db_meeting.vendor or '', 'meeting', db_meeting.documentNumber)
 
             old_val = {c.name: getattr(db_meeting, c.name) for c in db_meeting.__table__.columns}
             self.repo.delete(db_meeting)

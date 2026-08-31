@@ -21,10 +21,12 @@ from repositories.noi_repository import NOIRepository
 from repositories.ncr_repository import NCRRepository
 from repositories.itr_repository import ITRRepository
 from repositories.contractor_repository import ContractorRepository
+from repositories.meeting_minutes_repository import MeetingMinutesRepository
 from services.itp_service import ITPService
 from services.noi_service import NOIService
 from services.ncr_service import NCRService
 from services.itr_service import ITRService
+from services.meeting_minutes_service import MeetingMinutesService
 
 
 @pytest.fixture
@@ -458,3 +460,54 @@ def test_contractor_abbreviation_drives_reference_prefix(db_session):
     # Each vendor has its own sequence, so both should start at 000001.
     assert alpha.referenceNo.endswith("000001")
     assert beta.referenceNo.endswith("000001")
+
+
+def test_delete_draft_meeting_minutes_reclaims_tail_number(db_session, vendor):
+    """A deleted Draft (never published — see BACKLOG discussion
+    2026-08-31) gives its number back if it was the most recently issued
+    one, so the very next created record reuses it instead of leaving an
+    unexplained gap."""
+    service = MeetingMinutesService(MeetingMinutesRepository(db_session))
+
+    first = service.create_meeting_minutes(
+        schemas.MeetingMinutesCreate(vendor="Acme Co", status="Draft", title="mistake")
+    )
+    db_session.commit()
+
+    service.delete_meeting_minutes(first.id)
+    db_session.commit()
+
+    second = service.create_meeting_minutes(
+        schemas.MeetingMinutesCreate(vendor="Acme Co", status="Draft", title="redo")
+    )
+    db_session.commit()
+
+    assert second.documentNumber == first.documentNumber
+
+
+def test_delete_draft_meeting_minutes_does_not_reclaim_non_tail_number(db_session, vendor):
+    """If a newer record already exists past the deleted one, the number
+    is NOT reclaimed — decrementing the counter would let a future create
+    collide with that newer record."""
+    service = MeetingMinutesService(MeetingMinutesRepository(db_session))
+
+    first = service.create_meeting_minutes(
+        schemas.MeetingMinutesCreate(vendor="Acme Co", status="Draft", title="first")
+    )
+    second = service.create_meeting_minutes(
+        schemas.MeetingMinutesCreate(vendor="Acme Co", status="Draft", title="second")
+    )
+    db_session.commit()
+
+    service.delete_meeting_minutes(first.id)  # not the tail (second exists) — not reclaimed
+    db_session.commit()
+
+    third = service.create_meeting_minutes(
+        schemas.MeetingMinutesCreate(vendor="Acme Co", status="Draft", title="third")
+    )
+    db_session.commit()
+
+    assert third.documentNumber != first.documentNumber
+    tail_third = int(third.documentNumber.split("-")[-1])
+    tail_second = int(second.documentNumber.split("-")[-1])
+    assert tail_third == tail_second + 1

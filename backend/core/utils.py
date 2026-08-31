@@ -461,6 +461,63 @@ def generate_reference_no(db: Session, vendor_name: str, doc_type: str, project_
     return f"{expected_prefix}{seq_str}"
 
 
+def reclaim_reference_no(db: Session, vendor_name: str, doc_type: str,
+                          document_number: str, project_code: str | None = None) -> bool:
+    """
+    Best-effort "give back" a reference number when the record that held it
+    is deleted while still a Draft — i.e. it was never published/shared, so
+    nobody could have referenced it externally, and re-issuing the same
+    number to the next created record is safe (see BACKLOG discussion
+    2026-08-31: this is deliberately NOT available for Published/Void
+    records — generate_reference_no's "never reuse" behavior stays the
+    default for anything that was ever released).
+
+    Only reclaims the number if it's still the *most recently issued* one
+    for this (project, vendor, doc) sequence — i.e. only the tail can be
+    given back. If a newer record already exists past this number, the
+    counter is left alone (decrementing would let the next call re-issue a
+    number that collides with that newer record) — the number just becomes
+    a permanent, unexplained-by-Void gap in that case, same as before this
+    function existed.
+
+    Returns True if the sequence counter was actually decremented, False
+    if there was nothing to reclaim (parse failure, no matching sequence
+    row, or this wasn't the tail number).
+    """
+    code = project_code or PROJECT_CODE
+    vendor_abbrev = get_contractor_abbreviation(db, vendor_name)
+
+    rule = db.query(DocumentNamingRule).filter(
+        DocumentNamingRule.doc_type == doc_type.lower()
+    ).first()
+    if rule and rule.prefix:
+        expected_prefix = rule.prefix.replace('[ABBREV]', vendor_abbrev)
+    else:
+        expected_prefix = f"{code}-{vendor_abbrev}-{doc_type.upper()}-"
+
+    if not document_number.startswith(expected_prefix):
+        return False
+    suffix = document_number[len(expected_prefix):]
+    try:
+        parsed_seq = int(suffix)
+    except ValueError:
+        return False
+
+    with _reference_seq_lock:
+        seq_record = db.query(ReferenceSequence).filter(
+            ReferenceSequence.project == code,
+            ReferenceSequence.vendor == vendor_abbrev,
+            ReferenceSequence.doc == doc_type
+        ).with_for_update().first()
+
+        if not seq_record or seq_record.last_seq != parsed_seq:
+            return False
+
+        seq_record.last_seq = parsed_seq - 1
+        db.flush()
+        return True
+
+
 # 白名單：doc_type → (實體 table name, 編號欄位名)（避免 SQL 注入，且只 self-heal 已知文件類型）
 # Column names differ per table (referenceNo / documentNumber / pqpNo / recordsNo) —
 # using the wrong one makes self-heal silently no-op (caught below), so keep this accurate.

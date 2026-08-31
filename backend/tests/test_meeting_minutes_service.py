@@ -121,7 +121,7 @@ def test_update_published_meeting_minutes_allows_noop_resave(meeting_service, mo
         mock_log.assert_called_once()
 
 def test_delete_meeting_minutes_success(meeting_service, mock_repo):
-    """Only a Void record can be deleted — see delete_meeting_minutes'
+    """A Void record can always be deleted — see delete_meeting_minutes'
     guard (mirrors ncr_service.py's delete_ncr)."""
     mock_db_meeting = models.MeetingMinutes(id="mtg-123", status="Void", documentNumber="MOM-001")
     mock_repo.get_by_id.return_value = mock_db_meeting
@@ -133,8 +133,24 @@ def test_delete_meeting_minutes_success(meeting_service, mock_repo):
         mock_repo.delete.assert_called_once_with(mock_db_meeting)
         mock_log.assert_called_once()
 
-def test_delete_meeting_minutes_blocked_when_not_void(meeting_service, mock_repo):
+def test_delete_meeting_minutes_draft_allowed_and_reclaims_number(meeting_service, mock_repo):
+    """A Draft was never published — nobody could have referenced its
+    number externally, so it can be deleted directly (no Void required)
+    and its number is best-effort reclaimed."""
     mock_db_meeting = models.MeetingMinutes(id="mtg-123", status="Draft", documentNumber="MOM-001")
+    mock_repo.get_by_id.return_value = mock_db_meeting
+
+    with patch('services.meeting_minutes_service.log_audit') as mock_log, \
+         patch('services.meeting_minutes_service.reclaim_reference_no') as mock_reclaim:
+        result = meeting_service.delete_meeting_minutes("mtg-123", user_id=1, username="admin")
+
+        assert result is True
+        mock_reclaim.assert_called_once_with(mock_repo.db, '', 'meeting', 'MOM-001')
+        mock_repo.delete.assert_called_once_with(mock_db_meeting)
+        mock_log.assert_called_once()
+
+def test_delete_meeting_minutes_blocked_when_published(meeting_service, mock_repo):
+    mock_db_meeting = models.MeetingMinutes(id="mtg-123", status="Published", documentNumber="MOM-001")
     mock_repo.get_by_id.return_value = mock_db_meeting
 
     with pytest.raises(ValueError) as excinfo:

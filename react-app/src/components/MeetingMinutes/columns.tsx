@@ -164,7 +164,7 @@ export const createColumns = (
                 const meeting = row.original;
                 return (
                     <div className="flex items-center justify-center">
-                        {meeting.status !== 'Void' && (
+                        {meeting.status === 'Published' && (
                             <Button
                                 variant="ghost"
                                 size="icon"
