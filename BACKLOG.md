@@ -1314,6 +1314,52 @@ risk to the live print feature) and defer exact visual parity.
 
 ---
 
+## 20. OBS engineer sign-off: anyone can approve as anyone · NOT STARTED
+
+Captured 2026-09-01, right after shipping the OBS Quality Engineer /
+Construction Engineer closure split (see #18's neighbor commits —
+`obsFormSchema.ts::deriveOBSStatus`, `OBSModals.tsx` "結案簽核" section).
+The two "Approved By" fields are `<select>` pickers sourced from the real
+IAM user list (`getUsers()` + `formatUserLabel()`, same pattern as NCR's
+`assignedTo`) — but **any logged-in user can pick any name from that list**
+for either role, and can freely toggle both roles' approval status. There
+is no check that the person actually submitting the form is the person
+named in `qualityEngineerApprovalBy` / `constructionEngineerApprovalBy`.
+
+User's framing: whoever is logged in should only be able to set/change
+**their own** sign-off — not the other engineer's, and not by picking an
+arbitrary name. i.e. a Quality Engineer approving should stamp the
+currently-authenticated user automatically (or restrict the picker to
+"self only"), and should not be able to touch the Construction Engineer's
+fields (or vice versa), rather than the current free-for-all where one
+person could fill in and approve both roles themselves.
+
+**Not investigated yet:**
+- Whether this should be enforced by role/permission (e.g. two new scopes,
+  `obs:approve:quality` / `obs:approve:construction`, gating which half of
+  the closure section is editable — mirroring how OBS already gates the
+  *whole record* via `obs:approve:all` vs `obs:update:all` in `OBS.tsx`),
+  or by identity (whoever is logged in can only write their own name into
+  either field, full stop, with no separate quality/construction role
+  concept in IAM).
+  - Ask on the identity route: does the app already have a stable way to
+  tell if the current user *is* a "Quality Engineer" vs "Construction
+  Engineer" (an IAM role/permission), or would this need a new attribute?
+- Whether `ApprovedBy` should stop being a picker entirely and just
+  auto-fill from `useAuth()`'s current user when that role's approval is
+  set to `Approved` (read-only display of "you", not a dropdown) — would
+  also remove the possibility of a typo/mismatch between the picked name
+  and who is actually acting, closer to what the user described.
+- Backend: today `qualityEngineerApproval`/`constructionEngineerApproval`
+  are plain columns on `OBS` with no router-level check
+  (`routers/obs.py`) — any authenticated user with `obs:update:all`
+  (or `obs:approve:all` once closed) can currently write either field.
+  Enforcing "self only" needs a backend check too, not just hiding the
+  picker in the frontend — a client-side-only restriction would be
+  trivially bypassable via the API directly.
+
+---
+
 ## Not on this list (and why)
 
 - **Migrating SQLite → Postgres.** Real production move, not a code
