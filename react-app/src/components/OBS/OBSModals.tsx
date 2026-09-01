@@ -199,13 +199,16 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                 return;
             }
         }
-        // On close, stamp the close-out / each engineer's approval date with
-        // today if left blank.
+        // Stamp each engineer's approval date with today if left blank, then
+        // derive Close-out Date as the later of the two — it is not an
+        // independently-set field.
         const today = new Date();
         const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-        const closeoutDate = finalStatus === 'Closed' && !values.closeoutDate ? todayStr : values.closeoutDate;
         const qualityEngineerApprovalDate = values.qualityEngineerApproval === 'Approved' && !values.qualityEngineerApprovalDate ? todayStr : values.qualityEngineerApprovalDate;
         const constructionEngineerApprovalDate = values.constructionEngineerApproval === 'Approved' && !values.constructionEngineerApprovalDate ? todayStr : values.constructionEngineerApprovalDate;
+        const closeoutDate = qualityEngineerApprovalDate && constructionEngineerApprovalDate
+            ? (qualityEngineerApprovalDate > constructionEngineerApprovalDate ? qualityEngineerApprovalDate : constructionEngineerApprovalDate)
+            : (qualityEngineerApprovalDate || constructionEngineerApprovalDate || '');
         setSaving(true);
         try {
             await onSave({ ...values, status: finalStatus, closeoutDate, qualityEngineerApprovalDate, constructionEngineerApprovalDate }, [
@@ -505,8 +508,22 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                     {dateInput('constructionEngineerApprovalDate')}
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label className={formStyles.optionalLabel}>{t('obs.closeoutDate')}</label>
-                                    {dateInput('closeoutDate')}
+                                    <label style={labelStyle}>
+                                        <span>{t('obs.closeoutDate')}</span>
+                                        {infoDot('自動取兩位工程師簽核日期中較晚的一個，結案後才會顯示 / Automatically the later of the two engineers’ approval dates — shown once at least one has signed off.')}
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className={formStyles.formInput}
+                                        value={(() => {
+                                            const q = watch('qualityEngineerApprovalDate');
+                                            const c = watch('constructionEngineerApprovalDate');
+                                            if (q && c) return q > c ? q : c;
+                                            return q || c || '—';
+                                        })()}
+                                        readOnly
+                                        style={{ backgroundColor: '#D9D9D9', cursor: 'not-allowed' }}
+                                    />
                                 </div>
                                 <div className={formStyles.formGroupFull}>
                                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400, cursor: 'pointer' }}>
