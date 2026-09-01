@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import ReactDOM from 'react-dom';
-import { getUsers, getEntityFiles, getAuthenticatedFileUrl, type User as ApiUser } from '../../services/api';
+import { getUsers, getEntityFiles, getAuthenticatedFileUrl, formatUserLabel, type User as ApiUser } from '../../services/api';
 import type { OBSItem } from '../../store/obsStore';
 import FileAttachment from '../Shared/FileAttachment';
 import ImagePreviewOverlay from '../Shared/ImagePreviewOverlay';
@@ -483,7 +483,12 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label className={formStyles.optionalLabel}>{t('obs.approvedBy') || '簽核人 Approved By'}</label>
-                                    <input type="text" className={formStyles.formInput} {...register('qualityEngineerApprovalBy')} />
+                                    <select className={formStyles.formSelect} {...register('qualityEngineerApprovalBy')}>
+                                        <option value="">{t('obs.approvedByPlaceholder') || '請選擇'}</option>
+                                        {users.map(u => (
+                                            <option key={u.id} value={formatUserLabel(u)}>{formatUserLabel(u)}</option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label className={formStyles.optionalLabel}>{t('obs.approvalDate') || '簽核日期 Approval Date'}</label>
@@ -501,7 +506,12 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label className={formStyles.optionalLabel}>{t('obs.approvedBy') || '簽核人 Approved By'}</label>
-                                    <input type="text" className={formStyles.formInput} {...register('constructionEngineerApprovalBy')} />
+                                    <select className={formStyles.formSelect} {...register('constructionEngineerApprovalBy')}>
+                                        <option value="">{t('obs.approvedByPlaceholder') || '請選擇'}</option>
+                                        {users.map(u => (
+                                            <option key={u.id} value={formatUserLabel(u)}>{formatUserLabel(u)}</option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label className={formStyles.optionalLabel}>{t('obs.approvalDate') || '簽核日期 Approval Date'}</label>
