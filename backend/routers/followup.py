@@ -105,7 +105,12 @@ def delete_followup(
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(FOLLOWUP_DELETE))
 ):
-    deleted = followup_service.delete_followup(followup_id=followup_id, user_id=current_user.id, username=current_user.username, scope=scope)
+    try:
+        deleted = followup_service.delete_followup(followup_id=followup_id, user_id=current_user.id, username=current_user.username, scope=scope)
+    except ScopeForbidden as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if not deleted:
         raise HTTPException(status_code=404, detail="FollowUp not found")
     return {"ok": True}

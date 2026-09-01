@@ -546,6 +546,11 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
     }
   };
 
+  // A Closed FollowUp is an unconditional dead end backend-side (see
+  // followup_service.py::update_followup) — lock the form the same way so
+  // the UI doesn't show editable fields that would just 400 on save.
+  const readOnly = existingItem?.status === 'Closed';
+
   return (
     <div className={formStyles.modalOverlay}>
       <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
@@ -554,6 +559,7 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
           <button className={formStyles.closeButton} onClick={onClose}>×</button>
         </div>
         <div className={formStyles.modalBody}>
+          <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
           <div className={formStyles.formSections}>
             <div className={formStyles.formSection}>
               <h3 className={formStyles.sectionTitle}>{t('common.baseInfo')}</h3>
@@ -577,6 +583,7 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
                   >
                     <option value="Open">Open</option>
                     <option value="Closed">Closed</option>
+                    <option value="Void">{t('status.void') || 'Void'}</option>
                   </select>
                 </div>
                 <div className={formStyles.formGroup}>
@@ -731,11 +738,14 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
               </div>
             </div>
           </div>
+          </fieldset>
         </div>
         <div className={formStyles.modalActions}>
-          <button className={formStyles.saveButton} onClick={handleSave}>
-            {t('common.save')}
-          </button>
+          {!readOnly && (
+            <button className={formStyles.saveButton} onClick={handleSave}>
+              {t('common.save')}
+            </button>
+          )}
           <button className={formStyles.cancelButton} onClick={onClose}>
             {t('common.cancel')}
           </button>

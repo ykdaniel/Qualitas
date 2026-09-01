@@ -124,8 +124,9 @@ def test_update_followup_success(followup_service, mock_repo):
         mock_log.assert_called_once()
 
 def test_delete_followup(followup_service, mock_repo):
+    """Void FollowUps can be deleted."""
     # Arrange
-    mock_db_fw = models.FollowUp(id="fw-123", issueNo="FW-01")
+    mock_db_fw = models.FollowUp(id="fw-123", issueNo="FW-01", status="Void")
     mock_repo.get_by_id.return_value = mock_db_fw
 
     class MockColumn:
@@ -144,4 +145,16 @@ def test_delete_followup(followup_service, mock_repo):
         assert result is True
         mock_repo.delete.assert_called_once_with(mock_db_fw)
         mock_log.assert_called_once()
+
+
+def test_delete_followup_blocked_by_non_void_status(followup_service, mock_repo):
+    """Non-Void FollowUps (including Closed) cannot be deleted outright —
+    must be Voided first. Mirrors NCR/Audit's delete anti-gaming guard."""
+    mock_db_fw = models.FollowUp(id="fw-123", issueNo="FW-01", status="Closed")
+    mock_repo.get_by_id.return_value = mock_db_fw
+
+    with pytest.raises(ValueError, match="Void it first"):
+        followup_service.delete_followup("fw-123")
+
+    mock_repo.delete.assert_not_called()
 

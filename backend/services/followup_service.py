@@ -74,6 +74,11 @@ class FollowUpService:
                 self.repo.db, "CREATE", "FollowUp", created.id, created.issueNo,
                 new_value=followup_create.model_dump(), user_id=user_id, username=username
             )
+            # log_audit only db.add()s the row — repo.create() already
+            # committed the FollowUp itself, but this trailing commit is
+            # what actually persists the audit log entry (see the identical
+            # bug found/fixed in meeting_minutes_service.py).
+            self.repo.db.commit()
 
             return created
         except Exception as e:
@@ -99,6 +104,21 @@ class FollowUpService:
             old_val = {c.name: getattr(db_followup, c.name) for c in db_followup.__table__.columns}
             data = followup_update.model_dump(exclude_unset=True)
 
+            # Guard: a Closed FollowUp is a true dead end — WorkflowEngine's
+            # FollowUp transitions (core/utils.py) define "Closed": [], no
+            # reopen path exists at all (same shape as NOI/Audit). Safe to
+            # lock unconditionally since there's no legitimate "reopen and
+            # edit" flow to accidentally break.
+            if db_followup.status == 'Closed':
+                changed_fields = {
+                    k for k, v in data.items() if v != old_val.get(k)
+                }
+                if changed_fields:
+                    raise ValueError(
+                        f"Cannot modify a closed FollowUp '{db_followup.issueNo}' — "
+                        f"no fields can be changed once it is closed."
+                    )
+
             if 'vendor' in data:
                 vendor_name = data.pop('vendor')
                 data['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
@@ -122,6 +142,7 @@ class FollowUpService:
                 old_value=old_val, new_value=followup_update.model_dump(exclude_unset=True),
                 user_id=user_id, username=username
             )
+            self.repo.db.commit()
 
             return updated
         except Exception as e:
@@ -135,6 +156,17 @@ class FollowUpService:
             if not db_followup or not record_in_scope(db_followup, scope):
                 return False
 
+            # Only Void FollowUps can be deleted — same precedent as
+            # NCR/Audit. A Closed FollowUp is an unconditional dead end for
+            # edits (see update_followup above); deleting it outright would
+            # let that lock be bypassed entirely by removing the record
+            # instead of changing it.
+            if db_followup.status != 'Void':
+                raise ValueError(
+                    f"Cannot delete FollowUp '{db_followup.issueNo}' with status "
+                    f"'{db_followup.status}'. Please Void it first, then delete."
+                )
+
             old_val = {c.name: getattr(db_followup, c.name) for c in db_followup.__table__.columns}
             self.repo.delete(db_followup)
 
@@ -142,6 +174,7 @@ class FollowUpService:
                 self.repo.db, "DELETE", "FollowUp", followup_id, db_followup.issueNo,
                 old_value=old_val, user_id=user_id, username=username
             )
+            self.repo.db.commit()
 
             return True
         except Exception as e:

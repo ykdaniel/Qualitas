@@ -226,6 +226,10 @@ export const createColumns = (
                     );
                 }
 
+                // Only Void FollowUps can be deleted (mirrors NCR/Audit) —
+                // a Closed FollowUp especially is meant to stay a permanent
+                // record, not something a stray click can erase.
+                const canDelete = issue.status === 'Void';
                 return (
                     <div className="flex justify-center gap-1">
                         {!issue.isExternal && deepLinkPath && (
@@ -241,9 +245,10 @@ export const createColumns = (
                         <Button
                             variant="ghost"
                             size="sm"
-                            onClick={(e) => { e.stopPropagation(); handleDeleteClick(issue.id); }}
-                            title={t('common.delete')}
-                            className="text-red-500 hover:text-red-700"
+                            disabled={!canDelete}
+                            onClick={(e) => { e.stopPropagation(); canDelete && handleDeleteClick(issue.id); }}
+                            title={canDelete ? t('common.delete') : (t('followup.deleteVoidOnlyHint') || 'Void this issue first, then delete')}
+                            className="text-red-500 hover:text-red-700 disabled:opacity-30 disabled:hover:text-red-500"
                         >
                             <Trash2 className="h-4 w-4" />
                         </Button>
