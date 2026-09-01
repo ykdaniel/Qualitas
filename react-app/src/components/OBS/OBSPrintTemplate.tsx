@@ -82,10 +82,6 @@ const OBSPrintTemplate: React.FC<OBSPrintTemplateProps> = ({ data, defectPhotos 
                             <table>
                                 <tbody>
                                     <tr>
-                                        <td className="lbl">驗證結果<small>Verified</small></td><td className="val">{val(data.verified)}</td>
-                                        <td className="lbl">驗證日期<small>Verified Date</small></td><td className="val">{val(data.verifiedDate)}</td>
-                                    </tr>
-                                    <tr>
                                         <td className="lbl">結案日期<small>Closeout</small></td><td className="val">{val(data.closeoutDate)}</td>
                                         <td className="lbl">狀態<small>Status</small></td><td className="val">{val(data.status)}</td>
                                     </tr>
@@ -100,6 +96,8 @@ const OBSPrintTemplate: React.FC<OBSPrintTemplateProps> = ({ data, defectPhotos 
                             <div className="sign-grid">
                                 <SignCell num="5.1" zh="承包商" en="Contractor" />
                                 <SignCell num="5.2" zh="開立人" en="Raised by" name={data.raisedBy || data.foundBy} date={data.raiseDate} />
+                                <SignCell num="5.3" zh="品質工程師" en="Quality Engineer" name={data.qualityEngineerApprovalBy} date={data.qualityEngineerApprovalDate} req={data.qualityEngineerApproval} />
+                                <SignCell num="5.4" zh="工地工程師" en="Construction Engineer" name={data.constructionEngineerApprovalBy} date={data.constructionEngineerApprovalDate} req={data.constructionEngineerApproval} />
                             </div>
 
                             {/* ===== 照片 ===== */}

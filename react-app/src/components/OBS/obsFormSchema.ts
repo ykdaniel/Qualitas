@@ -30,8 +30,15 @@ export const obsFormSchema = z.object({
     closeoutDate: str,
     detailsDescription: z.string().min(1, 'obs.descriptionRequired'),
     productDisposition: str, // UI label = "Action Taken"
-    verified: str,           // Pending / Verified / Rejected (QC closeout)
-    verifiedDate: str,
+    // Closure sign-off, split per external owner-system requirement
+    // (Aconex-style "Closure Agreed" fields) — replaces the old single
+    // `verified` field (2026-09-01). Status now derives from BOTH.
+    qualityEngineerApproval: str,       // Pending / Approved / Rejected
+    qualityEngineerApprovalBy: str,
+    qualityEngineerApprovalDate: str,
+    constructionEngineerApproval: str,  // Pending / Approved / Rejected
+    constructionEngineerApprovalBy: str,
+    constructionEngineerApprovalDate: str,
     remark: str,
     aconex: str,
     defectPhotos: fileArr,
@@ -46,7 +53,9 @@ export const emptyOBSForm: OBSDetailData = {
     obsNumber: '', status: 'Open', subject: '', type: '', contractor: '',
     foundLocation: '', foundBy: '', raisedBy: '', raiseDate: '', dueDate: '',
     closeoutDate: '', detailsDescription: '', productDisposition: '',
-    verified: 'Pending', verifiedDate: '', remark: '',
+    qualityEngineerApproval: 'Pending', qualityEngineerApprovalBy: '', qualityEngineerApprovalDate: '',
+    constructionEngineerApproval: 'Pending', constructionEngineerApprovalBy: '', constructionEngineerApprovalDate: '',
+    remark: '',
     aconex: '',
     defectPhotos: [], improvementPhotos: [], attachments: [],
 };
@@ -68,8 +77,12 @@ export function toFormValues(item: OBSItem): OBSDetailData {
         closeoutDate: item.closeoutDate || '',
         detailsDescription: item.description || '',
         productDisposition: item.productDisposition || '',
-        verified: item.verified || 'Pending',
-        verifiedDate: item.verifiedDate || '',
+        qualityEngineerApproval: item.qualityEngineerApproval || 'Pending',
+        qualityEngineerApprovalBy: item.qualityEngineerApprovalBy || '',
+        qualityEngineerApprovalDate: item.qualityEngineerApprovalDate || '',
+        constructionEngineerApproval: item.constructionEngineerApproval || 'Pending',
+        constructionEngineerApprovalBy: item.constructionEngineerApprovalBy || '',
+        constructionEngineerApprovalDate: item.constructionEngineerApprovalDate || '',
         remark: item.remark || '',
         aconex: item.aconex || '',
         defectPhotos: item.defectPhotos || [],
@@ -79,13 +92,21 @@ export function toFormValues(item: OBSItem): OBSDetailData {
 }
 
 /**
- * Derive the OBS status from the Verification & Closure state instead of letting
+ * Derive the OBS status from the Closure Sign-off state instead of letting
  * it be picked freely. Void is a manual override handled in the form (not here).
+ *
+ * Both Quality Engineer AND Construction Engineer must approve before the
+ * observation closes (2026-09-01 — replaces the old single `verified`
+ * field). Either one rejecting sends it back to the contractor regardless
+ * of the other's state.
  */
-export function deriveOBSStatus(v: Pick<OBSDetailData, 'verified'>): string {
-    // Driven only by the explicit QC verification, not by whether fields are filled.
-    if (v.verified === 'Verified') return 'Closed';
-    if (v.verified === 'Rejected') return 'In Progress'; // sent back to contractor
+export function deriveOBSStatus(v: Pick<OBSDetailData, 'qualityEngineerApproval' | 'constructionEngineerApproval'>): string {
+    if (v.qualityEngineerApproval === 'Rejected' || v.constructionEngineerApproval === 'Rejected') {
+        return 'In Progress'; // sent back to contractor
+    }
+    if (v.qualityEngineerApproval === 'Approved' && v.constructionEngineerApproval === 'Approved') {
+        return 'Closed';
+    }
     return 'Open';
 }
 

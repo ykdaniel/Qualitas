@@ -33,8 +33,14 @@ export interface OBSItem {
     noiNumber?: string;
     itrNumber?: string;
     dueDate?: string;
-    verified?: string;        // Pending / Verified / Rejected
+    verified?: string;        // superseded — see engineer approvals below
     verifiedDate?: string;
+    qualityEngineerApproval?: string;       // Pending / Approved / Rejected
+    qualityEngineerApprovalBy?: string;
+    qualityEngineerApprovalDate?: string;
+    constructionEngineerApproval?: string;  // Pending / Approved / Rejected
+    constructionEngineerApprovalBy?: string;
+    constructionEngineerApprovalDate?: string;
 }
 
 function normalizeItem(item: unknown): OBSItem {

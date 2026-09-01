@@ -389,8 +389,20 @@ class OBS(Base):
     dueDate = Column(String, nullable=True)
     noiNumber = Column(String, nullable=True, index=True)
     itrNumber = Column(String, nullable=True, index=True)
+    # Superseded 2026-09-01 by the two role-specific approvals below — kept
+    # (not dropped) so existing historical data isn't lost; no longer
+    # editable via the form, status derivation no longer reads it.
     verified = Column(String, nullable=True)       # Pending / Verified / Rejected (QA closeout)
     verifiedDate = Column(String, nullable=True)
+    # Closure sign-off, split per external owner-system requirement
+    # (Aconex-style "Closure Agreed" fields) — status now derives from
+    # BOTH: either Rejected -> In Progress, both Approved -> Closed.
+    qualityEngineerApproval = Column(String, nullable=True)      # Pending / Approved / Rejected
+    qualityEngineerApprovalBy = Column(String, nullable=True)
+    qualityEngineerApprovalDate = Column(String, nullable=True)
+    constructionEngineerApproval = Column(String, nullable=True)  # Pending / Approved / Rejected
+    constructionEngineerApprovalBy = Column(String, nullable=True)
+    constructionEngineerApprovalDate = Column(String, nullable=True)
 
     # Relationships
     vendor_ref = relationship("Contractor", back_populates="obss")

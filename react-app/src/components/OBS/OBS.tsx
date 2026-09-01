@@ -125,8 +125,12 @@ const OBS: React.FC = () => {
       improvementPhotos: details.improvementPhotos,
       attachments: details.attachments,
       dueDate: details.dueDate || undefined,
-      verified: details.verified || undefined,
-      verifiedDate: details.verifiedDate || undefined,
+      qualityEngineerApproval: details.qualityEngineerApproval || undefined,
+      qualityEngineerApprovalBy: details.qualityEngineerApprovalBy || undefined,
+      qualityEngineerApprovalDate: details.qualityEngineerApprovalDate || undefined,
+      constructionEngineerApproval: details.constructionEngineerApproval || undefined,
+      constructionEngineerApprovalBy: details.constructionEngineerApprovalBy || undefined,
+      constructionEngineerApprovalDate: details.constructionEngineerApprovalDate || undefined,
     };
     try {
       let targetId = '';

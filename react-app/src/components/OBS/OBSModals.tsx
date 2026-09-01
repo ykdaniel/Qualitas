@@ -199,14 +199,16 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                 return;
             }
         }
-        // On close, stamp the close-out / verified dates with today if left blank.
+        // On close, stamp the close-out / each engineer's approval date with
+        // today if left blank.
         const today = new Date();
         const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
         const closeoutDate = finalStatus === 'Closed' && !values.closeoutDate ? todayStr : values.closeoutDate;
-        const verifiedDate = values.verified === 'Verified' && !values.verifiedDate ? todayStr : values.verifiedDate;
+        const qualityEngineerApprovalDate = values.qualityEngineerApproval === 'Approved' && !values.qualityEngineerApprovalDate ? todayStr : values.qualityEngineerApprovalDate;
+        const constructionEngineerApprovalDate = values.constructionEngineerApproval === 'Approved' && !values.constructionEngineerApprovalDate ? todayStr : values.constructionEngineerApprovalDate;
         setSaving(true);
         try {
-            await onSave({ ...values, status: finalStatus, closeoutDate, verifiedDate }, [
+            await onSave({ ...values, status: finalStatus, closeoutDate, qualityEngineerApprovalDate, constructionEngineerApprovalDate }, [
                 { category: 'defectPhoto', files: pendingDefectPhotos },
                 { category: 'improvementPhoto', files: pendingImprovementPhotos },
                 { category: 'attachment', files: pendingAttachments },
@@ -259,7 +261,10 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
     // Live status badge — derived from verification & closure (Void = override).
     const derivedStatus = voided
         ? 'Void'
-        : deriveOBSStatus({ verified: watch('verified') });
+        : deriveOBSStatus({
+            qualityEngineerApproval: watch('qualityEngineerApproval'),
+            constructionEngineerApproval: watch('constructionEngineerApproval'),
+        });
     const statusText = ({
         'Open': t('status.open'), 'In Progress': t('status.inProgress'),
         'Resolved': t('status.resolved'), 'Closed': t('status.closed'), 'Void': t('status.void'),
@@ -460,22 +465,44 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                     <div className={formStyles.formSections}>
                         {/* ===== 4. 驗證與結案 / Verification & Closure ===== */}
                         <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>驗證與結案 / Verification &amp; Closure <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（QC）</span></h3>
+                            <h3 className={formStyles.sectionTitle}>結案簽核 / Closure Sign-off <span style={{ fontWeight: 400, fontSize: 12, color: '#6b7280' }}>（QC）</span></h3>
                             <div className={formStyles.formGrid}>
                                 <div className={formStyles.formGroup}>
                                     <label style={labelStyle}>
-                                        <span>{t('obs.verified') || 'Verified'}</span>
-                                        {infoDot('設為 Verified 即結案；Rejected 退回處理中 / Set to "Verified" to close; "Rejected" routes it back to In Progress.')}
+                                        <span>{t('obs.qualityEngineer') || '品質工程師 Quality Engineer'}</span>
+                                        {infoDot('雙方都設為 Approved 才會結案；任一方 Rejected 都會退回處理中 / Both must be Approved to close; either Rejected sends it back to In Progress.')}
                                     </label>
-                                    <select className={formStyles.formSelect} {...register('verified')}>
+                                    <select className={formStyles.formSelect} {...register('qualityEngineerApproval')}>
                                         <option value="Pending">{t('ncr.effectiveness.pending') || '待驗證 Pending'}</option>
-                                        <option value="Verified">通過 Verified</option>
+                                        <option value="Approved">核准 Approved</option>
                                         <option value="Rejected">退回 Rejected</option>
                                     </select>
                                 </div>
                                 <div className={formStyles.formGroup}>
-                                    <label className={formStyles.optionalLabel}>{t('obs.verifiedDate') || 'Verified Date'}</label>
-                                    {dateInput('verifiedDate')}
+                                    <label className={formStyles.optionalLabel}>{t('obs.approvedBy') || '簽核人 Approved By'}</label>
+                                    <input type="text" className={formStyles.formInput} {...register('qualityEngineerApprovalBy')} />
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label className={formStyles.optionalLabel}>{t('obs.approvalDate') || '簽核日期 Approval Date'}</label>
+                                    {dateInput('qualityEngineerApprovalDate')}
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label style={labelStyle}>
+                                        <span>{t('obs.constructionEngineer') || '工地工程師 Construction Engineer'}</span>
+                                    </label>
+                                    <select className={formStyles.formSelect} {...register('constructionEngineerApproval')}>
+                                        <option value="Pending">{t('ncr.effectiveness.pending') || '待驗證 Pending'}</option>
+                                        <option value="Approved">核准 Approved</option>
+                                        <option value="Rejected">退回 Rejected</option>
+                                    </select>
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label className={formStyles.optionalLabel}>{t('obs.approvedBy') || '簽核人 Approved By'}</label>
+                                    <input type="text" className={formStyles.formInput} {...register('constructionEngineerApprovalBy')} />
+                                </div>
+                                <div className={formStyles.formGroup}>
+                                    <label className={formStyles.optionalLabel}>{t('obs.approvalDate') || '簽核日期 Approval Date'}</label>
+                                    {dateInput('constructionEngineerApprovalDate')}
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label className={formStyles.optionalLabel}>{t('obs.closeoutDate')}</label>

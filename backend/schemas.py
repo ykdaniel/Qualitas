@@ -744,10 +744,17 @@ class OBSBase(BaseModel):
     dueDate: str | None = None
     noiNumber: str | None = None
     itrNumber: str | None = None
-    verified: str | None = None          # Pending / Verified / Rejected
+    verified: str | None = None          # superseded — see engineer approvals below
     verifiedDate: str | None = None
+    qualityEngineerApproval: str | None = None       # Pending / Approved / Rejected
+    qualityEngineerApprovalBy: str | None = None
+    qualityEngineerApprovalDate: str | None = None
+    constructionEngineerApproval: str | None = None  # Pending / Approved / Rejected
+    constructionEngineerApprovalBy: str | None = None
+    constructionEngineerApprovalDate: str | None = None
 
-    @field_validator('raiseDate', 'closeoutDate', 'dueDate', 'verifiedDate', mode='before')
+    @field_validator('raiseDate', 'closeoutDate', 'dueDate', 'verifiedDate',
+                      'qualityEngineerApprovalDate', 'constructionEngineerApprovalDate', mode='before')
     @classmethod
     def check_dates(cls, v):
         return validate_date_format(v)
@@ -801,6 +808,12 @@ class OBSUpdate(BaseModel):
     itrNumber: str | None = None
     verified: str | None = None
     verifiedDate: str | None = None
+    qualityEngineerApproval: str | None = None
+    qualityEngineerApprovalBy: str | None = None
+    qualityEngineerApprovalDate: str | None = None
+    constructionEngineerApproval: str | None = None
+    constructionEngineerApprovalBy: str | None = None
+    constructionEngineerApprovalDate: str | None = None
 
     @field_validator('defectPhotos', 'improvementPhotos', 'attachments', mode='before')
     @classmethod

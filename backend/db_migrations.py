@@ -91,6 +91,11 @@ def run_migrations():
     # composite (documentNumber, rev) one.
     _loosen_meeting_minutes_documentNumber_unique()
 
+    # 14. OBS: closure verification split into Quality Engineer +
+    # Construction Engineer sign-offs — backfill historical Verified rows
+    # so their derived status (now based on both new fields) stays Closed.
+    _backfill_obs_engineer_approvals()
+
     logger.info("Migrations completed.")
 
 def _add_missing_columns():
@@ -163,6 +168,13 @@ def _add_missing_columns():
             _add_column_if_missing(conn, "obs", "attachments", "TEXT")
             _add_column_if_missing(conn, "obs", "verified", "VARCHAR")       # Pending / Verified / Rejected
             _add_column_if_missing(conn, "obs", "verifiedDate", "TEXT")
+            # Split closure sign-off (2026-09-01) — see _backfill_obs_engineer_approvals
+            _add_column_if_missing(conn, "obs", "qualityEngineerApproval", "VARCHAR")
+            _add_column_if_missing(conn, "obs", "qualityEngineerApprovalBy", "VARCHAR")
+            _add_column_if_missing(conn, "obs", "qualityEngineerApprovalDate", "TEXT")
+            _add_column_if_missing(conn, "obs", "constructionEngineerApproval", "VARCHAR")
+            _add_column_if_missing(conn, "obs", "constructionEngineerApprovalBy", "VARCHAR")
+            _add_column_if_missing(conn, "obs", "constructionEngineerApprovalDate", "TEXT")
 
             # OSD
             _add_column_if_missing(conn, "osd", "improvementPhotos", "TEXT")
@@ -759,3 +771,30 @@ def _loosen_meeting_minutes_documentNumber_unique():
             conn.commit()
     except Exception as e:
         logger.warning(f"Meeting Minutes rev/unique migration warning: {e}")
+
+
+def _backfill_obs_engineer_approvals():
+    """OBS closure verification was a single `verified` field
+    (Pending/Verified/Rejected); split 2026-09-01 into independent Quality
+    Engineer + Construction Engineer sign-offs (an external owner system's
+    "Closure Agreed" fields). Status now derives from BOTH new fields, so
+    any row that was already Verified needs both backfilled to Approved —
+    otherwise an already-closed observation would silently look reopened
+    once the frontend switches to the new two-field rule. The `IS NULL`
+    guard makes this idempotent (a rerun only touches rows the previous
+    run hadn't reached, e.g. ones added between migration runs)."""
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                UPDATE obs
+                SET qualityEngineerApproval = 'Approved',
+                    qualityEngineerApprovalDate = verifiedDate,
+                    constructionEngineerApproval = 'Approved',
+                    constructionEngineerApprovalDate = verifiedDate
+                WHERE verified = 'Verified' AND qualityEngineerApproval IS NULL
+            """))
+            conn.commit()
+            if result.rowcount:
+                logger.info(f"Backfilled {result.rowcount} previously-Verified OBS row(s) into the new engineer approval fields.")
+    except Exception as e:
+        logger.warning(f"OBS engineer-approval backfill skipped: {e}")
