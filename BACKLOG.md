@@ -1418,6 +1418,53 @@ dies immediately too. That part is solid. Three gaps found beyond it:
 
 ---
 
+## 22. Checklist "bare template must stay clean" rule is frontend-only · NOT STARTED
+
+Captured 2026-09-01, found while answering "why can't I edit Base
+Information" on `QTS-RKS-HL-CHK-000001` ("Stakeout"). The §17 template/
+instance split's rule — a Checklist with no `itrId` and no `template_id`
+is a "bare template" and must be locked read-only so it stays reusable
+for future "Generate Checklist" links (`isBareTemplate` in
+`Checklist.tsx`) — is enforced **only in the React fieldset/readOnly
+prop**. `backend/services/checklist_service.py`'s `create_checklist` and
+`update_checklist` never check `itrId`/`template_id` before accepting
+`status`/`detail_data`/`passCount`/`failCount`. The Pass/Fail closed-state
+lock added 2026-08-26 (`_LOCKED_CHECKLIST_FIELDS`, see
+[[todo_checklist_backend_lock_and_itrid_desync]]) only guards *re-editing
+an already-closed* checklist — it says nothing about a checklist that was
+never linked to an ITR in the first place.
+
+**Live proof, not just theoretical:** queried production directly —
+`QTS-RKS-HL-CHK-000001` has `itrId=''`, `template_id=''`,
+`status='Pass'`, `passCount=1`. That is exactly the state the frontend
+rule says should be impossible. Most likely explanation: this record
+predates the §17 rule (it's the very first Checklist ever created,
+`recordsNo` `...000001`) and was filled in back when there was no bare/
+linked distinction — the rule was added later, in the frontend only, with
+no retroactive backend enforcement. **But because the backend never
+enforces it going forward either, the same gap is still live today**:
+anyone with `checklist:create:all`/`checklist:update:all` can bypass the
+UI (a direct API call) and write real Pass/Fail results onto an unlinked
+"template" right now — the same class of gap already flagged and left
+open in [[todo_checklist_backend_lock_and_itrid_desync]]'s item (1),
+just for the bare-template condition specifically rather than the
+already-closed condition.
+
+**User's call 2026-09-01:** log it, don't fix yet.
+
+**Not investigated yet:**
+- Whether to add the bare-template guard as its own check (`itrId` and
+  `template_id` both empty → reject any write of `status`/`detail_data`/
+  `passCount`/`failCount` other than clearing them) alongside the
+  existing Pass/Fail lock, or fold both into one combined "when is this
+  record allowed to hold real results" guard.
+- Whether legacy rows like `QTS-RKS-HL-CHK-000001` need a decision too
+  (leave as historical data — same call the user made for the sibling
+  `QTS-RKS-RKS-CHK-000006` desync row — or attempt a cleanup) once the
+  backend fix is scoped.
+
+---
+
 ## Not on this list (and why)
 
 - **Migrating SQLite → Postgres.** Real production move, not a code
