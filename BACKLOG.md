@@ -1465,6 +1465,41 @@ already-closed condition.
 
 ---
 
+## 23. Attachment preview won't open + Print doesn't show · NOT STARTED, unscoped
+
+Captured 2026-09-02, reported directly by the user: "附件無法打開來預覽，列印不會出現" —
+attachment preview doesn't open, and Print doesn't appear/render. **Not yet
+reproduced or narrowed to a specific module** — logging as-is per the
+user's own framing ("要排查各模組" — needs checking module by module),
+not investigating further right now.
+
+**Quick look at the shared infrastructure before logging (not a full
+investigation):**
+- Attachment preview (`Shared/FileAttachment.tsx`) doesn't own the preview
+  UI itself — clicking a thumbnail calls an `onPreview` prop the *parent*
+  module supplies, which is expected to render `Shared/ImagePreviewOverlay.tsx`.
+  If a given module never wires `onPreview` (or never mounts the overlay),
+  clicking there would silently do nothing — this shape means the bug
+  could plausibly be real in some modules and not others, matching the
+  user's own instinct that it needs a per-module check rather than one
+  shared fix.
+- `getAuthenticatedFileUrl()` (`services/api.ts`) just normalizes the URL
+  to a relative path — no token embedding — so file access relies on the
+  httpOnly auth cookie riding along on the `<img src>` request. Looked
+  structurally sound, not an obvious shared culprit.
+- Print is built the same way in every module that has it (a
+  `ReactDOM.createPortal` into `<body>`, `Shared/PrintPrimitives.tsx` for
+  the shared cells, a per-module `*.print.css`) — didn't inspect any one
+  module's wiring for this pass.
+
+**Before starting real work on this:** get the user to name which
+module(s) and record(s) reproduce it, and which specifically fails —
+preview click does nothing vs. errors, print button does nothing vs. opens
+a blank/broken print dialog — since "which modules" is exactly the open
+question, not an assumption to make.
+
+---
+
 ## Not on this list (and why)
 
 - **Migrating SQLite → Postgres.** Real production move, not a code
