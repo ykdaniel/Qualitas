@@ -332,8 +332,13 @@ const Checklist: React.FC = () => {
                     // (checklist_service.py) — Reopen is the only way back to
                     // Ongoing, since status has no manual dropdown otherwise
                     // (it's always re-derived from item results on Save).
+                    // Excludes bare templates — those are read-only unconditionally
+                    // (see the readOnly prop above), so Reopen would flip status
+                    // back to Ongoing without actually unlocking anything, which
+                    // just confuses whoever clicks it.
                     canReopen={
                         !!editingRecord &&
+                        !(!editingRecord.itrId && !editingRecord.templateId) &&
                         (editingRecord.status === 'Pass' || editingRecord.status === 'Fail') &&
                         hasPermission('checklist:close:all')
                     }

@@ -380,6 +380,7 @@ const translations: Record<Language, Record<string, string>> = {
     'checklist.available': 'Available Templates',
     'checklist.reopen': 'Reopen',
     'checklist.reopenHint': 'Switch back to Ongoing so inspection results can be edited again',
+    'checklist.templateModeBanner': 'Template Mode — this is a reusable blank template (not yet linked to an ITR). It is locked read-only so it stays clean for future "Generate Checklist" links; pass/fail results can only be entered after it is linked.',
 
     // NCR
     'ncr.title': 'NCR List',
@@ -2005,6 +2006,7 @@ const translations: Record<Language, Record<string, string>> = {
     'checklist.available': '可用範本',
     'checklist.reopen': '重開',
     'checklist.reopenHint': '切換回進行中，讓檢驗結果可以重新編輯',
+    'checklist.templateModeBanner': '範本模式——這是一份可重複使用的空白範本（尚未連結任何 ITR），故強制鎖定唯讀，以保持乾淨供未來「產生檢查表」使用；連結後才能填寫檢驗結果。',
 
     // ITP
     'itp.title': 'ITP 列表',
