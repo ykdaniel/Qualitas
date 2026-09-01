@@ -1360,6 +1360,64 @@ person could fill in and approve both roles themselves.
 
 ---
 
+## 21. Offboarding a user (deactivate ≠ removed from the system) · NOT STARTED
+
+Captured 2026-09-01, surfaced by discussing #20's "pick any IAM user as
+approver" gap — user asked "有人離職怎麼辦？？" (what happens when someone
+leaves?). IAM already has a real deactivate mechanism
+(`User.is_active`, toggled from the IAM UI) that correctly blocks login —
+checked in `core/security.py::get_current_user`, re-verified on **every**
+request (not just at login), so a deactivated user's existing session
+dies immediately too. That part is solid. Three gaps found beyond it:
+
+1. **Every "pick a person" dropdown still offers deactivated users.**
+   `repositories/user_repository.py::UserRepository.get_all()` has no
+   `is_active` filter, and the frontend `getUsers()` (used by NCR's
+   `assignedTo` picker, OBS's `qualityEngineerApprovalBy` /
+   `constructionEngineerApprovalBy` pickers, and the IAM list itself) just
+   renders whatever comes back. So a departed employee is offered as a new
+   assignee/approver exactly like anyone still on staff, indefinitely.
+   Historical records are correctly unaffected either way (they store a
+   name snapshot, not a live lookup) — this is only about *new* picks.
+
+2. **`scheduler.py`'s reminder emails don't check `is_active` either.**
+   Both the FollowUp due/overdue reminder (`f.assignee.email`, line ~61)
+   and the NCR pending-owner-approval reminder (`assignee.email`, line
+   ~161) look up the assignee purely by ID and mail them if an email
+   exists — no check that the account is still active. If a departed
+   user's account still has open NCRs/FollowUps assigned when they leave,
+   the scheduler keeps mailing their now-dead inbox forever, and — because
+   nothing else watches these records — **no one else ever gets notified
+   that the item is stuck.** This is worse than gap 1: gap 1 risks a bad
+   *new* pick, this one silently strands *existing* work with no escalation
+   path.
+
+3. **No bulk reassignment / offboarding tool.** There is no "move every
+   open item currently assigned to user X onto user Y" action anywhere in
+   the app. Offboarding someone today means manually finding and editing
+   every NCR/FollowUp (and, per #20 once that ships, every OBS engineer
+   sign-off) they were on, one row at a time — easy to miss some if the
+   departing person had more than a couple open items.
+
+**Not investigated yet:**
+- Where exactly to draw the `is_active` filter for gap 1 — probably a new
+  `active_only: bool = True` param on the `get_users` endpoint/repository
+  method, defaulting to filtered for pickers but explicitly `False` for
+  the IAM management list (which needs to show inactive accounts to
+  reactivate them).
+- Whether gap 2's fix should be "skip mailing inactive assignees" (silent,
+  but at least stops mailing a dead inbox) or "escalate to someone else"
+  (e.g. the record's vendor contact, or a configurable fallback/manager
+  email) — skipping alone still leaves the record silently unattended,
+  just without spamming a former employee.
+- Whether gap 3 is worth building as a real bulk-reassign UI, or whether
+  surfacing "records still assigned to inactive users" as a filtered list/
+  dashboard widget (so an admin can reassign them individually via
+  existing per-record editing) is enough — the latter is far less work
+  and doesn't require new bulk-mutation endpoints.
+
+---
+
 ## Not on this list (and why)
 
 - **Migrating SQLite → Postgres.** Real production move, not a code
