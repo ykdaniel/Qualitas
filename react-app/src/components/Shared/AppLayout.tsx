@@ -102,13 +102,16 @@ const AppLayout = () => {
     .find((m) => isActive(m.path));
 
   const qcActive = qcModules.some((m) => isActive(m.path));
-  const [qcOpen, setQcOpen] = useState(qcActive);
-
   const findingsActive = findingsModules.some((m) => isActive(m.path));
-  const [findingsOpen, setFindingsOpen] = useState(findingsActive);
-
   const settingsActive = settingsModules.some((m) => isActive(m.path));
-  const [settingsOpen, setSettingsOpen] = useState(settingsActive);
+
+  // Accordion: only one nav group open at a time. Defaults to whichever
+  // group contains the current route.
+  type NavGroupId = 'qc' | 'findings' | 'settings';
+  const [openGroup, setOpenGroup] = useState<NavGroupId | null>(
+    qcActive ? 'qc' : findingsActive ? 'findings' : settingsActive ? 'settings' : null,
+  );
+  const toggleGroup = (id: NavGroupId) => setOpenGroup((cur) => (cur === id ? null : id));
 
   type NavModule = { id: ModuleId; title: string; path: string; color: string };
   const renderNavItem = (module: NavModule, nested: boolean) => {
@@ -173,28 +176,28 @@ const AppLayout = () => {
             t('sidebar.section.qc'),
             ClipboardCheck,
             qcActive,
-            qcOpen,
-            () => setQcOpen((open) => !open),
+            openGroup === 'qc',
+            () => toggleGroup('qc'),
           )}
-          {qcOpen && qcModules.map((module) => renderNavItem(module, true))}
+          {openGroup === 'qc' && qcModules.map((module) => renderNavItem(module, true))}
 
           {renderGroupHeader(
             t('sidebar.section.findings'),
             Flag,
             findingsActive,
-            findingsOpen,
-            () => setFindingsOpen((open) => !open),
+            openGroup === 'findings',
+            () => toggleGroup('findings'),
           )}
-          {findingsOpen && findingsModules.map((module) => renderNavItem(module, true))}
+          {openGroup === 'findings' && findingsModules.map((module) => renderNavItem(module, true))}
 
           {renderGroupHeader(
             t('sidebar.section.settings'),
             SettingsIcon,
             settingsActive,
-            settingsOpen,
-            () => setSettingsOpen((open) => !open),
+            openGroup === 'settings',
+            () => toggleGroup('settings'),
           )}
-          {settingsOpen && settingsModules.map((module) => renderNavItem(module, true))}
+          {openGroup === 'settings' && settingsModules.map((module) => renderNavItem(module, true))}
         </nav>
       </aside>
 
