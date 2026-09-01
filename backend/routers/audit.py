@@ -87,12 +87,17 @@ def delete_audit_route(
     current_user: schemas.User = Depends(RoleChecker(AUDIT_DELETE))
 ):
     """Delete an audit"""
-    success = service.delete_audit(
-        audit_id,
-        user_id=current_user.id,
-        username=current_user.username,
-        scope=scope
-    )
+    try:
+        success = service.delete_audit(
+            audit_id,
+            user_id=current_user.id,
+            username=current_user.username,
+            scope=scope
+        )
+    except ScopeForbidden as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if not success:
         raise HTTPException(status_code=404, detail="Audit not found")
     return {"ok": True}

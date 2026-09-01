@@ -263,7 +263,8 @@ def test_update_audit_not_found(audit_service, mock_repo):
 
 
 def test_delete_audit(audit_service, mock_repo, sample_audit, mock_db):
-    """Test deleting audit"""
+    """Void audits can be deleted."""
+    sample_audit.status = "Void"
     mock_repo.get_by_id = Mock(return_value=sample_audit)
     mock_repo.delete = Mock(return_value=True)
     mock_repo.db = mock_db
@@ -275,6 +276,21 @@ def test_delete_audit(audit_service, mock_repo, sample_audit, mock_db):
 
     assert result is True
     mock_repo.delete.assert_called_once_with("audit-001")
+
+
+def test_delete_audit_blocked_by_non_void_status(audit_service, mock_repo, sample_audit):
+    """Non-Void audits (including Closed) cannot be deleted outright — must
+    be Voided first. Mirrors NCR's delete_ncr anti-gaming guard: a Closed
+    audit is an unconditional dead end for edits (see update_audit), so
+    letting it be deleted instead would bypass that lock entirely."""
+    sample_audit.status = "Closed"
+    mock_repo.get_by_id = Mock(return_value=sample_audit)
+    mock_repo.delete = Mock()
+
+    with pytest.raises(ValueError, match="Void the Audit first"):
+        audit_service.delete_audit("audit-001", user_id=1, username="testuser")
+
+    mock_repo.delete.assert_not_called()
 
 
 def test_delete_audit_not_found(audit_service, mock_repo):

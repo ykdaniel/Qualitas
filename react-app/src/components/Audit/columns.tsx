@@ -109,14 +109,19 @@ export const createColumns = (
             header: t('common.operations'),
             cell: ({ row }) => {
                 const item = row.original;
+                // Only Void audits can be deleted (mirrors NCR) — a Closed
+                // audit especially is meant to be a permanent record, not
+                // something a stray click can erase.
+                const canDelete = item.status === 'Void';
                 return (
                     <div className="flex items-center justify-center gap-2">
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0 text-red-500 hover:text-white hover:bg-red-500"
-                            onClick={() => handleDelete(item.id)}
-                            title={t('common.delete')}
+                            disabled={!canDelete}
+                            className="h-8 w-8 p-0 text-red-500 hover:text-white hover:bg-red-500 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-red-500"
+                            onClick={() => canDelete && handleDelete(item.id)}
+                            title={canDelete ? t('common.delete') : (t('audit.deleteVoidOnlyHint') || 'Void this audit first, then delete')}
                         >
                             <Trash2 className="h-4 w-4" />
                         </Button>

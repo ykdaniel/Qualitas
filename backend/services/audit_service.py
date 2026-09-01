@@ -227,6 +227,17 @@ class AuditService:
         if not db_audit or not record_in_scope(db_audit, scope):
             return False
 
+        # Only Void Audits can be deleted — same precedent as NCR
+        # (ncr_service.py::delete_ncr). A Closed Audit is explicitly a "true
+        # dead end" in update_audit above (no reopen path); deleting it
+        # outright would let that unconditional edit-lock be bypassed
+        # entirely by just removing the record instead of changing it.
+        if db_audit.status != 'Void':
+            raise ValueError(
+                f"Cannot delete Audit '{db_audit.auditNo}' with status '{db_audit.status}'. "
+                f"Please Void the Audit first, then delete."
+            )
+
         # Log the deletion
         self._log_audit(
             action="DELETE",
