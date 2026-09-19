@@ -1660,6 +1660,31 @@ those tests don't substitute for confirming the frontend Dashboard/
 FollowUp views actually *apply* project scope client-side rather than
 just rendering whatever the (already project-scoped, per P0) API returns.
 
+## 29. Outstanding test coverage from the 2026-09-19 walkthrough · NOT A BUG LIST — untested, not broken
+
+Captured 2026-09-19, same session as #24-28 above. The reviewer
+deliberately stopped short of these because they mutate data and wanted
+sign-off first — **this is a to-do list of what still needs manual
+verification, not a set of confirmed problems.** Don't read anything
+below as "found broken."
+
+- Create / Edit / Delete flows (any module) — untested this pass.
+- Search — untested this pass.
+- Language switch (en/zh toggle) — untested this pass.
+- Role management (creating/editing custom roles, permission assignment)
+  — untested this pass.
+- Permissions Preview — untested this pass.
+- Security page's "Sign out everywhere" — untested (would kill the
+  reviewer's own session, correctly deferred).
+- Security page's "Enable 2FA" — untested (would change the account's
+  login flow, correctly deferred).
+
+**How to apply:** when any of these areas comes up for real work, treat
+this list as "not yet exercised end-to-end," not as "known-good" — the
+walkthrough's own confirmed findings (#24-28) show that "no console
+errors" is not the same as "correct," so absence of a report here isn't
+evidence these areas are fine either.
+
 ---
 
 ## Not on this list (and why)
