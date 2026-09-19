@@ -1500,6 +1500,168 @@ question, not an assumption to make.
 
 ---
 
+## 24. Dashboard/list number reconciliation gaps · NOT STARTED
+
+Captured 2026-09-19 from a full manual walkthrough of all 22 sidebar pages
+(no console errors, no failed API calls — these are real data/display
+discrepancies, not crashes). **Spot-checked against the local dev DB and
+confirmed real** (see below); not yet re-checked against production,
+which has diverged from local dev all session — verify there too before
+assuming identical numbers.
+
+1. **ITP submission count disagrees with itself.** Dashboard shows "ITP
+   144, SUBMITTED 144 (100%)"; the ITP page itself shows "Submission 134,
+   Submission Maturity 93%". Same underlying table, two different counts
+   on two different pages.
+2. **ITP status tabs don't cover the total.** Approved (26) + Pending (86)
+   = 112, but the page header total is 144 — a 32-row gap. The user
+   manually paged through all rows and found the missing 32 have status
+   values that match no tab at all: blank (10), `active` (17), `For
+   Construction` (5). **Confirmed via local DB**: 20 rows have a
+   `referenceNo` starting `CHWCL-` instead of the normal
+   `QTS-RKS-HL-...` pattern (close to but not exactly the reported 32 —
+   worth a closer count when this is picked up), with an empty assignee
+   field — legacy imported data, presumably pre-dating this app's own
+   status vocabulary.
+3. **Follow Up Issues card totals don't add up.** Cards show Open 17 /
+   Closed 0 / Total 129 — 17 + 0 ≠ 129. The actual table status
+   breakdown is Open 7 / In Progress 3 / Under Review 1 for genuine
+   FollowUp rows, plus 118 rows that are the *virtual* ITP-sourced
+   aggregation (see `columns.tsx`'s `isExternal` rows, `sourceModule`)
+   carrying over those same non-standard ITP status strings from #2 above
+   — so the "17" on the summary card doesn't obviously correspond to
+   anything a user can find by looking at the table.
+4. **NCR and OBS define "Open" differently from their own tabs.** NCR's
+   top card shows Open=4, but its own status tabs show Open=3 + In
+   Progress=1 (4 total, but the card's single "Open" number silently
+   folds in a different status than the tab labeled Open). OBS does the
+   same thing in the other direction — its In Progress items get counted
+   into the Open tab.
+
+**Not investigated yet:** where each of these counts is actually computed
+(likely `useFollowUpIssueStats.ts`, a similar ITP stats hook, and each
+module's summary-card logic vs. its own tab-filter logic disagreeing on
+what counts as which status) — worth checking whether the summary cards
+and the tabs are two independently-written pieces of logic that just
+drifted apart, which is the same root-cause shape KPI's Void-exclusion
+bug had before it was fixed 2026-08-27.
+
+## 25. UI polish: untranslated key + inconsistent date format · NOT STARTED
+
+Captured 2026-09-19, same walkthrough as #24.
+
+- Checklist's table header shows the raw i18n key `common.revision`
+  instead of translated text — same class of bug as
+  `checklist.templateModeBanner` fixed 2026-09-01 (missing translation
+  key, `t()` returns the key itself since it's truthy, silently defeating
+  any `|| fallback`). Check `common.revision` is actually defined in both
+  `LanguageContext.tsx` language blocks.
+- Date format is inconsistent across modules: NOI displays `2026/2/6`
+  while other modules display `2026-02-06`. Cosmetic, but worth a single
+  shared date-formatting helper if/when this is picked up, rather than
+  patching NOI's specific format call in isolation.
+
+(Owner Performance being an unimplemented placeholder page was also
+re-confirmed by this walkthrough — already tracked, see
+[[todo_dead_features_2026_08_24]], not re-logged here.)
+
+## 26. Data integrity findings from manual walkthrough · NOT STARTED
+
+Captured 2026-09-19. **All confirmed against the local dev DB**
+(`backend/qualitas.db`) via direct query — not yet checked against
+production, which has different/diverged data.
+
+1. **Two NCRs with identical auto-generated description, from the same
+   ITR.** `QTS-RKS-HL-NCR-000002` and `QTS-RKS-HL-NCR-000003` both have
+   `description = "NCR raised from failed ITR QTS-RKS-HL-ITR-000003"`
+   (confirmed via DB — `subject` is empty on both, the reviewer read
+   `description` as the record's subject line in the UI). Each also has
+   its own FollowUp row. Could be two genuinely separate failed checklist
+   items on the same ITR each correctly raising their own NCR (the
+   template text doesn't distinguish which item), or a duplicate-creation
+   bug in the "Raise NCR" flow — **needs the actual creation audit-log
+   entries checked to tell which**, per the reviewer's own note.
+2. **Document-number prefix doesn't match the configured naming rule.**
+   Document Naming Rules is configured as `QTS-RKS-{ABBREV}-...`, but
+   confirmed live examples don't follow it: `QTS-A-PQP-000001`,
+   `QTS-C-AUD-000001`, `QTS-HL-OSD-000001`, `QTS-A-NOI-000001` (missing
+   the `RKS` segment entirely), plus `QTS-RKS-RKS-CHK-000006` (the
+   already-known desync row from
+   [[todo_checklist_backend_lock_and_itrid_desync]], not a new
+   occurrence — cross-referencing, not re-logging).
+3. **Closed OBS records missing fields that should be required at
+   closure.** `HL-OBS-000001` is Closed but has no Close-out Date,
+   Subject, or Raise Date. `NA-OBS-000002` has almost every field empty.
+   Suggests either a backend gap (Closed doesn't actually require these
+   fields) or bulk-imported/seeded data that skipped normal creation.
+4. **Numbering prefix doesn't match the Contractor field, and collides
+   with another record's sequence number.** `QTS-RKS-NA-NCR-000003` shows
+   Contractor = "Hailong" (an `HL`-coded vendor) despite its own document
+   number using the `NA` prefix, and it shares the same sequence number
+   (`000003`) as `HL-NCR-000003` — two different-prefix documents landed
+   on the same number. Given `generate_reference_no()` keys sequences by
+   `(project, vendor, doc_type)`, this is very plausibly correct-by-design
+   (different vendor prefix = different sequence counter, so collision is
+   expected, not a bug) — but the Contractor-vs-prefix mismatch itself
+   (an `NA`-prefixed NCR whose contractor is a different, `HL`-prefixed
+   vendor) suggests the vendor was changed after the number was assigned,
+   which existing number-assignment code doesn't seem to guard against.
+5. **Broken cross-module reference.** ITR `ITR-000002`'s linked
+   `QTS-A-NOI-000001` cannot be found in the NOI list at all — a
+   documentNumber-based reference (see #3 in the "Original finding" P0
+   note and [[todo_checklist_backend_lock_and_itrid_desync]]'s item 2)
+   pointing at a NOI that either never existed under that number or was
+   deleted without the ITR's reference being cleaned up.
+6. **Impossible date ordering.** `NOI-000003`'s Issue Date (2/24) is
+   *after* its Inspection Date (2/12) — the notice was apparently issued
+   after the inspection it's supposedly about took place. No cross-field
+   date validation catches this at write time.
+7. **Missing reference number on an ITP row.** Row 6, "Pre-mixed Concrete
+   Work", has no Reference no. at all — likely related to the same
+   legacy-import population as #24's CHWCL-prefixed rows.
+
+**Not investigated yet:** whether any of #3/#5/#6 are enforceable via a
+cheap backend validator (closure-requires-these-fields for OBS; FK
+existence check before allowing an ITR-NOI link to save; issueDate <=
+inspectionDate cross-field check) versus being accepted as historical
+seed-data noise not worth new validation code for.
+
+## 27. IAM user list never shows the actual username · NOT STARTED
+
+Captured 2026-09-19. Confirmed against `IAM/columns.tsx` — the user list
+table's columns are `name` (full_name), `email`, `display_company`,
+`role`, `status`, `createdAt`. **`username` is never a column.** The
+reviewer's specific complaint — "the list only shows admin@example.com
+and john@example.com, not YkDaniel, and the top-right corner just says
+'System Administrator'" — is explained by this: `YkDaniel` *is*
+`admin@example.com`'s username, but nothing in the IAM screen surfaces
+that mapping, so there's no way to look at the user list and know what
+username to type at the login screen, or to confirm which login session
+maps to which row, without going to the database directly (as this
+session had to do multiple times this month for password resets).
+
+**Not investigated yet:** whether to add a `username` column outright, or
+fold it into the existing `name` cell (e.g. "System Administrator
+(YkDaniel)") — the latter needs less layout rework.
+
+## 28. Project-switch filtering not verifiable yet — only one project exists · NOT STARTED, blocked on data
+
+Captured 2026-09-19. Switching the project selector to "Hailong" produced
+no visible change in Dashboard or Follow Up Issues numbers. The reviewer
+correctly did not conclude this is a bug — with only one project
+(`Hailong`) currently in the system, "the filter is silently not
+applying" and "there's nothing to filter, so naturally nothing changes"
+are indistinguishable from the UI alone. This isn't something to fix; it
+needs a **second real project created** before it can even be tested,
+which is a data/setup dependency, not a code question. Related to the P0
+multi-project isolation entry above (line ~704) — that section documents
+the backend enforcement and its automated tests, which is reassuring, but
+those tests don't substitute for confirming the frontend Dashboard/
+FollowUp views actually *apply* project scope client-side rather than
+just rendering whatever the (already project-scoped, per P0) API returns.
+
+---
+
 ## Not on this list (and why)
 
 - **Migrating SQLite → Postgres.** Real production move, not a code
