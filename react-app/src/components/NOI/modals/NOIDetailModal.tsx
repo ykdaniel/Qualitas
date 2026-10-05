@@ -1,4 +1,8 @@
+import { useDraftGuard } from '../../Shared/LeaveGuard';
+import FormActions from '../../Shared/FormActions';
+import actionStyles from '../../Shared/FormActions.module.css';
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useLanguage } from '../../../context/LanguageContext';
 import { useContractorsStore } from '../../../store/contractorsStore';
@@ -10,23 +14,42 @@ import type { NOIItem } from '../../../store/noiStore';
 import { validateStatusTransition, NOIStatusTransitions, NOIStatusTransitionList, validateRequiredFields, NOIValidationRules } from '../../../utils/statusValidation';
 import { checkDateOrder } from '../../../utils/dateValidation';
 import FileAttachment from '../../Shared/FileAttachment';
+import { exportNoiDocx } from '../../../services/api';
 import RelatedDocuments from '../../ui/RelatedDocuments';
 import styles from '../NOI.module.css';
 import formStyles from '../../Shared/FormShell.module.css';
 import { NOIDetailData } from '../NOITypes';
+import { DateIssueBanner } from '../../Shared/DateIssueMark';
+import { AttachmentsBlockedNotice, SaveFollowUpBanner } from '../../Shared/SaveFollowUpBanner';
+import { NOI_DATE_FIELDS, preserveHistoricalDates } from '../../../utils/dateIssues';
+import { followUpOf } from '../../../utils/saveFlow';
+import type { FollowUp, SaveOutcome } from '../../../utils/saveFlow';
+import { describeSaveError, presentOutcome } from '../../../utils/saveErrors';
 
 export interface NOIDetailModalProps {
     noiId: string | null;
     readOnly?: boolean;
+    /** false when the account may not upload / remove attachments (no update permission): the file controls are read-only and a notice says why. */
+    attachmentsAllowed?: boolean;
     existingData?: NOIDetailData;
     existingItem?: NOIItem;
     noiList: NOIItem[];
-    onSave: (details: NOIDetailData, pendingFiles: File[], deletedFileIds: string[]) => void | Promise<void>;
+    onSave: (details: NOIDetailData, pendingFiles: File[], deletedFileIds: string[]) => Promise<SaveOutcome>;
+    /** Retries only the unfinished file steps of a record that is already stored (never writes the record). */
+    onRetryFiles?: (pendingFiles: File[], deletedFileIds: string[]) => Promise<SaveOutcome>;
     onClose: () => void;
     onPrint?: (data: NOIDetailData) => void;
 }
 
-export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, readOnly = false, existingData, existingItem, noiList: _noiList, onSave, onClose, onPrint }) => {
+type ContactField = 'contacts' | 'phone' | 'email';
+type ContactSource = Record<ContactField, 'system' | 'user'>;
+const CONTACT_FIELD_LABEL_KEY: Record<ContactField, string> = {
+    contacts: 'contractors.contact',
+    phone: 'contractors.phone',
+    email: 'contractors.email',
+};
+
+export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, readOnly = false, existingData, existingItem, noiList: _noiList, onSave, onRetryFiles, onClose, onPrint, attachmentsAllowed = true }) => {
     const { t } = useLanguage();
     const { getActiveContractors } = useContractorsStore();
     const itpList = useITPStore(state => state.itpList);
@@ -64,7 +87,7 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
             };
         }
         const activeContractors = getActiveContractors();
-        const defaultContractor = activeContractors.length > 0 ? activeContractors[0].name : '';
+        const defaultContractorRecord = activeContractors.length > 0 ? activeContractors[0] : undefined;
         return {
             package: '',
             referenceNo: '',
@@ -75,10 +98,13 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
             eventNumber: '',
             checkpoint: '',
             type: '',
-            contractor: defaultContractor,
-            contacts: '',
-            phone: '',
-            email: '',
+            contractor: defaultContractorRecord?.name || '',
+            // Pre-selecting the first active contractor also pre-fills its contact
+            // info in the same initialization — these three stay marked 'system'
+            // below so a later contractor change can still safely overwrite them.
+            contacts: defaultContractorRecord?.contactPerson || '',
+            phone: defaultContractorRecord?.phone || '',
+            email: defaultContractorRecord?.email || '',
             status: 'Open',
             remark: '',
             closeoutDate: '',
@@ -88,7 +114,16 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
         };
     };
 
+    // A brand-new record's contact fields came from the pre-selected contractor
+    // ('system'); an existing record's contact fields are historical data and
+    // must never be silently overwritten by a later contractor change ('user').
+    const getInitialContactSource = (): ContactSource => {
+        const source: 'system' | 'user' = (existingData || existingItem) ? 'user' : 'system';
+        return { contacts: source, phone: source, email: source };
+    };
+
     const [formData, setFormData] = useState<NOIDetailData>(getInitialData());
+    const [contactSource, setContactSource] = useState<ContactSource>(getInitialContactSource());
 
     const filteredITPList = useMemo(() => {
         if (!formData.contractor) return [];
@@ -107,6 +142,9 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
     }, [validation]);
 
     const handleFieldChange = (field: keyof NOIDetailData, value: string) => {
+        if (field === 'contacts' || field === 'phone' || field === 'email') {
+            setContactSource(prev => ({ ...prev, [field]: 'user' }));
+        }
         setFormData(prev => {
             const updated = { ...prev, [field]: value };
             if (field === 'status' && prev.status) {
@@ -167,7 +205,35 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
         setPreviewName(name || '');
     };
 
+    const navigate = useNavigate();
     const [saving, setSaving] = useState(false);
+    const leaveGuard = useDraftGuard({ formData, pendingFiles, deletedFileIds }, saving, !readOnly);
+    const requestClose = () => leaveGuard.requestClose(onClose);
+    // Bumped once the pending files are stored on the server, so FileAttachment forgets them (a retry must not upload them twice).
+    const [syncToken, setSyncToken] = useState(0);
+
+    // What is still owed after a "saved, but a file step failed" outcome (see SaveFollowUpBanner).
+    const [followUp, setFollowUp] = useState<FollowUp | null>(null);
+    // Shared by "Save" and "retry remaining files": trims what already went through, shows the ONE message, closes only when done.
+    const applyOutcome = (outcome: SaveOutcome, created: boolean) => {
+        if (outcome.status === 'saved-incomplete') {
+            // The record is stored. Drop what already went through so a retry only redoes the rest.
+            if (outcome.uploadedCategories.includes('attachment')) {
+                setPendingFiles([]);
+                setSyncToken(n => n + 1);
+                // show the files that are on the server now (this modal's list comes from the form, not from a fetch)
+                const stored = (outcome.uploaded.attachment ?? []) as NOIDetailData['attachments'];
+                setFormData(prev => ({ ...prev, attachments: [...prev.attachments, ...stored] }));
+            }
+            setDeletedFileIds(outcome.remainingDeletes);
+            setFollowUp(prev => followUpOf(outcome, prev?.created ?? created));
+        } else if (outcome.status !== 'failed') {
+            setFollowUp(null);
+        }
+        const { close, notice } = presentOutcome(outcome, t);
+        if (notice) (notice.level === 'error' ? toast.error : toast.warning)(notice.text, { duration: 10000 });
+        if (close) { leaveGuard.release(); onClose(); }
+    };
 
     const handleSave = async () => {
         if (!validation.valid) {
@@ -200,14 +266,26 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
 
         setSaving(true);
         try {
-            const dataToSave: NOIDetailData = {
+            // an invalid stored date must not be erased by a blank <input type="date"> (it cannot display an invalid string)
+            const dataToSave: NOIDetailData = preserveHistoricalDates({
                 ...formData,
                 ncrNumber: formData.ncrNumber === 'N/A' ? '' : formData.ncrNumber,
-            };
-            await onSave(dataToSave, pendingFiles, deletedFileIds);
-            onClose();
+            }, existingItem, NOI_DATE_FIELDS);
+            applyOutcome(await onSave(dataToSave, pendingFiles, deletedFileIds), !existingItem);
         } catch (err) {
-            toast.error((err as Error)?.message || t('common.saveFailed'));
+            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
+        } finally {
+            setSaving(false);
+        }
+    };
+    // Retries only the unfinished file steps: the record itself is not written (that needs update permission the user may not have).
+    const retryFiles = async () => {
+        if (!onRetryFiles) return;
+        setSaving(true);
+        try {
+            applyOutcome(await onRetryFiles(pendingFiles, deletedFileIds), false);
+        } catch (err) {
+            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
         } finally {
             setSaving(false);
         }
@@ -218,9 +296,12 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
             <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
                 <div className={formStyles.modalHeader}>
                     <h2>{readOnly ? t('noi.viewTitle') : existingData || existingItem ? t('noi.editTitle') : t('noi.addTitle')}</h2>
-                    <button className={formStyles.closeButton} onClick={onClose}>×</button>
+                    <button className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={requestClose}>×</button>
                 </div>
                 <div className={formStyles.modalBody}>
+                    <DateIssueBanner item={existingItem} />
+                    {!readOnly && !attachmentsAllowed && <AttachmentsBlockedNotice creating={!existingItem} />}
+                    <SaveFollowUpBanner followUp={followUp} canEditFields={!readOnly} canRetry={attachmentsAllowed} busy={saving} onRetry={() => { void retryFiles(); }} />
                     {!readOnly && (
                     <p className={formStyles.formRequiredHint}>{t('form.requiredHint')}</p>
                     )}
@@ -241,19 +322,34 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
                                         className={`${formStyles.formSelect}${errors.contractor ? ' ' + formStyles.errorInput : ''}`}
                                         value={formData.contractor}
                                         onChange={(e) => {
-                                            const selected = getActiveContractors().find(c => c.name === e.target.value);
-                                            setFormData(prev => ({
-                                                ...prev,
-                                                contractor: e.target.value,
-                                                itpNo: '',
-                                                // Default from the contractor's own contact info instead of
-                                                // making the user retype it on every NOI — only fills empty
-                                                // fields, never overwrites a contact already typed for this
-                                                // specific inspection.
-                                                contacts: prev.contacts || selected?.contactPerson || '',
-                                                phone: prev.phone || selected?.phone || '',
-                                                email: prev.email || selected?.email || '',
-                                            }));
+                                            const newContractorName = e.target.value;
+                                            if (!newContractorName) {
+                                                // Clearing the contractor selection does not touch the
+                                                // contact fields or their source status — those values
+                                                // may already be user-confirmed for this inspection.
+                                                setFormData(prev => ({ ...prev, contractor: '', itpNo: '' }));
+                                                return;
+                                            }
+                                            const selected = getActiveContractors().find(c => c.name === newContractorName);
+                                            // Computed from the current contactSource BEFORE calling setFormData:
+                                            // the functional updater passed below is not guaranteed to run
+                                            // synchronously, so any decision that depends on "what happened in
+                                            // the updater" must not be derived from a side effect inside it.
+                                            const systemFields = (['contacts', 'phone', 'email'] as ContactField[]).filter(f => contactSource[f] === 'system');
+                                            const keptFields = (['contacts', 'phone', 'email'] as ContactField[]).filter(f => contactSource[f] !== 'system');
+                                            setFormData(prev => {
+                                                const next = { ...prev, contractor: newContractorName, itpNo: '' };
+                                                systemFields.forEach(field => {
+                                                    // System-sourced fields always follow the newly selected
+                                                    // contractor, including when that contractor's own field is blank.
+                                                    next[field] = (field === 'contacts' ? selected?.contactPerson : selected?.[field]) || '';
+                                                });
+                                                return next;
+                                            });
+                                            if (keptFields.length > 0) {
+                                                const fieldLabels = keptFields.map(f => t(CONTACT_FIELD_LABEL_KEY[f])).join('、');
+                                                toast.info(t('noi.contactKeptOnContractorChange', { fields: fieldLabels }));
+                                            }
                                         }}
                                     >
                                         <option value="">{t('common.selectPlaceholder')}</option>
@@ -358,24 +454,35 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
                                 <div className={formStyles.formGroup}>
                                     <label className={formStyles.requiredLabel}>{t('contractors.contact')}</label>
                                     <input type="text" className={`${formStyles.formInput}${errors.contacts ? ' ' + formStyles.errorInput : ''}`} value={formData.contacts} onChange={(e) => handleFieldChange('contacts', e.target.value)} />
+                                    {contactSource.contacts === 'system' && formData.contacts && (
+                                        <small className={formStyles.fieldHint}>{t(formData.contractor ? 'noi.contactFromContractor' : 'noi.contactFromPreviousContractor')}</small>
+                                    )}
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label className={formStyles.requiredLabel}>{t('contractors.phone')}</label>
                                     <input type="tel" className={`${formStyles.formInput}${errors.phone ? ' ' + formStyles.errorInput : ''}`} value={formData.phone} onChange={(e) => handleFieldChange('phone', e.target.value)} />
+                                    {contactSource.phone === 'system' && formData.phone && (
+                                        <small className={formStyles.fieldHint}>{t(formData.contractor ? 'noi.contactFromContractor' : 'noi.contactFromPreviousContractor')}</small>
+                                    )}
                                 </div>
                                 <div className={formStyles.formGroupFull}>
                                     <label className={formStyles.requiredLabel}>{t('contractors.email')}</label>
                                     <input type="email" className={`${formStyles.formInput}${errors.email ? ' ' + formStyles.errorInput : ''}`} value={formData.email} onChange={(e) => handleFieldChange('email', e.target.value)} />
+                                    {contactSource.email === 'system' && formData.email && (
+                                        <small className={formStyles.fieldHint}>{t(formData.contractor ? 'noi.contactFromContractor' : 'noi.contactFromPreviousContractor')}</small>
+                                    )}
                                 </div>
                             </div>
                         </div>
                         <div className={formStyles.formSection}>
                             <FileAttachment
+                                readOnly={!attachmentsAllowed}
                                 attachments={formData.attachments}
                                 onPendingFilesChange={handlePendingFilesChange}
                                 onRemoveLegacy={handleRemoveLegacyAttachment}
                                 onDeleteExistingFile={handleDeleteExistingFile}
                                 onPreview={handlePreview}
+                                syncToken={syncToken}
                                 entityType="noi"
                                 entityId={existingItem?.id}
                                 category="attachment"
@@ -414,33 +521,60 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
                                 <div className={formStyles.formGroupFull}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                                         <label style={{ marginBottom: 0 }}>{t('common.remark')}</label>
-                                        <button type="button" className={styles.addDateBtn} style={{ padding: '4px 12px', fontSize: '12px', backgroundColor: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: '4px', cursor: 'pointer' }} onClick={() => { const dateStr = new Date().toLocaleDateString(); const newRemark = formData.remark ? `${formData.remark}\n${dateStr}: ` : `${dateStr}: `; handleFieldChange('remark', newRemark); }}>{t('common.addDate')}</button>
+                                        <button className={actionStyles.compact} type="button" onClick={() => { const dateStr = new Date().toLocaleDateString(); const newRemark = formData.remark ? `${formData.remark}\n${dateStr}: ` : `${dateStr}: `; handleFieldChange('remark', newRemark); }}>{t('common.addDate')}</button>
                                     </div>
                                     <textarea className={formStyles.formTextarea} value={formData.remark} onChange={(e) => handleFieldChange('remark', e.target.value)} rows={4} />
                                 </div>
                             </div>
                         </div>
                         {existingItem?.id && (
-                            <RelatedDocuments entityType="noi" entityId={existingItem.id} />
+                            <RelatedDocuments
+                                entityType="noi"
+                                entityId={existingItem.id}
+                                onOpen={(entityType, id) => {
+                                    // Only ITR has a confirmed, symmetric ?openId= consumer
+                                    // (ITR.tsx) plus its own existing navigate(-1) return path.
+                                    // Every other related-document type keeps its original
+                                    // unfiltered-list navigation — unchanged from before this fix.
+                                    if (entityType === 'itr') {
+                                        navigate(`/itr?openId=${encodeURIComponent(id)}`);
+                                        return;
+                                    }
+                                    navigate(`/${entityType}`);
+                                }}
+                            />
                         )}
                     </div>
                     </fieldset>
                 </div>
-                <div className={formStyles.modalActions}>
-                    {onPrint && (
-                        <button
-                            className={formStyles.printButton}
-                            onClick={() => onPrint(formData)}
-                            style={{ marginRight: 'auto' }} // Push to left
-                        >
-                            {t('common.print')}
-                        </button>
-                    )}
-                    {!readOnly && (
-                        <button className={formStyles.saveButton} onClick={handleSave} disabled={saving || !isFormValid} title={!isFormValid ? t('form.requiredHint') : undefined}>{saving ? t('common.saving') || 'Saving...' : t('common.save')}</button>
-                    )}
-                    <button className={formStyles.cancelButton} onClick={onClose} disabled={saving}>{t('common.cancel')}</button>
-                </div>
+                <FormActions
+                    tools={<>
+                        {onPrint && (
+                            <button className={actionStyles.secondary}
+                                onClick={() => onPrint(formData)} // Push to left
+                            >
+                                {t('common.print')}
+                            </button>
+                        )}
+                        {/* Needs a real saved record id to call the export endpoint — same
+                            existingItem?.id gate ITR's "Export Word" button uses. */}
+                        {existingItem?.id && (
+                            <button className={actionStyles.secondary}
+                                onClick={() => exportNoiDocx(existingItem.id, formData.referenceNo || 'NOI')}
+                            >
+                                {t('itr.exportWord') || 'Export Word'}
+                            </button>
+                        )}
+                    </>}
+                    cancel={<>
+                        <button className={actionStyles.secondary} onClick={requestClose} disabled={saving}>{t('common.cancel')}</button>
+                    </>}
+                    primary={<>
+                        {!readOnly && (
+                            <button className={actionStyles.primary} onClick={handleSave} disabled={saving || !isFormValid} title={!isFormValid ? t('form.requiredHint') : undefined}>{saving ? t('common.saving') || 'Saving...' : t('common.save')}</button>
+                        )}
+                    </>}
+                />
             </div>
             {previewUrl && (
                 <div className={styles.previewOverlay} onClick={() => setPreviewUrl(null)}>

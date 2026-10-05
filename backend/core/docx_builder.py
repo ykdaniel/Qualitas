@@ -283,6 +283,75 @@ def add_photo_section(doc: Document, title: str, image_paths: list):
                 _run_font(cp.add_run("（圖片載入失敗 image failed to load）"), Pt(8))
 
 
+def add_paragraph(doc: Document, text: str, size=10.5, bold: bool = False, italic: bool = False):
+    """A single plain paragraph with the house font applied — for free-standing
+    text (a sub-heading, a "no data" note) that doesn't fit any of the more
+    specific helpers above. Thin public wrapper around `_run_font` so callers
+    outside this module never need to reach into the underscore-prefixed
+    internals directly."""
+    p = doc.add_paragraph()
+    r = p.add_run(text)
+    _run_font(r, Pt(size), bold=bold)
+    if italic:
+        r.font.italic = True
+    return p
+
+
+def add_data_table(doc: Document, headers: list, rows: list):
+    """Generic multi-column repeated-row data table (e.g. a Checklist's
+    Item/Criteria/Situation/Result grid) — `add_field_grid` is a fixed
+    label/value 2-column pattern and doesn't fit this shape. `rows` is a
+    list of row-lists of cell strings; a cell containing `\\n` is split into
+    separate paragraphs WITHIN that cell — a literal `\\n` character placed
+    in a single python-docx paragraph does not render as a line break in
+    Word, so this is required to actually preserve multi-line content (the
+    same newline-preservation problem already solved for the web print view
+    in ITRPrintPreview, here solved for the .docx cell equivalent). First
+    consumer: ITR's export_docx (ITR-EXPORT-DOCX-2026-001)."""
+    n_cols = len(headers)
+    table = doc.add_table(rows=1, cols=n_cols)
+    table.style = "Table Grid"
+    header_cells = table.rows[0].cells
+    for i, h in enumerate(headers):
+        _shade_cell(header_cells[i], _LABEL_SHADE)
+        _vcenter(header_cells[i])
+        hp = header_cells[i].paragraphs[0]
+        _run_font(hp.add_run(h), Pt(9), bold=True)
+    for row in rows:
+        cells = table.add_row().cells
+        for i, value in enumerate(row):
+            if i >= n_cols:
+                break
+            cell = cells[i]
+            lines = str(value if value is not None else DASH).split("\n")
+            first_p = cell.paragraphs[0]
+            _run_font(first_p.add_run(lines[0]), Pt(9))
+            for extra_line in lines[1:]:
+                p = cell.add_paragraph()
+                _run_font(p.add_run(extra_line), Pt(9))
+    return table
+
+
+def add_file_list(doc: Document, title: str, paths: list):
+    """`paths`: local filesystem paths of non-photo attachments (drawings,
+    certificates, general documents — anything that isn't necessarily an
+    image, so `add_photo_section`'s `run.add_picture()` would often just
+    silently fail for these). Lists each file's basename instead of
+    attempting to embed it. First consumer: ITR's export_docx
+    (ITR-EXPORT-DOCX-2026-001)."""
+    p = doc.add_paragraph()
+    _run_font(p.add_run(title), Pt(10.5), bold=True)
+    if not paths:
+        np = doc.add_paragraph()
+        r = np.add_run("（無附件 No attachments）")
+        _run_font(r, Pt(9))
+        r.font.italic = True
+        return
+    for path in paths:
+        lp = doc.add_paragraph(style="List Bullet")
+        _run_font(lp.add_run(os.path.basename(path)), Pt(9.5))
+
+
 def finalize_response(doc: Document, filename_base: str) -> StreamingResponse:
     """Serialize + StreamingResponse with a browser-safe filename header —
     same convention as km_service.py's export_docx."""

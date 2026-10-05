@@ -1,11 +1,13 @@
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 import schemas
 from core.dependencies import RoleChecker, get_noi_service, get_related_service
 from core.perms import NOI_CREATE, NOI_DELETE, NOI_UPDATE, NOI_VIEW
 from core.scope import Scope, ScopeForbidden, get_scope
+from core.strict_dates import DateValidationError
 from database import get_db
 from services.noi_service import NOIService
 from services.related_service import RelatedService
@@ -25,6 +27,7 @@ def read_nois(
     status: str = None,
     start_date: str = None,
     end_date: str = None,
+    project_id: str = None,
     noi_service: NOIService = Depends(get_noi_service),
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(NOI_VIEW))
@@ -36,6 +39,7 @@ def read_nois(
         status=status,
         start_date=start_date,
         end_date=end_date,
+        project_id=project_id,
         scope=scope,
     )
 
@@ -50,6 +54,19 @@ def read_noi(
     if db_noi is None:
         raise HTTPException(status_code=404, detail="NOI not found")
     return db_noi
+
+@router.get("/{noi_id}/export-docx", response_class=StreamingResponse)
+def export_noi_docx(
+    noi_id: str,
+    noi_service: NOIService = Depends(get_noi_service),
+    scope: Scope = Depends(get_scope),
+    current_user: schemas.User = Depends(RoleChecker(NOI_VIEW))
+):
+    """Formal .docx export of the Notice of Inspection (NOI-EXPORT-DOCX-2026-001)."""
+    try:
+        return noi_service.export_docx(noi_id=noi_id, scope=scope)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 # 寫入操作 - 需要認證
 @router.post("/", response_model=schemas.NOI)
@@ -66,6 +83,8 @@ def create_noi(
         )
     except ScopeForbidden as e:
         raise HTTPException(status_code=403, detail=str(e))
+    except DateValidationError as e:
+        raise HTTPException(status_code=422, detail=e.http_detail())
 
 @router.post("/bulk/", response_model=list[schemas.NOI])
 def create_nois_bulk(
@@ -84,6 +103,8 @@ def create_nois_bulk(
             ))
     except ScopeForbidden as e:
         raise HTTPException(status_code=403, detail=str(e))
+    except DateValidationError as e:
+        raise HTTPException(status_code=422, detail=e.http_detail())
     return created
 
 @router.put("/{noi_id}/", response_model=schemas.NOI)
@@ -101,6 +122,8 @@ def update_noi(
         )
     except ScopeForbidden as e:
         raise HTTPException(status_code=403, detail=str(e))
+    except DateValidationError as e:
+        raise HTTPException(status_code=422, detail=e.http_detail())
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if db_noi is None:

@@ -11,11 +11,13 @@ from typing import List, Optional
 import models
 import schemas
 from repositories.noi_repository import NOIRepository
+from core import strict_dates
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
 from core.utils import (
     _json_serialize,
     _reference_seq_lock,
     _resolve_vendor_id,
+    begin_write_transaction,
     generate_reference_no,
     log_audit,
     WorkflowEngine
@@ -24,6 +26,17 @@ from core import error_messages
 from core import validators
 
 logger = logging.getLogger(__name__)
+
+
+def noi_has_own_qworkflow(ncr_number) -> bool:
+    """THE rule for "does this NOI get a Q-WorkFlow row of its own?" (2026-09-20) — used by the create path AND by the
+    start-up back-fill (db_migrations._backfill_qworkflows), so the two can never disagree.
+
+    A NOI carrying an ``ncrNumber`` is a RE-INSPECTION NOI: it shares the original NOI's tracker (the re-inspection
+    progress is found through NCR.reInspectionNumber / ITR.originalItrId), and a second row would double-count the
+    thread. Recognition is exactly Python truthiness of the stored value — NULL and '' are "no ncrNumber"; anything else
+    (including whitespace) is one. No trimming and no other normalisation is applied, here or anywhere that calls this."""
+    return not ncr_number
 
 
 class NOIService:
@@ -71,6 +84,14 @@ class NOIService:
         - Serializes JSON fields (attachments)
         - Logs audit trail
 
+        ONE transaction (2026-09-20): the NOI row, its reference-number allocation, the paired Q-WorkFlow
+        row (unless it is a re-inspection NOI) and the strict CREATE audit entry are written under one
+        write lock and committed ONCE, at the end. Any failure — including the Q-WorkFlow insert and the
+        audit entry, which are no longer allowed to fail silently — rolls all of it back, sequence
+        included. (Before, the NOI was committed first and the Q-WorkFlow row and audit entry were only
+        flushed/added and never committed, so they were lost and the tracker stayed empty until the
+        start-up back-fill.)
+
         Args:
             noi_create: NOI creation schema
             user_id: ID of user creating the NOI
@@ -99,6 +120,13 @@ class NOIService:
             if data.get('itpNo'):
                 validators.validate_itp_reference(self.repo.db, data['itpNo'])
 
+            # final content validated before the write lock / any reference number (2026-09-20)
+            strict_dates.validate_date_write(data, strict_dates.NOI_DATE_FIELDS, required=strict_dates.NOI_REQUIRED_DATE_FIELDS)
+
+            # From here on everything is written in ONE transaction: take the write lock before the
+            # sequence is read (see begin_write_transaction).
+            begin_write_transaction(self.repo.db)
+
             # Generate Reference No automatically if not provided
             if not data.get('referenceNo'):
                 data['referenceNo'] = generate_reference_no(
@@ -114,8 +142,8 @@ class NOIService:
             if not db_noi.id:
                 db_noi.id = str(uuid.uuid4())
 
-            # Save to database
-            created = self.repo.create(db_noi)
+            # Insert the NOI (flush only — the commit is the single one at the end)
+            created = self.repo.create(db_noi, commit=False)
 
             # Auto-create the paired Q-WorkFlow row. A Q-WorkFlow is
             # 1:1 with an NOI and drives the cross-module tracker on
@@ -130,17 +158,26 @@ class NOIService:
             # re-insp ITR they carry is picked up by the original
             # Q-WorkFlow via ``NCR.reInspectionNumber`` / the typed
             # ``ITR.originalItrId`` relationship.
-            if not data.get('ncrNumber'):
+            if noi_has_own_qworkflow(data.get('ncrNumber')):
                 self._create_qworkflow_for_noi(created)
 
-            # Log audit trail
+            # Audit entry: strict — an unrecordable create is not saved at all
             log_audit(
                 self.repo.db, "CREATE", "NOI", created.id, created.referenceNo,
-                new_value=noi_create.model_dump(), user_id=user_id, username=username
+                new_value=noi_create.model_dump(), user_id=user_id, username=username,
+                strict=True,
             )
 
+            # NOI + reference sequence + Q-WorkFlow + audit: ONE commit
+            self.repo.db.flush()
+            self.repo.db.commit()
+            self.repo.db.refresh(created)
             return created
+        except strict_dates.DateValidationError:
+            self.repo.db.rollback()            # expected refusal (422): nothing was written
+            raise
         except Exception as e:
+            self.repo.db.rollback()            # releases the write lock; nothing of this create survives
             logger.error(f"Error creating NOI: {e}", exc_info=True)
             raise e
 
@@ -185,6 +222,17 @@ class NOIService:
             # Prepare update data
             d = noi_update.model_dump(exclude_unset=True)
             d = _json_serialize(d, ['attachments'])
+
+            # Date rules on the merged final content, BEFORE anything is numbered or written (2026-09-20). NOI used to have NO
+            # date validation on update: a bad value (or NULL in a required date) was saved, then the response failed with 500.
+            # A value re-sent unchanged (historical data) is not a new write; NOI has no order rules (unchanged).
+            strict_dates.validate_date_write(
+                {f: d[f] if f in d else getattr(db_noi, f, None) for f in strict_dates.NOI_DATE_FIELDS},
+                strict_dates.NOI_DATE_FIELDS,
+                stored={f: getattr(db_noi, f, None) for f in strict_dates.NOI_DATE_FIELDS},
+                provided=set(d) & set(strict_dates.NOI_DATE_FIELDS),
+                required=strict_dates.NOI_REQUIRED_DATE_FIELDS,
+            )
 
             # Handle contractor name -> vendor_id mapping
             if 'contractor' in d:
@@ -300,41 +348,38 @@ class NOIService:
         per-vendor or per-project, so we don't need the shared
         reference_sequences table. Any parse failure on an existing
         row is ignored (treated as 0) so a hand-edited DB can't break
-        startup. If the QWorkflow insert somehow fails we log and
-        swallow — NOI creation must not be blocked by tracker
-        bookkeeping.
+        startup. Only the flush happens here: the row is committed by the
+        caller together with the NOI and its audit entry. A failure is
+        NOT swallowed any more (2026-09-20) — the whole NOI create rolls
+        back, because a NOI without its tracker row would be silently
+        missing from the workflow page.
         """
         from datetime import datetime, timezone
 
-        try:
-            with _reference_seq_lock:
-                existing = (
-                    self.repo.db.query(models.QWorkflow.referenceNo)
-                    .with_for_update()
-                    .all()
-                )
-                max_seq = 0
-                for (ref,) in existing:
-                    if not ref or not ref.startswith("Q-WorkFlow-"):
-                        continue
-                    try:
-                        max_seq = max(max_seq, int(ref.split("-")[-1]))
-                    except ValueError:
-                        continue
-
-                next_ref = f"Q-WorkFlow-{max_seq + 1:06d}"
-                qwf = models.QWorkflow(
-                    id=str(uuid.uuid4()),
-                    referenceNo=next_ref,
-                    noi_id=noi.id,
-                    createdAt=datetime.now(timezone.utc).isoformat(),
-                )
-                self.repo.db.add(qwf)
-                self.repo.db.flush()
-        except Exception as e:
-            logger.warning(
-                f"Failed to create Q-WorkFlow for NOI {noi.id}: {e}"
+        with _reference_seq_lock:
+            existing = (
+                self.repo.db.query(models.QWorkflow.referenceNo)
+                .with_for_update()
+                .all()
             )
+            max_seq = 0
+            for (ref,) in existing:
+                if not ref or not ref.startswith("Q-WorkFlow-"):
+                    continue
+                try:
+                    max_seq = max(max_seq, int(ref.split("-")[-1]))
+                except ValueError:
+                    continue
+
+            next_ref = f"Q-WorkFlow-{max_seq + 1:06d}"
+            qwf = models.QWorkflow(
+                id=str(uuid.uuid4()),
+                referenceNo=next_ref,
+                noi_id=noi.id,
+                createdAt=datetime.now(timezone.utc).isoformat(),
+            )
+            self.repo.db.add(qwf)
+            self.repo.db.flush()
 
     def delete_noi(self, noi_id: str, user_id: int = None, username: str = None, scope=None) -> bool:
         """
@@ -383,3 +428,93 @@ class NOIService:
         except Exception as e:
             logger.error(f"Error deleting NOI {noi_id}: {e}", exc_info=True)
             raise e
+
+    def export_docx(self, noi_id: str, scope=None):
+        """
+        Generate a formal .docx export of a Notice of Inspection
+        (NOI-EXPORT-DOCX-2026-001), mirroring ITRService.export_docx's
+        approach (itself mirroring NCRService.export_docx): built directly
+        with python-docx via core/docx_builder.py.
+
+        Unlike ITR, NOI's `itpNo` is a real persisted FK (not a dead field),
+        so no NOI->ITP derivation is needed here — it's read straight off
+        the record. NOI also has no linked-Checklist display of its own in
+        the frontend (that relationship is architecturally "the NOI
+        triggers checklists that end up on the resulting ITR"), so no
+        Checklist table is included, unlike ITR's export. NOI's single
+        attachment category accepts images/PDF/Word/Excel (not image-only,
+        confirmed by reading FileAttachment's default `accept`), so
+        attachments are listed by filename (`add_file_list`), not embedded
+        as photos (`add_photo_section`).
+
+        Returns a StreamingResponse; raises ValueError (-> 404 in the
+        router) if the NOI doesn't exist or isn't in the caller's scope.
+        """
+        import json
+        from core import docx_builder as db
+        from core.uploads import upload_root as _upload_root
+
+        noi = self.get_noi(noi_id, scope=scope)
+        if not noi:
+            raise ValueError("NOI not found")
+
+        upload_root = _upload_root()
+
+        def _parse_json_list(raw):
+            if not raw:
+                return []
+            try:
+                parsed = json.loads(raw)
+                return parsed if isinstance(parsed, list) else []
+            except (TypeError, ValueError):
+                return []
+
+        def _attachment_paths(legacy_value, category: str) -> list:
+            legacy = [u for u in _parse_json_list(legacy_value) if isinstance(u, str)]
+            attachments = self.repo.db.query(models.Attachment).filter(
+                models.Attachment.entity_type == "noi",
+                models.Attachment.entity_id == noi_id,
+                models.Attachment.category == category,
+                models.Attachment.is_deleted == False,  # noqa: E712
+            ).all()
+            urls = legacy + [a.file_path for a in attachments]
+            paths = []
+            for u in urls:
+                p = db.resolve_local_upload_path(u, upload_root)
+                if p:
+                    paths.append(p)
+            return paths
+
+        general_attachments = _attachment_paths(noi.attachments, "attachment")
+
+        doc = db.new_document()
+        db.add_masthead(
+            doc, "檢驗通知單", "NOTICE OF INSPECTION",
+            doc_no=noi.referenceNo, status=noi.status,
+        )
+
+        db.add_field_grid(doc, [
+            [("編號", "Reference No.", noi.referenceNo), ("承包商", "Contractor", noi.contractor)],
+            [("NCR 編號", "NCR Reference", noi.ncrNumber), ("主旨", "Package", noi.package)],
+            [("關聯 ITP", "Related ITP", noi.itpNo), ("檢驗點", "Checkpoint", noi.checkpoint)],
+            [("發文日期", "Issue Date", noi.issueDate), ("檢驗日期", "Inspection Date", noi.inspectionDate)],
+            [("到期日", "Due Date", noi.dueDate), ("檢驗時間", "Inspection Time", noi.inspectionTime)],
+            [("事件編號", "Event No.", noi.eventNumber), ("結案日期", "Close-out Date", noi.closeoutDate)],
+            [("聯絡人", "Contacts", noi.contacts), ("電話", "Phone", noi.phone)],
+            [("Email", "Email", noi.email), ("狀態", "Status", noi.status)],
+        ])
+
+        if noi.remark:
+            db.add_subsection_heading(doc, "備註", "Remark")
+            db.add_field_box(doc, value=noi.remark)
+
+        if general_attachments:
+            db.add_file_list(doc, "附件 Attachments", general_attachments)
+
+        db.add_sign_off_grid(doc, [
+            {"num": "1", "zh": "製表", "en": "Prepared By"},
+            {"num": "2", "zh": "複核", "en": "Reviewed By"},
+            {"num": "3", "zh": "核准", "en": "Approved By"},
+        ])
+
+        return db.finalize_response(doc, noi.referenceNo or "NOI")

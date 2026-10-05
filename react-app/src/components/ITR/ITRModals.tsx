@@ -1,3 +1,6 @@
+import { useDraftGuard } from '../Shared/LeaveGuard';
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { toast } from 'sonner';
@@ -7,6 +10,7 @@ import { useChecklistStore } from '../../store/checklistStore';
 import { ShieldCheck, ClipboardCheck, ArrowRight, AlertCircle, Info } from 'lucide-react';
 import { getNextRevision } from '../../utils/revision';
 import { useLanguage } from '../../context/LanguageContext';
+import ITRApprovalHistoryModal from './ITRApprovalHistoryModal';
 import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useNOIStore } from '../../store/noiStore';
@@ -26,11 +30,15 @@ import {
     unlinkChecklistFromITR,
     createNcrFromItr,
     createReinspectionItr,
+    revokeItrApproval,
+    exportItrDocx,
     type ChecklistRecordApi,
 } from '../../services/api';
 import FileAttachment from '../Shared/FileAttachment';
+import { CollapsibleSection } from '../Shared/CollapsibleSection';
 import RelatedDocuments from '../ui/RelatedDocuments';
 import ConfirmModal from '../Shared/ConfirmModal';
+import { itemCounts, summarizeItems, ongoingProgress, isNaPending, failuresSoFar, classifyResult } from '../../utils/checklistResult';
 import styles from './ITR.module.css';
 
 import formStyles from '../Shared/FormShell.module.css';
@@ -89,10 +97,13 @@ export interface ITRDetailModalProps {
     // NCR / Re-inspect), so it doesn't fight with onClose's own navigate(-1)
     // when this modal happened to be opened via ?openId=.
     onDismiss?: () => void;
+    // Called after a revoke-approval succeeds, so the parent can reload the
+    // backend state (refetch) and close/reopen this modal against it.
+    onRevoked?: () => void | Promise<void>;
     readOnly?: boolean;
 }
 
-export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingData, existingItem, itrList: _propItrList, onSave, onClose, onDismiss, readOnly = false }) => {
+export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingData, existingItem, itrList: _propItrList, onSave, onClose, onDismiss, onRevoked, readOnly = false }) => {
     const { t } = useLanguage();
     const { hasPermission } = useAuth();
     const { getActiveContractors } = useContractorsStore();
@@ -106,6 +117,14 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
 
 
     const allChecklists = useChecklistStore(state => state.records);
+    // Lookup for the "source template" display on each linked instance —
+    // allChecklists only ever holds templates (see checklistStore.ts /
+    // backend's default itrId=NULL list filter), so this never resolves to
+    // another instance.
+    const templateById = useMemo(
+        () => new Map(allChecklists.map(c => [c.id, c])),
+        [allChecklists]
+    );
     const itpList = useITPStore(state => state.itpList);
 
     // Initialize form data from existing data or existing item
@@ -197,6 +216,19 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
     };
 
     const [formData, setFormData] = useState<ITRDetailData>(getInitialData());
+
+    // Related ITP is derived live from the linked NOI (noi.itpNo -> itp.referenceNo), not stored
+    // on the ITR itself — confirmed by reading backend/models.py and backend/schemas.py that ITR
+    // has no persisted itpNo column; the old <select> here let a user pick a value that was
+    // silently discarded on save (ITR-INPUT-UX-2026-001 finding). Deriving it fresh on every
+    // render, from data already loaded for the NOI select above, is correct both right after
+    // picking a NOI and after reopening a saved record — there is nothing to desync.
+    const relatedItp = useMemo(() => {
+        if (!formData.noiNumber) return null;
+        const linkedNoi = noiList.find(n => n.referenceNo === formData.noiNumber);
+        if (!linkedNoi?.itpNo) return null;
+        return itpList.find(i => i.referenceNo === linkedNoi.itpNo) || null;
+    }, [formData.noiNumber, noiList, itpList]);
     const [showPrintPreview, setShowPrintPreview] = useState(false);
 
     const [pendingUploads, setPendingUploads] = useState<PendingUploads[]>([
@@ -251,8 +283,9 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
     // Persist edits to an instance (the inspection results live on this row).
     const saveInstance = async (instanceId: string, snap: any) => {
         const items = snap.data?.items || snap.items || [];
-        const passCount = items.filter((i: any) => i.result === 'O').length;
-        const failCount = items.filter((i: any) => i.result === 'X').length;
+        // Counts are exactly the number of O / X items — the backend rejects
+        // any other value, and never trusts these for a Pass on their own.
+        const { passCount, failCount } = itemCounts(items);
         try {
             await updateChecklist(instanceId, {
                 status: snap.status,
@@ -266,11 +299,37 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
             await refreshInstances();
         } catch (e: any) {
             toast.error(e?.response?.data?.detail || (e as Error)?.message || 'Failed to save checklist');
+            // Rethrow so the snapshot panel stays open with every entry
+            // (including any N/A reasons) intact instead of closing on failure.
+            throw e;
         }
+    };
+
+    // Reopen a closed (Pass/Fail) instance. Sends ONLY the status change — the
+    // results, observations and N/A reasons stay exactly as saved, nothing is
+    // cleared or rewritten. The backend's own Reopen path enforces
+    // checklist:close:all, the parent-ITR lock and the audit entry. A failed
+    // request rejects (the panel stays locked and shows why); the panel only
+    // unlocks once the reloaded backend state actually says Ongoing.
+    const reopenInstance = async (instanceId: string): Promise<{ reloaded: boolean }> => {
+        await updateChecklist(instanceId, { status: 'Ongoing' });
+        try {
+            setInstances(await getChecklists({ itrId: persistedItrId } as any));
+        } catch {
+            toast.warning(t('checklist.reopen.reloadFailed'));
+            return { reloaded: false };
+        }
+        toast.success(t('checklist.reopen.success'));
+        return { reloaded: true };
     };
 
     // Backward-compat alias for the few read-only references below.
     const linkedChecklists = instances;
+    // Ongoing checklists that are Ongoing for a reason the user must see (same rule/wording as the snapshot and the
+    // list rows): "contains N/A, pending, cannot be approved", and failures already found while items are unfilled.
+    const ongoingSummaries = linkedChecklists.filter(c => c.status === 'Ongoing').map(c => summarizeItems(parseInstance(c).items));
+    const naPendingCount = ongoingSummaries.filter(isNaPending).length;
+    const failSoFarTotal = ongoingSummaries.reduce((n, s) => n + failuresSoFar(s), 0);
 
     const VERSION_OPTIONS = ['Rev1.0', 'Rev2.0', 'Rev3.0', 'Rev4.0'];
     const [versionMode, setVersionMode] = useState<'select' | 'custom'>(() => {
@@ -287,10 +346,44 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
     // endpoints that pre-populate the new record from this ITR).
     const [spawning, setSpawning] = useState<'ncr' | 'reinspect' | null>(null);
 
-    // 勾稽鎖定：Approved/Void 後全欄鎖定，防止已批准 ITR 被竄改
-    const isLocked = formData.status === 'Approved' || formData.status === 'Void';
+    // Revoke-approval dialog. The reason is kept in state across a failed
+    // attempt so the user doesn't have to retype it.
+    const [revokeOpen, setRevokeOpen] = useState(false);
+    const [historyOpen, setHistoryOpen] = useState(false);       // read-only approval history
+    const [revokeReason, setRevokeReason] = useState('');
+    const [revokeError, setRevokeError] = useState<string | null>(null);
+    const [revoking, setRevoking] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const leaveGuard = useDraftGuard({ formData, pendingUploads, deletedFileIds }, saving || revoking || !!spawning, !readOnly);
+    const requestClose = () => leaveGuard.requestClose(onClose, true);
+
+    // 勾稽鎖定：Approved/Void 後全欄鎖定，防止已批准 ITR 被竄改。
+    //
+    // Deliberately keyed on the PERSISTED status (existingItem?.status, as
+    // last fetched from the backend) — NOT formData.status. formData.status
+    // changes the instant the user picks a new option in the dropdown,
+    // before anything is saved; keying isLocked on it meant selecting
+    // "Approved" locked the form (and hid the Save button) immediately,
+    // making it impossible to ever submit the approval at all (2026-09-19
+    // browser-verified bug). Once the save actually succeeds, the parent
+    // refetches and this modal is reopened with a fresh existingItem whose
+    // .status now reflects the persisted Approved state — isLocked only
+    // becomes true then.
+    const persistedStatus = existingItem?.status;
+    const isLocked = persistedStatus === 'Approved' || persistedStatus === 'Void';
     // NOI 一旦儲存後不可再更換（避免勾稽關聯斷裂）
     const noiSaved = !!(existingItem?.noiNumber);
+    // FORMS-CONSISTENCY-2026-001: the `readOnly` prop only reflects permission
+    // (ITR.tsx: `readOnly={!hasPermission('itr:update:all')}`) — it does not
+    // account for isLocked (Approved/Void), unlike NOI/NCR's own readOnly
+    // computation which already folds their own lock state in. That made the
+    // title stay "Edit ITR" and the Cancel button stay "Cancel" even when the
+    // record is Approved and nothing can actually be saved (Save itself is
+    // already correctly hidden via `!isLocked && !readOnly` below — only the
+    // title/button label failed to follow). Used ONLY for display text here;
+    // does not change what fields are disabled (those already check isLocked
+    // individually) or any save/permission behaviour.
+    const displayAsReadOnly = readOnly || isLocked;
 
     if (!itrId) {
         return null;
@@ -302,11 +395,26 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
     // Reference No 由後端自動產生，不再於前端自動更新
 
     const handleFieldChange = (field: keyof ITRDetailData, value: string) => {
-        if (field === 'status' && formData.status) {
-            const validation = validateStatusTransition(formData.status, value, ITRStatusTransitions);
-            if (!validation.allowed) {
-                toast.warning(validation.message || t('common.invalidStatusTransition'));
-                return;
+        if (field === 'status') {
+            // ITR-STATUS-2026-001: transition validation must be judged against the PERSISTED
+            // status (existingItem?.status — same basis as `isLocked` above, and for the same
+            // reason), never formData.status. formData.status flips the instant the user picks
+            // an option, before anything is saved — so picking "Approved" and then having the
+            // save REJECTED by the backend (e.g. no linked checklist yet) left formData.status
+            // sitting on "Approved" with nothing actually persisted. The next status change then
+            // ran validateStatusTransition('Approved', ...), hit the "Approved can only change
+            // via Revoke Approval" rule, and permanently trapped the user in a modal that claimed
+            // to be Approved while the server still said In Progress (2026-10-03, reproduced in
+            // isolation, confirmed via a raw GET that the backend was untouched).
+            // New-item mode has no persisted status at all (existingItem is undefined) — nothing
+            // has been saved yet, so there is no "from" state to transition away from; any first
+            // choice is free, not a transition, and must not self-lock the form either.
+            if (persistedStatus) {
+                const validation = validateStatusTransition(persistedStatus, value, ITRStatusTransitions);
+                if (!validation.allowed) {
+                    toast.warning(validation.message || t('common.invalidStatusTransition'));
+                    return;
+                }
             }
             if (value === 'Approved' && linkedChecklists.some(c => c.status === 'Fail')) {
                 setApprovalWarning({ show: true, pendingStatus: value });
@@ -385,17 +493,20 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
     };
 
     const handleSave = async () => {
+        if (saving) return;
         if (!formData.noiNumber) {
             toast.warning(t('itr.validation.noiRequired') || 'Please select an NOI Number.');
             return;
         }
 
         try {
+            setSaving(true);
             await onSave(formData, pendingUploads, deletedFileIds);
+            leaveGuard.release();
             onClose();
         } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
             // 錯誤已在父層 handleSaveITRDetails 以 toast 顯示，保持 modal 開啟
-        }
+        } finally { setSaving(false); }
     };
 
     const handlePublish = () => {
@@ -404,6 +515,8 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
     };
 
     const doPublish = async (nextRev: string) => {
+        if (saving) return;
+        setSaving(true);
         try {
             // publishOnly=true tells the parent to send ONLY type/status —
             // the backend rejects any other field on a locked (Approved)
@@ -416,6 +529,47 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
             // onClose is handled by parent (handleSaveITRDetails sets isEditModalOpen=false)
         } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
             // Error already shown by parent handleSaveITRDetails toast
+        } finally { setSaving(false); }
+    };
+
+    // Only an already-PERSISTED Approved ITR can be revoked, and only by an
+    // ITR_APPROVE holder (the backend enforces both regardless of this UI).
+    // Goes through the dedicated endpoint — never a normal status update,
+    // which the backend rejects for any change away from Approved.
+    const canRevokeApproval = !!existingItem?.id && persistedStatus === 'Approved' && hasPermission('itr:approve:all');
+
+    const openRevokeDialog = () => {
+        setRevokeError(null);
+        setRevokeOpen(true);
+    };
+
+    const handleRevoke = async () => {
+        if (!existingItem?.id || revoking) return;
+        const reason = revokeReason.trim();
+        if (!reason) {
+            setRevokeError(t('itr.revokeReasonRequired'));
+            return;
+        }
+        setRevoking(true);
+        setRevokeError(null);
+        try {
+            await revokeItrApproval(existingItem.id, 'In Progress', reason);
+        } catch (e: any) {
+            const raw = e?.response?.data?.detail;
+            setRevokeError(typeof raw === 'string' ? raw : (e?.message || t('itr.revokeFailed')));
+            setRevoking(false);
+            return; // dialog stays open with the reason intact
+        }
+        // The revoke itself succeeded from here on — a failure reloading the
+        // list must not be reported as a failed revoke.
+        toast.success(t('itr.revokeSuccess'));
+        setRevokeOpen(false);
+        setRevokeReason('');
+        setRevoking(false);
+        try {
+            await onRevoked?.();
+        } catch {
+            toast.warning(t('itr.revokeReloadFailed'));
         }
     };
 
@@ -430,6 +584,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
             // navigate(-1) when this modal was reached via ?openId=, which
             // would race with the navigate() below and land somewhere
             // unrelated to the NCR just created.
+            leaveGuard.release();
             (onDismiss || onClose)();
             navigate(`/ncr?openId=${ncr.id}`);
         } catch (err: any) {
@@ -439,13 +594,26 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         }
     };
 
+    // Re-inspect Approved/Void boundary (2026-09-29 business decision): Void is terminal and can
+    // never be re-inspected; Approved must first go back to In Progress via Revoke Approval —
+    // there is no "re-inspect straight off an Approved record" path. Keyed on persistedStatus
+    // (not live formData.status) for the same reason isLocked is — see its own comment above.
+    // Backend enforces this regardless (services/itr_service.py::create_reinspection); this is
+    // purely a friendly, proactive hint so the user isn't left guessing after a rejected request.
+    const reinspectBlockedReason = persistedStatus === 'Void'
+        ? (t('itr.reinspectBlockedVoid') || 'Void records cannot be re-inspected.')
+        : persistedStatus === 'Approved'
+            ? (t('itr.reinspectBlockedApproved') || 'Revoke the approval first, then re-inspect if it still meets the usual conditions.')
+            : '';
+
     const handleReinspect = async () => {
-        if (!existingItem?.id || spawning) return;
+        if (!existingItem?.id || spawning || reinspectBlockedReason) return;
         setSpawning('reinspect');
         try {
             const newItr = await createReinspectionItr(existingItem.id);
             toast.success(t('itr.reinspectionCreated') || `Re-inspection ${newItr.documentNumber} created`);
             await useITRStore.getState().refetch();
+            leaveGuard.release();
             (onDismiss || onClose)();
             navigate(`/itr?openId=${newItr.id}`);
         } catch (err: any) {
@@ -462,7 +630,12 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
     if (showPrintPreview) {
         return (
             <ITRPrintPreview
-                data={{ ...formData, linkedChecklists: instances }}
+                // itpNo overridden with the same live NOI-derived value shown on screen
+                // (ITR-INPUT-UX-IMPLEMENT-2026-005) — ITRPrintPreview has no access to
+                // noiList/itpList itself, so the already-computed `relatedItp` is passed through
+                // via the one field name it already reads, instead of plumbing two more lists
+                // into an otherwise self-contained print component.
+                data={{ ...formData, linkedChecklists: instances, itpNo: relatedItp ? (relatedItp.referenceNo || relatedItp.description || '') : '' }}
                 onClose={() => setShowPrintPreview(false)}
             />
         );
@@ -473,15 +646,15 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         <div className={formStyles.modalOverlay}>
             <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
                 <div className={formStyles.modalHeader}>
-                    <h2>{existingData || existingItem ? t('itr.editTitle') : t('itr.addTitle')}</h2>
-                    <button className={formStyles.closeButton} onClick={onClose}>×</button>
+                    <h2>{displayAsReadOnly ? t('itr.viewTitle') : existingData || existingItem ? t('itr.editTitle') : t('itr.addTitle')}</h2>
+                    <button className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={requestClose}>×</button>
                 </div>
                 <div className={formStyles.modalBody}>
                 <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
                     {isLocked && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#fef9c3', border: '1px solid #fde047', borderRadius: '6px', padding: '8px 14px', marginBottom: '12px', color: '#854d0e', fontSize: '13px', fontWeight: 600 }}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                            {t('itr.lockedMsg') || `此 ITR 狀態為「${formData.status}」，欄位已鎖定。如需修改請先透過 Publish 建立新版本，或將狀態改為 Reject。`}
+                            {persistedStatus === 'Void' ? t('itr.lockedMsgVoid') : t('itr.lockedMsg')}
                         </div>
                     )}
                     <p className={formStyles.formRequiredHint}>{t('form.requiredHint')}</p>
@@ -524,10 +697,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                                     if (selectedNOI.contractor) {
                                                         handleFieldChange('contractor', selectedNOI.contractor);
                                                     }
-                                                    if (selectedNOI.itpNo) {
-                                                        handleFieldChange('itpNo', selectedNOI.itpNo);
-                                                    }
-                                                }
+        }
                                             }
                                         }}
                                     >
@@ -563,6 +733,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                             ))}
                                         </select>
                                     )}
+                                    {!!formData.noiNumber && <small className={formStyles.fieldHint}>{t('itr.fieldFromNoi') || 'From NOI'}</small>}
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label className={formData.noiNumber ? formStyles.optionalLabel : ''}>{t('noi.package')}</label>
@@ -574,23 +745,18 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                         readOnly={isLocked || !!formData.noiNumber}
                                         style={(isLocked || !!formData.noiNumber) ? { backgroundColor: '#D9D9D9', cursor: 'not-allowed' } : {}}
                                     />
+                                    {!!formData.noiNumber && <small className={formStyles.fieldHint}>{t('itr.fieldFromNoi') || 'From NOI'}</small>}
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('itr.relatedITP') || 'Related ITP'}</label>
-                                    <select
-                                        className={formStyles.formSelect}
-                                        value={formData.itpNo}
-                                        onChange={(e) => handleFieldChange('itpNo', e.target.value)}
-                                        disabled={isLocked || !!formData.noiNumber}
-                                        style={(isLocked || !!formData.noiNumber) ? { backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: '#000000' } : {}}
-                                    >
-                                        <option value="">{t('itr.selectITP') || 'Select ITP'}</option>
-                                        {itpList.map((itp) => (
-                                            <option key={itp.id} value={itp.referenceNo || ''}>
-                                                {itp.referenceNo || itp.description || `(${t('common.notGenerated')})`}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <input
+                                        type="text"
+                                        className={formStyles.formInput}
+                                        value={relatedItp ? (relatedItp.referenceNo || relatedItp.description || '') : (t('itr.noRelatedItp') || 'No ITP linked via NOI')}
+                                        readOnly
+                                        style={{ backgroundColor: '#D9D9D9', cursor: 'not-allowed' }}
+                                    />
+                                    {relatedItp && <small className={formStyles.fieldHint}>{t('itr.fieldFromNoi') || 'From NOI'}</small>}
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label className={formData.noiNumber ? formStyles.optionalLabel : ''}>{t('itr.inspectionDate')}</label>
@@ -608,6 +774,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                         readOnly={isLocked || !!formData.noiNumber}
                                         style={(isLocked || !!formData.noiNumber) ? { backgroundColor: '#D9D9D9', cursor: 'not-allowed' } : {}}
                                     />
+                                    {!!formData.noiNumber && <small className={formStyles.fieldHint}>{t('itr.fieldFromNoi') || 'From NOI'}</small>}
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label>{t('common.dueDate')}</label>
@@ -660,18 +827,19 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                         </div>
 
                         {/* Linked Checklists Section */}
+                        <p className="text-sm text-slate-600">{t('itr.checklistInstanceHint')}</p>
                         <div className={formStyles.formSection}>
-                            <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 border-b border-slate-100 pb-2">
                                 <h3 className={formStyles.sectionTitle} style={{ margin: 0 }}>
                                     <ClipboardCheck size={18} className="inline-block mr-2" />
                                     {t('itr.sectionLinkedChecklists') || 'Linked Checklists'}
                                 </h3>
-                                <div className="flex flex-col items-end">
+                                <div className="flex min-w-0 max-w-full flex-col items-start sm:items-end">
                                     <span className="text-xs text-slate-500 bg-slate-50 px-2 py-1 rounded border border-slate-200 mb-2">
                                         {t('itr.checklistInstanceNote') || '從範本引用會建立此 ITR 專屬的檢驗紀錄；範本不受影響。'}
                                     </span>
                                     <select
-                                        className="h-8 pl-2 pr-8 rounded-md border border-slate-200 bg-white text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-blue-400 transition-colors cursor-pointer"
+                                        className="h-8 max-w-full pl-2 pr-8 rounded-md border border-slate-200 bg-white text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-blue-400 transition-colors cursor-pointer"
                                         disabled={isLocked || !persistedItrId}
                                         style={(isLocked || !persistedItrId) ? { backgroundColor: '#D9D9D9', cursor: 'not-allowed', opacity: 0.6 } : {}}
                                         onChange={(e) => {
@@ -730,11 +898,25 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                                                 }`}>
                                                                 {record.status === 'Ongoing' && <AlertCircle size={10} />}
                                                                 {record.status === 'Ongoing'
-                                                                    ? (t('checklist.notYetFilled') || 'Not filled')
+                                                                    ? (() => {
+                                                                        // "Not filled" only when nothing has been judged yet;
+                                                                        // once some items are, show real progress instead.
+                                                                        const sm = summarizeItems(parseInstance(record).items);
+                                                                        if (sm.judged === 0) return (t('checklist.notYetFilled') || 'Not filled');
+                                                                        const op = ongoingProgress(sm);
+                                                                        return t(op.key, op.params);
+                                                                    })()
                                                                     : record.status}
                                                             </span>
                                                         </div>
                                                         <span className="text-sm font-bold text-slate-800">{record.activity}</span>
+                                                        <span className="text-[11px] text-slate-400">
+                                                            {t('checklist.sourceTemplate') || 'Source Template'}:{' '}
+                                                            {record.template_id ? (templateById.get(record.template_id)?.recordsNo || record.template_id) : (t('checklist.versionUnknown') || 'Unknown')}
+                                                            {' · '}
+                                                            {t('checklist.sourceVersion') || 'Linked Version'}:{' '}
+                                                            {record.source_template_version ?? (t('checklist.versionUnknown') || 'Unknown')}
+                                                        </span>
                                                         {record.location && (
                                                             <span className="text-xs text-slate-500 flex items-center gap-1">
                                                                 <ArrowRight size={10} /> {record.location}
@@ -749,10 +931,9 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                                         </div>
 
                                                         {/* Unlink Button — hidden when ITR is locked */}
-                                                        {!isLocked && <button
+                                                        {!isLocked && <button className={actionStyles.iconDanger}
                                                             type="button"
                                                             onClick={(e) => handleUnlinkChecklist(record.id, e)}
-                                                            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors z-10"
                                                             title={t('common.delete') || 'Remove'}
                                                         >
                                                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -769,9 +950,16 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                                 {expanded && (
                                                     <div className="border-t border-slate-200 p-3 bg-slate-50">
                                                         <ChecklistSnapshotModal
+                                                            // Remount when the stored status changes (Reopen) so the
+                                                            // panel is rebuilt from the freshly loaded backend data.
+                                                            key={`${record.id}:${record.status}`}
                                                             inline
                                                             isOpen={true}
                                                             readOnly={isLocked}
+                                                            checklistStatus={record.status}
+                                                            canReopen={hasPermission('checklist:close:all')}
+                                                            onReopen={() => reopenInstance(record.id)}
+                                                            lockReason={persistedStatus === 'Void' ? 'Void' : 'Approved'}
                                                             initialData={parseInstance(record)}
                                                             onClose={() => setExpandedInstanceId(null)}
                                                             onSave={(snap) => saveInstance(record.id, snap)}
@@ -793,96 +981,10 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                             )}
                         </div>
 
-
-
-
-
-                        {/* 照片上傳 */}
-                        <div className={formStyles.formSection}>
-                            <div className={styles.photoSectionContainer}>
-                                <div className={styles.photoSection}>
-                                    <h3 className={formStyles.sectionTitle}>{t('itr.photo.defect')}</h3>
-                                    <FileAttachment
-                                        attachments={formData.defectPhotos || [] as any[]}
-                                        onPendingFilesChange={(files) => handlePendingFilesChange('defectPhoto', files)}
-                                        onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'defect')}
-                                        onDeleteExistingFile={handleDeleteExistingFile}
-                                        entityType="itr"
-                                        entityId={existingItem?.id}
-                                        category="defectPhoto"
-                                        accept="image/*"
-                                        id="defectPhoto"
-                                        hideTitle
-                                    />
-                                </div>
-                                <div className={styles.photoSection}>
-                                    <h3 className={formStyles.sectionTitle}>{t('itr.photo.improvement')}</h3>
-                                    <FileAttachment
-                                        attachments={formData.improvementPhotos || [] as any[]}
-                                        onPendingFilesChange={(files) => handlePendingFilesChange('improvementPhoto', files)}
-                                        onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'improvement')}
-                                        onDeleteExistingFile={handleDeleteExistingFile}
-                                        entityType="itr"
-                                        entityId={existingItem?.id}
-                                        category="improvementPhoto"
-                                        accept="image/*"
-                                        id="improvementPhoto"
-                                        hideTitle
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Attachments */}
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>{t('itr.sectionDrawings') || 'Latest Drawings'}</h3>
-                            <FileAttachment
-                                attachments={formData.drawings || [] as any[]}
-                                onPendingFilesChange={(files) => handlePendingFilesChange('drawing', files)}
-                                onRemoveLegacy={(index) => handleRemoveLegacyGeneric(index, 'drawings')}
-                                onDeleteExistingFile={handleDeleteExistingFile}
-                                entityType="itr"
-                                entityId={existingItem?.id}
-                                category="drawing"
-                                id="drawing"
-                                hideTitle
-                            />
-                        </div>
-
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>{t('itr.sectionCertificates') || 'Calibration Certificates'}</h3>
-                            <FileAttachment
-                                attachments={formData.certificates || [] as any[]}
-                                onPendingFilesChange={(files) => handlePendingFilesChange('certificate', files)}
-                                onRemoveLegacy={(index) => handleRemoveLegacyGeneric(index, 'certificates')}
-                                onDeleteExistingFile={handleDeleteExistingFile}
-                                entityType="itr"
-                                entityId={existingItem?.id}
-                                category="certificate"
-                                id="certificate"
-                                hideTitle
-                            />
-                        </div>
-
-                        <div className={formStyles.formSection}>
-                            <h3 className={formStyles.sectionTitle}>{t('common.attachments')}</h3>
-                            <FileAttachment
-                                attachments={formData.attachments || [] as any[]}
-                                onPendingFilesChange={(files) => handlePendingFilesChange('attachment', files)}
-                                onRemoveLegacy={handleRemoveLegacyAttachment}
-                                onDeleteExistingFile={handleDeleteExistingFile}
-                                entityType="itr"
-                                entityId={existingItem?.id}
-                                category="attachment"
-                                id="attachment"
-                                hideTitle
-                            />
-                        </div>
-
-                        {/* 複檢資料 */}
-
-
-                        {/* 品質評估 */}
+                        {/* 品質評估 — moved here (right after Linked Checklists, before the
+                            photo/attachment sections) per ITR-INPUT-UX-IMPLEMENT-2026-003: filling
+                            in the inspection result/remark reads more naturally right after judging
+                            the checklist, instead of after scrolling past four upload sections. */}
                         <div className={formStyles.formSection}>
                             <h3 className={formStyles.sectionTitle}>{t('itr.sectionQuality')}</h3>
                             <div className={formStyles.formGrid}>
@@ -908,8 +1010,15 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                             className={formStyles.formSelect}
                                             value={formData.status}
                                             onChange={(e) => handleFieldChange('status', e.target.value)}
-                                            disabled={formData.status === 'Void'}
-                                            style={formData.status === 'Void' ? { backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: '#000' } : {}}
+                                            // Once persisted Approved/Void, status can ONLY be changed
+                                            // via the dedicated revoke-approval flow — the backend
+                                            // rejects any other status change away from Approved
+                                            // unconditionally (2026-09-19). Previously this only
+                                            // checked formData.status === 'Void', leaving the dropdown
+                                            // open (and silently doomed to a backend 400) on a
+                                            // persisted-Approved record.
+                                            disabled={isLocked}
+                                            style={isLocked ? { backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: '#000' } : {}}
                                         >
                                             <option value="Approved">{t('itr.status.approved')}</option>
                                             <option value="Reject">{t('itr.status.reject')}</option>
@@ -940,6 +1049,18 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                                         <span>SOME CHECKLISTS ONGOING</span>
                                                     </>
                                                 )}
+                                            </div>
+                                        )}
+                                        {naPendingCount > 0 && (
+                                            <div data-itr-na-pending className="mt-1 flex items-center gap-2 p-2 rounded-md text-xs font-bold border bg-sky-50 text-sky-800 border-sky-200">
+                                                <Info size={14} />
+                                                <span>{t('checklist.banner.naPending', { n: naPendingCount })}</span>
+                                            </div>
+                                        )}
+                                        {failSoFarTotal > 0 && (
+                                            <div data-itr-fail-so-far className="mt-1 flex items-center gap-2 p-2 rounded-md text-xs font-bold border bg-red-50 text-red-700 border-red-100">
+                                                <AlertCircle size={14} />
+                                                <span>{t('checklist.banner.failSoFar', { n: failSoFarTotal })}</span>
                                             </div>
                                         )}
                                     </div>
@@ -984,57 +1105,230 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
 
                             </div>
                         </div>
+
+
+                        {/* 照片上傳／附件 — collapsible (ITR-INPUT-UX-IMPLEMENT-2026-003): each
+                            section starts open only when this ITR already has content in it,
+                            closed otherwise, so empty upload sections don't take up permanent
+                            vertical space between the Checklist/Quality Assessment the user is
+                            actually filling in and the ones below. */}
+                        <CollapsibleSection
+                            title={<>{t('itr.photo.defect')} / {t('itr.photo.improvement')}</>}
+                            defaultExpanded={(formData.defectPhotos?.length || 0) > 0 || (formData.improvementPhotos?.length || 0) > 0}
+                        >
+                            <div className={styles.photoSectionContainer}>
+                                <div className={styles.photoSection}>
+                                    <h3 className={formStyles.sectionTitle}>{t('itr.photo.defect')}</h3>
+                                    <FileAttachment
+                                        attachments={formData.defectPhotos || [] as any[]}
+                                        onPendingFilesChange={(files) => handlePendingFilesChange('defectPhoto', files)}
+                                        onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'defect')}
+                                        onDeleteExistingFile={handleDeleteExistingFile}
+                                        entityType="itr"
+                                        entityId={existingItem?.id}
+                                        category="defectPhoto"
+                                        accept="image/*"
+                                        id="defectPhoto"
+                                        hideTitle
+                                    />
+                                </div>
+                                <div className={styles.photoSection}>
+                                    <h3 className={formStyles.sectionTitle}>{t('itr.photo.improvement')}</h3>
+                                    <FileAttachment
+                                        attachments={formData.improvementPhotos || [] as any[]}
+                                        onPendingFilesChange={(files) => handlePendingFilesChange('improvementPhoto', files)}
+                                        onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'improvement')}
+                                        onDeleteExistingFile={handleDeleteExistingFile}
+                                        entityType="itr"
+                                        entityId={existingItem?.id}
+                                        category="improvementPhoto"
+                                        accept="image/*"
+                                        id="improvementPhoto"
+                                        hideTitle
+                                    />
+                                </div>
+                            </div>
+                        </CollapsibleSection>
+
+                        <CollapsibleSection
+                            title={t('itr.sectionDrawings') || 'Latest Drawings'}
+                            defaultExpanded={(formData.drawings?.length || 0) > 0}
+                        >
+                            <FileAttachment
+                                attachments={formData.drawings || [] as any[]}
+                                onPendingFilesChange={(files) => handlePendingFilesChange('drawing', files)}
+                                onRemoveLegacy={(index) => handleRemoveLegacyGeneric(index, 'drawings')}
+                                onDeleteExistingFile={handleDeleteExistingFile}
+                                entityType="itr"
+                                entityId={existingItem?.id}
+                                category="drawing"
+                                id="drawing"
+                                hideTitle
+                            />
+                        </CollapsibleSection>
+
+                        <CollapsibleSection
+                            title={t('itr.sectionCertificates') || 'Calibration Certificates'}
+                            defaultExpanded={(formData.certificates?.length || 0) > 0}
+                        >
+                            <FileAttachment
+                                attachments={formData.certificates || [] as any[]}
+                                onPendingFilesChange={(files) => handlePendingFilesChange('certificate', files)}
+                                onRemoveLegacy={(index) => handleRemoveLegacyGeneric(index, 'certificates')}
+                                onDeleteExistingFile={handleDeleteExistingFile}
+                                entityType="itr"
+                                entityId={existingItem?.id}
+                                category="certificate"
+                                id="certificate"
+                                hideTitle
+                            />
+                        </CollapsibleSection>
+
+                        <CollapsibleSection
+                            title={t('common.attachments')}
+                            defaultExpanded={(formData.attachments?.length || 0) > 0}
+                        >
+                            <FileAttachment
+                                attachments={formData.attachments || [] as any[]}
+                                onPendingFilesChange={(files) => handlePendingFilesChange('attachment', files)}
+                                onRemoveLegacy={handleRemoveLegacyAttachment}
+                                onDeleteExistingFile={handleDeleteExistingFile}
+                                entityType="itr"
+                                entityId={existingItem?.id}
+                                category="attachment"
+                                id="attachment"
+                                hideTitle
+                            />
+                        </CollapsibleSection>
                         {existingItem?.id && (
                             <RelatedDocuments entityType="itr" entityId={existingItem.id} />
                         )}
                     </div>
                 </fieldset>
                 </div>
-                <div className={formStyles.modalActions}>
-                    <button className={formStyles.printButton} onClick={handlePrint} style={{ marginRight: 'auto' }}>
-                        {t('common.print')}
-                    </button>
-                    {existingItem?.id && (formData.inspectionResult === 'Fail' || formData.status === 'Reject') && hasPermission('ncr:create:all') && (
-                        <button
-                            className={formStyles.printButton}
-                            onClick={handleRaiseNcr}
-                            disabled={spawning !== null}
-                            title={t('itr.raiseNcrTitle') || 'Create an NCR pre-filled from this failed ITR'}
-                        >
-                            {spawning === 'ncr' ? (t('common.saving') || 'Saving...') : (t('itr.raiseNcr') || 'Raise NCR')}
-                        </button>
-                    )}
-                    {existingItem?.id && (formData.inspectionResult === 'Fail' || formData.status === 'Reject') && hasPermission('itr:create:all') && (
-                        <button
-                            className={formStyles.printButton}
-                            onClick={handleReinspect}
-                            disabled={spawning !== null}
-                            title={t('itr.reinspectTitle') || 'Create a re-inspection ITR pre-filled from this one'}
-                        >
-                            {spawning === 'reinspect' ? (t('common.saving') || 'Saving...') : (t('itr.reinspect') || 'Re-inspect')}
-                        </button>
-                    )}
-                    {!readOnly && (
-                        <button
-                            className={styles.publishButton}
-                            onClick={handlePublish}
-                            title="Publish as next revision"
-                        >
-                            Publish
-                        </button>
-                    )}
-                    {!isLocked && !readOnly && (
-                        <button className={formStyles.saveButton} onClick={handleSave} style={{ marginLeft: '12px' }}>
-                            {t('common.save')}
-                        </button>
-                    )}
-                    <button className={formStyles.cancelButton} onClick={onClose}>
-                        {readOnly ? t('common.close') : t('common.cancel')}
-                    </button>
-                </div>
+                    <FormActions
+                        tools={<>
+                            <button className={actionStyles.secondary} onClick={handlePrint}>
+                                {t('common.print')}
+                            </button>
+                            {/* Needs a real saved record id to call the export endpoint — unlike
+                                Print (which only reads already-loaded formData), there is nothing
+                                to export for an unsaved new ITR yet. */}
+                            {existingItem?.id && (
+                                <button className={actionStyles.secondary} onClick={() => exportItrDocx(existingItem.id, formData.itrNumber || 'ITR')}>
+                                    {t('itr.exportWord') || 'Export Word'}
+                                </button>
+                            )}
+                            {existingItem?.id && (formData.inspectionResult === 'Fail' || formData.status === 'Reject') && hasPermission('ncr:create:all') && (
+                                <button className={actionStyles.secondary}
+                                    onClick={handleRaiseNcr}
+                                    disabled={spawning !== null}
+                                    title={t('itr.raiseNcrTitle') || 'Create an NCR pre-filled from this failed ITR'}
+                                >
+                                    {spawning === 'ncr' ? (t('common.saving') || 'Saving...') : (t('itr.raiseNcr') || 'Raise NCR')}
+                                </button>
+                            )}
+                            {existingItem?.id && (formData.inspectionResult === 'Fail' || formData.status === 'Reject') && hasPermission('itr:create:all') && (
+                                <div className="flex flex-col items-start gap-1">
+                                    <button className={actionStyles.secondary}
+                                        onClick={() => leaveGuard.requestAction(handleReinspect)}
+                                        disabled={spawning !== null || !!reinspectBlockedReason}
+                                        title={reinspectBlockedReason || t('itr.reinspectTitle') || 'Create a re-inspection ITR pre-filled from this one'}
+                                    >
+                                        {spawning === 'reinspect' ? (t('common.saving') || 'Saving...') : (t('itr.reinspect') || 'Re-inspect')}
+                                    </button>
+                                    {reinspectBlockedReason && (
+                                        <span className="text-xs text-slate-500">{reinspectBlockedReason}</span>
+                                    )}
+                                </div>
+                            )}
+                            {!!existingItem?.id && (
+                                <button className={actionStyles.secondary}
+                                    onClick={() => setHistoryOpen(true)}
+                                    title={t('itr.approvalHistoryTitle')}
+                                    data-approval-history-button
+                                >
+                                    {t('itr.approvalHistory')}
+                                </button>
+                            )}
+                        </>}
+                        secondary={<>
+                            {canRevokeApproval && (
+                                <button className={actionStyles.danger}
+                                    onClick={openRevokeDialog}
+                                    title={t('itr.revokeApprovalTitle')}
+                                >
+                                    {t('itr.revokeApproval')}
+                                </button>
+                            )}
+                            {!readOnly && (
+                                <button className={actionStyles.workflow}
+                                    onClick={handlePublish} disabled={saving}
+                                    title="Publish as next revision"
+                                >
+                                    Publish
+                                </button>
+                            )}
+                        </>}
+                        cancel={<>
+                            <button className={actionStyles.secondary} onClick={requestClose} disabled={saving}>
+                                {displayAsReadOnly ? t('common.close') : t('common.cancel')}
+                            </button>
+                        </>}
+                        primary={<>
+                            {!isLocked && !readOnly && (
+                                <button className={actionStyles.primary} onClick={handleSave} disabled={saving}>
+                                    {saving ? t('common.saving') || 'Saving...' : t('common.save')}
+                                </button>
+                            )}
+                        </>}
+                    />
             </div>
         </div>
+        {historyOpen && existingItem?.id && (
+            <ITRApprovalHistoryModal
+                itrId={existingItem.id}
+                documentNumber={existingItem.documentNumber}
+                onClose={() => setHistoryOpen(false)}
+            />
+        )}
+        {revokeOpen && (
+            <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/50">
+                <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-2xl">
+                    <h3 className="text-lg font-bold text-slate-800">{t('itr.revokeApproval')}</h3>
+                    <p className="mt-2 text-sm text-slate-600">{t('itr.revokeDialogNote')}</p>
+                    <label className="mt-4 block text-sm font-semibold text-slate-700">
+                        {t('itr.revokeReasonLabel')} <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                        className="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm focus:border-blue-500 focus:outline-none"
+                        rows={4}
+                        value={revokeReason}
+                        onChange={(e) => setRevokeReason(e.target.value)}
+                        placeholder={t('itr.revokeReasonPlaceholder')}
+                        disabled={revoking}
+                    />
+                    {revokeError && (
+                        <div className="mt-2 rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700">{revokeError}</div>
+                    )}
+                        <FormActions cancel={<><button
+                            className={actionStyles.secondary}
+                            onClick={() => { setRevokeOpen(false); setRevokeError(null); }}
+                            disabled={revoking}
+                        >
+                            {t('common.cancel')}
+                        </button></>} primary={<><button
+                            className={actionStyles.danger}
+                            onClick={handleRevoke}
+                            disabled={revoking || !revokeReason.trim()}
+                        >
+                            {revoking ? t('common.saving') : t('itr.revokeConfirm')}
+                        </button></>} />
+                </div>
+            </div>
+        )}
         <ConfirmModal
+            intent="primary"
             isOpen={approvalWarning.show}
             title={t('common.warning') || 'Warning'}
             message={t('itr.approvalWarningMsg') || 'WARNING: There are failed checklists associated with this ITR. Are you sure you want to approve it?'}
@@ -1047,6 +1341,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
             onCancel={() => setApprovalWarning({ show: false, pendingStatus: '' })}
         />
         <ConfirmModal
+            intent="primary"
             isOpen={publishConfirm.show}
             title={t('itr.publishTitle') || 'Publish Revision'}
             message={`${t('itr.publishConfirm') || 'Are you sure you want to publish as'} ${publishConfirm.nextRev}?`}
@@ -1121,6 +1416,57 @@ export const ITRPrintPreview: React.FC<ITRPrintPreviewProps> = ({ data: displayD
                 </tbody>
             </table>
 
+            {/* Linked Checklist results (ITR-INPUT-UX-IMPLEMENT-2026-006): the actual
+                inspection item/criteria/situation/result data was previously entirely absent
+                from the printed ITR — only the basic-info table and free-text fields were
+                printed, never the Checklist data linkedChecklists already carries. */}
+            {(displayData.linkedChecklists || []).map((raw: any) => {
+                let dd: any = {};
+                try {
+                    dd = raw.detail_data ? (typeof raw.detail_data === 'string' ? JSON.parse(raw.detail_data) : raw.detail_data) : {};
+                } catch { dd = {}; }
+                const items: any[] = dd.items || [];
+                const resultLabel = (value: unknown) => {
+                    const kind = classifyResult(value);
+                    if (kind === 'unknown') return String(value ?? '');
+                    return t(`checklist.result.${kind}`);
+                };
+                return (
+                    <div key={raw.id} style={{ marginBottom: '14px' }}>
+                        <div style={{ fontWeight: 600, fontSize: '12px', color: '#1a1a1a', marginBottom: '4px' }}>
+                            {raw.recordsNo} — {raw.activity}
+                            {raw.status && <span style={{ fontWeight: 400, color: '#666' }}> ({raw.status})</span>}
+                        </div>
+                        {items.length > 0 ? (
+                            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '8px' }}>
+                                <thead>
+                                    <tr>
+                                        <th style={{ border: '1px solid #ccc', padding: '4px 6px', backgroundColor: '#f5f5f5', fontSize: '11px', textAlign: 'left', width: '5%' }}>#</th>
+                                        <th style={{ border: '1px solid #ccc', padding: '4px 6px', backgroundColor: '#f5f5f5', fontSize: '11px', textAlign: 'left', width: '20%' }}>{t('checklist.item')}</th>
+                                        <th style={{ border: '1px solid #ccc', padding: '4px 6px', backgroundColor: '#f5f5f5', fontSize: '11px', textAlign: 'left', width: '20%' }}>{t('checklist.criteria')}</th>
+                                        <th style={{ border: '1px solid #ccc', padding: '4px 6px', backgroundColor: '#f5f5f5', fontSize: '11px', textAlign: 'left', width: '40%' }}>{t('checklist.situation')}</th>
+                                        <th style={{ border: '1px solid #ccc', padding: '4px 6px', backgroundColor: '#f5f5f5', fontSize: '11px', textAlign: 'left', width: '15%' }}>{t('checklist.result')}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {items.map((item: any, idx: number) => (
+                                        <tr key={item.id ?? idx}>
+                                            <td style={{ border: '1px solid #ccc', padding: '4px 6px', fontSize: '11px', verticalAlign: 'top' }}>{idx + 1}</td>
+                                            <td style={{ border: '1px solid #ccc', padding: '4px 6px', fontSize: '11px', verticalAlign: 'top' }}>{item.item}</td>
+                                            <td style={{ border: '1px solid #ccc', padding: '4px 6px', fontSize: '11px', verticalAlign: 'top' }}>{item.criteria}</td>
+                                            <td style={{ border: '1px solid #ccc', padding: '4px 6px', fontSize: '11px', verticalAlign: 'top', whiteSpace: 'pre-wrap' }}>{item.situation || '-'}</td>
+                                            <td style={{ border: '1px solid #ccc', padding: '4px 6px', fontSize: '11px', verticalAlign: 'top' }}>{resultLabel(item.result)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        ) : (
+                            <div style={{ fontSize: '11px', color: '#888', marginBottom: '8px' }}>{t('checklist.noItems')}</div>
+                        )}
+                    </div>
+                );
+            })}
+
             {[
                 { label: t('itr.referenceStandards'), value: displayData.referenceStandards },
                 { label: t('itr.foundLocation'), value: displayData.foundLocation },
@@ -1163,19 +1509,23 @@ export const ITRPrintPreview: React.FC<ITRPrintPreviewProps> = ({ data: displayD
                 <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
                     <div className={formStyles.modalHeader}>
                         <h2>{t('itr.detailsTitle') || 'ITR Details (Print Preview)'}</h2>
-                        <button className={formStyles.closeButton} onClick={onClose}>×</button>
+                        <button className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={onClose}>×</button>
                     </div>
                     <div className={formStyles.modalBody}>
                         {printContent}
                     </div>
-                    <div className={formStyles.modalActions}>
-                        <button className={formStyles.printButton} onClick={handlePrint}>
-                            {t('common.print')}
-                        </button>
-                        <button className={formStyles.cancelButton} onClick={onClose}>
-                            {t('common.close')}
-                        </button>
-                    </div>
+                    <FormActions
+                        tools={<>
+                            <button className={actionStyles.secondary} onClick={handlePrint}>
+                                {t('common.print')}
+                            </button>
+                        </>}
+                        cancel={<>
+                            <button className={actionStyles.secondary} onClick={onClose}>
+                                {t('common.close')}
+                            </button>
+                        </>}
+                    />
                 </div>
             </div>
         </>

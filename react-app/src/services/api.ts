@@ -309,6 +309,7 @@ export interface CreateUserPayload {
   role_id: number;
   is_active: boolean;
   company_name?: string | null;
+  reason?: string | null;
 }
 
 export type UpdateUserPayload = Partial<CreateUserPayload>
@@ -343,6 +344,8 @@ export interface CreateRolePayload {
   name: string;
   description?: string;
   permissions: string[];
+  /** Audit reason (the role form requires one); stored on the Role audit entry. */
+  reason?: string;
 }
 
 export type UpdateRolePayload = Partial<CreateRolePayload>
@@ -386,6 +389,13 @@ export interface ChecklistRecordApi {
   noiNumber?: string;
   detail_data?: string;
   template_id?: string; // §17: instance -> 來源範本（範本本身為 NULL）
+  // Read-only provenance fields — backend already returns these (see
+  // backend/schemas.py's Checklist schema), never accepted on create/update.
+  version?: number | null; // template's own edit counter (bare template only)
+  source_template_version?: number | null; // captured once at link_checklist time; NULL = historical/unknown
+  evidence_recorded_at?: string | null;
+  evidence_recorded_at_reliable?: boolean | null;
+  evidence_historical_unknown?: boolean | null;
 }
 
 export interface CreateChecklistPayload {
@@ -482,6 +492,37 @@ export const createReinspectionItr = async (itrId: string): Promise<any> => {
   return response.data;
 };
 
+// Revoke an ITR's approval — the ONLY sanctioned way out of Approved (a
+// normal update cannot change status away from Approved). Backend is gated
+// on ITR_APPROVE, requires a non-empty reason, and writes the audit entry
+// (incl. the checklist snapshot) in the same transaction.
+export const revokeItrApproval = async (
+  itrId: string,
+  newStatus: 'In Progress' | 'Void',
+  reason: string
+): Promise<any> => {
+  const response = await api.post(`/itr/${itrId}/revoke-approval`, { new_status: newStatus, reason });
+  return response.data;
+};
+
+// Approval history — READ-ONLY (2026-09-20). The list carries no snapshots; a single event (with its stored
+// ITR + Checklist snapshots) is fetched only when the user opens it. There is deliberately no write call here.
+export const getItrApprovalEvents = async (
+  itrId: string,
+  params: { skip?: number; limit?: number } = {}
+): Promise<import('../utils/approvalHistory').ApprovalEventPage> => {
+  const response = await api.get(`/itr/${encodeURIComponent(itrId)}/approval-events`, { params });
+  return response.data;
+};
+
+export const getItrApprovalEvent = async (
+  itrId: string,
+  eventId: number
+): Promise<import('../utils/approvalHistory').ApprovalEventDetail> => {
+  const response = await api.get(`/itr/${encodeURIComponent(itrId)}/approval-events/${eventId}`);
+  return response.data;
+};
+
 // Create the next occurrence of a recurring meeting series (BACKLOG #18) —
 // backend reuses the source row's documentNumber and increments rev;
 // new row starts as Draft.
@@ -494,6 +535,30 @@ export const createMeetingMinutesOccurrence = async (meetingId: string): Promise
 // kmService.exportDocx's blob-download pattern.
 export const exportNcrDocx = async (ncrId: string, filename: string): Promise<void> => {
   const response = await api.get(`/ncr/${ncrId}/export-docx`, { responseType: 'blob' });
+  const url = URL.createObjectURL(new Blob([response.data]));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filename}.docx`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+// Formal .docx export of an ITR report, including linked Checklist results
+// (ITR-EXPORT-DOCX-2026-001) — mirrors exportNcrDocx's blob-download pattern.
+export const exportItrDocx = async (itrId: string, filename: string): Promise<void> => {
+  const response = await api.get(`/itr/${itrId}/export-docx`, { responseType: 'blob' });
+  const url = URL.createObjectURL(new Blob([response.data]));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filename}.docx`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+// Formal .docx export of a Notice of Inspection (NOI-EXPORT-DOCX-2026-001) — mirrors
+// exportItrDocx's blob-download pattern.
+export const exportNoiDocx = async (noiId: string, filename: string): Promise<void> => {
+  const response = await api.get(`/noi/${noiId}/export-docx`, { responseType: 'blob' });
   const url = URL.createObjectURL(new Blob([response.data]));
   const a = document.createElement('a');
   a.href = url;
@@ -542,7 +607,9 @@ export const getEntityFiles = async (
 ): Promise<AttachmentInfo[]> => {
   const params: Record<string, string> = { entity_type: entityType, entity_id: entityId };
   if (category) params.category = category;
-  const response = await api.get<AttachmentInfo[]>('/files/by-entity/', { params });
+  // No trailing slash: the backend route is exactly `/files/by-entity`, and a slash makes FastAPI answer 307 with an ABSOLUTE Location that only
+  // works when every proxy in front rewrites or preserves it (2026-09-21) — an extra round trip for every list, and a failed one where it does not.
+  const response = await api.get<AttachmentInfo[]>('/files/by-entity', { params });
   return response.data;
 };
 
