@@ -26,7 +26,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Run pytest
         run: python -m pytest -q
@@ -47,11 +47,18 @@ jobs:
           cache: npm
           cache-dependency-path: react-app/package-lock.json
 
+      # --legacy-peer-deps: the lockfile has never resolved cleanly under npm's
+      # strict peer check (eslint-plugin-react-refresh@0.5.0 vs eslint@8), so a
+      # plain `npm ci` fails at install on Node 20 / npm 10 — verified against
+      # HEAD without any other change. Matches how the project is installed locally.
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Type check
         run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm test
 
       - name: Build
         run: npm run build
