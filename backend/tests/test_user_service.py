@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from fastapi import HTTPException
 from services.user_service import UserService
+from repositories.user_repository import UserRepository
 import schemas
 import models
 
@@ -10,6 +11,8 @@ def test_create_user_success():
     mock_repo = MagicMock()
     mock_repo.get_by_email.return_value = None
     mock_repo.get_by_username.return_value = None
+    mock_repo.get_role_by_id.return_value = models.Role(id=1, name="Ordinary")   # a real, non-Admin role
+    mock_repo.is_admin_role_name = UserRepository.is_admin_role_name              # the real identity test, not a truthy mock
     
     mock_created_user = models.User(id=1, username="testuser", email="test@test.com", role_id=1)
     mock_repo.create.return_value = mock_created_user
@@ -36,7 +39,9 @@ def test_create_user_persists_company_name():
     mock_repo = MagicMock()
     mock_repo.get_by_email.return_value = None
     mock_repo.get_by_username.return_value = None
-    mock_repo.create.side_effect = lambda u: u
+    mock_repo.get_role_by_id.return_value = models.Role(id=1, name="Ordinary")   # a real, non-Admin role
+    mock_repo.is_admin_role_name = UserRepository.is_admin_role_name              # the real identity test, not a truthy mock
+    mock_repo.create.side_effect = lambda u, commit=True: u
 
     service = UserService(mock_repo)
     user_data = schemas.UserCreate(
@@ -84,21 +89,13 @@ def test_create_user_duplicate_email():
     assert excinfo.value.status_code == 400
     assert excinfo.value.detail == "Email already registered"
 
-def test_delete_last_admin_prevented():
-    mock_repo = MagicMock()
-    admin_role = models.Role(name="Admin")
-    admin_user = models.User(id=1, username="admin", role=admin_role, is_active=True)
-    
-    mock_repo.get_by_id.return_value = admin_user
-    mock_repo.count_active_admins.return_value = 1
-    
-    service = UserService(mock_repo)
-    
-    with pytest.raises(HTTPException) as excinfo:
-        service.delete_user(1)
-
-    assert excinfo.value.status_code == 400
-    assert "Cannot delete the last active Admin" in excinfo.value.detail
+def test_accounts_have_no_hard_delete_path():
+    # Accounts are deactivated, never deleted (2026-09-20): neither layer keeps
+    # a user-delete method. Last-admin / rejection behaviour is covered end to
+    # end in test_iam_user_security_http.py.
+    from repositories.user_repository import UserRepository
+    assert not hasattr(UserService, "delete_user")
+    assert not hasattr(UserRepository, "delete")
 
 
 def test_delete_role_blocked_when_users_assigned():
@@ -128,6 +125,9 @@ def test_delete_role_blocked_when_users_assigned():
 
 
 def test_delete_role_success_when_unassigned():
+    # 2026-09-19: the role delete, its permission links and the audit entry are ONE
+    # transaction — the repository is told not to commit, the audit call is the
+    # strict one, and the service commits exactly once itself.
     mock_repo = MagicMock()
     mock_role = models.Role(id=6, name="Unused Role")
     mock_role.permissions_rel = []
@@ -136,12 +136,31 @@ def test_delete_role_success_when_unassigned():
     service = UserService(mock_repo)
 
     with patch('services.user_service.validators.check_role_references') as mock_check, \
-         patch('services.user_service.log_audit') as mock_log:
+         patch('services.user_service.strict_log_audit') as mock_log:
         mock_check.return_value = None
 
         result = service.delete_role(6, current_user_id=1, current_username="admin")
 
         assert result is True
         mock_check.assert_called_once_with(mock_repo.db, 6, "Unused Role")
-        mock_repo.delete_role.assert_called_once_with(mock_role)
+        mock_repo.delete_role.assert_called_once_with(mock_role, commit=False)
         mock_log.assert_called_once()
+        assert mock_log.call_args.kwargs["strict"] is True
+        mock_repo.db.commit.assert_called_once()
+        mock_repo.db.rollback.assert_not_called()
+
+
+def test_delete_role_rolls_back_when_the_audit_entry_fails():
+    mock_repo = MagicMock()
+    mock_role = models.Role(id=6, name="Unused Role")
+    mock_role.permissions_rel = []
+    mock_repo.get_role_by_id.return_value = mock_role
+    service = UserService(mock_repo)
+
+    with patch('services.user_service.validators.check_role_references'), \
+         patch('services.user_service.strict_log_audit', side_effect=RuntimeError("audit down")):
+        with pytest.raises(RuntimeError):
+            service.delete_role(6, current_user_id=1, current_username="admin")
+
+    mock_repo.db.rollback.assert_called_once()
+    mock_repo.db.commit.assert_not_called()

@@ -141,14 +141,14 @@ class TestChecklistReferenceValidation:
         validators.validate_itr_by_id(mock_db, "itr-123")
         # Should not raise error
 
-    def test_create_checklist_with_invalid_itr_id(self):
-        """Creating Checklist with non-existent ITR ID should fail"""
+    def test_create_checklist_with_itr_id_is_rejected(self):
+        """§17 isolation hardening (2026-09-19): direct creation with
+        itrId set is rejected outright, regardless of whether that ITR
+        exists — a real instance can only be created via
+        ITRService.link_checklist, never a raw POST /checklist/."""
         mock_repo = Mock()
         mock_db = Mock()
         mock_repo.db = mock_db
-
-        # Mock ITR not found
-        mock_db.query.return_value.filter.return_value.first.return_value = None
 
         service = ChecklistService(mock_repo)
 
@@ -160,16 +160,15 @@ class TestChecklistReferenceValidation:
             packageName="Package A",
             itpIndex=1,
             location="Site A",
-            itrId="itr-nonexistent",  # Invalid ITR ID
+            itrId="itr-nonexistent",
             detail_data="{}"
         )
 
-        # Should raise ValueError
         with pytest.raises(ValueError) as exc_info:
             service.create_checklist(checklist_data)
 
-        assert "itr" in str(exc_info.value).lower()
-        assert "not found" in str(exc_info.value).lower()
+        assert "itrid" in str(exc_info.value).lower()
+        assert "link-checklist" in str(exc_info.value).lower()
 
     def test_create_checklist_with_valid_itr_number(self):
         """Creating Checklist with valid ITR document number should succeed"""

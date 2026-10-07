@@ -190,3 +190,75 @@ def test_serialized_entry_shape(service):
     assert noi_entry["primaryDate"] == "2025-04-15"
     assert noi_entry["vendorName"] == "Test Contractor"
     assert noi_entry["direction"] == "upstream"
+
+
+def test_isreinspection_flag_only_on_itr_entries(db_session, sample_contractor):
+    """NOI-ITR-LABEL-2026-001: isReInspection must appear (True/False) only on
+    ITR entries, and must be absent entirely (not False) on every other
+    entity type — a separate fixture from `graph` so this never risks
+    changing the shared fixture other tests above depend on.
+    """
+    vendor_id = sample_contractor.id
+    noi = models.NOI(
+        id="noi-label-1", package="Rebar spacing", referenceNo="NOI-LBL-001",
+        issueDate="2025-05-01", inspectionTime="09:00",
+        inspectionDate="2025-05-02", type="site",
+        vendor_id=vendor_id, status="Scheduled", checkpoint="H",
+    )
+    original = models.ITR(
+        id="itr-label-orig", vendor_id=vendor_id, documentNumber="ITR-LBL-001",
+        subject="Rebar spacing inspection", description="Rebar spacing inspection",
+        rev="0", submit="Contractor", status="Reject", inspectionResult="Fail",
+        raiseDate="2025-05-02", noiNumber="NOI-LBL-001", isReInspection=False,
+    )
+    reinspection = models.ITR(
+        id="itr-label-reinsp", vendor_id=vendor_id, documentNumber="ITR-LBL-002",
+        # Deliberately identical subject/description to `original`, mirroring
+        # create_reinspection()'s real verbatim-copy behaviour — the flag is
+        # the only thing that can distinguish them, not the title.
+        subject="Rebar spacing inspection", description="Rebar spacing inspection",
+        rev="0", submit="", status="In Progress",
+        raiseDate="2025-05-03", noiNumber="NOI-LBL-001",
+        isReInspection=True, originalItrId="itr-label-orig", reInspectionCount=1,
+    )
+    ncr = models.NCR(
+        id="ncr-label-1", vendor_id=vendor_id, documentNumber="NCR-LBL-001",
+        description="Rebar spacing out of tolerance", rev="A", submit="Initial",
+        status="Open", noiNumber="NOI-LBL-001", subject="Rebar spacing out of tolerance",
+        raiseDate="2025-05-02",
+    )
+    db_session.add_all([noi, original, reinspection, ncr])
+    db_session.commit()
+
+    service = RelatedService(db_session)
+    result = service.get_related("noi", "noi-label-1", max_depth=1)
+
+    by_id = {(e["entityType"], e["id"]): e for e in result["downstream"]}
+
+    original_entry = by_id[("itr", "itr-label-orig")]
+    reinsp_entry = by_id[("itr", "itr-label-reinsp")]
+    ncr_entry = by_id[("ncr", "ncr-label-1")]
+
+    assert original_entry["isReInspection"] is False
+    assert reinsp_entry["isReInspection"] is True
+    # Same title on both — the flag, not the title/documentNumber magnitude,
+    # is what must distinguish them.
+    assert original_entry["title"] == reinsp_entry["title"] == "Rebar spacing inspection"
+
+    # Non-ITR entries must not carry this key at all (not even as False).
+    assert "isReInspection" not in ncr_entry
+
+
+def test_related_response_serialization_keeps_non_itr_shape():
+    from schemas import RelatedEntitiesResponse
+
+    entries = [dict(entityType=kind, id=kind, level=1, direction="downstream")
+               for kind in ("itp", "noi", "ncr")]
+    entries += [dict(entityType="itr", id=str(flag), level=1,
+                     direction="downstream", isReInspection=flag)
+                for flag in (False, True)]
+    result = RelatedEntitiesResponse(downstream=entries).model_dump(mode="json")
+    for entry in result["downstream"][:3]:
+        assert "isReInspection" not in entry
+        assert "title" in entry  # Existing nullable fields are preserved.
+    assert [e["isReInspection"] for e in result["downstream"][3:]] == [False, True]

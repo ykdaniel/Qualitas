@@ -535,6 +535,24 @@ def test_needs_attention_sorts_by_lowest_completion_first(workflow_fixture):
     assert percents == sorted(percents)
 
 
+def test_needs_attention_missing_dates_sort_after_dated_rows(db_session, sample_contractor):
+    """Equal completion: newest date first, NULL/empty dates last, before limit."""
+    for suffix, date in [("null", None), ("empty", ""), ("old", "2026-09-01"), ("new", "2026-09-30")]:
+        noi = models.NOI(
+            id=f"attention-{suffix}", referenceNo=f"ATTENTION-{suffix}",
+            package=suffix, vendor_id=sample_contractor.id, issueDate=date,
+            inspectionDate="2026-09-30", inspectionTime="09:00", type="site", status="Open",
+        )
+        db_session.add(noi)
+        _make_qworkflow(db_session, noi, f"ATTENTION-WF-{suffix}")
+    db_session.commit()
+    service = WorkflowService(db_session)
+    rows = service.get_needs_attention(limit=4)
+    assert [row["noi_id"] for row in rows[:2]] == ["attention-new", "attention-old"]
+    assert {row["noi_id"] for row in rows[2:]} == {"attention-null", "attention-empty"}
+    assert [row["noi_id"] for row in service.get_needs_attention(limit=2)] == ["attention-new", "attention-old"]
+
+
 def test_needs_attention_respects_limit(workflow_fixture):
     service = WorkflowService(workflow_fixture)
     top_one = service.get_needs_attention(limit=1)
@@ -881,6 +899,46 @@ def test_void_itr_does_not_satisfy_wh_inspection_or_force_ncr(
             break
     else:  # pragma: no cover
         pytest.fail("Q-WorkFlow-900006 not found")
+
+
+@pytest.mark.parametrize("reference_path", ["document_number", "typed_relation"])
+def test_checkpoint_links_exclude_void_itrs(workflow_fixture, db_session, reference_path):
+    """Deep-links exclude Void reports just as checkpoint rules do."""
+    original = db_session.get(models.ITR, "itr-full")
+    original.status = "Void"
+    active = db_session.query(models.ITR).filter(
+        models.ITR.documentNumber == "ITR-FULL-REINSP"
+    ).one()
+    cancelled = models.ITR(
+        id="cancelled-link", documentNumber="CANCELLED-LINK",
+        vendor_id=original.vendor_id, description="cancelled reinspection",
+        rev="A", submit="Initial", status="Void", inspectionResult="Pass",
+        noiNumber=original.noiNumber, raiseDate="2026-09-30",
+        isReInspection=True, originalItrId=original.id,
+    )
+    db_session.add(cancelled)
+    active.isReInspection = True
+    active.originalItrId = original.id
+    ncr = db_session.query(models.NCR).filter(models.NCR.noiNumber == original.noiNumber).one()
+    ncr.itrNumber = original.documentNumber if reference_path == "typed_relation" else None
+    if reference_path == "document_number":
+        # A stale number must not take precedence over the active typed report.
+        ncr.reInspectionNumber = cancelled.documentNumber
+        ncr.itrNumber = original.documentNumber
+    else:
+        ncr.reInspectionNumber = None
+    db_session.commit()
+    service = WorkflowService(db_session)
+    summary = _summary_for(service, "Q-WorkFlow-000004")
+    assert summary["itr_ids"] == [active.id]
+    assert summary["reinsp_itr_ids"] == [active.id]
+    assert _done_map(summary)[CHECKPOINT_WH_INSPECTION] is True
+    active.status = "Void"
+    db_session.commit()
+    summary = _summary_for(service, "Q-WorkFlow-000004")
+    assert summary["itr_ids"] == []
+    assert summary["reinsp_itr_ids"] == []
+    assert _done_map(summary)[CHECKPOINT_WH_INSPECTION] is False
 
 
 def test_list_workflows_filters_by_vendor(workflow_fixture, db_session):

@@ -56,7 +56,7 @@ class TestReferentialIntegrity:
 
         # Mock query to return None (NOI not found)
         mock_db.query.return_value.filter.return_value.first.return_value = None
-        mock_repo.create.side_effect = lambda ncr: ncr
+        mock_repo.create.side_effect = lambda ncr, **kw: ncr
 
         service = NCRService(mock_repo)
 

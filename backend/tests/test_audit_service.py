@@ -65,7 +65,7 @@ def test_get_audits(audit_service, mock_repo, sample_audit):
 
     assert len(result) == 1
     assert result[0].id == "audit-001"
-    mock_repo.get_all.assert_called_once_with(0, 100, scope=None)
+    mock_repo.get_all.assert_called_once_with(0, 100, project_id=None, scope=None)
 
 
 def test_get_audit_by_id(audit_service, mock_repo, sample_audit):

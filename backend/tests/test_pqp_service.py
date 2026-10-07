@@ -177,4 +177,4 @@ def test_delete_pqp_cleans_up_history(pqp_service, mock_repo):
     assert result is True
     mock_repo.db.query.assert_any_call(models.PQPHistory)
     mock_repo.db.query.return_value.filter.return_value.delete.assert_called()
-    mock_repo.delete.assert_called_once_with(mock_db_pqp)
+    mock_repo.delete.assert_called_once_with(mock_db_pqp, commit=False)

@@ -140,5 +140,5 @@ def test_delete_fat(fat_service, mock_repo):
 
         # Assert
         assert result is True
-        mock_repo.delete.assert_called_once_with(mock_db_fat)
+        mock_repo.delete.assert_called_once_with(mock_db_fat, commit=False)
         mock_log.assert_called_once()

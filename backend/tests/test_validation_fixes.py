@@ -127,17 +127,17 @@ class TestDateRangeValidation:
         ncr = schemas.NCRBase(**data)
         assert ncr.raiseDate == "2024-01-01"
 
-    def test_ncr_invalid_date_range(self):
-        """Closeout before raise should fail"""
-        with pytest.raises(ValidationError) as exc_info:
-            schemas.NCRBase(
-                description="Test",
-                rev="1",
-                submit="test",
-                status="Open",
-                raiseDate="2024-12-31",
-                closeoutDate="2024-01-01"
-            )
+    def test_ncr_base_tolerates_inconsistent_legacy_dates_and_the_rule_moved_to_the_write_path(self):
+        """BEHAVIOUR CHANGE (2026-09-20). This used to be `test_ncr_invalid_date_range` and asserted that NCRBase — which is also the
+        base of the READ schema NCR — REJECTED closeout-before-raise. That is what made GET /ncr/ answer 500 for one legacy row
+        (compare ITPBase above, which already tolerates it). NCRBase now returns such a row untouched; the SAME rule is enforced
+        on the final content of a create/update by NCRService (core.strict_dates), and reported on reads as `date_issues`."""
+        from core import strict_dates
+        ncr = schemas.NCRBase(description="Test", rev="1", submit="test", status="Open", raiseDate="2024-12-31", closeoutDate="2024-01-01")
+        assert (ncr.raiseDate, ncr.closeoutDate) == ("2024-12-31", "2024-01-01")
+        with pytest.raises(strict_dates.DateValidationError) as exc_info:
+            strict_dates.validate_date_write({"raiseDate": "2024-12-31", "closeoutDate": "2024-01-01"}, strict_dates.NCR_DATE_FIELDS,
+                                             relations=strict_dates.NCR_ORDER_RELATIONS)
         assert "before or equal" in str(exc_info.value).lower()
 
     def test_fat_valid_date_range(self):

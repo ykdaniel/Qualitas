@@ -85,7 +85,9 @@ def test_update_ncr_success(ncr_service, mock_repo):
         assert result.status == "In Progress"
         assert result.description == "Updated Description"
         mock_repo.update.assert_called_once()
-        mock_log.assert_called_once()
+        # one UPDATE entry (what changed) and, because the status changed, one STATUS_CHANGE entry — both strict
+        assert [c.args[1] for c in mock_log.call_args_list] == ['UPDATE', 'STATUS_CHANGE']
+        assert all(c.kwargs.get('strict') is True for c in mock_log.call_args_list)
 
 def test_update_ncr_sends_rejection_email_on_new_rejection(ncr_service, mock_repo):
     # Arrange — vendor_ref carries the contractor's email

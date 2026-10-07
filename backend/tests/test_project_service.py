@@ -50,7 +50,9 @@ def test_delete_project_success_when_unreferenced(project_service, mock_repo):
         mock_check.assert_called_once_with(mock_repo.db, "proj-456", "Empty Project")
         mock_repo.db.query.assert_any_call(models.UserProject)
         mock_repo.db.query.return_value.filter.return_value.delete.assert_called()
-        mock_repo.delete.assert_called_once_with(mock_db_project)
+        # 2026-09-23: delete_project now flushes only and commits once itself, together with the audit
+        # entry (see services/project_service.py) — repo.delete() is called with commit=False.
+        mock_repo.delete.assert_called_once_with(mock_db_project, commit=False)
 
 
 def test_delete_project_not_found(project_service, mock_repo):

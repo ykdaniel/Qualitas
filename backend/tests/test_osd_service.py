@@ -93,5 +93,5 @@ def test_delete_osd_success(osd_service, mock_repo):
         result = osd_service.delete_osd("osd-123", user_id=1, username="admin")
 
         assert result is True
-        mock_repo.delete.assert_called_once_with(mock_db_osd)
+        mock_repo.delete.assert_called_once_with(mock_db_osd, commit=False)
         mock_log.assert_called_once()

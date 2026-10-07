@@ -16,6 +16,8 @@ import database as database_module
 from database import Base
 import models
 import schemas
+from core.perms import NCR_CLOSE
+from ncr_photos import add_photo
 from repositories.itp_repository import ITPRepository
 from repositories.noi_repository import NOIRepository
 from repositories.ncr_repository import NCRRepository
@@ -205,6 +207,7 @@ def test_ncr_status_transition_allows_direct_close(db_session, vendor):
         )
     )
     db_session.commit()
+    add_photo(db_session, ncr.id)          # the improvement photo the closure needs: a real image file + its attachment row
 
     # deriveNCRStatus() (ncrFormSchema.ts) only ever produces Open / In Progress /
     # Closed — Effectiveness Verified = Yes closes the NCR in a single save from
@@ -219,13 +222,11 @@ def test_ncr_status_transition_allows_direct_close(db_session, vendor):
             status="Closed",
             productDisposition="Rework",
             reInspectionNumber="REINSP-001",
-            improvementPhotos=["photo1.jpg"],
             effectivenessVerified="Yes",
             drawingNo="DWG-1", specNo="SPEC-1", qtyAffected="1", extent="Isolated",
         ),
         user_id=1,
-        username="tester",
-    )
+        username="tester", permissions={NCR_CLOSE})
     assert updated.status == "Closed"
 
     # A closed NCR stays reachable by ncr:close:all holders (NCR.tsx), and
@@ -278,6 +279,7 @@ def test_ncr_use_as_is_requires_owner_approval_to_close(db_session, vendor):
         )
     )
     db_session.commit()
+    add_photo(db_session, ncr.id)          # the improvement photo the closure needs: a real image file + its attachment row
 
     # All the usual closure-gate fields present, effectiveness verified — but
     # ownerApproval is still unset. Use As Is must not close without it.
@@ -287,13 +289,11 @@ def test_ncr_use_as_is_requires_owner_approval_to_close(db_session, vendor):
             schemas.NCRUpdate(
                 status="Closed",
                 reInspectionNumber="REINSP-002",
-                improvementPhotos=["photo1.jpg"],
                 effectivenessVerified="Yes",
                 drawingNo="DWG-1", specNo="SPEC-1", qtyAffected="1", extent="Isolated",
             ),
             user_id=1,
-            username="tester",
-        )
+            username="tester", permissions={NCR_CLOSE})
 
     # Approve it — now closing succeeds, and the date auto-stamps.
     updated = ncr_service.update_ncr(
@@ -301,15 +301,13 @@ def test_ncr_use_as_is_requires_owner_approval_to_close(db_session, vendor):
         schemas.NCRUpdate(
             status="Closed",
             reInspectionNumber="REINSP-002",
-            improvementPhotos=["photo1.jpg"],
             effectivenessVerified="Yes",
             ownerApproval="Approved",
             ownerApprovalBy="Jane Owner",
             drawingNo="DWG-1", specNo="SPEC-1", qtyAffected="1", extent="Isolated",
         ),
         user_id=1,
-        username="tester",
-    )
+        username="tester", permissions={NCR_CLOSE})
     assert updated.status == "Closed"
     assert updated.ownerApproval == "Approved"
     assert updated.ownerApprovalBy == "Jane Owner"
@@ -330,6 +328,7 @@ def test_ncr_rework_disposition_does_not_need_owner_approval(db_session, vendor)
         )
     )
     db_session.commit()
+    add_photo(db_session, ncr.id)          # the improvement photo the closure needs: a real image file + its attachment row
 
     # Rework isn't a technical-change disposition — no owner approval, and no
     # repairMethodStatement (that's only required for "Repair"), needed.
@@ -338,13 +337,11 @@ def test_ncr_rework_disposition_does_not_need_owner_approval(db_session, vendor)
         schemas.NCRUpdate(
             status="Closed",
             reInspectionNumber="REINSP-003",
-            improvementPhotos=["photo1.jpg"],
             effectivenessVerified="Yes",
             drawingNo="DWG-1", specNo="SPEC-1", qtyAffected="1", extent="Isolated",
         ),
         user_id=1,
-        username="tester",
-    )
+        username="tester", permissions={NCR_CLOSE})
     assert updated.status == "Closed"
 
 
@@ -366,6 +363,7 @@ def test_ncr_repair_disposition_requires_repair_method_statement(db_session, ven
         )
     )
     db_session.commit()
+    add_photo(db_session, ncr.id)          # the improvement photo the closure needs: a real image file + its attachment row
 
     with pytest.raises(ValueError, match="repairMethodStatement"):
         ncr_service.update_ncr(
@@ -373,14 +371,12 @@ def test_ncr_repair_disposition_requires_repair_method_statement(db_session, ven
             schemas.NCRUpdate(
                 status="Closed",
                 reInspectionNumber="REINSP-004",
-                improvementPhotos=["photo1.jpg"],
                 effectivenessVerified="Yes",
                 ownerApproval="Approved",
                 drawingNo="DWG-1", specNo="SPEC-1", qtyAffected="1", extent="Isolated",
             ),
             user_id=1,
-            username="tester",
-        )
+            username="tester", permissions={NCR_CLOSE})
 
     updated = ncr_service.update_ncr(
         ncr.id,
@@ -388,14 +384,12 @@ def test_ncr_repair_disposition_requires_repair_method_statement(db_session, ven
             status="Closed",
             repairMethodStatement="Reweld and re-inspect.",
             reInspectionNumber="REINSP-004",
-            improvementPhotos=["photo1.jpg"],
             effectivenessVerified="Yes",
             ownerApproval="Approved",
             drawingNo="DWG-1", specNo="SPEC-1", qtyAffected="1", extent="Isolated",
         ),
         user_id=1,
-        username="tester",
-    )
+        username="tester", permissions={NCR_CLOSE})
     assert updated.status == "Closed"
 
 

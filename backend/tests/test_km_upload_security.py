@@ -25,10 +25,10 @@ class _FakeUploadFile:
         self.file = io.BytesIO(content)
 
 
-def test_upload_filename_cannot_escape_uploads_dir(db_session):
+def test_upload_filename_cannot_escape_uploads_dir(db_session, tmp_path, monkeypatch):
+    monkeypatch.setenv('QUALITAS_UPLOAD_ROOT', str(tmp_path))      # never the project's backend/uploads
     service = KMService(KMRepository(db_session))
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    upload_dir = os.path.join(base_dir, 'uploads', 'km')
+    upload_dir = os.path.join(str(tmp_path), 'km')
 
     malicious = _FakeUploadFile('../../../../tmp/evil_traversal_test.png', _PNG_BYTES)
     url = service.upload_image(malicious)
@@ -51,10 +51,10 @@ def test_upload_filename_cannot_escape_uploads_dir(db_session):
     os.remove(saved_path)
 
 
-def test_upload_normal_filename_still_works(db_session):
+def test_upload_normal_filename_still_works(db_session, tmp_path, monkeypatch):
+    monkeypatch.setenv('QUALITAS_UPLOAD_ROOT', str(tmp_path))      # never the project's backend/uploads
     service = KMService(KMRepository(db_session))
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    upload_dir = os.path.join(base_dir, 'uploads', 'km')
+    upload_dir = os.path.join(str(tmp_path), 'km')
 
     normal = _FakeUploadFile('diagram.png', _PNG_BYTES)
     url = service.upload_image(normal)

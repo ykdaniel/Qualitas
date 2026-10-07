@@ -6,6 +6,7 @@ controlled-value (enum) validation, and the Resolved→In Progress transition.
 """
 
 import pytest
+from core.perms import NCR_CLOSE
 from unittest.mock import MagicMock, patch
 from pydantic import ValidationError
 
@@ -18,6 +19,14 @@ import schemas
 @pytest.fixture
 def mock_repo():
     return MagicMock()
+
+
+@pytest.fixture(autouse=True)
+def _usable_improvement_photo():
+    """These unit tests are about the OTHER closure rules, on a mocked repository (no attachments table, no upload folder): the server-side photo
+    check is patched to "one usable photo". It is tested for real — files, rows, refusals — in test_ncr_closure_photos_http.py."""
+    with patch('services.ncr_service.improvement_photo_evidence', return_value=(1, [])):
+        yield
 
 
 @pytest.fixture
@@ -42,7 +51,7 @@ def _captured_new_record(mock_repo):
 def test_create_auto_fills_due_date_from_severity(ncr_service, mock_repo, severity, expected):
     with patch('services.ncr_service.generate_reference_no', return_value="NCR-1"), \
          patch('services.ncr_service.log_audit'):
-        mock_repo.create.side_effect = lambda obj: obj
+        mock_repo.create.side_effect = lambda obj, **kw: obj
         ncr_service.create_ncr(_make_create(severity=severity, raiseDate="2026-01-01"),
                                user_id=1, username="qa")
         assert _captured_new_record(mock_repo).dueDate == expected
@@ -52,7 +61,7 @@ def test_create_auto_fills_due_date_from_severity(ncr_service, mock_repo, severi
 def test_create_respects_explicit_due_date(ncr_service, mock_repo):
     with patch('services.ncr_service.generate_reference_no', return_value="NCR-1"), \
          patch('services.ncr_service.log_audit'):
-        mock_repo.create.side_effect = lambda obj: obj
+        mock_repo.create.side_effect = lambda obj, **kw: obj
         ncr_service.create_ncr(
             _make_create(severity="Major", raiseDate="2026-01-01", dueDate="2026-02-01"),
             user_id=1, username="qa")
@@ -62,7 +71,7 @@ def test_create_respects_explicit_due_date(ncr_service, mock_repo):
 def test_create_without_severity_does_not_autofill(ncr_service, mock_repo):
     with patch('services.ncr_service.generate_reference_no', return_value="NCR-1"), \
          patch('services.ncr_service.log_audit'):
-        mock_repo.create.side_effect = lambda obj: obj
+        mock_repo.create.side_effect = lambda obj, **kw: obj
         ncr_service.create_ncr(_make_create(raiseDate="2026-01-01"), user_id=1, username="qa")
         assert not _captured_new_record(mock_repo).dueDate
 
@@ -85,16 +94,16 @@ def test_close_blocked_without_effectiveness_verified(ncr_service, mock_repo):
     with patch('services.ncr_service.log_audit'):
         with pytest.raises(ValueError, match="effectiveness"):
             ncr_service.update_ncr("ncr-1", schemas.NCRUpdate(status="Closed"),
-                                   user_id=7, username="qa")
+                                   user_id=7, username="qa", permissions={NCR_CLOSE})
 
 
 def test_close_succeeds_with_effectiveness_and_stamps_actors(ncr_service, mock_repo):
     mock_repo.get_by_id.return_value = _resolved_ncr_ready_to_close()
-    mock_repo.update.side_effect = lambda obj, d: obj
+    mock_repo.update.side_effect = lambda obj, d, **kw: obj
     with patch('services.ncr_service.log_audit'):
         ncr_service.update_ncr(
             "ncr-1", schemas.NCRUpdate(status="Closed", effectivenessVerified="Yes"),
-            user_id=7, username="qa")
+            user_id=7, username="qa", permissions={NCR_CLOSE})
         applied = mock_repo.update.call_args[0][1]
         assert applied["closedBy"] == 7
         assert applied["effectivenessVerifiedBy"] == 7
@@ -126,23 +135,23 @@ def test_close_blocked_when_repair_method_statement_and_status_both_blank(ncr_se
     with patch('services.ncr_service.log_audit'):
         with pytest.raises(ValueError, match="repairMethodStatement"):
             ncr_service.update_ncr("ncr-1", schemas.NCRUpdate(status="Closed"),
-                                   user_id=7, username="qa")
+                                   user_id=7, username="qa", permissions={NCR_CLOSE})
 
 
 def test_close_succeeds_when_repair_method_statement_status_is_na(ncr_service, mock_repo):
     mock_repo.get_by_id.return_value = _repair_ncr_ready_to_close(repairMethodStatementStatus="NA")
-    mock_repo.update.side_effect = lambda obj, d: obj
+    mock_repo.update.side_effect = lambda obj, d, **kw: obj
     with patch('services.ncr_service.log_audit'):
         ncr_service.update_ncr("ncr-1", schemas.NCRUpdate(status="Closed"),
-                               user_id=7, username="qa")  # should not raise
+                               user_id=7, username="qa", permissions={NCR_CLOSE})  # should not raise
 
 
 def test_close_succeeds_when_repair_method_statement_text_present(ncr_service, mock_repo):
     mock_repo.get_by_id.return_value = _repair_ncr_ready_to_close(repairMethodStatement="Grind and re-weld.")
-    mock_repo.update.side_effect = lambda obj, d: obj
+    mock_repo.update.side_effect = lambda obj, d, **kw: obj
     with patch('services.ncr_service.log_audit'):
         ncr_service.update_ncr("ncr-1", schemas.NCRUpdate(status="Closed"),
-                               user_id=7, username="qa")  # should not raise
+                               user_id=7, username="qa", permissions={NCR_CLOSE})  # should not raise
 
 
 # --- Locked quality fields on a Closed NCR now also cover the *Status
