@@ -13,7 +13,7 @@ Nine canonical checkpoints make up one row on the tracker:
     2. W/H Inspection     — at least one ITR is linked to the NOI
     3. NCR                — at least one NCR has been raised (or N/A)
     4. MoC                — every linked NCR has repair method
-    5. Improvement        — every linked NCR has improvement photos
+    5. Improvement        — every linked NCR has improvement photos the SERVER can confirm (see below)
     6. Re-Inspection      — every linked NCR has re-insp number
     7. ITR (re-insp)      — every NCR's re-insp ITR exists
     8. Close NCR          — every linked NCR is Closed
@@ -38,6 +38,19 @@ Three important semantics:
   as "progress only reached here", and a green cell to the right of
   an orange one would look like the work skipped ahead.
 
+**Improvement evidence (2026-09-21).** The checkpoint no longer reads the NCR's own ``improvementPhotos`` JSON list (any string could satisfy it, and a
+real uploaded photo never did). Per NCR — Void excluded — using the SAME read-only check as the NCR closure rule (core/ncr_photo_evidence.py: an
+improvementPhoto attachment of THIS NCR, not deleted, file present under the upload root, image FILE HEADER — not a proof that the image decodes):
+
+* NCR not Closed: passes only with such a photo. Otherwise it blocks, with the reason ``missing`` / ``invalid`` / ``legacy_unverified``
+  (an old JSON string cannot be mapped to a file, so it is not counted and not guessed at). A REOPENED NCR is judged the same way: a valid photo that
+  is still there keeps it green.
+* NCR Closed: passes either way. With a valid photo the cell says the CURRENT photo is verified; without one it passes "on Closed status, photos not
+  verified" and keeps the underlying reason. Closed proves neither the age of the record nor that the photo was valid when it was closed.
+
+The percentage formula is unchanged; the checkpoint and the summary report how many records passed WITHOUT verification, so 100% is never read as
+"all evidence verified". This only concerns the tracker's DISPLAY: closing an NCR still needs a verified photo (ncr_service), whatever this says.
+
 Tri-state:
 
 * ``done``    — every rule up to and including this cell is satisfied
@@ -47,7 +60,6 @@ Tri-state:
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any, Callable, Dict, List, Optional
 
@@ -55,6 +67,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload
 
 import models
+from core.ncr_photo_evidence import LEGACY_UNVERIFIED, VERIFIED, PhotoEvidence, classify, ncr_photo_evidence, photo_list
 from core.scope import apply_scope
 
 logger = logging.getLogger(__name__)
@@ -102,20 +115,6 @@ def _has_text(value: Optional[str]) -> bool:
     if isinstance(value, str):
         return bool(value.strip())
     return bool(value)
-
-
-def _has_photos(photos_json: Optional[str]) -> bool:
-    """``improvementPhotos`` is a JSON array of paths stored as TEXT.
-    Empty arrays, nulls and parse failures all count as "no photos"
-    so malformed blobs can't accidentally mark the Improvement
-    checkpoint as done."""
-    if not photos_json:
-        return False
-    try:
-        parsed = json.loads(photos_json)
-    except (ValueError, TypeError):
-        return False
-    return isinstance(parsed, list) and len(parsed) > 0
 
 
 def _all_ncrs(
@@ -169,12 +168,14 @@ class _CheckpointContext:
         ncrs: List[models.NCR],
         itr_by_doc_no: Dict[str, models.ITR],
         reinsp_itrs_by_original_id: Dict[str, List[models.ITR]],
+        photo_evidence: Optional[Dict[str, PhotoEvidence]] = None,
     ) -> None:
         self.noi = noi
         self.itrs = itrs
         self.ncrs = ncrs
         self.itr_by_doc_no = itr_by_doc_no
         self.reinsp_itrs_by_original_id = reinsp_itrs_by_original_id
+        self.photo_evidence = photo_evidence or {}
 
 
 _CheckpointRule = Callable[[_CheckpointContext], bool]
@@ -220,8 +221,33 @@ def _rule_moc(ctx: _CheckpointContext) -> bool:
     return _all_ncrs(ctx.ncrs, lambda n: _moc_ok(ctx, n))
 
 
-def _improvement_ok(_ctx: _CheckpointContext, n: models.NCR) -> bool:
-    return _has_photos(n.improvementPhotos)
+EVIDENCE_VERIFIED = "verified"                    # a valid improvement photo of this NCR exists NOW
+EVIDENCE_CLOSED_UNVERIFIED = "closed_unverified"  # passes only because the NCR is Closed; the photo is not verified (reason: missing / invalid / legacy_unverified)
+
+
+class _ImprovementResult:
+    """The improvement checkpoint's verdict for ONE NCR."""
+
+    __slots__ = ("passes", "evidence", "reason")
+
+    def __init__(self, passes: bool, evidence: Optional[str], reason: Optional[str]) -> None:
+        self.passes = passes          # does this NCR satisfy the checkpoint
+        self.evidence = evidence      # EVIDENCE_VERIFIED / EVIDENCE_CLOSED_UNVERIFIED for a passing NCR, None for a blocking one
+        self.reason = reason          # why the photo is not verified: missing / invalid / legacy_unverified (None when verified)
+
+
+def _improvement_result(ctx: _CheckpointContext, n: models.NCR) -> _ImprovementResult:
+    kind = classify(ctx.photo_evidence.get(n.id, PhotoEvidence(0)), bool(photo_list(n.improvementPhotos)))
+    if kind == VERIFIED:
+        return _ImprovementResult(True, EVIDENCE_VERIFIED, None)
+    if (n.status or "").strip() == "Closed":
+        # Closed is not proof of anything about the photo: the reason it cannot be verified is kept, never rewritten into "verified"
+        return _ImprovementResult(True, EVIDENCE_CLOSED_UNVERIFIED, kind)
+    return _ImprovementResult(False, None, kind)
+
+
+def _improvement_ok(ctx: _CheckpointContext, n: models.NCR) -> bool:
+    return _improvement_result(ctx, n).passes
 
 
 def _rule_improvement(ctx: _CheckpointContext) -> bool:
@@ -344,6 +370,32 @@ def _first_blocking_ncr_id(
     return None
 
 
+def _improvement_detail(ctx: _CheckpointContext) -> Dict[str, Any]:
+    """What the improvement checkpoint rests on, per NCR of this workflow (Void excluded): how many have a verified photo, how many pass ONLY because
+    they are Closed (with the ids and the underlying reasons), and why the first blocking NCR blocks. Same per-NCR verdicts as the rule itself."""
+    verified = 0
+    unverified_ids: List[str] = []
+    reasons: Dict[str, int] = {}
+    blocking_reason: Optional[str] = None
+    for n in ctx.ncrs:
+        r = _improvement_result(ctx, n)
+        if not r.passes:
+            if blocking_reason is None:
+                blocking_reason = r.reason
+        elif r.evidence == EVIDENCE_VERIFIED:
+            verified += 1
+        else:
+            unverified_ids.append(n.id)
+            reasons[r.reason or "missing"] = reasons.get(r.reason or "missing", 0) + 1
+    return {
+        "blocking_reason": blocking_reason,
+        "verified_count": verified,
+        "unverified_count": len(unverified_ids),
+        "unverified_ncr_ids": unverified_ids,
+        "unverified_reasons": reasons,
+    }
+
+
 # Completion buckets for the Dashboard distribution card. Inclusive
 # on both ends of the final bucket so 100% has somewhere to land.
 _BUCKETS: tuple[tuple[str, int, int], ...] = (
@@ -362,17 +414,20 @@ class _Lookups:
     evaluation in a single request. Built once per public-method call
     to avoid quadratic re-queries."""
 
-    __slots__ = ("itr_by_doc_no", "extra_ncrs_by_noi", "reinsp_itrs_by_original_id")
+    __slots__ = ("itr_by_doc_no", "extra_ncrs_by_noi", "reinsp_itrs_by_original_id", "photo_evidence")
 
     def __init__(
         self,
         itr_by_doc_no: Dict[str, models.ITR],
         extra_ncrs_by_noi: Dict[str, List[models.NCR]],
         reinsp_itrs_by_original_id: Dict[str, List[models.ITR]],
+        photo_evidence: Optional[Dict[str, PhotoEvidence]] = None,
     ) -> None:
         self.itr_by_doc_no = itr_by_doc_no
         self.extra_ncrs_by_noi = extra_ncrs_by_noi
         self.reinsp_itrs_by_original_id = reinsp_itrs_by_original_id
+        # improvement-photo evidence of every NCR of THIS request, from one batch; dropped with the request, never cached between requests
+        self.photo_evidence = photo_evidence or {}
 
 
 class WorkflowService:
@@ -389,6 +444,7 @@ class WorkflowService:
         max_completion: Optional[int] = None,
         vendor_id: Optional[str] = None,
         scope=None,
+        project_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Return a page of Q-WorkFlow summaries. Completion filtering
         happens after computation because the percentage is derived,
@@ -396,7 +452,7 @@ class WorkflowService:
         limit = max(1, min(limit, _MAX_LIMIT))
         skip = max(0, skip)
 
-        qworkflows = self._load_qworkflows(vendor_id=vendor_id, scope=scope)
+        qworkflows = self._load_qworkflows(vendor_id=vendor_id, scope=scope, project_id=project_id)
         lookups = self._build_lookups(qworkflows, scope=scope)
 
         summaries = [
@@ -414,9 +470,9 @@ class WorkflowService:
 
         return summaries[skip : skip + limit]
 
-    def get_stats(self, scope=None) -> Dict[str, int]:
+    def get_stats(self, scope=None, project_id: Optional[str] = None) -> Dict[str, int]:
         """Completion-distribution stats for the Dashboard card."""
-        qworkflows = self._load_qworkflows(scope=scope)
+        qworkflows = self._load_qworkflows(scope=scope, project_id=project_id)
         lookups = self._build_lookups(qworkflows, scope=scope)
 
         bucket_counts: Dict[str, int] = {name: 0 for name, _, _ in _BUCKETS}
@@ -429,13 +485,13 @@ class WorkflowService:
 
         return {"total": len(qworkflows), **bucket_counts}
 
-    def get_needs_attention(self, limit: int = 3, scope=None) -> List[Dict[str, Any]]:
+    def get_needs_attention(self, limit: int = 3, scope=None, project_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Lowest-completion non-complete Q-WorkFlows.
 
         100%-complete ones are excluded — there's nothing left to
         act on. Ties are broken by NOI ``issueDate`` desc so newer
         problem workflows surface over ancient zombies."""
-        qworkflows = self._load_qworkflows(scope=scope)
+        qworkflows = self._load_qworkflows(scope=scope, project_id=project_id)
         lookups = self._build_lookups(qworkflows, scope=scope)
 
         summaries = [
@@ -453,7 +509,7 @@ class WorkflowService:
     # ─── Internal helpers ─────────────────────────────────────────
 
     def _load_qworkflows(
-        self, vendor_id: Optional[str] = None, scope=None,
+        self, vendor_id: Optional[str] = None, scope=None, project_id: Optional[str] = None,
     ) -> List[models.QWorkflow]:
         """Load all Q-WorkFlows plus the NOI/NCR/ITR graph they span
         in a bounded number of queries (thanks to selectinload)."""
@@ -477,6 +533,8 @@ class WorkflowService:
         # P0 data isolation: a Q-WorkFlow is owned by its NOI, so scope by the
         # NOI's project/contractor.
         query = apply_scope(query, models.NOI, scope)
+        if project_id:
+            query = query.filter(models.NOI.project_id == project_id)
         # Newest Q-WorkFlow first. Ordering by referenceNo desc gives
         # "most recently created" since numbers are monotonically
         # assigned.
@@ -621,7 +679,8 @@ class WorkflowService:
         ncrs = list(noi.ncrs) if noi and noi.ncrs else []
         if noi is not None:
             ncrs.extend(lookups.extra_ncrs_by_noi.get(noi.id, []))
-        return [n for n in ncrs if (n.status or "").strip() != "Void"]
+        # a stable order (the relationship's own order is unspecified): "the first blocking NCR" and every id list must not change between requests
+        return sorted((n for n in ncrs if (n.status or "").strip() != "Void"), key=lambda n: (n.documentNumber or "", n.id or ""))
 
     def _make_context(
         self,
@@ -635,6 +694,7 @@ class WorkflowService:
             noi=noi, itrs=itrs, ncrs=ncrs,
             itr_by_doc_no=lookups.itr_by_doc_no,
             reinsp_itrs_by_original_id=lookups.reinsp_itrs_by_original_id,
+            photo_evidence=lookups.photo_evidence,
         )
 
     def _build_lookups(
@@ -646,10 +706,21 @@ class WorkflowService:
         extra_ncrs_by_noi = self._build_extra_ncrs_by_noi(qworkflows, scope)
         itr_by_doc_no = self._build_itr_lookup(qworkflows, extra_ncrs_by_noi, scope)
         reinsp_itrs_by_original_id = self._build_reinsp_by_original(itr_by_doc_no, scope)
+        # improvement-photo evidence for every NCR any of these workflows will look at (Void ones are excluded by the rules, so not read):
+        # one batch = one query per 400 NCRs, read-only, kept only for this request
+        ncr_ids: List[str] = []
+        for qwf in qworkflows:
+            noi = qwf.noi_ref
+            if noi is None:
+                continue
+            for n in list(noi.ncrs or []) + list(extra_ncrs_by_noi.get(noi.id, [])):
+                if (n.status or "").strip() != "Void":
+                    ncr_ids.append(n.id)
         return _Lookups(
             itr_by_doc_no=itr_by_doc_no,
             extra_ncrs_by_noi=extra_ncrs_by_noi,
             reinsp_itrs_by_original_id=reinsp_itrs_by_original_id,
+            photo_evidence=ncr_photo_evidence(self.db, ncr_ids),
         )
 
     def _evaluate_checkpoints(
@@ -722,14 +793,21 @@ class WorkflowService:
             predicate = _NCR_RULE_PREDICATES.get(key)
             if predicate is not None:
                 blocking_ncr_id = _first_blocking_ncr_id(ctx, predicate)
-            out.append(
-                {
-                    "key": key,
-                    "state": state,
-                    "done": state == STATE_DONE,
-                    "blocking_ncr_id": blocking_ncr_id,
-                }
-            )
+            cp = {
+                "key": key,
+                "state": state,
+                "done": state == STATE_DONE,
+                "blocking_ncr_id": blocking_ncr_id,
+                # improvement-evidence detail (zero / empty for every other checkpoint)
+                "blocking_reason": None,
+                "verified_count": 0,
+                "unverified_count": 0,
+                "unverified_ncr_ids": [],
+                "unverified_reasons": {},
+            }
+            if key == CHECKPOINT_IMPROVEMENT:
+                cp.update(_improvement_detail(ctx))
+            out.append(cp)
         return out
 
     def _completion_percent(
@@ -763,7 +841,12 @@ class WorkflowService:
         # what the checkpoint rules actually saw.
         ncrs_for_summary: List[models.NCR] = self._active_ncrs_for_noi(noi, lookups)
         ncr_ids = [n.id for n in ncrs_for_summary]
-        itr_ids = [i.id for i in (noi.itrs or [])] if noi else []
+        # Checkpoint links follow the same Void exclusion as W/H inspection.
+        # Keep the full relationship in the context for terminal-state checks.
+        itr_ids = [
+            i.id for i in (noi.itrs or [])
+            if (i.status or "").strip() != "Void"
+        ] if noi else []
 
         # Re-inspection ITR ids — the specific ITRs that satisfy (or
         # should satisfy) checkpoint 7. Lets the frontend deep-link
@@ -784,7 +867,7 @@ class WorkflowService:
                         lookups.reinsp_itrs_by_original_id.get(orig.id, [])
                     )
             for itr in candidates:
-                if itr.id and itr.id not in seen_reinsp:
+                if (itr.status or "").strip() != "Void" and itr.id and itr.id not in seen_reinsp:
                     seen_reinsp.add(itr.id)
                     reinsp_itr_ids.append(itr.id)
 
@@ -802,19 +885,22 @@ class WorkflowService:
             "checkpoints": checkpoints,
             "done_count": done_count,
             "completion_percent": completion_percent,
+            # how many NCRs of this flow pass the improvement checkpoint WITHOUT a verified photo (Closed status only): 100% is not "all verified"
+            "unverified_photo_count": next(c["unverified_count"] for c in checkpoints if c["key"] == CHECKPOINT_IMPROVEMENT),
+            "unverified_photo_reasons": next(c["unverified_reasons"] for c in checkpoints if c["key"] == CHECKPOINT_IMPROVEMENT),
             "ncr_ids": ncr_ids,
             "itr_ids": itr_ids,
             "reinsp_itr_ids": reinsp_itr_ids,
         }
 
 
-def _sort_date_desc(value: Optional[str]) -> str:
+def _sort_date_desc(value: Optional[str]) -> tuple[bool, str]:
     """Comparison key that flips ISO-date strings so newer dates sort
     first when used alongside an ascending numeric key in a tuple.
     Missing dates sort last."""
     if not value:
-        return ""
-    return "".join(
+        return (True, "")
+    return (False, "".join(
         chr(0x7E - ord(c)) if 0x20 <= ord(c) <= 0x7E else c
         for c in value
-    )
+    ))

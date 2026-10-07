@@ -51,22 +51,31 @@ class OBSRepository:
 
         return query.offset(skip).limit(limit).all()
 
-    def create(self, obs: models.OBS) -> models.OBS:
+    def create(self, obs: models.OBS, commit: bool = True) -> models.OBS:
         """Create a new OBS record"""
         self.db.add(obs)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(obs)
         return obs
 
-    def update(self, obs: models.OBS, update_data: dict) -> models.OBS:
+    def update(self, obs: models.OBS, update_data: dict, commit: bool = True) -> models.OBS:
         """Update an existing OBS record"""
         for key, value in update_data.items():
             setattr(obs, key, value)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(obs)
         return obs
 
-    def delete(self, obs: models.OBS):
+    def delete(self, obs: models.OBS, commit: bool = True):
         """Delete an OBS record"""
         self.db.delete(obs)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()

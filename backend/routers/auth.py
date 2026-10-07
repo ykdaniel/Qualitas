@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta, timezone
 import logging
-import os
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -79,20 +78,12 @@ async def login_for_access_token(
                 )
                 password_ok = False
 
-        # Development-only rescue login for the admin account.
-        # Restrict to development only — staging / qa / prod should never accept
-        # a rescue password.
-        if not password_ok and settings.ENVIRONMENT == "development":
-            fallback_password = os.getenv("INITIAL_ADMIN_PASSWORD", "").strip()
-            is_dev_admin_login = form_data.username in {"admin", "admin@example.com"}
-            if fallback_password and is_dev_admin_login and form_data.password == fallback_password:
-                if not user:
-                    user = user_service.get_user_by_email("admin@example.com") or user_service.get_user_by_username("admin")
-                if user:
-                    logger.warning(
-                        "Development rescue login used for admin account via INITIAL_ADMIN_PASSWORD"
-                    )
-                    password_ok = True
+        # There is deliberately NO environment-variable / "rescue" password path
+        # here (removed 2026-09-20): in every environment a login must pass the
+        # stored password check, and then the checks below (deactivated account,
+        # 2FA) and above (lockout). INITIAL_ADMIN_PASSWORD is only the password SOURCE
+        # when db_seeder first creates the very first administrator; afterwards it
+        # is just that account's ordinary stored password until it is changed.
 
         if not user or not password_ok:
             # Increment failure counter & lock if threshold reached.
@@ -117,6 +108,20 @@ async def login_for_access_token(
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect username or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # A deactivated account must not be handed fresh session cookies (before
+        # this check the login succeeded and only the NEXT request was refused).
+        # Reached only with a correct password, so it reveals nothing to a guesser.
+        if not user.is_active:
+            log_audit(db, "LOGIN_FAILED_INACTIVE", "User", str(user.id),
+                      entity_name=user.username, username=form_data.username,
+                      reason=f"Deactivated account from {client_ip}")
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User account is deactivated",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
@@ -280,6 +285,19 @@ async def refresh_access_token(
     user = user_service.get_user_by_username(username=username)
     if user is None:
         raise credentials_exception
+    # No new credentials for a deactivated account, and none from a refresh
+    # token issued before an account-wide revocation / deactivation cutoff
+    # (same rule get_current_user applies to access tokens) — otherwise a
+    # re-activated account would get its old sessions back.
+    if not user.is_active:
+        raise credentials_exception
+    cutoff = getattr(user, "tokens_valid_after", None)
+    if cutoff is not None:
+        iat = payload.get("iat")
+        if iat is None or datetime.fromtimestamp(iat, tz=timezone.utc) < (
+            cutoff.replace(tzinfo=timezone.utc) if cutoff.tzinfo is None else cutoff
+        ):
+            raise credentials_exception
 
     # Blacklist the consumed refresh token (single-use rotation)
     blacklist_token(refresh_token)

@@ -37,19 +37,28 @@ class ITPRepository:
 
         return query.offset(skip).limit(limit).all()
 
-    def create(self, itp: models.ITP) -> models.ITP:
+    def create(self, itp: models.ITP, commit: bool = True) -> models.ITP:
         self.db.add(itp)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(itp)
         return itp
 
-    def update(self, itp: models.ITP, update_data: dict) -> models.ITP:
+    def update(self, itp: models.ITP, update_data: dict, commit: bool = True) -> models.ITP:
         for key, value in update_data.items():
             setattr(itp, key, value)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(itp)
         return itp
 
-    def delete(self, itp: models.ITP):
+    def delete(self, itp: models.ITP, commit: bool = True):
         self.db.delete(itp)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()

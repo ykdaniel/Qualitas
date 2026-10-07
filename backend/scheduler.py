@@ -54,6 +54,10 @@ async def check_and_send_reminders():
         ).all()
 
         for f in followups:
+            # A disabled IAM assignee must not receive reminders or cause
+            # automatic rerouting to the vendor contact.
+            if f.assignee and not f.assignee.is_active:
+                continue
             # Prefer the actual assignee's email (assignedToUserId) — many
             # FollowUp rows are purely internal action items with no vendor
             # at all, so falling straight to _get_vendor_email meant the
@@ -156,7 +160,7 @@ async def check_and_send_reminders():
 
         for ncr in pending_approval_ncrs:
             assignee = assignees_by_id.get(ncr.assignedTo)
-            if not assignee or not assignee.email:
+            if not assignee or not assignee.is_active or not assignee.email:
                 continue
             await send_ncr_owner_approval_pending_reminder(
                 assignee.email, ncr.documentNumber, ncr.productDisposition

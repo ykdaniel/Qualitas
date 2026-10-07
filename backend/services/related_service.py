@@ -178,7 +178,7 @@ class RelatedService:
         if vendor_ref is not None:
             vendor_name = getattr(vendor_ref, "name", None)
 
-        return {
+        result: Dict[str, Any] = {
             "entityType": entity_type,
             "id": entity.id,
             "referenceNo": getattr(entity, meta["reference_field"], None),
@@ -189,3 +189,7 @@ class RelatedService:
             "direction": direction,
             "primaryDate": getattr(entity, meta["date_field"], None),
         }
+        # The response model also omits this field for non-ITR entries.
+        if entity_type == "itr":
+            result["isReInspection"] = bool(getattr(entity, "isReInspection", False))
+        return result

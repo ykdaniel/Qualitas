@@ -258,9 +258,73 @@ class WorkflowEngine:
         return new_status in allowed_next_states
 
 
+def lock_itr_for_write(db: Session, itr_id: str) -> None:
+    """Take the write lock for everything that decides or changes an ITR's
+    approval-relevant state, BEFORE reading it.
+
+    Approving an ITR is check-then-write over several rows (the ITR, all its
+    linked Checklist instances): "are they all Pass?", "snapshot them", "set
+    Approved". A concurrent Checklist edit / link / unlink that had already
+    passed its own "parent ITR is not Approved" check could otherwise commit
+    between those steps and leave an approval whose snapshot differs from what
+    was checked (or a checklist changed behind an Approved ITR). Every such
+    writer therefore calls this first and RE-READS afterwards.
+
+    SQLite has one writer at a time, but nothing is held across plain SELECTs,
+    so a no-op UPDATE starts the write transaction (a concurrent writer waits
+    here until the holder commits or rolls back). Elsewhere, a row lock on the
+    ITR. The caller must commit or roll back to release it."""
+    if db.get_bind().dialect.name == "sqlite":
+        db.execute(text("UPDATE itr SET id = id WHERE id = :i"), {"i": itr_id})
+    else:
+        db.query(models.ITR).filter(models.ITR.id == itr_id).with_for_update().first()
+
+
+def begin_write_transaction(db: Session) -> None:
+    """Start the write transaction NOW, before anything is read, for a create that must read-then-write shared
+    state (a reference-number sequence, MAX+1 numbering) and commit it together with the record.
+
+    SQLite has one writer at a time and pysqlite starts a transaction only at the first INSERT/UPDATE, so two
+    creators could both read the same "next number" and one would then fail to upgrade to a writer. A no-op UPDATE
+    (matches no row) takes the write lock up front; a concurrent creator waits here until the holder commits or
+    rolls back. On other databases the sequence row is locked by generate_reference_no (`FOR UPDATE`), so nothing
+    is needed. The caller must commit or roll back to release it."""
+    if db.get_bind().dialect.name == "sqlite":
+        db.execute(text("UPDATE reference_sequences SET id = id WHERE 0"))
+
+
+def lock_ncr_for_write(db: Session, ncr_id: str) -> None:
+    """Take the write lock for an NCR change BEFORE reading anything the change is decided on (2026-09-21).
+
+    Closing an NCR is check-then-write: "does it have a valid improvement photo?" and then "set Closed". A photo deleted between those two steps
+    would leave a Closed NCR with no evidence. Every writer of that evidence — this update and the attachment delete (which takes the same
+    lock and then RE-READS what it decides on) — is serialised through it. SQLite has one writer at a time, but nothing is held across plain
+    SELECTs, so a no-op UPDATE starts the write transaction; elsewhere the NCR row is locked FOR UPDATE. The caller commits or rolls back."""
+    if db.get_bind().dialect.name == "sqlite":
+        db.execute(text("UPDATE ncr SET id = id WHERE id = :i"), {"i": ncr_id})
+    else:
+        db.query(models.NCR).filter(models.NCR.id == ncr_id).with_for_update().first()
+
+
+def reload_locked(db: Session, obj) -> bool:
+    """Re-read `obj` from the database right after taking the ITR write lock.
+
+    Returns False when the row no longer exists: another request held the lock first and DELETED it
+    (e.g. an ITR delete racing an approval, a checklist save or a link). The caller then treats the
+    record as not found and rolls back to release the lock — never a 500 from a refresh of a
+    vanished row."""
+    from sqlalchemy.exc import InvalidRequestError       # ObjectDeletedError and "could not refresh instance"
+    try:
+        db.refresh(obj)
+        return True
+    except InvalidRequestError:
+        return False
+
+
 def log_audit(db: Session, action: str, entity_type: str, entity_id: str,
               entity_name: str = None, old_value: dict = None, new_value: dict = None,
-              user_id: int = None, username: str = None, reason: str = None):
+              user_id: int = None, username: str = None, reason: str = None,
+              strict: bool = False):
     """
     記錄審計日誌
 
@@ -277,6 +341,15 @@ def log_audit(db: Session, action: str, entity_type: str, entity_id: str,
         user_id: ID of user performing the action
         username: Username of user performing the action
         reason: Reason for the action
+        strict: if True, a failure building/queuing the audit entry is
+            RE-RAISED instead of swallowed. Default False preserves this
+            function's normal "never let audit logging block the main
+            operation" behavior for every other call site. Use strict=True
+            only for an action where the audit trail is itself the safety
+            control (e.g. revoking an approval) — the caller must still
+            commit in the same transaction as its own state change and
+              roll back on any failure for this to actually guarantee
+            atomicity (see itr_service.py::revoke_itr_approval).
 
     Note:
         Should be called within the same database transaction as the business operation.
@@ -299,8 +372,11 @@ def log_audit(db: Session, action: str, entity_type: str, entity_id: str,
         )
         db.add(audit_log)
     except Exception as e:
-        # 日誌記錄失敗不應中斷主流程，僅列印錯誤
+        # 日誌記錄失敗不應中斷主流程，僅列印錯誤 (default) — but some
+        # callers need the opposite guarantee; see `strict` above.
         logger.error(f"Error logging audit: {e}", exc_info=True)
+        if strict:
+            raise
 
 
 def log_status_change(db: Session, entity_type: str, entity_id: str, entity_name: str,

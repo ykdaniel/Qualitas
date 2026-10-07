@@ -25,18 +25,20 @@ class AuditService:
     def __init__(self, repo: AuditRepository):
         self.repo = repo
 
-    def get_audits(self, skip: int = 0, limit: int = 100, scope=None) -> List[models.Audit]:
+    def get_audits(self, skip: int = 0, limit: int = 100, project_id: str = None, scope=None) -> List[models.Audit]:
         """
         Get list of Audits
 
         Args:
             skip: Number of records to skip
             limit: Maximum number of records
+            project_id: Optional project filter — narrows WITHIN `scope`, never replaces it
+                (repo.get_all AND-combines both; see BACKLOG #28)
 
         Returns:
             List of Audit objects
         """
-        return self.repo.get_all(skip, limit, scope=scope)
+        return self.repo.get_all(skip, limit, project_id=project_id, scope=scope)
 
     def get_audit(self, audit_id: str, scope=None) -> Optional[models.Audit]:
         """

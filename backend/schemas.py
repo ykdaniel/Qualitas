@@ -2,7 +2,9 @@ import json
 import re
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, EmailStr, constr, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, computed_field, constr, field_validator, model_validator, model_serializer
+
+from core import strict_dates
 
 # 輸入驗證常數
 MAX_TEXT_LENGTH = 10000  # 一般文字欄位最大長度
@@ -69,6 +71,17 @@ def _validate_ncr_controlled(field_name: str, v):
     if allowed is not None and v not in allowed:
         raise ValueError(f"{field_name} must be one of {sorted(allowed)}; got '{v}'")
     return v
+
+class DateIssue(BaseModel):
+    """Read-only description of a stored date that a NEW write would not be allowed to produce (NCR / OBS / NOI). The
+    stored value is returned untouched next to this; nothing is written back. `code` is a stable identifier:
+    invalid_format | invalid_calendar | timestamp | trailing_characters | whitespace | whitespace_only | missing_required |
+    raise_after_closeout | raise_after_due | closeout_after_due (the last three name the LATER field and set `related_field`)."""
+    field: str
+    value: str | None = None
+    code: str
+    related_field: str | None = None
+
 
 class ITPBase(BaseModel):
     project_id: str | None = None
@@ -250,10 +263,9 @@ class NCRBase(BaseModel):
     preventiveActionOwner: str | None = None
     preventiveActionTargetDate: str | None = None
 
-    @field_validator('raiseDate', 'closeoutDate', 'dueDate', 'effectivenessVerifiedDate', 'correctiveActionTargetDate', 'preventiveActionTargetDate', 'ownerApprovalDate', mode='before')
-    @classmethod
-    def check_dates(cls, v):
-        return validate_date_format(v)
+    # Date fields: NO validator here (2026-09-20). This class is also the base of the READ schema NCR, which must return
+    # stored dates untouched (a bad historical date used to make GET /ncr/ answer 500). Strict checking of NEW writes lives
+    # on NCRCreate (field level) and in NCRService (final, merged content, incl. the order rules).
 
     @field_validator('severity', 'discipline', 'productDisposition', 'effectivenessVerified', 'ownerApproval', 'status', 'extent', 'recurrence',
                       'repairMethodStatementStatus', 'immediateCorrectionActionStatus', 'rootCauseAnalysisStatus',
@@ -278,21 +290,16 @@ class NCRBase(BaseModel):
                 return []
         return v
 
-    @model_validator(mode='after')
-    def check_date_ranges(self):
-        if self.raiseDate and self.closeoutDate:
-            if self.raiseDate > self.closeoutDate:
-                raise ValueError('Raise date must be before or equal to closeout date')
-        if self.raiseDate and self.dueDate:
-            if self.raiseDate > self.dueDate:
-                raise ValueError('Raise date must be before or equal to due date')
-        if self.closeoutDate and self.dueDate:
-            if self.closeoutDate > self.dueDate:
-                raise ValueError('Closeout date must be before or equal to due date')
-        return self
+    # (the strict order rules that used to sit here as a model_validator are now enforced on the FINAL content of a write by
+    # NCRService — see core/strict_dates.py — so reading a row with an inverted order no longer raises)
 
 class NCRCreate(NCRBase):
     id: str | None = None
+
+    @field_validator(*strict_dates.NCR_DATE_FIELDS, mode='before')
+    @classmethod
+    def check_strict_dates(cls, v):
+        return strict_dates.strict_date_input(v)
 
     @field_validator('qtyAffected', mode='before')
     @classmethod
@@ -385,10 +392,8 @@ class NCRUpdate(BaseModel):
     preventiveActionOwner: str | None = None
     preventiveActionTargetDate: str | None = None
 
-    @field_validator('raiseDate', 'closeoutDate', 'dueDate', 'effectivenessVerifiedDate', 'correctiveActionTargetDate', 'preventiveActionTargetDate', 'ownerApprovalDate', mode='before')
-    @classmethod
-    def check_dates(cls, v):
-        return validate_date_format(v)
+    # Date fields on UPDATE are validated by NCRService against the stored row (an unchanged resend of a historical value is
+    # not a new write; the order rules run on the merged content) — a schema-level validator cannot know the stored value.
 
     @field_validator('severity', 'discipline', 'productDisposition', 'effectivenessVerified', 'ownerApproval', 'status', 'extent', 'recurrence',
                       'repairMethodStatementStatus', 'immediateCorrectionActionStatus', 'rootCauseAnalysisStatus',
@@ -401,19 +406,6 @@ class NCRUpdate(BaseModel):
     @classmethod
     def check_qty_affected(cls, v):
         return validate_numeric_string(v)
-
-    @model_validator(mode='after')
-    def check_date_ranges(self):
-        if self.raiseDate and self.closeoutDate:
-            if self.raiseDate > self.closeoutDate:
-                raise ValueError('Raise date must be before or equal to closeout date')
-        if self.raiseDate and self.dueDate:
-            if self.raiseDate > self.dueDate:
-                raise ValueError('Raise date must be before or equal to due date')
-        if self.closeoutDate and self.dueDate:
-            if self.closeoutDate > self.dueDate:
-                raise ValueError('Closeout date must be before or equal to due date')
-        return self
 
     @field_validator('defectPhotos', 'progressPhotos', 'improvementPhotos', 'attachments', mode='before')
     @classmethod
@@ -428,6 +420,13 @@ class NCRUpdate(BaseModel):
 class NCR(NCRBase):
     id: str
     model_config = ConfigDict(from_attributes=True)
+
+    @computed_field
+    @property
+    def date_issues(self) -> list[DateIssue]:
+        """Read-only: what is wrong with the stored dates (never an error, never written back)."""
+        return [DateIssue(**i) for i in strict_dates.compute_date_issues(
+            self, strict_dates.NCR_DATE_FIELDS, relations=strict_dates.NCR_ORDER_RELATIONS)]
 
 
 # NOI
@@ -456,10 +455,8 @@ class NOIBase(BaseModel):
     foundLocation: str | None = None  # §17: 具體檢驗地點（ITR 引用此處）
     discipline: str | None = None     # §17: 專業別（ITR 引用此處）
 
-    @field_validator('issueDate', 'inspectionDate', 'closeoutDate', 'dueDate', mode='before')
-    @classmethod
-    def check_dates(cls, v):
-        return validate_date_format(v)
+    # Date fields: no validator on the base (the READ schema NOI derives from it and must return stored dates untouched);
+    # strict checking of new writes: NOICreate (field level) and NOIService (update, final content).
 
     @field_validator('attachments', mode='before')
     @classmethod
@@ -478,6 +475,11 @@ class NOIBase(BaseModel):
 
 class NOICreate(NOIBase):
     id: str | None = None
+
+    @field_validator(*strict_dates.NOI_DATE_FIELDS, mode='before')
+    @classmethod
+    def check_strict_dates(cls, v):
+        return strict_dates.strict_date_input(v)
 
 class NOIUpdate(BaseModel):
     project_id: str | None = None
@@ -516,7 +518,20 @@ class NOIUpdate(BaseModel):
 
 class NOI(NOIBase):
     id: str
+    # READ only: preserve missing legacy references without breaking the whole
+    # list. NOICreate retains its required string contract.
+    itpNo: str | None = None
+    # READ side: the two date fields that are required for a NEW NOI may be NULL in legacy rows; they are returned as stored
+    # (NULL included) and reported in `date_issues` (missing_required) instead of turning the whole list into a 500.
+    issueDate: str | None = None
+    inspectionDate: str | None = None
     model_config = ConfigDict(from_attributes=True)
+
+    @computed_field
+    @property
+    def date_issues(self) -> list[DateIssue]:
+        return [DateIssue(**i) for i in strict_dates.compute_date_issues(
+            self, strict_dates.NOI_DATE_FIELDS, required=strict_dates.NOI_REQUIRED_DATE_FIELDS)]
 
 
 # ITR
@@ -580,6 +595,44 @@ class ITRBase(BaseModel):
 
 class ITRCreate(ITRBase):
     id: str | None = None
+
+class ITRRevokeApproval(BaseModel):
+    """Body for POST /itr/{id}/revoke-approval — the only sanctioned way
+    to leave an Approved ITR (2026-09-19 approval-authority hardening)."""
+    new_status: str
+    reason: str
+
+class ITRApprovalEventSummary(BaseModel):
+    """One row of an ITR's approval history (read-only). Deliberately WITHOUT the snapshots: those are
+    loaded only when a single event is opened. Every value is what was stored with the event — the actor's
+    id / username / full name as they were at the time, never the user's current data."""
+    id: int
+    itr_id: str
+    document_number: str | None = None
+    sequence: int
+    event_type: str                       # APPROVED | REVOKED
+    occurred_at: str                      # server UTC, ISO 8601 with offset
+    actor_user_id: int | None = None
+    actor_username: str | None = None
+    actor_full_name: str | None = None
+    status_before: str | None = None
+    status_after: str | None = None
+    reason: str | None = None
+    approval_event_id: int | None = None          # REVOKED -> the APPROVED event it ends; None = unknown (never guessed)
+    approval_event_sequence: int | None = None
+    has_snapshot: bool = False
+
+class ITRApprovalEventPage(BaseModel):
+    items: list[ITRApprovalEventSummary]
+    total: int
+    skip: int
+    limit: int
+
+class ITRApprovalEventDetail(ITRApprovalEventSummary):
+    itr_snapshot: dict | None = None              # the ITR row exactly as committed with the approval
+    checklists_snapshot: list | None = None       # every linked Checklist instance as approved
+    snapshot_sha256: str | None = None            # SHA-256 over the canonical JSON of both snapshots
+    snapshot_sha256_matches: bool | None = None   # recomputed now; a content-consistency check, NOT a signature
 
 class ITRUpdate(BaseModel):
     project_id: str | None = None
@@ -753,11 +806,8 @@ class OBSBase(BaseModel):
     constructionEngineerApprovalBy: str | None = None
     constructionEngineerApprovalDate: str | None = None
 
-    @field_validator('raiseDate', 'closeoutDate', 'dueDate', 'verifiedDate',
-                      'qualityEngineerApprovalDate', 'constructionEngineerApprovalDate', mode='before')
-    @classmethod
-    def check_dates(cls, v):
-        return validate_date_format(v)
+    # Date fields: no validator on the base (the READ schema OBS derives from it); strict checking of new writes:
+    # OBSCreate (field level) and OBSService (update, final content).
 
     @field_validator('defectPhotos', 'improvementPhotos', 'attachments', mode='before')
     @classmethod
@@ -776,6 +826,11 @@ class OBSBase(BaseModel):
 
 class OBSCreate(OBSBase):
     id: str | None = None
+
+    @field_validator(*strict_dates.OBS_DATE_FIELDS, mode='before')
+    @classmethod
+    def check_strict_dates(cls, v):
+        return strict_dates.strict_date_input(v)
 
 class OBSUpdate(BaseModel):
     project_id: str | None = None
@@ -828,6 +883,11 @@ class OBSUpdate(BaseModel):
 class OBS(OBSBase):
     id: str
     model_config = ConfigDict(from_attributes=True)
+
+    @computed_field
+    @property
+    def date_issues(self) -> list[DateIssue]:
+        return [DateIssue(**i) for i in strict_dates.compute_date_issues(self, strict_dates.OBS_DATE_FIELDS)]
 
 
 # OSD (Over/Short/Damage Report)
@@ -1196,6 +1256,16 @@ class ChecklistUpdate(BaseModel):
 
 class Checklist(ChecklistBase):
     id: str
+    # Read-only provenance — never accepted on Create/Update, only ever set
+    # server-side (version bumped on template edits, source_template_version
+    # captured once at link_checklist time, evidence_recorded_at set once
+    # the first time real evidence is saved and never cleared). See
+    # models.py's Checklist comment.
+    version: int | None = None
+    source_template_version: int | None = None
+    evidence_recorded_at: str | None = None
+    evidence_recorded_at_reliable: bool | None = None
+    evidence_historical_unknown: bool | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -1594,6 +1664,16 @@ class RelatedEntity(BaseModel):
     level: int
     direction: str  # 'upstream' | 'downstream'
     primaryDate: str | None = None
+    # Only ITR exposes this flag. The serializer omits it for other types
+    # while preserving their existing nullable fields.
+    isReInspection: bool | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize_related_entity(self, handler):
+        data = handler(self)
+        if self.entityType != "itr":
+            data.pop("isReInspection", None)
+        return data
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -1625,6 +1705,14 @@ class CheckpointState(BaseModel):
     # marker at the exact blocking record instead of guessing "first/last
     # linked NCR".
     blocking_ncr_id: str | None = None
+    # Improvement checkpoint only (zero / empty everywhere else) — what its verdict rests on (2026-09-21). `blocking_reason`: why the first blocking NCR
+    # blocks (missing / invalid / legacy_unverified). `verified_count`: NCRs with a valid improvement photo now. `unverified_*`: NCRs that pass ONLY
+    # because they are Closed, with the underlying reason counts — their photos are NOT verified.
+    blocking_reason: str | None = None
+    verified_count: int = 0
+    unverified_count: int = 0
+    unverified_ncr_ids: list[str] = []
+    unverified_reasons: dict[str, int] = {}
 
 
 class WorkflowSummary(BaseModel):
@@ -1638,6 +1726,9 @@ class WorkflowSummary(BaseModel):
     checkpoints: list[CheckpointState]
     done_count: int
     completion_percent: int
+    # NCRs of this flow that pass the improvement checkpoint WITHOUT a verified photo (Closed status only), and why. 100% never means "all verified".
+    unverified_photo_count: int = 0
+    unverified_photo_reasons: dict[str, int] = {}
     # Linked entity IDs so the frontend can deep-link from checkpoint
     # markers to the relevant forms. ``reinsp_itr_ids`` is the subset
     # of ITRs that satisfy (or should satisfy) the re-inspection

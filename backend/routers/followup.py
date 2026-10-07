@@ -23,12 +23,13 @@ def read_followups(
     limit: int = 500,
     sourceModule: str = None,
     sourceReferenceNo: str = None,
+    project_id: str = None,
     followup_service: FollowUpService = Depends(get_followup_service),
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(FOLLOWUP_VIEW))
 ):
     return followup_service.get_followups(
-        skip=skip, limit=limit, scope=scope,
+        skip=skip, limit=limit, scope=scope, project_id=project_id,
         sourceModule=sourceModule, sourceReferenceNo=sourceReferenceNo,
     )
 

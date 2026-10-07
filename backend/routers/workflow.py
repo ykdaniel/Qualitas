@@ -26,6 +26,7 @@ router = APIRouter(
 
 @router.get("/stats", response_model=schemas.WorkflowStats)
 def get_workflow_stats(
+    project_id: str | None = None,
     workflow_service: WorkflowService = Depends(get_workflow_service),
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(NOI_VIEW)),
@@ -33,12 +34,13 @@ def get_workflow_stats(
     """Completion-bucket snapshot across every Q-WorkFlow. Powers the
     Dashboard card's four-bucket distribution (0-25 / 26-50 / 51-75 /
     76-100%)."""
-    return workflow_service.get_stats(scope=scope)
+    return workflow_service.get_stats(scope=scope, project_id=project_id)
 
 
 @router.get("/needs-attention", response_model=list[schemas.WorkflowSummary])
 def get_needs_attention(
     limit: int = 3,
+    project_id: str | None = None,
     workflow_service: WorkflowService = Depends(get_workflow_service),
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(NOI_VIEW)),
@@ -46,7 +48,7 @@ def get_needs_attention(
     """Lowest-completion non-complete Q-WorkFlows. Powers the Dashboard
     card's "Needs attention" list. Default limit is 3 to match the
     card's three-row layout."""
-    return workflow_service.get_needs_attention(limit=limit, scope=scope)
+    return workflow_service.get_needs_attention(limit=limit, scope=scope, project_id=project_id)
 
 
 @router.get("/", response_model=list[schemas.WorkflowSummary])
@@ -56,6 +58,7 @@ def list_workflows(
     min_completion: int | None = None,
     max_completion: int | None = None,
     vendor_id: str | None = None,
+    project_id: str | None = None,
     workflow_service: WorkflowService = Depends(get_workflow_service),
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(NOI_VIEW)),
@@ -70,5 +73,6 @@ def list_workflows(
         min_completion=min_completion,
         max_completion=max_completion,
         vendor_id=vendor_id,
+        project_id=project_id,
         scope=scope,
     )

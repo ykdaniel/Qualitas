@@ -193,3 +193,26 @@ def entity_in_scope(db: Session, entity_type: str, entity_id: str, scope: Option
         return True
     rec = db.query(model).filter(model.id == entity_id).first()
     return record_in_scope(rec, scope)
+
+
+# Every entity type the attachment API accepts, with the model that owns it. `entity_in_scope` (above) only knows the project-scoped ones;
+# `contractor` and `km` have no project/contractor ownership of their own, but a target must still EXIST before a file may be attached.
+ATTACHMENT_TARGET_MODELS = {**_ENTITY_MODELS, "contractor": models.Contractor, "km": models.KMArticle}
+
+
+def find_attachment_record(db: Session, entity_type: str, entity_id: str):
+    """The record an attachment row / upload points at, ignoring scope; None when the type is unknown or the record is gone."""
+    model = ATTACHMENT_TARGET_MODELS.get((entity_type or "").lower())
+    return db.query(model).filter(model.id == entity_id).first() if model is not None else None
+
+
+def attachment_target(db: Session, entity_type: str, entity_id: str, scope: Optional[Scope]):
+    """The record an upload would attach to, or None when it does not exist, is not a known target type, or is outside `scope`
+    (deliberately one answer for all three, so a caller cannot probe which ids exist). Scope follows `entity_in_scope`: types
+    without project/contractor ownership are not scope-restricted."""
+    rec = find_attachment_record(db, entity_type, entity_id)
+    if rec is None:
+        return None
+    if (entity_type or "").lower() in _ENTITY_MODELS and not record_in_scope(rec, scope):
+        return None
+    return rec

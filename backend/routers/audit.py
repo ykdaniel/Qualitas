@@ -16,12 +16,13 @@ router = APIRouter(
 def read_audits(
     skip: int = 0,
     limit: int = 100,
+    project_id: str = None,
     service: AuditService = Depends(get_audit_service),
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(AUDIT_VIEW))
 ):
     """Get list of audits with pagination"""
-    return service.get_audits(skip=skip, limit=limit, scope=scope)
+    return service.get_audits(skip=skip, limit=limit, project_id=project_id, scope=scope)
 
 @router.get("/{audit_id}", response_model=schemas.Audit)
 def read_audit(

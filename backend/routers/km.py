@@ -45,7 +45,7 @@ def create_km_article(
     service: KMService = Depends(get_km_service),
     current_user: schemas.User = Depends(RoleChecker(KM_CREATE))
 ):
-    return service.create_article(article_create=article, author_id=current_user.id)
+    return service.create_article(article_create=article, author_id=current_user.id, user_id=current_user.id, username=current_user.username)
 
 @router.put("/{id}", response_model=schemas.KMArticle)
 def update_km_article(
@@ -54,7 +54,7 @@ def update_km_article(
     service: KMService = Depends(get_km_service),
     current_user: schemas.User = Depends(RoleChecker(KM_UPDATE))
 ):
-    return service.update_article(article_id=id, article_update=article_update)
+    return service.update_article(article_id=id, article_update=article_update, user_id=current_user.id, username=current_user.username)
 
 @router.delete("/{id}")
 def delete_km_article(
@@ -62,7 +62,7 @@ def delete_km_article(
     service: KMService = Depends(get_km_service),
     current_user: schemas.User = Depends(RoleChecker(KM_DELETE))
 ):
-    return service.delete_article(article_id=id)
+    return service.delete_article(article_id=id, user_id=current_user.id, username=current_user.username)
 
 @router.post("/upload-image")
 def upload_km_image(

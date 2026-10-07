@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, event
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -312,6 +312,64 @@ class ITR(Base):
         return self.vendor_ref.name if self.vendor_ref else None
     checklists = relationship("Checklist", back_populates="itr_ref", foreign_keys="Checklist.itrId",
                              cascade="all, delete-orphan", passive_deletes=True)
+
+
+class ITRApprovalEvent(Base):
+    """Append-only history of an ITR's approvals and revocations (2026-09-20).
+
+    One APPROVED row per successful entry into Approved, one REVOKED row per
+    revoke-approval. Rows are never updated or deleted (enforced below for ORM
+    writes). What each holds:
+
+    * who / when: the acting user's id, username and full name AS THEY WERE AT
+      THE TIME (a later rename cannot change what happened) and the server
+      clock (UTC ISO 8601) — never anything the client supplied;
+    * APPROVED rows: `itr_snapshot` = the complete ITR row exactly as
+      committed with the approval, `checklists_snapshot` = every linked
+      Checklist instance (id, recordsNo, template + source version, items with
+      criteria / situation / result / naReason, status, counts ...) — both
+      captured in the SAME transaction and from the SAME rows that passed the
+      approval check — and `snapshot_sha256` over their canonical JSON;
+    * REVOKED rows: the reason, and `approval_event_id` = the APPROVED event it
+      ends. (The existing REVOKE_APPROVAL audit row keeps its own snapshot.)
+
+    itr.approvedBy / itr.approvedAt only mirror the LATEST approval for quick
+    display; this table is the authority. Pre-existing approvals have no
+    APPROVED row and NULL approvedBy/approvedAt — that stays "unknown".
+    """
+    __tablename__ = "itr_approval_events"
+    # sqlite_autoincrement: ids are never reused. info["migration_owned"]: startup's
+    # create_all skips this table (see create_all_except_migration_owned) — its schema
+    # is created by db_migrations._create_itr_approval_events_table, so a database's
+    # schema for it is always that of the migration, on old and brand-new databases alike.
+    __table_args__ = {"sqlite_autoincrement": True, "info": {"migration_owned": True}}
+
+    id = Column(Integer, primary_key=True)
+    itr_id = Column(String, nullable=False, index=True)          # deliberately not an FK: history outlives the row
+    document_number = Column(String, nullable=True)
+    sequence = Column(Integer, nullable=False)                    # 1, 2, 3 ... per ITR, across both event types
+    event_type = Column(String, nullable=False)                   # APPROVED | REVOKED
+    occurred_at = Column(String, nullable=False)                  # server UTC, ISO 8601
+    actor_user_id = Column(Integer, nullable=True)
+    actor_username = Column(String, nullable=True)
+    actor_full_name = Column(String, nullable=True)
+    status_before = Column(String, nullable=True)
+    status_after = Column(String, nullable=True)
+    reason = Column(Text, nullable=True)
+    approval_event_id = Column(Integer, nullable=True)            # REVOKED -> the APPROVED event it ends
+    itr_snapshot = Column(Text, nullable=True)
+    checklists_snapshot = Column(Text, nullable=True)
+    snapshot_sha256 = Column(String, nullable=True)
+
+
+@event.listens_for(ITRApprovalEvent, "before_update")
+def _approval_events_are_append_only_update(mapper, connection, target):
+    raise ValueError("ITR approval events are append-only and cannot be modified")
+
+
+@event.listens_for(ITRApprovalEvent, "before_delete")
+def _approval_events_are_append_only_delete(mapper, connection, target):
+    raise ValueError("ITR approval events are append-only and cannot be deleted")
 
 
 class PQP(Base):
@@ -755,6 +813,61 @@ class Checklist(Base):
     # points back (template_id) to the template it was made from. Self-FK with
     # SET NULL so deleting a template leaves historical instances intact.
     template_id = Column(String, ForeignKey("checklist.id", ondelete="SET NULL"), nullable=True, index=True)
+    # Minimal explicit versioning (Checklist/ITR isolation hardening,
+    # 2026-09-19). `version` is a bare template's own edit counter —
+    # meaningful only when itrId/template_id are both empty — bumped when
+    # its `activity` or item/criteria content changes. `source_template_version`
+    # is captured once, at link_checklist time, as a snapshot of the
+    # template's `version` at that moment; it is never written any other
+    # way. Pre-existing rows read back as NULL (no DEFAULT), which is the
+    # correct "historical version unknown" sentinel — never backfilled/guessed.
+    version = Column(Integer, nullable=True, default=1)
+    source_template_version = Column(Integer, nullable=True)
+    # Historical-evidence markers (2026-09-19 hardening; iterated three
+    # times more the same day — see db_migrations.py's
+    # `checklist_evidence_marker_v2`, `checklist_evidence_timestamp_repair_v3`,
+    # and `checklist_evidence_reliability_repair_v4` migration flags for
+    # the full history of why). None of these three columns are exposed on
+    # ChecklistCreate/ChecklistUpdate — no normal API call can set, reset,
+    # or blank any of them. All three protection-relevant states equally
+    # forbid hard-delete/unlink (see _instance_has_historical_evidence),
+    # but what each column actually MEANS is kept distinct and honest:
+    #   - evidence_recorded_at: a timestamp — either a REAL, KNOWN moment
+    #     (set live by update_checklist the first time a save is detected
+    #     to carry evidence — the ONLY path that may ever set
+    #     evidence_recorded_at_reliable=True, see below), or a value of
+    #     unproven/unreliable provenance: a leftover from the original
+    #     buggy v2 backfill, or a "known sighting" timestamp reconstructed
+    #     by v3/v4 from a corroborating audit_logs entry. Check
+    #     evidence_recorded_at_reliable to know which kind this is.
+    #     update_checklist never overwrites a value that's already set; no
+    #     migration fabricates a new one based on current content alone
+    #     (the v2 bug this was fixed from).
+    #   - evidence_recorded_at_reliable: True ONLY when evidence_recorded_at
+    #     was set live, by update_checklist's own first-save detection on
+    #     an instance continuously tracked since its own creation — i.e. a
+    #     genuinely provable first-save moment. No migration may ever set
+    #     this True (v3 originally did, based only on an audit_logs
+    #     entry's new_value showing evidence; v4 corrected this — see
+    #     `_repair_checklist_evidence_first_time_reliability`'s docstring
+    #     for why even a clean old_value-blank/new_value-evidence
+    #     transition reconstructed from audit_logs still cannot be trusted
+    #     as "first" for a pre-existing row, given this codebase's
+    #     historical missing-commit-after-log_audit bug). False/NULL
+    #     means: if evidence_recorded_at has a value, don't treat/display
+    #     it as a confirmed first-save timestamp — it may still be a
+    #     genuine "evidence was known to exist by this point" sighting,
+    #     just not provably the first one.
+    #   - evidence_historical_unknown: the row is protected because its
+    #     true FIRST-evidence history cannot be determined (may have held
+    #     real evidence that was cleared, or introduced, before any of
+    #     this tracking existed, or before this codebase's audit trail was
+    #     itself reliable), NOT because a real timestamp is known. Only
+    #     ever set by the one-time migration repairs, never by any
+    #     application code path.
+    evidence_recorded_at = Column(String, nullable=True)
+    evidence_recorded_at_reliable = Column(Boolean, nullable=True, default=False)
+    evidence_historical_unknown = Column(Boolean, nullable=True, default=False)
 
     # Relationships
     noi_ref = relationship("NOI", back_populates="checklists",
@@ -946,3 +1059,11 @@ class QWorkflow(Base):
     createdAt = Column(String, nullable=True)
 
     noi_ref = relationship("NOI", back_populates="qworkflow")
+
+
+def create_all_except_migration_owned(bind):
+    """`Base.metadata.create_all`, minus tables whose schema a named migration owns
+    (Table.info["migration_owned"]). Used by application start-up (main.py and the
+    seeder). Tests that want every table simply call Base.metadata.create_all."""
+    tables = [t for t in Base.metadata.sorted_tables if not t.info.get("migration_owned")]
+    Base.metadata.create_all(bind=bind, tables=tables)

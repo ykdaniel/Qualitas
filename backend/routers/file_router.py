@@ -17,7 +17,12 @@ from sqlalchemy.orm import Session
 
 import schemas
 from database import get_db
-from core.scope import Scope, get_scope, compute_scope, entity_in_scope
+from core.scope import Scope, get_scope, compute_scope, entity_in_scope, attachment_target, find_attachment_record
+from core.attachment_access import (
+    ENTITY_PERMISSIONS, is_km_image_path, lock_reason, require_attachment_permission, validate_category,
+)
+from core.uploads import upload_root
+from core.utils import lock_ncr_for_write
 # Cookie-aware auth (accepts httpOnly access_token cookie OR legacy Bearer
 # header). middleware.auth.get_current_user is Bearer-only and 401s the
 # cookie-authenticated frontend, which logs the user out when opening a record
@@ -39,11 +44,13 @@ async def _get_current_user_or_none(
       2. access_token httpOnly cookie (preferred)
     Returns None if neither is valid — caller handles the fallback to
     ?token= query-param auth.
+
+    "Valid" means exactly what get_current_user means (core.security.authenticate_access_token): not revoked, an ACCESS token, an active
+    account, not older than the account's log-out-everywhere cutoff. (2026-09-21: this used to decode the JWT itself and accept revoked
+    tokens, refresh tokens and deactivated accounts.)
     """
-    from jose import JWTError, jwt
-    from core.config import settings as app_settings
     from core.auth_cookies import ACCESS_COOKIE_NAME
-    import crud
+    from core.security import authenticate_access_token
 
     token_str: str | None = None
     auth_header = request.headers.get("Authorization", "")
@@ -54,50 +61,33 @@ async def _get_current_user_or_none(
     if not token_str:
         return None
     try:
-        payload = jwt.decode(token_str, app_settings.SECRET_KEY, algorithms=[app_settings.ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            return None
-    except JWTError:
+        return authenticate_access_token(token_str, db)
+    except HTTPException:
         return None
-    return crud.get_user_by_username(db, username=username)
 
 
-async def _resolve_user_from_token(token_str: str) -> schemas.User:
+async def _resolve_user_from_token(token_str: str, db: Session) -> schemas.User:
     """
-    從 query-param token 解析使用者。驗證失敗時拋出 401。
+    從 query-param token 解析使用者。驗證失敗時拋出 401。Same validation as every other way of presenting an access token.
     """
-    from jose import JWTError, jwt
-    from core.config import settings as app_settings
-    import crud
-    from database import SessionLocal
-
-    credentials_exception = HTTPException(
-        status_code=401,
-        detail="Invalid or expired token",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    from core.security import authenticate_access_token
     try:
-        payload = jwt.decode(token_str, app_settings.SECRET_KEY, algorithms=[app_settings.ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
+        return authenticate_access_token(token_str, db)
+    except HTTPException:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-    db = SessionLocal()
-    try:
-        user = crud.get_user_by_username(db, username=username)
-        if user is None:
-            raise credentials_exception
-        return user
-    finally:
-        db.close()
 
 router = APIRouter(prefix="/files", tags=["files"])
 
 # NOTE: 上傳根目錄，由 main.py 啟動時自動建立
-UPLOAD_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
+# The upload root is core.uploads.upload_root(): backend/uploads unless QUALITAS_UPLOAD_ROOT says otherwise (mandatory, and confined to the
+# run directory, in an isolated test process). It is read on every request — there is no module-level constant to import.
+_VALID_ENTITY_TYPES = {"itp", "ncr", "noi", "itr", "pqp", "obs", "osd", "fat",
+                       "audit", "checklist", "followup", "km", "contractor", "meeting"}
 
 # 允許的 MIME 類型白名單
 ALLOWED_MIME_PREFIXES = ("image/", "application/pdf", "application/msword",
@@ -189,6 +179,7 @@ async def upload_files(
     category: str = Form("attachment"),
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(get_current_user),
 ) -> list[AttachmentResponse]:
     """
@@ -196,22 +187,38 @@ async def upload_files(
     - entity_type: 關聯模組 (itp / ncr / noi / itr / pqp / obs)
     - entity_id: 關聯記錄 ID
     - category: 檔案分類 (attachment / defectPhoto / improvementPhoto)
+
+    Order (2026-09-20): entity type -> the target record must EXIST and be inside the caller's data scope -> every file is validated ->
+    only then anything is written. A refusal at any step leaves no attachment row and no file behind.
     """
     # ── Validate entity_type against known modules ──
-    _VALID_ENTITY_TYPES = {"itp", "ncr", "noi", "itr", "pqp", "obs", "osd", "fat",
-                           "audit", "checklist", "followup", "km", "contractor", "meeting"}
     if entity_type not in _VALID_ENTITY_TYPES:
         raise HTTPException(
             status_code=400,
             detail=f"Unknown entity_type '{entity_type}'. Must be one of: {', '.join(sorted(_VALID_ENTITY_TYPES))}",
         )
 
-    results: list[AttachmentResponse] = []
+    # ── Permission on the record type first (a 403 says nothing about which records exist) ──
+    require_attachment_permission(current_user, entity_type, "update")
 
-    # 建立模組子目錄
-    module_dir = os.path.join(UPLOAD_ROOT, entity_type)
-    os.makedirs(module_dir, exist_ok=True)
+    # ── The category must be one this record type really uses (exact match: no empty value, no unknown value, no case variant) ──
+    validate_category(entity_type, category)
 
+    # ── The target must exist and be visible to the caller (same 404 for both, so existence is not leaked) ──
+    target = attachment_target(db, entity_type, entity_id, scope)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Attachment target not found")
+
+    # ── The record's state may forbid changing its attachments ──
+    reason = lock_reason(db, entity_type, target, category)
+    if reason:
+        raise HTTPException(status_code=409, detail=reason)
+
+    # In an isolated test process this raises unless the root is inside the run directory — before any file is created.
+    root = upload_root()
+
+    # ── Validate EVERY file before writing ANY of them ──
+    prepared: list[tuple[UploadFile, bytes, str]] = []
     for file in files:
         # 驗證檔案大小
         content = await file.read()
@@ -242,36 +249,51 @@ async def upload_files(
                 status_code=400,
                 detail=f"File content does not match an allowed type (detected: {mime})"
             )
+        prepared.append((file, content, mime))
 
-        # 產生唯一檔名，保留原始副檔名
-        ext = os.path.splitext(filename)[1]
-        unique_name = f"{uuid.uuid4().hex}{ext}"
-        relative_path = f"{entity_type}/{unique_name}"
-        full_path = os.path.join(UPLOAD_ROOT, relative_path)
+    results: list[AttachmentResponse] = []
+    written: list[str] = []
+    try:
+        # 建立模組子目錄
+        os.makedirs(os.path.join(root, entity_type), exist_ok=True)
+        for file, content, mime in prepared:
+            # 產生唯一檔名，保留原始副檔名
+            ext = os.path.splitext(file.filename or "file")[1]
+            relative_path = f"{entity_type}/{uuid.uuid4().hex}{ext}"
+            full_path = os.path.join(root, relative_path)
 
-        # 寫入磁碟
-        with open(full_path, "wb") as f:
-            f.write(content)
+            # 寫入磁碟
+            with open(full_path, "wb") as f:
+                f.write(content)
+            written.append(full_path)
 
-        # 建立 DB 記錄
-        attachment = Attachment(
-            id=uuid.uuid4().hex,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            file_name=file.filename or "unknown",
-            file_path=relative_path,
-            file_size=len(content),
-            mime_type=mime,
+            # 建立 DB 記錄
+            attachment = Attachment(
+                id=uuid.uuid4().hex,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                file_name=file.filename or "unknown",
+                file_path=relative_path,
+                file_size=len(content),
+                mime_type=mime,
 
-            category=category,
-            uploaded_by=current_user.username,
-            uploaded_at=datetime.now(timezone.utc).isoformat(),
-            is_deleted=False,
-        )
-        db.add(attachment)
-        results.append(_to_response(attachment, request))
+                category=category,
+                uploaded_by=current_user.username,
+                uploaded_at=datetime.now(timezone.utc).isoformat(),
+                is_deleted=False,
+            )
+            db.add(attachment)
+            results.append(_to_response(attachment, request))
 
-    db.commit()
+        db.commit()
+    except Exception:
+        db.rollback()
+        for path in written:                       # no orphan file when the row could not be stored
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        raise
     logger.info("Uploaded %d files for %s/%s", len(results), entity_type, entity_id)
     return results
 
@@ -287,6 +309,9 @@ def get_entity_files(
     current_user: schemas.User = Depends(get_current_user),
 ) -> list[AttachmentResponse]:
     """查詢指定實體的所有附件"""
+    if entity_type not in _VALID_ENTITY_TYPES:
+        raise HTTPException(status_code=400, detail=f"Unknown entity_type '{entity_type}'")
+    require_attachment_permission(current_user, entity_type, "view")
     # P0 data isolation: don't expose attachments for a parent the caller can't see.
     if not entity_in_scope(db, entity_type, entity_id, scope):
         return []
@@ -317,6 +342,7 @@ def get_file(
     ).first()
     if not attachment or not entity_in_scope(db, attachment.entity_type, attachment.entity_id, scope):
         raise HTTPException(status_code=404, detail="Attachment not found")
+    require_attachment_permission(current_user, attachment.entity_type, "view")
     return _to_response(attachment, request)
 
 
@@ -334,6 +360,26 @@ def delete_file(
     ).first()
     if not attachment or not entity_in_scope(db, attachment.entity_type, attachment.entity_id, scope):
         raise HTTPException(status_code=404, detail="Attachment not found")
+
+    require_attachment_permission(current_user, attachment.entity_type, "update")
+    if attachment.entity_type == "ncr":
+        # Closing an NCR checks its improvement photos and then writes Closed (services/ncr_service.py::update_ncr, which takes this same lock
+        # first). Deleting a photo is decided under that lock too and on FRESH data: the NCR may have been closed — or the photo already
+        # deleted — since the reads above, and a photo must not vanish from an NCR that was closed on the strength of it.
+        try:
+            lock_ncr_for_write(db, attachment.entity_id)
+            db.expire_all()                                   # whatever this session read before the lock (the row, the NCR) may be stale now
+        except Exception:
+            db.rollback()
+            raise
+        if attachment.is_deleted:
+            db.rollback()
+            raise HTTPException(status_code=404, detail="Attachment not found")
+    record = find_attachment_record(db, attachment.entity_type, attachment.entity_id)
+    reason = lock_reason(db, attachment.entity_type, record, attachment.category) if record is not None else None
+    if reason:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=reason)
 
     attachment.is_deleted = True
     db.commit()
@@ -353,7 +399,7 @@ async def serve_upload(
     支援兩種驗證方式：
     1. Authorization: Bearer <token> header (標準 API 呼叫)
     2. ?token=<token> query parameter (供 <img src="..."> 等無法設定 header 的場景)
-    包含路徑遍歷防護：resolved path 必須位於 UPLOAD_ROOT 內。
+    包含路徑遍歷防護：resolved path 必須位於上傳根目錄內。
     """
     # If header-based auth didn't resolve a user, try query-param token
     if current_user is None:
@@ -363,22 +409,38 @@ async def serve_upload(
                 detail="Authentication required",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        current_user = await _resolve_user_from_token(token)
+        current_user = await _resolve_user_from_token(token, db)
+
+    # A soft-deleted attachment is gone for EVERYONE, including unrestricted accounts and anyone who kept the path (2026-09-20).
+    att = db.query(Attachment).filter(Attachment.file_path == file_path).first()
+    if att is not None and att.is_deleted:
+        raise HTTPException(status_code=404, detail="File not found")
 
     # P0 data isolation: a scoped user may only download files whose parent
     # record is within their scope. Looks the file up by its stored path.
     scope = compute_scope(current_user, db)
     if not scope.unrestricted:
-        att = db.query(Attachment).filter(Attachment.file_path == file_path).first()
         if att is None or not entity_in_scope(db, att.entity_type, att.entity_id, scope):
             raise HTTPException(status_code=404, detail="File not found")
 
     # Resolve and validate to prevent path traversal (e.g. ../../etc/passwd)
-    upload_root_resolved = os.path.realpath(UPLOAD_ROOT)
-    full_path = os.path.realpath(os.path.join(UPLOAD_ROOT, file_path))
+    root = upload_root()
+    upload_root_resolved = os.path.realpath(root)
+    full_path = os.path.realpath(os.path.join(root, file_path))
 
     if not full_path.startswith(upload_root_resolved + os.sep) and full_path != upload_root_resolved:
         raise HTTPException(status_code=403, detail="Access denied")
+
+    # Reading needs the view permission of the record the file belongs to. A file WITHOUT an attachment row belongs to nothing we can
+    # prove — it is never served on the strength of the directory it sits in. The one exception is a KM image: KM stores the images
+    # embedded in its articles without rows, under a naming scheme only its own upload code produces (see is_km_image_path); those need
+    # km:view:all. Every other row-less file (an orphan, a stray, another module's leftover) is 404 for everybody.
+    if att is not None:
+        require_attachment_permission(current_user, att.entity_type, "view")
+    elif is_km_image_path(file_path):
+        require_attachment_permission(current_user, "km", "view")
+    else:
+        raise HTTPException(status_code=404, detail="File not found")
 
     if not os.path.isfile(full_path):
         raise HTTPException(status_code=404, detail="File not found")

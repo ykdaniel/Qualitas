@@ -69,7 +69,7 @@ class KMRepository:
             joinedload(models.KMArticle.author)
         ).filter(models.KMArticle.parent_id == parent_id).all()
 
-    def create(self, article: schemas.KMArticleCreate, author_id: int) -> models.KMArticle:
+    def create(self, article: schemas.KMArticleCreate, author_id: int, commit: bool = True) -> models.KMArticle:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         new_id = article.id or str(uuid.uuid4())
 
@@ -119,11 +119,14 @@ class KMRepository:
         )
         self.db.add(history_record)
 
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(db_article)
         return db_article
 
-    def update(self, db_article: models.KMArticle, update_data: dict) -> models.KMArticle:
+    def update(self, db_article: models.KMArticle, update_data: dict, commit: bool = True) -> models.KMArticle:
         if "attachments" in update_data and not isinstance(update_data["attachments"], str):
             update_data["attachments"] = json.dumps(update_data["attachments"])
 
@@ -165,11 +168,14 @@ class KMRepository:
         )
         self.db.add(history_record)
 
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(db_article)
         return db_article
 
-    def delete(self, db_article: models.KMArticle) -> None:
+    def delete(self, db_article: models.KMArticle, commit: bool = True) -> None:
         # Cascade delete: remove all child chapters first
         children = self.get_children(db_article.id)
 
@@ -187,7 +193,10 @@ class KMRepository:
         for child in children:
             self.db.delete(child)
         self.db.delete(db_article)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
 
     def get_history(self, article_id: str) -> list[models.KMArticleHistory]:
         return self.db.query(models.KMArticleHistory).filter(

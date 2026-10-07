@@ -16,6 +16,7 @@ from core.utils import (
     _json_serialize,
     _resolve_vendor_id,
     generate_reference_no,
+    begin_write_transaction,
     log_audit,
     WorkflowEngine
 )
@@ -55,6 +56,8 @@ class OSDService:
             # (forces vendor_id for contractor users; validates project_id).
             enforce_create_scope(data, scope)
 
+            begin_write_transaction(self.repo.db)
+
             if not data.get('documentNumber'):
                 data['documentNumber'] = generate_reference_no(
                     self.repo.db, vendor_name or '', 'OSD'
@@ -64,15 +67,17 @@ class OSDService:
             if not db_osd.id:
                 db_osd.id = str(uuid.uuid4())
 
-            created = self.repo.create(db_osd)
+            created = self.repo.create(db_osd, commit=False)
 
             log_audit(
                 self.repo.db, "CREATE", "OSD", created.id, created.documentNumber,
-                new_value=osd_create.model_dump(), user_id=user_id, username=username
+                new_value=osd_create.model_dump(), user_id=user_id, username=username, strict=True
             )
 
+            self.repo.db.commit()
             return created
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error creating OSD: {e}", exc_info=True)
             raise e
 
@@ -101,18 +106,21 @@ class OSDService:
 
             enforce_update_scope(d, scope)
 
-            updated = self.repo.update(db_osd, d)
+            updated = self.repo.update(db_osd, d, commit=False)
 
             log_audit(
                 self.repo.db, "UPDATE", "OSD", osd_id, updated.documentNumber,
                 old_value=old_val, new_value=osd_update.model_dump(exclude_unset=True),
-                user_id=user_id, username=username
+                user_id=user_id, username=username, strict=True
             )
 
+            self.repo.db.commit()
             return updated
         except ValueError as e:
+            self.repo.db.rollback()
             raise e
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error updating OSD {osd_id}: {e}", exc_info=True)
             raise e
 
@@ -124,14 +132,16 @@ class OSDService:
                 return False
 
             old_val = {c.name: getattr(db_osd, c.name) for c in db_osd.__table__.columns}
-            self.repo.delete(db_osd)
+            self.repo.delete(db_osd, commit=False)
 
             log_audit(
                 self.repo.db, "DELETE", "OSD", osd_id, db_osd.documentNumber,
-                old_value=old_val, user_id=user_id, username=username
+                old_value=old_val, user_id=user_id, username=username, strict=True
             )
 
+            self.repo.db.commit()
             return True
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error deleting OSD {osd_id}: {e}", exc_info=True)
             raise e

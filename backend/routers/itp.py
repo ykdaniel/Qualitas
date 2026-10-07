@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 import schemas
 from core.dependencies import RoleChecker, get_itp_service, get_related_service
-from core.perms import ITP_CREATE, ITP_DELETE, ITP_UPDATE, ITP_VIEW
+from core.perms import ITP_CREATE, ITP_DELETE, ITP_UPDATE, ITP_VIEW, PermissionDenied
 from core.scope import Scope, ScopeForbidden, get_scope
 from database import get_db
 # Cookie-aware auth (accepts httpOnly access_token cookie OR legacy Bearer).
@@ -31,9 +31,15 @@ def create_itp(
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(ITP_CREATE))
 ):
+    # Trusted permission codes from the authenticated user's OWN role.permissions_rel — never
+    # inferred from role name, never client-supplied. RoleChecker(ITP_CREATE) already guarantees
+    # current_user.role is not None by the time this line runs.
+    user_permissions = {p.code for p in current_user.role.permissions_rel}
     try:
-        return itp_service.create_itp(itp_create=itp, user_id=current_user.id, username=current_user.username, scope=scope)
+        return itp_service.create_itp(itp_create=itp, user_id=current_user.id, username=current_user.username, scope=scope, user_permissions=user_permissions)
     except ScopeForbidden as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except PermissionDenied as e:
         raise HTTPException(status_code=403, detail=str(e))
 
 @router.get("/")
@@ -44,6 +50,7 @@ def read_itps(
     status: str = None,
     start_date: str = None,
     end_date: str = None,
+    project_id: str = None,
     itp_service: ITPService = Depends(get_itp_service),
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(ITP_VIEW))
@@ -56,6 +63,7 @@ def read_itps(
             status=status,
             start_date=start_date,
             end_date=end_date,
+            project_id=project_id,
             scope=scope,
         )
 
@@ -102,9 +110,14 @@ def update_itp(
     current_user: schemas.User = Depends(RoleChecker(ITP_UPDATE))
 ):
     logger.debug(f"update_itp called for ID {itp_id} by user {current_user.username}")
+    # Trusted permission codes from the authenticated user's OWN role.permissions_rel — never
+    # inferred from role name, never client-supplied.
+    user_permissions = {p.code for p in current_user.role.permissions_rel}
     try:
-        db_itp = itp_service.update_itp(itp_id=itp_id, itp_update=itp, user_id=current_user.id, username=current_user.username, scope=scope)
+        db_itp = itp_service.update_itp(itp_id=itp_id, itp_update=itp, user_id=current_user.id, username=current_user.username, scope=scope, user_permissions=user_permissions)
     except ScopeForbidden as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except PermissionDenied as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

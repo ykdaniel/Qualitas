@@ -24,6 +24,7 @@ def read_osds(
     status: str = None,
     start_date: str = None,
     end_date: str = None,
+    project_id: str = None,
     osd_service: OSDService = Depends(get_osd_service),
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(OSD_VIEW))
@@ -35,6 +36,7 @@ def read_osds(
         status=status,
         start_date=start_date,
         end_date=end_date,
+        project_id=project_id,
         scope=scope,
     )
 

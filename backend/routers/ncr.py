@@ -6,9 +6,10 @@ from sqlalchemy.orm import Session
 import schemas
 from core.dependencies import RoleChecker, get_ncr_service, get_related_service
 from core.perms import NCR_APPROVE, NCR_CREATE, NCR_DELETE, NCR_UPDATE, NCR_VIEW
+from core.strict_dates import DateValidationError
 from core.scope import Scope, ScopeForbidden, get_scope
 from database import get_db
-from services.ncr_service import NCRService
+from services.ncr_service import NCRCloseNotPermitted, NCRService
 from services.related_service import RelatedService
 
 router = APIRouter(
@@ -31,6 +32,7 @@ def read_ncrs(
     status: str = None,
     start_date: str = None,
     end_date: str = None,
+    project_id: str = None,
     ncr_service: NCRService = Depends(get_ncr_service),
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(NCR_VIEW))
@@ -42,6 +44,7 @@ def read_ncrs(
         status=status,
         start_date=start_date,
         end_date=end_date,
+        project_id=project_id,
         scope=scope,
     )
 
@@ -70,6 +73,13 @@ def export_ncr_docx(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
+def _permission_codes(current_user: "schemas.User") -> set:
+    """The caller's permission codes, from the role — the same source RoleChecker uses. No name-based exceptions (an 'Admin' role gets what its
+    permission list says, nothing more)."""
+    role = getattr(current_user, "role", None)
+    return {p.code for p in (role.permissions_rel if role is not None else [])}
+
+
 def _require_approve_permission(current_user: "schemas.User") -> None:
     user_permissions = {p.code for p in current_user.role.permissions_rel}
     if NCR_APPROVE not in user_permissions:
@@ -94,10 +104,14 @@ def create_ncr(
     try:
         return ncr_service.create_ncr(
             ncr_create=ncr, user_id=current_user.id, username=current_user.username,
-            scope=scope,
+            scope=scope, permissions=_permission_codes(current_user),
         )
-    except ScopeForbidden as e:
+    except (ScopeForbidden, NCRCloseNotPermitted) as e:
         raise HTTPException(status_code=403, detail=str(e))
+    except DateValidationError as e:
+        raise HTTPException(status_code=422, detail=e.http_detail())
+    except ValueError as e:                     # e.g. created as Closed without meeting the closure conditions
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.put("/{ncr_id}/", response_model=schemas.NCR)
 def update_ncr(
@@ -126,10 +140,12 @@ def update_ncr(
         db_ncr = ncr_service.update_ncr(
             ncr_id=ncr_id, ncr_update=ncr,
             user_id=current_user.id, username=current_user.username,
-            scope=scope, background_tasks=background_tasks,
+            scope=scope, background_tasks=background_tasks, permissions=_permission_codes(current_user),
         )
-    except ScopeForbidden as e:
+    except (ScopeForbidden, NCRCloseNotPermitted) as e:
         raise HTTPException(status_code=403, detail=str(e))
+    except DateValidationError as e:
+        raise HTTPException(status_code=422, detail=e.http_detail())
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if db_ncr is None:

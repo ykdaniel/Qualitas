@@ -80,35 +80,45 @@ class NCRRepository:
 
         return query.offset(skip).limit(limit).all()
 
-    def create(self, ncr: models.NCR) -> models.NCR:
+    def create(self, ncr: models.NCR, commit: bool = True) -> models.NCR:
         """
         Create a new NCR record
 
         Args:
             ncr: NCR object to create
+            commit: default True keeps the historical commit-immediately behaviour. False = flush only (row inserted, state refreshed)
+                and leave the transaction open, for a caller that commits the NCR TOGETHER WITH its reference-number sequence and audit entry.
 
         Returns:
             Created NCR object with refreshed state
         """
         self.db.add(ncr)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(ncr)
         return ncr
 
-    def update(self, ncr: models.NCR, update_data: dict) -> models.NCR:
+    def update(self, ncr: models.NCR, update_data: dict, commit: bool = True) -> models.NCR:
         """
         Update an existing NCR record
 
         Args:
             ncr: NCR object to update
             update_data: Dictionary of fields to update
+            commit: default True keeps the historical commit-immediately behaviour. False = flush only (values assigned, constraints
+                checked, state refreshed) and leave the transaction open, for a caller that commits the change TOGETHER WITH its audit entries.
 
         Returns:
             Updated NCR object with refreshed state
         """
         for key, value in update_data.items():
             setattr(ncr, key, value)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(ncr)
         return ncr
 

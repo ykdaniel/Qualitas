@@ -189,3 +189,14 @@ ALL_PERMISSIONS = [
     {"code": ROLE_MANAGE, "description": "管理角色權限"},
     {"code": "settings:manage:all", "description": "管理系統設定"},
 ]
+
+
+class PermissionDenied(Exception):
+    """Raised by a SERVICE layer when a specific permission code — supplied by the router as an
+    explicit, trusted set derived from the authenticated user's own role.permissions_rel (never
+    inferred from role NAME, and never client-supplied) — is missing for the write being
+    attempted. An omitted or empty permission set must always be treated as "no permissions",
+    never as "skip this check" — callers must not default it to "allow"."""
+    def __init__(self, required_permission: str):
+        self.required_permission = required_permission
+        super().__init__(f"Operation not permitted. Required: {required_permission}")

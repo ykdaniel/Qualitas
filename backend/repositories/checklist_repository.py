@@ -5,6 +5,7 @@ Data access layer for Checklist module
 """
 
 from typing import List, Optional
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 import models
@@ -71,9 +72,25 @@ class ChecklistRepository:
         if filters.get('status'):
             query = query.filter(models.Checklist.status == filters['status'])
 
-        # ITR filter
+        # ITR filter. §17 isolation hardening (2026-09-19): the standalone
+        # Checklist module page must show templates only, not every ITR's
+        # instances mixed in — default to itrId IS NULL when no itr_id is
+        # requested. ITR's own page (ITRModals.tsx) always passes itr_id
+        # explicitly and is unaffected. `include_instances` is an explicit
+        # escape hatch for any future admin/debug view that genuinely wants
+        # the mixed list.
         if filters.get('itr_id'):
             query = query.filter(models.Checklist.itrId == filters['itr_id'])
+        elif not filters.get('include_instances'):
+            # Falsy, not just NULL — a known production anomaly has
+            # itrId='' rather than NULL; treating only NULL as "no itrId"
+            # would make that row vanish from every list (neither the
+            # templates-only default nor any itr_id-filtered view would
+            # match it), which is worse than showing it. Matches the
+            # service layer's own `if not db_checklist.itrId` convention.
+            query = query.filter(
+                or_(models.Checklist.itrId.is_(None), models.Checklist.itrId == '')
+            )
 
         # NOI filter
         if filters.get('noi_number'):
@@ -120,18 +137,23 @@ class ChecklistRepository:
                 .filter(models.Checklist.noiNumber == noi_number)
                 .all())
 
-    def create(self, checklist: models.Checklist) -> models.Checklist:
+    def create(self, checklist: models.Checklist, commit: bool = True) -> models.Checklist:
         """
         Create a new Checklist record
 
         Args:
             checklist: Checklist object to create
+            commit: False lets the caller add a same-transaction audit entry and commit once itself
+                (see checklist_service.py::create_checklist)
 
         Returns:
             Created Checklist object with refreshed state
         """
         self.db.add(checklist)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(checklist)
         return checklist
 

@@ -31,10 +31,15 @@ def _require_role_manage_permission(current_user: "schemas.User") -> None:
 def read_users(
     skip: int = 0,
     limit: int = 100,
+    # BACKLOG #21 gap 1 (2026-10-05): defaults to active-only so every "pick a
+    # person" picker (NCR/OBS/OSD/FollowUp/Meeting Minutes assignee pickers)
+    # stops offering deactivated users forever. The IAM admin page explicitly
+    # passes active_only=false to keep reactivating people possible.
+    active_only: bool = True,
     user_service: UserService = Depends(get_user_service),
     current_user: schemas.User = Depends(RoleChecker(USER_VIEW))
 ):
-    return user_service.get_users(skip=skip, limit=limit)
+    return user_service.get_users(skip=skip, limit=limit, active_only=active_only)
 
 @router.get("/users/{user_id}/", response_model=schemas.User)
 def read_user(
@@ -53,6 +58,13 @@ def create_user(
     user_service: UserService = Depends(get_user_service),
     current_user: schemas.User = Depends(RoleChecker(USER_MANAGE))
 ):
+    # Handing out a role at creation is the same privilege-escalation vector as
+    # changing one, so it needs the same permission (plain iam:user:manage must
+    # not be able to mint an Admin). Omitting role_id creates a roleless account
+    # — the backend assigns NO default role — which holds no permissions.
+    if user.role_id is not None:
+        _require_role_manage_permission(current_user)
+
     # Validation and hashing are handled in user_service.create_user
     return user_service.create_user(
         user=user,
@@ -100,19 +112,17 @@ def update_user(
 @router.delete("/users/{user_id}/")
 def delete_user(
     user_id: int,
-    reason: str = None,
-    user_service: UserService = Depends(get_user_service),
     current_user: schemas.User = Depends(RoleChecker(USER_MANAGE))
 ):
-    success = user_service.delete_user(
-        user_id=user_id,
-        current_user_id=current_user.id,
-        current_username=current_user.username,
-        reason=reason
+    # Accounts are never hard-deleted: users.id is reused by SQLite after the
+    # newest row is removed, and audit/ownership rows point at it by number, so
+    # a delete lets history be re-attributed to a later account. Explicitly
+    # refused (NOT treated as a deactivation) — deactivate via PUT is_active=false.
+    raise HTTPException(
+        status_code=405,
+        detail="Accounts cannot be deleted. Deactivate the account instead (set Status to Inactive).",
+        headers={"Allow": "GET, PUT"},
     )
-    if not success:
-        raise HTTPException(status_code=404, detail="User not found")
-    return {"ok": True}
 
 # === User data-isolation scope (P0) ===
 @router.get("/users/{user_id}/scope", response_model=schemas.UserScope)

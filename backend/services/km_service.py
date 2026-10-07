@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 
 import schemas
 from repositories.km_repository import KMRepository
+from core.utils import log_audit
 
 
 class KMService:
@@ -26,26 +27,62 @@ class KMService:
             raise HTTPException(status_code=404, detail="KM Article not found")
         return article
 
-    def create_article(self, article_create: schemas.KMArticleCreate, author_id: int):
-        return self.repo.create(article=article_create, author_id=author_id)
+    def create_article(self, article_create: schemas.KMArticleCreate, author_id: int, user_id: int = None, username: str = None):
+        # 2026-09-23: this module never called log_audit at all — every create/update/delete was completely
+        # unaudited, not "audited but lost" like the sibling fix in the other four modules. Same shared
+        # helper and one-commit shape as those: flush only, add the audit entry, commit once; any failure
+        # (including building the audit entry) rolls back the article AND its initial history snapshot together.
+        try:
+            created = self.repo.create(article=article_create, author_id=author_id, commit=False)
+            log_audit(
+                self.repo.db, "CREATE", "KMArticle", created.id, created.title,
+                new_value=article_create.model_dump(), user_id=user_id, username=username, strict=True,
+            )
+            self.repo.db.commit()
+            return created
+        except Exception:
+            self.repo.db.rollback()
+            raise
 
-    def update_article(self, article_id: str, article_update: schemas.KMArticleUpdate):
+    def update_article(self, article_id: str, article_update: schemas.KMArticleUpdate, user_id: int = None, username: str = None):
         db_article = self.repo.get_by_id(article_id)
         if not db_article:
             raise HTTPException(status_code=404, detail="KM Article not found")
 
+        old_val = {c.name: getattr(db_article, c.name) for c in db_article.__table__.columns}
         update_data = article_update.model_dump(exclude_unset=True)
         try:
-            return self.repo.update(db_article, update_data)
+            updated = self.repo.update(db_article, update_data, commit=False)
+            log_audit(
+                self.repo.db, "UPDATE", "KMArticle", article_id, updated.title,
+                old_value=old_val, new_value=article_update.model_dump(exclude_unset=True),
+                user_id=user_id, username=username, strict=True,
+            )
+            self.repo.db.commit()
+            return updated
         except ValueError as e:
+            self.repo.db.rollback()
             raise HTTPException(status_code=409, detail=str(e))
+        except Exception:
+            self.repo.db.rollback()
+            raise
 
-    def delete_article(self, article_id: str):
+    def delete_article(self, article_id: str, user_id: int = None, username: str = None):
         db_article = self.repo.get_by_id(article_id)
         if not db_article:
             raise HTTPException(status_code=404, detail="KM Article not found")
-        self.repo.delete(db_article)
-        return {"ok": True}
+        old_val = {c.name: getattr(db_article, c.name) for c in db_article.__table__.columns}
+        try:
+            self.repo.delete(db_article, commit=False)
+            log_audit(
+                self.repo.db, "DELETE", "KMArticle", article_id, old_val.get("title"),
+                old_value=old_val, user_id=user_id, username=username, strict=True,
+            )
+            self.repo.db.commit()
+            return {"ok": True}
+        except Exception:
+            self.repo.db.rollback()
+            raise
 
     def get_article_history(self, article_id: str):
         db_article = self.repo.get_by_id(article_id)
@@ -609,9 +646,8 @@ class KMService:
 
         file.file.seek(0)  # Reset for writing
 
-        # Resolve the base directory of the backend
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        upload_dir = os.path.join(base_dir, "uploads", "km")
+        from core.uploads import upload_root
+        upload_dir = os.path.join(upload_root(), "km")
         os.makedirs(upload_dir, exist_ok=True)
 
         # Discard the client-supplied filename for the saved path entirely

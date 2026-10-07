@@ -36,6 +36,7 @@ def read_fats(
     status: str = None,
     start_date: str = None,
     end_date: str = None,
+    project_id: str = None,
     fat_service: FATService = Depends(get_fat_service),
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(FAT_VIEW))
@@ -47,6 +48,7 @@ def read_fats(
         status=status,
         start_date=start_date,
         end_date=end_date,
+        project_id=project_id,
         scope=scope,
     )
     return fats

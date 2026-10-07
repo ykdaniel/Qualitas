@@ -143,13 +143,24 @@ class ITRRepository:
 
         return query.offset(skip).limit(limit).all(), total_count
 
-    def get_stats(self, project_id: Optional[str] = None) -> Dict[str, int]:
-        """Return ITR statistics by status + overdue count."""
+    def get_stats(self, project_id: Optional[str] = None, scope=None,
+                  vendor_id: Optional[str] = None) -> Dict[str, int]:
+        """Return ITR statistics by status + overdue count.
+
+        The caller's data-isolation ``scope`` is applied ONCE, to the base query every figure below
+        (total, each status, overdue) is derived from — the same ``apply_scope`` the ITR list uses
+        (2026-09-20: it used to be missing, so every account got the whole-system totals).
+        ``project_id`` / ``vendor_id`` are optional and can only NARROW further (they are AND-ed on
+        top of the scope); they can never widen it. ``scope=None`` keeps the old unscoped behaviour
+        for internal callers; the HTTP route always passes the caller's scope.
+        """
         today = datetime.now().strftime("%Y-%m-%d")
 
-        base_query = self.db.query(func.count(models.ITR.id))
+        base_query = apply_scope(self.db.query(func.count(models.ITR.id)), models.ITR, scope)
         if project_id:
             base_query = base_query.filter(models.ITR.project_id == project_id)
+        if vendor_id:
+            base_query = base_query.filter(models.ITR.vendor_id == vendor_id)
 
         total = base_query.scalar()
         in_progress = (
@@ -186,47 +197,67 @@ class ITRRepository:
             "overdue": overdue or 0,
         }
 
-    def create(self, itr: models.ITR) -> models.ITR:
+    def create(self, itr: models.ITR, commit: bool = True) -> models.ITR:
         """
         Create a new ITR record
 
         Args:
             itr: ITR object to create
+            commit: default True keeps the historical commit-immediately behaviour for
+                every other caller. False = flush only (row inserted, state refreshed) and
+                leave the transaction open, for a caller that must commit the row TOGETHER
+                WITH its audit entry.
 
         Returns:
             Created ITR object with refreshed state
         """
         self.db.add(itr)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(itr)
         return itr
 
-    def update(self, itr: models.ITR, update_data: dict) -> models.ITR:
+    def update(self, itr: models.ITR, update_data: dict, commit: bool = True) -> models.ITR:
         """
         Update an existing ITR record
 
         Args:
             itr: ITR object to update
             update_data: Dictionary of fields to update
+            commit: default True keeps the historical commit-immediately
+                behaviour for every other caller. False = flush only (values
+                assigned, constraints checked, state refreshed) and leave the
+                transaction open, for a caller that must commit the ITR change
+                TOGETHER WITH its audit entry / approval event.
 
         Returns:
             Updated ITR object with refreshed state
         """
         for key, value in update_data.items():
             setattr(itr, key, value)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(itr)
         return itr
 
-    def delete(self, itr: models.ITR):
+    def delete(self, itr: models.ITR, commit: bool = True):
         """
         Delete an ITR record
 
         Args:
             itr: ITR object to delete
+            commit: default True = commit immediately (historical behaviour, other
+                callers unaffected); False = flush only, the caller commits with its audit entry.
         """
         self.db.delete(itr)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
 
     # §17: the old link_checklist() here mutated a (shared, cross-project)
     # template's itrId in place, which polluted the template. Linking now

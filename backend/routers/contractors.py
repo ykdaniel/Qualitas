@@ -58,7 +58,15 @@ def delete_contractor(
     service: ContractorService = Depends(get_contractor_service),
     current_user: schemas.User = Depends(RoleChecker(CONTRACTOR_MANAGE))
 ):
-    deleted = service.delete_contractor(contractor_id, user_id=current_user.id, username=current_user.username)
+    # ContractorService.delete_contractor's only ValueError source is the
+    # reference check (validators.check_contractor_references) — every other
+    # step in that method (repo.delete, log_audit, db.commit) raises its own
+    # exception types on failure, so this does not mask an unrelated system
+    # error as a clean business rejection.
+    try:
+        deleted = service.delete_contractor(contractor_id, user_id=current_user.id, username=current_user.username)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if not deleted:
         raise HTTPException(status_code=404, detail="Contractor not found")
     return {"ok": True}

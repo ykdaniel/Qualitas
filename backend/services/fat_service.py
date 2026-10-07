@@ -61,15 +61,17 @@ class FATService:
             db_fat.created_at = now
             db_fat.updated_at = now
 
-            created = self.repo.create(db_fat)
+            created = self.repo.create(db_fat, commit=False)
 
             log_audit(
                 self.repo.db, "CREATE", "FAT", created.id, created.equipment,
-                new_value=fat_create.model_dump(), user_id=user_id, username=username
+                new_value=fat_create.model_dump(), user_id=user_id, username=username, strict=True
             )
 
+            self.repo.db.commit()
             return created
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error creating FAT: {e}", exc_info=True)
             raise e
 
@@ -94,16 +96,18 @@ class FATService:
 
             data['updated_at'] = datetime.now().isoformat()
 
-            updated = self.repo.update(db_fat, data)
+            updated = self.repo.update(db_fat, data, commit=False)
 
             log_audit(
                 self.repo.db, "UPDATE", "FAT", fat_id, updated.equipment,
                 old_value=old_val, new_value=fat_update.model_dump(exclude_unset=True),
-                user_id=user_id, username=username
+                user_id=user_id, username=username, strict=True
             )
 
+            self.repo.db.commit()
             return updated
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error updating FAT {fat_id}: {e}", exc_info=True)
             raise e
 
@@ -124,16 +128,18 @@ class FATService:
                 "updated_at": datetime.now().isoformat()
             }
             
-            updated = self.repo.update(db_fat, data)
+            updated = self.repo.update(db_fat, data, commit=False)
             
             log_audit(
                 self.repo.db, "UPDATE_DETAIL", "FAT", fat_id, updated.equipment,
                 old_value=old_val, new_value={"detail_data": details},
-                user_id=user_id, username=username
+                user_id=user_id, username=username, strict=True
             )
             
+            self.repo.db.commit()
             return updated
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error updating FAT details for {fat_id}: {e}", exc_info=True)
             raise e
 
@@ -145,14 +151,16 @@ class FATService:
                 return False
 
             old_val = {c.name: getattr(db_fat, c.name) for c in db_fat.__table__.columns}
-            self.repo.delete(db_fat)
+            self.repo.delete(db_fat, commit=False)
 
             log_audit(
                 self.repo.db, "DELETE", "FAT", fat_id, db_fat.equipment,
-                old_value=old_val, user_id=user_id, username=username
+                old_value=old_val, user_id=user_id, username=username, strict=True
             )
 
+            self.repo.db.commit()
             return True
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error deleting FAT {fat_id}: {e}", exc_info=True)
             raise e

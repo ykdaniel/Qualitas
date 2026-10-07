@@ -52,22 +52,31 @@ class OSDRepository:
 
         return query.offset(skip).limit(limit).all()
 
-    def create(self, osd: models.OSD) -> models.OSD:
+    def create(self, osd: models.OSD, commit: bool = True) -> models.OSD:
         """Create a new OSD record"""
         self.db.add(osd)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(osd)
         return osd
 
-    def update(self, osd: models.OSD, update_data: dict) -> models.OSD:
+    def update(self, osd: models.OSD, update_data: dict, commit: bool = True) -> models.OSD:
         """Update an existing OSD record"""
         for key, value in update_data.items():
             setattr(osd, key, value)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(osd)
         return osd
 
-    def delete(self, osd: models.OSD):
+    def delete(self, osd: models.OSD, commit: bool = True):
         """Delete an OSD record"""
         self.db.delete(osd)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()

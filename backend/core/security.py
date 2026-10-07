@@ -124,30 +124,16 @@ def create_refresh_token(data: dict, expires_delta: timedelta | None = None):
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
-async def get_current_user(
-    request: Request,
-    token: str | None = Depends(OAuth2PasswordBearer(tokenUrl="token", auto_error=False)),
-    db: Session = Depends(get_db),
-):
-    """Authenticate via httpOnly access_token cookie OR Authorization Bearer header.
-
-    During migration both paths are supported so existing localStorage-based
-    sessions keep working. New logins set the cookie too — once the frontend
-    fully migrates we can drop the header path.
-    """
+def authenticate_access_token(token: str, db: Session):
+    """The ONE validation of an access token: not blacklisted, a genuine access token (not a refresh token), a known and ACTIVE user, and not
+    issued before that user's "log out everywhere" cutoff. Raises HTTPException(401) otherwise. get_current_user uses it, and so does the file
+    download entry point for the Authorization header, the cookie and ?token= (2026-09-21: it used to decode the JWT on its own and skip
+    the blacklist, the token type, the active flag and the cutoff)."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-
-    # Prefer the cookie; fall back to the Authorization header
-    if token is None:
-        from core.auth_cookies import ACCESS_COOKIE_NAME
-        token = request.cookies.get(ACCESS_COOKIE_NAME)
-    if not token:
-        raise credentials_exception
-
     # Check blacklist BEFORE any expensive DB lookup
     if is_token_blacklisted(token):
         raise HTTPException(
@@ -205,3 +191,29 @@ async def get_current_user(
                 headers={"WWW-Authenticate": "Bearer"},
             )
     return user
+
+
+async def get_current_user(
+    request: Request,
+    token: str | None = Depends(OAuth2PasswordBearer(tokenUrl="token", auto_error=False)),
+    db: Session = Depends(get_db),
+):
+    """Authenticate via httpOnly access_token cookie OR Authorization Bearer header.
+
+    During migration both paths are supported so existing localStorage-based
+    sessions keep working. New logins set the cookie too — once the frontend
+    fully migrates we can drop the header path.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    # Prefer the cookie; fall back to the Authorization header
+    if token is None:
+        from core.auth_cookies import ACCESS_COOKIE_NAME
+        token = request.cookies.get(ACCESS_COOKIE_NAME)
+    if not token:
+        raise credentials_exception
+    return authenticate_access_token(token, db)

@@ -83,18 +83,24 @@ class NOIRepository:
 
         return query.offset(skip).limit(limit).all()
 
-    def create(self, noi: models.NOI) -> models.NOI:
+    def create(self, noi: models.NOI, commit: bool = True) -> models.NOI:
         """
         Create a new NOI record
 
         Args:
             noi: NOI object to create
+            commit: default True keeps the historical commit-immediately behaviour for every other caller.
+                False = flush only (row inserted, state refreshed) and leave the transaction open, for a
+                caller that must commit the row TOGETHER WITH its Q-WorkFlow row and audit entry.
 
         Returns:
             Created NOI object with refreshed state
         """
         self.db.add(noi)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(noi)
         return noi
 

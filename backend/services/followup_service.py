@@ -10,6 +10,7 @@ from typing import List, Optional
 
 import models
 import schemas
+from core.assignees import validate_new_assignee
 from repositories.followup_repository import FollowUpRepository
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
 from core.utils import (
@@ -51,6 +52,7 @@ class FollowUpService:
             # P0 data isolation: confine the new record to the caller's scope
             # (forces vendor_id for contractor users; validates project_id).
             enforce_create_scope(data, scope)
+            validate_new_assignee(self.repo.db, data, "assignedToUserId")
 
             # Validate source reference exists if provided
             validators.validate_followup_source_reference(
@@ -124,6 +126,7 @@ class FollowUpService:
                 data['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
 
             enforce_update_scope(data, scope)
+            validate_new_assignee(self.repo.db, data, "assignedToUserId", db_followup.assignedToUserId)
 
             # Validate source reference if being updated
             # Use updated values if provided, otherwise use existing values

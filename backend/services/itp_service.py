@@ -6,24 +6,51 @@ import models
 import schemas
 from repositories.itp_repository import ITPRepository
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
-from core.utils import _json_serialize, _resolve_vendor_id, generate_reference_no, log_audit, WorkflowEngine
+from core.utils import _json_serialize, _resolve_vendor_id, begin_write_transaction, generate_reference_no, log_audit, WorkflowEngine
 from core import error_messages
 from core import validators
+from core.perms import ITP_APPROVE, ITP_VOID, PermissionDenied
 
 logger = logging.getLogger(__name__)
+
+# "Approved with comments" is treated as part of the Approved family for this gate: the frontend's
+# own approvalMaturity stat (hooks/useITPStats.ts) already sums approved + approvedWithComments as
+# one concept, and its Chinese label ("核准但帶有意見") is "approved, with a reservation" — not a
+# distinct non-approval status. No existing backend policy states this explicitly; treating it as
+# part of the approval family is the conservative choice for a permission GATE (the alternative —
+# leaving it ungated — would let anyone without itp:approve:all bypass the whole point of this
+# check by picking "Approved with comments" instead of "Approved"). Flagged, not silently assumed.
+_ITP_APPROVAL_STATUSES = {"Approved", "Approved with comments"}
+
+
+def _require_itp_permission(user_permissions, code: str) -> None:
+    """user_permissions must be an explicit set the caller (the router) built from the
+    authenticated user's own role.permissions_rel — never omitted, never defaulted to "allow"."""
+    if code not in (user_permissions or frozenset()):
+        raise PermissionDenied(code)
 
 class ITPService:
     def __init__(self, repo: ITPRepository):
         self.repo = repo
 
-    def get_itps(self, skip: int = 0, limit: int = 100, search: str = None, status: str = None, start_date: str = None, end_date: str = None, scope=None) -> List[models.ITP]:
-        return self.repo.get_all(skip=skip, limit=limit, search=search, status=status, start_date=start_date, end_date=end_date, scope=scope)
+    def get_itps(self, skip: int = 0, limit: int = 100, search: str = None, status: str = None, start_date: str = None, end_date: str = None, project_id: str = None, scope=None) -> List[models.ITP]:
+        # `project_id` only NARROWS the result inside `scope` (repo.get_all AND-combines both
+        # filters — apply_scope is applied regardless of project_id, never bypassed by it), same
+        # contract as ITR's existing get_stats(project_id=..., scope=...). See BACKLOG #28.
+        return self.repo.get_all(skip=skip, limit=limit, search=search, status=status, start_date=start_date, end_date=end_date, project_id=project_id, scope=scope)
 
     def get_itp(self, itp_id: str, scope=None) -> Optional[models.ITP]:
         obj = self.repo.get_by_id(itp_id)
         return obj if record_in_scope(obj, scope) else None
 
-    def create_itp(self, itp_create: schemas.ITPCreate, user_id: int = None, username: str = None, scope=None) -> models.ITP:
+    def create_itp(self, itp_create: schemas.ITPCreate, user_id: int = None, username: str = None, scope=None, user_permissions=None) -> models.ITP:
+        # Checked before anything else, and outside the try/except below, so a rejection here
+        # never reaches begin_write_transaction / repo.create / log_audit / commit — nothing is
+        # written, no reference number is consumed, no audit entry is created.
+        if itp_create.status in _ITP_APPROVAL_STATUSES:
+            _require_itp_permission(user_permissions, ITP_APPROVE)
+        elif itp_create.status == "Void":
+            _require_itp_permission(user_permissions, ITP_VOID)
         try:
             data = _json_serialize(itp_create.model_dump(), ['attachments', 'detail_data'])
 
@@ -36,6 +63,8 @@ class ITPService:
             # (forces vendor_id for contractor users; validates project_id).
             enforce_create_scope(data, scope)
 
+            begin_write_transaction(self.repo.db)
+
             # Generate Reference No
             if not data.get('referenceNo'):
                 data['referenceNo'] = generate_reference_no(self.repo.db, vendor_name or '', 'ITP')
@@ -43,24 +72,52 @@ class ITPService:
             db_itp = models.ITP(**data)
             if not db_itp.id:
                 db_itp.id = str(uuid.uuid4())
-            
-            created_itp = self.repo.create(db_itp)
+
+            created_itp = self.repo.create(db_itp, commit=False)
 
             log_audit(
                 self.repo.db, "CREATE", "ITP", created_itp.id, created_itp.referenceNo,
-                new_value=itp_create.model_dump(), user_id=user_id, username=username
+                new_value=itp_create.model_dump(), user_id=user_id, username=username, strict=True
             )
 
+            self.repo.db.commit()
             return created_itp
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error creating ITP: {e}", exc_info=True)
             raise e
 
-    def update_itp(self, itp_id: str, itp_update: schemas.ITPUpdate, user_id: int = None, username: str = None, scope=None) -> Optional[models.ITP]:
+    def update_itp(self, itp_id: str, itp_update: schemas.ITPUpdate, user_id: int = None, username: str = None, scope=None, user_permissions=None) -> Optional[models.ITP]:
         try:
             db_itp = self.repo.get_by_id(itp_id)
             if not db_itp or not record_in_scope(db_itp, scope):
                 return None
+
+            # Entering Approved/Void requires the matching approve/void permission — checked
+            # BEFORE the transition-legality check below (an unauthorized caller gets a
+            # consistent 403 regardless of whether the target status would even be legal, rather
+            # than leaking which). Only a genuine ENTRY needs the extra permission:
+            #   - same-status resend (target == current) is a no-op per WorkflowEngine and is
+            #     deliberately left alone here — it needs no extra permission, unchanged from
+            #     before this batch.
+            #   - leaving Approved/Approved with comments (e.g. -> Pending) is an existing legal
+            #     transition that has never required any extra permission; this batch does not
+            #     add one — only entry is gated, per the four rules this batch implements.
+            #   - moving BETWEEN the two Approved-family statuses (Approved <-> Approved with
+            #     comments) IS re-gated as of 2026-09-28 (corrected after review): "更新進入
+            #     Approved 需要 update+approve" is stated unconditionally in the original rules,
+            #     with no carve-out for "already Approved with comments" — exempting that case
+            #     was an unrequested narrowing on my part, now removed. This is a real status
+            #     change, not a same-value resend. Whether "Approved with comments" itself
+            #     belongs in the approval family at all remains a separate, still-unconfirmed
+            #     judgment call (see _ITP_APPROVAL_STATUSES above) — flagged, not decided here;
+            #     the conservative default (both directions require itp:approve:all) is applied
+            #     pending that confirmation.
+            if itp_update.status and itp_update.status != db_itp.status:
+                if itp_update.status in _ITP_APPROVAL_STATUSES:
+                    _require_itp_permission(user_permissions, ITP_APPROVE)
+                elif itp_update.status == "Void":
+                    _require_itp_permission(user_permissions, ITP_VOID)
 
             # State transition check
             if itp_update.status and not WorkflowEngine.validate_transition("ITP", db_itp.status, itp_update.status):
@@ -77,18 +134,21 @@ class ITPService:
 
             enforce_update_scope(d, scope)
 
-            updated_itp = self.repo.update(db_itp, d)
+            updated_itp = self.repo.update(db_itp, d, commit=False)
 
             log_audit(
                 self.repo.db, "UPDATE", "ITP", itp_id, updated_itp.referenceNo,
                 old_value=old_val, new_value=itp_update.model_dump(exclude_unset=True),
-                user_id=user_id, username=username
+                user_id=user_id, username=username, strict=True
             )
 
+            self.repo.db.commit()
             return updated_itp
         except ValueError as e:
+            self.repo.db.rollback()
             raise e
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error updating ITP {itp_id}: {e}", exc_info=True)
             raise e
 
@@ -103,14 +163,16 @@ class ITPService:
 
             old_val = {c.name: getattr(db_itp, c.name) for c in db_itp.__table__.columns}
 
-            self.repo.delete(db_itp)
-            
+            self.repo.delete(db_itp, commit=False)
+
             log_audit(
                 self.repo.db, "DELETE", "ITP", itp_id, db_itp.referenceNo,
-                old_value=old_val, user_id=user_id, username=username
+                old_value=old_val, user_id=user_id, username=username, strict=True
             )
+            self.repo.db.commit()
             return True
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error deleting ITP {itp_id}: {e}", exc_info=True)
             raise e
 
@@ -127,15 +189,17 @@ class ITPService:
                 "detail_data": json.dumps(detail_body) if detail_body else None
             }
             
-            updated_itp = self.repo.update(db_itp, update_data)
+            updated_itp = self.repo.update(db_itp, update_data, commit=False)
 
             log_audit(
                 self.repo.db, "UPDATE_DETAIL", "ITP", itp_id, updated_itp.referenceNo,
                 old_value=old_val, new_value=detail_body,
-                user_id=user_id, username=username
+                user_id=user_id, username=username, strict=True
             )
+            self.repo.db.commit()
 
             return updated_itp
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error updating ITP detail {itp_id}: {e}", exc_info=True)
             raise e

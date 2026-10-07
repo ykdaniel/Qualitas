@@ -58,22 +58,31 @@ class PQPRepository:
 
         return query.offset(skip).limit(limit).all()
 
-    def create(self, pqp: models.PQP) -> models.PQP:
+    def create(self, pqp: models.PQP, commit: bool = True) -> models.PQP:
         """Create a new PQP record"""
         self.db.add(pqp)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(pqp)
         return pqp
 
-    def update(self, pqp: models.PQP, update_data: dict) -> models.PQP:
+    def update(self, pqp: models.PQP, update_data: dict, commit: bool = True) -> models.PQP:
         """Update an existing PQP record"""
         for key, value in update_data.items():
             setattr(pqp, key, value)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(pqp)
         return pqp
 
-    def delete(self, pqp: models.PQP):
+    def delete(self, pqp: models.PQP, commit: bool = True):
         """Delete a PQP record"""
         self.db.delete(pqp)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()

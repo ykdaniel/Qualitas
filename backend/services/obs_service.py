@@ -11,16 +11,58 @@ from typing import List, Optional
 import models
 import schemas
 from repositories.obs_repository import OBSRepository
+from core import strict_dates
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
 from core.utils import (
     _json_serialize,
     _resolve_vendor_id,
     generate_reference_no,
+    begin_write_transaction,
     log_audit,
     WorkflowEngine
 )
 
 logger = logging.getLogger(__name__)
+
+# Engineer closure sign-off identity (2026-10-05, BACKLOG #20): the two
+# `...ApprovedBy` fields used to be a free-pick dropdown over every IAM user —
+# anyone with OBS_UPDATE could stamp any name as having approved. ApprovedBy is
+# now server-derived from the authenticated caller only, mirroring ITR's
+# `approvedBy` (itr_service.py::_require_approver) — the client's own value for
+# these two fields is never trusted, whether or not an approval is in flight.
+_ENGINEER_APPROVAL_FIELDS = (
+    ('qualityEngineerApproval', 'qualityEngineerApprovalBy'),
+    ('constructionEngineerApproval', 'constructionEngineerApprovalBy'),
+)
+
+
+def _approver_label(approver: models.User) -> str:
+    """Same "Name / Company" shape the frontend's formatUserLabel() writes,
+    so existing stored values and newly server-derived ones stay consistent."""
+    name = approver.full_name or approver.username
+    return f"{name} / {approver.display_company}" if approver.display_company else name
+
+
+def _apply_engineer_approval_identity(d: dict, db, user_id, current_values: dict) -> None:
+    """Mutates `d` in place: strips any client-submitted `...ApprovedBy`, then
+    sets it from the authenticated caller for whichever engineer field is newly
+    transitioning to 'Approved' in this write. `current_values` maps each
+    approval field name to its value before this write (None for a brand-new
+    record)."""
+    approver = None
+    for approval_field, by_field in _ENGINEER_APPROVAL_FIELDS:
+        d.pop(by_field, None)
+        entering_approved = (
+            d.get(approval_field) == 'Approved'
+            and current_values.get(approval_field) != 'Approved'
+        )
+        if not entering_approved:
+            continue
+        if approver is None:
+            approver = db.query(models.User).filter(models.User.id == user_id).first() if user_id is not None else None
+            if approver is None or not approver.is_active:
+                raise ValueError("Cannot approve without an authenticated, active user.")
+        d[by_field] = _approver_label(approver)
 
 
 class OBSService:
@@ -51,9 +93,23 @@ class OBSService:
             if vendor_name:
                 data['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
 
+            # A brand-new OBS has no legitimate way to arrive already Approved via
+            # the form (both engineer fields default to Pending) — rather than
+            # risk an unhandled 500 from _apply_engineer_approval_identity's
+            # "no authenticated approver" ValueError (this router doesn't map
+            # ValueError -> 400 the way update_obs's does), simply refuse to let
+            # the client set either ApprovedBy field at creation time at all.
+            for _, by_field in _ENGINEER_APPROVAL_FIELDS:
+                data.pop(by_field, None)
+
             # P0 data isolation: confine the new record to the caller's scope
             # (forces vendor_id for contractor users; validates project_id).
             enforce_create_scope(data, scope)
+
+            # final content validated before a reference number is taken or anything is written (2026-09-20)
+            strict_dates.validate_date_write(data, strict_dates.OBS_DATE_FIELDS)
+
+            begin_write_transaction(self.repo.db)
 
             if not data.get('documentNumber'):
                 data['documentNumber'] = generate_reference_no(
@@ -64,15 +120,20 @@ class OBSService:
             if not db_obs.id:
                 db_obs.id = str(uuid.uuid4())
 
-            created = self.repo.create(db_obs)
+            created = self.repo.create(db_obs, commit=False)
 
             log_audit(
                 self.repo.db, "CREATE", "OBS", created.id, created.documentNumber,
-                new_value=obs_create.model_dump(), user_id=user_id, username=username
+                new_value=obs_create.model_dump(), user_id=user_id, username=username, strict=True
             )
 
+            self.repo.db.commit()
             return created
+        except strict_dates.DateValidationError:
+            self.repo.db.rollback()
+            raise                                   # an expected refusal (422), nothing was written — not an error to log
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error creating OBS: {e}", exc_info=True)
             raise e
 
@@ -122,20 +183,38 @@ class OBSService:
                 vendor_name = d.pop('vendor')
                 d['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
 
+            _apply_engineer_approval_identity(
+                d, self.repo.db, user_id,
+                current_values={f: getattr(db_obs, f, None) for f, _ in _ENGINEER_APPROVAL_FIELDS},
+            )
+
             enforce_update_scope(d, scope)
 
-            updated = self.repo.update(db_obs, d)
+            # Date rules on the merged final content, BEFORE the write (2026-09-20). OBS used to have NO date validation on
+            # update: a bad value was saved, then the response failed with 500 and the whole list stopped loading. A value
+            # re-sent unchanged (historical data) is not a new write; OBS has no order rules (unchanged).
+            strict_dates.validate_date_write(
+                {f: d[f] if f in d else getattr(db_obs, f, None) for f in strict_dates.OBS_DATE_FIELDS},
+                strict_dates.OBS_DATE_FIELDS,
+                stored={f: getattr(db_obs, f, None) for f in strict_dates.OBS_DATE_FIELDS},
+                provided=set(d) & set(strict_dates.OBS_DATE_FIELDS),
+            )
+
+            updated = self.repo.update(db_obs, d, commit=False)
 
             log_audit(
                 self.repo.db, "UPDATE", "OBS", obs_id, updated.documentNumber,
                 old_value=old_val, new_value=obs_update.model_dump(exclude_unset=True),
-                user_id=user_id, username=username
+                user_id=user_id, username=username, strict=True
             )
 
+            self.repo.db.commit()
             return updated
         except ValueError as e:
+            self.repo.db.rollback()
             raise e
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error updating OBS {obs_id}: {e}", exc_info=True)
             raise e
 
@@ -147,14 +226,16 @@ class OBSService:
                 return False
 
             old_val = {c.name: getattr(db_obs, c.name) for c in db_obs.__table__.columns}
-            self.repo.delete(db_obs)
+            self.repo.delete(db_obs, commit=False)
 
             log_audit(
                 self.repo.db, "DELETE", "OBS", obs_id, db_obs.documentNumber,
-                old_value=old_val, user_id=user_id, username=username
+                old_value=old_val, user_id=user_id, username=username, strict=True
             )
 
+            self.repo.db.commit()
             return True
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error deleting OBS {obs_id}: {e}", exc_info=True)
             raise e

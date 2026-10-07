@@ -12,18 +12,37 @@ from typing import List, Optional
 
 import models
 import schemas
+from core.assignees import validate_new_assignee
 from mail_service import send_ncr_rejection_notification
 from repositories.ncr_repository import NCRRepository
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
+from core import strict_dates
+from core.perms import NCR_CLOSE
+from core.ncr_photo_evidence import ncr_photo_evidence, photo_list
 from core.utils import (
     _json_serialize,
     _resolve_vendor_id,
+    begin_write_transaction,
+    lock_ncr_for_write,
     generate_reference_no,
     log_audit,
     WorkflowEngine
 )
 
 logger = logging.getLogger(__name__)
+
+
+class NCRCloseNotPermitted(Exception):
+    """Closing an NCR needs ncr:close:all on top of ncr:update:all (2026-09-21). Not a ValueError on purpose: the router answers 403, not 400."""
+
+    def __init__(self):
+        super().__init__(f"Operation not permitted. Required: {NCR_CLOSE}")
+
+
+def _may_close(permissions) -> bool:
+    """`permissions` = the caller's permission codes, passed in by the router. Missing means NO permission: a caller that forgets to pass
+    them can never close an NCR by accident."""
+    return NCR_CLOSE in (permissions or ())
 
 # NCR severity → default SLA days from raiseDate to dueDate (BACKLOG #13 #1).
 # TODO(#13): promote to a global configurable setting (KPIWeight-style) so the
@@ -35,6 +54,106 @@ def _add_days(date_str: str, days: int) -> str:
     """Add `days` to a YYYY-MM-DD date string, returning YYYY-MM-DD."""
     base = datetime.strptime(date_str[:10], "%Y-%m-%d")
     return (base + timedelta(days=days)).strftime("%Y-%m-%d")
+
+
+# Photo / attachment columns may hold INLINE file content (legacy base64 strings). An audit entry records THAT they changed and how many items
+# they hold — never the content itself.
+_AUDIT_CONTENT_FIELDS = ('defectPhotos', 'progressPhotos', 'improvementPhotos', 'attachments')
+
+
+def _audit_scalar(field, value):
+    if field in _AUDIT_CONTENT_FIELDS:
+        return {'items': len(_photo_list(value)), 'content': 'not recorded'}
+    return value
+
+
+def _row_values(obj) -> dict:
+    """Every column of the row as it is NOW (after a flush/refresh), by name."""
+    return {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
+
+
+# The fields the closure conditions read. Shared by create and update so that both judge exactly the same thing.
+CLOSURE_FIELDS = ('productDisposition', 'repairMethodStatement', 'repairMethodStatementStatus', 'reInspectionNumber', 'drawingNo', 'specNo',
+                  'qtyAffected', 'extent', 'recurrence', 'recurrenceRef', 'effectivenessVerified', 'ownerApproval')
+
+
+_photo_list = photo_list                       # the legacy improvementPhotos column, JSON string or list (shared with the Q-Workflow tracker)
+
+
+def improvement_photo_evidence(db, ncr_id: str):
+    """The improvement photos of THIS NCR that the SERVER can confirm (2026-09-21): (usable_count, problems).
+
+    The photo condition itself — attachment row of this NCR, category improvementPhoto, not deleted, file present under the upload root with an image
+    FILE HEADER — lives in core/ncr_photo_evidence.py, shared with the Q-Workflow tracker. `problems` lists, for the refusal message, the rows that
+    exist but cannot be used. Read-only."""
+    ev = ncr_photo_evidence(db, [ncr_id])[ncr_id]
+    return ev.usable, list(ev.problems)
+
+
+def assert_closure_conditions(final, photos, *, photos_on_saved_record: bool = True) -> None:
+    """THE closure conditions of an NCR — the single copy, used when an existing NCR enters Closed (update) and when one is created as Closed.
+    `final` is the FINAL content (stored row merged with the request, or the create body with its defaults); raises ValueError (-> 400).
+
+    Kept in lockstep with the frontend's zod superRefine gate (ncrFormSchema.ts) — the two used to disagree (this gate required
+    repairMethodStatement unconditionally while the frontend only required it for "Repair", and didn't check drawingNo/specNo/qtyAffected/extent
+    at all here or improvementPhotos there), so a save that passed frontend validation could still 400 here for a field the user was never told
+    was required, or the reverse.
+
+    `photos` = (usable_count, problems) from improvement_photo_evidence — the photos the server confirmed for this NCR. The NCR's own
+    `improvementPhotos` column (legacy path strings) is NOT evidence and never consulted here.
+
+    `photos_on_saved_record=False` (a CREATE): improvement photos are evidence attached to the saved NCR (attachments hang off its id), and a
+    record that does not exist yet has none — so nothing in the request can count, whatever paths it lists (they could point at anything, or at
+    another record's files). An NCR therefore cannot be born Closed: create it, attach the photos, then close it."""
+    final_disposition = final.get('productDisposition')
+    missing = []
+    if not final_disposition:
+        missing.append('productDisposition (產品處置)')
+    # repairMethodStatement is only required for "Repair" — matches the frontend's repairStar / repairNeedsMethod coupling. A TBC/NA status
+    # counts as "addressed" here too, same as the frontend gate (BACKLOG item 6) — it's an explicit answer, not a blank field.
+    if final_disposition == 'Repair':
+        final_repair = final.get('repairMethodStatement')
+        final_repair_status = final.get('repairMethodStatementStatus')
+        if (not final_repair or not str(final_repair).strip()) and not final_repair_status:
+            missing.append('repairMethodStatement (改善方案)')
+    for field, label in (('reInspectionNumber', '複檢編號'), ('drawingNo', '圖號'), ('specNo', '規範號'), ('qtyAffected', '受影響數量'), ('extent', '範圍')):
+        value = final.get(field)
+        if not value or not str(value).strip():
+            missing.append(f'{field} ({label})')
+    usable, photo_problems = photos if photos_on_saved_record else (0, [])
+    if usable < 1:
+        missing.append('improvementPhotos (改善照片)')
+    # recurrence='Yes' claims this NCR is a repeat of a prior one — require the trace link so that claim is actually verifiable
+    # (matches the frontend's recurrenceNeedsRef check).
+    if final.get('recurrence') == 'Yes' and (not final.get('recurrenceRef') or not str(final.get('recurrenceRef')).strip()):
+        missing.append('recurrenceRef (關聯前次 NCR)')
+
+    if missing:
+        if not photos_on_saved_record:
+            hint = ' — improvement photos must be attached to the saved NCR, so an NCR cannot be created directly as Closed: create it first, then close it'
+        elif usable < 1:
+            hint = (' — add at least one improvement photo (image file) to this NCR: save the NCR, upload the photo in the 改善照片 section, then close it'
+                    + (f'. Uploaded but unusable: {"; ".join(photo_problems)}' if photo_problems else ''))
+        else:
+            hint = ''
+        raise ValueError(f"Cannot close NCR: the following required fields are missing: {', '.join(missing)}{hint}")
+
+    # Corrective-action effectiveness gate (BACKLOG #13 #3): an NCR cannot be Closed until its effectiveness has been verified = Yes.
+    if final.get('effectivenessVerified') != 'Yes':
+        raise ValueError(
+            "Cannot close NCR: corrective-action effectiveness must be "
+            "verified (effectivenessVerified = 'Yes') before closing."
+        )
+
+    # Owner / Engineering-Design authority sign-off gate (BACKLOG #14 item e): "Use As Is" / "Repair" are technical changes to the accepted
+    # product and need explicit approval before closing — the print report's disposition note references this (見 6.3).
+    if final_disposition in ('Use As Is', 'Repair') and final.get('ownerApproval') != 'Approved':
+        raise ValueError(
+            "Cannot close NCR: disposition 'Use As Is' or 'Repair' "
+            "requires owner/engineering authority approval "
+            "(ownerApproval = 'Approved') before closing."
+        )
+
 
 
 class NCRService:
@@ -71,7 +190,7 @@ class NCRService:
         return ncr if record_in_scope(ncr, scope) else None
 
     def create_ncr(self, ncr_create: schemas.NCRCreate,
-                   user_id: int = None, username: str = None, scope=None) -> models.NCR:
+                   user_id: int = None, username: str = None, scope=None, permissions=None) -> models.NCR:
         """
         Create a new NCR with business logic validation
 
@@ -93,11 +212,18 @@ class NCRService:
             Exception: If creation fails
         """
         try:
+            # An NCR born Closed is a closure: same permission as closing an existing one, checked before anything is read or written.
+            if ncr_create.status == 'Closed' and not _may_close(permissions):
+                raise NCRCloseNotPermitted()
+
             # Serialize JSON fields
             data = _json_serialize(
                 ncr_create.model_dump(),
                 ['defectPhotos', 'progressPhotos', 'improvementPhotos', 'attachments']
             )
+
+            # closedBy is who CLOSED the NCR — set by the server from the authenticated user, never taken from the request body.
+            data.pop('closedBy', None)
 
             # Handle vendor name -> vendor_id mapping
             vendor_name = data.pop('vendor', None)
@@ -107,6 +233,7 @@ class NCRService:
             # P0 data isolation: confine the new record to the caller's scope
             # (forces vendor_id for contractor users; validates project_id).
             enforce_create_scope(data, scope)
+            validate_new_assignee(self.repo.db, data, "assignedTo")
 
             # Auto-fill dueDate from the severity SLA when not explicitly set
             # (BACKLOG #13 #1). Major → 7 days, Minor → 14 days from raiseDate
@@ -147,6 +274,21 @@ class NCRService:
                     )
                     data['recurrenceRef'] = ''
 
+            # An NCR created directly as Closed is a closure: it must meet the SAME closure conditions as one entering Closed by update (one shared
+            # check), judged on the final content, before a reference number is taken or anything is written. Its improvement photos cannot exist
+            # yet (attachments need the record's id), so a direct Closed is always refused — create it first, then close it.
+            if data.get('status') == 'Closed':
+                assert_closure_conditions({f: data.get(f) for f in CLOSURE_FIELDS}, [], photos_on_saved_record=False)
+
+            # FINAL content (after the SLA due-date fill above) is validated BEFORE a reference number is taken or anything
+            # is written: a create whose dates contradict each other is refused with 422, never saved-then-500 (2026-09-20).
+            strict_dates.validate_date_write(data, strict_dates.NCR_DATE_FIELDS, relations=strict_dates.NCR_ORDER_RELATIONS,
+                                             client_fields=ncr_create.model_fields_set)
+
+            # From here on everything is written in ONE transaction: the write lock is taken before the sequence is read (see
+            # begin_write_transaction), and the NCR row, the reference-number sequence and the audit entry are committed together, once.
+            begin_write_transaction(self.repo.db)
+
             # Generate Reference No automatically if not provided
             if not data.get('documentNumber'):
                 data['documentNumber'] = generate_reference_no(
@@ -158,23 +300,33 @@ class NCRService:
             if not db_ncr.id:
                 db_ncr.id = str(uuid.uuid4())
 
-            # Save to database
-            created = self.repo.create(db_ncr)
+            # Insert the NCR (flush only — the commit is the single one at the end)
+            created = self.repo.create(db_ncr, commit=False)
 
-            # Log audit trail
+            # Audit entry: strict — an unrecordable create is not saved at all. It records what was ACTUALLY stored (defaults, SLA due date and
+            # server-set fields included), by whom, and never inline file content.
             log_audit(
                 self.repo.db, "CREATE", "NCR", created.id, created.documentNumber,
-                new_value=ncr_create.model_dump(), user_id=user_id, username=username
+                new_value={k: _audit_scalar(k, v) for k, v in _row_values(created).items() if v is not None},
+                user_id=user_id, username=username, strict=True,
             )
 
+            # NCR + reference sequence + audit: ONE commit
+            self.repo.db.flush()
+            self.repo.db.commit()
+            self.repo.db.refresh(created)
             return created
+        except (ValueError, NCRCloseNotPermitted):
+            self.repo.db.rollback()                 # an expected refusal (400 / 422 / 403): nothing was written — not an error to log
+            raise
         except Exception as e:
+            self.repo.db.rollback()                 # releases the write lock; nothing of this create survives (row, number, audit)
             logger.error(f"Error creating NCR: {e}", exc_info=True)
             raise e
 
     def update_ncr(self, ncr_id: str, ncr_update: schemas.NCRUpdate,
                    user_id: int = None, username: str = None, scope=None,
-                   background_tasks=None) -> Optional[models.NCR]:
+                   background_tasks=None, permissions=None) -> Optional[models.NCR]:
         """
         Update an existing NCR with validation
 
@@ -198,9 +350,18 @@ class NCRService:
             Exception: If update fails
         """
         try:
+            # The write lock BEFORE anything is read: the closure check ("is there a usable improvement photo?") and the write ("Closed") must not
+            # have a photo delete in between (routers/file_router.py::delete_file takes the same lock and re-reads under it).
+            lock_ncr_for_write(self.repo.db, ncr_id)
             db_ncr = self.repo.get_by_id(ncr_id)
             if not db_ncr or not record_in_scope(db_ncr, scope):
+                self.repo.db.rollback()
                 return None
+
+            # Entering Closed from any other status needs ncr:close:all (on top of the ncr:update:all the route already demanded). Judged on the
+            # STORED status, so a Closed record re-sent as Closed is not a closure; and before anything below can write, audit or number.
+            if ncr_update.status == 'Closed' and db_ncr.status != 'Closed' and not _may_close(permissions):
+                raise NCRCloseNotPermitted()
 
             # Workflow validation: Check status transition
             if ncr_update.status and not WorkflowEngine.validate_transition(
@@ -215,6 +376,7 @@ class NCRService:
 
             # Prepare update data
             d = ncr_update.model_dump(exclude_unset=True)
+            validate_new_assignee(self.repo.db, d, "assignedTo", db_ncr.assignedTo)
             d = _json_serialize(d, ['defectPhotos', 'progressPhotos', 'improvementPhotos', 'attachments'])
 
             # Recompute dueDate from the severity SLA when severity changes and
@@ -222,13 +384,18 @@ class NCRService:
             # auto-fill in create_ncr. Without this, escalating severity (e.g.
             # Minor -> Major) via a later update leaves the stale, looser SLA
             # deadline in place instead of tightening it.
+            # Not when the NCR is (being) Closed: its due date is fixed then, so a late closure stays a late closure.
             if (
                 d.get('severity') in NCR_SLA_DAYS
                 and d.get('severity') != db_ncr.severity
                 and 'dueDate' not in d
+                and d.get('status', db_ncr.status) != 'Closed'
             ):
                 base_date = d.get('raiseDate', db_ncr.raiseDate) or datetime.now().strftime("%Y-%m-%d")
-                d['dueDate'] = _add_days(base_date, NCR_SLA_DAYS[d['severity']])
+                # a historical raise date that is not a valid date cannot be the base of a computation: keep the current
+                # due date instead of failing an update that never touched the date (a bad NEW raise date is refused below)
+                if strict_dates.date_problem(base_date) is None:
+                    d['dueDate'] = _add_days(base_date, NCR_SLA_DAYS[d['severity']])
 
             # recurrenceRef is a traceability claim ("this is a repeat of that
             # prior NCR") — unlike noiNumber/itrNumber it previously had no
@@ -298,92 +465,17 @@ class NCRService:
             # save that passed frontend validation could still 400 here for a
             # field the user was never told was required, or the reverse.
             if is_transitioning_to_closed:
-                # Merge incoming data with existing record to check final state
-                final_disposition = d.get('productDisposition', db_ncr.productDisposition)
-                final_reinspection = d.get('reInspectionNumber', db_ncr.reInspectionNumber)
-                final_drawing_no = d.get('drawingNo', db_ncr.drawingNo)
-                final_spec_no = d.get('specNo', db_ncr.specNo)
-                final_qty_affected = d.get('qtyAffected', db_ncr.qtyAffected)
-                final_extent = d.get('extent', db_ncr.extent)
-                final_photos_raw = d.get('improvementPhotos', db_ncr.improvementPhotos)
-
-                # improvementPhotos may be a JSON string or a Python list
-                if isinstance(final_photos_raw, str):
-                    try:
-                        final_photos = json.loads(final_photos_raw)
-                    except (json.JSONDecodeError, TypeError):
-                        final_photos = []
-                elif isinstance(final_photos_raw, list):
-                    final_photos = final_photos_raw
-                else:
-                    final_photos = []
-
-                missing = []
-                if not final_disposition:
-                    missing.append('productDisposition (產品處置)')
-                # repairMethodStatement is only required for "Repair" — matches
-                # the frontend's repairStar / repairNeedsMethod coupling. A
-                # TBC/NA status counts as "addressed" here too, same as the
-                # frontend gate (BACKLOG item 6) — it's an explicit answer,
-                # not a blank field.
-                if final_disposition == 'Repair':
-                    final_repair = d.get('repairMethodStatement', db_ncr.repairMethodStatement)
-                    final_repair_status = d.get('repairMethodStatementStatus', db_ncr.repairMethodStatementStatus)
-                    if (not final_repair or not str(final_repair).strip()) and not final_repair_status:
-                        missing.append('repairMethodStatement (改善方案)')
-                if not final_reinspection or not str(final_reinspection).strip():
-                    missing.append('reInspectionNumber (複檢編號)')
-                if not final_drawing_no or not str(final_drawing_no).strip():
-                    missing.append('drawingNo (圖號)')
-                if not final_spec_no or not str(final_spec_no).strip():
-                    missing.append('specNo (規範號)')
-                if not final_qty_affected or not str(final_qty_affected).strip():
-                    missing.append('qtyAffected (受影響數量)')
-                if not final_extent or not str(final_extent).strip():
-                    missing.append('extent (範圍)')
-                if not final_photos:
-                    missing.append('improvementPhotos (改善照片)')
-                # recurrence='Yes' claims this NCR is a repeat of a prior one —
-                # require the trace link so that claim is actually verifiable
-                # (matches the frontend's recurrenceNeedsRef check).
-                final_recurrence = d.get('recurrence', db_ncr.recurrence)
-                final_recurrence_ref = d.get('recurrenceRef', db_ncr.recurrenceRef)
-                if final_recurrence == 'Yes' and (not final_recurrence_ref or not str(final_recurrence_ref).strip()):
-                    missing.append('recurrenceRef (關聯前次 NCR)')
-
-                if missing:
-                    raise ValueError(
-                        f"Cannot close NCR: the following required fields are missing: "
-                        f"{', '.join(missing)}"
-                    )
-
-                # Corrective-action effectiveness gate (BACKLOG #13 #3): an NCR
-                # cannot be Closed until its effectiveness has been verified = Yes.
-                final_effectiveness = d.get('effectivenessVerified', db_ncr.effectivenessVerified)
-                if final_effectiveness != 'Yes':
-                    raise ValueError(
-                        "Cannot close NCR: corrective-action effectiveness must be "
-                        "verified (effectivenessVerified = 'Yes') before closing."
-                    )
-
-                # Owner / Engineering-Design authority sign-off gate (BACKLOG #14
-                # item e): "Use As Is" / "Repair" are technical changes to the
-                # accepted product and need explicit approval before closing —
-                # the print report's disposition note references this (見 6.3).
-                # (final_disposition already computed above.)
-                if final_disposition in ('Use As Is', 'Repair'):
-                    final_owner_approval = d.get('ownerApproval', db_ncr.ownerApproval)
-                    if final_owner_approval != 'Approved':
-                        raise ValueError(
-                            "Cannot close NCR: disposition 'Use As Is' or 'Repair' "
-                            "requires owner/engineering authority approval "
-                            "(ownerApproval = 'Approved') before closing."
-                        )
+                # The stored row merged with this request = the FINAL content the closure conditions are judged on.
+                assert_closure_conditions(
+                    {f: d.get(f, getattr(db_ncr, f, None)) for f in CLOSURE_FIELDS},
+                    improvement_photo_evidence(self.repo.db, ncr_id),
+                )
 
             # Auto-set closeoutDate + stamp closedBy when transitioning to Closed
             if d.get('status') == 'Closed' and not d.get('closeoutDate') and not db_ncr.closeoutDate:
                 d['closeoutDate'] = datetime.now().strftime('%Y-%m-%d')
-            if is_transitioning_to_closed and not d.get('closedBy') and not db_ncr.closedBy:
+            d.pop('closedBy', None)                 # who closed it is the authenticated user, never a value from the request body
+            if is_transitioning_to_closed and not db_ncr.closedBy:
                 d['closedBy'] = user_id
 
             # Stamp who/when verified effectiveness when it's being recorded
@@ -419,15 +511,56 @@ class NCRService:
             # transition before repo.update() overwrites db_ncr in place.
             newly_rejected = d.get('ownerApproval') == 'Rejected' and old_val.get('ownerApproval') != 'Rejected'
 
-            # Update the record
-            updated = self.repo.update(db_ncr, d)
+            # The due date of a Closed NCR — or of the request that closes it — is fixed: closing late must not be hidden by moving the deadline.
+            if (
+                d.get('status', db_ncr.status) == 'Closed'
+                and 'dueDate' in d and db_ncr.dueDate
+                and d['dueDate'] != db_ncr.dueDate
+            ):
+                raise strict_dates.DateValidationError([{
+                    'field': 'dueDate', 'code': strict_dates.DUE_FIXED_AT_CLOSURE, 'value': d['dueDate'],
+                    'msg': 'the due date of a closed NCR (or of the request that closes it) cannot be changed',
+                }])
 
-            # Log audit trail
-            log_audit(
-                self.repo.db, "UPDATE", "NCR", ncr_id, updated.documentNumber,
-                old_value=old_val, new_value=ncr_update.model_dump(exclude_unset=True),
-                user_id=user_id, username=username
+            # Date rules on the MERGED final content (stored row + this request incl. the values filled in above), BEFORE the
+            # write: a changed date must be valid, and each order relation touching a changed date must hold. A historical
+            # value re-sent unchanged, or an old inconsistency this request does not touch, is not a new write (2026-09-20).
+            strict_dates.validate_date_write(
+                {f: d[f] if f in d else getattr(db_ncr, f, None) for f in strict_dates.NCR_DATE_FIELDS},
+                strict_dates.NCR_DATE_FIELDS,
+                stored={f: getattr(db_ncr, f, None) for f in strict_dates.NCR_DATE_FIELDS},
+                provided=set(d) & set(strict_dates.NCR_DATE_FIELDS),
+                relations=strict_dates.NCR_ORDER_RELATIONS,
+                client_fields=ncr_update.model_fields_set,
             )
+
+            # Update the record, flush only: the commit is the single one below, together with the audit entries
+            updated = self.repo.update(db_ncr, d, commit=False)
+
+            # Audit (strict): what ACTUALLY changed — every column whose stored value differs after the write, including the values the server
+            # set itself (closedBy, close-out date, the SLA due date...) — with the before and after value of each, by whom, when (server clock).
+            # A save that changes nothing leaves no entry. Any failure to record it rolls the whole update back.
+            new_val = _row_values(updated)
+            changed = [k for k in new_val if new_val[k] != old_val.get(k)]
+            if changed:
+                log_audit(
+                    self.repo.db, "UPDATE", "NCR", ncr_id, updated.documentNumber,
+                    old_value={k: _audit_scalar(k, old_val.get(k)) for k in changed},
+                    new_value={k: _audit_scalar(k, new_val[k]) for k in changed},
+                    user_id=user_id, username=username, strict=True,
+                )
+            if 'status' in changed:                 # entering or leaving Closed (or any status change): the existing STATUS_CHANGE action
+                log_audit(
+                    self.repo.db, "STATUS_CHANGE", "NCR", ncr_id, updated.documentNumber,
+                    old_value={"status": old_val.get('status')}, new_value={"status": new_val['status']},
+                    user_id=user_id, username=username,
+                    reason=f"Status changed from '{old_val.get('status')}' to '{new_val['status']}'", strict=True,
+                )
+
+            # NCR change + audit entries: ONE commit
+            self.repo.db.flush()
+            self.repo.db.commit()
+            self.repo.db.refresh(updated)
 
             if newly_rejected:
                 vendor_email = updated.vendor_ref.email if updated.vendor_ref else ''
@@ -445,9 +578,11 @@ class NCRService:
                     )
 
             return updated
-        except ValueError as e:
+        except (ValueError, NCRCloseNotPermitted) as e:
+            self.repo.db.rollback()
             raise e
         except Exception as e:
+            self.repo.db.rollback()                 # the NCR change and its audit entries both go, nothing half-saved
             logger.error(f"Error updating NCR {ncr_id}: {e}", exc_info=True)
             raise e
 
@@ -521,9 +656,8 @@ class NCRService:
         if not ncr or not record_in_scope(ncr, scope):
             raise ValueError("NCR not found")
 
-        upload_root = _os.path.join(
-            _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "uploads"
-        )
+        from core.uploads import upload_root as _upload_root
+        upload_root = _upload_root()
 
         def _parse_json_list(raw):
             if not raw:

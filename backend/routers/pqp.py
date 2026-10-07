@@ -32,6 +32,7 @@ def read_pqps(
     status: str = None,
     start_date: str = None,
     end_date: str = None,
+    project_id: str = None,
     pqp_service: PQPService = Depends(get_pqp_service),
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(PQP_VIEW))
@@ -41,6 +42,7 @@ def read_pqps(
         limit=limit,
         search=search,
         status=status,
+        project_id=project_id,
         start_date=start_date,
         end_date=end_date,
         scope=scope,

@@ -1,5 +1,7 @@
+import json
 import logging
 import re
+from datetime import datetime
 
 from sqlalchemy import text
 
@@ -36,6 +38,8 @@ def add_unique_index_if_not_exists(conn, table: str, column: str) -> None:
 
 def run_migrations():
     """Run all database migrations"""
+    from core.startup_guard import guard_if_required
+    guard_if_required()      # isolated-test processes only; no-op otherwise
     logger.info("Running database migrations...")
 
     # 1. Add unique constraint to reference_sequences
@@ -96,7 +100,149 @@ def run_migrations():
     # so their derived status (now based on both new fields) stays Closed.
     _backfill_obs_engineer_approvals()
 
+    # 15. §17 Checklist/ITR isolation hardening: template's own edit
+    # counter (`version`) + the template version an instance was linked
+    # from (`source_template_version`) — minimal explicit versioning;
+    # link_checklist's existing deep-copy already preserves the actual
+    # item/criteria content, this just labels which version it came from.
+    _add_checklist_version_columns()
+
+    # 16. No backfill needed for source_template_version — a new nullable
+    # column with no DEFAULT already reads back NULL for every pre-existing
+    # row, which IS the correct "historical version unknown" sentinel
+    # (never fabricate a number). This step only logs the baseline count.
+    _log_checklist_legacy_version_baseline()
+
+    # 17. Historical-evidence markers (`evidence_recorded_at` +
+    # `evidence_historical_unknown`) — see
+    # _backfill_checklist_evidence_recorded_at's own docstring. Runs
+    # exactly once, tracked via `migration_flags` (not a per-row IS NULL
+    # guard — an independently-reproduced bug found that IS NULL cannot
+    # tell "predates this feature" from "brand-new row, correctly still
+    # NULL", so every app restart was re-protecting genuinely untouched
+    # new instances).
+    _create_migration_flags_table()
+    _add_checklist_evidence_marker_column()
+    _backfill_checklist_evidence_recorded_at()
+
+    # 18. Repair for the v2 backfill above (2026-09-19, same day):
+    # v2's guard against re-stamping new rows was fixed, but v2 itself
+    # (which had already run at least once by the time this shipped) had
+    # a *separate* bug — its blanket content-based classification
+    # overwrote/cleared any evidence_recorded_at value that already
+    # existed (from a real update_checklist save, or from v2's own
+    # earlier runs), based purely on the row's CURRENT content. This
+    # reconstructs real timestamps from audit_logs where possible, and
+    # otherwise leaves whatever value is already stored untouched, only
+    # correcting its reliability label. See the function's own docstring.
+    _add_checklist_evidence_reliability_column()
+    _repair_checklist_evidence_timestamp_provenance()
+
+    # 19. Repair for a bug IN v3's own reconstruction logic above
+    # (2026-09-19, same day): v3 treated any audit_logs UPDATE entry
+    # whose new_value showed evidence as a provable first-save moment,
+    # without checking whether old_value already had evidence too (a
+    # correction, not an introduction) and without accounting for the
+    # historical missing-commit-after-log_audit bug meaning the audit
+    # trail itself can have gaps. Re-examines rows v3 marked reliable=True
+    # and downgrades any that cannot actually be proven safe — see the
+    # function's own docstring for the full reasoning and the exact rule
+    # used to tell a genuinely-safe live save (after v3 last ran) apart
+    # from one v3's own sweep could have touched.
+    _repair_checklist_evidence_first_time_reliability()
+
+    # 20. ITR approval events (2026-09-20): the append-only approval / revocation history
+    # (approver, server time, approval-moment ITR + Checklist snapshots). Its schema is
+    # owned by THIS step (start-up create_all skips it) — see the function's docstring.
+    # Unlike the best-effort steps above, a failure here RAISES MigrationError and stops start-up.
+    _create_itr_approval_events_table()
+
     logger.info("Migrations completed.")
+
+class MigrationError(RuntimeError):
+    """A migration this application cannot run without failed. Raised out of run_migrations()
+    (nothing catches it), so start-up stops before seeding, the scheduler or any request."""
+
+
+def _create_itr_approval_events_table():
+    """Create `itr_approval_events` (and its index) if missing, and verify it. Nothing else.
+
+    * Owns this table's schema: models.ITRApprovalEvent is flagged migration_owned, so
+      start-up's create_all no longer creates it — a brand-new database gets it here, and
+      an old one gets it here on its first start after upgrade.
+    * Idempotent, no "done" flag: every statement is IF NOT EXISTS, so re-running is a
+      no-op that keeps every existing row, and a step that failed half-way (say the table
+      was created but the index was not) simply completes on the next start — there is
+      nothing that could be wrongly recorded as finished. An existing table (e.g. one an
+      earlier development build made through create_all) is adopted as it is — if it has
+      every column the model writes.
+    * Never backfills: historical approvals stay without events, and no ITR, Checklist or
+      audit row is read or written. Never drops or rebuilds a table, never rewrites an event.
+    * AUTOINCREMENT so event ids are never reused after a delete.
+    * FAILS THE START-UP (2026-09-20): if the table cannot be created, its index cannot be
+      created, or an existing table lacks columns the application writes, this raises
+      MigrationError — approvals depend on this table, and starting anyway would only defer
+      the failure to the first approval. What is guaranteed: no existing table is dropped or
+      rebuilt and no event row is rewritten. What is NOT: that nothing was created — the table
+      and/or its index may already exist when a later check fails (a partial schema). Because every
+      statement is IF NOT EXISTS, the next start simply completes whatever is missing.
+    """
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS itr_approval_events (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    itr_id VARCHAR NOT NULL,
+                    document_number VARCHAR,
+                    sequence INTEGER NOT NULL,
+                    event_type VARCHAR NOT NULL,
+                    occurred_at VARCHAR NOT NULL,
+                    actor_user_id INTEGER,
+                    actor_username VARCHAR,
+                    actor_full_name VARCHAR,
+                    status_before VARCHAR,
+                    status_after VARCHAR,
+                    reason TEXT,
+                    approval_event_id INTEGER,
+                    itr_snapshot TEXT,
+                    checklists_snapshot TEXT,
+                    snapshot_sha256 VARCHAR
+                )
+            """))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_itr_approval_events_itr_id ON itr_approval_events (itr_id)"
+            ))
+            conn.commit()
+
+        # Verify rather than assume: the table and its index must exist, and a pre-existing
+        # table must actually have every column the model writes (never silently "adopt" a
+        # wrong shape).
+        import models
+        from sqlalchemy import inspect as sa_inspect
+        insp = sa_inspect(engine)
+        have = {c["name"] for c in insp.get_columns("itr_approval_events")}
+        missing = [c.name for c in models.ITRApprovalEvent.__table__.columns if c.name not in have]
+        if missing:
+            raise MigrationError(
+                f"itr_approval_events exists but is missing column(s) {missing}. ITR approvals cannot be "
+                "recorded with this table. This step never drops, rebuilds or rewrites the table or any event "
+                "row, but it may already have created the missing index on it (IF NOT EXISTS) before this "
+                "check failed. Fix the table by hand (it may hold approval history), then start again."
+            )
+        if "ix_itr_approval_events_itr_id" not in {i["name"] for i in insp.get_indexes("itr_approval_events")}:
+            raise MigrationError("itr_approval_events index ix_itr_approval_events_itr_id is missing after creation.")
+    except MigrationError as e:
+        logger.error("STARTUP ABORTED: %s", e)
+        raise
+    except Exception as e:
+        logger.error("STARTUP ABORTED: itr_approval_events could not be created or verified: %s", e)
+        raise MigrationError(
+            f"itr_approval_events could not be created or verified ({type(e).__name__}: {e}). "
+            "The table and/or its index may have been created before the failure (a partial schema is "
+            "possible); existing event rows are never rewritten or dropped. Every statement is IF NOT EXISTS, "
+            "so fix the cause and start again — the step completes whatever is missing."
+        ) from e
+
 
 def _add_missing_columns():
     try:
@@ -314,17 +460,25 @@ def _backfill_qworkflows():
     Safe to rerun: existing rows are detected via LEFT JOIN and
     skipped. Numbering continues from the current max sequence so
     backfills and ordinary creates can't collide.
+
+    Re-inspection NOIs are skipped (2026-09-20): the create path gives a NOI with an ``ncrNumber`` no Q-WorkFlow of its
+    own (it shares the original NOI's tracker), so completing "every NOI without a row" here used to recreate, at
+    each restart, exactly the rows the create path deliberately does not make. The decision is the SAME function the
+    create path calls (``noi_has_own_qworkflow``) — not a second, SQL-side copy of the rule. Rows that already exist are
+    never touched, whatever kind of NOI they belong to.
     """
     import uuid
     from datetime import datetime
+    from services.noi_service import noi_has_own_qworkflow
 
     try:
         with engine.connect() as conn:
-            rows = conn.execute(text(
-                "SELECT n.id FROM noi n "
+            candidates = conn.execute(text(
+                'SELECT n.id, n."ncrNumber" FROM noi n '
                 "LEFT JOIN qworkflow q ON q.noi_id = n.id "
                 "WHERE q.id IS NULL ORDER BY n.id"
             )).fetchall()
+            rows = [(nid,) for nid, ncr_number in candidates if noi_has_own_qworkflow(ncr_number)]
             if not rows:
                 return
 
@@ -798,3 +952,517 @@ def _backfill_obs_engineer_approvals():
                 logger.info(f"Backfilled {result.rowcount} previously-Verified OBS row(s) into the new engineer approval fields.")
     except Exception as e:
         logger.warning(f"OBS engineer-approval backfill skipped: {e}")
+
+
+def _add_checklist_version_columns():
+    """§17 isolation hardening (2026-09-19). `version` is a bare template's
+    own edit counter (default 1, bumped by checklist_service.py when its
+    activity/items change). `source_template_version` is captured once, at
+    ITRService.link_checklist time, as a snapshot of the template's
+    `version` at that moment — it has no DEFAULT, so every pre-existing
+    row reads back NULL, which is the correct "historical version unknown"
+    sentinel (see _log_checklist_legacy_version_baseline below — nothing
+    backfills a guessed number onto it)."""
+    try:
+        with engine.connect() as conn:
+            _add_column_if_missing(conn, "checklist", "version", "INTEGER DEFAULT 1")
+            _add_column_if_missing(conn, "checklist", "source_template_version", "INTEGER")
+            conn.commit()
+    except Exception as e:
+        logger.warning(f"Checklist version column migration skipped: {e}")
+
+
+def _log_checklist_legacy_version_baseline():
+    """Log-only, no-op migration step — deliberately does not write
+    anything. Reports how many pre-existing Checklist instances now read
+    source_template_version=NULL, so that count is visible in deploy logs
+    without anyone needing to query the DB directly to confirm nothing was
+    silently (mis)backfilled."""
+    try:
+        with engine.connect() as conn:
+            n = conn.execute(text(
+                "SELECT COUNT(*) FROM checklist "
+                "WHERE \"itrId\" IS NOT NULL AND \"itrId\" != '' "
+                "AND source_template_version IS NULL"
+            )).scalar()
+            if n:
+                logger.info(
+                    f"{n} pre-existing Checklist instance(s) have "
+                    f"source_template_version=NULL ('historical version unknown') "
+                    f"— expected, no action needed."
+                )
+    except Exception as e:
+        logger.warning(f"Checklist legacy version baseline log skipped: {e}")
+
+
+def _create_migration_flags_table():
+    """Generic one-time-migration completion tracker. A row here means
+    the named one-time data backfill has already run and must never run
+    its write-sweep again — for any backfill whose "already done" check
+    can't safely be a per-row `IS NULL` guard, because NULL is also the
+    normal, expected state for a brand-new row created after the feature
+    shipped.
+
+    Added 2026-09-19 after an independently-reproduced bug:
+    `_backfill_checklist_evidence_recorded_at` used to guard on
+    `evidence_recorded_at IS NULL` alone — on every app restart, this
+    re-stamped genuinely new, untouched Checklist instances as if they
+    had always held evidence, because a fresh instance's marker is
+    NULL for exactly the same reason a not-yet-backfilled legacy row's
+    is. A per-row content check can't distinguish "predates this
+    migration" from "postdates it"; only an explicit, persistent
+    "this migration has already swept once" flag can."""
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS migration_flags (
+                    flag_name VARCHAR NOT NULL PRIMARY KEY,
+                    completed_at VARCHAR NOT NULL
+                )
+            """))
+            conn.commit()
+    except Exception as e:
+        logger.warning(f"migration_flags table creation skipped: {e}")
+
+
+def _add_checklist_evidence_marker_column():
+    """Historical-evidence hardening (2026-09-19), columns only — see
+    models.py's Checklist comment for what each of the two columns means
+    and why they're kept separate. Neither is written here; this step
+    only ensures they exist."""
+    try:
+        with engine.connect() as conn:
+            _add_column_if_missing(conn, "checklist", "evidence_recorded_at", "VARCHAR")
+            _add_column_if_missing(conn, "checklist", "evidence_historical_unknown", "BOOLEAN DEFAULT 0")
+            conn.commit()
+    except Exception as e:
+        logger.warning(f"Checklist evidence-marker column migration skipped: {e}")
+
+
+_CHECKLIST_EVIDENCE_MARKER_FLAG = "checklist_evidence_marker_v2"
+
+
+def _backfill_checklist_evidence_recorded_at():
+    """One-time, flag-tracked backfill for the historical-evidence
+    markers (2026-09-19, rewritten after the bug described in
+    _create_migration_flags_table's docstring).
+
+    Runs its write-sweep AT MOST ONCE, ever — guarded by a row in
+    `migration_flags`, not a per-row column check. If the flag is
+    already present, this function returns immediately and touches
+    nothing, no matter how many times the app restarts or how many new
+    Checklist instances have been created since.
+
+    When it does run (the very first time, on whichever deploy first
+    ships this migration), for every Checklist row that is a real
+    ITR-owned instance (itrId set) at that moment:
+      - If its CURRENT content already carries evidence (reusing
+        checklist_service.py's own `_touched_fields_carry_results`
+        predicate, so this can never disagree with the guard that uses
+        it everywhere else): set `evidence_recorded_at` to this
+        migration's run time — a real, if approximate, "known to hold
+        evidence by this point" timestamp.
+      - Otherwise (currently blank): set `evidence_historical_unknown =
+        True`, and leave `evidence_recorded_at` NULL — its true history
+        is unknown (it may have been genuinely created blank, or may
+        have held evidence that was cleared before any of this tracking
+        existed), so per the 2026-09-19 decision
+        ("對無法判斷歷史的舊空白實例，不可直接假定「從未填寫」") it stays
+        protected, but WITHOUT fabricating a "recorded at" moment that
+        was never actually observed.
+
+    The backfill UPDATEs and the `migration_flags` INSERT happen in the
+    SAME transaction/commit — if anything fails partway through, nothing
+    is written (SQLite connection-level transaction), and the flag is
+    never inserted, so the next app start safely retries the whole sweep
+    from scratch rather than being half-done forever.
+
+    Every instance created AFTER this flag is set is completely
+    unaffected by this function (it returns immediately) — such a row's
+    evidence_recorded_at starts NULL and evidence_historical_unknown
+    starts False, and only update_checklist ever changes either, only
+    with a real, accurate timestamp, only the first time real evidence
+    is actually saved."""
+    from services.checklist_service import _touched_fields_carry_results
+
+    try:
+        with engine.connect() as conn:
+            already_done = conn.execute(text(
+                "SELECT 1 FROM migration_flags WHERE flag_name = :flag"
+            ), {"flag": _CHECKLIST_EVIDENCE_MARKER_FLAG}).first()
+            if already_done:
+                return
+
+            rows = conn.execute(text(
+                "SELECT id, status, passCount, failCount, detail_data FROM checklist "
+                "WHERE \"itrId\" IS NOT NULL AND \"itrId\" != ''"
+            )).fetchall()
+
+            timestamp = datetime.now().isoformat()
+            evidenced_ids = []
+            unknown_ids = []
+            for row in rows:
+                has_evidence_now = _touched_fields_carry_results({
+                    'status': row.status, 'passCount': row.passCount,
+                    'failCount': row.failCount, 'detail_data': row.detail_data,
+                })
+                (evidenced_ids if has_evidence_now else unknown_ids).append(row.id)
+
+            for checklist_id in evidenced_ids:
+                conn.execute(text(
+                    "UPDATE checklist SET evidence_recorded_at = :ts, "
+                    "evidence_historical_unknown = 0 WHERE id = :id"
+                ), {"ts": timestamp, "id": checklist_id})
+            for checklist_id in unknown_ids:
+                conn.execute(text(
+                    "UPDATE checklist SET evidence_recorded_at = NULL, "
+                    "evidence_historical_unknown = 1 WHERE id = :id"
+                ), {"id": checklist_id})
+
+            conn.execute(text(
+                "INSERT INTO migration_flags (flag_name, completed_at) VALUES (:flag, :ts)"
+            ), {"flag": _CHECKLIST_EVIDENCE_MARKER_FLAG, "ts": timestamp})
+
+            conn.commit()
+
+            if evidenced_ids or unknown_ids:
+                logger.info(
+                    f"Checklist evidence-marker one-time backfill complete: "
+                    f"{len(evidenced_ids)} instance(s) had real current evidence "
+                    f"(evidence_recorded_at set), {len(unknown_ids)} were blank and "
+                    f"marked evidence_historical_unknown (protected, no fabricated "
+                    f"timestamp). This will not run again."
+                )
+    except Exception as e:
+        logger.warning(f"Checklist evidence-marker backfill skipped (safe to retry next start): {e}")
+
+
+def _add_checklist_evidence_reliability_column():
+    """Historical-evidence provenance repair (2026-09-19), column only —
+    see models.py's Checklist comment for what `evidence_recorded_at_reliable`
+    means. This step only ensures it exists."""
+    try:
+        with engine.connect() as conn:
+            _add_column_if_missing(conn, "checklist", "evidence_recorded_at_reliable", "BOOLEAN DEFAULT 0")
+            conn.commit()
+    except Exception as e:
+        logger.warning(f"Checklist evidence-reliability column migration skipped: {e}")
+
+
+_CHECKLIST_EVIDENCE_REPAIR_FLAG = "checklist_evidence_timestamp_repair_v3"
+
+
+def _repair_checklist_evidence_timestamp_provenance():
+    """One-time, flag-tracked repair for damage the v2 backfill caused
+    (2026-09-19). Does NOT touch, clear, or require re-running the
+    `checklist_evidence_marker_v2` flag — this is a separate, additive
+    follow-up step with its own flag, so v2's own "ran once" record stays
+    intact and this repair is itself independently safe to retry.
+
+    The bug being repaired: v2's classification was based purely on a
+    row's CURRENT content at the moment v2 ran — "currently has
+    evidence" got a fresh v2-run-time timestamp (overwriting whatever
+    evidence_recorded_at already held, even if it was a real one from an
+    actual prior update_checklist save), "currently blank" got
+    evidence_recorded_at forced to NULL (erasing whatever was there,
+    even if it was real). Both directions destroyed genuine history
+    based on content alone, exactly the mistake the *first* version of
+    this backfill was written to avoid making for the "was it ever
+    filled in" question — it just made the same category of mistake one
+    level deeper, for the "when" question.
+
+    The fix: audit_logs is authoritative and was never touched by either
+    buggy migration (both write directly via SQL, bypassing
+    checklist_service.py's log_audit entirely) — every REAL save through
+    update_checklist always creates a corresponding UPDATE audit_logs
+    entry. So: for every Checklist instance row that v2 already touched
+    (identified by `evidence_historical_unknown IS TRUE OR
+    evidence_recorded_at IS NOT NULL` — the two states v2's logic could
+    have left a row in; a row with NEITHER set was never touched by v2
+    at all, e.g. created afterward, and is left completely alone here):
+
+      1. Scan that row's audit_logs UPDATE history for the EARLIEST entry
+         whose logged new_value shows real evidence being introduced
+         (reusing checklist_service.py's own `_touched_fields_carry_results`
+         predicate against the parsed new_value, so this can never
+         disagree with what counts as "evidence" everywhere else).
+      2. If found: that entry's timestamp IS a real, provable first-save
+         moment — set evidence_recorded_at to it (correcting whatever v2
+         wrote), evidence_recorded_at_reliable=True,
+         evidence_historical_unknown=False. This can restore a real
+         timestamp even for a row v2 left NULLed, if the row's content
+         has since been cleared.
+      3. If not found: v2's mistake is not recoverable from this row's
+         own history — whatever value is CURRENTLY stored in
+         evidence_recorded_at is preserved exactly as-is (not cleared,
+         not overwritten with a new guess), evidence_recorded_at_reliable
+         is set to False (never claim it as a confirmed real moment),
+         and evidence_historical_unknown is set to True (still fully
+         protected either way).
+
+    Same atomicity/retry contract as v2: the repair UPDATEs and the flag
+    INSERT commit together in one transaction; a failure partway through
+    leaves nothing written, so the next app start retries cleanly."""
+    from services.checklist_service import _touched_fields_carry_results
+
+    try:
+        with engine.connect() as conn:
+            already_done = conn.execute(text(
+                "SELECT 1 FROM migration_flags WHERE flag_name = :flag"
+            ), {"flag": _CHECKLIST_EVIDENCE_REPAIR_FLAG}).first()
+            if already_done:
+                return
+
+            rows = conn.execute(text(
+                "SELECT id, evidence_recorded_at, evidence_historical_unknown FROM checklist "
+                "WHERE \"itrId\" IS NOT NULL AND \"itrId\" != '' "
+                "AND (evidence_historical_unknown = 1 OR evidence_recorded_at IS NOT NULL)"
+            )).fetchall()
+
+            if not rows:
+                # Nothing v2 touched (e.g. v2 never ran on this DB, or
+                # found no instances at all) — still record that v3 ran,
+                # so a later restart doesn't keep re-checking for nothing.
+                conn.execute(text(
+                    "INSERT INTO migration_flags (flag_name, completed_at) VALUES (:flag, :ts)"
+                ), {"flag": _CHECKLIST_EVIDENCE_REPAIR_FLAG, "ts": datetime.now().isoformat()})
+                conn.commit()
+                return
+
+            audit_rows = conn.execute(text(
+                "SELECT entity_id, timestamp, new_value FROM audit_logs "
+                "WHERE entity_type = 'Checklist' AND action = 'UPDATE' "
+                "ORDER BY entity_id, timestamp ASC"
+            )).fetchall()
+            # Earliest evidence-introducing UPDATE per checklist id, from
+            # real (log_audit-recorded) saves only.
+            earliest_real_evidence_ts = {}
+            for arow in audit_rows:
+                if arow.entity_id in earliest_real_evidence_ts:
+                    continue  # already found this row's earliest — audit_rows is timestamp-ordered
+                try:
+                    parsed_new_value = json.loads(arow.new_value) if arow.new_value else None
+                except (TypeError, ValueError):
+                    parsed_new_value = None
+                if isinstance(parsed_new_value, dict) and _touched_fields_carry_results(parsed_new_value):
+                    earliest_real_evidence_ts[arow.entity_id] = arow.timestamp
+
+            restored = 0
+            preserved_unreliable = 0
+            for row in rows:
+                real_ts = earliest_real_evidence_ts.get(row.id)
+                if real_ts:
+                    conn.execute(text(
+                        "UPDATE checklist SET evidence_recorded_at = :ts, "
+                        "evidence_recorded_at_reliable = 1, evidence_historical_unknown = 0 "
+                        "WHERE id = :id"
+                    ), {"ts": real_ts, "id": row.id})
+                    restored += 1
+                else:
+                    # Preserve whatever is already stored — do not clear,
+                    # do not overwrite with a new guess.
+                    conn.execute(text(
+                        "UPDATE checklist SET evidence_recorded_at_reliable = 0, "
+                        "evidence_historical_unknown = 1 WHERE id = :id"
+                    ), {"id": row.id})
+                    preserved_unreliable += 1
+
+            timestamp = datetime.now().isoformat()
+            conn.execute(text(
+                "INSERT INTO migration_flags (flag_name, completed_at) VALUES (:flag, :ts)"
+            ), {"flag": _CHECKLIST_EVIDENCE_REPAIR_FLAG, "ts": timestamp})
+
+            conn.commit()
+
+            logger.info(
+                f"Checklist evidence-timestamp provenance repair complete: "
+                f"{restored} instance(s) had a real first-evidence moment reconstructed "
+                f"from audit_logs, {preserved_unreliable} had no corroborating audit "
+                f"history so their existing value (if any) was preserved as-is and marked "
+                f"unreliable/historical-unknown. This will not run again."
+            )
+    except Exception as e:
+        logger.warning(f"Checklist evidence-timestamp provenance repair skipped (safe to retry next start): {e}")
+
+
+_CHECKLIST_EVIDENCE_RELIABILITY_REPAIR_FLAG = "checklist_evidence_reliability_repair_v4"
+
+
+def _repair_checklist_evidence_first_time_reliability():
+    """One-time, flag-tracked repair for a bug in v3's own reconstruction
+    logic (2026-09-19, same day). Does NOT touch, clear, or require
+    re-running `checklist_evidence_marker_v2` or
+    `checklist_evidence_timestamp_repair_v3` — this is a third, separate,
+    additive follow-up with its own flag.
+
+    The bug being repaired: v3 treated the EARLIEST audit_logs UPDATE
+    entry whose new_value showed evidence as a provable "first recorded"
+    moment, based only on new_value. Independently reproduced
+    counter-example: the one visible UPDATE entry for a row already had
+    evidence in its OLD_value (i.e. it was a correction of already-
+    existing content, not an introduction of new content) — v3 still
+    marked it evidence_recorded_at_reliable=True. That cannot be a first-
+    save moment; a correction of pre-existing evidence proves evidence
+    existed even EARLIER, not that this UPDATE is when it began.
+
+    A stricter check ("does old_value ALSO lack evidence") is still not
+    sufficient on its own: this codebase had a real missing-commit-after-
+    log_audit bug (found and fixed elsewhere in this same hardening
+    effort), so "earliest audit_logs entry we can find" is not
+    necessarily "the first time this ever happened" — a still-earlier
+    fill-then-clear cycle could have occurred and left no trace, even for
+    a row whose earliest visible old_value happens to look blank. So for
+    any row that predates this whole tracking mechanism, a genuinely
+    provable first-save moment cannot be reconstructed after the fact at
+    all — only instances tracked continuously since their own creation
+    (i.e. their first real save happens through update_checklist itself,
+    live, after every part of this mechanism already existed) can ever
+    be trusted as reliable.
+
+    The fix: re-examine every row currently marked
+    evidence_recorded_at_reliable=True.
+      - If its evidence_recorded_at timestamp is AFTER v3's own
+        completed_at (from migration_flags) — this can only have been
+        set by a genuine LIVE update_checklist save that happened after
+        v3 last ran (v3 never runs again, by its own one-time-flag
+        contract), so it is a real, continuously-tracked first save.
+        Left completely untouched.
+      - Otherwise — this row was in scope for v3's own (flawed) sweep and
+        its current reliable=True status cannot be trusted as-is. It is
+        re-derived using the corrected rule (a genuine old_value-lacks-
+        evidence / new_value-has-evidence TRANSITION, not just any
+        evidence-containing new_value):
+          - If such a transition is found in audit_logs: its timestamp is
+            kept as a known moment evidence was confirmed to exist (more
+            informative than an arbitrary migration run-time), but
+            evidence_recorded_at_reliable is set to False and
+            evidence_historical_unknown to True — never claimed as a
+            proven first-save time, per the reasoning above.
+          - If not found: whatever evidence_recorded_at value is already
+            stored is preserved exactly as-is (never cleared or
+            replaced), only the reliability label changes, same as
+            above.
+
+    No row's evidence_recorded_at is ever fabricated or blanked by this
+    repair, and no row that is genuinely safe (a live save after v3's own
+    completion) is downgraded. Same atomicity/retry contract as v2/v3:
+    the repair UPDATEs and the flag INSERT commit together in one
+    transaction."""
+    from services.checklist_service import _touched_fields_carry_results
+
+    try:
+        with engine.connect() as conn:
+            already_done = conn.execute(text(
+                "SELECT 1 FROM migration_flags WHERE flag_name = :flag"
+            ), {"flag": _CHECKLIST_EVIDENCE_RELIABILITY_REPAIR_FLAG}).first()
+            if already_done:
+                return
+
+            v3_flag_row = conn.execute(text(
+                "SELECT completed_at FROM migration_flags WHERE flag_name = :flag"
+            ), {"flag": _CHECKLIST_EVIDENCE_REPAIR_FLAG}).first()
+
+            def _mark_done_and_commit():
+                conn.execute(text(
+                    "INSERT INTO migration_flags (flag_name, completed_at) VALUES (:flag, :ts)"
+                ), {"flag": _CHECKLIST_EVIDENCE_RELIABILITY_REPAIR_FLAG, "ts": datetime.now().isoformat()})
+                conn.commit()
+
+            if v3_flag_row is None:
+                # v3 never ran on this DB -- any reliable=True row can only
+                # have come from a genuine live update_checklist save.
+                # Nothing to repair; just record that this step ran.
+                _mark_done_and_commit()
+                return
+
+            v3_completed_at = v3_flag_row.completed_at
+
+            candidates = conn.execute(text(
+                "SELECT id, evidence_recorded_at FROM checklist "
+                "WHERE \"itrId\" IS NOT NULL AND \"itrId\" != '' "
+                "AND evidence_recorded_at_reliable = 1"
+            )).fetchall()
+
+            # A row's own evidence_recorded_at postdating v3's own
+            # completion is proof it can only have been set live,
+            # afterward (v3 never runs again) -- safe, leave alone.
+            # Anything at or before v3's completion (or with no timestamp
+            # at all) could have been set/confirmed BY v3's own flawed
+            # reconstruction and must be re-examined.
+            suspect_ids = [
+                row.id for row in candidates
+                if not row.evidence_recorded_at or row.evidence_recorded_at <= v3_completed_at
+            ]
+
+            if not suspect_ids:
+                _mark_done_and_commit()
+                return
+
+            placeholders = ",".join(f":id{i}" for i in range(len(suspect_ids)))
+            params = {f"id{i}": v for i, v in enumerate(suspect_ids)}
+            audit_rows = conn.execute(text(
+                f"SELECT entity_id, timestamp, old_value, new_value FROM audit_logs "
+                f"WHERE entity_type = 'Checklist' AND action = 'UPDATE' "
+                f"AND entity_id IN ({placeholders}) "
+                f"ORDER BY entity_id, timestamp ASC"
+            ), params).fetchall()
+
+            # Earliest genuine blank-evidence -> has-evidence TRANSITION
+            # per checklist id -- a stricter, more meaningful "known
+            # sighting" than v3's "new_value merely shows evidence"
+            # check, though per the reasoning above it is still never
+            # promoted to reliable=True for a pre-existing row.
+            earliest_transition_ts = {}
+            for arow in audit_rows:
+                if arow.entity_id in earliest_transition_ts:
+                    continue  # already found this row's earliest -- audit_rows is timestamp-ordered
+                try:
+                    parsed_old = json.loads(arow.old_value) if arow.old_value else None
+                except (TypeError, ValueError):
+                    parsed_old = None
+                try:
+                    parsed_new = json.loads(arow.new_value) if arow.new_value else None
+                except (TypeError, ValueError):
+                    parsed_new = None
+                old_has_evidence = isinstance(parsed_old, dict) and _touched_fields_carry_results(parsed_old)
+                new_has_evidence = isinstance(parsed_new, dict) and _touched_fields_carry_results(parsed_new)
+                if new_has_evidence and not old_has_evidence:
+                    earliest_transition_ts[arow.entity_id] = arow.timestamp
+
+            downgraded = 0
+            for checklist_id in suspect_ids:
+                known_sighting_ts = earliest_transition_ts.get(checklist_id)
+                if known_sighting_ts:
+                    conn.execute(text(
+                        "UPDATE checklist SET evidence_recorded_at = :ts, "
+                        "evidence_recorded_at_reliable = 0, evidence_historical_unknown = 1 "
+                        "WHERE id = :id"
+                    ), {"ts": known_sighting_ts, "id": checklist_id})
+                else:
+                    # No qualifying transition found -- preserve whatever
+                    # is already stored, exactly as-is.
+                    conn.execute(text(
+                        "UPDATE checklist SET evidence_recorded_at_reliable = 0, "
+                        "evidence_historical_unknown = 1 WHERE id = :id"
+                    ), {"id": checklist_id})
+                downgraded += 1
+
+            conn.execute(text(
+                "INSERT INTO migration_flags (flag_name, completed_at) VALUES (:flag, :ts)"
+            ), {"flag": _CHECKLIST_EVIDENCE_RELIABILITY_REPAIR_FLAG, "ts": datetime.now().isoformat()})
+            conn.commit()
+
+            if downgraded:
+                logger.info(
+                    f"Checklist evidence first-time-reliability repair complete: "
+                    f"{downgraded} row(s) previously (over-confidently) marked "
+                    f"reliable=True by v3 were downgraded to historical_unknown=True "
+                    f"(evidence_recorded_at preserved or re-derived from a genuine "
+                    f"evidence-appearance transition, never fabricated or cleared). "
+                    f"Rows whose evidence_recorded_at postdates v3's own completion "
+                    f"were left untouched -- those can only have been set by a live "
+                    f"save after v3 last ran and remain genuinely reliable. This will "
+                    f"not run again."
+                )
+    except Exception as e:
+        logger.warning(f"Checklist evidence first-time-reliability repair skipped (safe to retry next start): {e}")

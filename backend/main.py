@@ -4,6 +4,13 @@ import os
 from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 
+# Test-isolation guard: FIRST, before anything that could touch a database, write a log, take or
+# rotate a backup, migrate or seed. A no-op unless this process was started as an isolated test
+# process (QUALITAS_REQUIRE_ISOLATED_DB=1) — normal development / production start-up is unchanged.
+from core.startup_guard import guard_if_required
+
+guard_if_required()
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -93,6 +100,7 @@ logger.info(f"日誌系統已啟動 - 級別: {LOG_LEVEL}, 目錄: {LOG_DIR}")
 # Backup database before migrations/seeding
 def _backup_database():
     """Create a timestamped backup of the SQLite database on each startup."""
+    guard_if_required()      # a second, independent check right before the only code that copies and deletes backups
     import shutil
     from datetime import datetime
     from core.config import settings
@@ -125,8 +133,9 @@ def _backup_database():
 
 _backup_database()
 
-# Create tables
-models.Base.metadata.create_all(bind=engine)
+# Create tables (except migration-owned ones such as itr_approval_events — those are
+# created by db_migrations.run_migrations() just below)
+models.create_all_except_migration_owned(bind=engine)
 
 # Run Migrations & Seeding
 db_migrations.run_migrations()
@@ -202,7 +211,8 @@ async def csrf_protect(request: Request, call_next):
     return await call_next(request)
 
 # Upload directory (served via authenticated route in file_router.py)
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
+from core.uploads import upload_root
+UPLOAD_DIR = upload_root()          # backend/uploads unless QUALITAS_UPLOAD_ROOT is set (mandatory and confined to the run directory when isolated)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.exception_handler(Exception)

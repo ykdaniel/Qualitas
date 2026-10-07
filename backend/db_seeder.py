@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime
 
 from passlib.context import CryptContext
+from sqlalchemy import func
 
 import crud
 import models
@@ -32,10 +33,12 @@ def get_password_hash(password):
 
 def run_seeding():
     """Run all database seeding"""
+    from core.startup_guard import guard_if_required
+    guard_if_required()      # isolated-test processes only; no-op otherwise
     logger.info("Running database seeding...")
     import database
-    # Ensure tables exist
-    models.Base.metadata.create_all(bind=database.engine)
+    # Ensure tables exist (migration-owned tables are the migration's job, not ours)
+    models.create_all_except_migration_owned(bind=database.engine)
 
     seed_default_contractors()
     seed_default_pqp()
@@ -102,27 +105,17 @@ def seed_initial_data():
                 db.add(new_p)
         db.commit()
 
-        # 1b. Backfill: any role that already has checklist:update:all also gets the
-        # new checklist:close:all (added for the Checklist read-only-lock hardening).
-        # Without this, existing non-admin roles would suddenly lose the ability to
-        # touch a closed Checklist the moment the frontend lock ships, since a brand
-        # new permission code starts out granted to nobody but admin.
-        checklist_update_perm = db.query(models.Permission).filter(
-            models.Permission.code == "checklist:update:all"
-        ).first()
-        checklist_close_perm = db.query(models.Permission).filter(
-            models.Permission.code == "checklist:close:all"
-        ).first()
-        if checklist_update_perm and checklist_close_perm:
-            roles_with_update = [
-                r for r in db.query(models.Role).all()
-                if checklist_update_perm in r.permissions_rel
-            ]
-            for role in roles_with_update:
-                if checklist_close_perm not in role.permissions_rel:
-                    role.permissions_rel.append(checklist_close_perm)
-                    logger.info(f"Backfilled checklist:close:all onto role '{role.name}'.")
-            db.commit()
+        # NOTE (2026-09-19): there used to be a "1b" step here that, on EVERY
+        # startup, granted checklist:close:all to every role holding
+        # checklist:update:all. It was removed: it silently re-granted the
+        # permission after an administrator revoked it, made "may update a
+        # checklist" and "may reopen a closed one" impossible to manage
+        # separately, and could never be told apart afterwards from a
+        # deliberate grant. Seeding now only ENSURES THE PERMISSION CODES EXIST
+        # (above); which roles hold checklist:close:all is decided solely by an
+        # administrator through role management. Nothing here (or in any
+        # migration) grants or revokes it for a non-admin role. Admin keeps its
+        # existing "all permissions" sync below — that policy is unchanged.
 
         # 2. Create admin role if not exists (case-insensitive lookup)
         admin_role = db.query(models.Role).filter(
@@ -157,20 +150,35 @@ def seed_initial_data():
             ))
             logger.info("Seeded user role.")
 
-        # 4. Create Admin User if not exists
+        # 4. First-time Admin initialisation — and NOTHING else (2026-09-20).
         #
-        # Password selection policy:
-        # - If INITIAL_ADMIN_PASSWORD env var is set, use it (preferred).
-        # - Otherwise, in production: hard-fail. Deployers must set the env var
-        #   deliberately; there is no silent fallback to a guessable password.
-        # - Otherwise, in development: generate a strong random password on the
-        #   fly and print it ONCE so the developer can copy it. No "admin"/"admin"
-        #   fallback ever — that was the old behaviour and it was a walking
-        #   security hole.
+        # This step may only CREATE the very first administrator. It never
+        # touches an account that already exists: it does not promote it to the
+        # admin role, does not reset its password (INITIAL_ADMIN_PASSWORD is
+        # used exactly once, when the account is created), and does not touch
+        # its session cut-off. Previously every start (a) forced the account
+        # found by email admin@example.com back into the admin role, and (b)
+        # rewrote its password from the environment variable whenever it
+        # differed — so a legitimately changed password, or a deliberately
+        # demoted / repurposed account, was silently undone at the next restart.
+        #
+        # Runs only when the system has NO Admin user at all AND the seed identity
+        # (username "admin" / email admin@example.com) is free. Any other
+        # situation is reported loudly and left for a person to resolve.
+        #
+        # Password selection when creating:
+        # - INITIAL_ADMIN_PASSWORD if set (preferred).
+        # - production without it: hard-fail (no guessable fallback).
+        # - otherwise (development): a strong random password, printed ONCE.
         configured_admin_password = os.getenv("INITIAL_ADMIN_PASSWORD", "").strip()
+        seed_username, seed_email = "admin", "admin@example.com"
 
-        admin_user = crud.get_user_by_email(db, "admin@example.com")
-        if not admin_user:
+        admin_role_ids = [r.id for r in db.query(models.Role).filter(func.lower(models.Role.name) == "admin").all()]
+        admin_user_count = db.query(models.User).filter(models.User.role_id.in_(admin_role_ids)).count() if admin_role_ids else 0
+        seed_by_email = crud.get_user_by_email(db, seed_email)
+        seed_by_username = crud.get_user_by_username(db, seed_username)
+
+        if admin_user_count == 0 and not seed_by_email and not seed_by_username:
             if configured_admin_password:
                 admin_password_to_use = configured_admin_password
                 password_source = "INITIAL_ADMIN_PASSWORD env var"
@@ -191,44 +199,36 @@ def seed_initial_data():
                 logger.warning("=" * 72)
 
             crud.create_user(db, schemas.UserCreate(
-                username="admin",
-                email="admin@example.com",
+                username=seed_username,
+                email=seed_email,
                 password=admin_password_to_use,
                 full_name="System Administrator",
                 role_id=admin_role.id
             ), hashed_password=get_password_hash(admin_password_to_use))
-            logger.info("Seeded admin user (source: %s).", password_source)
+            logger.info("Seeded first admin user (source: %s).", password_source)
         else:
-            # Always ensure admin user has the admin role
-            if admin_user.role_id != admin_role.id:
-                admin_user.role_id = admin_role.id
-                db.commit()
-                logger.info(f"Updated admin user role_id to {admin_role.id}.")
+            identity_holders = [u for u in (seed_by_email, seed_by_username) if u is not None]
+            not_admin = [u for u in identity_holders if u.role_id not in admin_role_ids]
+            if not_admin:
+                logger.warning(
+                    "ADMIN SEEDING SKIPPED — identity conflict: account(s) %s hold the initial-admin "
+                    "username/email but are NOT in an admin role. They were NOT promoted and their "
+                    "passwords were NOT changed. %s Resolve this manually (rename or repurpose the account, "
+                    "or promote it deliberately through IAM as an Admin).",
+                    sorted({u.username for u in not_admin}),
+                    "No Admin user exists — nobody can administer the system until this is resolved."
+                    if admin_user_count == 0 else "Other Admin users exist.",
+                )
+            elif admin_user_count == 0:
+                logger.warning("ADMIN SEEDING SKIPPED — no Admin user exists and none was created; manual action required.")
 
-            # Only sync admin password if INITIAL_ADMIN_PASSWORD is explicitly set via env var.
-            # Never reset to a hardcoded fallback to avoid overwriting user-changed passwords.
-            if configured_admin_password:
-                should_reset_password = not admin_user.hashed_password
-                if not should_reset_password:
-                    try:
-                        should_reset_password = not pwd_context.verify(
-                            configured_admin_password, admin_user.hashed_password
-                        )
-                    except Exception:
-                        should_reset_password = True
-                if should_reset_password:
-                    admin_user.hashed_password = get_password_hash(configured_admin_password)
-                    db.commit()
-                    logger.info("Synchronized admin password from INITIAL_ADMIN_PASSWORD env var.")
-
-            # Nag loudly if the existing admin still has the legacy "admin" password.
-            # (This was the default prior to the password-seeding hardening.)
+            # Read-only nag if the existing seed admin still has the legacy "admin" password.
             try:
-                if admin_user.hashed_password and pwd_context.verify("admin", admin_user.hashed_password):
+                if seed_by_email and seed_by_email.role_id in admin_role_ids and seed_by_email.hashed_password \
+                        and pwd_context.verify("admin", seed_by_email.hashed_password):
                     logger.warning("=" * 72)
                     logger.warning("SECURITY WARNING: admin user is still using the legacy password 'admin'.")
-                    logger.warning("Log in and change it immediately, or set INITIAL_ADMIN_PASSWORD")
-                    logger.warning("and delete the user so it can be re-seeded with a strong password.")
+                    logger.warning("Log in and change it immediately (an Admin can reset it through IAM).")
                     logger.warning("=" * 72)
             except Exception:
                 pass

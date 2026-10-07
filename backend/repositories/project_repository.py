@@ -29,19 +29,28 @@ class ProjectRepository:
             query = query.filter(models.Project.id.in_(scope.project_ids))
         return query.order_by(models.Project.name).offset(skip).limit(limit).all()
 
-    def create(self, project: models.Project) -> models.Project:
+    def create(self, project: models.Project, commit: bool = True) -> models.Project:
         self.db.add(project)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(project)
         return project
 
-    def update(self, project: models.Project, update_data: dict) -> models.Project:
+    def update(self, project: models.Project, update_data: dict, commit: bool = True) -> models.Project:
         for key, value in update_data.items():
             setattr(project, key, value)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(project)
         return project
 
-    def delete(self, project: models.Project):
+    def delete(self, project: models.Project, commit: bool = True):
         self.db.delete(project)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()

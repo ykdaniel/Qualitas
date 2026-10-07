@@ -61,19 +61,28 @@ class FATRepository:
 
         return query.offset(skip).limit(limit).all()
 
-    def create(self, fat: models.FAT) -> models.FAT:
+    def create(self, fat: models.FAT, commit: bool = True) -> models.FAT:
         self.db.add(fat)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(fat)
         return fat
 
-    def update(self, fat: models.FAT, update_data: dict) -> models.FAT:
+    def update(self, fat: models.FAT, update_data: dict, commit: bool = True) -> models.FAT:
         for key, value in update_data.items():
             setattr(fat, key, value)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(fat)
         return fat
 
-    def delete(self, fat: models.FAT):
+    def delete(self, fat: models.FAT, commit: bool = True):
         self.db.delete(fat)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()

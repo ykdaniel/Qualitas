@@ -24,6 +24,7 @@ def read_meeting_minutes_list(
     status: str = None,
     start_date: str = None,
     end_date: str = None,
+    project_id: str = None,
     meeting_service: MeetingMinutesService = Depends(get_meeting_minutes_service),
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(MEETING_VIEW))
@@ -35,6 +36,7 @@ def read_meeting_minutes_list(
         status=status,
         start_date=start_date,
         end_date=end_date,
+        project_id=project_id,
         scope=scope,
     )
 

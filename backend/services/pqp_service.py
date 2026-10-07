@@ -17,6 +17,7 @@ from core.utils import (
     _json_serialize,
     _resolve_vendor_id,
     generate_reference_no,
+    begin_write_transaction,
     log_audit,
     WorkflowEngine
 )
@@ -76,6 +77,8 @@ class PQPService:
             # (forces vendor_id for contractor users; validates project_id).
             enforce_create_scope(data, scope)
 
+            begin_write_transaction(self.repo.db)
+
             if not data.get('pqpNo'):
                 data['pqpNo'] = generate_reference_no(
                     self.repo.db, vendor_name or '', 'PQP'
@@ -85,15 +88,17 @@ class PQPService:
             if not db_pqp.id:
                 db_pqp.id = str(uuid.uuid4())
 
-            created = self.repo.create(db_pqp)
+            created = self.repo.create(db_pqp, commit=False)
 
             log_audit(
                 self.repo.db, "CREATE", "PQP", created.id, created.pqpNo,
-                new_value=pqp_create.model_dump(), user_id=user_id, username=username
+                new_value=pqp_create.model_dump(), user_id=user_id, username=username, strict=True
             )
 
+            self.repo.db.commit()
             return created
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error creating PQP: {e}", exc_info=True)
             raise e
 
@@ -147,18 +152,21 @@ class PQPService:
 
             enforce_update_scope(d, scope)
 
-            updated = self.repo.update(db_pqp, d)
+            updated = self.repo.update(db_pqp, d, commit=False)
 
             log_audit(
                 self.repo.db, "UPDATE", "PQP", pqp_id, updated.pqpNo,
                 old_value=old_val, new_value=pqp_update.model_dump(exclude_unset=True),
-                user_id=user_id, username=username
+                user_id=user_id, username=username, strict=True
             )
 
+            self.repo.db.commit()
             return updated
         except ValueError as e:
+            self.repo.db.rollback()
             raise e
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error updating PQP {pqp_id}: {e}", exc_info=True)
             raise e
 
@@ -192,6 +200,7 @@ class PQPService:
             self.repo.db.add(snapshot)
 
             # Bump version on the PQP record
+            previous_status = db_pqp.status
             current_version = db_pqp.version or "Rev1.0"
             import re
             rev_match = re.match(r'^Rev(\d+)\.(\d+)$', current_version)
@@ -206,17 +215,19 @@ class PQPService:
                 'status': 'Approved',
                 'updatedAt': datetime.now().strftime('%Y-%m-%d'),
             }
-            updated = self.repo.update(db_pqp, update_data)
+            updated = self.repo.update(db_pqp, update_data, commit=False)
 
             log_audit(
                 self.repo.db, "PUBLISH", "PQP", pqp_id, updated.pqpNo,
-                old_value={"version": current_version, "status": db_pqp.status},
+                old_value={"version": current_version, "status": previous_status},
                 new_value={"version": new_version, "status": "Approved"},
-                user_id=user_id, username=username
+                user_id=user_id, username=username, strict=True
             )
 
+            self.repo.db.commit()
             return updated
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error publishing PQP {pqp_id}: {e}", exc_info=True)
             raise e
 
@@ -246,14 +257,16 @@ class PQPService:
                 models.PQPHistory.pqp_id == pqp_id
             ).delete()
 
-            self.repo.delete(db_pqp)
+            self.repo.delete(db_pqp, commit=False)
 
             log_audit(
                 self.repo.db, "DELETE", "PQP", pqp_id, db_pqp.pqpNo,
-                old_value=old_val, user_id=user_id, username=username
+                old_value=old_val, user_id=user_id, username=username, strict=True
             )
 
+            self.repo.db.commit()
             return True
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error deleting PQP {pqp_id}: {e}", exc_info=True)
             raise e

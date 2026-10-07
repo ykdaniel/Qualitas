@@ -72,16 +72,18 @@ class ContractorService:
                 db_contractor.id = str(uuid.uuid4())
 
             # Save to database
-            created = self.repo.create(db_contractor)
+            created = self.repo.create(db_contractor, commit=False)
 
             # Log audit trail
             log_audit(
                 self.repo.db, "CREATE", "Contractor", created.id, created.name,
-                new_value=contractor_create.model_dump(), user_id=user_id, username=username
+                new_value=contractor_create.model_dump(), user_id=user_id, username=username, strict=True
             )
 
+            self.repo.db.commit()
             return created
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error creating Contractor: {e}", exc_info=True)
             raise e
 
@@ -114,17 +116,19 @@ class ContractorService:
             d = contractor_update.model_dump(exclude_unset=True)
 
             # Update the record
-            updated = self.repo.update(db_contractor, d)
+            updated = self.repo.update(db_contractor, d, commit=False)
 
             # Log audit trail
             log_audit(
                 self.repo.db, "UPDATE", "Contractor", contractor_id, updated.name,
                 old_value=old_val, new_value=contractor_update.model_dump(exclude_unset=True),
-                user_id=user_id, username=username
+                user_id=user_id, username=username, strict=True
             )
 
+            self.repo.db.commit()
             return updated
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error updating Contractor {contractor_id}: {e}", exc_info=True)
             raise e
 
@@ -155,15 +159,17 @@ class ContractorService:
             old_val = {c.name: getattr(db_contractor, c.name) for c in db_contractor.__table__.columns}
 
             # Delete the record
-            self.repo.delete(db_contractor)
+            self.repo.delete(db_contractor, commit=False)
 
             # Log audit trail
             log_audit(
                 self.repo.db, "DELETE", "Contractor", contractor_id, db_contractor.name,
-                old_value=old_val, user_id=user_id, username=username
+                old_value=old_val, user_id=user_id, username=username, strict=True
             )
 
+            self.repo.db.commit()
             return True
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error deleting Contractor {contractor_id}: {e}", exc_info=True)
             raise e

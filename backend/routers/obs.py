@@ -6,6 +6,7 @@ import schemas
 from core.dependencies import RoleChecker, get_obs_service
 from core.perms import OBS_CREATE, OBS_DELETE, OBS_UPDATE, OBS_VIEW
 from core.scope import Scope, ScopeForbidden, get_scope
+from core.strict_dates import DateValidationError
 from database import get_db
 from services.obs_service import OBSService
 
@@ -24,6 +25,7 @@ def read_obss(
     status: str = None,
     start_date: str = None,
     end_date: str = None,
+    project_id: str = None,
     obs_service: OBSService = Depends(get_obs_service),
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(OBS_VIEW))
@@ -35,6 +37,7 @@ def read_obss(
         status=status,
         start_date=start_date,
         end_date=end_date,
+        project_id=project_id,
         scope=scope,
     )
 
@@ -62,6 +65,8 @@ def create_obs(
         return obs_service.create_obs(obs_create=obs, user_id=current_user.id, username=current_user.username, scope=scope)
     except ScopeForbidden as e:
         raise HTTPException(status_code=403, detail=str(e))
+    except DateValidationError as e:
+        raise HTTPException(status_code=422, detail=e.http_detail())
 
 @router.put("/{obs_id}", response_model=schemas.OBS)
 def update_obs(
@@ -75,6 +80,8 @@ def update_obs(
         db_obs = obs_service.update_obs(obs_id=obs_id, obs_update=obs, user_id=current_user.id, username=current_user.username, scope=scope)
     except ScopeForbidden as e:
         raise HTTPException(status_code=403, detail=str(e))
+    except DateValidationError as e:
+        raise HTTPException(status_code=422, detail=e.http_detail())
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if db_obs is None:

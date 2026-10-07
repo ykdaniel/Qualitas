@@ -45,7 +45,7 @@ class ContractorRepository:
         skip, limit = sanitize_pagination(skip, limit)
         return self.db.query(models.Contractor).offset(skip).limit(limit).all()
 
-    def create(self, contractor: models.Contractor) -> models.Contractor:
+    def create(self, contractor: models.Contractor, commit: bool = True) -> models.Contractor:
         """
         Create a new Contractor record
 
@@ -56,11 +56,14 @@ class ContractorRepository:
             Created Contractor object with refreshed state
         """
         self.db.add(contractor)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(contractor)
         return contractor
 
-    def update(self, contractor: models.Contractor, update_data: dict) -> models.Contractor:
+    def update(self, contractor: models.Contractor, update_data: dict, commit: bool = True) -> models.Contractor:
         """
         Update an existing Contractor record
 
@@ -73,11 +76,14 @@ class ContractorRepository:
         """
         for key, value in update_data.items():
             setattr(contractor, key, value)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(contractor)
         return contractor
 
-    def delete(self, contractor: models.Contractor):
+    def delete(self, contractor: models.Contractor, commit: bool = True):
         """
         Delete a Contractor record
 
@@ -85,4 +91,7 @@ class ContractorRepository:
             contractor: Contractor object to delete
         """
         self.db.delete(contractor)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
