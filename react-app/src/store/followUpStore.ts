@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import api from '../services/api';
 import { getErrorMessage } from '../utils/errorUtils';
-import { getProjectFilterParams } from '../utils/projectFilter';
+import { getProjectFilterParams, getCurrentProjectScopeId } from '../utils/projectFilter';
 
 export interface FollowUpIssueItem {
     id: string;
@@ -35,6 +35,11 @@ interface FollowUpState {
     setError: (err: string | null) => void;
 }
 
+// See itpStore.ts's itpFetchSeq — discards a stale (superseded) response (BACKLOG #28/#37).
+let followUpFetchSeq = 0;
+// See itpStore.ts's itpDataScopeId — clears the list on a cross-scope failure (BACKLOG #28/#37).
+let followUpDataScopeId: string | null = null;
+
 export const useFollowUpStore = create<FollowUpState>((set, get) => ({
     followUpList: [],
     loading: false,
@@ -44,12 +49,23 @@ export const useFollowUpStore = create<FollowUpState>((set, get) => ({
     setError: (error: string | null) => set({ error }),
 
     fetchFollowUps: async () => {
+        const seq = ++followUpFetchSeq;
+        const requestedScopeId = getCurrentProjectScopeId();
         set({ loading: true, error: null });
         try {
             const response = await api.get('/followup/', { params: { ...getProjectFilterParams() } });
+            if (seq !== followUpFetchSeq) return;
+            followUpDataScopeId = requestedScopeId;
             set({ followUpList: response.data || [], loading: false });
         } catch (err: any) {
-            set({ error: getErrorMessage(err, 'Failed to fetch Follow-up Issues'), loading: false });
+            if (seq !== followUpFetchSeq) return;
+            const message = getErrorMessage(err, 'Failed to fetch Follow-up Issues');
+            if (requestedScopeId !== followUpDataScopeId) {
+                followUpDataScopeId = requestedScopeId;
+                set({ followUpList: [], error: message, loading: false });
+            } else {
+                set({ error: message, loading: false });
+            }
         }
     },
 

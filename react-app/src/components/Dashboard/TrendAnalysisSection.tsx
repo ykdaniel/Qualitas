@@ -11,55 +11,57 @@ import { useITPStore } from '../../store/itpStore';
 import { useChecklistStore } from '../../store/checklistStore';
 import { useDashboardFilterStore } from '../../store/dashboardFilterStore';
 import { useLanguage } from '../../context/LanguageContext';
+import { buildMonthlyData, TREND_MONTHS } from '../../utils/trendMonths';
+import { useDashboardModuleStatus, ModuleStatus } from '../../hooks/useDashboardModuleStatus';
+import { StaleFlag } from './ModuleStatus';
 import styles from './Dashboard.module.css';
 
-const MONTHS = 6;
-
-// Generic helper: given a list and a date extractor, returns monthly counts for last N months
-function buildMonthlyData(
-  list: any[],
-  getDate: (item: any) => string | undefined,
-  vendor: string
-) {
-  const filtered = vendor === 'all' ? list : list.filter(i => i.vendor === vendor);
-
-  const today = new Date();
-  const monthLabels: string[] = [];
-  for (let i = MONTHS - 1; i >= 0; i--) {
-    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-    monthLabels.push(d.toISOString().slice(0, 7));
-  }
-
-  const counts: Record<string, number> = {};
-  monthLabels.forEach(m => { counts[m] = 0; });
-
-  filtered.forEach(item => {
-    const raw = getDate(item);
-    if (raw) {
-      const month = raw.slice(0, 7);
-      if (counts[month] !== undefined) counts[month]++;
-    }
-  });
-
-  return monthLabels.map(month => {
-    const [year, mon] = month.split('-');
-    return {
-      month: `${year}/${parseInt(mon)}`,
-      count: counts[month] || 0,
-    };
-  });
-}
+const MONTHS = TREND_MONTHS;
 
 interface MiniTrendCardProps {
   title: string;
   data: { month: string; count: number }[];
   color: string;
   dataLabel: string;
+  status: ModuleStatus;
+  onRetry: () => void;
 }
 
-const MiniTrendCard: React.FC<MiniTrendCardProps> = ({ title, data, color, dataLabel }) => {
+// BACKLOG #37 (2026-09-29): a trend card used to infer "no data" purely from `total === 0`,
+// which is exactly the same "loading vs failed vs really zero" ambiguity the key-stats tiles and
+// stats cards had. `status` comes from the SAME useDashboardModuleStatus() the rest of the page
+// uses, so a module in trouble reads the same way here as everywhere else on the page.
+const MiniTrendCard: React.FC<MiniTrendCardProps> = ({ title, data, color, dataLabel, status, onRetry }) => {
+  const { t } = useLanguage();
   const total = data.reduce((s, d) => s + d.count, 0);
   const hasData = total > 0;
+  const trendEmptyLabel = t('dashboard.trendEmpty', { months: MONTHS });
+
+  if (status === 'loading') {
+    return (
+      <div className={styles.trendCard}>
+        <div className={styles.trendCardHeader}>
+          <span className={styles.trendCardTitle}>{title}</span>
+        </div>
+        <div className={styles.trendCardChart} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className={styles.keyStatsTileSkeleton} style={{ width: 60 }} />
+        </div>
+      </div>
+    );
+  }
+  if (status === 'error-empty') {
+    return (
+      <div className={styles.trendCard}>
+        <div className={styles.trendCardHeader}>
+          <span className={styles.trendCardTitle}>{title}</span>
+        </div>
+        <div className={styles.trendCardChart} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <span className={styles.moduleStatusErrorText}>{t('dashboard.trendLoadError')}</span>
+          <button className={styles.moduleStatusRetryButton} onClick={onRetry}>{t('common.retry')}</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.trendCard}>
@@ -67,6 +69,7 @@ const MiniTrendCard: React.FC<MiniTrendCardProps> = ({ title, data, color, dataL
         <span className={styles.trendCardTitle}>{title}</span>
         <span className={styles.trendCardTotal} style={{ color }}>{total}</span>
       </div>
+      {status === 'error-stale' && <StaleFlag onRetry={onRetry} />}
       <div className={styles.trendCardChart}>
         {hasData ? (
           <ResponsiveContainer width="100%" height={100}>
@@ -98,7 +101,7 @@ const MiniTrendCard: React.FC<MiniTrendCardProps> = ({ title, data, color, dataL
         ) : (
           <div className={styles.trendEmptyState}>
             <span>—</span>
-            <span>近 {MONTHS} 個月無資料</span>
+            <span>{trendEmptyLabel}</span>
           </div>
         )}
       </div>
@@ -109,6 +112,7 @@ const MiniTrendCard: React.FC<MiniTrendCardProps> = ({ title, data, color, dataL
 const TrendAnalysisSection: React.FC = () => {
   const { t } = useLanguage();
   const selectedVendor = useDashboardFilterStore(state => state.selectedVendor);
+  const moduleStatus = useDashboardModuleStatus();
 
   const ncrList = useNCRStore(state => state.ncrList);
   const obsList = useOBSStore(state => state.obsList);
@@ -124,22 +128,26 @@ const TrendAnalysisSection: React.FC = () => {
   const itpData = useMemo(() => buildMonthlyData(itpList, i => i.submissionDate, selectedVendor), [itpList, selectedVendor]);
   const checklistData = useMemo(() => buildMonthlyData(checklistRecords, i => i.date, selectedVendor), [checklistRecords, selectedVendor]);
 
+  // Each card's title states its real date basis (verified against the getDate
+  // extractors above) instead of a blanket "X Trend" — a monthly count by
+  // submission date is not the same fact as one by raise/issue/update date, and
+  // "new item count" would be wrong for every one of these except ITP/Checklist.
   const charts: MiniTrendCardProps[] = [
-    { title: 'NCR Trend', data: ncrData, color: '#ef4444', dataLabel: t('dashboard.ncrTotal') || 'NCR' },
-    { title: 'OBS Trend', data: obsData, color: '#f59e0b', dataLabel: t('dashboard.obsTotal') || 'OBS' },
-    { title: 'NOI Trend', data: noiData, color: '#06b6d4', dataLabel: t('dashboard.noiTotal') || 'NOI' },
-    { title: 'PQP Trend', data: pqpData, color: '#8b5cf6', dataLabel: t('dashboard.pqpMaturity') || 'PQP' },
-    { title: 'ITP Trend', data: itpData, color: '#3b82f6', dataLabel: t('dashboard.itpTotal') || 'ITP' },
-    { title: 'Checklist Trend', data: checklistData, color: '#10b981', dataLabel: t('checklist.title') || 'Checklist' },
+    { title: t('dashboard.trendBasisNcr'), data: ncrData, color: '#ef4444', dataLabel: t('dashboard.ncrTotal') || 'NCR', status: moduleStatus.ncr.status, onRetry: moduleStatus.ncr.retry },
+    { title: t('dashboard.trendBasisObs'), data: obsData, color: '#f59e0b', dataLabel: t('dashboard.obsTotal') || 'OBS', status: moduleStatus.obs.status, onRetry: moduleStatus.obs.retry },
+    { title: t('dashboard.trendBasisNoi'), data: noiData, color: '#06b6d4', dataLabel: t('dashboard.noiTotal') || 'NOI', status: moduleStatus.noi.status, onRetry: moduleStatus.noi.retry },
+    { title: t('dashboard.trendBasisPqp'), data: pqpData, color: '#8b5cf6', dataLabel: t('dashboard.pqpMaturity') || 'PQP', status: moduleStatus.pqp.status, onRetry: moduleStatus.pqp.retry },
+    { title: t('dashboard.trendBasisItp'), data: itpData, color: '#3b82f6', dataLabel: t('dashboard.itpTotal') || 'ITP', status: moduleStatus.itp.status, onRetry: moduleStatus.itp.retry },
+    { title: t('dashboard.trendBasisChecklist'), data: checklistData, color: '#10b981', dataLabel: t('checklist.title') || 'Checklist', status: moduleStatus.checklist.status, onRetry: moduleStatus.checklist.retry },
   ];
 
   return (
     <div className={styles.trendAnalysisSection}>
       <div className={styles.trendAnalysisHeader}>
         <h2 className={styles.sectionTitle} style={{ margin: 0 }}>
-          Trend Analysis
+          {t('dashboard.last6MonthsTrend')}
         </h2>
-        <span className={styles.trendSubtitle}>近 {MONTHS} 個月月度趨勢</span>
+        <span className={styles.trendSubtitle}>{t('dashboard.trendPeriod', { months: MONTHS })}</span>
       </div>
       <div className={styles.trendGrid}>
         {charts.map(chart => (

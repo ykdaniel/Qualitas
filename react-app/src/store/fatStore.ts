@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import api from '../services/api';
 import { getErrorMessage } from '../utils/errorUtils';
-import { getProjectFilterParams } from '../utils/projectFilter';
+import { getProjectFilterParams, getCurrentProjectScopeId } from '../utils/projectFilter';
 
 export interface FATItem {
+    project_id?: string | null;
     id: string;
     equipment: string;
     supplier: string;
@@ -63,6 +64,11 @@ interface FATState {
     setError: (err: string | null) => void;
 }
 
+// See itpStore.ts's itpFetchSeq — discards a stale (superseded) response (BACKLOG #28/#37).
+let fatFetchSeq = 0;
+// See itpStore.ts's itpDataScopeId — clears the list on a cross-scope failure (BACKLOG #28/#37).
+let fatDataScopeId: string | null = null;
+
 export const useFATStore = create<FATState>((set, get) => ({
     fatList: [],
     fatDetails: {},
@@ -73,9 +79,12 @@ export const useFATStore = create<FATState>((set, get) => ({
     setError: (error: string | null) => set({ error }),
 
     fetchFATs: async () => {
+        const seq = ++fatFetchSeq;
+        const requestedScopeId = getCurrentProjectScopeId();
         set({ loading: true, error: null });
         try {
             const response = await api.get('/fat/', { params: { ...getProjectFilterParams() } });
+            if (seq !== fatFetchSeq) return;
             const list = response.data || [];
             // NOTE: 從後端回應中解析 detail_data 並填入 fatDetails
             const detailsMap: { [key: string]: FATDetailItem[] } = {};
@@ -84,12 +93,17 @@ export const useFATStore = create<FATState>((set, get) => ({
                     detailsMap[item.id] = item.detail_data;
                 }
             });
+            fatDataScopeId = requestedScopeId;
             set({ fatList: list, fatDetails: detailsMap, loading: false });
         } catch (err: any) {
-            set({
-                error: getErrorMessage(err, 'Failed to fetch FAT list'),
-                loading: false,
-            });
+            if (seq !== fatFetchSeq) return;
+            const message = getErrorMessage(err, 'Failed to fetch FAT list');
+            if (requestedScopeId !== fatDataScopeId) {
+                fatDataScopeId = requestedScopeId;
+                set({ fatList: [], fatDetails: {}, error: message, loading: false });
+            } else {
+                set({ error: message, loading: false });
+            }
         }
     },
 

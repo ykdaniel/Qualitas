@@ -1,3 +1,6 @@
+import { useDraftGuard } from '../Shared/LeaveGuard';
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -15,8 +18,11 @@ import formStyles from '../Shared/FormShell.module.css';
 import { osdFormSchema, emptyOSDForm, toFormValues, OSD_ERROR_FALLBACKS } from './osdFormSchema';
 import { checkDateOrder } from '../../utils/dateValidation';
 import type { OSDDetailData } from './osdFormSchema';
+import type { SaveOutcome } from '../../utils/saveFlow';
+import { presentOutcome } from '../../utils/saveErrors';
 
 export type { OSDDetailData };
+export type { SaveOutcome };
 
 export interface PendingUploads {
     category: string;
@@ -26,7 +32,7 @@ export interface PendingUploads {
 export interface OSDDetailModalProps {
     osdId: string | null;
     existingItem?: OSDItem;
-    onSave: (details: OSDDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => void | Promise<void>;
+    onSave: (details: OSDDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => Promise<SaveOutcome>;
     onClose: () => void;
     /** Open the form locked for viewing only — every field disabled, no Save.
      *  Driven by the caller from IAM permission + record status. */
@@ -54,6 +60,8 @@ export const OSDDetailModal: React.FC<OSDDetailModalProps> = ({ osdId: _osdId, e
     const [pendingAttachments, setPendingAttachments] = useState<File[]>([]);
     const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
     const [saving, setSaving] = useState(false);
+    const leaveGuard = useDraftGuard({ fields: watch(), pendingDefectPhotos, pendingImprovementPhotos, pendingAttachments, deletedFileIds, voided }, saving, !readOnly);
+    const requestClose = () => leaveGuard.requestClose(onClose);
 
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [previewName, setPreviewName] = useState<string>('');
@@ -131,6 +139,31 @@ export const OSDDetailModal: React.FC<OSDDetailModalProps> = ({ osdId: _osdId, e
         setValue(key, (getValues(key) || []).filter((a: any) => typeof a === 'string' || a?.id !== id), { shouldDirty: true });
     };
 
+    // Shared by the initial Save and a retry of the same click: trims whatever the outcome
+    // confirms already went through, so a retry only resends what is actually left — never
+    // re-creates the record (see saveFlow.ts's contract) and never re-sends an already-
+    // confirmed upload/delete.
+    const applyOutcome = (outcome: SaveOutcome) => {
+        if (outcome.status === 'saved-incomplete') {
+            const done = new Set(outcome.uploadedCategories);
+            if (done.has('defectPhoto')) setPendingDefectPhotos([]);
+            if (done.has('improvementPhoto')) setPendingImprovementPhotos([]);
+            if (done.has('attachment')) setPendingAttachments([]);
+            setDeletedFileIds(outcome.remainingDeletes);
+            // The record IS saved at this point — say so explicitly, distinct from a
+            // plain save failure, so the user does not think nothing happened.
+            const detail = outcome.failures.map(f => f.message).join('；');
+            toast.warning(`主資料已保存，但附件處理尚未完成：${detail}`, { duration: 10000 });
+            return;
+        }
+        const { close, notice } = presentOutcome(outcome, t);
+        if (notice) (notice.level === 'error' ? toast.error : toast.warning)(notice.text, { duration: 10000 });
+        if (close) {
+            leaveGuard.release();
+            onClose();
+        }
+    };
+
     const onValid = async (values: OSDDetailData) => {
         const finalStatus = voided ? 'Void' : values.status;
         // On close, stamp the close-out date with today if left blank.
@@ -139,13 +172,15 @@ export const OSDDetailModal: React.FC<OSDDetailModalProps> = ({ osdId: _osdId, e
         const closeoutDate = finalStatus === 'Closed' && !values.closeoutDate ? todayStr : values.closeoutDate;
         setSaving(true);
         try {
-            await onSave({ ...values, status: finalStatus, closeoutDate }, [
+            const outcome = await onSave({ ...values, status: finalStatus, closeoutDate }, [
                 { category: 'defectPhoto', files: pendingDefectPhotos },
                 { category: 'improvementPhoto', files: pendingImprovementPhotos },
                 { category: 'attachment', files: pendingAttachments },
             ], deletedFileIds);
-            onClose();
+            applyOutcome(outcome);
         } catch (err) {
+            // The record write itself threw (not routed through runSaveFlow) — keep the
+            // modal open, preserve input, single friendly error.
             toast.error((err as Error)?.message || t('common.saveFailed'));
         } finally {
             setSaving(false);
@@ -212,7 +247,7 @@ export const OSDDetailModal: React.FC<OSDDetailModalProps> = ({ osdId: _osdId, e
             <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
                 <div className={formStyles.modalHeader}>
                     <h2>{readOnly ? '檢視 OSD / View OSD' : existingItem ? t('osd.editTitle') : t('osd.addTitle')}</h2>
-                    <button className={formStyles.closeButton} onClick={onClose} disabled={saving}>×</button>
+                    <button className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={requestClose} disabled={saving}>×</button>
                 </div>
                 <div className={formStyles.modalBody}>
                     {!readOnly && (
@@ -415,19 +450,25 @@ export const OSDDetailModal: React.FC<OSDDetailModalProps> = ({ osdId: _osdId, e
                     </div>
                     </fieldset>
                 </div>
-                <div className={formStyles.modalActions}>
-                    {!readOnly && (
-                        <button type="button" className={formStyles.saveButton} onClick={handleSaveClick} disabled={saving}>
-                            {saving ? t('osd.saving') : t('common.save')}
+                <FormActions
+                    tools={<>
+                        <button className={actionStyles.secondary} type="button" onClick={handlePrintClick} disabled={saving} title={t('common.print') || 'Print'}>
+                            {t('common.print') || 'Print'}
                         </button>
-                    )}
-                    <button type="button" className={formStyles.printButton} onClick={handlePrintClick} disabled={saving} title={t('common.print') || 'Print'}>
-                        {t('common.print') || 'Print'}
-                    </button>
-                    <button type="button" className={formStyles.cancelButton} onClick={onClose} disabled={saving}>
-                        {t('common.cancel')}
-                    </button>
-                </div>
+                    </>}
+                    cancel={<>
+                        <button className={actionStyles.secondary} type="button" onClick={requestClose} disabled={saving}>
+                            {t('common.cancel')}
+                        </button>
+                    </>}
+                    primary={<>
+                        {!readOnly && (
+                            <button className={actionStyles.primary} type="button" onClick={handleSaveClick} disabled={saving}>
+                                {saving ? t('osd.saving') : t('common.save')}
+                            </button>
+                        )}
+                    </>}
+                />
             </div>
             {isPrinting && printData && ReactDOM.createPortal(
                 <OSDPrintTemplate

@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { useLanguage } from '../../context/LanguageContext';
 import styles from './Dashboard.module.css';
 
 interface PQPGaugeChartProps {
@@ -9,6 +10,7 @@ interface PQPGaugeChartProps {
 }
 
 const PQPGaugeChart: React.FC<PQPGaugeChartProps> = React.memo(({ approved, maturity }) => {
+  const { t } = useLanguage();
   const containerRef = useRef<HTMLDivElement>(null);
   const [{ chartHeight, outerRadius, innerRadius }, setDims] = useState({
     chartHeight: 136, outerRadius: 120, innerRadius: 80,
@@ -55,7 +57,7 @@ const PQPGaugeChart: React.FC<PQPGaugeChartProps> = React.memo(({ approved, matu
 
   return (
     <div className={styles.gaugeChartContainer} ref={containerRef}>
-      <h3 className={styles.gaugeTitle}>PQP Total (Qty &amp; %)</h3>
+      <h3 className={styles.gaugeTitle}>{t('dashboard.gaugePqpTitle')}</h3>
       <div className={styles.gaugeWrapper} style={{ height: chartHeight }}>
         <ResponsiveContainer width="100%" height={chartHeight}>
           <PieChart>
@@ -91,7 +93,7 @@ const PQPGaugeChart: React.FC<PQPGaugeChartProps> = React.memo(({ approved, matu
 
       <div className={styles.gaugeValue}>
         <span className={styles.gaugeNumber} style={{ color: valueColor }}>{approved}</span>
-        <span className={styles.gaugeMaturity} style={{ color: valueColor }}>Maturity = {maturity}%</span>
+        <span className={styles.gaugeMaturity} style={{ color: valueColor }}>{t('dashboard.maturityValue', { value: maturity })}</span>
       </div>
     </div>
   );

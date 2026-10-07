@@ -6,6 +6,7 @@ import { getErrorMessage } from '../utils/errorUtils';
 export interface User {
     id: string;
     name: string;
+    username: string;
     email: string;
     role: string;
     role_id?: number;
@@ -49,7 +50,6 @@ interface IAMState {
     // NOTE: 接受任意 payload 物件，與 IAM 元件的呼叫方式一致
     createUser: (payload: any) => Promise<any>;
     updateUser: (id: number, payload: any) => Promise<any>;
-    deleteUser: (id: number, reason?: string) => Promise<void>;
     createRole: (payload: any) => Promise<any>;
     updateRole: (id: number, payload: any) => Promise<any>;
     deleteRole: (id: number, reason?: string) => Promise<void>;
@@ -70,10 +70,12 @@ export const useIAMStore = create<IAMState>((set, get) => ({
     fetchUsers: async () => {
         set({ loading: true, error: null });
         try {
-            const usersData = await apiService.getUsers();
+            // IAM admin page needs the full list (incl. deactivated) to reactivate people.
+            const usersData = await apiService.getUsers(false);
             const formattedUsers: User[] = usersData.map(u => ({
                 id: String(u.id),
                 name: u.full_name || u.username,
+                username: u.username,
                 email: u.email,
                 role: u.role_name || 'user',
                 role_id: u.role_id ?? undefined,
@@ -123,12 +125,13 @@ export const useIAMStore = create<IAMState>((set, get) => ({
         set({ loading: true, error: null });
         try {
             const [usersData, rolesData] = await Promise.all([
-                apiService.getUsers(),
+                apiService.getUsers(false),
                 apiService.getRoles(),
             ]);
             const formattedUsers: User[] = usersData.map(u => ({
                 id: String(u.id),
                 name: u.full_name || u.username,
+                username: u.username,
                 email: u.email,
                 role: u.role_name || 'user',
                 role_id: u.role_id ?? undefined,
@@ -166,11 +169,14 @@ export const useIAMStore = create<IAMState>((set, get) => ({
             role_id: payload.role_id,
             is_active: payload.status === 'active',
             company_name: payload.company_name || null,
+            // The form requires a change reason; it must reach the backend so the audit entry keeps it.
+            reason: payload.reason || null,
         };
         const result = await apiService.createUser(apiPayload);
         const newUser: User = {
             id: String(result.id),
             name: result.full_name || result.username,
+            username: result.username,
             email: result.email,
             role: result.role_name || 'user',
             role_id: payload.role_id,
@@ -191,11 +197,13 @@ export const useIAMStore = create<IAMState>((set, get) => ({
         if (payload.role_id !== undefined) apiPayload.role_id = payload.role_id;
         if (payload.password) apiPayload.password = payload.password;
         if (payload.company_name !== undefined) apiPayload.company_name = payload.company_name;
+        if (payload.reason) apiPayload.reason = payload.reason;
 
         const result = await apiService.updateUser(id, apiPayload);
         const updatedUser: User = {
             id: String(result.id),
             name: result.full_name || result.username,
+            username: result.username,
             email: result.email,
             role: result.role_name || 'user',
             role_id: payload.role_id || 0,
@@ -210,10 +218,8 @@ export const useIAMStore = create<IAMState>((set, get) => ({
         return result;
     },
 
-    deleteUser: async (id: number, reason?: string) => {
-        await apiService.deleteUser(id, reason);
-        set((state) => ({ users: state.users.filter(u => u.id !== String(id)) }));
-    },
+    // No deleteUser: accounts are deactivated (Status = Inactive), never deleted —
+    // the backend refuses DELETE so ids and history references stay intact.
 
     // --- Role CRUD ---
     createRole: async (payload: any) => {
@@ -221,6 +227,7 @@ export const useIAMStore = create<IAMState>((set, get) => ({
             name: payload.name,
             description: payload.description,
             permissions: payload.permissions,
+            reason: payload.reason,
         };
         const result = await apiService.createRole(apiPayload);
         const newRole: Role = {
@@ -238,6 +245,8 @@ export const useIAMStore = create<IAMState>((set, get) => ({
         if (payload.name !== undefined) apiPayload.name = payload.name;
         if (payload.description !== undefined) apiPayload.description = payload.description;
         if (payload.permissions !== undefined) apiPayload.permissions = payload.permissions;
+        // The role form requires a change reason; it must reach the backend so the audit entry keeps it.
+        if (payload.reason !== undefined) apiPayload.reason = payload.reason;
 
         const result = await apiService.updateRole(id, apiPayload);
         set((state) => ({

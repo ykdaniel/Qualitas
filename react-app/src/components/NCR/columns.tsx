@@ -3,6 +3,7 @@ import { NCRItem } from "../../store/ncrStore";
 import { DataTableColumnHeader } from "@/components/Shared/DataTable/DataTableColumnHeader";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
+import { DateCell } from "@/components/Shared/DateIssueMark";
 
 export const createColumns = (
     confirmDelete: (id: string) => void,
@@ -88,14 +89,14 @@ export const createColumns = (
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title={t('ncr.raiseDate')} />
             ),
-            cell: ({ row }) => <div className="text-center">{row.getValue("raiseDate") || '-'}</div>,
+            cell: ({ row }) => <div className="text-center"><DateCell item={row.original} field="raiseDate" /></div>,
         },
         {
             accessorKey: "closeoutDate",
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title={t('obs.closeoutDate')} />
             ),
-            cell: ({ row }) => <div className="text-center">{row.getValue("closeoutDate") || '-'}</div>,
+            cell: ({ row }) => <div className="text-center"><DateCell item={row.original} field="closeoutDate" /></div>,
         },
         {
             accessorKey: "foundBy",

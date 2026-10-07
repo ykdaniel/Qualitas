@@ -3,10 +3,14 @@ import api from '../services/api';
 import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
-import { getProjectFilterParams } from '../utils/projectFilter';
+import { getProjectFilterParams, getCurrentProjectScopeId } from '../utils/projectFilter';
+
+import type { DateIssue } from '../utils/dateIssues';
 
 export interface OBSItem {
     id: string;
+    /** Read-only: what is wrong with the stored dates (from the API; never sent back, never written). */
+    date_issues?: DateIssue[];
     vendor: string;
     documentNumber: string;
     description: string;
@@ -63,6 +67,11 @@ interface OBSState {
     setError: (err: string | null) => void;
 }
 
+// See itpStore.ts's itpFetchSeq — discards a stale (superseded) response (BACKLOG #28/#37).
+let obsFetchSeq = 0;
+// See itpStore.ts's itpDataScopeId — clears the list on a cross-scope failure (BACKLOG #28/#37).
+let obsDataScopeId: string | null = null;
+
 export const useOBSStore = create<OBSState>((set, get) => ({
     obsList: [],
     loading: false,
@@ -72,12 +81,23 @@ export const useOBSStore = create<OBSState>((set, get) => ({
     setError: (error: string | null) => set({ error }),
 
     fetchOBSs: async (params?: FilterParams) => {
+        const seq = ++obsFetchSeq;
+        const requestedScopeId = getCurrentProjectScopeId();
         set({ loading: true, error: null });
         try {
             const response = await api.get('/obs/', { params: { ...getProjectFilterParams(), ...params } });
+            if (seq !== obsFetchSeq) return;
+            obsDataScopeId = requestedScopeId;
             set({ obsList: (response.data || []).map(normalizeItem), loading: false });
         } catch (err: any) {
-            set({ error: getErrorMessage(err, 'Failed to fetch OBSs'), loading: false });
+            if (seq !== obsFetchSeq) return;
+            const message = getErrorMessage(err, 'Failed to fetch OBSs');
+            if (requestedScopeId !== obsDataScopeId) {
+                obsDataScopeId = requestedScopeId;
+                set({ obsList: [], error: message, loading: false });
+            } else {
+                set({ error: message, loading: false });
+            }
         }
     },
 
@@ -86,28 +106,20 @@ export const useOBSStore = create<OBSState>((set, get) => ({
     },
 
     addOBS: async (obs: Omit<OBSItem, 'id'>) => {
-        try {
-            const response = await api.post('/obs/', obs);
-            const newOBS = normalizeItem(response.data);
-            set((state) => ({ obsList: [...state.obsList, newOBS] }));
-            return newOBS;
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to add OBS');
-            set({ error: msg });
-            throw error;
-        }
+        // A failed add/update is not written to the list-level `error`: the record modal reports it itself, once. Writing it here
+        // showed the same failure again as a page banner and made a failed save look like a failed list load.
+        const response = await api.post('/obs/', obs);
+        const newOBS = normalizeItem(response.data);
+        set((state) => ({ obsList: [...state.obsList, newOBS] }));
+        return newOBS;
     },
 
     updateOBS: async (id: string, updates: Partial<OBSItem>) => {
-        try {
-            const response = await api.put(`/obs/${id}`, updates);
-            const updated = normalizeItem(response.data);
-            set((state) => ({ obsList: state.obsList.map(o => o.id === id ? updated : o) }));
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to update OBS');
-            set({ error: msg });
-            throw error;
-        }
+        // A failed add/update is not written to the list-level `error`: the record modal reports it itself, once. Writing it here
+        // showed the same failure again as a page banner and made a failed save look like a failed list load.
+        const response = await api.put(`/obs/${id}`, updates);
+        const updated = normalizeItem(response.data);
+        set((state) => ({ obsList: state.obsList.map(o => o.id === id ? updated : o) }));
     },
 
     deleteOBS: async (id: string) => {

@@ -3,6 +3,7 @@ import { useDashboardFilterStore } from '../../store/dashboardFilterStore';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
+import { isClosedStatus, isOutstandingStatus } from '../../utils/statusBuckets';
 import styles from './Dashboard.module.css';
 
 const OBSStatsCard: React.FC = () => {
@@ -17,14 +18,8 @@ const OBSStatsCard: React.FC = () => {
       : obsList.filter(item => item.vendor === selectedVendor);
 
     const total = filteredList.length;
-    const open = filteredList.filter(item => {
-      const status = (item.status || '').toLowerCase();
-      return status !== 'closed' && status !== 'void';
-    }).length;
-    const closed = filteredList.filter(item => {
-      const status = (item.status || '').toLowerCase();
-      return status === 'closed';
-    }).length;
+    const open = filteredList.filter(item => isOutstandingStatus(item.status)).length;
+    const closed = filteredList.filter(item => isClosedStatus(item.status)).length;
     const openPercent = total > 0 ? Math.round((open / total) * 100) : 0;
     const closedPercent = total > 0 ? Math.round((closed / total) * 100) : 0;
 

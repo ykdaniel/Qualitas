@@ -1,3 +1,6 @@
+import { useLeaveGuard } from '../Shared/LeaveGuard';
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import api from '../../services/api';
@@ -16,6 +19,7 @@ const SecuritySettings: React.FC = () => {
   const [disablePassword, setDisablePassword] = useState('');
   const [disableOtp, setDisableOtp] = useState('');
   const [loading, setLoading] = useState(false);
+  const leaveGuard = useLeaveGuard(!!(setup || enrollOtp || disablePassword || disableOtp), loading);
 
   const fetchStatus = async () => {
     try {
@@ -100,9 +104,9 @@ const SecuritySettings: React.FC = () => {
             <p style={{ color: '#4a4238', fontSize: 14 }}>
               Add a second authentication factor using an app like Google Authenticator, Authy, or 1Password.
             </p>
-            <button onClick={startSetup} disabled={loading} style={btnPrimary}>
-              {loading ? '…' : 'Enable 2FA'}
-            </button>
+                      <FormActions primary={<button className={actionStyles.primary} onClick={startSetup} disabled={loading}>
+                          {loading ? '…' : 'Enable 2FA'}
+                      </button>} />
           </>
         )}
 
@@ -120,12 +124,11 @@ const SecuritySettings: React.FC = () => {
               value={enrollOtp} onChange={(e) => setEnrollOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
               style={input}
             />
-            <button onClick={enable} disabled={loading || enrollOtp.length < 6} style={btnPrimary}>
-              Confirm and enable
-            </button>
-            <button onClick={() => setSetup(null)} disabled={loading} style={btnSecondary}>
-              Cancel
-            </button>
+                      <FormActions cancel={<button className={actionStyles.secondary} onClick={() => leaveGuard.requestClose(() => { setSetup(null); setEnrollOtp(''); })} disabled={loading}>
+                          Cancel
+                      </button>} primary={<button className={actionStyles.primary} onClick={enable} disabled={loading || enrollOtp.length < 6}>
+                          Confirm and enable
+                      </button>} />
           </>
         )}
 
@@ -142,7 +145,7 @@ const SecuritySettings: React.FC = () => {
               value={disableOtp} onChange={(e) => setDisableOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
               style={input}
             />
-            <button onClick={disable} disabled={loading} style={btnDanger}>Disable 2FA</button>
+                      <FormActions primary={<button className={actionStyles.danger} onClick={disable} disabled={loading}>Disable 2FA</button>} />
           </>
         )}
       </section>
@@ -152,7 +155,7 @@ const SecuritySettings: React.FC = () => {
         <p style={{ color: '#4a4238', fontSize: 14 }}>
           If you suspect your account was accessed from a device you don't recognize, sign out everywhere. You'll be logged out of this browser and any other active session.
         </p>
-        <button onClick={logoutEverywhere} style={btnDanger}>Sign out everywhere</button>
+              <FormActions primary={<button className={actionStyles.danger} onClick={logoutEverywhere}>Sign out everywhere</button>} />
       </section>
     </div>
   );
@@ -163,18 +166,4 @@ const input: React.CSSProperties = {
   border: '1px solid rgba(184,148,90,0.32)', borderRadius: 8, marginBottom: 10,
   fontSize: 14,
 };
-const btnBase: React.CSSProperties = {
-  padding: '10px 18px', fontSize: 14, fontWeight: 600, border: 'none',
-  borderRadius: 8, cursor: 'pointer', marginRight: 8,
-};
-const btnPrimary: React.CSSProperties = {
-  ...btnBase, background: 'linear-gradient(135deg, #b8945a 0%, #8a6a3a 100%)', color: '#faf7f1',
-};
-const btnSecondary: React.CSSProperties = {
-  ...btnBase, background: '#faf7f1', color: '#4a4238', border: '1px solid rgba(184,148,90,0.32)',
-};
-const btnDanger: React.CSSProperties = {
-  ...btnBase, background: '#b91c1c', color: '#fff',
-};
-
 export default SecuritySettings;

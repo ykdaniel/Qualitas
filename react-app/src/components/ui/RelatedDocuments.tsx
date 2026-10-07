@@ -167,7 +167,9 @@ interface RelatedListProps {
     onOpen: (target: RelatedEntity) => void;
 }
 
-const RelatedList: React.FC<RelatedListProps> = ({ entries, onOpen }) => (
+const RelatedList: React.FC<RelatedListProps> = ({ entries, onOpen }) => {
+    const { t } = useLanguage();
+    return (
     <div className={styles.list}>
         {entries.map((entry) => (
             <button
@@ -182,6 +184,11 @@ const RelatedList: React.FC<RelatedListProps> = ({ entries, onOpen }) => (
                 <div className={styles.body}>
                     <div className={styles.refLine}>
                         {entry.referenceNo || '—'}
+                        {entry.entityType === 'itr' && entry.isReInspection === true && (
+                            <span className={styles.reinspectionTag}>
+                                {t('related.reinspection') || 'Re-inspection'}
+                            </span>
+                        )}
                     </div>
                     {entry.title && (
                         <div className={styles.titleLine}>{entry.title}</div>
@@ -199,6 +206,7 @@ const RelatedList: React.FC<RelatedListProps> = ({ entries, onOpen }) => (
             </button>
         ))}
     </div>
-);
+    );
+};
 
 export default RelatedDocuments;

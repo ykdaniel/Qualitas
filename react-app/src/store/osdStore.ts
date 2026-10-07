@@ -3,7 +3,7 @@ import api from '../services/api';
 import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
-import { getProjectFilterParams } from '../utils/projectFilter';
+import { getProjectFilterParams, getCurrentProjectScopeId } from '../utils/projectFilter';
 
 export interface OSDItem {
     id: string;
@@ -53,6 +53,11 @@ interface OSDState {
     setError: (err: string | null) => void;
 }
 
+// See itpStore.ts's itpFetchSeq — discards a stale (superseded) response (BACKLOG #28/#37).
+let osdFetchSeq = 0;
+// See itpStore.ts's itpDataScopeId — clears the list on a cross-scope failure (BACKLOG #28/#37).
+let osdDataScopeId: string | null = null;
+
 export const useOSDStore = create<OSDState>((set, get) => ({
     osdList: [],
     loading: false,
@@ -62,12 +67,23 @@ export const useOSDStore = create<OSDState>((set, get) => ({
     setError: (error: string | null) => set({ error }),
 
     fetchOSDs: async (params?: FilterParams) => {
+        const seq = ++osdFetchSeq;
+        const requestedScopeId = getCurrentProjectScopeId();
         set({ loading: true, error: null });
         try {
             const response = await api.get('/osd/', { params: { ...getProjectFilterParams(), ...params } });
+            if (seq !== osdFetchSeq) return;
+            osdDataScopeId = requestedScopeId;
             set({ osdList: (response.data || []).map(normalizeItem), loading: false });
         } catch (err: any) {
-            set({ error: getErrorMessage(err, 'Failed to fetch OSDs'), loading: false });
+            if (seq !== osdFetchSeq) return;
+            const message = getErrorMessage(err, 'Failed to fetch OSDs');
+            if (requestedScopeId !== osdDataScopeId) {
+                osdDataScopeId = requestedScopeId;
+                set({ osdList: [], error: message, loading: false });
+            } else {
+                set({ error: message, loading: false });
+            }
         }
     },
 

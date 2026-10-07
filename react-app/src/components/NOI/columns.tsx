@@ -5,7 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { StatusBadge } from "@/components/Shared/StatusBadge";
-import { formatTime24h, getLocalizedStatus, formatDateLocale } from "../../utils/formatters";
+import { formatTime24h, getLocalizedStatus } from "../../utils/formatters";
+import { DateCell } from "@/components/Shared/DateIssueMark";
+import { formatStrictDate } from "../../utils/dateIssues";
+
+// Plain dates are formatted from the string, never through `Date` (which rolls 2026-02-30 over to 2 March and shifts by the UTC offset).
+const noiDate = (raw: string) => formatStrictDate(raw) ?? raw;
 
 export const createColumns = (
     handleDeleteClick: (id: string) => void,
@@ -110,14 +115,14 @@ export const createColumns = (
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title={t('noi.issueDate')} />
             ),
-            cell: ({ row }) => <div className="text-center">{formatDateLocale(row.getValue("issueDate"))}</div>,
+            cell: ({ row }) => <div className="text-center"><DateCell item={row.original} field="issueDate" format={noiDate} /></div>,
         },
         {
             accessorKey: "inspectionDate",
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title={t('noi.inspectionDate')} />
             ),
-            cell: ({ row }) => <div className="text-center">{formatDateLocale(row.getValue("inspectionDate"))}</div>,
+            cell: ({ row }) => <div className="text-center"><DateCell item={row.original} field="inspectionDate" format={noiDate} /></div>,
         },
         {
             accessorKey: "inspectionTime",

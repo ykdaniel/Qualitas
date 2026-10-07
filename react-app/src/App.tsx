@@ -1,5 +1,6 @@
 import React, { Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { createBrowserRouter, createRoutesFromElements, RouterProvider, Outlet, Route, Navigate, useNavigate } from 'react-router-dom';
+import { LeaveGuardProvider } from './components/Shared/LeaveGuard';
 import { Toaster } from 'sonner';
 import { useAuth } from './context/AuthContext';
 import { AppProviders } from './components/Shared/AppProviders';
@@ -60,11 +61,8 @@ const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
 };
 
-function App() {
-  return (
-    <BrowserRouter>
-      <Suspense fallback={<PageLoader />}>
-        <Routes>
+const router = createBrowserRouter(createRoutesFromElements(
+    <Route element={<LeaveGuardProvider><Suspense fallback={<PageLoader />}><Outlet /></Suspense></LeaveGuardProvider>}>
           <Route path="/login" element={<Login />} />
 
           {/* Protected Routes with Data Providers */}
@@ -100,11 +98,11 @@ function App() {
             <Route path="/settings/security" element={<SecuritySettings />} />
           </Route>
           <Route path="*" element={<NotFound />} />
-        </Routes>
-      </Suspense>
-      <Toaster position="top-center" richColors />
-    </BrowserRouter>
-  );
+    </Route>
+));
+
+function App() {
+  return <><RouterProvider router={router} /><Toaster position="top-center" richColors /></>;
 }
 
 export default App;

@@ -41,7 +41,19 @@ export interface Checkpoint {
     // predicate fails, i.e. the specific record actually blocking this
     // checkpoint. Null when not NCR-derived, or already satisfied.
     blocking_ncr_id: string | null;
+    // Improvement checkpoint only (0 / empty on the others): what its verdict rests on.
+    //   blocking_reason  why the first blocking NCR blocks
+    //   verified_count   NCRs with a valid improvement photo NOW
+    //   unverified_*     NCRs that pass ONLY because they are Closed — their photos are NOT verified — and why
+    blocking_reason?: PhotoReason | null;
+    verified_count?: number;
+    unverified_count?: number;
+    unverified_ncr_ids?: string[];
+    unverified_reasons?: Partial<Record<PhotoReason, number>>;
 }
+
+// Why an NCR's improvement photo could not be verified (the underlying reason is kept even for a Closed NCR that passes on its status).
+export type PhotoReason = 'missing' | 'invalid' | 'legacy_unverified';
 
 export interface WorkflowSummary {
     qworkflow_id: string;
@@ -54,6 +66,9 @@ export interface WorkflowSummary {
     checkpoints: Checkpoint[];
     done_count: number;
     completion_percent: number;
+    // NCRs of this flow passing the improvement checkpoint WITHOUT a verified photo (Closed status only). 100% never means "all verified".
+    unverified_photo_count?: number;
+    unverified_photo_reasons?: Partial<Record<PhotoReason, number>>;
     ncr_ids: string[];
     itr_ids: string[];
     reinsp_itr_ids: string[];

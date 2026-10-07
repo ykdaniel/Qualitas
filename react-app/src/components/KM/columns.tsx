@@ -3,7 +3,8 @@ import { KMArticle } from '../../types/km';
 
 export const createColumns = (
     onDelete: (id: string) => void,
-    t: (key: string) => string
+    t: (key: string) => string,
+    canDelete = false
 ): ColumnDef<KMArticle>[] => [
         {
             accessorKey: 'articleNo',
@@ -91,6 +92,7 @@ export const createColumns = (
             id: 'actions',
             header: t('common.actions') || 'Actions',
             cell: ({ row }) => {
+                if (!canDelete) return null;
                 return (
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                         <button

@@ -1,3 +1,6 @@
+import { useDraftGuard } from '../Shared/LeaveGuard';
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useLanguage } from '../../context/LanguageContext';
@@ -5,7 +8,10 @@ import { useContractorsStore } from '../../store/contractorsStore';
 import { usePQPStore } from '../../store/pqpStore';
 import type { PQPItem, PQPHistoryItem } from '../../store/pqpStore';
 import FileAttachment from '../Shared/FileAttachment';
+import ImagePreviewOverlay from '../Shared/ImagePreviewOverlay';
 import PQPPrintTemplate from './PQPPrintTemplate';
+import { getErrorMessage } from '../../utils/errorUtils';
+import { isUnchangedSincePriorWrite } from '../../utils/attachmentOutcome';
 import styles from './PQP.module.css';
 import './PQP.print.css';
 
@@ -20,12 +26,31 @@ const getLocalizedStatus = (status: string, t: (key: string) => string) => {
     return status;
 };
 
+/** Result of ONE save attempt's attachment phase (Phase 2 — the record itself, Phase 1, has
+ * already succeeded by the time this is built; a Phase 1 failure throws instead of returning
+ * this). Never invented to look like a full success/failure — each field says exactly what this
+ * attempt actually confirmed, so the modal can prune its own queues per-item instead of
+ * clearing or keeping them all together. */
+export interface SaveOutcome {
+    /** Attachment ids this attempt confirmed deleted (HTTP success) — safe to drop from the
+     * modal's pending-delete queue; anything NOT in this list (whether it failed outright or
+     * came back 404/unknown) stays queued for retry. */
+    deletedIds: string[];
+    /** True only if the pending-files upload call itself succeeded — routers/file_router.py's
+     * upload endpoint is one all-or-nothing transaction, so this is a single boolean, not a
+     * per-file list. Safe to clear the pending-upload queue only when true. */
+    uploadedPending: boolean;
+    /** Human-readable description of every step that did NOT complete this attempt, in the
+     * order attempted. Empty means the whole attachment phase succeeded. */
+    errors: string[];
+}
+
 export interface PQPDetailModalProps {
     pqpId: string;
     existingItem?: PQPItem;
     readOnly?: boolean;
     canPublish?: boolean;
-    onSave: (updates: Partial<PQPItem>, pendingFiles: File[], deletedFileIds: string[], removedAttachments?: string[]) => void | Promise<void>;
+    onSave: (updates: Partial<PQPItem>, pendingFiles: File[], deletedFileIds: string[], removedAttachments?: string[], skipRecordWrite?: boolean) => Promise<SaveOutcome>;
     onPublish?: (id: string, changeSummary?: string) => Promise<void>;
     onClose: () => void;
 }
@@ -53,6 +78,25 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
     const [saveError, setSaveError] = useState('');
     const [pendingUploads, setPendingUploads] = useState<File[]>([]);
     const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
+    // Attachment preview (BACKLOG #23, 2026-10-05): FileAttachment's thumbnail click only fires
+    // if the parent supplies onPreview — this never did, so clicking a photo silently did
+    // nothing. Same handlePreview/ImagePreviewOverlay pattern already used by OBS/NCR/OSD/NOI.
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [previewName, setPreviewName] = useState<string>('');
+    const handlePreview = (url: string, name?: string) => {
+        setPreviewUrl(url);
+        setPreviewName(name || '');
+    };
+    const leaveGuard = useDraftGuard({ formData, pendingUploads, deletedFileIds }, saving, !readOnly);
+    const requestClose = () => leaveGuard.requestClose(onClose);
+    // JSON.stringify(formData) from the last successfully written attempt this session (a
+    // serialized-string key, not a semantic/deep-equality snapshot — see
+    // utils/attachmentOutcome.ts::isUnchangedSincePriorWrite). A retry after an attachment-only
+    // failure whose current formData serializes to the SAME string must not re-send that write
+    // (that previously created a second, real audit-log UPDATE entry on every retry, the same
+    // bug independently confirmed and fixed for ITP's Publish retry). Any change to formData
+    // produces a different string, so it is never skipped.
+    const [lastWrittenPayloadKey, setLastWrittenPayloadKey] = useState<string | null>(null);
     const [versionMode, setVersionMode] = useState<'select' | 'custom'>(() => {
         let currentVersion = existingItem?.version;
         if (currentVersion === 'V1.0') {
@@ -111,10 +155,34 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
         setSaving(true);
         setSaveError('');
         try {
-            await onSave(formData, pendingUploads, deletedFileIds);
+            // onSave throwing here means Phase 1 (the record itself) failed to save — nothing
+            // below runs, the queues are untouched, and the catch below is the record's own
+            // single "not saved" notice.
+            const { key: payloadKey, skip: skipRecordWrite } = isUnchangedSincePriorWrite(formData, lastWrittenPayloadKey);
+            const outcome = await onSave(formData, pendingUploads, deletedFileIds, undefined, skipRecordWrite);
+            if (!skipRecordWrite) setLastWrittenPayloadKey(payloadKey);
+            // Prune only what THIS attempt actually confirmed — a delete/upload not mentioned
+            // here (whether it failed outright or the response was ambiguous) stays queued so
+            // the next Save retries exactly that, and only that.
+            if (outcome.deletedIds.length > 0) {
+                setDeletedFileIds(prev => prev.filter(id => !outcome.deletedIds.includes(id)));
+            }
+            if (outcome.uploadedPending) {
+                setPendingUploads([]);
+            }
+            if (outcome.errors.length > 0) {
+                // The record itself IS saved at this point — a different situation from Phase 1
+                // failing, so it gets a distinctly worded, single notice (not "save failed").
+                setSaveError(
+                    (t('pqp.recordSavedPartialFailure') || 'Record saved, but some attachment steps did not complete') +
+                    '：' + outcome.errors.join('；')
+                );
+            } else {
+                leaveGuard.release();
             onClose();
+            }
         } catch (err) {
-            setSaveError((err as Error)?.message || t('pqp.saveError'));
+            setSaveError(getErrorMessage(err, t('pqp.saveError')));
         } finally {
             setSaving(false);
         }
@@ -155,9 +223,10 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
             if (onPublish) {
                 await onPublish(existingItem.id, changeSummary || undefined);
             }
+            leaveGuard.release();
             onClose();
         } catch (err) {
-            setSaveError((err as Error)?.message || t('pqp.saveError'));
+            setSaveError(getErrorMessage(err, t('pqp.saveError')));
         } finally {
             setSaving(false);
         }
@@ -168,7 +237,7 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
             <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
                 <div className={formStyles.modalHeader}>
                     <h2>{existingItem ? t('pqp.editTitle') : t('pqp.addTitle')}</h2>
-                    <button type="button" className={formStyles.closeButton} onClick={onClose}>×</button>
+                    <button type="button" className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={requestClose}>×</button>
                 </div>
                 <div className={formStyles.modalBody}>
                     <p className={formStyles.formRequiredHint}>{t('form.requiredHint')}</p>
@@ -300,6 +369,7 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
                                 entityType="pqp"
                                 category="attachment"
                                 hideTitle
+                                onPreview={handlePreview}
                             />
                         </div>
 
@@ -380,35 +450,44 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
                     </div>
                 )}
                 {saveError && <p className={formStyles.saveError}>{saveError}</p>}
-                <div className={formStyles.modalActions}>
-                    {canPublish && (
-                    <button
-                        type="button"
-                        className={formStyles.saveButton}
-                        onClick={handlePublish}
-                        disabled={saving}
-                        style={{ backgroundColor: '#4f46e5' }}
-                        title="Publish as next revision"
-                    >
-                        Publish
-                    </button>
-                    )}
-                    {!readOnly && (
-                    <button type="button" className={formStyles.saveButton} onClick={handleSave} disabled={saving} style={{ marginLeft: '12px' }}>
-                        {saving ? t('pqp.saving') : t('common.save')}
-                    </button>
-                    )}
-                    <button type="button" className={formStyles.printButton} onClick={() => setIsPrinting(true)} disabled={saving} title={t('common.print') || 'Print'}>
-                        {t('common.print') || 'Print'}
-                    </button>
-                    <button type="button" className={formStyles.cancelButton} onClick={onClose} disabled={saving}>
-                        {t('common.cancel')}
-                    </button>
-                </div>
+                <FormActions
+                    tools={<>
+                        <button className={actionStyles.secondary} type="button" onClick={() => setIsPrinting(true)} disabled={saving} title={t('common.print') || 'Print'}>
+                            {t('common.print') || 'Print'}
+                        </button>
+                    </>}
+                    secondary={<>
+                        {canPublish && (
+                            <button className={actionStyles.workflow}
+                                type="button"
+                                onClick={handlePublish}
+                                disabled={saving}
+                                title="Publish as next revision"
+                            >
+                                Publish
+                            </button>
+                        )}
+                    </>}
+                    cancel={<>
+                        <button className={actionStyles.secondary} type="button" onClick={requestClose} disabled={saving}>
+                            {t('common.cancel')}
+                        </button>
+                    </>}
+                    primary={<>
+                        {!readOnly && (
+                            <button className={actionStyles.primary} type="button" onClick={handleSave} disabled={saving}>
+                                {saving ? t('pqp.saving') : t('common.save')}
+                            </button>
+                        )}
+                    </>}
+                />
             </div>
             {isPrinting && ReactDOM.createPortal(
                 <PQPPrintTemplate data={formData as PQPItem} history={historyItems} />,
                 document.body
+            )}
+            {previewUrl && (
+                <ImagePreviewOverlay key={previewUrl} url={previewUrl} name={previewName} onClose={() => setPreviewUrl(null)} />
             )}
         </div>
     );
@@ -425,6 +504,13 @@ export const PQPDetailsViewModal: React.FC<PQPDetailsViewModalProps> = ({ pqpId:
     const handlePrint = () => {
         window.print();
     };
+    // Attachment preview (BACKLOG #23, 2026-10-05) — see PQPDetailModal above for why.
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [previewName, setPreviewName] = useState<string>('');
+    const handlePreview = (url: string, name?: string) => {
+        setPreviewUrl(url);
+        setPreviewName(name || '');
+    };
 
     if (!pqpItem) {
         return null;
@@ -435,7 +521,7 @@ export const PQPDetailsViewModal: React.FC<PQPDetailsViewModalProps> = ({ pqpId:
             <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
                 <div className={formStyles.modalHeader}>
                     <h2>{t('pqp.detail.title')}</h2>
-                    <button className={formStyles.closeButton} onClick={onClose}>×</button>
+                    <button className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={onClose}>×</button>
                 </div>
                 <div className={formStyles.modalBody}>
                     <div className={formStyles.formSections}>
@@ -485,18 +571,26 @@ export const PQPDetailsViewModal: React.FC<PQPDetailsViewModalProps> = ({ pqpId:
                             entityType="pqp"
                             category="attachment"
                             readOnly={true}
+                            onPreview={handlePreview}
                         />
                     </div>
                 </div>
             </div>
-            <div className={formStyles.modalActions}>
-                <button className={formStyles.printButton} onClick={handlePrint}>
-                    {t('common.print') || 'Print'}
-                </button>
-                <button className={formStyles.cancelButton} onClick={onClose}>
-                    {t('common.close') || 'Close'}
-                </button>
-            </div>
+            <FormActions
+                tools={<>
+                    <button className={actionStyles.secondary} onClick={handlePrint}>
+                        {t('common.print') || 'Print'}
+                    </button>
+                </>}
+                cancel={<>
+                    <button className={actionStyles.secondary} onClick={onClose}>
+                        {t('common.close') || 'Close'}
+                    </button>
+                </>}
+            />
+            {previewUrl && (
+                <ImagePreviewOverlay key={previewUrl} url={previewUrl} name={previewName} onClose={() => setPreviewUrl(null)} />
+            )}
         </div>
     );
 };

@@ -15,7 +15,8 @@ import { OBSDetailModal, OBSDetailData, PendingUploads } from './OBSModals';
 import { useDebounce } from '../../hooks/useDebounce';
 import { uploadFiles, deleteFile } from '../../services/api';
 import { useOBSStats } from '../../hooks/useOBSStats';
-import { getErrorMessage } from '../../utils/errorUtils';
+import { runSaveFlow, sameWrite, SaveOutcome } from '../../utils/saveFlow';
+import { describeSaveError } from '../../utils/saveErrors';
 
 type StatusFilter = 'all' | 'open' | 'closed' | 'void';
 
@@ -61,12 +62,15 @@ const OBS: React.FC = () => {
   }, [obsList, statusFilter]);
 
   const statistics = useOBSStats(obsList);
+  // The last successful record write of the open modal (id + serialized payload) — see runSaveFlow / sameWrite.
+  const lastWriteRef = useRef<{ id: string; key: string } | null>(null);
 
 
 
 
 
   const handleEdit = React.useCallback((id: string) => {
+    lastWriteRef.current = null;
     setCurrentObsId(id);
     setIsEditModalOpen(true);
   }, []);
@@ -96,12 +100,35 @@ const OBS: React.FC = () => {
   }, [searchParams, obsList, handleEdit, setSearchParams]);
 
   const handleAddNew = () => {
+    lastWriteRef.current = null;
     setCurrentObsId('new');
     setIsEditModalOpen(true);
   };
 
-  const handleSaveOBSDetails = async (details: OBSDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => {
-    if (!currentObsId) return;
+  const fileSteps = {
+    upload: (id: string, group: { category: string; files: File[] }) => uploadFiles('obs', id, group.files, group.category),
+    remove: deleteFile,
+    // The store already merged the saved record into the list and this page never re-fetched after a save.
+    reload: async () => true,
+    describe: (e: unknown) => describeSaveError(e, t),
+  };
+
+  // Retry of the unfinished file steps only. The record is stored already; it is NOT written again (an account with create but
+  // without update permission could not do that anyway, and the retry must never create it a second time).
+  const handleRetryOBSFiles = async (pendingUploads: PendingUploads[], deletedFileIds: string[]): Promise<SaveOutcome> => {
+    const id = lastWriteRef.current?.id;
+    if (!id) return { status: 'failed', message: t('common.saveFailed') };
+    return runSaveFlow({
+      writeRecord: async () => { throw new Error('a file retry never writes the record'); },
+      reuseId: id,
+      uploads: pendingUploads,
+      deletedFileIds,
+      ...fileSteps,
+    });
+  };
+
+  const handleSaveOBSDetails = async (details: OBSDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]): Promise<SaveOutcome> => {
+    if (!currentObsId) return { status: 'failed', message: t('common.saveFailed') };
     const isNew = currentObsId === 'new';
     // documentNumber 由後端自動產生，新建時不送
     const payload: Record<string, unknown> = {
@@ -132,52 +159,23 @@ const OBS: React.FC = () => {
       constructionEngineerApprovalBy: details.constructionEngineerApprovalBy || undefined,
       constructionEngineerApprovalDate: details.constructionEngineerApprovalDate || undefined,
     };
-    try {
-      let targetId = '';
-      if (isNew) {
-        const createdObs = await addOBS(payload as Omit<ContextOBSItem, 'id'>);
-        targetId = createdObs.id;
-      } else {
-        await updateOBS(currentObsId, payload);
-        targetId = currentObsId;
-      }
-
-      const fileErrors: string[] = [];
-      if (deletedFileIds.length > 0) {
-        const deleteResults = await Promise.allSettled(
-          [...new Set(deletedFileIds)].map((fileId) => deleteFile(fileId))
-        );
-        deleteResults.forEach((result) => {
-          if (result.status === 'rejected') {
-            const detail = (result.reason as any)?.response?.data?.detail || (result.reason as Error)?.message;
-            fileErrors.push(detail || 'Failed to delete one or more files');
-          }
-        });
-      }
-
-      if (targetId) {
-        for (const { category, files } of pendingUploads) {
-          if (files.length > 0) {
-            try {
-              await uploadFiles('obs', targetId, files, category);
-            } catch (err: any) {
-              const detail = err?.response?.data?.detail || err?.message;
-              fileErrors.push(detail || `Failed to upload ${category}`);
-            }
-          }
-        }
-      }
-
-      if (fileErrors.length > 0) {
-        throw new Error(fileErrors[0]);
-      }
-
-      setIsEditModalOpen(false);
-      setCurrentObsId(null);
-    } catch (error: any) {
-      const detail = getErrorMessage(error, t('common.saveFailed'));
-      toast.error(detail);
-    }
+    // A retry after "saved, but a file step failed" with unchanged content must not write the record again.
+    const currentId = currentObsId;
+    const outcome = await runSaveFlow({
+      writeRecord: async () => {
+        if (isNew) return (await addOBS(payload as Omit<ContextOBSItem, 'id'>)).id;
+        await updateOBS(currentId, payload);
+        return currentId;
+      },
+      reuseId: sameWrite(lastWriteRef.current, currentId, payload) ? currentId : null,
+      uploads: pendingUploads,
+      deletedFileIds,
+      ...fileSteps,
+      onRecordSaved: (id) => { lastWriteRef.current = { id, key: JSON.stringify(payload) }; },
+    });
+    // The record exists now: a retry must update it, never create it again.
+    if (outcome.status === 'saved-incomplete' && isNew) setCurrentObsId(outcome.id);
+    return outcome;
   };
 
   const confirmDelete = React.useCallback((id: string) => {
@@ -204,46 +202,50 @@ const OBS: React.FC = () => {
   };
 
 
-  const chips: { id: StatusFilter; label: string; count: number }[] = [
-    { id: 'all', label: t('common.all') || 'All', count: statistics.total },
-    { id: 'open', label: t('obs.statOpen') || 'Open', count: statistics.opening },
-    { id: 'closed', label: t('obs.statClosed') || 'Closed', count: statistics.closed },
-    { id: 'void', label: t('itp.status.void') || 'Void', count: statistics.void },
+  // A failed load is not "zero records": with an error and nothing loaded the counts are unknown and are shown as "—".
+  const loadFailed = !!error && obsList.length === 0;
+  const shown = <T,>(v: T): T | string => (loadFailed ? '—' : v);
+
+  const chips: { id: StatusFilter; label: string; count: number | string }[] = [
+    { id: 'all', label: t('common.all') || 'All', count: shown(statistics.total) },
+    { id: 'open', label: t('obs.statOpen') || 'Open', count: shown(statistics.opening) },
+    { id: 'closed', label: t('obs.statClosed') || 'Closed', count: shown(statistics.closed) },
+    { id: 'void', label: t('itp.status.void') || 'Void', count: shown(statistics.void) },
   ];
 
   const summary = [
     {
       key: 'open',
       label: t('obs.statOpen'),
-      value: statistics.opening,
+      value: shown(statistics.opening),
       icon: <Clock size={18} strokeWidth={1.8} />,
       accent: '#c8753f',
     },
     {
       key: 'closed',
       label: t('obs.statClosed'),
-      value: statistics.closed,
+      value: shown(statistics.closed),
       icon: <CheckCircle2 size={18} strokeWidth={1.8} />,
       accent: '#7a8f5a',
     },
     {
       key: 'void',
       label: t('itp.status.void') || 'Void',
-      value: statistics.void,
+      value: shown(statistics.void),
       icon: <Ban size={18} strokeWidth={1.8} />,
       accent: '#9aa0a8',
     },
     {
       key: 'total',
       label: t('obs.statTotal'),
-      value: statistics.total,
+      value: shown(statistics.total),
       icon: <BarChart3 size={18} strokeWidth={1.8} />,
       accent: '#8a6a3a',
     },
     {
       key: 'rate',
       label: t('obs.statOpenRate'),
-      value: `${statistics.openRate}%`,
+      value: shown(`${statistics.openRate}%`),
       icon: <Zap size={18} strokeWidth={1.8} />,
       accent: '#b8945a',
     },
@@ -341,7 +343,10 @@ const OBS: React.FC = () => {
             existingItem={editingItem}
             readOnly={!canEdit}
             onSave={handleSaveOBSDetails}
+            onRetryFiles={handleRetryOBSFiles}
+            attachmentsAllowed={hasPermission('obs:update:all')}
             onClose={() => {
+              lastWriteRef.current = null;
               if (openedViaDeepLinkRef.current) {
                 openedViaDeepLinkRef.current = false;
                 navigate(-1);

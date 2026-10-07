@@ -1,3 +1,5 @@
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   LineChart,
@@ -366,15 +368,13 @@ const KPI: React.FC = () => {
             </label>
           </div>
           {canEditWeights && (
-            <button
-              type="button"
-              className={styles.weightToggle}
-              onClick={handleSaveWeights}
-              disabled={savingWeights}
-              style={{ marginTop: 8 }}
-            >
-              {savingWeights ? (t('common.saving') || 'Saving...') : (t('common.save') || 'Save')}
-            </button>
+                          <FormActions primary={<button className={actionStyles.primary}
+                              type="button"
+                              onClick={handleSaveWeights}
+                              disabled={savingWeights}
+                          >
+                              {savingWeights ? (t('common.saving') || 'Saving...') : (t('common.save') || 'Save')}
+                          </button>} />
           )}
           </>
         )}

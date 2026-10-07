@@ -1,3 +1,7 @@
+import { toast } from 'sonner';
+import { useDraftGuard } from '../Shared/LeaveGuard';
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
 import React, { useState, useEffect } from 'react';
 import styles from './ContractorModal.module.css';
 
@@ -22,6 +26,7 @@ interface ContractorModalProps {
 const ContractorModal: React.FC<ContractorModalProps> = ({ existingId, initialData, onSave, onClose, t }) => {
   const [formData, setFormData] = useState(initialData);
   const [isClosing, setIsClosing] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setFormData(initialData);
@@ -29,15 +34,20 @@ const ContractorModal: React.FC<ContractorModalProps> = ({ existingId, initialDa
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onSave(existingId, formData);
+    if (saving) return;
+    setSaving(true);
+    try { await onSave(existingId, formData); }
+    catch { toast.error(t('common.saveFailed')); }
+    finally { setSaving(false); }
   };
 
-  const handleClose = () => {
+    const leaveGuard = useDraftGuard(formData, saving);
+  const handleClose = () => leaveGuard.requestClose(() => {
     setIsClosing(true);
     setTimeout(() => {
       onClose();
     }, 250);
-  };
+  });
 
   return (
     <div className={`${styles.modalOverlay} ${isClosing ? styles.closing : ''}`} onMouseDown={handleClose}>
@@ -110,10 +120,14 @@ const ContractorModal: React.FC<ContractorModalProps> = ({ existingId, initialDa
             <textarea value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} required rows={2} />
           </div>
 
-          <div className={styles.formActions}>
-            <button type="button" className={styles.cancelButton} onClick={handleClose}>{t('common.cancel')}</button>
-            <button type="submit" className={styles.submitButton}>{existingId ? t('common.save') : t('common.add')}</button>
-          </div>
+                  <FormActions
+                      cancel={<>
+                          <button className={actionStyles.secondary} type="button" onClick={handleClose}>{t('common.cancel')}</button>
+                      </>}
+                      primary={<>
+                          <button className={actionStyles.primary} type="submit" disabled={saving}>{existingId ? t('common.save') : t('common.add')}</button>
+                      </>}
+                  />
         </form>
       </div>
     </div>

@@ -22,7 +22,16 @@ const NOIPrintTemplate: React.FC<NOIPrintTemplateProps> = ({ groupedByContractor
                 >
                     <div className={styles.noiBatchPrintTitle}>
                         <h1>批次檢驗通知 (NOI)</h1>
-                        <p>列印日期：{new Date().toLocaleDateString('zh-TW')}</p>
+                        {/* BACKLOG #25 (2026-10-06): was `toLocaleDateString('zh-TW')` →
+                            "2026/2/6", the only place in the app using that format — every
+                            other date display uses the YYYY-MM-DD convention. Built from local
+                            date parts (not `toISOString()`) to avoid a UTC-shift day boundary
+                            bug, same pattern already used elsewhere (e.g. OBSModals.tsx's
+                            approval-date stamping). */}
+                        <p>列印日期：{(() => {
+                            const d = new Date();
+                            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                        })()}</p>
                     </div>
 
                     <div className={styles.noiBatchPrintCommon}>

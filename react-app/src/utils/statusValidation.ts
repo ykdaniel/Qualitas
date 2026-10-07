@@ -54,9 +54,16 @@ export const ITRStatusTransitions: StatusTransition[] = [
   { from: 'In Progress', to: 'Approved', allowed: true },
   { from: 'In Progress', to: 'Reject', allowed: true },
   { from: 'In Progress', to: 'Void', allowed: true },
-  { from: 'Approved', to: 'Reject', allowed: false, message: '已批准的 ITR 不能直接改為拒絕，請透過 Publish 建立新版本' },
-  { from: 'Approved', to: 'In Progress', allowed: true },
-  { from: 'Approved', to: 'Void', allowed: true },
+  // 2026-09-19: backend now blocks ANY status change away from Approved via
+  // the normal update path, unconditionally — only the dedicated
+  // revoke-approval action (ITR_APPROVE-gated, requires a reason) may move
+  // an ITR out of Approved. The UI's status dropdown is also disabled
+  // outright once persisted-Approved (see ITRModals.tsx's isLocked), so
+  // these are unreachable through the normal form; kept accurate here as a
+  // defense-in-depth check, not as documentation of a still-open path.
+  { from: 'Approved', to: 'Reject', allowed: false, message: '已核准的 ITR 無法直接改為拒絕，須先由具核准權限者撤回核准（Revoke Approval）' },
+  { from: 'Approved', to: 'In Progress', allowed: false, message: '已核准的 ITR 無法直接改回進行中，須先由具核准權限者撤回核准（Revoke Approval）' },
+  { from: 'Approved', to: 'Void', allowed: false, message: '已核准的 ITR 無法直接作廢，須先由具核准權限者撤回核准（Revoke Approval）' },
   { from: 'Reject', to: 'In Progress', allowed: true },
   { from: 'Reject', to: 'Approved', allowed: true },
   { from: 'Reject', to: 'Void', allowed: true },

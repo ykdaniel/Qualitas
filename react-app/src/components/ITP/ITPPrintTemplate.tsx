@@ -68,29 +68,29 @@ export const ITPPrintTemplate: React.FC<ITPPrintTemplateProps> = ({ items, heade
                                 <tr key={item.id} className="break-inside-avoid">
                                     <td className="border-b border-r border-slate-300 px-2 py-2 text-center font-mono align-top">{item.id}</td>
                                     <td className="border-b border-r border-slate-300 px-2 py-2 align-top">
-                                        <div className="font-bold mb-0.5">{typeof item.activity === 'object' ? item.activity?.en : item.activity || ''}</div>
-                                        <div className="text-[10px] text-slate-500">{typeof item.activity === 'object' ? item.activity?.ch : ''}</div>
+                                        <div className="font-bold mb-0.5 whitespace-pre-line">{typeof item.activity === 'object' ? item.activity?.en : item.activity || ''}</div>
+                                        <div className="text-[10px] text-slate-500 whitespace-pre-line">{typeof item.activity === 'object' ? item.activity?.ch : ''}</div>
                                     </td>
                                     <td className="border-b border-r border-slate-300 px-2 py-2 align-top">
                                         <div className="text-[10px] text-slate-500 mb-1 bg-slate-50 inline-block px-1 border border-slate-200 rounded">
-                                            <div>{typeof item.standard === 'string' ? item.standard : item.standard.en}</div>
-                                            {typeof item.standard !== 'string' && item.standard.ch && <div className="text-slate-400">{item.standard.ch}</div>}
+                                            <div className="whitespace-pre-line">{typeof item.standard === 'string' ? item.standard : item.standard.en}</div>
+                                            {typeof item.standard !== 'string' && item.standard.ch && <div className="text-slate-400 whitespace-pre-line">{item.standard.ch}</div>}
                                         </div>
-                                        {(() => { const arr = (typeof item.criteria === 'string' ? (item.criteria ? [{ en: item.criteria, ch: '' }] : []) : (Array.isArray(item.criteria) ? item.criteria.map((c: any) => typeof c === 'string' ? { en: c, ch: '' } : c) : [])).filter((c: any) => c.en || c.ch); if (arr.length === 0) return null; if (arr.length === 1) return <><div className="font-medium">{(arr[0] as any).en}</div>{(arr[0] as any).ch && <div className="text-[10px] text-slate-500">{(arr[0] as any).ch}</div>}</>; return <ul className="space-y-1 pl-1">{arr.map((c: any, i: number) => <li key={i} className="flex items-start gap-1"><span className="text-slate-400 shrink-0">•</span><div><div className="font-medium">{c.en}</div>{c.ch && <div className="text-[10px] text-slate-500">{c.ch}</div>}</div></li>)}</ul>; })()}
+                                        {(() => { const arr = (typeof item.criteria === 'string' ? (item.criteria ? [{ en: item.criteria, ch: '' }] : []) : (Array.isArray(item.criteria) ? item.criteria.map((c: any) => typeof c === 'string' ? { en: c, ch: '' } : c) : [])).filter((c: any) => c.en || c.ch); if (arr.length === 0) return null; if (arr.length === 1) return <><div className="font-medium whitespace-pre-line">{(arr[0] as any).en}</div>{(arr[0] as any).ch && <div className="text-[10px] text-slate-500 whitespace-pre-line">{(arr[0] as any).ch}</div>}</>; return <ul className="space-y-1 pl-1">{arr.map((c: any, i: number) => <li key={i} className="flex items-start gap-1"><span className="text-slate-400 shrink-0">•</span><div><div className="font-medium whitespace-pre-line">{c.en}</div>{c.ch && <div className="text-[10px] text-slate-500 whitespace-pre-line">{c.ch}</div>}</div></li>)}</ul>; })()}
                                     </td>
                                     <td className="border-b border-r border-slate-300 px-2 py-2 align-top text-center">
-                                        <div>{typeof item.checkTime === 'object' ? item.checkTime?.en : item.checkTime || ''}</div>
-                                        <div className="text-[10px] text-slate-500">{typeof item.checkTime === 'object' ? item.checkTime?.ch : ''}</div>
+                                        <div className="whitespace-pre-line">{typeof item.checkTime === 'object' ? item.checkTime?.en : item.checkTime || ''}</div>
+                                        <div className="text-[10px] text-slate-500 whitespace-pre-line">{typeof item.checkTime === 'object' ? item.checkTime?.ch : ''}</div>
                                     </td>
                                     <td className="border-b border-r border-slate-300 px-2 py-2 align-top text-center">
-                                        <div>{typeof item.method === 'object' ? item.method?.en : item.method || ''}</div>
-                                        <div className="text-[10px] text-slate-500">{typeof item.method === 'object' ? item.method?.ch : ''}</div>
+                                        <div className="whitespace-pre-line">{typeof item.method === 'object' ? item.method?.en : item.method || ''}</div>
+                                        <div className="text-[10px] text-slate-500 whitespace-pre-line">{typeof item.method === 'object' ? item.method?.ch : ''}</div>
                                     </td>
                                     <td className="border-b border-r border-slate-300 px-2 py-2 align-top text-center">
-                                        {typeof item.frequency === 'string' ? item.frequency : (
+                                        {typeof item.frequency === 'string' ? <span className="whitespace-pre-line">{item.frequency}</span> : (
                                             <>
-                                                <div>{item.frequency?.en}</div>
-                                                {item.frequency?.ch && <div className="text-[10px] text-slate-500">{item.frequency.ch}</div>}
+                                                <div className="whitespace-pre-line">{item.frequency?.en}</div>
+                                                {item.frequency?.ch && <div className="text-[10px] text-slate-500 whitespace-pre-line">{item.frequency.ch}</div>}
                                             </>
                                         )}
                                     </td>

@@ -1,3 +1,6 @@
+import { useDraftGuard } from '../../Shared/LeaveGuard';
+import FormActions from '../../Shared/FormActions';
+import actionStyles from '../../Shared/FormActions.module.css';
 import React, { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import { useLanguage } from '../../../context/LanguageContext';
@@ -34,6 +37,8 @@ export const NOIBulkAddModal: React.FC<NOIBulkAddModalProps> = ({ onSave, onClos
     ]);
 
     const [saving, setSaving] = useState(false);
+    const leaveGuard = useDraftGuard({ commonData, rows }, saving);
+    const requestClose = () => leaveGuard.requestClose(onClose);
 
     const filteredITPList = useMemo(() => {
         if (!commonData.contractor) return [];
@@ -97,7 +102,7 @@ export const NOIBulkAddModal: React.FC<NOIBulkAddModalProps> = ({ onSave, onClos
             <div className={formStyles.modalContent} style={{ maxWidth: '900px', width: '90%' }} onClick={(e) => e.stopPropagation()}>
                 <div className={formStyles.modalHeader}>
                     <h2>{t('noi.bulkAdd')}</h2>
-                    <button className={formStyles.closeButton} onClick={onClose}>×</button>
+                    <button className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={requestClose}>×</button>
                 </div>
                 <div className={formStyles.modalBody}>
                     <p className={formStyles.formRequiredHint}>{t('form.requiredHint')}</p>
@@ -136,7 +141,7 @@ export const NOIBulkAddModal: React.FC<NOIBulkAddModalProps> = ({ onSave, onClos
                     <div className={formStyles.formSection}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                             <h3 className={formStyles.sectionTitle} style={{ margin: 0 }}>{t('noi.print.listTitle')}</h3>
-                            <button type="button" onClick={addRow} style={{ padding: '6px 12px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '14px' }}>{t('common.add')}</button>
+                            <button className={actionStyles.secondary} type="button" onClick={addRow}>{t('common.add')}</button>
                         </div>
                         <div style={{ overflowX: 'auto' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
@@ -182,7 +187,7 @@ export const NOIBulkAddModal: React.FC<NOIBulkAddModalProps> = ({ onSave, onClos
                                                 <input type="text" className={formStyles.formInput} style={{ width: '100%', padding: '6px', border: '1px solid #d1d5db', borderRadius: '4px' }} placeholder="HH:mm" value={row.inspectionTime} onChange={(e) => { const val = e.target.value; if (/^[0-9:]*$/.test(val)) handleRowChange(row.id, 'inspectionTime', val); }} />
                                             </td>
                                             <td style={{ padding: '4px', borderBottom: '1px solid #e5e7eb', textAlign: 'center' }}>
-                                                <button type="button" onClick={() => removeRow(row.id)} disabled={rows.length <= 1} style={{ padding: '4px 8px', backgroundColor: rows.length <= 1 ? '#e5e7eb' : '#ef4444', color: rows.length <= 1 ? '#9ca3af' : 'white', border: 'none', borderRadius: '4px', cursor: rows.length <= 1 ? 'not-allowed' : 'pointer', fontSize: '12px' }}>{t('common.delete')}</button>
+                                                <button className={actionStyles.danger} type="button" onClick={() => removeRow(row.id)} disabled={rows.length <= 1}>{t('common.delete')}</button>
                                             </td>
                                         </tr>
                                     ))}
@@ -192,10 +197,14 @@ export const NOIBulkAddModal: React.FC<NOIBulkAddModalProps> = ({ onSave, onClos
                         <div style={{ marginTop: '12px', color: '#6b7280', fontSize: '13px' }}>{t('noi.bulkAddSummary', { count: rows.length })}</div>
                     </div>
                 </div>
-                <div className={formStyles.modalActions}>
-                    <button className={formStyles.saveButton} onClick={handleSave} disabled={saving}>{saving ? t('noi.bulkAddSaving') : t('noi.bulkAddAction', { count: rows.length })}</button>
-                    <button className={formStyles.cancelButton} onClick={onClose}>{t('common.cancel')}</button>
-                </div>
+                <FormActions
+                    cancel={<>
+                        <button className={actionStyles.secondary} onClick={requestClose}>{t('common.cancel')}</button>
+                    </>}
+                    primary={<>
+                        <button className={actionStyles.primary} onClick={handleSave} disabled={saving}>{saving ? t('noi.bulkAddSaving') : t('noi.bulkAddAction', { count: rows.length })}</button>
+                    </>}
+                />
             </div>
         </div>
     );

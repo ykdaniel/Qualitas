@@ -13,31 +13,27 @@
 //                                   progress front)
 //
 // The bar is painted by ::before/::after pseudo-elements on each
-// .progressCell (see Workflow.module.css). The completion % column
-// on the right rolls up done / 9. Clicking a row deep-links to
+// .progressCell (see Workflow.module.css). Completion in the sticky summary
+// rolls up done / 9. Clicking a row deep-links to
 // /noi?openId=<noi_id>, which the NOI page consumes on mount to
 // open that NOI's detail modal.
 //
 // See backend/services/workflow_service.py for the rules that
 // compute each checkpoint's done state.
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart3, AlertCircle, AlertTriangle, Activity, CheckCircle2 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
-import {
-    fetchWorkflows,
-    fetchWorkflowStats,
-} from '../../services/workflowService';
+import { improvementNotes, summaryNote, summaryTitle } from '../../utils/workflowEvidence';
+import { useWorkflowData } from '../../hooks/useWorkflowData';
 import {
     CHECKPOINT_ORDER,
     COMPLETION_BUCKETS,
     type CheckpointKey,
     type CompletionBucket,
-    type WorkflowStats,
     type WorkflowSummary,
 } from '../../types/workflow';
-import { getErrorMessage } from '../../utils/errorUtils';
 import styles from './Workflow.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
 
@@ -61,39 +57,8 @@ const Workflow: React.FC = () => {
     const { t } = useLanguage();
     const navigate = useNavigate();
 
-    const [stats, setStats] = useState<WorkflowStats | null>(null);
-    const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const { stats, workflows, loading, error, retry } = useWorkflowData();
     const [bucketFilter, setBucketFilter] = useState<BucketFilter>('all');
-
-    useEffect(() => {
-        let cancelled = false;
-        const load = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                // Fire both in parallel — they're independent and both
-                // small enough that this meaningfully cuts first paint.
-                const [statsData, listData] = await Promise.all([
-                    fetchWorkflowStats(),
-                    fetchWorkflows({ limit: 200 }),
-                ]);
-                if (cancelled) return;
-                setStats(statsData);
-                setWorkflows(listData);
-            } catch (err) {
-                if (cancelled) return;
-                setError(getErrorMessage(err) || t('workflow.loadError'));
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        };
-        load();
-        return () => {
-            cancelled = true;
-        };
-    }, [t]);
 
     const filtered = useMemo(() => {
         const list =
@@ -125,6 +90,29 @@ const Workflow: React.FC = () => {
 
     const checkpointLabel = (key: CheckpointKey): string => {
         return t(`workflow.checkpoint.${key}`) || key;
+    };
+
+    // QWORKFLOW-UX-2026-001: a one-line "current step" summary shown in the sticky NOI cell, so
+    // it is visible without scrolling the 9-checkpoint strip horizontally. Built ENTIRELY from
+    // the already-computed checkpoints[].state (no new calculation, no guessing) — see
+    // backend/services/workflow_service.py's _evaluate_checkpoints: there is always exactly one
+    // 'current' checkpoint, UNLESS every rule is satisfied, in which case there is none and every
+    // checkpoint (including 'accepted') is 'done'. Those are the only two real shapes; the third
+    // branch below is defensive only and never asserts a guess.
+    const currentStepText = (w: WorkflowSummary): string | null => {
+        const current = w.checkpoints.find(cp => cp.state === 'current');
+        if (current) {
+            return `${t('workflow.currentStep')}: ${checkpointLabel(current.key as CheckpointKey)}`;
+        }
+        const allDone = w.checkpoints.length > 0 && w.checkpoints.every(cp => cp.state === 'done');
+        if (allDone) {
+            // Stating the already-known fact ("Accepted"/"驗收合格"), not "current step: X" —
+            // there is no current step left once everything is done.
+            return checkpointLabel('accepted');
+        }
+        // Neither shape — not expected from the backend's own logic, but if it ever happens,
+        // show nothing rather than guess (e.g. never render "等待檢驗"/"Inspected" here).
+        return null;
     };
 
     /** The NCR actually holding this checkpoint back, per the backend's
@@ -225,6 +213,7 @@ const Workflow: React.FC = () => {
             {error && (
                 <div className={shellStyles.errorBanner}>
                     <span>{error}</span>
+                    <button type="button" onClick={retry}>{t('common.retry')}</button>
                 </div>
             )}
 
@@ -254,7 +243,7 @@ const Workflow: React.FC = () => {
                         onClick={() => setBucketFilter('all')}
                     >
                         {t('workflow.filterAll') || 'All'}
-                        <span className={shellStyles.chipCount}>{stats?.total ?? 0}</span>
+                        <span className={shellStyles.chipCount}>{stats?.total ?? '—'}</span>
                     </button>
                     {COMPLETION_BUCKETS.map(bucket => (
                         <button
@@ -264,26 +253,40 @@ const Workflow: React.FC = () => {
                             onClick={() => setBucketFilter(bucket.key)}
                         >
                             {bucketLabel(bucket.key)}
-                            <span className={shellStyles.chipCount}>{stats?.[bucket.key] ?? 0}</span>
+                            <span className={shellStyles.chipCount}>{stats?.[bucket.key] ?? '—'}</span>
                         </button>
                     ))}
                 </div>
             </div>
 
+            <div className={styles.legend} data-testid="workflow-legend">
+                {(['done', 'current', 'pending'] as const).map(state => (
+                    <span key={state} className={`${styles.legendItem} ${styles[state]}`}>
+                        <span className={styles.progressMarker} aria-hidden="true" />
+                        {t(`workflow.legend.${state}`)}
+                    </span>
+                ))}
+            </div>
+            {!loading && !error && (
+                <div className={styles.rowCount} aria-live="polite">
+                    {t('workflow.visibleCount', { count: filtered.length })}
+                </div>
+            )}
             {/* Checkpoint tracker table */}
             <div className={styles.tableWrapper}>
                 <table className={styles.table}>
                     <thead>
                         <tr>
+                            <th className={styles.indexCol} scope="col">#</th>
                             <th className={styles.stickyCol}>
                                 {t('workflow.col.reference') || 'Q-WorkFlow'}
                             </th>
-                            <th className={styles.stickyCol2}>
-                                {t('workflow.col.noi') || 'NOI'}
-                            </th>
+                            <th className={styles.noiCol}>{t('workflow.col.noi') || 'NOI'}</th>
                             <th className={styles.subjectCol}>
                                 {t('workflow.col.subject') || 'Subject'}
                             </th>
+                            <th className={styles.stepCol}>{t('workflow.currentStep')}</th>
+                            <th className={styles.completionCol}>{t('workflow.processCompletion')}</th>
                             {CHECKPOINT_ORDER.map(key => (
                                 <th key={key} className={styles.checkpointHead}>
                                     <span className={styles.checkpointHeadLabel}>
@@ -291,26 +294,23 @@ const Workflow: React.FC = () => {
                                     </span>
                                 </th>
                             ))}
-                            <th className={styles.percentCol}>
-                                {t('workflow.col.percent') || '%'}
-                            </th>
                         </tr>
                     </thead>
                     <tbody>
                         {loading && (
                             <tr>
                                 <td
-                                    colSpan={CHECKPOINT_ORDER.length + 4}
+                                    colSpan={CHECKPOINT_ORDER.length + 6}
                                     className={styles.empty}
                                 >
                                     {t('common.loading') || 'Loading...'}
                                 </td>
                             </tr>
                         )}
-                        {!loading && filtered.length === 0 && (
+                        {!loading && !error && filtered.length === 0 && (
                             <tr>
                                 <td
-                                    colSpan={CHECKPOINT_ORDER.length + 4}
+                                    colSpan={CHECKPOINT_ORDER.length + 6}
                                     className={styles.empty}
                                 >
                                     {t('workflow.empty') ||
@@ -319,21 +319,17 @@ const Workflow: React.FC = () => {
                             </tr>
                         )}
                         {!loading &&
-                            filtered.map(w => (
+                            filtered.map((w, index) => (
                                 <tr
                                     key={w.qworkflow_id}
                                     className={styles.row}
                                     onClick={() => handleRowClick(w)}
                                 >
-                                    <td
-                                        className={`${styles.stickyCol} ${styles.ncrCell}`}
-                                    >
+                                    <td className={styles.indexCol}>{index + 1}</td>
+                                    <td className={styles.stickyCol} title={w.reference_no || ''}>
                                         {w.reference_no || '—'}
                                     </td>
-                                    <td
-                                        className={`${styles.stickyCol2} ${styles.subjectCell}`}
-                                        title={`${w.noi_reference_no || ''} · ${w.noi_package || ''}`}
-                                    >
+                                    <td className={styles.noiCol} title={w.noi_reference_no || ''}>
                                         {w.noi_reference_no || w.noi_package || '—'}
                                     </td>
                                     <td
@@ -341,6 +337,17 @@ const Workflow: React.FC = () => {
                                         title={w.noi_package || ''}
                                     >
                                         {w.noi_package || '—'}
+                                    </td>
+                                    <td className={styles.stepCol} data-testid="current-step-line">
+                                        {currentStepText(w)?.replace(`${t('workflow.currentStep')}: `, '') || '—'}
+                                    </td>
+                                    <td className={styles.completionCol} data-testid="workflow-completion">
+                                        <strong>{w.completion_percent}%</strong>
+                                        {summaryNote(w, t) && (
+                                            <div className={styles.unverifiedNote} title={summaryTitle(w, t)} data-testid="unverified-note">
+                                                {summaryNote(w, t)}
+                                            </div>
+                                        )}
                                     </td>
                                     {w.checkpoints.map((cp, i) => {
                                         const isFirst = i === 0;
@@ -358,18 +365,23 @@ const Workflow: React.FC = () => {
                                                 ]
                                                     .filter(Boolean)
                                                     .join(' ')}
-                                                title={`${checkpointLabel(cp.key as CheckpointKey)} · ${cp.state}`}
+                                                title={[`${checkpointLabel(cp.key as CheckpointKey)} · ${cp.state}`, ...(cp.key === 'improvement' ? improvementNotes(cp, t) : [])].join('\n')}
+                                                data-checkpoint={cp.key}
+                                                data-unverified={cp.key === 'improvement' && (cp.unverified_count ?? 0) > 0 ? cp.unverified_count : undefined}
                                                 onClick={(e) => handleCheckpointClick(e, w, cp.key as CheckpointKey)}
                                             >
                                                 <div
                                                     className={styles.progressMarker}
                                                 />
+                                                {cp.key === 'improvement' && (cp.unverified_count ?? 0) > 0 && (
+                                                    <span className={styles.unverifiedMark} data-testid="unverified-mark">
+                                                        {t('workflow.evidence.closedUnverified', { count: cp.unverified_count as number })}
+                                                    </span>
+                                                )}
                                             </td>
                                         );
                                     })}
-                                    <td className={styles.percentCell}>
-                                        {w.completion_percent}%
-                                    </td>
+
                                 </tr>
                             ))}
                     </tbody>

@@ -40,6 +40,9 @@ interface AuditState {
     setError: (err: string | null) => void;
 }
 
+// See itpStore.ts's itpFetchSeq — discards a stale (superseded) response (BACKLOG #28/#37).
+let auditFetchSeq = 0;
+
 export const useAuditStore = create<AuditState>((set, get) => ({
     auditList: [],
     loading: false,
@@ -49,12 +52,15 @@ export const useAuditStore = create<AuditState>((set, get) => ({
     setError: (error: string | null) => set({ error }),
 
     fetchAudits: async () => {
+        const seq = ++auditFetchSeq;
         set({ loading: true, error: null });
         try {
             const response = await api.get('/audit/', { params: { ...getProjectFilterParams() } });
+            if (seq !== auditFetchSeq) return;
             const list = response.data || [];
             set({ auditList: list, loading: false });
         } catch (err: any) {
+            if (seq !== auditFetchSeq) return;
             const errorMessage = getErrorMessage(err, 'Failed to fetch audits');
             set({
                 auditList: [],

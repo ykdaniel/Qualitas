@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { toast } from 'sonner';
 import { Clock, CheckCircle2, BarChart3, Zap, Search, Ban } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
@@ -17,7 +16,8 @@ import { createColumns } from './columns';
 import { useDebounce } from '../../hooks/useDebounce';
 import { uploadFiles, deleteFile } from '../../services/api';
 import { useNCRStats } from '../../hooks/useNCRStats';
-import { getErrorMessage } from '../../utils/errorUtils';
+import { runSaveFlow, sameWrite, SaveOutcome } from '../../utils/saveFlow';
+import { describeSaveError } from '../../utils/saveErrors';
 
 type StatusFilter = 'all' | 'open' | 'inProgress' | 'resolved' | 'closed' | 'void';
 
@@ -58,8 +58,11 @@ const NCR: React.FC = () => {
   });
 
   const statistics = useNCRStats(ncrList);
+  // The last successful record write of the open modal (id + serialized payload) — see runSaveFlow / sameWrite.
+  const lastWriteRef = useRef<{ id: string; key: string } | null>(null);
 
   const handleEdit = React.useCallback((id: string) => {
+    lastWriteRef.current = null;
     setCurrentNcrId(id);
     setIsEditModalOpen(true);
   }, []);
@@ -89,11 +92,33 @@ const NCR: React.FC = () => {
   }, [searchParams, ncrList, handleEdit, setSearchParams]);
 
   const handleAddNew = () => {
+    lastWriteRef.current = null;
     setCurrentNcrId('new');
     setIsEditModalOpen(true);
   };
 
-  const handleSaveNCRDetails = async (details: NCRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => {
+  const fileSteps = {
+    upload: (id: string, group: { category: string; files: File[] }) => uploadFiles('ncr', id, group.files, group.category),
+    remove: deleteFile,
+    reload: async () => { await refetch(); return !useNCRStore.getState().error; },
+    describe: (e: unknown) => describeSaveError(e, t),
+  };
+
+  // Retry of the unfinished file steps only. The record is stored already; it is NOT written again (an account with create but
+  // without update permission could not do that anyway, and the retry must never create it a second time).
+  const handleRetryNCRFiles = async (pendingUploads: PendingUploads[], deletedFileIds: string[]): Promise<SaveOutcome> => {
+    const id = lastWriteRef.current?.id;
+    if (!id) return { status: 'failed', message: t('common.saveFailed') };
+    return runSaveFlow({
+      writeRecord: async () => { throw new Error('a file retry never writes the record'); },
+      reuseId: id,
+      uploads: pendingUploads,
+      deletedFileIds,
+      ...fileSteps,
+    });
+  };
+
+  const handleSaveNCRDetails = async (details: NCRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]): Promise<SaveOutcome> => {
     if (currentNcrId) {
       const isNew = currentNcrId === 'new';
       const existingItem = isNew ? undefined : ncrList.find(item => item.id === currentNcrId);
@@ -187,47 +212,26 @@ const NCR: React.FC = () => {
         preventiveActionTargetDate: details.preventiveActionTargetDate || undefined,
       };
 
-      try {
-        let targetId = currentNcrId;
-        if (existingItem) {
-          await updateNCR(currentNcrId, updatedItem);
-        } else {
-          const newNCR = await addNCR(updatedItem as Omit<NCRItem, 'id'>);
-          targetId = newNCR.id;
-        }
-
-        if (deletedFileIds && deletedFileIds.length > 0) {
-          for (const fileId of deletedFileIds) {
-            try {
-              await deleteFile(fileId);
-            } catch (error) {
-              console.error('Error deleting file:', fileId, error);
-            }
+      // A retry after "saved, but a file step failed" with unchanged content must not write the record again.
+      const outcome = await runSaveFlow({
+        writeRecord: async () => {
+          if (existingItem) {
+            await updateNCR(currentNcrId, updatedItem);
+            return currentNcrId;
           }
-        }
-
-        if (pendingUploads && pendingUploads.length > 0) {
-          for (const uploadGroup of pendingUploads) {
-            if (uploadGroup.files.length > 0) {
-              try {
-                await uploadFiles('ncr', targetId, uploadGroup.files, uploadGroup.category);
-              } catch (error) {
-                console.error(`Error uploading files for category ${uploadGroup.category}:`, error);
-                toast.error(`Failed to upload some files for ${uploadGroup.category}.`);
-              }
-            }
-          }
-        }
-
-        await refetch();
-
-        setIsEditModalOpen(false);
-        setCurrentNcrId(null);
-      } catch (error: any) {
-        const detail = getErrorMessage(error, t('common.saveFailed'));
-        toast.error(detail);
-      }
+          return (await addNCR(updatedItem as Omit<NCRItem, 'id'>)).id;
+        },
+        reuseId: sameWrite(lastWriteRef.current, currentNcrId, updatedItem) ? currentNcrId : null,
+        uploads: pendingUploads,
+        deletedFileIds,
+        ...fileSteps,
+        onRecordSaved: (id) => { lastWriteRef.current = { id, key: JSON.stringify(updatedItem) }; },
+      });
+      // The record exists now: a retry must update it, never create it again.
+      if (outcome.status === 'saved-incomplete' && isNew) setCurrentNcrId(outcome.id);
+      return outcome;
     }
+    return { status: 'failed', message: t('common.saveFailed') };
   };
 
   const confirmDelete = React.useCallback((id: string) => {
@@ -249,48 +253,52 @@ const NCR: React.FC = () => {
 
   const columns = useMemo(() => createColumns(confirmDelete, t), [t, confirmDelete]);
 
-  const chips: { id: StatusFilter; label: string; count: number }[] = [
-    { id: 'all', label: t('common.all') || 'All', count: statistics.total },
-    { id: 'open', label: t('obs.statOpen') || 'Open', count: statistics.open },
-    { id: 'inProgress', label: t('status.inProgress') || 'In Progress', count: statistics.inProgress },
-    { id: 'resolved', label: t('status.resolved') || 'Resolved', count: statistics.resolved },
-    { id: 'closed', label: t('obs.statClosed') || 'Closed', count: statistics.closed },
-    { id: 'void', label: t('itp.status.void') || 'Void', count: statistics.void },
+  // A failed load is not "zero records": with an error and nothing loaded the counts are unknown and are shown as "—".
+  const loadFailed = !!error && ncrList.length === 0;
+  const shown = <T,>(v: T): T | string => (loadFailed ? '—' : v);
+
+  const chips: { id: StatusFilter; label: string; count: number | string }[] = [
+    { id: 'all', label: t('common.all') || 'All', count: shown(statistics.total) },
+    { id: 'open', label: t('obs.statOpen') || 'Open', count: shown(statistics.open) },
+    { id: 'inProgress', label: t('status.inProgress') || 'In Progress', count: shown(statistics.inProgress) },
+    { id: 'resolved', label: t('status.resolved') || 'Resolved', count: shown(statistics.resolved) },
+    { id: 'closed', label: t('obs.statClosed') || 'Closed', count: shown(statistics.closed) },
+    { id: 'void', label: t('itp.status.void') || 'Void', count: shown(statistics.void) },
   ];
 
   const summary = [
     {
       key: 'open',
       label: t('obs.statOpen') || 'Open',
-      value: statistics.opening,
+      value: shown(statistics.opening),
       icon: <Clock size={18} strokeWidth={1.8} />,
       accent: '#c8753f',
     },
     {
       key: 'closed',
       label: t('obs.statClosed') || 'Closed',
-      value: statistics.closed,
+      value: shown(statistics.closed),
       icon: <CheckCircle2 size={18} strokeWidth={1.8} />,
       accent: '#7a8f5a',
     },
     {
       key: 'void',
       label: t('itp.status.void') || 'Void',
-      value: statistics.void,
+      value: shown(statistics.void),
       icon: <Ban size={18} strokeWidth={1.8} />,
       accent: '#9aa0a8',
     },
     {
       key: 'total',
       label: t('obs.statTotal') || 'Total',
-      value: statistics.total,
+      value: shown(statistics.total),
       icon: <BarChart3 size={18} strokeWidth={1.8} />,
       accent: '#8a6a3a',
     },
     {
       key: 'rate',
       label: t('obs.statOpenRate') || 'Open Rate',
-      value: `${statistics.openRate}%`,
+      value: shown(`${statistics.openRate}%`),
       icon: <Zap size={18} strokeWidth={1.8} />,
       accent: '#b8945a',
     },
@@ -400,7 +408,10 @@ const NCR: React.FC = () => {
             existingItem={editingItem}
             readOnly={!canEdit}
             onSave={handleSaveNCRDetails}
+            onRetryFiles={handleRetryNCRFiles}
+            attachmentsAllowed={hasPermission('ncr:update:all')}
             onClose={() => {
+              lastWriteRef.current = null;
               if (openedViaDeepLinkRef.current) {
                 openedViaDeepLinkRef.current = false;
                 navigate(-1);

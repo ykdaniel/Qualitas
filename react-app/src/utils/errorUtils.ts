@@ -13,12 +13,23 @@ import { AxiosError } from 'axios';
 export function getErrorMessage(error: unknown, fallbackMessage = 'An unknown error occurred'): string {
     // Axios 錯誤
     if (isAxiosError(error)) {
+        const status = error.response?.status;
         const detail = error.response?.data?.detail;
+        // A server error is not something the user can act on, and its body may carry a full validation dump (in non-production
+        // builds) — show one friendly line, never the stack. (2026-09-20)
+        if (status !== undefined && status >= 500) {
+            return '伺服器處理資料時發生錯誤（HTTP ' + status + '），請稍後重試或聯絡管理員。 / Server error (HTTP ' + status + '), please retry later or contact an administrator.';
+        }
         if (typeof detail === 'string') {
             return detail;
         }
         if (Array.isArray(detail)) {
-            return detail.map((e: { msg?: string }) => e?.msg || JSON.stringify(e)).join(', ');
+            // Date refusals carry a stable `code` and the offending field in `loc`: name the field ("raiseDate: date is not a real
+            // calendar date"). Other array-shaped details keep their previous text.
+            return detail.map((e: { msg?: string; loc?: unknown[]; code?: string }) => {
+                const field = Array.isArray(e?.loc) && e.code ? String(e.loc[e.loc.length - 1]) : '';
+                return field && e?.msg ? `${field}: ${e.msg}` : (e?.msg || JSON.stringify(e));
+            }).join(', ');
         }
         return error.message || fallbackMessage;
     }

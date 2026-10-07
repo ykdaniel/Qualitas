@@ -2,15 +2,19 @@ import { create } from 'zustand';
 import api from '../services/api';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
-import { getProjectFilterParams } from '../utils/projectFilter';
+import { getProjectFilterParams, getCurrentProjectScopeId } from '../utils/projectFilter';
+
+import type { DateIssue } from '../utils/dateIssues';
 
 export interface NOIItem {
     id: string;
+    /** Read-only: what is wrong with the stored dates (from the API; never sent back, never written). */
+    date_issues?: DateIssue[];
     package: string;
     referenceNo: string;
     issueDate: string;
     inspectionTime: string;
-    itpNo: string;  // 連結到 ITP referenceNo
+    itpNo: string | null;  // 連結到 ITP referenceNo
     eventNumber?: string;
     checkpoint: string;
     inspectionDate: string;
@@ -43,6 +47,11 @@ interface NOIState {
     setError: (err: string | null) => void;
 }
 
+// See itpStore.ts's itpFetchSeq — discards a stale (superseded) response (BACKLOG #28/#37).
+let noiFetchSeq = 0;
+// See itpStore.ts's itpDataScopeId — clears the list on a cross-scope failure (BACKLOG #28/#37).
+let noiDataScopeId: string | null = null;
+
 export const useNOIStore = create<NOIState>((set, get) => ({
     noiList: [],
     loading: false,
@@ -52,12 +61,23 @@ export const useNOIStore = create<NOIState>((set, get) => ({
     setError: (error: string | null) => set({ error }),
 
     fetchNOIs: async (params?: FilterParams) => {
+        const seq = ++noiFetchSeq;
+        const requestedScopeId = getCurrentProjectScopeId();
         set({ loading: true, error: null });
         try {
             const response = await api.get('/noi/', { params: { ...getProjectFilterParams(), ...params } });
+            if (seq !== noiFetchSeq) return;
+            noiDataScopeId = requestedScopeId;
             set({ noiList: response.data || [], loading: false });
         } catch (err: any) {
-            set({ error: getErrorMessage(err, 'Failed to fetch NOIs'), loading: false });
+            if (seq !== noiFetchSeq) return;
+            const message = getErrorMessage(err, 'Failed to fetch NOIs');
+            if (requestedScopeId !== noiDataScopeId) {
+                noiDataScopeId = requestedScopeId;
+                set({ noiList: [], error: message, loading: false });
+            } else {
+                set({ error: message, loading: false });
+            }
         }
     },
 
@@ -66,16 +86,12 @@ export const useNOIStore = create<NOIState>((set, get) => ({
     },
 
     addNOI: async (noi: Omit<NOIItem, 'id'>, id?: string) => {
-        try {
-            const response = await api.post('/noi/', id ? { ...noi, id } : noi);
-            const newNOI = response.data;
-            set((state) => ({ noiList: [...state.noiList, newNOI] }));
-            return newNOI;
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to add NOI');
-            set({ error: msg });
-            throw error;
-        }
+        // A failed add/update is not written to the list-level `error`: the record modal reports it itself, once. Writing it here
+        // showed the same failure again as a page banner and made a failed save look like a failed list load.
+        const response = await api.post('/noi/', id ? { ...noi, id } : noi);
+        const newNOI = response.data;
+        set((state) => ({ noiList: [...state.noiList, newNOI] }));
+        return newNOI;
     },
 
     addBulkNOI: async (nois: Omit<NOIItem, 'id'>[]) => {
@@ -92,14 +108,10 @@ export const useNOIStore = create<NOIState>((set, get) => ({
     },
 
     updateNOI: async (id: string, updates: Partial<NOIItem>) => {
-        try {
-            const response = await api.put(`/noi/${id}/`, updates);
-            set((state) => ({ noiList: state.noiList.map(n => n.id === id ? response.data : n) }));
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to update NOI');
-            set({ error: msg });
-            throw error;
-        }
+        // A failed add/update is not written to the list-level `error`: the record modal reports it itself, once. Writing it here
+        // showed the same failure again as a page banner and made a failed save look like a failed list load.
+        const response = await api.put(`/noi/${id}/`, updates);
+        set((state) => ({ noiList: state.noiList.map(n => n.id === id ? response.data : n) }));
     },
 
     deleteNOI: async (id: string) => {

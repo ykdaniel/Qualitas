@@ -3,10 +3,14 @@ import api from '../services/api';
 import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
-import { getProjectFilterParams } from '../utils/projectFilter';
+import { getProjectFilterParams, getCurrentProjectScopeId } from '../utils/projectFilter';
+
+import type { DateIssue } from '../utils/dateIssues';
 
 export interface NCRItem {
     id: string;
+    /** Read-only: what is wrong with the stored dates (from the API; never sent back, never written). */
+    date_issues?: DateIssue[];
     vendor: string;
     documentNumber: string;
     description: string;
@@ -111,6 +115,11 @@ interface NCRState {
     setError: (err: string | null) => void;
 }
 
+// See itpStore.ts's itpFetchSeq — discards a stale (superseded) response (BACKLOG #28/#37).
+let ncrFetchSeq = 0;
+// See itpStore.ts's itpDataScopeId — clears the list on a cross-scope failure (BACKLOG #28/#37).
+let ncrDataScopeId: string | null = null;
+
 export const useNCRStore = create<NCRState>((set, get) => ({
     ncrList: [],
     loading: false,
@@ -120,12 +129,23 @@ export const useNCRStore = create<NCRState>((set, get) => ({
     setError: (error: string | null) => set({ error }),
 
     fetchNCRs: async (params?: FilterParams) => {
+        const seq = ++ncrFetchSeq;
+        const requestedScopeId = getCurrentProjectScopeId();
         set({ loading: true, error: null });
         try {
             const response = await api.get('/ncr/', { params: { ...getProjectFilterParams(), ...params } });
+            if (seq !== ncrFetchSeq) return;
+            ncrDataScopeId = requestedScopeId;
             set({ ncrList: (response.data || []).map(normalizeItem), loading: false });
         } catch (err: any) {
-            set({ error: getErrorMessage(err, 'Failed to fetch NCRs'), loading: false });
+            if (seq !== ncrFetchSeq) return;
+            const message = getErrorMessage(err, 'Failed to fetch NCRs');
+            if (requestedScopeId !== ncrDataScopeId) {
+                ncrDataScopeId = requestedScopeId;
+                set({ ncrList: [], error: message, loading: false });
+            } else {
+                set({ error: message, loading: false });
+            }
         }
     },
 
@@ -134,28 +154,20 @@ export const useNCRStore = create<NCRState>((set, get) => ({
     },
 
     addNCR: async (ncr: Omit<NCRItem, 'id'>) => {
-        try {
-            const response = await api.post('/ncr/', ncr);
-            const newNCR = normalizeItem(response.data);
-            set((state) => ({ ncrList: [...state.ncrList, newNCR] }));
-            return newNCR;
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to add NCR');
-            set({ error: msg });
-            throw error;
-        }
+        // A failed add/update is not written to the list-level `error`: the record modal reports it itself, once. Writing it here
+        // showed the same failure again as a page banner and made a failed save look like a failed list load.
+        const response = await api.post('/ncr/', ncr);
+        const newNCR = normalizeItem(response.data);
+        set((state) => ({ ncrList: [...state.ncrList, newNCR] }));
+        return newNCR;
     },
 
     updateNCR: async (id: string, updates: Partial<NCRItem>) => {
-        try {
-            const response = await api.put(`/ncr/${id}/`, updates);
-            const updated = normalizeItem(response.data);
-            set((state) => ({ ncrList: state.ncrList.map(n => n.id === id ? updated : n) }));
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to update NCR');
-            set({ error: msg });
-            throw error;
-        }
+        // A failed add/update is not written to the list-level `error`: the record modal reports it itself, once. Writing it here
+        // showed the same failure again as a page banner and made a failed save look like a failed list load.
+        const response = await api.put(`/ncr/${id}/`, updates);
+        const updated = normalizeItem(response.data);
+        set((state) => ({ ncrList: state.ncrList.map(n => n.id === id ? updated : n) }));
     },
 
     deleteNCR: async (id: string) => {

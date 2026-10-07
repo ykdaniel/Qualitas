@@ -3,7 +3,7 @@ import api from '../services/api';
 import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
-import { getProjectFilterParams } from '../utils/projectFilter';
+import { getProjectFilterParams, getCurrentProjectScopeId } from '../utils/projectFilter';
 
 export interface ITRItem {
     id: string;
@@ -73,6 +73,11 @@ interface ITRState {
     getITRByNCR: (ncrNumber: string) => ITRItem[];
 }
 
+// See itpStore.ts's itpFetchSeq — discards a stale (superseded) response (BACKLOG #28/#37).
+let itrFetchSeq = 0;
+// See itpStore.ts's itpDataScopeId — clears the list on a cross-scope failure (BACKLOG #28/#37).
+let itrDataScopeId: string | null = null;
+
 export const useITRStore = create<ITRState>((set, get) => ({
     itrList: [],
     loading: false,
@@ -82,12 +87,23 @@ export const useITRStore = create<ITRState>((set, get) => ({
     setError: (error: string | null) => set({ error }),
 
     fetchITRs: async (params?: FilterParams) => {
+        const seq = ++itrFetchSeq;
+        const requestedScopeId = getCurrentProjectScopeId();
         set({ loading: true, error: null });
         try {
             const response = await api.get('/itr/', { params: { ...getProjectFilterParams(), ...params } });
+            if (seq !== itrFetchSeq) return;
+            itrDataScopeId = requestedScopeId;
             set({ itrList: (response.data || []).map(normalizeItem), loading: false });
         } catch (err: any) {
-            set({ error: getErrorMessage(err, 'Failed to fetch ITRs'), loading: false });
+            if (seq !== itrFetchSeq) return;
+            const message = getErrorMessage(err, 'Failed to fetch ITRs');
+            if (requestedScopeId !== itrDataScopeId) {
+                itrDataScopeId = requestedScopeId;
+                set({ itrList: [], error: message, loading: false });
+            } else {
+                set({ error: message, loading: false });
+            }
         }
     },
 

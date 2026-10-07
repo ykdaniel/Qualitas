@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { toast } from 'sonner';
+import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useKMStore } from '../../store/kmStore';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
@@ -18,7 +20,15 @@ function stripHtmlForSearch(html: string): string {
 
 const KM: React.FC = () => {
   const { t } = useLanguage();
-  const { kmList, loading, error, fetchKMs, deleteKM } = useKMStore();
+  const { hasPermission } = useAuth();
+  const canView = hasPermission('km:view:all');
+  const canCreate = hasPermission('km:create:all');
+  const canUpdate = hasPermission('km:update:all');
+  const canDelete = hasPermission('km:delete:all');
+  const { kmList, loading, error, accessDenied, fetchKMs, deleteKM } = useKMStore();
+
+  const [deleting, setDeleting] = useState(false);
+  const deleteInFlight = useRef(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
@@ -35,8 +45,8 @@ const KM: React.FC = () => {
 
   // Fetch data on mount
   useEffect(() => {
-    fetchKMs();
-  }, [fetchKMs]);
+    if (canView) fetchKMs();
+  }, [fetchKMs, canView]);
 
   // Derived state
   const selectedArticle = useMemo(() => {
@@ -73,15 +83,17 @@ const KM: React.FC = () => {
 
   // Handlers
   const handleAddNew = useCallback(() => {
+    if (!canCreate) return;
     setSelectedArticleId(null);
     setIsModalOpen(true);
-  }, []);
+  }, [canCreate]);
 
   const handleEdit = useCallback((id: string, chapterId?: string) => {
+    if (!canUpdate) return;
     setSelectedArticleId(id);
     setFocusChapterId(chapterId || null);
     setIsModalOpen(true);
-  }, []);
+  }, [canUpdate]);
 
   const handleViewDetails = useCallback((id: string) => {
     setSelectedArticleId(id);
@@ -89,21 +101,39 @@ const KM: React.FC = () => {
   }, []);
 
   const handleDeleteClick = useCallback((id: string) => {
+    if (!canDelete) return;
     setDeleteModal({ isOpen: true, id });
-  }, []);
+  }, [canDelete]);
 
   const handleDeleteConfirm = async () => {
-    if (deleteModal.id) {
+    if (!canDelete || !deleteModal.id || deleteInFlight.current) return;
+    deleteInFlight.current = true;
+    setDeleting(true);
+    try {
       await deleteKM(deleteModal.id);
       setDeleteModal({ isOpen: false, id: null });
       if (currentView === 'detail' && selectedArticleId === deleteModal.id) {
         setCurrentView('list');
         setSelectedArticleId(null);
       }
+    } catch {
+      toast.error(t('common.deleteFailed'));
+    } finally {
+      deleteInFlight.current = false;
+      setDeleting(false);
     }
   };
 
-  const columns = useMemo(() => createColumns(handleDeleteClick, t), [handleDeleteClick, t]);
+  const columns = useMemo(() => createColumns(handleDeleteClick, t, canDelete), [handleDeleteClick, t, canDelete]);
+
+  if (!canView || accessDenied) {
+    return (
+      <div className={styles.container}>
+        <h1>{t('km.title')}</h1>
+        <p role="alert">{t('km.viewDenied')}</p>
+      </div>
+    );
+  }
 
   return (
     <div className={`${styles.container} ${currentView === 'detail' ? styles.detailMode : ''}`}>
@@ -147,7 +177,7 @@ const KM: React.FC = () => {
                 data={filteredData}
                 columns={columns}
                 actions={
-                  <button className={styles.addButton} onClick={handleAddNew}>
+                  canCreate && <button className={styles.addButton} onClick={handleAddNew}>
                     + {t('km.addNew') || 'Add Article'}
                   </button>
                 }
@@ -161,6 +191,7 @@ const KM: React.FC = () => {
         selectedArticle && (
           <KMDetail
             article={selectedArticle}
+            canEdit={canUpdate}
             onClose={() => {
               setCurrentView('list');
               setSelectedArticleId(null);
@@ -171,7 +202,7 @@ const KM: React.FC = () => {
         )
       )}
 
-      {isModalOpen && (
+      {isModalOpen && (selectedArticleId ? canUpdate : canCreate) && (
         <KMModal
           id={selectedArticleId}
           existingData={selectedArticle || undefined}
@@ -183,6 +214,7 @@ const KM: React.FC = () => {
 
       <ConfirmModal
         isOpen={deleteModal.isOpen}
+        pending={deleting}
         title={t('common.confirmDeleteTitle') || 'Confirm Delete'}
         message={t('common.confirmDelete') || 'Are you sure you want to delete this article?'}
         onConfirm={handleDeleteConfirm}

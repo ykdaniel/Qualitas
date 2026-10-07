@@ -93,6 +93,19 @@
 .badgeItr { background: #10b981; }
 .badgeNcr { background: #ef4444; }
 
+.reinspectionTag {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #9a3412;
+    background: #fed7aa;
+    flex-shrink: 0;
+}
+
 .body {
     display: flex;
     flex-direction: column;
@@ -107,7 +120,9 @@
     font-size: 0.85rem;
     font-weight: 600;
     color: #1e293b;
-    white-space: nowrap;
+    flex-wrap: wrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
     overflow: hidden;
     text-overflow: ellipsis;
 }
@@ -154,4 +169,16 @@
 
 .errorMsg {
     color: #b91c1c;
+}
+
+@media (max-width: 640px) {
+    .item {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .meta {
+        grid-column: 2;
+        flex-wrap: wrap;
+        white-space: normal;
+    }
 }

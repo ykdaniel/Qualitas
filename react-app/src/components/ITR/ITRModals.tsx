@@ -35,6 +35,7 @@ import {
     type ChecklistRecordApi,
 } from '../../services/api';
 import FileAttachment from '../Shared/FileAttachment';
+import ImagePreviewOverlay from '../Shared/ImagePreviewOverlay';
 import { CollapsibleSection } from '../Shared/CollapsibleSection';
 import RelatedDocuments from '../ui/RelatedDocuments';
 import ConfirmModal from '../Shared/ConfirmModal';
@@ -230,6 +231,17 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         return itpList.find(i => i.referenceNo === linkedNoi.itpNo) || null;
     }, [formData.noiNumber, noiList, itpList]);
     const [showPrintPreview, setShowPrintPreview] = useState(false);
+
+    // Attachment preview (BACKLOG #23, 2026-10-05): FileAttachment's thumbnail click only
+    // fires if the parent supplies onPreview — ITR's 5 FileAttachment blocks below never did,
+    // so clicking any photo silently did nothing. Same handlePreview/ImagePreviewOverlay
+    // pattern already used by OBS/NCR/OSD/NOI.
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [previewName, setPreviewName] = useState<string>('');
+    const handlePreview = (url: string, name?: string) => {
+        setPreviewUrl(url);
+        setPreviewName(name || '');
+    };
 
     const [pendingUploads, setPendingUploads] = useState<PendingUploads[]>([
         { category: 'defectPhoto', files: [] },
@@ -623,7 +635,13 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         }
     };
 
-    const handlePrint = () => {
+    const handlePrint = async () => {
+        // Re-fetch linked checklists before printing (ITR-PRINT-STALE-FIX-2026-001):
+        // `instances` is only refreshed on modal open / save / link / reopen, so a
+        // checklist edited elsewhere while this modal stayed open would print stale
+        // data even though Export Word (which always queries the DB fresh) shows the
+        // current content. Printing now matches export's always-live behavior.
+        await refreshInstances();
         setShowPrintPreview(true);
     };
 
@@ -906,7 +924,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                                                         const op = ongoingProgress(sm);
                                                                         return t(op.key, op.params);
                                                                     })()
-                                                                    : record.status}
+                                                                    : (t(`checklist.status.${record.status.toLowerCase()}`) || record.status)}
                                                             </span>
                                                         </div>
                                                         <span className="text-sm font-bold text-slate-800">{record.activity}</span>
@@ -1130,6 +1148,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                         accept="image/*"
                                         id="defectPhoto"
                                         hideTitle
+                                        onPreview={handlePreview}
                                     />
                                 </div>
                                 <div className={styles.photoSection}>
@@ -1145,6 +1164,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                         accept="image/*"
                                         id="improvementPhoto"
                                         hideTitle
+                                        onPreview={handlePreview}
                                     />
                                 </div>
                             </div>
@@ -1164,6 +1184,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                 category="drawing"
                                 id="drawing"
                                 hideTitle
+                                onPreview={handlePreview}
                             />
                         </CollapsibleSection>
 
@@ -1181,6 +1202,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                 category="certificate"
                                 id="certificate"
                                 hideTitle
+                                onPreview={handlePreview}
                             />
                         </CollapsibleSection>
 
@@ -1198,6 +1220,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                 category="attachment"
                                 id="attachment"
                                 hideTitle
+                                onPreview={handlePreview}
                             />
                         </CollapsibleSection>
                         {existingItem?.id && (
@@ -1374,6 +1397,9 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
             }}
             onCancel={() => setUnlinkConfirm({ show: false, id: null })}
         />
+        {previewUrl && (
+            <ImagePreviewOverlay key={previewUrl} url={previewUrl} name={previewName} onClose={() => setPreviewUrl(null)} />
+        )}
         </>
     );
 };

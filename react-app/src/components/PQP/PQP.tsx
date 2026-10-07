@@ -13,10 +13,10 @@ import shellStyles from '../Shared/ModuleShell.module.css';
 import { usePQPStats } from '../../hooks/usePQPStats';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
-import { PQPDetailModal } from './PQPModals';
+import { PQPDetailModal, type SaveOutcome } from './PQPModals';
 import { useDebounce } from '../../hooks/useDebounce';
 import { uploadFiles, deleteFile } from '../../services/api';
-import { getErrorMessage } from '../../utils/errorUtils';
+import { classifyDeleteResults } from '../../utils/attachmentOutcome';
 
 type StatusFilter = 'all' | 'notSubmit' | 'underReview' | 'approved' | 'reject' | 'reviseResubmit';
 
@@ -98,62 +98,93 @@ const PQP: React.FC = () => {
     setIsEditModalOpen(true);
   };
 
-  const handleSavePQPDetails = async (updates: Partial<PQPItem>, pendingFiles: File[], deletedFileIds: string[]) => {
+  const handleSavePQPDetails = async (updates: Partial<PQPItem>, pendingFiles: File[], deletedFileIds: string[], _removedAttachments?: string[], skipRecordWrite?: boolean): Promise<SaveOutcome> => {
     const existingItem = currentPqpId && currentPqpId !== 'new' ? pqpList.find(item => item.id === currentPqpId) : undefined;
     const today = new Date().toISOString().split('T')[0];
-    try {
-      let targetId = '';
-      if (existingItem) {
+
+    // Phase 1: persist the record itself. Left to throw straight through —
+    // the modal's own handleSave is the single owner of "record failed to
+    // save" (shown via its saveError state, kept open, input untouched).
+    //
+    // skipRecordWrite (set by PQPModals.tsx via isUnchangedSincePriorWrite: true when
+    // JSON.stringify(formData) is string-equal to the last successfully written attempt's — a
+    // serialized-string comparison, not semantic equality) only ever applies here — `create`
+    // (the else branch) happens at most once per record, before `existingItem` exists, so a
+    // retry is always an update. Without this, retrying after an attachment-only failure would
+    // re-send an identical PUT and create a second, real audit-log UPDATE entry every time — the
+    // same underlying pattern independently confirmed for ITP's Publish retry (audit_logs rows
+    // went 0→2 on first Publish, then 2→4 on an unedited retry, before this fix) and directly
+    // re-verified here for PQP's plain Save via the same request-log check (see the test suite).
+    let targetId = '';
+    if (existingItem) {
+      targetId = existingItem.id;
+      if (!skipRecordWrite) {
         const merged = { ...existingItem, ...updates, updatedAt: today };
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { id, pqpNo, ...payload } = merged;
         await updatePQP(existingItem.id, payload);
-        targetId = existingItem.id;
-      } else {
-        const createdPqp = await addPQP({
-          title: updates.title || '',
-          description: updates.description || '',
-          vendor: updates.vendor || '',
-          status: updates.status || 'Not Submit',
-          version: updates.version || 'Rev1.0',
-          createdAt: today,
-          updatedAt: today,
-          attachments: updates.attachments || [],
-        } as Omit<PQPItem, 'id'>);
-        targetId = createdPqp.id;
       }
+    } else {
+      const createdPqp = await addPQP({
+        title: updates.title || '',
+        description: updates.description || '',
+        vendor: updates.vendor || '',
+        status: updates.status || 'Not Submit',
+        version: updates.version || 'Rev1.0',
+        createdAt: today,
+        updatedAt: today,
+        attachments: updates.attachments || [],
+      } as Omit<PQPItem, 'id'>);
+      targetId = createdPqp.id;
+      // The record now exists — switch the modal from "new" to "editing
+      // this record" BEFORE touching attachments below, so that if the
+      // attachment phase fails and the modal stays open, a retry updates
+      // this same record instead of creating a second one.
+      setCurrentPqpId(createdPqp.id);
+    }
 
-      const fileErrors: string[] = [];
-      if (deletedFileIds.length > 0) {
-        const deleteResults = await Promise.allSettled(
-          [...new Set(deletedFileIds)].map((fileId) => deleteFile(fileId))
-        );
-        deleteResults.forEach((result) => {
-          if (result.status === 'rejected') {
-            const detail = (result.reason as any)?.response?.data?.detail || (result.reason as Error)?.message;
-            fileErrors.push(detail || 'Failed to delete one or more attachments');
-          }
-        });
+    // Phase 2: attachment housekeeping. The record is ALREADY saved by this point — Phase 2
+    // never throws, it always returns a SaveOutcome describing exactly what it confirmed, so
+    // the modal can prune its own queues per-item instead of clearing or keeping them wholesale.
+    //
+    // Deletes go through Promise.allSettled (each is independent), so one can fail while
+    // another succeeds — only the CONFIRMED-successful ids go in `deletedIds`. A 404 is NOT
+    // treated as "already gone = success": routers/file_router.py's delete endpoint returns the
+    // same 404 whether the attachment was already deleted, never existed, or fell out of scope,
+    // so silently treating it as success here would mask a real problem in some of those cases.
+    // It stays in the retry queue instead — see the outcome's `errors` for the caveat this
+    // creates (a truly-already-deleted id can never resolve itself; the user has to re-open the
+    // record instead of retrying indefinitely). A network failure with no response at all is
+    // recorded distinctly from a 404, since the two situations are not the same unknown.
+    //
+    // Upload is a single all-or-nothing backend transaction (validates every file, then writes
+    // all of them in one commit — see routers/file_router.py::upload_files), so it is a single
+    // boolean, not a per-file list; retrying it never re-uploads an already-successful file.
+    let errors: string[] = [];
+    let deletedIds: string[] = [];
+    if (deletedFileIds.length > 0) {
+      const uniqueIds = [...new Set(deletedFileIds)];
+      const results = await Promise.allSettled(uniqueIds.map((fileId) => deleteFile(fileId)));
+      const classified = classifyDeleteResults(uniqueIds, results);
+      deletedIds = classified.deletedIds;
+      errors = classified.errors;
+    }
+    let uploadedPending = false;
+    if (pendingFiles.length > 0 && targetId) {
+      try {
+        await uploadFiles('pqp', targetId, pendingFiles);
+        uploadedPending = true;
+      } catch (err: any) {
+        const detail = err?.response?.data?.detail || err?.message;
+        errors.push(`上傳附件：${detail || '上傳失敗'}`);
       }
-      if (pendingFiles.length > 0 && targetId) {
-        try {
-          await uploadFiles('pqp', targetId, pendingFiles);
-        } catch (err: any) {
-          const detail = err?.response?.data?.detail || err?.message;
-          fileErrors.push(detail || 'Failed to upload one or more attachments');
-        }
-      }
+    }
 
-      if (fileErrors.length > 0) {
-        throw new Error(fileErrors[0]);
-      }
-
+    if (errors.length === 0) {
       setIsEditModalOpen(false);
       setCurrentPqpId(null);
-    } catch (error: any) {
-      const detail = getErrorMessage(error, t('common.saveFailed'));
-      toast.error(detail);
     }
+    return { deletedIds, uploadedPending, errors };
   };
 
   const handleDelete = async () => {

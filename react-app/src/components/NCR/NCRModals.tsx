@@ -1,8 +1,11 @@
+import { useDraftGuard } from '../Shared/LeaveGuard';
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
 import React, { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { getUsers, getEntityFiles, getAuthenticatedFileUrl, formatUserLabel, exportNcrDocx, type User as ApiUser } from '../../services/api';
+import { getUsers, getEntityFiles, getAuthenticatedFileUrl, formatUserLabel, exportNcrDocx, uploadFiles, type User as ApiUser } from '../../services/api';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
@@ -19,6 +22,13 @@ import './NCR.print.css';
 import formStyles from '../Shared/FormShell.module.css';
 import { ncrFormSchema, emptyNCRForm, toFormValues, deriveNCRStatus, computeDueDate, NCR_ERROR_FALLBACKS } from './ncrFormSchema';
 import type { NCRDetailData } from './ncrFormSchema';
+import { DateIssueBanner } from '../Shared/DateIssueMark';
+import { AttachmentsBlockedNotice, SaveFollowUpBanner } from '../Shared/SaveFollowUpBanner';
+import { NCR_DATE_FIELDS, hasValueIssue, preserveHistoricalDates } from '../../utils/dateIssues';
+import { followUpOf } from '../../utils/saveFlow';
+import { lateClosureDays } from '../../utils/ncrOverdue';
+import type { FollowUp, SaveOutcome } from '../../utils/saveFlow';
+import { describeSaveError, presentOutcome } from '../../utils/saveErrors';
 
 // NCRDetailData now lives with the zod schema (single source of truth). Re-export
 // it so existing importers (NCR.tsx, NCRPrintTemplate) keep working unchanged.
@@ -32,14 +42,18 @@ export interface PendingUploads {
 export interface NCRDetailModalProps {
     ncrId: string | null;
     existingItem?: NCRItem;
-    onSave: (details: NCRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => void | Promise<void>;
+    onSave: (details: NCRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => Promise<SaveOutcome>;
+    /** Retries only the unfinished file steps of a record that is already stored (never writes the record). */
+    onRetryFiles?: (pendingUploads: PendingUploads[], deletedFileIds: string[]) => Promise<SaveOutcome>;
     onClose: () => void;
     /** Open the form locked for viewing only — every field disabled, no Save.
      *  Driven by the caller from IAM permission + record status. */
     readOnly?: boolean;
+    /** false when the account may not upload / remove attachments (no update permission): the file controls are read-only and a notice says why. */
+    attachmentsAllowed?: boolean;
 }
 
-export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, existingItem, onSave, onClose, readOnly = false }) => {
+export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, existingItem, onSave, onRetryFiles, onClose, readOnly = false, attachmentsAllowed = true }) => {
     const { t } = useLanguage();
     const { hasPermission } = useAuth();
     const { getActiveContractors } = useContractorsStore();
@@ -111,8 +125,10 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
     const [pendingAttachments, setPendingAttachments] = useState<File[]>([]);
     const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
     const [saving, setSaving] = useState(false);
-    // Status is derived from the Verification & Closure state; Void is a manual override.
     const [voided, setVoided] = useState(() => existingItem?.status === 'Void');
+    const leaveGuard = useDraftGuard({ fields: watch(), pendingDefectPhotos, pendingProgressPhotos, pendingImprovementPhotos, pendingAttachments, deletedFileIds, voided }, saving, !readOnly);
+    const requestClose = () => leaveGuard.requestClose(onClose);
+    // Status is derived from the Verification & Closure state; Void is a manual override.
 
     // The optional traceability/impact/description fields (everything except the
     // four required ones) collapse by default to declutter the form, but start
@@ -372,18 +388,90 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
     );
     const labelStyle = { display: 'inline-flex', alignItems: 'center', gap: 6 } as const;
 
-    const persist = async (values: NCRDetailData) => {
+    // Per-category counters handed to FileAttachment: bumped once that category's pending files are stored on the server.
+    const [syncTokens, setSyncTokens] = useState<Record<string, number>>({});
+    // What is still owed after a "saved, but a file step failed" outcome (see SaveFollowUpBanner).
+    const [followUp, setFollowUp] = useState<FollowUp | null>(null);
+    // "Upload photos only" (2026-09-22, BACKLOG #33.4): an existing, not-yet-Closed NCR can put its improvement photos on the server WITHOUT saving
+    // anything else — the record write is what a closing save needs the photos to already be there for (a photo can only be attached to a saved
+    // record), so a form that already has "Effectiveness Verified = Yes" can now still add its photo instead of being told to change that back first.
+    // Calls ONLY the attachment API (uploadFiles) — no NCR POST/PUT, no status/date/other-field change, no auto-close. Not offered before the NCR has
+    // an id (a brand-new, unsaved record — attaching a file needs a target that exists), and it never creates one to make itself available.
+    const [uploadingPhotosOnly, setUploadingPhotosOnly] = useState(false);
+    const canUploadPhotosOnly = !!existingItem?.id && !voided && existingItem.status !== 'Closed' && attachmentsAllowed;
+    const uploadPhotosOnly = async () => {
+        if (!existingItem?.id || pendingImprovementPhotos.length === 0 || uploadingPhotosOnly) return;
+        setUploadingPhotosOnly(true);
+        try {
+            await uploadFiles('ncr', existingItem.id, pendingImprovementPhotos, 'improvementPhoto');
+        } catch (err) {
+            // The upload itself failed: nothing is cleared — the pending files and every other field the user typed stay exactly as they were.
+            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
+            setUploadingPhotosOnly(false);
+            return;
+        }
+        // The files ARE on the server now — clear them so a later Save (or another click of this button) never sends them again, whatever
+        // happens below. FileAttachment refreshes its own list from `syncToken` alone; that refresh can fail independently of the upload that
+        // just succeeded (e.g. a network hiccup a moment later), so it must not be read as "the upload failed" or leave the file queued again.
+        setPendingImprovementPhotos([]);
+        setSyncTokens(prev => ({ ...prev, improvementPhoto: (prev.improvementPhoto ?? 0) + 1 }));
+        try {
+            await getEntityFiles('ncr', existingItem.id, 'improvementPhoto');          // confirms the refreshed list is actually reachable
+            toast.success(t('ncr.photosUploadedFormNotSaved'), { duration: 8000 });
+        } catch {
+            toast.warning(t('ncr.photosUploadedListReloadFailed'), { duration: 12000 });
+        } finally {
+            setUploadingPhotosOnly(false);
+        }
+    };
+    const uploadGroups = () => [
+        { category: 'defectPhoto', files: pendingDefectPhotos },
+        { category: 'progressPhoto', files: pendingProgressPhotos },
+        { category: 'improvementPhoto', files: pendingImprovementPhotos },
+        { category: 'attachment', files: pendingAttachments }
+    ];
+    // Shared by "Save" and "retry remaining files": trims what already went through, shows the ONE message, closes only when done.
+    const applyOutcome = (outcome: SaveOutcome, created: boolean) => {
+        if (outcome.status === 'saved-incomplete') {
+            // The record is stored. Drop what already went through so a retry only redoes the rest.
+            const done = new Set(outcome.uploadedCategories);
+            if (done.has('defectPhoto')) setPendingDefectPhotos([]);
+            if (done.has('progressPhoto')) setPendingProgressPhotos([]);
+            if (done.has('improvementPhoto')) setPendingImprovementPhotos([]);
+            if (done.has('attachment')) setPendingAttachments([]);
+            setDeletedFileIds(outcome.remainingDeletes);
+            setSyncTokens(prev => outcome.uploadedCategories.reduce((acc, c) => ({ ...acc, [c]: (acc[c] ?? 0) + 1 }), { ...prev }));
+            setFollowUp(prev => followUpOf(outcome, prev?.created ?? created));
+        } else if (outcome.status !== 'failed') {
+            setFollowUp(null);
+        }
+        const { close, notice } = presentOutcome(outcome, t);
+        if (notice) (notice.level === 'error' ? toast.error : toast.warning)(notice.text, { duration: 10000 });
+        if (close) { leaveGuard.release(); onClose(); }
+    };
+    /** Resolves to the outcome, or null when the save call itself threw. */
+    const persist = async (values: NCRDetailData): Promise<SaveOutcome | null> => {
         setSaving(true);
         try {
-            await onSave(values, [
-                { category: 'defectPhoto', files: pendingDefectPhotos },
-                { category: 'progressPhoto', files: pendingProgressPhotos },
-                { category: 'improvementPhoto', files: pendingImprovementPhotos },
-                { category: 'attachment', files: pendingAttachments }
-            ], deletedFileIds);
-            onClose();
+            // an invalid stored date must not be erased by a blank <input type="date"> (it cannot display an invalid string)
+            const outcome = await onSave(preserveHistoricalDates(values, existingItem, NCR_DATE_FIELDS), uploadGroups(), deletedFileIds);
+            applyOutcome(outcome, !existingItem);
+            return outcome;
         } catch (err) {
-            toast.error((err as Error)?.message || t('common.saveFailed'));
+            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
+            return null;
+        } finally {
+            setSaving(false);
+        }
+    };
+    // Retries only the unfinished file steps: the record itself is not written (that needs update permission the user may not have).
+    const retryFiles = async () => {
+        if (!onRetryFiles) return;
+        setSaving(true);
+        try {
+            applyOutcome(await onRetryFiles(uploadGroups(), deletedFileIds), false);
+        } catch (err) {
+            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
         } finally {
             setSaving(false);
         }
@@ -393,6 +481,23 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
     // A voided NCR is withdrawn, so it needs no response: skip both the
     // required-field validation (see handleSaveClick) and the link warning.
     const onValidSave = async (values: NCRDetailData) => {
+        // Closing needs an improvement photo the SERVER holds for this NCR (2026-09-21). Files are uploaded only AFTER the record is written, so a
+        // photo still waiting in this form can never support the closure of the very save that uploads it: stop here, before anything is written,
+        // and say what to do (save the photo first, close in a second save). Only a definite "none stored" stops the save — if the list cannot be
+        // read, or the photo is stored but unusable, the server's own check answers (with the reason).
+        if (!voided && deriveNCRStatus(values) === 'Closed' && existingItem?.status !== 'Closed') {
+            let stored: number | null = null;
+            try {
+                stored = existingItem ? (await getEntityFiles('ncr', existingItem.id, 'improvementPhoto')).filter(f => !deletedFileIds.includes(f.id)).length : 0;
+            } catch { stored = null; }
+            if (stored === 0) {
+                toast.warning(t('ncr.closeNeedsImprovementPhotos'), { duration: 12000 });
+                const tab = FIELD_TAB.improvementPhotos;
+                if (tab) goToTab(tab);
+                setTimeout(() => (document.querySelector('[data-field="improvementPhotos"]') as HTMLElement | null)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+                return;
+            }
+        }
         if (!voided && !values.itrNumber) {
             // Not every NCR originates from an ITR (e.g. raised directly from a
             // site walk or audit finding) — N/A is a normal, valid case. Just a
@@ -408,15 +513,25 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         const linkedItr = itrList.find(i => i.documentNumber === values.itrNumber);
         const noiNumber = values.itrNumber ? (linkedItr?.noiNumber || '') : (values.noiNumber || '');
         const finalStatus = voided ? 'Void' : deriveNCRStatus(values);
-        if (finalStatus === 'Closed' && noiNumber) {
-            toast.info(`NCR closed. You may now update NOI ${noiNumber} status to "Resolved".`);
-        }
+        // (the "NCR closed" hint is shown AFTER the save, and only when the server confirmed the record — see below)
         // On close, stamp the close-out date with today if the user left it blank.
         const today = new Date();
         const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
         const closeoutDate = finalStatus === 'Closed' && !values.closeoutDate ? todayStr : values.closeoutDate;
         // Due Date is auto-derived from raise date + severity (not user-editable).
-        await persist({ ...values, status: finalStatus, noiNumber, closeoutDate, dueDate: computeDueDate(values.raiseDate, values.severity) });
+        // Due Date is derived from the raise date; when the STORED raise date is invalid and unchanged there is nothing to derive from,
+        // so the stored due date is kept as it is instead of being recomputed to '' and silently erased.
+        const invalidRaiseKept = !!existingItem && hasValueIssue(existingItem, 'raiseDate') && values.raiseDate === existingItem.raiseDate;
+        // The stored due date is the deadline a closure is measured against: closing (late or not) never moves it, and neither does a save
+        // that changes neither the raise date nor the severity (an API-set due date would otherwise be overwritten by the SLA formula).
+        const inputsUnchanged = !!existingItem && values.raiseDate === existingItem.raiseDate && (values.severity || '') === (existingItem.severity || '');
+        const keepStoredDue = invalidRaiseKept || (!!existingItem?.dueDate && (finalStatus === 'Closed' || inputsUnchanged));
+        const outcome = await persist({ ...values, status: finalStatus, noiNumber, closeoutDate, dueDate: keepStoredDue ? (existingItem?.dueDate ?? '') : computeDueDate(values.raiseDate, values.severity) });
+        // Shown only once the server has the record (saved, or saved with a file step / list reload still open) and only at the moment
+        // it BECOMES closed — never before the answer, never after a refused or failed save, never again on later edits of a closed NCR.
+        if (outcome && outcome.status !== 'failed' && finalStatus === 'Closed' && existingItem?.status !== 'Closed' && noiNumber) {
+            toast.info(`NCR closed. You may now update NOI ${noiNumber} status to "Resolved".`);
+        }
     };
 
     // On a failed close, list every missing field (not just the first) and
@@ -481,6 +596,8 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
     const derivedStatus = voided ? 'Void' : deriveNCRStatus({ effectivenessVerified: watch('effectivenessVerified'), ownerApproval: watch('ownerApproval'), status: watch('status') });
     // Due Date auto-derived live from raise date + severity (Major +7 / Minor +14).
     const computedDueDate = computeDueDate(watch('raiseDate'), watch('severity'));
+    // A late closure is legal; the form just makes the fact visible (the due date stays as stored).
+    const lateDays = lateClosureDays(existingItem?.dueDate || computedDueDate, watch('closeoutDate'));
     const statusText = ({
         'Open': t('status.open'), 'In Progress': t('status.inProgress'),
         'Resolved': t('status.resolved'), 'Closed': t('status.closed'), 'Void': t('status.void'),
@@ -491,7 +608,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
             <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
                 <div className={formStyles.modalHeader}>
                     <h2>{readOnly ? t('ncr.viewTitle') : existingItem ? t('ncr.editTitle') : t('ncr.addTitle')}</h2>
-                    <button className={formStyles.closeButton} onClick={onClose} disabled={saving}>×</button>
+                    <button className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={requestClose} disabled={saving}>×</button>
                 </div>
                 <div className={formStyles.tabsContainer}>
                     {TABS.map((tab) => (
@@ -509,6 +626,9 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                     ))}
                 </div>
                 <div className={formStyles.modalBody} ref={modalBodyRef}>
+                    <DateIssueBanner item={existingItem} />
+                    {!readOnly && !attachmentsAllowed && <AttachmentsBlockedNotice creating={!existingItem} />}
+                    <SaveFollowUpBanner followUp={followUp} canEditFields={!readOnly} canRetry={attachmentsAllowed} busy={saving} onRetry={() => { void retryFiles(); }} />
                     {!readOnly && (
                     <p className={formStyles.formRequiredHint} style={labelStyle}>
                         <span>{t('form.requiredHint')}</span>
@@ -619,8 +739,11 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                         onChange={(e) => setValue('assignedTo', e.target.value ? Number(e.target.value) : null, { shouldValidate: true, shouldDirty: true })}
                                     >
                                         <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
-                                        {users.map(u => (
-                                            <option key={u.id} value={u.id}>{formatUserLabel(u)}</option>
+                                        {existingItem?.assignedTo != null && !users.some(u => u.id === existingItem?.assignedTo) && (
+                                            <option value={existingItem?.assignedTo} disabled>{`原指派 / Existing assignee #${existingItem?.assignedTo}`}</option>
+                                        )}
+                                        {users.filter(u => u.is_active || u.id === existingItem?.assignedTo).map(u => (
+                                            <option key={u.id} value={u.id} disabled={!u.is_active}>{formatUserLabel(u)}{!u.is_active ? '（已停用 / Inactive）' : ''}</option>
                                         ))}
                                     </select>
                                     {errText('assignedTo')}
@@ -1033,6 +1156,11 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 <div className={formStyles.formGroup}>
                                     <label className={formStyles.optionalLabel}>{t('obs.closeoutDate')}</label>
                                     <input type="date" lang="en" className={formStyles.formInput} {...register('closeoutDate')} />
+                                    {lateDays !== null && (
+                                        <p data-late-closure style={{ color: '#92400e', fontSize: 12, margin: '4px 0 0', lineHeight: 1.4 }}>
+                                            {t('ncr.lateClosure', { due: existingItem?.dueDate || computedDueDate, closeout: watch('closeoutDate'), days: lateDays })}
+                                        </p>
+                                    )}
                                 </div>
                                 <div className={formStyles.formGroupFull}>
                                     <div className={formStyles.labelWithButton}>
@@ -1079,6 +1207,9 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                             <FileAttachment
                                 id="ncr-defect-photos"
                                 category="defectPhoto"
+                                readOnly={!attachmentsAllowed}
+                                syncToken={syncTokens.defectPhoto}
+                                initialPendingFiles={pendingDefectPhotos}
                                 entityType={existingItem ? 'ncr' : undefined}
                                 entityId={existingItem?.id}
                                 title={t('obs.defectPhotos')}
@@ -1095,6 +1226,9 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                             <FileAttachment
                                 id="ncr-progress-photos"
                                 category="progressPhoto"
+                                readOnly={!attachmentsAllowed}
+                                syncToken={syncTokens.progressPhoto}
+                                initialPendingFiles={pendingProgressPhotos}
                                 entityType={existingItem ? 'ncr' : undefined}
                                 entityId={existingItem?.id}
                                 title={t('ncr.progressPhotos')}
@@ -1112,6 +1246,9 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                 <FileAttachment
                                     id="ncr-improvement-photos"
                                     category="improvementPhoto"
+                                    readOnly={!attachmentsAllowed}
+                                    syncToken={syncTokens.improvementPhoto}
+                                    initialPendingFiles={pendingImprovementPhotos}
                                     entityType={existingItem ? 'ncr' : undefined}
                                     entityId={existingItem?.id}
                                     title={t('obs.improvementPhotos')}
@@ -1125,11 +1262,23 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                                     onPreview={handlePreview}
                                     accept="image/*"
                                 />
+                                {canUploadPhotosOnly && pendingImprovementPhotos.length > 0 && (
+                                    <button className={actionStyles.secondary}
+                                        type="button"
+                                        disabled={uploadingPhotosOnly || saving}
+                                        onClick={() => { void uploadPhotosOnly(); }}
+                                    >
+                                        {uploadingPhotosOnly ? (t('common.uploading') || 'Uploading...') : t('ncr.uploadPhotosOnly')}
+                                    </button>
+                                )}
                                 {errText('improvementPhotos')}
                             </div>
                             <FileAttachment
                                 id="ncr-attachments"
                                 category="attachment"
+                                readOnly={!attachmentsAllowed}
+                                syncToken={syncTokens.attachment}
+                                initialPendingFiles={pendingAttachments}
                                 entityType={existingItem ? 'ncr' : undefined}
                                 entityId={existingItem?.id}
                                 title={t('obs.attachments')}
@@ -1149,25 +1298,32 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                     </div>
                     )}
                     </fieldset>
-                    <div className={formStyles.modalActions}>
-                        {!readOnly && (
-                            <button className={formStyles.saveButton} onClick={handleSaveClick} disabled={saving}>
-                                {saving ? t('obs.saving') : t('common.save')}
-                            </button>
-                        )}
-                        <button className={formStyles.printButton} onClick={handlePrintClick} style={{ marginLeft: '12px' }} disabled={saving} title={t('common.print') || 'Print'}>
+
+                </div >
+                <FormActions
+                    tools={<>
+                        <button className={actionStyles.secondary} onClick={handlePrintClick} disabled={saving} title={t('common.print') || 'Print'}>
                             {t('common.print') || 'Print'}
                         </button>
                         {existingItem?.id && (
-                            <button className={formStyles.printButton} onClick={handleExportDocxClick} style={{ marginLeft: '12px' }} disabled={saving || exportingDocx} title={t('common.exportWord') || 'Export Word'}>
+                            <button className={actionStyles.secondary} onClick={handleExportDocxClick} disabled={saving || exportingDocx} title={t('common.exportWord') || 'Export Word'}>
                                 {exportingDocx ? (t('common.saving') || '...') : (t('common.exportWord') || 'Export Word')}
                             </button>
                         )}
-                        <button className={formStyles.cancelButton} onClick={onClose} disabled={saving}>
+                    </>}
+                    cancel={<>
+                        <button className={actionStyles.secondary} onClick={requestClose} disabled={saving}>
                             {t('common.cancel')}
                         </button>
-                    </div>
-                </div >
+                    </>}
+                    primary={<>
+                        {!readOnly && (
+                            <button className={actionStyles.primary} onClick={handleSaveClick} disabled={saving}>
+                                {saving ? t('common.saving') : t('common.save')}
+                            </button>
+                        )}
+                    </>}
+                />
             </div >
             {isPrinting && printData && ReactDOM.createPortal(
                 <NCRPrintTemplate

@@ -138,9 +138,9 @@ export const ncrFormSchema = z
         // drawingNo / specNo / qtyAffected / extent / improvementPhotos).
         req('productDisposition', 'ncr.closeNeedsDisposition');
         req('reInspectionNumber', 'ncr.closeNeedsReinspection');
-        if (!v.improvementPhotos || v.improvementPhotos.length === 0) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['improvementPhotos'], message: 'ncr.closeNeedsImprovementPhotos' });
-        }
+        // The improvement PHOTO is not judged here (2026-09-21): this schema only sees the form's own `improvementPhotos` list, while uploaded
+        // photos are attachment rows that never enter it — and the server accepts only stored, verified attachments of this NCR. NCRModals
+        // checks the stored improvement-photo files (onValidSave) before anything is written.
         // Traceability/impact must be complete before closing (item 1)
         req('drawingNo', 'ncr.fieldRequired');
         req('specNo', 'ncr.fieldRequired');
@@ -321,7 +321,7 @@ export function deriveNCRStatus(v: Pick<NCRDetailData, 'effectivenessVerified' |
 export const NCR_ERROR_FALLBACKS: Record<string, string> = {
     'ncr.closeNeedsDisposition': 'Cannot close NCR without Product Disposition.',
     'ncr.closeNeedsReinspection': 'Cannot close NCR without Re-Inspection / Verification Reference (Strict QC Process).',
-    'ncr.closeNeedsImprovementPhotos': 'Cannot close NCR without at least one Improvement Photo as evidence of the fix.',
+    'ncr.closeNeedsImprovementPhotos': 'Cannot close yet: this NCR has no saved improvement photo. Save the NCR with the photo uploaded first (leave Effectiveness Verified off "Yes" for that save), then set it to Yes and save again to close. Nothing was saved this time.',
     'ncr.closeNeedsEffectiveness': "Cannot close NCR until corrective-action effectiveness is verified (set Effectiveness Verified = 'Yes').",
     'ncr.fieldRequired': 'This field is required.',
     'ncr.repairNeedsMethod': 'Disposition is "Repair" — a Repair Method Statement is required.',

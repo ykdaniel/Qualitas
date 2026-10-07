@@ -28,6 +28,7 @@
 }
 
 .modalContent {
+  min-width: 0;
   background: #ffffff;
   border-radius: 12px;
   width: 95%;
@@ -40,6 +41,7 @@
 }
 
 .modalHeader {
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -58,6 +60,7 @@
 }
 
 .closeButton {
+  flex-shrink: 0;
   background: none;
   border: none;
   font-size: 28px;
@@ -79,6 +82,9 @@
 }
 
 .modalBody {
+  min-height: 0;
+  min-width: 0;
+  overscroll-behavior: contain;
   padding: 24px 28px;
   overflow-y: auto;
   flex: 1;
@@ -88,6 +94,13 @@
 
 .formRequiredHint {
   margin: 0 0 16px 0;
+  font-size: 12px;
+  color: #8b8275;
+}
+
+.fieldHint {
+  display: block;
+  margin-top: 4px;
   font-size: 12px;
   color: #8b8275;
 }
@@ -136,22 +149,24 @@
 
 .formGrid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
 }
 
 @media (max-width: 1024px) {
   .formGrid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 .formGroup {
+  min-width: 0;
   display: flex;
   flex-direction: column;
 }
 
 .formGroupFull {
+  min-width: 0;
   grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
@@ -199,27 +214,7 @@
   align-items: center;
 }
 
-.tbcButton,
-.naButton {
-  padding: 4px 10px;
-  background: rgba(184, 148, 90, 0.08);
-  color: #4a4238;
-  border: 1px solid rgba(184, 148, 90, 0.28);
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.tbcButton:hover,
-.naButton:hover {
-  background: rgba(184, 148, 90, 0.18);
-  border-color: #b8945a;
-  color: #2d2a24;
-}
+.tbcButton, .naButton { composes: compact from './FormActions.module.css'; }
 
 .statusBadge {
   padding: 2px 8px;
@@ -329,70 +324,14 @@
   border-radius: 0 0 12px 12px;
 }
 
-.saveButton {
-  padding: 10px 24px;
-  background: linear-gradient(135deg, #b8945a 0%, #8a6a3a 100%);
-  color: #faf7f1;
-  border: none;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-  box-shadow: 0 2px 8px rgba(138, 106, 58, 0.22);
-  letter-spacing: 0.01em;
-}
-
-.saveButton:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(138, 106, 58, 0.32);
-}
-
-.saveButton:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-
-.cancelButton {
-  padding: 10px 22px;
-  background: #ffffff;
-  color: #4a4238;
-  border: 1px solid rgba(184, 148, 90, 0.4);
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s;
-}
-
-.cancelButton:hover {
-  background: rgba(184, 148, 90, 0.08);
-  border-color: #b8945a;
-  color: #2d2a24;
-}
-
-.printButton {
-  padding: 10px 22px;
-  background: #4a4238;
-  color: #faf7f1;
-  border: none;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.15s, transform 0.15s;
-}
-
-.printButton:hover {
-  background: #2d2a24;
-  transform: translateY(-1px);
-}
+.saveButton { composes: primary from './FormActions.module.css'; }
+.cancelButton, .printButton { composes: secondary from './FormActions.module.css'; }
 
 /* ─── Tabs (used by some modals) ─────────────────────────────── */
 
 .tabsContainer {
+  overflow-x: auto;
+  flex-shrink: 0;
   display: flex;
   border-bottom: 1px solid rgba(184, 148, 90, 0.22);
   margin-bottom: 20px;
@@ -401,6 +340,8 @@
 }
 
 .tabButton {
+  flex-shrink: 0;
+  white-space: nowrap;
   padding: 10px 18px;
   background: none;
   border: none;
@@ -421,4 +362,29 @@
 .activeTab {
   color: #2d2a24;
   border-bottom-color: #b8945a;
+}
+
+.closeButton:focus-visible,
+.tabButton:focus-visible {
+  outline: 3px solid #b8945a;
+  outline-offset: -3px;
+}
+
+/* Small screens keep fields readable instead of squeezing two desktop columns.
+   Only the field body scrolls; header and action bar retain their own space. */
+@media screen and (max-width: 640px) {
+  .modalOverlay { padding: 8px; }
+  .modalContent {
+    width: 100%;
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+  .modalHeader { padding: 12px 16px; gap: 12px; }
+  .modalHeader h2 { font-size: 18px; overflow-wrap: anywhere; }
+  .modalBody { padding: 16px; }
+  .formSection { padding: 16px; }
+  .formGrid { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .formInput, .formSelect, .formTextarea { font-size: 16px; }
+  .labelWithButton { flex-wrap: wrap; gap: 8px; }
+  .sectionTitle { overflow-wrap: anywhere; }
 }

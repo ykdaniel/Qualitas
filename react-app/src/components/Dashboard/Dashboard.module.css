@@ -4,6 +4,197 @@
   margin: 0;
 }
 
+/* Scope bar — current project + contractor, shown at the very top (2026-09-29).
+   Read-only project chip: the actual project SELECTOR already lives in the app
+   header (Shared/ProjectSelector.tsx); this only surfaces its current value so
+   the page states its own scope without a second scope-selection mechanism. */
+.scopeBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0 20px;
+  padding: 12px 16px;
+  background: rgba(184, 148, 90, 0.07);
+  border: 1px solid rgba(184, 148, 90, 0.18);
+  border-radius: 10px;
+}
+
+.scopeBarLabel {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8b8275;
+  margin-right: 4px;
+}
+
+.scopeChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: #ffffff;
+  border: 1px solid rgba(184, 148, 90, 0.28);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4a4238;
+}
+
+.scopeChipCode {
+  font-size: 11px;
+  font-weight: 700;
+  color: #b8945a;
+  letter-spacing: 0.03em;
+}
+
+/* Key statistics summary — current totals (not the 6-month trend below), for a
+   quick "where do things stand right now" read at the top of the page. */
+.keyStatsSection {
+  margin-bottom: 28px;
+}
+
+.keyStatsHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.keyStatsNote {
+  font-size: 12px;
+  color: #8b8275;
+}
+
+.keyStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.keyStatsTile {
+  background: #ffffff;
+  border: 1px solid rgba(184, 148, 90, 0.22);
+  border-radius: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+  min-width: 0;
+}
+
+.keyStatsTile:hover {
+  border-color: #b8945a;
+  transform: translateY(-1px);
+}
+
+.keyStatsTileLabel {
+  font-size: 12px;
+  font-weight: 700;
+  color: #8b8275;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.keyStatsTileValue {
+  font-size: 26px;
+  font-weight: 700;
+  color: #2d2a24;
+  line-height: 1.1;
+}
+
+.keyStatsTileSub {
+  font-size: 12px;
+  color: #6b6355;
+  margin-top: 4px;
+  overflow-wrap: break-word;
+}
+
+/* Module load status (2026-09-29, BACKLOG #37) — shared across the key-stats tiles, the
+   PQP/ITP/OBS/NCR detail sections and the trend mini-cards, so "loading" / "failed, nothing to
+   show" / "failed, showing stale data" look the same everywhere instead of each surface inventing
+   its own presentation. */
+.keyStatsTileSkeleton {
+  height: 26px;
+  width: 48px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(184, 148, 90, 0.12) 25%, rgba(184, 148, 90, 0.22) 37%, rgba(184, 148, 90, 0.12) 63%);
+  background-size: 400% 100%;
+  animation: qtsSkeletonPulse 1.4s ease infinite;
+}
+
+@keyframes qtsSkeletonPulse {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+.moduleStatusBox {
+  background: #ffffff;
+  border: 1px solid rgba(184, 148, 90, 0.22);
+  border-radius: 12px;
+  padding: 28px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 160px;
+  width: 100%;
+  text-align: center;
+}
+
+.moduleStatusText {
+  font-size: 13px;
+  color: #6b6355;
+}
+
+.moduleStatusErrorText {
+  font-size: 13px;
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.moduleStatusRetryButton {
+  padding: 7px 18px;
+  background: #4a4238;
+  color: #faf7f1;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.moduleStatusRetryButton:hover {
+  background: #2d2a24;
+}
+
+.moduleStaleFlag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 4px 10px;
+  background: #fffbeb;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #92400e;
+  font-weight: 600;
+}
+
+.moduleStaleFlagRetry {
+  background: none;
+  border: none;
+  color: #92400e;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 0;
+}
+
 .vendorLabel {
   display: inline-flex;
   align-items: center;
@@ -105,7 +296,8 @@
 .trendCardHeader {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 8px;
   margin-bottom: 10px;
 }
 
@@ -115,12 +307,16 @@
   color: #8b8275;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  min-width: 0;
+  overflow-wrap: break-word;
+  line-height: 1.3;
 }
 
 .trendCardTotal {
   font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.4px;
+  flex-shrink: 0;
 }
 
 .trendCardChart {
@@ -236,20 +432,29 @@
   padding: 20px;
 }
 
+/* flex-wrap (2026-09-29): the stats card (min-width 280px) plus the gauge/pareto
+   column no longer force a fixed-minimum row width. Between the 1024px
+   stacking breakpoint and roughly 1300px, the two side-by-side PQP/ITP columns
+   used to not have room for their own stats-card + chart pair and got visibly
+   squeezed; wrapping lets each pair drop to two rows on its own instead of
+   compressing both children. */
 .obsChartWrapper {
   display: flex;
+  flex-wrap: wrap;
   gap: 24px;
   align-items: stretch;
 }
 
 .ncrChartWrapper {
   display: flex;
+  flex-wrap: wrap;
   gap: 24px;
   align-items: stretch;
 }
 
 .itpChartWrapper {
   display: flex;
+  flex-wrap: wrap;
   gap: 24px;
   align-items: stretch;
   justify-content: center;
@@ -257,6 +462,7 @@
 
 .pqpChartWrapper {
   display: flex;
+  flex-wrap: wrap;
   gap: 24px;
   align-items: stretch;
   justify-content: center;
@@ -539,6 +745,101 @@
   margin: 0 auto;
   border-radius: 12px;
   padding: 0 32px 32px 32px;
+}
+
+/* Approval summary card (2026-09-29) — replaces the PQP/ITP stats-card + gauge pair with one
+   card: a number, a plain ratio bar, a couple of other-status counts, one "view details" link. */
+.approvalSummaryCard {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.03);
+  max-width: 420px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.approvalSummaryHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.approvalSummaryTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.approvalSummaryTotal {
+  font-size: 28px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.4px;
+}
+
+.approvalSummaryEmpty {
+  font-size: 14px;
+  color: #8b8275;
+  padding: 8px 0;
+}
+
+.approvalSummaryRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.approvalSummaryRowLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.approvalSummaryRowValue {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.approvalSummaryBarTrack {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(184, 148, 90, 0.15);
+  overflow: hidden;
+}
+
+.approvalSummaryBarFill {
+  height: 100%;
+  border-radius: 999px;
+  background: #b8945a;
+  transition: width 0.3s ease;
+}
+
+.approvalSummaryButton {
+  width: 100%;
+  padding: 12px 24px;
+  background: #4a4238;
+  color: #faf7f1;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.2s;
+  margin-top: 4px;
+  letter-spacing: 0.01em;
+}
+
+.approvalSummaryButton:hover {
+  background: #2d2a24;
+  transform: translateY(-1px);
 }
 
 .gaugeTitle {

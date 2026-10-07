@@ -1,9 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import { useLeaveGuard } from '../Shared/LeaveGuard';
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
+import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
 import { KMArticleCreate, KMArticleUpdate, KMArticle } from '../../types/km';
 import { useKMStore } from '../../store/kmStore';
 import { kmService } from '../../services/kmService';
+import { kmDraftKey } from '../../utils/kmDraftKey';
+import { loadKMEditorSnapshot } from '../../utils/kmEditorSnapshot';
+import { writeKMMain, KMMainWriteState } from '../../utils/kmMainWrite';
 import { stripDecorativeZeros, compareChapterNo } from '../../utils/extractSectionToc';
 import { injectAuthTokenIntoHtml, stripAuthTokenFromHtml } from '../../utils/authUrl';
 import { RichTextEditor } from '../ui/RichTextEditor';
@@ -23,7 +29,16 @@ interface KMModalProps {
 export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapterId, onSaveSuccess, onClose }) => {
     const { t } = useLanguage();
     const { kmList } = useKMStore();
-    const [loading, setLoading] = useState(false);
+    const [importLoading, setLoading] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [baseline, setBaseline] = useState<string | null>(null);
+    const saveInFlight = useRef(false);
+    const loading = importLoading || saving;
+    const [loadedId, setLoadedId] = useState<string | null>(null);
+    const [loadError, setLoadError] = useState(false);
+    const [loadAttempt, setLoadAttempt] = useState(0);
+    const editorReady = !id || loadedId === id;
+    const mainWrite = useRef<KMMainWriteState>({ id, versionNo: existingData?.version_no });
     // Collapse the "basic info" panel by default when editing an existing
     // article — that's the mode where the user almost always just wants to
     // touch the chapter content, not the title/category/tags. Keep it
@@ -49,77 +64,45 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
     ]);
 
     useEffect(() => {
-        if (existingData) {
-            setFormData(existingData);
-            // Force-refresh the kmList from the server, then load children.
-            // The store can be stale if the modal is opened right after a
-            // save in another component, or after direct DB edits.
-            //
-            // CRITICAL: this effect's dependency is `existingData?.id`, NOT
-            // the whole `existingData` object. Without that, awaiting
-            // fetchKMs causes an infinite loop:
-            //   fetchKMs → kmList replaced → KM.tsx's selectedArticle
-            //   useMemo returns a new ref → existingData prop ref
-            //   changes → useEffect re-fires → fetchKMs again → ...
-            // Keying on the id keeps the effect stable across kmList
-            // re-fetches as long as the user is editing the same article.
-            const fetchChildren = async () => {
-                if (existingData.id) {
-                    try {
-                        await useKMStore.getState().fetchKMs();
-                        // Re-sync formData from the store snapshot we
-                        // just fetched. Without this, any update the
-                        // store pulled in (a newer title, newer
-                        // content, status bump, etc.) is invisible to
-                        // the form — the initial setFormData above
-                        // captured the stale snapshot, and because the
-                        // outer effect only re-runs on id change we
-                        // never re-read existingData even after its
-                        // ref updates. Look the row up by id rather
-                        // than trusting existingData's identity so we
-                        // always render the freshest copy.
-                        const fresh = useKMStore
-                            .getState()
-                            .kmList.find(k => k.id === existingData.id);
-                        if (fresh) {
-                            setFormData(fresh);
-                        }
-                        const children = useKMStore.getState().kmList.filter(k => k.parent_id === existingData.id);
-                        if (children.length > 0) {
-                            const sortedChildren = [...children].sort((a, b) => compareChapterNo(a.chapter_no, b.chapter_no));
-                            setChapters(sortedChildren.map(c => ({
-                                id: c.id,
-                                title: c.title,
-                                content: injectAuthTokenIntoHtml(c.content),
-                                chapter_no: c.chapter_no || '',
-                                version_no: c.version_no
-                            })));
-                        } else {
-                            // If it has content itself, convert to first chapter
-                            const base = fresh || existingData;
-                            setChapters([{ title: base.title, content: injectAuthTokenIntoHtml(base.content), chapter_no: base.chapter_no || '1.0' }]);
-                        }
-                    } catch {
-                        setChapters([{ title: existingData.title, content: injectAuthTokenIntoHtml(existingData.content), chapter_no: existingData.chapter_no || '1.0' }]);
-                    }
-                }
-            };
-            fetchChildren();
-        } else {
-            setFormData({
-                title: '',
-                content: '',
-                category: 'General',
-                tags: '',
-                status: 'Published',
-                attachments: [],
-                parent_id: '',
-                chapter_no: '' // Main doc typically doesn't need chapter no if it acts as a book cover
+        let cancelled = false;
+        mainWrite.current = { id, versionNo: existingData?.version_no };
+        setLoadedId(null);
+        setLoadError(false);
+        setBaseline(null);
+        if (id) {
+            // Do not refresh the shared store here: its failure can remove the
+            // parent's selected article and turn this editor into a new form.
+            loadKMEditorSnapshot(id).then(({ article, children }) => {
+                if (cancelled) return;
+                setFormData(article);
+                mainWrite.current.versionNo = article.version_no;
+                const loadedChapters = children.length > 0
+                    ? [...children].sort((a, b) => compareChapterNo(a.chapter_no, b.chapter_no)).map(c => ({
+                        id: c.id, title: c.title, content: injectAuthTokenIntoHtml(c.content),
+                        chapter_no: c.chapter_no || '', version_no: c.version_no,
+                    }))
+                    : [{ title: article.title, content: injectAuthTokenIntoHtml(article.content), chapter_no: article.chapter_no || '1.0' }];
+                setChapters(loadedChapters);
+                setBaseline(kmDraftKey(article, loadedChapters));
+                setLoadedId(id);
+            }).catch(() => {
+                if (!cancelled) setLoadError(true);
             });
-            setChapters([{ title: 'Chapter 1', content: '', chapter_no: '1.0' }]);
+        } else {
+            const initialForm = { title: '', content: '', category: 'General', tags: '', status: 'Published', attachments: [], parent_id: '', chapter_no: '' };
+            const initialChapters = [{ title: 'Chapter 1', content: '', chapter_no: '1.0' }];
+            setFormData(initialForm);
+            setChapters(initialChapters);
+            setBaseline(kmDraftKey(initialForm, initialChapters));
         }
+        return () => { cancelled = true; };
+        // Snapshot only on article switch or explicit retry, never on a store refresh.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [existingData?.id]);
+    }, [id, loadAttempt]);
+
+    const isDirty = baseline !== null && baseline !== kmDraftKey(formData, chapters);
+    const leaveGuard = useLeaveGuard(isDirty, loading);
+    const requestClose = () => leaveGuard.requestClose(onClose);
 
     // Auto-scroll to a specific chapter when the modal opens from a
     // per-chapter edit button in the detail view.
@@ -704,7 +687,10 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setLoading(true);
+        if (!editorReady || loading || saveInFlight.current) return;
+        saveInFlight.current = true;
+        setSaving(true);
+        let mainSaved = false;
         try {
             // Determine active chapters and use first chapter's content as main fallback
             // if single chapter mode is effectively used.
@@ -724,15 +710,10 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
             };
 
             // Save main document first
-            let savedMainDoc: any;
             const payload = { ...mainDocData, change_summary: (formData as any).change_summary };
-            if (id) {
-                savedMainDoc = await kmService.update(id, payload as KMArticleUpdate);
-            } else {
-                savedMainDoc = await kmService.create(payload as KMArticleCreate);
-            }
-
-            const mainId = savedMainDoc?.id || id;
+            const savedMainDoc = await writeKMMain(mainWrite.current, payload);
+            const mainId = savedMainDoc.id;
+            mainSaved = true;
 
             // Build the next chapters state as we process each save so that
             // multiple saves within the same modal session don't re-POST the
@@ -817,27 +798,33 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
 
             // Refresh data via store
             await useKMStore.getState().fetchKMs();
+            leaveGuard.release();
             onSaveSuccess();
             onClose();
 
         } catch (err: any) {
-            // err.message alone is just axios's generic "Request failed
-            // with status code 409" — the useful text (e.g. the version
-            // conflict message) is in the backend's response body.
-            toast.error(err?.response?.data?.detail || err.message || 'Error saving KM article and chapters');
+            toast.error(t(mainSaved ? 'km.chaptersSaveUnconfirmed' : 'common.saveFailed'));
         } finally {
-            setLoading(false);
+            saveInFlight.current = false;
+            setSaving(false);
         }
     };
 
     return (
+        <>
         <div className={formStyles.modalOverlay}>
             <div className={`${formStyles.modalContent} ${styles.kmModalContent}`}>
                 <div className={formStyles.modalHeader}>
                     <h2>{id ? (t('km.edit') || 'Edit Article') : (t('km.create') || 'Create Article')}</h2>
-                    <button type="button" className={formStyles.closeButton} onClick={onClose}>&times;</button>
+                    <button type="button" className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} disabled={loading} onClick={requestClose}>&times;</button>
                 </div>
-                <form id="km-edit-form" onSubmit={handleSubmit} className={styles.formBody}>
+                {!editorReady && (
+                    <div role={loadError ? "alert" : "status"} className={styles.formBody}>
+                        <p>{t(loadError ? 'km.editorLoadFailed' : 'common.loading')}</p>
+                        {loadError && <button type="button" className={actionStyles.secondary} onClick={() => setLoadAttempt(n => n + 1)}>{t('common.retry')}</button>}
+                    </div>
+                )}
+                {editorReady && <form id="km-edit-form" aria-busy={loading} ref={element => { if (element) element.inert = loading; }} onSubmit={handleSubmit} className={styles.formBody}>
                     {/* Collapsible "Basic Info" section.
                         Click the header bar to toggle. Defaults to collapsed
                         on edit, expanded on create (see metaCollapsed init). */}
@@ -1078,32 +1065,18 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                                                 從 Word 匯入
                                             </label>
-                                            <button
+                                            <button className={actionStyles.secondary}
                                                 type="button"
                                                 onClick={() => splitChapterAtCursor(index)}
                                                 disabled={loading}
                                                 title="把游標停在想分章節的段落開頭，再按這顆。可以把一個章節拆成兩個。"
-                                                style={{
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    padding: '6px 10px',
-                                                    background: '#ecfdf5',
-                                                    color: '#047857',
-                                                    border: '1px solid #a7f3d0',
-                                                    borderRadius: 5,
-                                                    fontSize: '0.8rem',
-                                                    fontWeight: 600,
-                                                    cursor: loading ? 'not-allowed' : 'pointer',
-                                                    opacity: loading ? 0.5 : 1,
-                                                }}
                                             >
                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
                                                 在此分章節
                                             </button>
-                                            <button
+                                            <button className={actionStyles.iconDanger}
                                                 type="button"
                                                 onClick={() => removeChapter(index)}
-                                                className={styles.removeChapterBtn}
                                                 title="Remove Chapter"
                                                 disabled={chapters.filter(c => !c.deleted).length === 1}
                                             >&times;</button>
@@ -1126,10 +1099,9 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
                                     </div>
                                     {/* Insert sub-chapter button between chapters */}
                                     <div className={styles.insertChapterRow}>
-                                        <button
+                                        <button className={actionStyles.secondary}
                                             type="button"
                                             onClick={() => insertChapterAfter(index)}
-                                            className={styles.insertChapterBtn}
                                             title={`在 ${ch.chapter_no || 'this chapter'} 後面插入子章節`}
                                         >
                                             + 插入章節
@@ -1139,7 +1111,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
                             );
                         })}
 
-                        <button type="button" onClick={addChapter} className={styles.addChapterBtnBottom}>
+                        <button className={actionStyles.secondary} type="button" onClick={addChapter}>
                             + Add Chapter
                         </button>
                     </div>
@@ -1175,7 +1147,7 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
                                         {attList.map((att, idx) => (
                                             <div key={idx} className={styles.attachmentBadge}>
                                                 <span className={styles.attachmentBadgeName}>{att.name || att.filename} ({att.size})</span>
-                                                <button type="button" onClick={() => removeAttachment(idx, att.name || att.filename || `File_${idx + 1}`)} className={styles.attachmentRemoveBtn}>&times;</button>
+                                                <button className={actionStyles.iconDanger} type="button" onClick={() => removeAttachment(idx, att.name || att.filename || `File_${idx + 1}`)}>&times;</button>
                                             </div>
                                         ))}
                                     </div>
@@ -1185,16 +1157,21 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
                         })()}
                     </div>
 
-                </form>
-                <div className={styles.modalFooter}>
-                    <button type="button" className={styles.cancelBtn} onClick={onClose} disabled={loading}>
-                        {t('common.cancel') || 'Cancel'}
-                    </button>
-                    <button type="submit" form="km-edit-form" className={styles.saveBtn} disabled={loading}>
-                        {loading ? (t('common.saving') || 'Saving...') : (t('common.save') || 'Save')}
-                    </button>
-                </div>
+                </form>}
+                <FormActions
+                    cancel={<>
+                        <button className={actionStyles.secondary} type="button" onClick={requestClose} disabled={loading}>
+                            {t('common.cancel') || 'Cancel'}
+                        </button>
+                    </>}
+                    primary={<>
+                        <button className={actionStyles.primary} type="submit" form="km-edit-form" disabled={loading || !editorReady}>
+                            {loading ? (t('common.saving') || 'Saving...') : (t('common.save') || 'Save')}
+                        </button>
+                    </>}
+                />
             </div>
         </div>
+        </>
     );
 };

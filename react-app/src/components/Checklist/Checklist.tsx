@@ -1,25 +1,27 @@
+import { useDraftGuard } from '../Shared/LeaveGuard';
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { toast } from 'sonner';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
-import { Plus, Printer, Info, MapPin, CheckCircle, AlertCircle, Trash2, XCircle, HelpCircle, User, Signature, Activity, BarChart3, TrendingUp, Search } from 'lucide-react';
-import { useChecklistStore, ChecklistRecord } from '../../store/checklistStore';
+import { Plus, Printer, Info, MapPin, CheckCircle, AlertCircle, Trash2, User, Signature, History, Search } from 'lucide-react';
+import { useChecklistStore, ChecklistRecord, isTemplateHistoricallyProtected } from '../../store/checklistStore';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import ChecklistPrintTemplate from './ChecklistPrintTemplate';
+import { ResultSelect } from './ChecklistResultControls';
+import { withResult, deriveChecklistStatus, itemCounts } from '../../utils/checklistResult';
 import styles from './Checklist.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import { useDebounce } from '../../hooks/useDebounce';
 import { useNOIStore } from '../../store/noiStore';
 import { useITPStore } from '../../store/itpStore';
 import { useITRStore } from '../../store/itrStore';
-import { useChecklistStats } from '../../hooks/useChecklistStats';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { getErrorMessage } from '../../utils/errorUtils';
-
-type ChecklistStatusFilter = 'all' | 'pass' | 'fail' | 'ongoing';
 
 // --- ITP 資料庫定義 ---
 interface ItpItemDefinition {
@@ -60,7 +62,6 @@ const Checklist: React.FC = () => {
     const [editingRecord, setEditingRecord] = useState<ChecklistRecord | null>(null);
     const [saving, setSaving] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [statusFilter, setStatusFilter] = useState<ChecklistStatusFilter>('all');
     const debouncedSearch = useDebounce(searchQuery, 500);
 
     const { fetchNOIs } = useNOIStore();
@@ -75,16 +76,6 @@ const Checklist: React.FC = () => {
     React.useEffect(() => {
         refreshRecords({ search: debouncedSearch });
     }, [debouncedSearch, refreshRecords]);
-
-    const filteredList = useMemo(() => {
-        if (statusFilter === 'all') return records;
-        const target = ({
-            pass: 'Pass',
-            fail: 'Fail',
-            ongoing: 'Ongoing',
-        } as const)[statusFilter];
-        return records.filter(r => r.status === target);
-    }, [records, statusFilter]);
 
     // Deep-link: open a specific record via ?openId=<id-or-recordsNo>&from=<source>
     const [searchParams, setSearchParams] = useSearchParams();
@@ -116,9 +107,6 @@ const Checklist: React.FC = () => {
             navigate(-1); // Navigate back if in list view and not from specific source
         }
     };
-
-    // --- 統計數據 ---
-    const stats = useChecklistStats(records);
 
     // Removed Modal State
     const [selectedItpIndex, setSelectedItpIndex] = useState(0);
@@ -182,84 +170,23 @@ const Checklist: React.FC = () => {
 
     const checklistColumns = useMemo(() => createColumns(handleDelete, t), [handleDelete, t]);
 
-    const chips: { id: ChecklistStatusFilter; label: string; count: number }[] = [
-        { id: 'all', label: t('common.all') || 'All', count: stats.total },
-        { id: 'ongoing', label: t('checklist.status.ongoing') || 'Ongoing', count: stats.ongoing },
-        { id: 'pass', label: t('checklist.status.pass') || 'Pass', count: stats.passed },
-        { id: 'fail', label: t('checklist.status.fail') || 'Fail', count: stats.failed },
-    ];
-
-    const summary = [
-        {
-            key: 'ongoing',
-            label: t('checklist.status.ongoing') || 'Ongoing',
-            value: stats.ongoing,
-            icon: <Activity size={18} strokeWidth={1.8} />,
-            accent: '#c8753f',
-        },
-        {
-            key: 'pass',
-            label: t('checklist.status.pass') || 'Pass',
-            value: stats.passed,
-            icon: <CheckCircle size={18} strokeWidth={1.8} />,
-            accent: '#7a8f5a',
-        },
-        {
-            key: 'fail',
-            label: t('checklist.status.fail') || 'Fail',
-            value: stats.failed,
-            icon: <XCircle size={18} strokeWidth={1.8} />,
-            accent: '#b86060',
-        },
-        {
-            key: 'total',
-            label: t('common.total') || 'Total',
-            value: stats.total,
-            icon: <BarChart3 size={18} strokeWidth={1.8} />,
-            accent: '#8a6a3a',
-        },
-        {
-            key: 'rate',
-            label: t('common.passRate') || 'Pass Rate',
-            value: `${stats.passRate}%`,
-            icon: <TrendingUp size={18} strokeWidth={1.8} />,
-            accent: '#b8945a',
-        },
-    ];
-
     return (
         <div className={shellStyles.container}>
             {view === 'list' ? (
                 <>
-                    <section className={shellStyles.summaryGrid}>
-                        {summary.map((card) => (
-                            <div
-                                key={card.key}
-                                className={shellStyles.summaryCard}
-                                style={{ '--accent': card.accent } as React.CSSProperties}
-                            >
-                                <div className={shellStyles.summaryIcon}>{card.icon}</div>
-                                <div className={shellStyles.summaryBody}>
-                                    <div className={shellStyles.summaryLabel}>{card.label}</div>
-                                    <div className={shellStyles.summaryValue}>{card.value}</div>
-                                </div>
-                            </div>
-                        ))}
-                    </section>
+                    {/* Template-library framing (2026-09-19): this page is a pure
+                        template library — Checklist maintains items/criteria only,
+                        actual inspection results are filled in from within an ITR
+                        after linking a template. No Pass/Fail/pass-rate stats here
+                        on purpose; those describe ITR-linked instances, not templates. */}
+                    <div className={styles.listIntro}>
+                        <h1 className={styles.listIntroTitle}>{t('checklist.title')}</h1>
+                        <p className={styles.listIntroDesc}>{t('checklist.pageDescription')}</p>
+                    </div>
 
                     <div className={shellStyles.toolbar}>
-                        <div className={shellStyles.chipGroup}>
-                            {chips.map((chip) => (
-                                <button
-                                    key={chip.id}
-                                    type="button"
-                                    className={`${shellStyles.chip} ${statusFilter === chip.id ? shellStyles.chipActive : ''}`}
-                                    onClick={() => setStatusFilter(chip.id)}
-                                >
-                                    {chip.label}
-                                    <span className={shellStyles.chipCount}>{chip.count}</span>
-                                </button>
-                            ))}
+                        <div className={styles.listCount}>
+                            {records.length} {t('checklist.templatesCount') || 'templates'}
                         </div>
                         <div className={shellStyles.toolbarRight}>
                             <div className={shellStyles.searchWrap}>
@@ -274,7 +201,7 @@ const Checklist: React.FC = () => {
                             </div>
                             {hasPermission('checklist:create:all') && (
                                 <button type="button" onClick={handleAddNew} className={shellStyles.addNewButton}>
-                                    <Plus size={16} /> {t('checklist.addNew') || 'New Checklist'}
+                                    <Plus size={16} /> {t('checklist.addNew') || 'New Template'}
                                 </button>
                             )}
                         </div>
@@ -283,10 +210,10 @@ const Checklist: React.FC = () => {
                     <div className={shellStyles.content}>
                         <DataTable
                             columns={checklistColumns}
-                            data={filteredList}
+                            data={records}
                             getRowId={(row) => row.id}
                             getRowClassName={(row) =>
-                                row.status === 'Fail' ? shellStyles.rowAlert : ''
+                                isTemplateHistoricallyProtected(row) ? shellStyles.rowAlert : ''
                             }
                             onRowClick={(row) => handleEdit(row)}
                         />
@@ -300,26 +227,42 @@ const Checklist: React.FC = () => {
                     // §17: a bare template (itrId & templateId both null) must never take real
                     // pass/fail results directly — force read-only regardless of permission,
                     // so it stays reusable/clean for future "Generate Checklist" links.
-                    isBareTemplate={!!editingRecord && !editingRecord.itrId && !editingRecord.templateId}
+                    // This page only ever authors/edits TEMPLATES (see the page
+                    // intro above) — a brand-new record is always a template, and
+                    // the sole defensive exception below (itrId/templateId set) is
+                    // for a stray legacy deep-link, never a normal path here.
+                    isBareTemplate={!editingRecord || (!editingRecord.itrId && !editingRecord.templateId)}
+                    // A template that already carries real historical inspection
+                    // results (legacy data pre-dating §17, or evidence whose true
+                    // origin can't be proven — see backend's evidence_historical_
+                    // unknown/evidence_recorded_at) can't be safely edited as if it
+                    // were clean: locked read-only regardless of permission, with
+                    // its original content preserved untouched.
                     readOnly={
-                        (!!editingRecord && !editingRecord.itrId && !editingRecord.templateId)
+                        (!!editingRecord && isTemplateHistoricallyProtected(editingRecord))
                             ? true
                             : !(
                                 !editingRecord
                                     ? hasPermission('checklist:create:all')
-                                    : (editingRecord.status === 'Pass' || editingRecord.status === 'Fail')
-                                        ? hasPermission('checklist:close:all')
-                                        : hasPermission('checklist:update:all')
+                                    : (!editingRecord.itrId && !editingRecord.templateId)
+                                        ? hasPermission('checklist:update:all')
+                                        : (editingRecord.status === 'Pass' || editingRecord.status === 'Fail')
+                                            ? hasPermission('checklist:close:all')
+                                            : hasPermission('checklist:update:all')
                             )
                     }
                     onSave={async (data) => {
                         setSaving(true);
                         try {
-                            if (editingRecord) {
-                                await updateRecord(editingRecord.id, data);
-                            } else {
-                                await addRecord(data);
-                            }
+                            const saved = editingRecord
+                                ? await updateRecord(editingRecord.id, data)
+                                : await addRecord(data);
+                            const version = saved.version;
+                            toast.success(
+                                version === null || version === undefined
+                                    ? (t('checklist.saveSuccess') || 'Template saved')
+                                    : t('checklist.saveSuccessWithVersion', { version: String(version) })
+                            );
                             setView('list');
                         } catch (err: any) {
                             const detail = getErrorMessage(err, t('common.saveFailed'));
@@ -385,6 +328,18 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
 
     const getActiveContractors = () => contractors.filter(c => c.status === 'active');
 
+    // Same shared check the list badge and the outer readOnly computation
+    // use (isTemplateHistoricallyProtected) — recomputed here too so the
+    // editor can show an explanatory banner, not just lock.
+    const isHistoricalAnomaly = !!record && isTemplateHistoricallyProtected(record);
+    // A historically-anomalous template must stay INSPECTABLE — its
+    // Situation/Result values must still render (read-only, via the
+    // readOnly fieldset) even though it's a bare template; only a
+    // genuinely clean template hides these columns as not-yet-relevant.
+    // (2026-09-19 fix: must not switch to template mode and make existing
+    // historical results unreadable/impossible to audit.)
+    const showResultColumns = !isBareTemplate || isHistoricalAnomaly;
+
     const [searchParams] = useSearchParams();
     const paramItrId = searchParams.get('itrId');
     const paramItrNumber = searchParams.get('itrNumber');
@@ -397,6 +352,12 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
             // Include ITP/Analysis fields
             return {
                 ...record.data,
+                // recordsNo is authoritative ONLY on the top-level record (the
+                // backend column) — record.data is detail_data, which for an
+                // older save may still hold a stale/placeholder copy (see the
+                // 2026-09-19 recordsNo-overwrite fix). Always override with
+                // the real value from the row itself, spread order be damned.
+                recordsNo: record.recordsNo,
                 noiNumber: record.noiNumber,
                 contractor: record.contractor,
                 packageName: record.packageName,
@@ -474,6 +435,8 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
     }, [selectedItpIndex, record, dynamicItpDatabase]);
 
     const [isPrinting, setIsPrinting] = useState(false);
+    const leaveGuard = useDraftGuard(formData, !!saving, !readOnly);
+    const requestCancel = () => leaveGuard.requestClose(onCancel);
 
     useEffect(() => {
         if (isPrinting) {
@@ -519,74 +482,36 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
                             <span className="text-sm text-slate-500 font-bold uppercase">Form ID:</span>
                             <input
                                 className="text-sm font-medium text-slate-700 border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none bg-transparent transition-all w-[200px]"
-                                value={formData.recordsNo || displayNo || t('form.autoGenerated')}
+                                // Always the backend-authoritative value (displayNo reads
+                                // record.recordsNo directly, never formData/detail_data) —
+                                // see the 2026-09-19 recordsNo-overwrite fix.
+                                value={displayNo || t('form.autoGenerated')}
                                 readOnly
-                                style={{ backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: formData.recordsNo ? '#000000' : '#666666' }}
+                                style={{ backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: record ? '#000000' : '#666666' }}
                             />
+                            {isBareTemplate && (
+                                <span className={styles.modeBadge}>
+                                    {record ? (t('checklist.modeEditBadge') || 'Editing Template') : (t('checklist.modeNewBadge') || 'New Template')}
+                                </span>
+                            )}
                         </div>
                     </div>
-                    <div className={styles.webHeaderRight}>
-                        <button
-                            onClick={handlePrint}
-                            className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-lg font-bold text-sm hover:bg-slate-50 transition-colors"
-                        >
-                            <Printer size={16} /> {t('common.print')}
-                        </button>
-                        {canReopen && onReopen && (
-                        <button
-                            disabled={saving}
-                            onClick={onReopen}
-                            className="flex items-center gap-2 px-4 py-2 border border-amber-300 bg-amber-50 text-amber-700 rounded-lg font-bold text-sm hover:bg-amber-100 transition-colors disabled:opacity-50"
-                            title={t('checklist.reopenHint') || 'Switch back to Ongoing so inspection results can be edited again'}
-                        >
-                            {t('checklist.reopen') || 'Reopen'}
-                        </button>
-                        )}
-                        {!readOnly && (
-                        <button
-                            disabled={saving}
-                            onClick={() => onSave({
-                                itpId: formData.itpId,
-                                itpVersion: formData.itpVersion,
-                                passCount: formData.items.filter((i: any) => i.result === 'O').length,
-                                failCount: formData.items.filter((i: any) => i.result === 'X').length,
-                                activity: formData.activity || 'N/A',
-                                date: formData.inspectionDate,
-                                status: formData.items.every((i: any) => i.result === 'O') ? 'Pass' : 'Fail',
-                                packageName: formData.packageName || 'RKS',
-                                contractor: formData.contractor,
-                                location: formData.location,
-                                revision: formData.revision,
-                                noiNumber: formData.noiNumber,
-                                itrId: formData.itrId,
-                                itrNumber: formData.itrNumber,
-                                recordsNo: formData.recordsNo, // Include manually edited recordsNo
-                                data: { ...formData },
-                                itpIndex: selectedItpIndex
-                            })}
-                            className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-shadow disabled:opacity-50"
-                        >
-                            {saving ? t('common.saving') : t('common.save')}
-                        </button>
-                        )}
-                        <button onClick={onCancel} className="px-4 py-2 text-slate-500 hover:text-slate-800 font-bold text-sm">
-                            {t('common.cancel')}
-                        </button>
-                    </div>
+                    
                 </div>
 
-                {isBareTemplate && (
-                    <div style={{
-                        display: 'flex', alignItems: 'center', gap: '8px',
-                        margin: '0 0 16px', padding: '10px 16px',
-                        background: '#fef3c7', border: '1px solid #f59e0b',
-                        borderRadius: '8px', color: '#92400e', fontSize: '13px', fontWeight: 600,
-                    }}>
+                {isHistoricalAnomaly ? (
+                    <div className={styles.historicalBanner}>
+                        <History size={16} />
+                        {t('checklist.historicalDataBanner') || 'This template contains historical inspection data. Its original content has been preserved and is shown read-only — it cannot be safely edited here.'}
+                    </div>
+                ) : isBareTemplate && (
+                    <div className={styles.templateBanner}>
                         <Info size={16} />
-                        {t('checklist.templateModeBanner') || 'Template Mode — this is a reusable blank template (not yet linked to an ITR). It is locked read-only so it stays clean for future "Generate Checklist" links; pass/fail results can only be entered after it is linked.'}
+                        {t('checklist.templateModeBanner') || 'Template Mode — maintain inspection items and acceptance criteria here. Fill in actual inspection results after linking this template within an ITR.'}
                     </div>
                 )}
 
+                {!isBareTemplate && (
                 <div className={styles.tabsContainer}>
                     <button
                         className={`${styles.tabButton} ${activeTab === 'general' ? styles.activeTab : ''}`}
@@ -602,13 +527,15 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
                         {` (${formData.items.length})`}
                     </button>
                 </div>
+                )}
 
                 {/* A single disabled fieldset locks every input/select/textarea/button
                     below in one shot when readOnly (closed record, insufficient permission). */}
                 <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
 
-                {/* --- Project Information --- */}
-                {activeTab === 'general' && (
+                {/* --- Project Information (instance execution context — not
+                    shown in template mode; see the page intro/banners above) --- */}
+                {!isBareTemplate && activeTab === 'general' && (
                     <div className={styles.card}>
                         <div className={styles.cardHeader}>
                             <div className="p-1.5 bg-blue-50 text-blue-600 rounded-md">
@@ -711,27 +638,30 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
                 )}
 
                 {/* --- Inspection Checklist --- */}
-                {activeTab === 'checklist' && (
+                {(isBareTemplate || activeTab === 'checklist') && (
                     <div className={styles.card}>
                         <div className={styles.cardHeader}>
                             <div className="flex items-center gap-10 flex-1">
                                 <div className="p-1.5 bg-blue-50 text-blue-600 rounded-md">
                                     <CheckCircle size={18} />
                                 </div>
-                                <h2>Inspection Checklist</h2>
+                                <h2>{isBareTemplate ? (t('checklist.listTitle') || 'Checklist Template') : 'Inspection Checklist'}</h2>
                             </div>
-                            <button
+                            <button className={actionStyles.secondary}
                                 onClick={() => {
                                     const newId = formData.items.length > 0 ? Math.max(...formData.items.map((i: any) => i.id)) + 1 : 1;
                                     setFormData({
                                         ...formData,
                                         items: [
                                             ...formData.items,
-                                            { id: newId, item: "", criteria: "", situation: "", result: "O" }
+                                            // A fresh row never starts pre-marked O/Pass — that made
+                                            // sense nowhere, but especially not for a template row,
+                                            // which must never carry a result at all (see the
+                                            // template-mode Save payload above).
+                                            { id: newId, item: "", criteria: "", situation: "", result: "" }
                                         ]
                                     });
                                 }}
-                                className="flex items-center gap-1 px-3 py-1 text-blue-600 hover:bg-blue-50 rounded-md transition-colors text-sm font-bold"
                             >
                                 <Plus size={16} /> Add Row
                             </button>
@@ -741,10 +671,10 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
                                 <thead>
                                     <tr>
                                         <th style={{ width: '60px' }}>#</th>
-                                        <th>Inspection Item</th>
-                                        <th style={{ width: '200px' }}>Criteria</th>
-                                        <th style={{ width: '200px' }}>Actual Situation</th>
-                                        <th style={{ width: '120px', textAlign: 'center' }}>Result</th>
+                                        <th>{t('checklist.item') || 'Inspection Item'}</th>
+                                        <th style={{ width: '200px' }}>{t('checklist.criteria') || 'Criteria'}</th>
+                                        {showResultColumns && <th style={{ width: '200px' }}>Actual Situation</th>}
+                                        {showResultColumns && <th style={{ width: '120px', textAlign: 'center' }}>Result</th>}
                                         <th style={{ width: '50px' }}></th>
                                     </tr>
                                 </thead>
@@ -779,6 +709,7 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
                                                     />
                                                 </div>
                                             </td>
+                                            {showResultColumns && (
                                             <td>
                                                 <input
                                                     className={styles.underlineInput}
@@ -791,23 +722,30 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
                                                     }}
                                                 />
                                             </td>
+                                            )}
+                                            {showResultColumns && (
                                             <td>
-                                                <div className="flex justify-center">
-                                                    <div
-                                                        className={`${styles.statusChip} ${item.result === 'O' ? styles.chipPass : (item.result === 'X' ? styles.chipFail : styles.chipNA)}`}
-                                                        style={readOnly ? { cursor: 'not-allowed', opacity: 0.6 } : undefined}
-                                                        onClick={() => {
-                                                            if (readOnly) return;
-                                                            const newItems = [...formData.items];
-                                                            newItems[idx].result = newItems[idx].result === 'O' ? 'X' : (newItems[idx].result === 'X' ? '/' : 'O');
-                                                            setFormData({ ...formData, items: newItems });
-                                                        }}
-                                                    >
-                                                        {item.result === 'O' ? <CheckCircle size={14} /> : (item.result === 'X' ? <XCircle size={14} /> : <HelpCircle size={14} />)}
-                                                        <span>{item.result === 'O' ? '合格' : (item.result === 'X' ? '不合格' : 'N/A')}</span>
+                                                {/* Same four-way control as the ITR snapshot (no cycling
+                                                    button). For a historically-anomalous template this is
+                                                    locked read-only, so the original values are simply shown. */}
+                                                <ResultSelect
+                                                    value={item.result}
+                                                    disabled={readOnly}
+                                                    onChange={(code) => {
+                                                        const newItems = [...formData.items];
+                                                        newItems[idx] = withResult(newItems[idx], code);
+                                                        setFormData({ ...formData, items: newItems });
+                                                    }}
+                                                />
+                                                {item.result === '/' && (
+                                                    <div className="mt-1 text-[11px] text-slate-500" data-na-reason-line>
+                                                        {String(item.naReason ?? '').trim()
+                                                            ? <>{t('checklist.na.reasonLabel')}: {item.naReason}</>
+                                                            : t('checklist.na.legacyNoReason')}
                                                     </div>
-                                                </div>
+                                                )}
                                             </td>
+                                            )}
                                             <td>
                                                 <button
                                                     onClick={() => {
@@ -827,8 +765,9 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
                     </div>
                 )}
 
-                {/* --- Inspection Status Section --- */}
-                {activeTab === 'general' && (
+                {/* --- Inspection Status Section (results/NCR/signatures — instance-
+                    only; never shown in template mode, see spec item 3) --- */}
+                {!isBareTemplate && activeTab === 'general' && (
                     <>
                         <div className={styles.card}>
                             <div className={styles.cardHeader}>
@@ -936,6 +875,88 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
                     </>
                 )}
                 </fieldset>
+                <FormActions tools={<><button className={actionStyles.secondary}
+                    onClick={handlePrint}
+                >
+                    <Printer size={16} /> {t('common.print')}
+                </button></>}
+                    secondary={<>{canReopen && onReopen && (
+                        <button className={actionStyles.workflow}
+                            disabled={saving}
+                            onClick={onReopen}
+                            title={t('checklist.reopenHint') || 'Switch back to Ongoing so inspection results can be edited again'}
+                        >
+                            {t('checklist.reopen') || 'Reopen'}
+                        </button>
+                    )}</>}
+                    cancel={<><button className={actionStyles.secondary} onClick={requestCancel}>
+                        {t('common.cancel')}
+                    </button></>}
+                    primary={<>{!readOnly && (
+                        <div className="flex flex-col items-end gap-1">
+                            <button className={actionStyles.primary}
+                                disabled={saving}
+                                onClick={() => onSave(
+                                    isBareTemplate
+                                        ? {
+                                            // Template save: identity + items/criteria only. status is
+                                            // always 'Ongoing' (the one value that can never carry
+                                            // evidence per _touched_fields_carry_results) — a template
+                                            // must never carry real inspection evidence; the backend
+                                            // rejects the write outright if it does (see checklist_
+                                            // service.py's bare-template guard). "Actual Situation"/
+                                            // "Result" aren't even editable in template mode (see the
+                                            // items table below). `date`/`status` are still required by
+                                            // the backend's create schema even for a template.
+                                            //
+                                            // recordsNo is deliberately OMITTED here (2026-09-19 fix):
+                                            // it is backend-assigned on create and must never be sent on
+                                            // update — a stale "[AUTO-GENERATE]" placeholder that leaked
+                                            // into formData/detail_data on a prior save would otherwise
+                                            // silently overwrite the record's real, already-assigned
+                                            // number. `data` strips it too, so detail_data never carries
+                                            // a second, driftable copy of it at all.
+                                            activity: formData.activity || 'N/A',
+                                            date: formData.inspectionDate || new Date().toISOString().slice(0, 10),
+                                            status: 'Ongoing',
+                                            data: (({ recordsNo: _omit, ...rest }) => ({
+                                                ...rest,
+                                                items: formData.items.map((i: any) => ({
+                                                    id: i.id, item: i.item, criteria: i.criteria,
+                                                    situation: '', result: '',
+                                                })),
+                                            }))(formData),
+                                            itpIndex: selectedItpIndex,
+                                        }
+                                        : {
+                                            itpId: formData.itpId,
+                                            itpVersion: formData.itpVersion,
+                                            ...itemCounts(formData.items),
+                                            activity: formData.activity || 'N/A',
+                                            date: formData.inspectionDate,
+                                            status: deriveChecklistStatus(formData.items),
+                                            packageName: formData.packageName || 'RKS',
+                                            contractor: formData.contractor,
+                                            location: formData.location,
+                                            revision: formData.revision,
+                                            noiNumber: formData.noiNumber,
+                                            itrId: formData.itrId,
+                                            itrNumber: formData.itrNumber,
+                                            // recordsNo omitted — see the template-mode branch's comment.
+                                            data: (({ recordsNo: _omit, ...rest }) => rest)(formData),
+                                            itpIndex: selectedItpIndex,
+                                        }
+                                )}
+                            >
+                                {isBareTemplate
+                                    ? (saving ? (t('checklist.savingTemplate') || 'Saving...') : (t('checklist.saveTemplate') || 'Save Template'))
+                                    : (saving ? t('common.saving') : t('common.save'))}
+                            </button>
+                            {isBareTemplate && record && (
+                                <span className={styles.saveHint}>{t('checklist.updateTemplateNote') || 'Updating this template does not affect existing ITR references.'}</span>
+                            )}
+                        </div>
+                    )}</>} />
             </div>
 
             {/* --- Print View (Portal) --- */}

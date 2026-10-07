@@ -26,6 +26,12 @@ export interface FileAttachmentProps {
     accept?: string;
     hideTitle?: boolean;
     onPreview?: (src: string, name?: string) => void;
+    /** Bumped by the parent after it uploaded this group's pending files: the pending list is dropped (it is on the server now)
+     *  and the stored list is fetched again, so a retry cannot upload the same files twice. */
+    syncToken?: number;
+    /** Files the parent still holds as pending when this component (re)mounts — e.g. after switching away from and back to the tab it
+     *  lives in — so they are shown again instead of being queued invisibly. Read once, at mount. */
+    initialPendingFiles?: File[];
 }
 
 const FileAttachment: React.FC<FileAttachmentProps> = ({
@@ -43,7 +49,9 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
     readOnly = false,
     accept = "image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     hideTitle = false,
-    onPreview
+    onPreview,
+    syncToken,
+    initialPendingFiles
 }) => {
     const { t } = useLanguage();
     // 儲存已從 Server 拿回來的檔案
@@ -53,9 +61,9 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
     // does not affect the rendered list.
     const [pendingDeletes, setPendingDeletes] = useState<Set<string>>(new Set());
     // 儲存使用者剛選取但尚未上傳至 Server 的實體 File 物件
-    const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+    const [pendingFiles, setPendingFiles] = useState<File[]>(() => initialPendingFiles ?? []);
     // 儲存待上傳 File 所產生出的預覽用 URL (blob UI)
-    const [pendingPreviews, setPendingPreviews] = useState<string[]>([]);
+    const [pendingPreviews, setPendingPreviews] = useState<string[]>(() => (initialPendingFiles ?? []).map(f => URL.createObjectURL(f)));
     const uploading = false;
 
     // 如果提供了實體 ID，嘗試自動抓取遠端檔案 (如果外部沒傳 propsAttachments 的話)
@@ -65,7 +73,15 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
                 .then(setApiAttachments)
                 .catch(err => console.error('Failed to load attachments', err));
         }
-    }, [entityType, entityId, category, propsAttachments]);
+    }, [entityType, entityId, category, propsAttachments, syncToken]);
+
+    // The parent has stored this group's pending files: forget them (without telling the parent — it already cleared its copy).
+    const [seenSyncToken, setSeenSyncToken] = useState(syncToken);
+    if (syncToken !== seenSyncToken) {
+        setSeenSyncToken(syncToken);
+        setPendingFiles([]);
+        setPendingPreviews([]);
+    }
 
     // Callers like NOIDetailModal pass ``formData.attachments`` which
     // is typed ``any[]`` and can legitimately contain a mix of

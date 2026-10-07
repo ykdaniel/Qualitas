@@ -76,6 +76,18 @@
   text-overflow: ellipsis;
 }
 
+/* QWORKFLOW-UX-2026-001: one extra line in the sticky NOI cell stating the current checkpoint
+   (or Accepted once fully done) — kept inside the cell's own max-width so it wraps/ellipses
+   instead of widening the sticky column or forcing new page-level horizontal scroll. */
+.currentStepLine {
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 400;
+  color: #8b8275;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
 /* NOI's checkpoint/scope description — not sticky (unlike reference/NOI),
    since it's supplementary context, not a primary identifier; letting it
    scroll away with the checkpoint strip keeps the sticky-left group from
@@ -155,8 +167,8 @@
 /* First cell (NOI) drops its left-half track so the bar starts
    cleanly at the NOI marker. Last cell (Accepted) drops its right
    half for the same reason. */
-.progressCell.first::before { background: transparent; }
-.progressCell.last::after { background: transparent; }
+.progressCell.first::before { content: none; }
+.progressCell.last::after { content: none; }
 
 /* Done: both halves of the track are green. */
 .progressCell.done::before,
@@ -271,3 +283,42 @@
   border-radius: 8px;
   font-size: 14px;
 }
+
+/* Records that pass the improvement checkpoint on their Closed status only (photos NOT verified): a small line under the marker, and a note under
+   the percentage, so 100% is never read as "all evidence verified". */
+.unverifiedMark {
+  position: relative;
+  z-index: 1;
+  display: block;
+  margin: 2px 4px 0;
+  font-size: 10px;
+  line-height: 1.2;
+  color: #92400e;
+}
+
+.unverifiedNote {
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: #92400e;
+  white-space: nowrap;
+}
+
+
+/* Separate record fields; only the workflow identifier stays pinned. */
+.table .stickyCol { width: 180px; min-width: 180px; max-width: 180px; box-sizing: border-box; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.noiCol { min-width: 200px; white-space: nowrap; }
+.stepCol { min-width: 130px; white-space: nowrap; }
+.completionCol { min-width: 110px; font-variant-numeric: tabular-nums; }
+.unverifiedNote { white-space: normal; }
+.legend { display: flex; flex-wrap: wrap; gap: 12px 20px; padding: 8px 0; color: #57534e; font-size: 12px; }
+.legendItem { display: inline-flex; align-items: center; gap: 8px; }
+.legendItem .progressMarker { margin: 0; }
+.legendItem.done .progressMarker { background: #10b981; border-color: #047857; }
+.legendItem.current .progressMarker { background: #f59e0b; border-color: #b45309; }
+@media (max-width: 640px) {
+  .table .stickyCol { width: 144px; min-width: 144px; max-width: 144px; }
+}
+
+.indexCol { min-width: 40px; width: 40px; font-variant-numeric: tabular-nums; color: #78716c; }
+.rowCount { margin: 0 0 8px; font-size: 12px; color: #6b7280; }

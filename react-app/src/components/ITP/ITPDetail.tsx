@@ -1,3 +1,7 @@
+import { useItemDraftGuard } from '../Shared/LeaveGuard';
+import { useLeaveGuard } from '../Shared/LeaveGuard';
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -9,23 +13,28 @@ import {
   CheckCircle2, ChevronDown, Calendar, Hash, Tag, FileCheck, ShieldCheck, HardHat, User, Building2, Trash2, ArrowDown
 } from 'lucide-react';
 import { BackButton } from '../ui/BackButton';
+import { useLanguage } from '../../context/LanguageContext';
 import { toast } from 'sonner';
 import { InspectionItem } from '../../types/itp';
 import { PHASES, EMPTY_ITEM } from '../../constants/itp';
 import { getNextRevision } from '../../utils/revision';
 import VPBadge from './VPBadge';
+import { resolveItpRecordLink } from '../../utils/itpRecordLink';
+import { parseInspectionItems } from '../../utils/itpParser';
 import './ITPDetail.print.css';
 import './itp-print-global.css';
 
 
 
 const ITPDetail: React.FC = () => {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const itrList = useITRStore(state => state.itrList);
   // NOTE: 初始為空陣列，避免所有 ITP 顯示相同的硬編碼資料
   const [items, setItems] = useState<InspectionItem[]>([]);
   const [editingItem, setEditingItem] = useState<InspectionItem | null>(null);
+    const itemGuard = useItemDraftGuard(editingItem);
   const [workTitle, setWorkTitle] = useState(""); // 工項標題狀態
   const [referenceNo, setReferenceNo] = useState(""); // Form No.
 
@@ -33,6 +42,43 @@ const ITPDetail: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [rev, setRev] = useState("");
+  const draftKey = JSON.stringify({ items, workTitle });
+  const [baseline, setBaseline] = useState<string | null>(null);
+  useLeaveGuard(baseline !== null && draftKey !== baseline, saving);
+  // Which Record value's link is currently being resolved (real lookup, not a prefix guess —
+  // see utils/itpRecordLink.ts) — used to disable that one button while the round trip is in
+  // flight.
+  const [resolvingRecord, setResolvingRecord] = useState<string | null>(null);
+
+  const handleRecordClick = async (value: string) => {
+    if (resolvingRecord) return;
+    setResolvingRecord(value);
+    try {
+      const result = await resolveItpRecordLink(value);
+      switch (result.kind) {
+        case 'itr':
+          navigate('/itr');
+          toast.info(`Please find ITR ${result.documentNumber} in the ITR list.`);
+          break;
+        case 'checklist':
+          navigate(`/checklist?openId=${result.recordsNo}&from=itp`);
+          break;
+        case 'ambiguous':
+          toast.error(`Multiple documents match "${value}" — cannot tell which one this Record refers to. Please check the record number.`);
+          break;
+        case 'forbidden':
+          toast.error('You do not have permission to view this record.');
+          break;
+        case 'not_found':
+          toast.error('Record document data not found.');
+          break;
+        default:
+          toast.error('Could not look up this record right now. Please try again.');
+      }
+    } finally {
+      setResolvingRecord(null);
+    }
+  };
 
   const handlePublish = async () => {
     if (!id) return;
@@ -58,6 +104,7 @@ const ITPDetail: React.FC = () => {
         self_inspection: null
       };
       await api.put(`/itp/${id}/detail`, payload);
+      setBaseline(draftKey);
       toast.success(`Published successfully as Revision ${nextRev}!`);
     } catch (error) {
       console.error("Failed to publish ITP:", error);
@@ -96,27 +143,13 @@ const ITPDetail: React.FC = () => {
           if (data.referenceNo) setReferenceNo(data.referenceNo);
           if (data.rev) setRev(data.rev);
 
-          let details: any = {};
-          if (typeof data.detail_data === 'string') {
-            try {
-              details = JSON.parse(data.detail_data);
-            } catch (e) {
-              console.error("Failed to parse detail_data", e);
-            }
-          } else if (typeof data.detail_data === 'object') {
-            details = data.detail_data;
-          }
-
-          // 從後端載入檢查項目；若 detail_data 為空則保持空陣列
-          if (details && (details.a || details.b || details.c)) {
-            const loadedItems: InspectionItem[] = [
-              ...(details.a || []).map((i: any, index: number) => ({ ...i, phase: 'A', id: `A${index + 1}` })),
-              ...(details.b || []).map((i: any, index: number) => ({ ...i, phase: 'B', id: `B${index + 1}` })),
-              ...(details.c || []).map((i: any, index: number) => ({ ...i, phase: 'C', id: `C${index + 1}` })),
-            ];
-            setItems(loadedItems);
-          }
-          // 若無 detail_data，items 維持空陣列，使用者可透過「Add Item」新增
+          // 與列表頁彈窗（ITPModals.tsx）共用同一套解析工具：同時接受舊版 {a,b,c} 分階段物件
+          // 與新版每筆項目自帶 phase 的扁平陣列，避免兩個入口對同一筆資料顯示不一致
+          // （BACKLOG #35）。若無 detail_data 或格式無法辨識，回傳空陣列，使用者仍可透過
+          // 「Add Item」新增，行為與先前相同。
+          const parsedItems = parseInspectionItems(data.detail_data);
+          setItems(parsedItems);
+          setBaseline(JSON.stringify({ items: parsedItems, workTitle: data.description || '' }));
         }
       } catch (error) {
         console.error("Failed to fetch ITP:", error);
@@ -147,6 +180,7 @@ const ITPDetail: React.FC = () => {
       };
 
       await api.put(`/itp/${id}/detail`, payload);
+      setBaseline(draftKey);
       toast.success("Saved successfully!");
     } catch (error) {
       console.error("Failed to save ITP:", error);
@@ -183,6 +217,16 @@ const ITPDetail: React.FC = () => {
 
   // 儲存修改
   const handleSave = () => {
+    // Minimum-content guard (BACKLOG #35 follow-up, #36, 2026-10-07): this panel previously let
+    // "Apply" through with every field blank — a row with only an auto-assigned Event No. and no
+    // actual inspection content. Activity (EN) and Standard (EN) are the two fields an inspection
+    // item cannot meaningfully exist without; everything else stays optional.
+    const activityEn = (editingItem.activity?.en || '').trim();
+    const standardEn = (typeof editingItem.standard === 'string' ? editingItem.standard : editingItem.standard?.en || '').trim();
+    if (!activityEn || !standardEn) {
+      toast.warning('Please fill in Activity (EN) and Standard (EN) before applying.');
+      return;
+    }
     if (editingItem.isNew) {
       const { insertAfter, ...newItem } = editingItem;
 
@@ -192,6 +236,8 @@ const ITPDetail: React.FC = () => {
       let newPhaseItems = [];
       if (!insertAfter || insertAfter === 'end') {
         newPhaseItems = [...currentPhaseItems, newItem];
+      } else if (insertAfter === 'beginning') {
+        newPhaseItems = [newItem, ...currentPhaseItems];
       } else {
         const insertIndex = currentPhaseItems.findIndex(i => i.id === insertAfter);
         if (insertIndex !== -1) {
@@ -287,7 +333,7 @@ const ITPDetail: React.FC = () => {
   };
 
   const handleDelete = (itemId: string) => {
-    if (window.confirm("確定要刪除此項目嗎？")) {
+    if (window.confirm("Are you sure you want to delete this item?")) {
       setItems(prev => prev.filter(item => item.id !== itemId));
     }
   };
@@ -297,36 +343,11 @@ const ITPDetail: React.FC = () => {
       {/* Back Button & Toolbar */}
       <div className="max-w-[1400px] min-w-[1024px] mx-auto mb-6 flex items-center justify-between no-print">
         <BackButton
-          label="Back to List"
+          label={t('common.back')}
           onClick={() => navigate('/itp')}
         />
 
-        <div className="flex gap-3">
-          <button
-            onClick={handlePublish}
-            disabled={saving}
-            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide hover:bg-indigo-700 shadow-sm hover:shadow active:scale-95 transition-all disabled:opacity-50"
-          >
-            <ShieldCheck size={14} strokeWidth={3} /> Publish
-          </button>
-          <button
-            onClick={saveToBackend}
-            disabled={saving}
-            className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide hover:bg-emerald-700 shadow-sm hover:shadow active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {saving ? <LayoutTemplate size={14} className="animate-spin" /> : <Save size={14} strokeWidth={3} />}
-            {saving ? "Saving..." : "Save Document"}
-          </button>
-          <button onClick={handleAddNew} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide hover:bg-blue-700 shadow-sm hover:shadow active:scale-95 transition-all">
-            <Plus size={14} strokeWidth={3} /> Add New Item
-          </button>
-          <button
-            onClick={() => setIsPrinting(true)}
-            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide hover:bg-slate-50 hover:text-slate-900 shadow-sm transition-all"
-          >
-            <Printer size={14} /> Print / PDF
-          </button>
-        </div>
+        
       </div>
 
       {/* Subject Header */}
@@ -335,206 +356,190 @@ const ITPDetail: React.FC = () => {
       {/* 編輯視窗 (Modal) */}
       {editingItem && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-opacity">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-100 animate-in fade-in zoom-in duration-300">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[90vw] xl:max-w-[1500px] overflow-hidden border border-slate-100 animate-in fade-in zoom-in duration-300 max-h-[95vh] flex flex-col">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-5 flex justify-between items-center text-white shadow-md relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
-              <h3 className="font-bold text-xl flex items-center gap-3 relative z-10">
-                <div className="bg-white/20 p-2 rounded-lg backdrop-blur-sm">
-                  <PenTool size={20} className="text-white" />
+            <div className="bg-[#faf7f1] border-b border-[#b8945a]/20 px-8 py-5 flex justify-between items-center shrink-0 rounded-t-2xl">
+              <h3 className="font-bold text-xl flex items-center gap-3 text-[#2d2a24]">
+                <div className="bg-[#b8945a]/10 p-2 rounded-lg">
+                  <PenTool size={20} className="text-[#8a6a3a]" />
                 </div>
-                {editingItem.isNew ? "Add New Inspection Item" : `Edit Item (${editingItem.id})`}
+                {editingItem.isNew
+                  ? (t('itp.itemPanel.addTitle') || 'Add New Inspection Item')
+                  : (t('itp.itemPanel.editTitle') || 'Edit Item ({id})').replace('{id}', editingItem.id)}
               </h3>
               <button
-                onClick={() => setEditingItem(null)}
-                className="hover:bg-white/20 p-2 rounded-full transition-colors relative z-10"
+                onClick={() => itemGuard.requestClose(() => setEditingItem(null))}
+                className="hover:bg-[#b8945a]/10 p-2 rounded-full transition-colors text-[#6b6355]"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
-              {/* Basic Info Card */}
-              <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 shadow-sm grid grid-cols-2 gap-6 relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
+            <div className="p-4 sm:p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
+              {/* Event No. box removed (2026-10-07, "這有必要嗎"): read-only and already in the
+                  modal title. Phase stays (handleAddNew defaults to 'A', and it is the only way
+                  to move an item between phases); Insert After shares its row for new items. */}
+              <div className={`grid grid-cols-1 gap-6 ${editingItem.isNew ? 'sm:grid-cols-2' : ''}`}>
                 <div>
-                  <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                    <Hash size={14} /> Event No.
-                  </label>
-                  {/* Event No. is always auto-generated and read-only */}
-                  <div className="text-sm font-bold text-slate-800 bg-slate-100 border border-slate-200 rounded-lg px-4 h-10 flex items-center shadow-sm min-w-[3.5rem] justify-center cursor-not-allowed select-none">
-                    {editingItem.id}
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.phase') || 'Phase'}</span>
+                    <span className="flex-1 border-t-2 border-slate-400"></span>
                   </div>
+                  <select className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm" value={editingItem.phase} onChange={(e) => handleChange('phase', e.target.value)}>
+                    {PHASES.map(p => <option key={p.code} value={p.code}>{p.title}</option>)}
+                  </select>
                 </div>
-                <div>
-                  <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                    <Layers size={14} /> Phase
-                  </label>
-                  <div className="relative">
-                    <select className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none appearance-none bg-white font-medium text-slate-700 shadow-sm cursor-pointer transition-all hover:border-slate-400"
-                      value={editingItem.phase} onChange={(e) => handleChange('phase', e.target.value)}>
-                      {PHASES.map(p => <option key={p.code} value={p.code}>{p.title}</option>)}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-3 text-slate-400 pointer-events-none" size={16} />
-                  </div>
-                </div>
-
-                {/* Insert Position Selection (Only for New Items) */}
                 {editingItem.isNew && (
-                  <div className="col-span-2 border-t border-slate-200 pt-4 mt-2">
-                    <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                      <ArrowDown size={14} className="text-blue-500" /> Insert After (插入位置)
-                    </label>
-                    <div className="relative">
-                      <select
-                        className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none appearance-none bg-white font-medium text-slate-700 shadow-sm cursor-pointer transition-all hover:border-slate-400"
-                        value={editingItem.insertAfter || 'end'}
-                        onChange={(e) => handleChange('insertAfter', e.target.value)}
-                      >
-                        <option value="end">At the End (最後面)</option>
-                        {items.filter(i => i.phase === editingItem.phase).map(item => (
-                          <option key={item.id} value={item.id}>
-                            {item.id} - {item.activity.en}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-3 text-slate-400 pointer-events-none" size={16} />
+                  <div>
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.detail.insertAfter') || 'Insert After'}</span>
+                      <span className="flex-1 border-t-2 border-slate-400"></span>
                     </div>
+                    <select
+                      className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm"
+                      value={editingItem.insertAfter || 'end'}
+                      onChange={(e) => handleChange('insertAfter', e.target.value)}
+                    >
+                      <option value="beginning">{t('itp.detail.atTheBeginning') || 'At the Beginning'}</option>
+                      <option value="end">{t('itp.detail.atTheEnd') || 'At the End'}</option>
+                      {items.filter(i => i.phase === editingItem.phase).map(item => (
+                        <option key={item.id} value={item.id}>
+                          {item.id} - {item.activity.en}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 )}
               </div>
 
-              {/* Inspection Details */}
+              {/* Details */}
               <div className="space-y-4">
-                <h4 className="text-sm font-bold text-slate-800 border-b border-slate-200 pb-2 flex items-center gap-2">
-                  <FileText size={16} className="text-blue-600" /> Inspection Details
-                </h4>
-                {/* Activity (EN) & Standard Row */}
-                <div className="grid grid-cols-2 gap-6">
+                {/* Activity & Standard — side-by-side as a pair (2026-10-07: "次項目可以並排" —
+                    the two field-GROUPS sit side by side to save vertical space; each group's
+                    own EN/CH stays stacked top-to-bottom internally, matching the table/print
+                    direction, with a persistent "EN"/"中文" label on every box). */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
-                    <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2 ml-1">
-                      <FileText size={14} className="text-blue-500" /> Activity (EN)
-                    </label>
-                    <input type="text" className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white transition-all shadow-sm"
-                      value={editingItem.activity.en} onChange={(e) => handleChange('activity', e.target.value, 'en')} />
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.activityLabel') || 'Activity (EN/CH)'} <span style={{ color: '#b91c1c' }}>*</span></span>
+                      <span className="flex-1 border-t-2 border-slate-400"></span>
+                    </div>
+                    <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
+                    <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm resize-y mb-2" value={editingItem.activity.en} onChange={(e) => handleChange('activity', e.target.value, 'en')} />
+                    <span className="inline-block text-[11px] font-bold text-[#8a6a3a] bg-[#faf7f1] border border-[#b8945a]/40 rounded px-1.5 py-0.5 mb-1">中文</span>
+                    <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={editingItem.activity.ch} onChange={(e) => handleChange('activity', e.target.value, 'ch')} />
                   </div>
+
                   <div>
-                    <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2 ml-1">
-                      <ShieldCheck size={14} /> Standard (EN/CH)
-                    </label>
-                    <input type="text" className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono text-slate-600 bg-white shadow-sm mb-1"
-                      placeholder="EN"
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.standardLabel') || 'Standard (EN/CH)'} <span style={{ color: '#b91c1c' }}>*</span></span>
+                      <span className="flex-1 border-t-2 border-slate-400"></span>
+                    </div>
+                    <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
+                    <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm resize-y mb-2"
                       value={typeof editingItem.standard === 'string' ? editingItem.standard : editingItem.standard.en}
                       onChange={(e) => handleChange('standard', e.target.value, 'en')} />
-                    <input type="text" className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono text-slate-500 bg-white shadow-sm"
-                      placeholder="中文"
+                    <span className="inline-block text-[11px] font-bold text-[#8a6a3a] bg-[#faf7f1] border border-[#b8945a]/40 rounded px-1.5 py-0.5 mb-1">中文</span>
+                    <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y"
                       value={typeof editingItem.standard === 'string' ? '' : editingItem.standard.ch}
                       onChange={(e) => handleChange('standard', e.target.value, 'ch')} />
                   </div>
                 </div>
 
-                {/* Activity (CH) & Acceptance Criteria Row */}
-                <div className="grid grid-cols-2 gap-6">
-                  <div>
-                    <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2 ml-1">
-                      <FileText size={14} className="text-blue-500" /> Activity (CH)
-                    </label>
-                    <input type="text" className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white transition-all shadow-sm"
-                      value={editingItem.activity.ch} onChange={(e) => handleChange('activity', e.target.value, 'ch')} />
+                {/* Criteria — EN above CH per entry, stacked (same reasoning as Activity).
+                    Section label sits ON the divider line (2026-10-07, "字可以放在橫線前面"),
+                    not below a plain line, so the label reads as part of the same divider. */}
+                <div className="pt-2">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.criteriaLabel') || 'Criteria'}</span>
+                    <span className="flex-1 border-t-2 border-slate-400"></span>
                   </div>
-                  <div>
-                    <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2 ml-1">
-                      <CheckCircle2 size={14} /> Acceptance Criteria
-                    </label>
-                    {normalizeCriteria(editingItem.criteria).map((c, idx) => (
-                      <div key={idx} className="flex items-start gap-2 mb-2">
-                        <div className="flex-1 space-y-1">
-                          <input type="text" className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm font-medium"
-                            placeholder="EN" value={c.en} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'en')} />
-                          <input type="text" className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm text-slate-500"
-                            placeholder="中文" value={c.ch} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'ch')} />
-                        </div>
-                        <button type="button" onClick={() => handleCriteriaRemove(idx)} className="text-slate-400 hover:text-red-500 p-1.5 rounded-md hover:bg-red-50 transition-all shrink-0 mt-2">✕</button>
+                  {normalizeCriteria(editingItem.criteria).map((c, idx) => (
+                    <div key={idx} className="flex items-start gap-2 mb-2">
+                      {normalizeCriteria(editingItem.criteria).length > 1 && (
+                        <span className="shrink-0 w-6 h-6 mt-0.5 rounded-full bg-slate-700 text-white text-xs font-bold flex items-center justify-center">{idx + 1}</span>
+                      )}
+                      <div className="flex-1">
+                        <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
+                        <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm resize-y mb-2" value={c.en} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'en')} />
+                        <span className="inline-block text-[11px] font-bold text-[#8a6a3a] bg-[#faf7f1] border border-[#b8945a]/40 rounded px-1.5 py-0.5 mb-1">中文</span>
+                        <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={c.ch} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'ch')} />
                       </div>
-                    ))}
-                    <button type="button" onClick={handleCriteriaAdd} className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded hover:bg-blue-50 transition-all">+ Add Criteria</button>
-                  </div>
+                      <button className={actionStyles.iconDanger} type="button" onClick={() => handleCriteriaRemove(idx)}>✕</button>
+                    </div>
+                  ))}
+                  <button className={actionStyles.compact} type="button" onClick={handleCriteriaAdd}>{t('itp.itemPanel.addCriteria') || '+ Add Criteria'}</button>
                 </div>
 
-                {/* Procedure Specifics (Timing, Method, Frequency, Record) */}
-                <div className="grid grid-cols-2 gap-x-8 gap-y-6 pt-2">
+                {/* Others — Check Time / Method each get their own labeled-divider line (2026-10-07, "Check Time/Method 各劃一條") */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 pt-2">
                   <div>
-                    <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2 ml-1">
-                      <Calendar size={14} className="text-blue-500" /> Check Time (EN/CH)
-                    </label>
-                    <div className="flex flex-col gap-2">
-                      <input type="text" className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm"
-                        value={editingItem.checkTime.en} onChange={(e) => handleChange('checkTime', e.target.value, 'en')} />
-                      <input type="text" className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-500 bg-white shadow-sm"
-                        value={editingItem.checkTime.ch} onChange={(e) => handleChange('checkTime', e.target.value, 'ch')} />
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.checkTimeLabel') || 'Check Time (EN/CH)'}</span>
+                      <span className="flex-1 border-t-2 border-slate-400"></span>
                     </div>
+                    <textarea rows={3} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm mb-2 resize-y" value={editingItem.checkTime.en} onChange={(e) => handleChange('checkTime', e.target.value, 'en')} />
+                    <textarea rows={3} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={editingItem.checkTime.ch} onChange={(e) => handleChange('checkTime', e.target.value, 'ch')} />
                   </div>
                   <div>
-                    <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2 ml-1">
-                      <Filter size={14} className="text-blue-500" /> Method (EN/CH)
-                    </label>
-                    <div className="flex flex-col gap-2">
-                      <input type="text" className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm"
-                        value={editingItem.method.en} onChange={(e) => handleChange('method', e.target.value, 'en')} />
-                      <input type="text" className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-500 bg-white shadow-sm"
-                        value={editingItem.method.ch} onChange={(e) => handleChange('method', e.target.value, 'ch')} />
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.methodLabel') || 'Method (EN/CH)'}</span>
+                      <span className="flex-1 border-t-2 border-slate-400"></span>
                     </div>
+                    <textarea rows={3} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm mb-2 resize-y" value={editingItem.method.en} onChange={(e) => handleChange('method', e.target.value, 'en')} />
+                    <textarea rows={3} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={editingItem.method.ch} onChange={(e) => handleChange('method', e.target.value, 'ch')} />
                   </div>
                   <div>
-                    <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2 ml-1">
-                      <AlertCircle size={14} className="text-slate-400" /> Frequency (EN/CH)
-                    </label>
-                    <input type="text" className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm mb-2"
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.frequencyLabel') || 'Frequency (EN/CH)'}</span>
+                      <span className="flex-1 border-t-2 border-slate-400"></span>
+                    </div>
+                    <textarea rows={3} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm mb-2 resize-y"
                       value={typeof editingItem.frequency === 'string' ? editingItem.frequency : editingItem.frequency.en}
                       onChange={(e) => handleChange('frequency', e.target.value, 'en')} />
-                    <input type="text" className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm text-slate-500"
+                    <textarea rows={3} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y"
                       value={typeof editingItem.frequency === 'string' ? '' : editingItem.frequency.ch}
                       onChange={(e) => handleChange('frequency', e.target.value, 'ch')} />
                   </div>
                   <div>
-                    <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2 ml-1">
-                      <FileCheck size={14} className="text-emerald-600" /> Records
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        className="w-full border border-slate-300 bg-white rounded-lg pl-10 pr-4 h-10 text-sm focus:ring-2 focus:ring-emerald-500 outline-none font-mono text-slate-700 shadow-sm"
-                        list="itr-options"
-                        value={editingItem.record}
-                        onChange={(e) => handleChange('record', e.target.value)}
-                        placeholder="Select or enter Record No."
-                      />
-                      <Tag className="absolute left-3 top-3 text-slate-400" size={16} />
-                      <datalist id="itr-options">
-                        {itrList.map((itr) => (
-                          <option key={itr.id} value={itr.documentNumber} />
-                        ))}
-                      </datalist>
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.recordLabel') || 'Record'}</span>
+                      <span className="flex-1 border-t-2 border-slate-400"></span>
                     </div>
+                    <input
+                      className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm"
+                      list="itr-options"
+                      value={editingItem.record}
+                      onChange={(e) => handleChange('record', e.target.value)}
+                      placeholder={t('itp.itemPanel.recordPlaceholder') || 'Select or enter Record No.'}
+                    />
+                    <datalist id="itr-options">
+                      {itrList.map((itr) => (
+                        <option key={itr.id} value={itr.documentNumber} />
+                      ))}
+                    </datalist>
                   </div>
                 </div>
 
-                {/* Verification Points */}
-                <div className="bg-indigo-50/50 p-5 rounded-xl border border-indigo-100">
-                  <label className="block text-xs font-bold text-indigo-800 uppercase mb-4 tracking-wide text-center">Verification Points Assigment</label>
-                  <div className="grid grid-cols-4 gap-4">
+                {/* VP */}
+                <div className="bg-indigo-50/50 p-5 rounded-xl border border-indigo-100 mt-4">
+                  <label className="flex items-center justify-center gap-2 text-xs font-bold text-indigo-800 uppercase mb-4 text-center normal-case">
+                    <span className="uppercase">{t('itp.itemPanel.verificationPoints') || 'Verification Points'}</span>
+                    <span
+                      title={t('itp.itemPanel.vpLegend') || ''}
+                      className="inline-flex items-center justify-center w-[15px] h-[15px] rounded-full border border-indigo-300 text-indigo-500 text-[10px] font-bold leading-none cursor-help shrink-0"
+                    >!</span>
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     {[
-                      { key: 'sub', label: 'Sub-Con', icon: <HardHat size={14} /> },
-                      { key: 'teco', label: 'Main Con', icon: <Building2 size={14} /> },
-                      { key: 'employer', label: 'Employer', icon: <User size={14} /> },
+                      { key: 'sub', label: t('itp.itemPanel.subCon') || 'Sub-Con', icon: <HardHat size={14} /> },
+                      { key: 'teco', label: t('itp.itemPanel.mainCon') || 'Main Con', icon: <Building2 size={14} /> },
+                      { key: 'employer', label: t('itp.itemPanel.employer') || 'Employer', icon: <User size={14} /> },
                       { key: 'hse', label: 'HSE', icon: <ShieldCheck size={14} /> }
                     ].map(({ key, label, icon }) => (
-                      <div key={key} className="flex flex-col items-center bg-white p-3 rounded-lg border border-indigo-100 shadow-sm transition-transform hover:-translate-y-1 duration-200">
-                        <div className="text-[10px] uppercase font-bold text-slate-400 mb-2 flex items-center gap-1">
-                          {icon} {label}
-                        </div>
-                        <select className="w-full border-0 bg-slate-50 rounded-md text-sm font-bold py-1.5 text-center cursor-pointer hover:bg-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700"
-                          value={editingItem.vp[key]} onChange={(e) => handleVPChange(key, e.target.value)}>
+                      <div key={key} className="flex flex-col items-center bg-white p-3 rounded-lg border border-indigo-100 shadow-sm">
+                        <div className="text-[10px] uppercase font-bold text-slate-400 mb-2 flex items-center gap-1">{icon} {label}</div>
+                        <select className="w-full border-0 bg-slate-50 rounded-md text-sm font-bold py-1.5 text-center" value={editingItem.vp[key]} onChange={(e) => handleVPChange(key, e.target.value)}>
                           <option value="">-</option><option value="H">H</option><option value="W">W</option><option value="R">R</option><option value="※">※</option>
                         </select>
                       </div>
@@ -545,20 +550,17 @@ const ITPDetail: React.FC = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="bg-slate-50 px-8 py-5 border-t border-slate-200 flex justify-end gap-4">
-              <button
-                onClick={() => setEditingItem(null)}
-                className="px-6 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg shadow-sm transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                className="px-6 py-2.5 text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2 transform active:scale-95"
-              >
-                <Save size={18} /> Save Changes
-              </button>
-            </div>
+                      <FormActions cancel={<button
+                          onClick={() => itemGuard.requestClose(() => setEditingItem(null))}
+                          className={actionStyles.secondary}
+                      >
+                          {t('common.cancel') || 'Cancel'}
+                      </button>} primary={<button
+                          onClick={handleSave}
+                          className={actionStyles.primary}
+                      >
+                          <Save size={18} /> {t('common.apply') || 'Apply'}
+                      </button>} />
           </div>
         </div>
       )}
@@ -647,48 +649,42 @@ const ITPDetail: React.FC = () => {
                         {item.id}
                       </td>
                       <td className="px-5 py-4 border-r border-black align-top group-hover:text-black text-slate-800 transition-colors">
-                        <div className="font-bold text-sm mb-1">{item.activity.en}</div>
-                        <div className="text-slate-600 text-xs font-medium">{item.activity.ch}</div>
+                        <div className="font-bold text-[11px] mb-1">{item.activity.en}</div>
+                        <div className="text-slate-500 text-[10px] font-medium">{item.activity.ch}</div>
                       </td>
                       <td className="px-5 py-4 border-r border-black align-top">
                         <div className="inline-block bg-slate-100 text-slate-600 text-[11px] font-mono px-2 py-0.5 rounded mb-2 border border-black">
                           <div>{typeof item.standard === 'string' ? item.standard : item.standard.en}</div>
-                          {typeof item.standard !== 'string' && item.standard.ch && <div className="text-slate-400">{item.standard.ch}</div>}
+                          {typeof item.standard !== 'string' && item.standard.ch && <div className="text-slate-500 text-[10px]">{item.standard.ch}</div>}
                         </div>
-                        {(() => { const arr = (typeof item.criteria === 'string' ? (item.criteria ? [{ en: item.criteria, ch: '' }] : []) : (Array.isArray(item.criteria) ? item.criteria.map((c: any) => typeof c === 'string' ? { en: c, ch: '' } : c) : [])).filter((c: any) => c.en || c.ch); if (arr.length === 0) return null; if (arr.length === 1) return <><div className="text-slate-800 text-sm font-medium">{(arr[0] as any).en}</div>{(arr[0] as any).ch && <div className="text-slate-500 text-xs mt-0.5">{(arr[0] as any).ch}</div>}</>; return <ul className="space-y-1 pl-1">{arr.map((c: any, i: number) => <li key={i} className="flex items-start gap-1"><span className="text-slate-400 shrink-0 mt-0.5">•</span><div><div className="text-slate-800 text-sm font-medium">{c.en}</div>{c.ch && <div className="text-slate-500 text-xs">{c.ch}</div>}</div></li>)}</ul>; })()}
+                        {(() => { const arr = (typeof item.criteria === 'string' ? (item.criteria ? [{ en: item.criteria, ch: '' }] : []) : (Array.isArray(item.criteria) ? item.criteria.map((c: any) => typeof c === 'string' ? { en: c, ch: '' } : c) : [])).filter((c: any) => c.en || c.ch); if (arr.length === 0) return null; if (arr.length === 1) return <><div className="text-slate-800 text-[11px] font-medium">{(arr[0] as any).en}</div>{(arr[0] as any).ch && <div className="text-slate-500 text-[10px] mt-0.5">{(arr[0] as any).ch}</div>}</>; return <ul className="space-y-1 pl-1">{arr.map((c: any, i: number) => <li key={i} className="flex items-start gap-1"><span className="text-slate-400 shrink-0 mt-0.5">•</span><div><div className="text-slate-800 text-[11px] font-medium">{c.en}</div>{c.ch && <div className="text-slate-500 text-[10px]">{c.ch}</div>}</div></li>)}</ul>; })()}
                       </td>
                       <td className="px-5 py-4 border-r border-black bg-slate-50 align-top">
-                        <div className="text-black text-sm font-medium">{item.checkTime.en}</div>
-                        <div className="text-slate-500 text-xs mt-1">{item.checkTime.ch}</div>
+                        <div className="text-black text-[11px] font-medium">{item.checkTime.en}</div>
+                        <div className="text-slate-500 text-[10px] mt-1">{item.checkTime.ch}</div>
                       </td>
                       <td className="px-5 py-4 border-r border-black align-top">
-                        <div className="text-black text-sm">{item.method.en}</div>
-                        <div className="text-slate-500 text-xs mt-1">{item.method.ch}</div>
+                        <div className="text-black text-[11px]">{item.method.en}</div>
+                        <div className="text-slate-500 text-[10px] mt-1">{item.method.ch}</div>
                       </td>
                       <td className="px-5 py-4 border-r border-black align-top">
                         {typeof item.frequency === 'string' ? (
-                          <div className="text-slate-800 text-xs">{item.frequency}</div>
+                          <div className="text-slate-800 text-[11px]">{item.frequency}</div>
                         ) : (
                           <>
-                            <div className="text-slate-800 text-xs">{item.frequency.en}</div>
-                            {item.frequency.ch && <div className="text-slate-400 text-xs mt-1">{item.frequency.ch}</div>}
+                            <div className="text-slate-800 text-[11px]">{item.frequency.en}</div>
+                            {item.frequency.ch && <div className="text-slate-500 text-[10px] mt-1">{item.frequency.ch}</div>}
                           </>
                         )}
                       </td>
                       <td className="px-5 py-4 border-r border-black bg-slate-50 align-top">
                         {item.record !== '-' ? (
                           <button
-                            onClick={() => {
-                              if (item.record.includes('CHK') || item.record.startsWith('QTS')) {
-                                navigate(`/checklist?openId=${item.record}&from=itp`);
-                                return;
-                              }
-                              navigate('/itr');
-                              toast.info(`Please find ITR ${item.record} in the ITR list.`);
-                            }}
-                            className="inline-flex items-center px-2.5 py-1.5 rounded-md bg-white text-slate-900 hover:text-blue-800 hover:bg-blue-50 transition-colors font-mono text-xs font-bold border border-slate-300 hover:border-blue-400 whitespace-nowrap shadow-sm group/itr"
+                            onClick={() => handleRecordClick(item.record)}
+                            disabled={resolvingRecord === item.record}
+                            className="inline-flex items-center px-2.5 py-1.5 rounded-md bg-white text-slate-900 hover:text-blue-800 hover:bg-blue-50 transition-colors font-mono text-xs font-bold border border-slate-300 hover:border-blue-400 whitespace-nowrap shadow-sm group/itr disabled:opacity-50"
                           >
-                            <FileText size={12} className="mr-1.5 opacity-70 group-hover/itr:opacity-100" />{item.record}
+                            <FileText size={12} className="mr-1.5 opacity-70 group-hover/itr:opacity-100" />{resolvingRecord === item.record ? '...' : item.record}
                           </button>
                         ) : <span className="text-slate-400 text-xs pl-2">-</span>}
                       </td>
@@ -698,16 +694,14 @@ const ITPDetail: React.FC = () => {
                       <td className="px-2 py-4 text-center border-r border-black align-middle"><VPBadge type={item.vp.hse} /></td>
                       <td className="px-4 py-4 text-center align-middle sticky right-0 bg-white shadow-[-5px_0_10px_-5px_rgba(0,0,0,0.05)] transition-all border-l border-black no-print">
                         <div className="flex items-center justify-center gap-2">
-                          <button
+                          <button className={actionStyles.icon}
                             onClick={() => handleEditClick(item)}
-                            className="text-slate-500 hover:text-blue-600 p-2 rounded-lg hover:bg-blue-50 transition-all"
                             title="Edit"
                           >
                             <PenTool size={16} strokeWidth={2.5} />
                           </button>
-                          <button
+                          <button className={actionStyles.iconDanger}
                             onClick={() => handleDelete(item.id)}
-                            className="text-slate-500 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition-all"
                             title="Delete"
                           >
                             <Trash2 size={16} strokeWidth={2.5} />
@@ -728,6 +722,27 @@ const ITPDetail: React.FC = () => {
         </div>
       </div>
 
+          <div className="max-w-[1400px] mx-auto"><FormActions tools={<><button
+              onClick={() => setIsPrinting(true)}
+              className={actionStyles.secondary}
+          >
+              <Printer size={14} /> {t('itp.actionPrint') || 'Print'}
+          </button><button onClick={handleAddNew} className={actionStyles.secondary}>
+                  <Plus size={14} strokeWidth={3} /> {t('itp.actionAddNewItem') || 'Add New Item'}
+              </button></>} secondary={<button
+                  onClick={handlePublish}
+                  disabled={saving}
+                  className={actionStyles.workflow}
+              >
+                  <ShieldCheck size={14} strokeWidth={3} /> {t('itp.actionPublish') || 'Publish'}
+              </button>} primary={<button
+                  onClick={saveToBackend}
+                  disabled={saving}
+                  className={actionStyles.primary}
+              >
+                  {saving ? <LayoutTemplate size={14} className="animate-spin" /> : <Save size={14} strokeWidth={3} />}
+                  {saving ? (t('common.saving') || 'Saving...') : (t('itp.detail.saveDocument') || 'Save Document')}
+              </button>} /></div>
       {/* --- Print View (Portal) --- */}
       {/* Always render portal but hide via CSS to support Ctrl+P */}
       {ReactDOM.createPortal(
@@ -785,17 +800,9 @@ const ITPDetail: React.FC = () => {
                     <th className="px-2 py-2 text-center w-12 bg-slate-800 text-[11px] font-bold">HSE</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-black">
-                  {PHASES.map((phase) => (
-                    <React.Fragment key={phase.code}>
-                      <tr className="border-y border-black">
-                        <td colSpan={11} className={`px-0 py-0 border-b border-black ${phase.color}`}>
-                          <div className="px-6 py-3 font-bold text-sm flex items-center gap-2 uppercase tracking-wide w-full text-black">
-                            {phase.title}
-                          </div>
-                        </td>
-                      </tr>
-                      {items.filter(item => item.phase === phase.code).map((item) => (
+                {PHASES.map((phase) => {
+                  const phaseItems = items.filter(item => item.phase === phase.code);
+                  const renderRow = (item: InspectionItem) => (
                         <tr key={item.id} className="border-b border-black last:border-0 relative">
                           <td className="px-5 py-4 font-mono text-slate-900 font-bold border-r border-black bg-slate-50/30 align-top pt-5">
                             {item.id}
@@ -839,10 +846,26 @@ const ITPDetail: React.FC = () => {
                           <td className="px-2 py-4 text-center border-r border-black align-middle"><VPBadge type={item.vp.employer} /></td>
                           <td className="px-2 py-4 text-center align-middle"><VPBadge type={item.vp.hse} /></td>
                         </tr>
-                      ))}
+                  );
+                  // Phase heading travels with its first row so a tall first row cannot strand the heading alone at a page bottom.
+                  return (
+                    <React.Fragment key={phase.code}>
+                      <tbody className="break-inside-avoid">
+                      <tr className="border-y border-black">
+                        <td colSpan={11} className={`px-0 py-0 border-b border-black ${phase.color}`}>
+                          <div className="px-6 py-3 font-bold text-sm flex items-center gap-2 uppercase tracking-wide w-full text-black">
+                            {phase.title}
+                          </div>
+                        </td>
+                      </tr>
+                        {phaseItems.length > 0 && renderRow(phaseItems[0])}
+                      </tbody>
+                      <tbody>
+                        {phaseItems.slice(1).map(renderRow)}
+                      </tbody>
                     </React.Fragment>
-                  ))}
-                </tbody>
+                  );
+                })}
               </table>
             </div>
 

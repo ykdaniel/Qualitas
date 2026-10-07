@@ -7,6 +7,7 @@ import { createRoleColumns } from './columns';
 import { useIAMStore, Role } from '../../store/iamStore';
 import DeleteAuditModal from './DeleteAuditModal';
 import RoleModal from './RoleModal';
+import { getErrorMessage } from '../../utils/errorUtils';
 import styles from './IAM.module.css';
 import { Plus } from 'lucide-react';
 
@@ -61,7 +62,7 @@ const RoleManagement: React.FC<RoleManagementProps> = ({ searchQuery, tabsCompon
                 await deleteRole(parseInt(deleteModal.id), reason);
                 setDeleteModal({ isOpen: false, id: null });
             } catch (err: any) {
-                toast.error(err.message || "Failed to delete role");
+                toast.error(getErrorMessage(err, "Failed to delete role"));
             }
         }
     };

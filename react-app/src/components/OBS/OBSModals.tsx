@@ -1,8 +1,12 @@
+import { useDraftGuard } from '../Shared/LeaveGuard';
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
 import React, { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import ReactDOM from 'react-dom';
 import { getUsers, getEntityFiles, getAuthenticatedFileUrl, formatUserLabel, type User as ApiUser } from '../../services/api';
@@ -17,6 +21,13 @@ import type { OBSDetailData } from './obsFormSchema';
 
 // OBSDetailData lives with the zod schema (single source of truth). Re-export so
 // OBS.tsx keeps importing it from here.
+import { DateIssueBanner } from '../Shared/DateIssueMark';
+import { AttachmentsBlockedNotice, SaveFollowUpBanner } from '../Shared/SaveFollowUpBanner';
+import { OBS_DATE_FIELDS, preserveHistoricalDates } from '../../utils/dateIssues';
+import { followUpOf } from '../../utils/saveFlow';
+import type { FollowUp, SaveOutcome } from '../../utils/saveFlow';
+import { describeSaveError, presentOutcome } from '../../utils/saveErrors';
+
 export type { OBSDetailData };
 
 export interface PendingUploads {
@@ -27,15 +38,20 @@ export interface PendingUploads {
 export interface OBSDetailModalProps {
     obsId: string | null;
     existingItem?: OBSItem;
-    onSave: (details: OBSDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => void | Promise<void>;
+    onSave: (details: OBSDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => Promise<SaveOutcome>;
+    /** Retries only the unfinished file steps of a record that is already stored (never writes the record). */
+    onRetryFiles?: (pendingUploads: PendingUploads[], deletedFileIds: string[]) => Promise<SaveOutcome>;
     onClose: () => void;
     /** Open the form locked for viewing only — every field disabled, no Save.
      *  Driven by the caller from IAM permission + record status. */
     readOnly?: boolean;
+    /** false when the account may not upload / remove attachments (no update permission): the file controls are read-only and a notice says why. */
+    attachmentsAllowed?: boolean;
 }
 
-export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, existingItem, onSave, onClose, readOnly = false }) => {
+export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, existingItem, onSave, onRetryFiles, onClose, readOnly = false, attachmentsAllowed = true }) => {
     const { t } = useLanguage();
+    const { user: currentUser } = useAuth();
     const { getActiveContractors } = useContractorsStore();
 
     const {
@@ -82,6 +98,10 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
     const [pendingAttachments, setPendingAttachments] = useState<File[]>([]);
     const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
     const [saving, setSaving] = useState(false);
+    const leaveGuard = useDraftGuard({ fields: watch(), pendingDefectPhotos, pendingImprovementPhotos, pendingAttachments, deletedFileIds, voided }, saving, !readOnly);
+    const requestClose = () => leaveGuard.requestClose(onClose);
+    // Per-category counters handed to FileAttachment: bumped once that category's pending files are stored on the server.
+    const [syncTokens, setSyncTokens] = useState<Record<string, number>>({});
 
     // Attachment image preview (parity with NCR).
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -168,6 +188,31 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
         setValue(key, (getValues(key) || []).filter((a: any) => typeof a === 'string' || a?.id !== id), { shouldDirty: true });
     };
 
+    // What is still owed after a "saved, but a file step failed" outcome (see SaveFollowUpBanner).
+    const [followUp, setFollowUp] = useState<FollowUp | null>(null);
+    const uploadGroups = () => [
+        { category: 'defectPhoto', files: pendingDefectPhotos },
+        { category: 'improvementPhoto', files: pendingImprovementPhotos },
+        { category: 'attachment', files: pendingAttachments },
+    ];
+    // Shared by "Save" and "retry remaining files": trims what already went through, shows the ONE message, closes only when done.
+    const applyOutcome = (outcome: SaveOutcome, created: boolean) => {
+        if (outcome.status === 'saved-incomplete') {
+            // The record is stored. Drop what already went through so a retry only redoes the rest.
+            const done = new Set(outcome.uploadedCategories);
+            if (done.has('defectPhoto')) setPendingDefectPhotos([]);
+            if (done.has('improvementPhoto')) setPendingImprovementPhotos([]);
+            if (done.has('attachment')) setPendingAttachments([]);
+            setDeletedFileIds(outcome.remainingDeletes);
+            setSyncTokens(prev => outcome.uploadedCategories.reduce((acc, c) => ({ ...acc, [c]: (acc[c] ?? 0) + 1 }), { ...prev }));
+            setFollowUp(prev => followUpOf(outcome, prev?.created ?? created));
+        } else if (outcome.status !== 'failed') {
+            setFollowUp(null);
+        }
+        const { close, notice } = presentOutcome(outcome, t);
+        if (notice) (notice.level === 'error' ? toast.error : toast.warning)(notice.text, { duration: 10000 });
+        if (close) { leaveGuard.release(); onClose(); }
+    };
     const onValid = async (values: OBSDetailData) => {
         const finalStatus = voided ? 'Void' : deriveOBSStatus(values);
         // Closure photo gate: an OBS can only close with BOTH an observation
@@ -211,14 +256,23 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
             : (qualityEngineerApprovalDate || constructionEngineerApprovalDate || '');
         setSaving(true);
         try {
-            await onSave({ ...values, status: finalStatus, closeoutDate, qualityEngineerApprovalDate, constructionEngineerApprovalDate }, [
-                { category: 'defectPhoto', files: pendingDefectPhotos },
-                { category: 'improvementPhoto', files: pendingImprovementPhotos },
-                { category: 'attachment', files: pendingAttachments },
-            ], deletedFileIds);
-            onClose();
+            // an invalid stored date must not be erased by a blank <input type="date"> (it cannot display an invalid string)
+            const outcome = await onSave(preserveHistoricalDates({ ...values, status: finalStatus, closeoutDate, qualityEngineerApprovalDate, constructionEngineerApprovalDate }, existingItem, OBS_DATE_FIELDS), uploadGroups(), deletedFileIds);
+            applyOutcome(outcome, !existingItem);
         } catch (err) {
-            toast.error((err as Error)?.message || t('common.saveFailed'));
+            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
+        } finally {
+            setSaving(false);
+        }
+    };
+    // Retries only the unfinished file steps: the record itself is not written (that needs update permission the user may not have).
+    const retryFiles = async () => {
+        if (!onRetryFiles) return;
+        setSaving(true);
+        try {
+            applyOutcome(await onRetryFiles(uploadGroups(), deletedFileIds), false);
+        } catch (err) {
+            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
         } finally {
             setSaving(false);
         }
@@ -251,6 +305,24 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
         />
     );
 
+    // Engineer sign-off identity (2026-10-05, BACKLOG #20): ApprovedBy used to be
+    // a free-pick dropdown over every IAM user. The server now always derives it
+    // from whoever is authenticated (obs_service.py::_apply_engineer_approval_identity)
+    // and ignores whatever the client sends, so this is a read-only PREVIEW of what
+    // the server will stamp, not the source of truth. It only substitutes the current
+    // user's name when THIS editing session is the one flipping Pending/Rejected ->
+    // Approved; an already-Approved record (loaded that way) keeps showing its real,
+    // possibly different, historical approver instead of being overwritten by whoever
+    // happens to be viewing it now.
+    const approverDisplay = (approvalField: 'qualityEngineerApproval' | 'constructionEngineerApproval', byField: 'qualityEngineerApprovalBy' | 'constructionEngineerApprovalBy') => {
+        const liveApproval = watch(approvalField);
+        const storedByField = watch(byField);
+        if (liveApproval !== 'Approved') return storedByField || '—';
+        const wasAlreadyApproved = existingItem?.[approvalField] === 'Approved';
+        if (wasAlreadyApproved) return storedByField || '—';
+        return currentUser ? formatUserLabel(currentUser) : '—';
+    };
+
     // Voiding withdraws the observation, so no fields are required — bypass the
     // zod resolver and save the current values directly. Otherwise validate.
     const handleSaveClick = () => {
@@ -278,7 +350,7 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
             <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
                 <div className={formStyles.modalHeader}>
                     <h2>{readOnly ? '檢視觀察 / View Observation' : existingItem ? t('obs.editTitle') : t('obs.addTitle')}</h2>
-                    <button className={formStyles.closeButton} onClick={onClose} disabled={saving}>×</button>
+                    <button className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={requestClose} disabled={saving}>×</button>
                 </div>
                 <div className={formStyles.tabsContainer}>
                     {TABS.map((tab) => (
@@ -296,6 +368,9 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                     ))}
                 </div>
                 <div className={formStyles.modalBody} ref={modalBodyRef}>
+                    <DateIssueBanner item={existingItem} />
+                    {!readOnly && !attachmentsAllowed && <AttachmentsBlockedNotice creating={!existingItem} />}
+                    <SaveFollowUpBanner followUp={followUp} canEditFields={!readOnly} canRetry={attachmentsAllowed} busy={saving} onRetry={() => { void retryFiles(); }} />
                     {!readOnly && (
                         <p className={formStyles.formRequiredHint}>{t('form.requiredHint')}</p>
                     )}
@@ -425,6 +500,9 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                             <FileAttachment
                                 id="obs-defect-photos"
                                 category="defectPhoto"
+                                readOnly={!attachmentsAllowed}
+                                syncToken={syncTokens.defectPhoto}
+                                initialPendingFiles={pendingDefectPhotos}
                                 entityType={existingItem ? 'obs' : undefined}
                                 entityId={existingItem?.id}
                                 title={t('obs.defectPhotos')}
@@ -438,6 +516,9 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                             <FileAttachment
                                 id="obs-improvement-photos"
                                 category="improvementPhoto"
+                                readOnly={!attachmentsAllowed}
+                                syncToken={syncTokens.improvementPhoto}
+                                initialPendingFiles={pendingImprovementPhotos}
                                 entityType={existingItem ? 'obs' : undefined}
                                 entityId={existingItem?.id}
                                 title={t('obs.improvementPhotos')}
@@ -451,6 +532,9 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                             <FileAttachment
                                 id="obs-attachments"
                                 category="attachment"
+                                readOnly={!attachmentsAllowed}
+                                syncToken={syncTokens.attachment}
+                                initialPendingFiles={pendingAttachments}
                                 entityType={existingItem ? 'obs' : undefined}
                                 entityId={existingItem?.id}
                                 title={t('obs.attachments')}
@@ -483,12 +567,13 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label className={formStyles.optionalLabel}>{t('obs.approvedBy') || '簽核人 Approved By'}</label>
-                                    <select className={formStyles.formSelect} {...register('qualityEngineerApprovalBy')}>
-                                        <option value="">{t('obs.approvedByPlaceholder') || '請選擇'}</option>
-                                        {users.map(u => (
-                                            <option key={u.id} value={formatUserLabel(u)}>{formatUserLabel(u)}</option>
-                                        ))}
-                                    </select>
+                                    <input
+                                        type="text"
+                                        className={formStyles.formInput}
+                                        value={approverDisplay('qualityEngineerApproval', 'qualityEngineerApprovalBy')}
+                                        readOnly
+                                        style={{ backgroundColor: '#D9D9D9', cursor: 'not-allowed' }}
+                                    />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label className={formStyles.optionalLabel}>{t('obs.approvalDate') || '簽核日期 Approval Date'}</label>
@@ -506,12 +591,13 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label className={formStyles.optionalLabel}>{t('obs.approvedBy') || '簽核人 Approved By'}</label>
-                                    <select className={formStyles.formSelect} {...register('constructionEngineerApprovalBy')}>
-                                        <option value="">{t('obs.approvedByPlaceholder') || '請選擇'}</option>
-                                        {users.map(u => (
-                                            <option key={u.id} value={formatUserLabel(u)}>{formatUserLabel(u)}</option>
-                                        ))}
-                                    </select>
+                                    <input
+                                        type="text"
+                                        className={formStyles.formInput}
+                                        value={approverDisplay('constructionEngineerApproval', 'constructionEngineerApprovalBy')}
+                                        readOnly
+                                        style={{ backgroundColor: '#D9D9D9', cursor: 'not-allowed' }}
+                                    />
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label className={formStyles.optionalLabel}>{t('obs.approvalDate') || '簽核日期 Approval Date'}</label>
@@ -558,19 +644,25 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                     )}
                     </fieldset>
                 </div>
-                <div className={formStyles.modalActions}>
-                    {!readOnly && (
-                        <button type="button" className={formStyles.saveButton} onClick={handleSaveClick} disabled={saving}>
-                            {saving ? t('obs.saving') : t('common.save')}
+                <FormActions
+                    tools={<>
+                        <button className={actionStyles.secondary} type="button" onClick={handlePrintClick} disabled={saving} title={t('common.print') || 'Print'}>
+                            {t('common.print') || 'Print'}
                         </button>
-                    )}
-                    <button type="button" className={formStyles.printButton} onClick={handlePrintClick} disabled={saving} title={t('common.print') || 'Print'}>
-                        {t('common.print') || 'Print'}
-                    </button>
-                    <button type="button" className={formStyles.cancelButton} onClick={onClose} disabled={saving}>
-                        {t('common.cancel')}
-                    </button>
-                </div>
+                    </>}
+                    cancel={<>
+                        <button className={actionStyles.secondary} type="button" onClick={requestClose} disabled={saving}>
+                            {t('common.cancel')}
+                        </button>
+                    </>}
+                    primary={<>
+                        {!readOnly && (
+                            <button className={actionStyles.primary} type="button" onClick={handleSaveClick} disabled={saving}>
+                                {saving ? t('obs.saving') : t('common.save')}
+                            </button>
+                        )}
+                    </>}
+                />
             </div>
             {isPrinting && printData && ReactDOM.createPortal(
                 <OBSPrintTemplate

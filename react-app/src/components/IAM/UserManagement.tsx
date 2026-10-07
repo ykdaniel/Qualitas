@@ -1,11 +1,9 @@
 import React, { useState, useMemo, useDeferredValue } from 'react';
-import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createUserColumns } from './columns';
 import { useIAMStore, User } from '../../store/iamStore';
-import DeleteAuditModal from './DeleteAuditModal';
 import UserModal from './UserModal';
 import styles from './IAM.module.css';
 import { Plus } from 'lucide-react';
@@ -17,22 +15,21 @@ interface UserManagementProps {
 
 const UserManagement: React.FC<UserManagementProps> = ({ searchQuery, tabsComponent }) => {
     const { t } = useLanguage();
-    const { hasPermission } = useAuth();
-    const { users, roles, createUser, updateUser, deleteUser, loading } = useIAMStore();
+    const { hasPermission, user: currentUser } = useAuth();
+    // Mirrors the API's rule (which is what actually enforces it): Admin = role name, case-insensitive.
+    const isAdminName = (name?: string | null) => (name || '').toLowerCase() === 'admin';
+    const viewerIsAdmin = isAdminName(currentUser?.role_name);
+    const { users, roles, createUser, updateUser, loading } = useIAMStore();
     const deferredQuery = useDeferredValue(searchQuery);
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
 
-    const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null }>({
-        isOpen: false,
-        id: null
-    });
-
     const filteredUsers = useMemo(() => {
         const query = deferredQuery.toLowerCase();
         return users.filter(u =>
             u.name.toLowerCase().includes(query) ||
+            u.username.toLowerCase().includes(query) ||
             u.email.toLowerCase().includes(query) ||
             u.role.toLowerCase().includes(query)
         );
@@ -50,21 +47,6 @@ const UserManagement: React.FC<UserManagementProps> = ({ searchQuery, tabsCompon
         } else {
             const result = await createUser(validationData);
             return result?.id != null ? Number(result.id) : undefined;
-        }
-    };
-
-    const handleDeleteClick = (id: string) => {
-        setDeleteModal({ isOpen: true, id });
-    };
-
-    const handleDeleteConfirm = async (reason: string) => {
-        if (deleteModal.id) {
-            try {
-                await deleteUser(parseInt(deleteModal.id), reason);
-                setDeleteModal({ isOpen: false, id: null });
-            } catch (err: any) {
-                toast.error(err.message || "Failed to delete user");
-            }
         }
     };
 
@@ -87,7 +69,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ searchQuery, tabsCompon
                     <DataTable
                         title={t('iam.userList')}
                         actions={null} // Actions moved to Action Bar
-                        columns={createUserColumns(handleDeleteClick, roles, t)}
+                        columns={createUserColumns(roles, t)}
                         data={filteredUsers}
                         getRowId={(row) => row.id}
                         onRowClick={(row) => handleEdit(row)}
@@ -99,7 +81,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ searchQuery, tabsCompon
             {isModalOpen && (
                 <UserModal
                     existingUser={editingUser}
-                    readOnly={!hasPermission('iam:user:manage')}
+                    readOnly={!hasPermission('iam:user:manage') || (!!editingUser && isAdminName(editingUser.role) && !viewerIsAdmin)}
+                    canManageRoles={hasPermission('iam:role:manage')}
+                    canSetPassword={viewerIsAdmin}
+                    adminAccountLocked={!!editingUser && isAdminName(editingUser.role) && !viewerIsAdmin}
                     roles={roles}
                     onSave={handleSave}
                     onClose={() => setIsModalOpen(false)}
@@ -107,14 +92,6 @@ const UserManagement: React.FC<UserManagementProps> = ({ searchQuery, tabsCompon
                     loading={loading}
                 />
             )}
-
-            <DeleteAuditModal
-                isOpen={deleteModal.isOpen}
-                title={t('iam.deleteUser') || 'Delete User'}
-                message={t('common.confirmDelete') || 'Are you sure you want to delete this user?'}
-                onConfirm={handleDeleteConfirm}
-                onCancel={() => setDeleteModal({ isOpen: false, id: null })}
-            />
         </div>
     );
 };

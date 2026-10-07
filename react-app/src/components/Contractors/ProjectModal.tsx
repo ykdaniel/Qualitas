@@ -1,14 +1,20 @@
+import { useLanguage } from '../../context/LanguageContext';
+import { toast } from 'sonner';
+import { useDraftGuard } from '../Shared/LeaveGuard';
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
 import React, { useMemo, useState } from 'react';
 import { Project } from '../../store/projectStore';
 import styles from './ProjectModal.module.css';
 
 interface ProjectModalProps {
   existing?: Project;
-  onSave: (data: Omit<Project, 'id' | 'created_at'>) => void;
+  onSave: (data: Omit<Project, 'id' | 'created_at'>) => Promise<void>;
   onClose: () => void;
 }
 
 const ProjectModal: React.FC<ProjectModalProps> = ({ existing, onSave, onClose }) => {
+  const { t } = useLanguage();
   const initialForm = useMemo(() => ({
     name: existing?.name || '',
     code: existing?.code || '',
@@ -19,18 +25,24 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ existing, onSave, onClose }
   const [form, setForm] = useState(initialForm);
 
   const [isClosing, setIsClosing] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(form);
+    if (saving) return;
+    setSaving(true);
+    try { await onSave(form); }
+    catch { toast.error(t('common.saveFailed')); }
+    finally { setSaving(false); }
   };
 
-  const handleClose = () => {
+    const leaveGuard = useDraftGuard(form, saving);
+  const handleClose = () => leaveGuard.requestClose(() => {
     setIsClosing(true);
     setTimeout(() => {
       onClose();
     }, 250); // Match animation duration
-  };
+  });
 
   return (
     <div className={`${styles.modalOverlay} ${isClosing ? styles.closing : ''}`} onMouseDown={handleClose}>
@@ -83,14 +95,18 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ existing, onSave, onClose }
               rows={3}
             />
           </div>
-          <div className={styles.formActions}>
-            <button type="button" className={styles.cancelButton} onClick={handleClose}>
-              Cancel
-            </button>
-            <button type="submit" className={styles.submitButton}>
-              {existing ? 'Save Changes' : 'Add Project'}
-            </button>
-          </div>
+                  <FormActions
+                      cancel={<>
+                          <button className={actionStyles.secondary} type="button" onClick={handleClose}>
+                              Cancel
+                          </button>
+                      </>}
+                      primary={<>
+                          <button className={actionStyles.primary} type="submit" disabled={saving}>
+                              {existing ? 'Save Changes' : 'Add Project'}
+                          </button>
+                      </>}
+                  />
         </form>
       </div>
     </div>

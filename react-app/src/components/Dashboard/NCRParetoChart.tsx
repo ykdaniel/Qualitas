@@ -2,6 +2,7 @@ import { Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 import React, { useMemo } from 'react';
 import { useNCRStore } from '../../store/ncrStore';
 import { useDashboardFilterStore } from '../../store/dashboardFilterStore';
+import { isClosedStatus, isOutstandingStatus, isVoidStatus, buildParetoCumulative } from '../../utils/statusBuckets';
 import styles from './Dashboard.module.css';
 
 const NCRParetoChart: React.FC = React.memo(() => {
@@ -15,23 +16,22 @@ const NCRParetoChart: React.FC = React.memo(() => {
       ? ncrList
       : ncrList.filter(item => item.vendor === selectedVendor);
 
-    // 按承包商分组统计
-    const contractorStats: Record<string, { total: number; open: number; closed: number }> = {};
+    // 按承包商分组统计。open/closed 判斷改用共用的 utils/statusBuckets.ts（與
+    // NCRStatsCard.tsx／useDashboardStats.ts 同一來源，2026-09-29 統一）。`total` 仍包含 Void
+    // （供逐筆核對用，圖表本身不直接顯示這個欄位），`voided` 另外記錄。
+    const contractorStats: Record<string, { total: number; open: number; closed: number; voided: number }> = {};
 
     filteredList.forEach(ncr => {
       const contractor = ncr.vendor || 'Unknown';
       if (!contractorStats[contractor]) {
-        contractorStats[contractor] = { total: 0, open: 0, closed: 0 };
+        contractorStats[contractor] = { total: 0, open: 0, closed: 0, voided: 0 };
       }
       contractorStats[contractor].total++;
-      const status = (ncr.status || '').toLowerCase();
-      if (status === 'closed') {
+      if (isClosedStatus(ncr.status)) {
         contractorStats[contractor].closed++;
-      } else if (status !== 'void') {
-        // Void NCRs count toward the contractor's total but are neither
-        // open nor closed — matches NCRStatsCard's own exclusion (the
-        // sidebar stat card this chart sits next to), which previously
-        // disagreed with this chart on what counts as "open".
+      } else if (isVoidStatus(ncr.status)) {
+        contractorStats[contractor].voided++;
+      } else if (isOutstandingStatus(ncr.status)) {
         contractorStats[contractor].open++;
       }
     });
@@ -46,31 +46,17 @@ const NCRParetoChart: React.FC = React.memo(() => {
       }))
       .sort((a, b) => b.total - a.total);
 
-    // 计算总NCR数
-    const totalNCRs = sortedData.reduce((sum, item) => sum + item.total, 0);
-
-    // 计算累积百分比
-    const { result: dataWithCumulative } = sortedData.reduce(
-      (acc, item) => {
-        acc.cumulative += item.total;
-        const cumulativePercent = totalNCRs > 0 ? Math.round((acc.cumulative / totalNCRs) * 100) : 0;
-        acc.result.push({
-          ...item,
-          cumulativePercent,
-        });
-        return acc;
-      },
-      { cumulative: 0, result: [] as any[] }
-    );
-
-    return dataWithCumulative;
+    // 累積比例分母排除 Void（2026-09-29 使用者決定，見 utils/statusBuckets.ts::buildParetoCumulative
+    // 的完整說明與單元測試）：柱狀圖只畫 Open／Closed，累積線的範圍須與柱狀圖一致，否則最後一根
+    // 柱子的柱高會低於累積線標示的 100%。
+    return buildParetoCumulative(sortedData);
   }, [ncrList, selectedVendor]);
 
   // Recharts' "nice tick" rounding can inflate the left axis well past the
   // actual max bar (observed: a max of 2 rendering against a 0-4 axis), and
   // does so inconsistently between otherwise-identical charts. Pass explicit
   // integer ticks so the axis always matches the data exactly.
-  const leftAxisMax = Math.max(1, Math.ceil(Math.max(0, ...paretoData.map(d => d.total)) * 1.15));
+  const leftAxisMax = Math.max(1, Math.ceil(Math.max(0, ...paretoData.map(d => d.open + d.closed)) * 1.15));
   const leftAxisTicks = useMemo(
     () => Array.from({ length: leftAxisMax + 1 }, (_, i) => i),
     [leftAxisMax]

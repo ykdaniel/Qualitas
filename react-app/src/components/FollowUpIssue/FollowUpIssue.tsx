@@ -1,3 +1,6 @@
+import { useDraftGuard } from '../Shared/LeaveGuard';
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -15,6 +18,8 @@ import styles from './FollowUpIssue.module.css';
 import formStyles from '../Shared/FormShell.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import api, { getUsers, formatUserLabel, type User as ApiUser } from '../../services/api';
+import { getProjectFilterParams, getCurrentProjectScopeId } from '../../utils/projectFilter';
+import { useProjectStore } from '../../store/projectStore';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { useFollowUpIssueStats } from '../../hooks/useFollowUpIssueStats';
@@ -79,21 +84,42 @@ const FollowUpIssue: React.FC = () => {
   const itpList = useITPStore(state => state.itpList);
   const pqpList = usePQPStore(state => state.pqpList);
 
+  // BACKLOG #28 (2026-09-29): this page's real FollowUp rows were fetched here directly, bypassing
+  // both `getProjectFilterParams()` (so the project selector never actually narrowed them) and
+  // `useFollowUpStore` (so the store's own race/scope-clearing fix — see itpStore.ts — never
+  // applied here either). Fixed the same way, locally: a per-mount fetch-sequence ref discards a
+  // stale response, and a cross-scope failure clears `manualIssues` instead of leaving the
+  // previous project's rows displayed with no error state. The NCR/OBS/NOI/ITR/ITP/PQP rows merged
+  // in below already come from their own (already-fixed) shared stores.
+  const currentScopeId = useProjectStore(s => s.currentProject?.id ?? '__all__');
+  const fetchSeqRef = useRef(0);
+  const dataScopeIdRef = useRef<string | null>(null);
+
   const fetchManualIssues = async () => {
+    const seq = ++fetchSeqRef.current;
+    const requestedScopeId = getCurrentProjectScopeId();
     setLoading(true);
     try {
-      const res = await api.get('/followup/');
+      const res = await api.get('/followup/', { params: { ...getProjectFilterParams() } });
+      if (seq !== fetchSeqRef.current) return;
+      dataScopeIdRef.current = requestedScopeId;
       setManualIssues(res.data);
     } catch (err) {
+      if (seq !== fetchSeqRef.current) return;
       console.error('Failed to fetch issues:', err);
+      if (requestedScopeId !== dataScopeIdRef.current) {
+        dataScopeIdRef.current = requestedScopeId;
+        setManualIssues([]);
+      }
     } finally {
-      setLoading(false);
+      if (seq === fetchSeqRef.current) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchManualIssues();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentScopeId]);
 
   // 合併所有 Open 狀態的項目
   const issues = useMemo(() => {
@@ -537,13 +563,18 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
     }, 0);
   };
 
+  const [saving, setSaving] = useState(false);
+  const leaveGuard = useDraftGuard(formData, saving, existingItem?.status !== 'Closed');
+  const requestClose = () => leaveGuard.requestClose(onClose);
   const handleSave = async () => {
+    if (saving) return;
+    setSaving(true);
     try {
       await onSave(formData);
       onClose();
     } catch (err) {
       toast.error((err as Error)?.message || 'Save failed');
-    }
+    } finally { setSaving(false); }
   };
 
   // A Closed FollowUp is an unconditional dead end backend-side (see
@@ -556,7 +587,7 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
       <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
         <div className={formStyles.modalHeader}>
           <h2>{existingItem ? t('followup.editTitle') : t('followup.addTitle')}</h2>
-          <button className={formStyles.closeButton} onClick={onClose}>×</button>
+          <button className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={requestClose}>×</button>
         </div>
         <div className={formStyles.modalBody}>
           <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
@@ -594,8 +625,11 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
                     onChange={(e) => handleAssigneeChange(e.target.value)}
                   >
                     <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
-                    {users.map(u => (
-                      <option key={u.id} value={u.id}>{formatUserLabel(u)}</option>
+                    {existingItem?.assignedToUserId != null && !users.some(u => u.id === existingItem?.assignedToUserId) && (
+                      <option value={existingItem?.assignedToUserId} disabled>{`原指派 / Existing assignee #${existingItem?.assignedToUserId}`}</option>
+                    )}
+                    {users.filter(u => u.is_active || u.id === existingItem?.assignedToUserId).map(u => (
+                      <option key={u.id} value={u.id} disabled={!u.is_active}>{formatUserLabel(u)}{!u.is_active ? '（已停用 / Inactive）' : ''}</option>
                     ))}
                   </select>
                   {!formData.assignedToUserId && formData.assignedTo && (
@@ -704,19 +738,9 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
                 <div className={formStyles.formGroupFull}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                     <label>{t('followup.action')}</label>
-                    <button
+                    <button className={actionStyles.compact}
                       type="button"
                       onClick={handleInsertDate}
-                      style={{
-                        padding: '6px 12px',
-                        backgroundColor: '#4CAF50',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '14px',
-                        fontWeight: '500',
-                      }}
                       onMouseOver={(e) => {
                         e.currentTarget.style.backgroundColor = '#45a049';
                       }}
@@ -740,16 +764,20 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
           </div>
           </fieldset>
         </div>
-        <div className={formStyles.modalActions}>
-          {!readOnly && (
-            <button className={formStyles.saveButton} onClick={handleSave}>
-              {t('common.save')}
-            </button>
-          )}
-          <button className={formStyles.cancelButton} onClick={onClose}>
-            {t('common.cancel')}
-          </button>
-        </div>
+              <FormActions
+                  cancel={<>
+                      <button className={actionStyles.secondary} onClick={requestClose}>
+                          {t('common.cancel')}
+                      </button>
+                  </>}
+                  primary={<>
+                      {!readOnly && (
+                          <button className={actionStyles.primary} onClick={handleSave} disabled={saving}>
+                              {t('common.save')}
+                          </button>
+                      )}
+                  </>}
+              />
       </div>
     </div>
   );
@@ -776,7 +804,7 @@ const FollowUpIssueDetailsViewModal: React.FC<FollowUpIssueDetailsViewModalProps
       <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
         <div className={formStyles.modalHeader}>
           <h2>{t('followup.detailsTitle')}</h2>
-          <button className={formStyles.closeButton} onClick={onClose}>×</button>
+          <button className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={onClose}>×</button>
         </div>
         <div className={formStyles.modalBody}>
           <div className={formStyles.formSections}>
@@ -815,14 +843,18 @@ const FollowUpIssueDetailsViewModal: React.FC<FollowUpIssueDetailsViewModalProps
             </div>
           </div>
         </div>
-        <div className={formStyles.modalActions}>
-          <button className={formStyles.printButton} onClick={handlePrint}>
-            {t('common.print')}
-          </button>
-          <button className={formStyles.cancelButton} onClick={onClose}>
-            {t('common.close')}
-          </button>
-        </div>
+              <FormActions
+                  tools={<>
+                      <button className={actionStyles.secondary} onClick={handlePrint}>
+                          {t('common.print')}
+                      </button>
+                  </>}
+                  cancel={<>
+                      <button className={actionStyles.secondary} onClick={onClose}>
+                          {t('common.close')}
+                      </button>
+                  </>}
+              />
       </div>
     </div>
   );

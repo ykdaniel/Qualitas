@@ -1,5 +1,7 @@
 import React from 'react';
 import styles from './Checklist.print.module.css';
+import { useResultLabel } from './ChecklistResultControls';
+import { useLanguage } from '../../context/LanguageContext';
 
 interface ChecklistPrintTemplateProps {
     formData: any;
@@ -10,6 +12,10 @@ interface ChecklistPrintTemplateProps {
 const paddingRows = [null];
 
 const ChecklistPrintTemplate: React.FC<ChecklistPrintTemplateProps> = ({ formData, displayNo }) => {
+    // Same wording as the on-screen controls (Not filled / Pass / Fail / N/A /
+    // Unknown value), in the current UI language — never the raw stored code.
+    const resultLabel = useResultLabel();
+    const { t } = useLanguage();
     return (
         <div id="checklist-print-root" className={styles.printablePage}>
             <table className={styles.headerTable}>
@@ -90,7 +96,7 @@ const ChecklistPrintTemplate: React.FC<ChecklistPrintTemplateProps> = ({ formDat
                         <th>Inspection Item</th>
                         <th>Criteria</th>
                         <th>Actual Situation</th>
-                        <th style={{ width: '80px' }}>Result</th>
+                        <th style={{ width: '170px' }}>Result</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -100,7 +106,16 @@ const ChecklistPrintTemplate: React.FC<ChecklistPrintTemplateProps> = ({ formDat
                             <td className="font-bold">{item.item}</td>
                             <td>{item.criteria}</td>
                             <td>{item.situation}</td>
-                            <td className="text-center">{item.result}</td>
+                            <td className="text-center" data-print-result>
+                                {resultLabel(item.result)}
+                                {item.result === '/' && (
+                                    <div style={{ fontSize: '10px' }}>
+                                        {String(item.naReason ?? '').trim()
+                                            ? `${t('checklist.na.reasonLabel')}: ${item.naReason}`
+                                            : t('checklist.na.legacyNoReason')}
+                                    </div>
+                                )}
+                            </td>
                         </tr>
                     ))}
                     {paddingRows.map((_, idx) => (
@@ -109,7 +124,7 @@ const ChecklistPrintTemplate: React.FC<ChecklistPrintTemplateProps> = ({ formDat
                             <td></td>
                             <td></td>
                             <td></td>
-                            <td className="text-center text-slate-300">/</td>
+                            <td className="text-center"></td>
                         </tr>
                     ))}
                     <tr>

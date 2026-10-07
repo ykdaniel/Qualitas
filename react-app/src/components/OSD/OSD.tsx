@@ -14,7 +14,8 @@ import { OSDDetailModal, OSDDetailData, PendingUploads } from './OSDModals';
 import { useDebounce } from '../../hooks/useDebounce';
 import { uploadFiles, deleteFile } from '../../services/api';
 import { useOSDStats } from '../../hooks/useOSDStats';
-import { getErrorMessage } from '../../utils/errorUtils';
+import { runSaveFlow, type SaveOutcome } from '../../utils/saveFlow';
+import { describeSaveError } from '../../utils/saveErrors';
 
 type StatusFilter = 'all' | 'open' | 'closed' | 'void';
 
@@ -70,8 +71,16 @@ const OSD: React.FC = () => {
     setIsEditModalOpen(true);
   };
 
-  const handleSaveOSDDetails = async (details: OSDDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => {
-    if (!currentOsdId) return;
+  // Uses the shared runSaveFlow contract (utils/saveFlow.ts — already relied on by NCR/OBS/NOI)
+  // instead of a hand-rolled try/catch: the record write is a single, separately-failable step,
+  // and once it succeeds the id is promoted onto currentOsdId immediately (onRecordSaved) —
+  // BEFORE any upload/delete step runs — so that if a later step fails and the user retries via
+  // the same Save button, the retry's `isNew` check already sees the real id and goes through
+  // `updateOSD`, never `addOSD` again. This directly fixes: a new record whose main data saved
+  // successfully but whose attachments partially failed used to be re-created (a second, real
+  // duplicate POST) on every retry, because currentOsdId stayed 'new' across the failed attempt.
+  const handleSaveOSDDetails = async (details: OSDDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]): Promise<SaveOutcome> => {
+    if (!currentOsdId) return { status: 'failed', message: t('common.saveFailed') };
     const isNew = currentOsdId === 'new';
     // documentNumber 由後端自動產生，新建時不送
     const payload: Record<string, unknown> = {
@@ -98,52 +107,38 @@ const OSD: React.FC = () => {
       attachments: details.attachments,
       dueDate: details.dueDate || undefined,
     };
-    try {
-      let targetId = '';
-      if (isNew) {
-        const createdOsd = await addOSD(payload as Omit<ContextOSDItem, 'id'>);
-        targetId = createdOsd.id;
-      } else {
-        await updateOSD(currentOsdId, payload);
-        targetId = currentOsdId;
-      }
 
-      const fileErrors: string[] = [];
-      if (deletedFileIds.length > 0) {
-        const deleteResults = await Promise.allSettled(
-          [...new Set(deletedFileIds)].map((fileId) => deleteFile(fileId))
-        );
-        deleteResults.forEach((result) => {
-          if (result.status === 'rejected') {
-            const detail = (result.reason as any)?.response?.data?.detail || (result.reason as Error)?.message;
-            fileErrors.push(detail || 'Failed to delete one or more files');
-          }
-        });
-      }
-
-      if (targetId) {
-        for (const { category, files } of pendingUploads) {
-          if (files.length > 0) {
-            try {
-              await uploadFiles('osd', targetId, files, category);
-            } catch (err: any) {
-              const detail = err?.response?.data?.detail || err?.message;
-              fileErrors.push(detail || `Failed to upload ${category}`);
-            }
-          }
+    const outcome = await runSaveFlow({
+      writeRecord: async () => {
+        // Re-checked against the LATEST currentOsdId at call time (not the `isNew`
+        // captured when this function started) would need a ref; instead this relies
+        // on the fact that writeRecord only runs once per attempt and onRecordSaved
+        // below promotes currentOsdId synchronously before the function returns, so a
+        // *second* call to handleSaveOSDDetails (a retry) re-evaluates `isNew` fresh
+        // from the promoted id and takes the update branch below instead.
+        if (isNew) {
+          const createdOsd = await addOSD(payload as Omit<ContextOSDItem, 'id'>);
+          return createdOsd.id;
         }
-      }
+        await updateOSD(currentOsdId, payload);
+        return currentOsdId;
+      },
+      uploads: pendingUploads,
+      deletedFileIds,
+      upload: (id, group) => uploadFiles('osd', id, group.files, group.category),
+      remove: deleteFile,
+      reload: async () => { await refetch(); return !useOSDStore.getState().error; },
+      describe: (e) => describeSaveError(e, t),
+      onRecordSaved: (id) => {
+        if (isNew) setCurrentOsdId(id);
+      },
+    });
 
-      if (fileErrors.length > 0) {
-        throw new Error(fileErrors[0]);
-      }
-
+    if (outcome.status === 'saved' || outcome.status === 'saved-reload-failed') {
       setIsEditModalOpen(false);
       setCurrentOsdId(null);
-    } catch (error: any) {
-      const detail = getErrorMessage(error, t('common.saveFailed'));
-      toast.error(detail);
     }
+    return outcome;
   };
 
   const confirmDelete = React.useCallback((id: string) => {

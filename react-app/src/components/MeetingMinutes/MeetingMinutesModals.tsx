@@ -1,3 +1,6 @@
+import { useDraftGuard } from '../Shared/LeaveGuard';
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useNavigate } from 'react-router-dom';
@@ -12,6 +15,7 @@ import { getUsers, formatUserLabel, bulkCreateFollowUps, getEntityFiles, getAuth
 import api from '../../services/api';
 import type { MeetingMinutesItem, Attendee, DiscussionLogEntry } from '../../store/meetingMinutesStore';
 import FileAttachment from '../Shared/FileAttachment';
+import ImagePreviewOverlay from '../Shared/ImagePreviewOverlay';
 import MeetingMinutesPrintTemplate from './MeetingMinutesPrintTemplate';
 import formStyles from '../Shared/FormShell.module.css';
 import './MeetingMinutes.print.css';
@@ -68,6 +72,15 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
     const { addFollowUp } = useFollowUpStore();
     const navigate = useNavigate();
     const [spawningOccurrence, setSpawningOccurrence] = useState(false);
+    // Attachment preview (BACKLOG #23, 2026-10-05): FileAttachment's thumbnail click only fires
+    // if the parent supplies onPreview — this never did, so clicking a photo silently did
+    // nothing. Same handlePreview/ImagePreviewOverlay pattern already used by OBS/NCR/OSD/NOI.
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [previewName, setPreviewName] = useState<string>('');
+    const handlePreview = (url: string, name?: string) => {
+        setPreviewUrl(url);
+        setPreviewName(name || '');
+    };
 
     const [formData, setFormData] = useState({
         rev: existingItem?.rev || '',
@@ -122,6 +135,8 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
 
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
     const [saving, setSaving] = useState(false);
+    const leaveGuard = useDraftGuard({ formData, attendees, newAttendee, discussionLog, newTopicTitle, subItemDrafts, actionItemsDraft, newAction, pendingFiles }, saving || spawningOccurrence, !readOnly);
+    const requestClose = () => leaveGuard.requestClose(onClose);
 
     const handleFieldChange = (field: keyof typeof formData, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -226,7 +241,39 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
         }
     };
 
+    // Any sub-editor (attendee, discussion topic/sub-item, action item) that has content
+    // typed but was never Added is not part of formData/attendees/discussionLog/actionItemsDraft
+    // — saving now would silently discard it. Block and guide the user instead.
+    // Must compare EVERY editable field against its own initial value, not just the
+    // "primary" one (title/name) — a user can type only a company, an owner, an
+    // assignee, or a due date without ever touching the primary field, and that would
+    // still be silently dropped. subItemDrafts' `status` defaults to 'Open' on read
+    // (via getSubDraft) even when no entry exists yet, so a plain default must NOT
+    // count as unconfirmed input — only an explicit change away from it does.
+    const isAttendeeDraftDirty = () =>
+        !!(newAttendee.name.trim() || newAttendee.company.trim() || newAttendee.role.trim());
+    const isSubItemDraftsDirty = () =>
+        Object.values(subItemDrafts).some(d =>
+            d.content.trim() || d.owner.trim() || (d.status && d.status !== 'Open'));
+    const isActionDraftDirty = () =>
+        !!(newAction.title.trim() || newAction.description.trim() || newAction.assignedTo.trim() ||
+            newAction.assignedToUserId != null || newAction.dueDate.trim() || newAction.priority.trim());
+    const unconfirmedSubDraftLabel = (): string | null => {
+        if (isAttendeeDraftDirty()) return t('meetingMinutes.attendeesSection') || '與會者';
+        if (newTopicTitle.trim()) return t('meetingMinutes.addMajorTopic') || '討論主題';
+        if (isSubItemDraftsDirty()) return t('meetingMinutes.addSubItem') || '討論子項目';
+        if (isActionDraftDirty()) return t('meetingMinutes.actionItemsSection') || '行動項目';
+        return null;
+    };
+    const blockSaveForUnconfirmedDraft = () => {
+        const label = unconfirmedSubDraftLabel();
+        if (!label) return false;
+        toast.error(`您在「${label}」輸入了內容但尚未按新增。請先新增，或清空欄位後再保存。`);
+        return true;
+    };
+
     const handleSave = async () => {
+        if (blockSaveForUnconfirmedDraft()) return;
         setSaving(true);
         try {
             await onSave(
@@ -274,6 +321,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
             const created = await createMeetingMinutesOccurrence(existingItem.id);
             toast.success(t('meetingMinutes.occurrenceCreated') || `New occurrence created (rev ${created.rev})`);
             await useMeetingMinutesStore.getState().refetch();
+            leaveGuard.release();
             (onDismiss || onClose)();
             navigate(`/meeting-minutes?openId=${created.id}`);
         } catch (err: any) {
@@ -311,7 +359,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
             <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
                 <div className={formStyles.modalHeader}>
                     <h2>{readOnly ? t('meetingMinutes.viewTitle') : existingItem ? t('meetingMinutes.editTitle') : t('meetingMinutes.addTitle')}</h2>
-                    <button type="button" className={formStyles.closeButton} onClick={onClose}>×</button>
+                    <button type="button" className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={requestClose}>×</button>
                 </div>
                 <div className={formStyles.modalBody}>
                     <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
@@ -384,7 +432,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                                         <span style={{ flex: 2 }}>{a.name}</span>
                                         <span style={{ flex: 2, color: '#64748b' }}>{a.company || '-'}</span>
                                         <span style={{ flex: 1, color: '#64748b' }}>{a.role || '-'}</span>
-                                        <button type="button" onClick={() => removeAttendeeRow(idx)} style={{ color: '#ef4444' }}><Trash2 size={16} /></button>
+                                        <button className={actionStyles.iconDanger} type="button" onClick={() => removeAttendeeRow(idx)}><Trash2 size={16} /></button>
                                     </div>
                                 ))}
                                 <div style={{ display: 'flex', gap: 8 }}>
@@ -430,7 +478,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                                 <strong>{major.no}. {major.content}</strong>
                                                 {!readOnly && (
-                                                    <button type="button" onClick={() => removeDiscussionRow(major.no)} style={{ color: '#ef4444' }}><Trash2 size={16} /></button>
+                                                    <button className={actionStyles.iconDanger} type="button" onClick={() => removeDiscussionRow(major.no)}><Trash2 size={16} /></button>
                                                 )}
                                             </div>
                                             {visibleSubs.map(sub => (
@@ -438,7 +486,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                                                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                                         <span style={{ fontWeight: 600 }}>{sub.no}</span>
                                                         {!readOnly && (
-                                                            <button type="button" onClick={() => removeDiscussionRow(sub.no)} style={{ color: '#ef4444' }}><Trash2 size={14} /></button>
+                                                            <button className={actionStyles.iconDanger} type="button" onClick={() => removeDiscussionRow(sub.no)}><Trash2 size={14} /></button>
                                                         )}
                                                     </div>
                                                     {sub.content && <p style={{ margin: '4px 0', color: '#334155', whiteSpace: 'pre-wrap' }}>{sub.content}</p>}
@@ -483,7 +531,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                                                 <span style={{ flex: 2 }}>{a.title}</span>
                                                 <span style={{ flex: 1, color: '#64748b' }}>{a.assignedTo || '-'}</span>
                                                 <span style={{ flex: 1, color: '#64748b' }}>{a.dueDate || '-'}</span>
-                                                <button type="button" onClick={() => removeActionItemDraft(idx)} style={{ color: '#ef4444' }}><Trash2 size={16} /></button>
+                                                <button className={actionStyles.iconDanger} type="button" onClick={() => removeActionItemDraft(idx)}><Trash2 size={16} /></button>
                                             </div>
                                         ))}
                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -541,6 +589,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                                     onPendingFilesChange={setPendingFiles}
                                     readOnly={readOnly}
                                     hideTitle
+                                    onPreview={handlePreview}
                                 />
                             </div>
                         </div>
@@ -551,31 +600,39 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                         ))}
                     </datalist>
                 </div>
-                <div className={formStyles.modalActions}>
-                    {!readOnly && (
-                        <button type="button" className={formStyles.saveButton} onClick={handleSave} disabled={saving}>
-                            {saving ? t('common.saving') : t('common.save')}
+                <FormActions
+                    tools={<>
+                        {existingItem?.id && (
+                            <button className={actionStyles.secondary} type="button" onClick={handlePrintClick} disabled={saving} title={t('common.print') || 'Print'}>
+                                {t('common.print') || 'Print'}
+                            </button>
+                        )}
+                        {existingItem?.id && hasPermission('meeting:create:all') && (
+                            <button className={actionStyles.secondary} type="button" onClick={() => leaveGuard.requestAction(handleNewOccurrenceClick)} disabled={saving || spawningOccurrence} title={t('meetingMinutes.newOccurrenceTitle') || 'Create the next occurrence of this recurring meeting, reusing its document number'}>
+                                {spawningOccurrence ? (t('common.saving') || '...') : (t('meetingMinutes.newOccurrence') || 'New Occurrence')}
+                            </button>
+                        )}
+                    </>}
+                    secondary={<>
+                        {readOnly && existingItem?.status === 'Published' && hasPermission('meeting:update:all') && (
+                            <button className={actionStyles.danger} type="button" onClick={handleVoidClick} disabled={saving} title={t('meetingMinutes.voidAction') || 'Void'}>
+                                {t('meetingMinutes.voidAction') || 'Void'}
+                            </button>
+                        )}
+                    </>}
+                    cancel={<>
+                        <button className={actionStyles.secondary} type="button" onClick={requestClose} disabled={saving}>
+                            {t('common.cancel')}
                         </button>
-                    )}
-                    {readOnly && existingItem?.status === 'Published' && hasPermission('meeting:update:all') && (
-                        <button type="button" className={formStyles.cancelButton} onClick={handleVoidClick} disabled={saving} title={t('meetingMinutes.voidAction') || 'Void'}>
-                            {t('meetingMinutes.voidAction') || 'Void'}
-                        </button>
-                    )}
-                    {existingItem?.id && (
-                        <button type="button" className={formStyles.printButton} onClick={handlePrintClick} disabled={saving} title={t('common.print') || 'Print'}>
-                            {t('common.print') || 'Print'}
-                        </button>
-                    )}
-                    {existingItem?.id && hasPermission('meeting:create:all') && (
-                        <button type="button" className={formStyles.printButton} onClick={handleNewOccurrenceClick} disabled={saving || spawningOccurrence} title={t('meetingMinutes.newOccurrenceTitle') || 'Create the next occurrence of this recurring meeting, reusing its document number'}>
-                            {spawningOccurrence ? (t('common.saving') || '...') : (t('meetingMinutes.newOccurrence') || 'New Occurrence')}
-                        </button>
-                    )}
-                    <button type="button" className={formStyles.cancelButton} onClick={onClose} disabled={saving}>
-                        {t('common.cancel')}
-                    </button>
-                </div>
+                    </>}
+                    primary={<>
+                        {!readOnly && (
+                            <button className={actionStyles.primary} type="button" onClick={handleSave} disabled={saving}>
+                                {saving ? t('common.saving') : t('common.save')}
+                            </button>
+                        )}
+                    </>}
+                />
             </div>
             {isPrinting && existingItem && ReactDOM.createPortal(
                 <MeetingMinutesPrintTemplate
@@ -596,6 +653,9 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                     attachmentFiles={printAttachments}
                 />,
                 document.body
+            )}
+            {previewUrl && (
+                <ImagePreviewOverlay key={previewUrl} url={previewUrl} name={previewName} onClose={() => setPreviewUrl(null)} />
             )}
         </div>
     );

@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BarChart3, Send, TrendingUp, ShieldCheck, Search } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useITPStore } from '../../store/itpStore';
 import type { ITPItem } from '../../store/itpStore';
@@ -10,13 +11,14 @@ import { useNOIStore } from '../../store/noiStore';
 import { useChecklistStore } from '../../store/checklistStore';
 import { checkITPReferences, checkITPChecklistReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
 import { uploadFiles, deleteFile } from '../../services/api';
+import { classifyDeleteResults } from '../../utils/attachmentOutcome';
 import { getErrorMessage } from '../../utils/errorUtils';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './ITP.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
-import { ITPDetailModal } from './ITPModals';
+import { ITPDetailModal, type SaveOutcome, ItpMainSavedError } from './ITPModals';
 import { useDebounce } from '../../hooks/useDebounce';
 import { useITPStats } from '../../hooks/useITPStats';
 
@@ -33,6 +35,9 @@ type StatusFilter =
 const ITP: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission('itp:create:all');
+  const canUpdate = hasPermission('itp:update:all');
   const { getActiveContractors } = useContractorsStore();
   const { itpList, loading, error, refetch, addITP, updateITP, updateITPDetail, deleteITP } = useITPStore();
   const noiList = useNOIStore(state => state.noiList);
@@ -101,26 +106,17 @@ const ITP: React.FC = () => {
     setSearchParams(next, { replace: true });
   }, [searchParams, itpList, handleEdit, setSearchParams]);
 
-  const handleAddNew = async () => {
+  // Nothing is written to the backend here — clicking "Add New" only opens a blank form.
+  // The record is created on the FIRST Save/Publish click (see onSave below), so opening the
+  // form and then Cancelling sends no request and leaves no row behind, and someone who only
+  // holds itp:create:all (no itp:update:all) can still complete a create: the first save uses
+  // addITP (create), never updateITP.
+  const [newItpDefaultVendor, setNewItpDefaultVendor] = useState('');
+  const handleAddNew = () => {
     const activeContractors = getActiveContractors();
-    const defaultVendor = activeContractors.length > 0 ? activeContractors[0].name : 'N/A';
-    try {
-      const newItem = await addITP({
-        vendor: defaultVendor,
-        description: '',
-        rev: '',
-        submit: '',
-        status: 'Pending',
-        remark: '',
-        submissionDate: new Date().toISOString().split('T')[0],
-      } as Omit<ITPItem, 'id'>);
-      setCurrentItpId(newItem.id);
-      setIsEditModalOpen(true);
-    } catch (err: any) {
-      if (err?.response?.status === 401) return;
-      const msg = getErrorMessage(err, t('itp.addError'));
-      toast.error(t('itp.addError') + '：' + msg);
-    }
+    setNewItpDefaultVendor(activeContractors.length > 0 ? activeContractors[0].name : '');
+    setCurrentItpId(null);
+    setIsEditModalOpen(true);
   };
 
   const confirmDelete = React.useCallback((id: string) => {
@@ -252,9 +248,11 @@ const ITP: React.FC = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
-            {t('itp.addNew')}
-          </button>
+          {canCreate && (
+            <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+              {t('itp.addNew')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -268,7 +266,7 @@ const ITP: React.FC = () => {
           data={filteredList}
           searchKey=""
           getRowClassName={(row) =>
-            (row.status || '').toLowerCase() === 'void' ? shellStyles.rowDim : ''
+            `group ${(row.status || '').toLowerCase() === 'void' ? shellStyles.rowDim : ''}`
           }
           getRowId={(row) => row.id}
           onRowClick={(row) => handleEdit(row.id)}
@@ -285,41 +283,130 @@ const ITP: React.FC = () => {
         cancelText={t('common.cancel')}
       />
 
-      {isEditModalOpen && currentItpId && (
+      {isEditModalOpen && (
         <ITPDetailModal
           itpId={currentItpId}
-          existingItem={itpList.find(item => item.id === currentItpId)}
+          existingItem={currentItpId ? itpList.find(item => item.id === currentItpId) : undefined}
+          defaultVendor={newItpDefaultVendor}
+          canApprove={hasPermission('itp:approve:all')}
+          canVoid={hasPermission('itp:void:all')}
+          canCreate={canCreate}
+          canUpdate={canUpdate}
+          canCreateChecklist={hasPermission('checklist:create:all')}
           onApplyItems={async (detailPayload) => {
+            if (!currentItpId) return false; // guarded by the modal itself (itpId falsy skips the call), kept here too for safety
             try {
               await updateITPDetail(currentItpId, detailPayload);
               refetch();
+              return true;
             } catch (error: any) {
-              if (error?.response?.status === 401) return;
+              if (error?.response?.status === 401) return false;
               toast.error(getErrorMessage(error, t('itp.updateError')));
+              return false;
             }
           }}
-          onSave={async (updates, details, pendingUploads, deletedFileIds) => {
-            try {
-              await updateITP(currentItpId, updates);
+          onSave={async (updates, details, pendingUploads, deletedFileIds, skipRecordWrite): Promise<SaveOutcome> => {
+            // `workingId` — not the outer `currentItpId` — is used for every write below. On a
+            // brand-new record's first save, `currentItpId` is still null in THIS closure (the
+            // setCurrentItpId call below only takes effect on the next render), so every
+            // subsequent step in this same call must use `workingId`, not `currentItpId`.
+            let workingId = currentItpId;
+
+            if (!workingId) {
+              // Nothing exists on the backend yet — this is the record's first save. `details`
+              // is folded directly into the CREATE payload (schemas.ITPCreate.detail_data
+              // accepts it, stored as-is) rather than sent via a follow-up PUT /itp/{id}/detail —
+              // this is not just simpler, it is REQUIRED: that detail endpoint is gated on
+              // itp:update:all (confirmed via real isolated-backend testing), so a create-only
+              // account's inspection-plan items would otherwise be silently lost on first save.
+              // Folding it into the single POST means only itp:create:all is ever required to
+              // complete a brand-new record's full first save (main fields + plan), and the
+              // whole write is one atomic backend transaction — there is no "record created,
+              // detail failed" partial state possible for a new record at all.
+              const created = await addITP({ ...updates, detail_data: details } as Omit<ITPItem, 'id'>);
+              workingId = created.id;
+              setCurrentItpId(workingId);
+            } else if (!skipRecordWrite) {
+              // skipRecordWrite (set by ITPModals.tsx via isUnchangedSincePriorWrite: true when
+              // JSON.stringify({payload, detailPayload}) is string-equal to the last successfully
+              // written attempt's — a serialized-string comparison, not a semantic/deep-equality
+              // one, so key order or formatting differences would NOT be treated as "unchanged")
+              // — without this, retrying after an attachment-only failure re-sent the identical PUT
+              // and created a second, real audit_logs UPDATE/UPDATE_DETAIL pair every time,
+              // including for Publish (a confirmed duplicate-event bug: audit_logs rows went 0→2 on
+              // the first Publish, then 2→4 on a retry that changed nothing else). A genuinely
+              // changed payload produces a different serialized string, so it is never skipped.
+              await updateITP(workingId, updates);
               if (details) {
-                await updateITPDetail(currentItpId, details);
+                try {
+                  await updateITPDetail(workingId, details);
+                } catch (detailErr: any) {
+                  // The main record IS already saved at this point — say so explicitly instead of
+                  // letting a generic "save failed"/network-error toast imply nothing was saved.
+                  // Thrown (not swallowed) so Phase 2 (attachments) below is never attempted this
+                  // round: nothing about the pending upload/delete queue is touched or reported as
+                  // done, and the modal stays open with isDirty still true (handleSave's own catch
+                  // never reaches applyOutcome/setIsEditModalOpen when onSave throws). A retry
+                  // resends both updateITP and updateITPDetail (skipRecordWrite's own key is never
+                  // recorded on a throw), so it also picks up any further edit made before the
+                  // retry, not just the detail write.
+                  //
+                  // Always uses the "unconfirmed" wording, never "not saved" — a response coming
+                  // back (detailErr.response set, e.g. a 4xx/5xx) proves the backend REPLIED, not
+                  // that it didn't write: services/itp_service.py::update_itp_detail commits, THEN
+                  // logs/returns, so a failure after that commit (e.g. while building the
+                  // response) would still reach the client as a 500 despite the write having
+                  // already landed. A network failure with no response at all is the same
+                  // "genuinely don't know" situation from the client's side. Distinguishing "the
+                  // endpoint provably rejected before writing" from "provably wrote, then failed"
+                  // would need auditing update_itp_detail's every failure path for exactly where
+                  // it can throw relative to its commit — not done this batch, so every failure
+                  // here is treated the same, conservative way. Never surfaces the raw underlying
+                  // error text (e.g. a bare "Network Error" or a raw 500 body) as if it were a
+                  // user-facing explanation.
+                  const label = t('itp.mainSavedDetailUnconfirmed') || "The main ITP record was saved; the inspection plan's save result could not be confirmed — please check and retry";
+                  throw new ItpMainSavedError(label);
+                }
               }
+            }
 
-              if (deletedFileIds && deletedFileIds.length > 0) {
-                await Promise.all(deletedFileIds.map(id => deleteFile(id).catch(e => console.error('Del Err', e))));
+            // Phase 2: attachment housekeeping. The record's own fields are ALREADY saved by
+            // this point — this never throws, it always returns a SaveOutcome describing
+            // exactly what it confirmed, so the modal can prune its own queues per-item (see
+            // PQP.tsx's onSave for the full reasoning on 404-vs-network-failure handling, which
+            // this mirrors).
+            let errors: string[] = [];
+            let deletedIds: string[] = [];
+            if (deletedFileIds && deletedFileIds.length > 0) {
+              const uniqueIds = [...new Set(deletedFileIds)];
+              const results = await Promise.allSettled(uniqueIds.map(id => deleteFile(id)));
+              const classified = classifyDeleteResults(uniqueIds, results);
+              deletedIds = classified.deletedIds;
+              errors = classified.errors;
+            }
+            let uploadedPending = false;
+            if (pendingUploads && pendingUploads.length > 0 && workingId) {
+              try {
+                await uploadFiles('itp', workingId, pendingUploads, 'attachment');
+                uploadedPending = true;
+              } catch (err: any) {
+                const detail = err?.response?.data?.detail || err?.message;
+                errors.push(`上傳附件：${detail || '上傳失敗'}`);
               }
-              if (pendingUploads && pendingUploads.length > 0 && currentItpId) {
-                await uploadFiles('itp', currentItpId, pendingUploads, 'attachment');
-              }
+            }
 
+            if (errors.length === 0) {
               setIsEditModalOpen(false);
               setCurrentItpId(null);
-              refetch();
-            } catch (error: any) {
-              if (error?.response?.status === 401) return;
-              const detail = getErrorMessage(error, t('itp.updateError'));
-              toast.error(detail);
             }
+            // Reloading the list is a separate concern from whether the save itself succeeded —
+            // its failure must not be reported as (or block) the save outcome above.
+            try {
+              await refetch();
+            } catch (err) {
+              console.error('ITP list refetch after save failed:', err);
+            }
+            return { deletedIds, uploadedPending, errors };
           }}
           onClose={() => {
             if (openedViaDeepLinkRef.current) {

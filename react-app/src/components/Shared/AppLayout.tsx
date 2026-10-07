@@ -1,3 +1,4 @@
+import { useLeaveGuard } from './LeaveGuard';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
@@ -47,7 +48,8 @@ const MODULE_ICONS: Record<ModuleId, LucideIcon> = {
 const AppLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, hasPermission } = useAuth();
+  const leaveGuard = useLeaveGuard(false);
   const { t } = useLanguage();
 
   const mainModules = useMemo(() => [
@@ -115,6 +117,7 @@ const AppLayout = () => {
 
   type NavModule = { id: ModuleId; title: string; path: string; color: string };
   const renderNavItem = (module: NavModule, nested: boolean) => {
+    if (module.id === 'km' && !hasPermission('km:view:all')) return null;
     const IconComponent = MODULE_ICONS[module.id];
     const active = isActive(module.path);
     return (
@@ -221,7 +224,7 @@ const AppLayout = () => {
           <div className={styles.topActions}>
             <span className={styles.userName}>{user?.full_name || user?.username || t('home.adminUser')}</span>
             <ProjectSelector />
-            <button className={styles.logoutButton} onClick={logout}>
+            <button className={styles.logoutButton} onClick={() => leaveGuard.requestClose(logout, true)}>
               <LogOut size={16} />
               {t('home.logout')}
             </button>

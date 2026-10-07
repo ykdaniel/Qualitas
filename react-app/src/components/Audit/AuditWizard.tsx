@@ -1,3 +1,6 @@
+import { useDraftGuard, useItemDraftGuard } from '../Shared/LeaveGuard';
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
 import React, { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import {
@@ -84,9 +87,23 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
   const [newItem, setNewItem] = useState({ no: '', clause: '', task: '' });
   const [isCustomNew, setIsCustomNew] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  // Audit.tsx never promotes its own currentAuditId after a mid-session "Save Draft" (Save
+  // Draft deliberately keeps the wizard open without calling onSaveSuccess, so the parent
+  // never learns the new id) — existingItem stays undefined for the rest of this wizard's
+  // life even after the first successful create. Without tracking the id locally, EVERY
+  // subsequent Save Draft click on a still-open new record would call addAudit() again,
+  // creating another duplicate record each time (reproduced: two Save Draft clicks with an
+  // Add in between produced two separate audit rows, the second one holding the added item
+  // and the first one permanently stuck with an empty custom_check_items).
+  const [createdId, setCreatedId] = useState<string | null>(null);
+  const recordId = existingItem?.id ?? createdId;
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const [editFormData, setEditFormData] = useState({ no: '', clause: '', task: '' });
   const [isCustomEdit, setIsCustomEdit] = useState(false);
+  const leaveGuard = useDraftGuard(formData, isSaving || isDraftSaving, !readOnly);
+  useDraftGuard(newItem, false, !readOnly);
+  useItemDraftGuard(editingItemId !== null ? editFormData : null);
+  const requestClose = () => leaveGuard.requestClose(onClose, true);
 
   const startEdit = (item: any) => {
     setEditingItemId(item.id);
@@ -251,19 +268,40 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     };
   };
 
+  // Typing a custom check item but forgetting to click "Add" must not silently discard it
+  // on save — the field never made it into customCheckItems, so guide the user instead.
+  // The SAME loss happens for an EXISTING item mid-inline-edit (startEdit/editFormData):
+  // while editingItemId !== null, editFormData is a separate local draft not yet folded
+  // back into formData.customCheckItems (that only happens on saveEdit / "套用"), so a
+  // main-form save right now would keep the item's OLD values and silently drop whatever
+  // was just typed in the inline edit row.
+  const hasUnconfirmedNewItem = () => newItem.no.trim() || newItem.clause.trim() || newItem.task.trim();
+  const blockSaveForUnconfirmedNewItem = () => {
+    if (editingItemId !== null) {
+      toast.error('您正在編輯既有查檢項目但尚未按「儲存」套用這筆編輯。請先儲存，或按「取消」放棄後再保存整份表單。');
+      return true;
+    }
+    if (!hasUnconfirmedNewItem()) return false;
+    toast.error('您在自訂查檢項目輸入了內容但尚未按「新增」。請先按「新增」加入，或清空欄位後再保存。');
+    return true;
+  };
+
   const handleSaveDraft = async () => {
+    if (blockSaveForUnconfirmedNewItem()) return;
     setIsDraftSaving(true);
     setSaveError('');
     setDraftMessage('');
 
     try {
       const updates = prepareAuditData(formData.status || 'Draft');
-      if (existingItem) {
-        await updateAudit(existingItem.id, updates);
+      if (recordId) {
+        await updateAudit(recordId, updates);
       } else {
-        await addAudit(updates);
+        const created = await addAudit(updates);
+        setCreatedId(created.id);
       }
-      
+
+      leaveGuard.markSaved();
       const time = new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       setDraftMessage(`${t('audit.wizard.draftSaved')} ${time}`);
       setTimeout(() => setDraftMessage(''), 4000);
@@ -278,17 +316,20 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (blockSaveForUnconfirmedNewItem()) return;
     setIsSaving(true);
     setSaveError('');
 
     try {
       const updates = prepareAuditData(formData.status || 'Planned');
-      if (existingItem) {
-        await updateAudit(existingItem.id, updates);
+      if (recordId) {
+        await updateAudit(recordId, updates);
       } else {
-        await addAudit(updates);
+        const created = await addAudit(updates);
+        setCreatedId(created.id);
       }
-      
+
+      leaveGuard.release();
       setIsSubmitted(true);
       onSaveSuccess();
     } catch (err: any) {
@@ -355,7 +396,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
           </div>
 
           <button
-            onClick={onClose}
+            onClick={requestClose}
             className="w-full py-4 bg-teal-600 text-white rounded-2xl font-bold text-lg hover:bg-teal-700 hover:shadow-lg transition-all active:scale-[0.98]"
           >
             {t('audit.wizard.backToList')}
@@ -376,7 +417,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                 <h1 className="text-3xl font-black text-slate-800 tracking-tight">{t('audit.wizard.title')}</h1>
             </div>
             <button 
-                onClick={onClose}
+                onClick={requestClose}
                 className="w-12 h-12 bg-transparent hover:bg-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 transition-all"
             >
                 <X size={26} />
@@ -521,7 +562,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                     <MapPin className="text-teal-600" size={28} />
                     <h2 className="text-2xl font-bold text-slate-800">{t('audit.wizard.step3')}</h2>
                   </div>
-                  <button type="button" onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors shadow-sm text-sm font-medium no-print">
+                  <button className={actionStyles.secondary} type="button" onClick={() => window.print()}>
                     <Printer className="w-4 h-4" /> {t('audit.wizard.printPlan')}
                   </button>
                 </div>
@@ -622,7 +663,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                     <CheckSquare className="text-teal-600" size={28} />
                     <h2 className="text-2xl font-bold text-slate-800">{t('audit.wizard.step4')} Checklist</h2>
                   </div>
-                  <button type="button" onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors shadow-sm text-sm font-medium no-print">
+                  <button className={actionStyles.secondary} type="button" onClick={() => window.print()}>
                     <Printer className="w-4 h-4" /> {t('audit.wizard.printChecklist')}
                   </button>
                 </div>
@@ -680,7 +721,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                     </div>
                     <div className="flex gap-2">
                       <input type="text" name="task" value={newItem.task} onChange={handleNewItemChange} onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addCustomItem())} placeholder="輸入稽核查檢重點 (Audit Question)..." className="flex-1 p-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all text-sm font-medium text-slate-800" />
-                      <button type="button" onClick={addCustomItem} className="px-6 bg-slate-800 text-white rounded-xl hover:bg-slate-900 transition-colors flex items-center justify-center shadow-md"><Plus size={20} /></button>
+                      <button className={actionStyles.icon} type="button" onClick={addCustomItem}><Plus size={20} /></button>
                     </div>
                   </div>
 
@@ -708,8 +749,8 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                             </div>
                             <input type="text" name="task" value={editFormData.task} onChange={handleEditChange} onKeyPress={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveEdit(); } }} placeholder="輸入稽核查檢重點 (Audit Question)..." className="w-full p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm" />
                             <div className="flex justify-end gap-2 mt-1">
-                              <button type="button" onClick={cancelEdit} className="px-3 py-1.5 text-sm text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-1"><X size={16} /> {t('common.cancel')}</button>
-                              <button type="button" onClick={saveEdit} className="px-3 py-1.5 text-sm text-white bg-teal-600 rounded-lg hover:bg-teal-700 transition-colors flex items-center gap-1"><Check size={16} /> {t('common.save')}</button>
+                              <button className={actionStyles.secondary} type="button" onClick={cancelEdit}><X size={16} /> {t('common.cancel')}</button>
+                              <button className={actionStyles.primary} type="button" onClick={saveEdit}><Check size={16} /> {t('common.save')}</button>
                             </div>
                           </div>
                         ) : (
@@ -731,8 +772,8 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                               </div>
                             </div>
                             <div className="flex flex-col gap-2 shrink-0">
-                              <button type="button" onClick={() => startEdit(item)} className="text-slate-300 hover:text-teal-600 transition-colors p-1"><Edit2 size={18} /></button>
-                              <button type="button" onClick={() => removeCustomItem(item.id)} className="text-slate-300 hover:text-red-500 transition-colors p-1"><Trash2 size={18} /></button>
+                              <button className={actionStyles.icon} type="button" onClick={() => startEdit(item)}><Edit2 size={18} /></button>
+                              <button className={actionStyles.iconDanger} type="button" onClick={() => removeCustomItem(item.id)}><Trash2 size={18} /></button>
                             </div>
                           </>
                         )}
@@ -761,7 +802,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                   </div>
                   
                   <div className="flex items-center gap-3 no-print">
-                    <button type="button" onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors shadow-sm text-sm font-medium">
+                    <button className={actionStyles.secondary} type="button" onClick={() => window.print()}>
                       <Printer className="w-4 h-4" /> {t('audit.wizard.printReport')}
                     </button>
                   </div>
@@ -971,56 +1012,42 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
             )}
 
             {/* Footer Navigation */}
-            <div className="px-8 py-6 flex flex-col md:flex-row justify-between items-center gap-4 border-t border-slate-100 no-print">
-              <div className="flex items-center gap-3 w-full md:w-auto">
-                {step > 1 && (
-                  <button
-                    type="button" onClick={prevStep}
-                    className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-all border border-transparent hover:border-slate-200"
-                  >
-                    <ChevronLeft size={20} /> {t('audit.wizard.prevStep')}
-                  </button>
-                )}
-              </div>
-              
-              <div className="flex items-center gap-4 w-full md:w-auto">
-                {/* 儲存進度按鈕 (Ghost Style) — hidden entirely once Closed:
+                      <FormActions tools={<>{step > 1 && (
+                          <button className={actionStyles.secondary}
+                              type="button" onClick={prevStep}
+                          >
+                              <ChevronLeft size={20} /> {t('audit.wizard.prevStep')}
+                          </button>
+                      )}</>} secondary={<>{/* 儲存進度按鈕 (Ghost Style) — hidden entirely once Closed:
                     a true dead end (WorkflowEngine "Closed": []), so there's
                     nothing left to save, matching the backend's unconditional
                     lock in audit_service.py. */}
-                {!readOnly && (
-                <button
-                  type="button"
-                  onClick={handleSaveDraft}
-                  disabled={isDraftSaving || loading}
-                  className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-slate-500 bg-transparent hover:bg-slate-50 border border-slate-200 transition-all disabled:opacity-50"
-                >
-                  <Save size={18} /> {isDraftSaving ? t('audit.wizard.savingDraft') : t('audit.wizard.saveDraft')}
-                </button>
-                )}
-
-                {draftMessage && (
-                  <span className="text-sm font-medium text-slate-500 animate-in fade-in hidden sm:block whitespace-nowrap absolute right-8 bottom-24">
-                    {draftMessage}
-                  </span>
-                )}
-
-                {step < 5 ? (
-                  <button key="btn-next" type="button" onClick={(e) => { e.preventDefault(); nextStep(); }} className="w-full md:w-auto flex items-center justify-center gap-2 px-10 py-3.5 bg-teal-600 text-white rounded-2xl font-bold hover:bg-teal-700 shadow-md shadow-teal-600/20 transition-all active:scale-[0.98]">
-                    {t('audit.wizard.nextStep')} <ChevronRight size={20} />
-                  </button>
-                ) : !readOnly ? (
-                  <button
-                    key="btn-submit"
-                    type="submit"
-                    disabled={isSaving || loading}
-                    className="w-full md:w-auto flex items-center justify-center gap-2 px-10 py-3.5 bg-slate-900 text-white rounded-2xl font-bold hover:bg-black shadow-md shadow-slate-900/20 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isSaving ? t('audit.wizard.submitting') : t('audit.wizard.submit')} <CheckCircle size={20} />
-                  </button>
-                ) : null}
-              </div>
-            </div>
+                          {!readOnly && (
+                              <button className={actionStyles.secondary}
+                                  type="button"
+                                  onClick={handleSaveDraft}
+                                  disabled={isDraftSaving || loading}
+                              >
+                                  <Save size={18} /> {isDraftSaving ? t('audit.wizard.savingDraft') : t('audit.wizard.saveDraft')}
+                              </button>
+                          )}
+                          {draftMessage && (
+                              <span className="text-sm font-medium text-slate-500 animate-in fade-in hidden sm:block whitespace-nowrap absolute right-8 bottom-24">
+                                  {draftMessage}
+                              </span>
+                          )}</>} primary={<>{step < 5 ? (
+                              <button className={actionStyles.primary} key="btn-next" type="button" onClick={(e) => { e.preventDefault(); nextStep(); }}>
+                                  {t('audit.wizard.nextStep')} <ChevronRight size={20} />
+                              </button>
+                          ) : !readOnly ? (
+                              <button className={actionStyles.primary}
+                                  key="btn-submit"
+                                  type="submit"
+                                  disabled={isSaving || loading}
+                              >
+                                  {isSaving ? t('audit.wizard.submitting') : t('audit.wizard.submit')} <CheckCircle size={20} />
+                              </button>
+                          ) : null}</>} />
           </form>
         </div>
       </div>

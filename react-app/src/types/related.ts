@@ -17,6 +17,8 @@ export interface RelatedEntity {
     direction: RelatedDirection;
     /** Most meaningful date per entity type (submissionDate/inspectionDate/raiseDate). */
     primaryDate: string | null;
+    /** Only ever set for entityType === 'itr'; absent (undefined) for every other type. */
+    isReInspection?: boolean | null;
 }
 
 export interface RelatedEntitiesResponse {

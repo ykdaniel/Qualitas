@@ -7,7 +7,6 @@ import { User, Role } from "../../store/iamStore";
 import { formatRoleName } from "@/utils/formatters";
 
 export const createUserColumns = (
-    handleDelete: (id: string) => void,
     availableRoles: Role[] = [],
     t: (key: string) => string
 ): ColumnDef<User>[] => [
@@ -16,7 +15,14 @@ export const createUserColumns = (
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title={t('iam.name')} />
             ),
-            cell: ({ row }) => <div className="text-center font-medium">{row.getValue("name")}</div>,
+            cell: ({ row }) => (
+                <div className="text-center">
+                    <div className="font-medium">{row.getValue("name")}</div>
+                    {row.original.username !== row.original.name && (
+                        <div className="text-sm text-muted-foreground break-all">{row.original.username}</div>
+                    )}
+                </div>
+            ),
         },
         {
             accessorKey: "email",
@@ -93,29 +99,9 @@ export const createUserColumns = (
             ),
             cell: ({ row }) => <div className="text-center">{row.getValue("createdAt")}</div>,
         },
-        {
-            id: "actions",
-            header: t('common.operations'),
-            cell: ({ row }) => {
-                const item = row.original;
-                return (
-                    <div className="flex items-center justify-center">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 text-red-500 hover:text-white hover:bg-red-500"
-                            onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
-                            title={t('common.delete')}
-                        >
-                            <Trash2 className="h-4 w-4" />
-                        </Button>
-                    </div>
-                );
-            },
-            enableSorting: false,
-            enableHiding: false,
-            size: 100,
-        },
+        // No delete action: an account is deactivated (edit -> Status = Inactive),
+        // never deleted — the backend refuses DELETE so its id and every history
+        // record that references it stay intact.
     ];
 
 export const createRoleColumns = (

@@ -341,3 +341,39 @@
     display: none;
   }
 }
+
+/* BACKLOG #38 (2026-09-29): below ~900px the sidebar already stacks full-width above the content
+   (the block above), so it was never the cause of the header's own horizontal overflow. The
+   header row itself (`.topBar`: breadcrumb + username + ProjectSelector + logout, all in one
+   `justify-content: space-between` row with no wrap) is what overflowed — only visible in
+   English, where "Welcome / Dashboard", a full name, "All Projects" and "Logout" together are
+   wider than a phone viewport; the same Chinese labels happened to fit. Reproduced on `/dashboard`
+   AND `/pqp` (an unrelated page) before concluding this was the shared shell, not a Dashboard
+   change. Fixed by letting the row WRAP onto a second line at this width — every control stays
+   its full, real, clickable size (nothing shrunk to icon-only, nothing clipped by overflow:hidden,
+   nothing removed) — rather than trying to cram everything into one row. */
+@media (max-width: 640px) {
+  .topBar {
+    height: auto;
+    min-height: 56px;
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding: 10px 16px;
+  }
+
+  .breadcrumb {
+    flex: 1 1 100%;
+  }
+
+  .topActions {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    row-gap: 8px;
+    justify-content: flex-start;
+  }
+
+  .userName {
+    /* Stays fully visible (no ellipsis) — this is who is signed in, not decorative text. */
+    margin-right: 0;
+  }
+}

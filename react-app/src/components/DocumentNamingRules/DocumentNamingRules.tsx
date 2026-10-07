@@ -1,3 +1,6 @@
+import { useLeaveGuard } from '../Shared/LeaveGuard';
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
@@ -35,6 +38,10 @@ const DocumentNamingRules: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [loadError, setLoadError] = useState('');
   const [saveError, setSaveError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [baseline, setBaseline] = useState<string | null>(null);
+  const rulesKey = JSON.stringify(rules.map(({ id, prefix, sequenceDigits }) => ({ id, prefix, sequenceDigits })));
+  useLeaveGuard(baseline !== null && rulesKey !== baseline, saving);
 
   const rulesWithDescription = rules.map((rule) => {
     const def = DEFAULT_RULE_DEFS.find((item) => item.id === rule.id);
@@ -59,8 +66,7 @@ const DocumentNamingRules: React.FC = () => {
         apiRules.forEach((r) => {
           map.set(r.doc_type.toLowerCase(), r);
         });
-        setRules(
-          DEFAULT_RULE_DEFS.map((def) => {
+        const loadedRules = DEFAULT_RULE_DEFS.map((def) => {
             const apiRule = map.get(def.id.toLowerCase());
             return {
               ...def,
@@ -68,8 +74,9 @@ const DocumentNamingRules: React.FC = () => {
               prefix: apiRule ? apiRule.prefix : def.prefix,
               sequenceDigits: apiRule ? apiRule.sequence_digits : def.sequenceDigits,
             };
-          })
-        );
+          });
+        setRules(loadedRules);
+        setBaseline(JSON.stringify(loadedRules.map(({ id, prefix, sequenceDigits }) => ({ id, prefix, sequenceDigits }))));
       } catch (e) {
         const err = e as { response?: { data?: { detail?: string } }; message?: string };
         const msg = err.response?.data?.detail ?? err.message ?? 'Failed to load document naming rules.';
@@ -92,6 +99,7 @@ const DocumentNamingRules: React.FC = () => {
   };
 
   const handleSave = async () => {
+    if (saving || baseline === null) return;
     setSaveError('');
 
     // Basic sanity checks before hitting the API — a bad prefix here has a wide
@@ -119,6 +127,7 @@ const DocumentNamingRules: React.FC = () => {
       seenPrefixes.set(rule.prefix, rule.moduleName);
     }
 
+    setSaving(true);
     try {
       const payload = rules.map((rule) => ({
         doc_type: rule.id,
@@ -126,6 +135,7 @@ const DocumentNamingRules: React.FC = () => {
         sequence_digits: Math.min(6, Math.max(1, Number(rule.sequenceDigits) || 6)),
       }));
       await updateNamingRules(payload);
+      setBaseline(rulesKey);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e: unknown) {
@@ -137,7 +147,7 @@ const DocumentNamingRules: React.FC = () => {
         const msg = err.response?.data?.detail ?? err.message ?? '請確認後端已啟動且網路連線正常。';
         setSaveError(`命名規則儲存失敗：${typeof msg === 'string' ? msg : JSON.stringify(msg)}`);
       }
-    }
+    } finally { setSaving(false); }
   };
 
   const getExample = (rule: NamingRuleItem): string => {
@@ -166,22 +176,20 @@ const DocumentNamingRules: React.FC = () => {
       <div className={styles.card}>
         {loadError && <p className={styles.errorText}>{loadError}</p>}
         {saveError && <p className={styles.errorText}>{saveError}</p>}
-        <div className={styles.tableWrap}>
+        <fieldset disabled={saving || baseline === null || !hasPermission('settings:manage:all')} className={styles.tableWrap} style={{ border: 0, padding: 0 }}>
           <DataTable
             title={t('namingRules.title')}
-            actions={
-              hasPermission('settings:manage:all') ? (
-                <button className={styles.saveButton} onClick={handleSave}>
-                  {saved ? t('namingRules.saved') : t('namingRules.save')}
-                </button>
-              ) : null
-            }
             columns={createColumns(handlePrefixChange, handleSequenceDigitsChange, getExample, t)}
             data={filteredRules}
             searchKey=""
             getRowId={(row) => row.id}
           />
-        </div>
+        </fieldset>
+              <FormActions primary={hasPermission('settings:manage:all') ? (
+                  <button className={actionStyles.primary} onClick={handleSave} disabled={saving || baseline === null}>
+                      {saved ? t('namingRules.saved') : t('namingRules.save')}
+                  </button>
+              ) : null} />
         <p className={styles.hint}>
           <strong>{t('namingRules.hint')}：</strong> {t('namingRules.hintContent')}
         </p>

@@ -16,6 +16,7 @@ import { createColumns } from './columns';
 import { ITRDetailModal, ITRDetailData, PendingUploads } from './ITRModals';
 import ConfirmModal from '../Shared/ConfirmModal';
 import { uploadFiles, deleteFile } from '../../services/api';
+import { describeSaveError } from '../../utils/saveErrors';
 import shellStyles from '../Shared/ModuleShell.module.css';
 
 type StatusFilter = 'all' | 'inProgress' | 'approved' | 'reject' | 'void' | 'overdue';
@@ -111,10 +112,21 @@ const ITR: React.FC = () => {
     };
 
     const handleSaveITRDetails = async (details: ITRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[], publishOnly?: boolean) => {
-        if (publishOnly) {
-            // Publish only re-versions a locked (Approved) ITR — the backend
-            // rejects any other field on an Approved record, so this must
-            // send *only* type/status, never the full form state.
+        // Publish behaves differently depending on whether the ITR is ALREADY Approved:
+        // - Already Approved (re-Publish to bump the revision): the backend locks every field but
+        //   type/status/detail_data on a locked record and rejects anything else outright, so only
+        //   type/status may be sent here.
+        // - NOT yet Approved (the first real approval): the backend has no such restriction, and
+        //   `details` already carries the full current form state (ITRModals.tsx's doPublish sends
+        //   `{...formData, status: 'Approved'}`). Restricting to type/status here as well silently
+        //   discarded any field the user had changed but not yet saved with a plain Save click —
+        //   e.g. picking Inspection Result then clicking Publish directly — because Publish never
+        //   sent it at all (2026-09-29 fix, found via real Publish-without-Save on
+        //   QTS-CWC-ITR-000001: reopening afterward showed "Not yet assessed" despite Pass having
+        //   been selected). Falling through to the normal save path below sends the full form,
+        //   exactly like a plain Save immediately followed by Publish would.
+        const currentPersistedStatus = currentItrId ? itrList.find(i => i.id === currentItrId)?.status : undefined;
+        if (publishOnly && currentPersistedStatus === 'Approved') {
             if (!currentItrId) return;
             try {
                 await updateITR(currentItrId, { type: details.type, status: details.status });
@@ -204,11 +216,28 @@ const ITR: React.FC = () => {
             setIsEditModalOpen(false);
             setCurrentItrId(null);
         } catch (error: any) {
-            const raw = error?.response?.data?.detail;
-            const detail = typeof raw === 'string' ? raw
-                : Array.isArray(raw) ? raw.map((e: any) => e.msg || JSON.stringify(e)).join('; ')
-                : t('common.saveFailed') || 'Save failed';
-            toast.error(detail);
+            // FORMS-CONSISTENCY-2026-003: this used to show error.response.data.detail
+            // verbatim, including for 5xx — the raw backend detail text (e.g. a stack
+            // trace or validation dump) went straight to the user. Routed through
+            // describeSaveError (never exposes the raw body for 5xx) so the message text
+            // stays friendly, same as NOI/NCR.
+            //
+            // FORMS-CONSISTENCY-2026-004: the wrapper itself is deliberately NOT the
+            // shared saveFlow.failedKeep ("Not saved — ..."). This catch also covers a
+            // 5xx or a network error with no response at all — those do not prove the
+            // write never reached the server, only that this client never got
+            // confirmation. Asserting "Not saved" here would be a guess dressed up as
+            // fact. ITR gets its own itr.saveNotConfirmed wording instead; NOI/NCR keep
+            // saveFlow.failedKeep as-is (not touched by this round).
+            toast.error(t('itr.saveNotConfirmed', { message: describeSaveError(error, t) }), { duration: 10000 });
+            // Re-throw (2026-09-19 fix): the modal's own handleSave awaits
+            // this onSave call and only closes on success — swallowing the
+            // error here made every failed save (e.g. approving without
+            // ITR_APPROVE, or a backend validation rejection) look
+            // successful to the modal, which then closed anyway and
+            // discarded the user's in-progress edits. Re-throwing lets the
+            // modal correctly keep itself open with the content intact.
+            throw error;
         }
     };
 
@@ -353,6 +382,13 @@ const ITR: React.FC = () => {
                     existingItem={currentItrId ? itrList.find(i => i.id === currentItrId) : undefined}
                     itrList={itrList}
                     onSave={handleSaveITRDetails}
+                    onRevoked={async () => {
+                        // Reload backend state, then close — reopening shows the
+                        // fresh (no longer Approved) status, same as after a save.
+                        await refetch();
+                        setIsEditModalOpen(false);
+                        setCurrentItrId(null);
+                    }}
                     onClose={() => {
                         if (openedViaDeepLinkRef.current) {
                             openedViaDeepLinkRef.current = false;

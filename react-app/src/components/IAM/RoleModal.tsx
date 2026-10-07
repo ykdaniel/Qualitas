@@ -1,7 +1,11 @@
+import { useDraftGuard } from '../Shared/LeaveGuard';
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
 import React, { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { Role } from '../../store/iamStore';
+import { getErrorMessage } from '../../utils/errorUtils';
 import styles from './RoleModal.module.css';
 
 const roleSchema = z.object({
@@ -42,10 +46,11 @@ const RoleModal: React.FC<RoleModalProps> = ({ existingRole, readOnly = false, p
         }, {} as Record<string, typeof permissions>);
     }, [permissions]);
 
-    const handleClose = () => {
+    const leaveGuard = useDraftGuard(form, loading, !readOnly);
+    const handleClose = () => leaveGuard.requestClose(() => {
         setIsClosing(true);
         setTimeout(() => onClose(), 250);
-    };
+    });
 
     const togglePermission = (code: string) => {
         setForm(prev => ({
@@ -61,7 +66,9 @@ const RoleModal: React.FC<RoleModalProps> = ({ existingRole, readOnly = false, p
         try {
             roleSchema.parse(form);
             await onSave(form, !!existingRole, existingRole ? parseInt(existingRole.id) : undefined);
-            handleClose();
+            leaveGuard.release();
+            setIsClosing(true);
+            setTimeout(onClose, 250);
         } catch (err: any) {
             if (err instanceof z.ZodError) {
                 const error = err as z.ZodError;
@@ -73,7 +80,8 @@ const RoleModal: React.FC<RoleModalProps> = ({ existingRole, readOnly = false, p
                     toast.error(`Validation failed: ${error.message || 'Unknown error'}`);
                 }
             } else {
-                toast.error(err.message || "An error occurred");
+                // The backend's own reason (e.g. "Only an Admin can ..."), not axios's generic status text.
+                toast.error(getErrorMessage(err, "An error occurred"));
             }
         }
     };
@@ -143,14 +151,18 @@ const RoleModal: React.FC<RoleModalProps> = ({ existingRole, readOnly = false, p
                     </div>
                     </fieldset>
 
-                    <div className={styles.formActions}>
-                        <button type="button" className={styles.cancelButton} onClick={handleClose} disabled={loading}>{t('common.cancel')}</button>
-                        {!readOnly && (
-                            <button type="submit" className={styles.submitButton} disabled={loading}>
-                                {loading ? (t('common.saving') || 'Saving...') : (existingRole ? t('common.save') : t('common.add'))}
-                            </button>
-                        )}
-                    </div>
+                    <FormActions
+                        cancel={<>
+                            <button className={actionStyles.secondary} type="button" onClick={handleClose} disabled={loading}>{t('common.cancel')}</button>
+                        </>}
+                        primary={<>
+                            {!readOnly && (
+                                <button className={actionStyles.primary} type="submit" disabled={loading}>
+                                    {loading ? (t('common.saving') || 'Saving...') : (existingRole ? t('common.save') : t('common.add'))}
+                                </button>
+                            )}
+                        </>}
+                    />
                 </form>
             </div>
         </div>

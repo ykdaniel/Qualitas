@@ -4,6 +4,20 @@ import { ITPItem } from "../../store/itpStore";
 import { Trash2, Link } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { StatusBadge } from "@/components/Shared/StatusBadge";
+
+// Maps ITP statuses onto StatusBadge colour classes (green = approved, teal = approved with comments,
+// yellow = pending, orange = revise & resubmit, red = rejected, grey = no submit / void).
+const getBadgeKey = (status: string) => {
+    const s = status.toLowerCase();
+    if (s === 'approved') return 'approved';
+    if (s === 'approved with comments') return 'approvedwithcomments';
+    if (s === 'revise & resubmit' || s === 'revise and resubmit') return 'reviseresubmit';
+    if (s === 'rejected') return 'rejected';
+    if (s === 'pending') return 'pending';
+    if (s === 'void') return 'cancelled';
+    return 'na';
+};
 
 const getLocalizedStatus = (status: string, t: (key: string) => string) => {
     const s = status.toLowerCase();
@@ -40,7 +54,7 @@ export const createColumns = (
             cell: ({ row }) => {
                 const isVoid = row.getValue('status')?.toString().toLowerCase() === 'void';
                 return (
-                    <div className={cn("text-center", isVoid && "line-through text-gray-400")}>
+                    <div className={cn("text-center font-medium text-[#8a6a3a] underline-offset-2 group-hover:underline", isVoid && "line-through text-gray-400")}>
                         {row.getValue("referenceNo") || '-'}
                     </div>
                 );
@@ -68,8 +82,12 @@ export const createColumns = (
                 const status = row.getValue("status") as string;
                 const isVoid = status.toLowerCase() === 'void';
                 return (
-                    <div className={cn("text-center", isVoid && "line-through text-gray-400")}>
-                        {getLocalizedStatus(status, t)}
+                    <div className="text-center">
+                        <StatusBadge
+                            status={getBadgeKey(status)}
+                            label={getLocalizedStatus(status, t)}
+                            className={cn(isVoid && "line-through")}
+                        />
                     </div>
                 );
             },
@@ -170,7 +188,7 @@ export const createColumns = (
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0 text-red-500 hover:text-white hover:bg-red-500"
+                            className="h-8 w-8 p-0 text-slate-300 group-hover:text-red-500 focus-visible:text-red-500 hover:text-white hover:bg-red-500"
                             onClick={(e) => { e.stopPropagation(); handleDelete(itp.id); }}
                             title={t('itp.tooltip.delete')}
                         >

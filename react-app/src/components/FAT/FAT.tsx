@@ -1,3 +1,8 @@
+import { useDraftGuard } from '../Shared/LeaveGuard';
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
+import { useCreationProjects } from '../../hooks/useCreationProjects';
+import { CreationProjectField } from '../Shared/CreationProjectField';
 import React, { useState, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import { BarChart3, FileCheck, TrendingUp, Search } from 'lucide-react';
@@ -27,6 +32,7 @@ type StatusFilter = 'all' | 'scheduled' | 'inProgress' | 'completed' | 'cancelle
 const FAT: React.FC = () => {
   const { t } = useLanguage();
   const { hasPermission } = useAuth();
+  const canCreate = hasPermission('fat:create:all');
   const canEdit = hasPermission('fat:update:all');
   const { getActiveContractors } = useContractorsStore();
   const { fatList, addFAT, updateFAT, deleteFAT, saveFATDetails, fatDetails, fetchFATs } = useFATStore();
@@ -95,34 +101,36 @@ const FAT: React.FC = () => {
     setIsEditModalOpen(true);
   };
 
+  // NOTE: deliberately does NOT catch here. The caller (FATEditModal.handleSave) is the one that
+  // knows whether to keep the modal open and the user's input intact — it must see this reject if
+  // the write fails, otherwise it can't tell success from failure and would close unconditionally
+  // (the bug this fixed: a swallowed error here made the child's own `await onSave(...); onClose()`
+  // always reach onClose(), even after a failed create/update).
   const handleSaveFATDetails = async (updates: Partial<FATItem>) => {
-    try {
-      if (currentFatId) {
-        await updateFAT(currentFatId, updates);
-      } else {
-        const activeContractors = getActiveContractors();
-        const defaultSupplier = activeContractors.length > 0 ? activeContractors[0].name : '';
-        const newItem: Omit<FATItem, 'id'> = {
-          equipment: updates.equipment || '',
-          supplier: updates.supplier || defaultSupplier,
-          procedure: updates.procedure || '',
-          location: updates.location || '',
-          startDate: updates.startDate || '',
-          endDate: updates.endDate || '',
-          deliveryFrom: updates.deliveryFrom || '',
-          deliveryTo: updates.deliveryTo || '',
-          siteReadiness: updates.siteReadiness || '',
-          moveInDate: updates.moveInDate || '',
-          status: updates.status || 'Scheduled',
-          hasDetails: false,
-        } as any; // safe cast for omit id
-        await addFAT(newItem);
-      }
-      setIsEditModalOpen(false);
-      setCurrentFatId(null);
-    } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
-      // Error handled in context
+    if (currentFatId) {
+      await updateFAT(currentFatId, updates);
+    } else {
+      const activeContractors = getActiveContractors();
+      const defaultSupplier = activeContractors.length > 0 ? activeContractors[0].name : '';
+      const newItem: Omit<FATItem, 'id'> = {
+        project_id: updates.project_id || undefined,
+        equipment: updates.equipment || '',
+        supplier: updates.supplier || defaultSupplier,
+        procedure: updates.procedure || '',
+        location: updates.location || '',
+        startDate: updates.startDate || '',
+        endDate: updates.endDate || '',
+        deliveryFrom: updates.deliveryFrom || '',
+        deliveryTo: updates.deliveryTo || '',
+        siteReadiness: updates.siteReadiness || '',
+        moveInDate: updates.moveInDate || '',
+        status: updates.status || 'Scheduled',
+        hasDetails: false,
+      } as any; // safe cast for omit id
+      await addFAT(newItem);
     }
+    setIsEditModalOpen(false);
+    setCurrentFatId(null);
   };
 
   const handleAddDetails = (id: string) => {
@@ -130,15 +138,14 @@ const FAT: React.FC = () => {
     setIsDetailsEditModalOpen(true);
   };
 
+  // NOTE: does NOT catch here, same reasoning as handleSaveFATDetails above — the caller
+  // (FATDetailModal.handleSave) must see a rejection to keep the modal open and the entered
+  // details intact, instead of always reaching onClose() regardless of outcome.
   const handleSaveDetails = async (details: FATDetailItem[]) => {
     if (currentFatId) {
-      try {
-        await saveFATDetails(currentFatId, details);
-        setIsDetailsEditModalOpen(false);
-        setCurrentFatId(null);
-      } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
-        // Error handled in context
-      }
+      await saveFATDetails(currentFatId, details);
+      setIsDetailsEditModalOpen(false);
+      setCurrentFatId(null);
     }
   };
 
@@ -272,7 +279,7 @@ const FAT: React.FC = () => {
             setIsEditModalOpen(false);
             setCurrentFatId(null);
           }}
-          readOnly={!canEdit}
+          readOnly={currentFatId ? !canEdit : !canCreate}
         />
       )}
 
@@ -378,12 +385,18 @@ const FATDetailModal: React.FC<FATDetailModalProps> = ({ fatId, details, onSave,
     );
   };
 
+  const [saving, setSaving] = useState(false);
+    const leaveGuard = useDraftGuard(detailList, saving, !readOnly);
+    const requestClose = () => leaveGuard.requestClose(onClose);
   const handleSave = async () => {
+    setSaving(true);
     try {
       await onSave(detailList);
-      onClose();
+      onClose(); // only reached on success — detailList/modal are left untouched on any rejection
     } catch (err) {
       toast.error((err as Error)?.message || 'Save failed');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -392,7 +405,7 @@ const FATDetailModal: React.FC<FATDetailModalProps> = ({ fatId, details, onSave,
       <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
         <div className={formStyles.modalHeader}>
           <h2>{t('fat.detailModalTitle')}</h2>
-          <button className={formStyles.closeButton} onClick={onClose}>×</button>
+          <button className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={requestClose}>×</button>
         </div>
         <div className={formStyles.modalBody}>
         <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
@@ -504,8 +517,7 @@ const FATDetailModal: React.FC<FATDetailModalProps> = ({ fatId, details, onSave,
                       />
                     </td>
                     <td>
-                      <button
-                        className={styles.deleteRowButton}
+                      <button className={actionStyles.danger}
                         onClick={() => handleDeleteRow(item.id)}
                         disabled={detailList.length <= 1}
                       >
@@ -518,24 +530,30 @@ const FATDetailModal: React.FC<FATDetailModalProps> = ({ fatId, details, onSave,
             </table>
           </div>
           {!readOnly && (
-            <div className={formStyles.modalActions}>
-              <button className={styles.addRowButton} onClick={handleAddRow}>
-                {t('fat.addRow')}
-              </button>
-            </div>
+            <FormActions
+              tools={<>
+                <button className={actionStyles.secondary} onClick={handleAddRow}>
+                  {t('fat.addRow')}
+                </button>
+              </>}
+            />
           )}
         </fieldset>
-          <div className={formStyles.modalActions}>
+        </div>
+        <FormActions
+          cancel={<>
+            <button className={actionStyles.secondary} onClick={requestClose}>
+              {readOnly ? t('common.close') : t('common.cancel')}
+            </button>
+          </>}
+          primary={<>
             {!readOnly && (
-              <button className={formStyles.saveButton} onClick={handleSave}>
+              <button className={actionStyles.primary} onClick={handleSave} disabled={saving}>
                 {t('common.save')}
               </button>
             )}
-            <button className={formStyles.cancelButton} onClick={onClose}>
-              {readOnly ? t('common.close') : t('common.cancel')}
-            </button>
-          </div>
-        </div>
+          </>}
+        />
       </div>
     </div>
   );
@@ -549,6 +567,7 @@ interface FATEditModalProps {
   readOnly?: boolean;
 }
 const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem, onSave, onClose, readOnly = false }) => {
+  const creationProjects = useCreationProjects(!existingItem);
   const { t } = useLanguage();
   const { getActiveContractors } = useContractorsStore();
   const [formData, setFormData] = useState<Partial<FATItem>>({
@@ -580,12 +599,19 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
     });
   };
 
+  const [saving, setSaving] = useState(false);
+    const leaveGuard = useDraftGuard(formData, saving, !readOnly);
+    const requestClose = () => leaveGuard.requestClose(onClose);
   const handleSave = async () => {
+    setSaving(true);
     try {
+      if (!existingItem && (creationProjects.loading || creationProjects.error)) return;
       await onSave(formData);
-      onClose();
+      onClose(); // only reached on success — formData/modal are left untouched on any rejection
     } catch (err) {
       toast.error((err as Error)?.message || 'Save failed');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -594,13 +620,16 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
       <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
         <div className={formStyles.modalHeader}>
           <h2>{existingItem ? t('fat.editTitle') : t('fat.addTitle')}</h2>
-          <button className={formStyles.closeButton} onClick={onClose}>×</button>
+          <button className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={requestClose}>×</button>
         </div>
         <div className={formStyles.modalBody}>
         <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
           <div className={formStyles.formSections}>
             <div className={formStyles.formSection}>
               <h3 className={formStyles.sectionTitle}>{t('fat.sectionInfo')}</h3>
+              {!existingItem && <CreationProjectField state={creationProjects} value={formData.project_id}
+                onChange={value => handleFieldChange('project_id', value)} />}
+
               <div className={formStyles.formGrid}>
                 <div className={formStyles.formGroup}>
                   <label>{t('fat.equipment')}</label>
@@ -734,16 +763,20 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
           </div>
         </fieldset>
         </div>
-        <div className={formStyles.modalActions}>
-          {!readOnly && (
-            <button className={formStyles.saveButton} onClick={handleSave}>
-              {t('common.save')}
-            </button>
-          )}
-          <button className={formStyles.cancelButton} onClick={onClose}>
-            {readOnly ? t('common.close') : t('common.cancel')}
-          </button>
-        </div>
+              <FormActions
+                  cancel={<>
+                      <button className={actionStyles.secondary} onClick={requestClose}>
+                          {readOnly ? t('common.close') : t('common.cancel')}
+                      </button>
+                  </>}
+                  primary={<>
+                      {!readOnly && (
+                          <button className={actionStyles.primary} onClick={handleSave} disabled={saving || (!existingItem && (creationProjects.loading || creationProjects.error))}>
+                              {t('common.save')}
+                          </button>
+                      )}
+                  </>}
+              />
       </div>
     </div>
   );
@@ -778,7 +811,7 @@ const FATDetailsViewModal: React.FC<FATDetailsViewModalProps> = ({ fatId: _fatId
       <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
         <div className={formStyles.modalHeader}>
           <h2>{t('fat.detailsTitle')}</h2>
-          <button className={formStyles.closeButton} onClick={onClose}>×</button>
+          <button className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={onClose}>×</button>
         </div>
         <div className={formStyles.modalBody}>
           <div className={formStyles.formSections}>
@@ -869,14 +902,18 @@ const FATDetailsViewModal: React.FC<FATDetailsViewModalProps> = ({ fatId: _fatId
             )}
           </div>
         </div>
-        <div className={formStyles.modalActions}>
-          <button className={formStyles.printButton} onClick={() => setIsPrinting(true)}>
-            {t('common.print')}
-          </button>
-          <button className={formStyles.cancelButton} onClick={onClose}>
-            {t('common.close')}
-          </button>
-        </div>
+              <FormActions
+                  tools={<>
+                      <button className={actionStyles.secondary} onClick={() => setIsPrinting(true)}>
+                          {t('common.print')}
+                      </button>
+                  </>}
+                  cancel={<>
+                      <button className={actionStyles.secondary} onClick={onClose}>
+                          {t('common.close')}
+                      </button>
+                  </>}
+              />
       </div>
       {isPrinting && ReactDOM.createPortal(
         <FATPrintTemplate fat={fatItem} details={fatDetails} result={overallResult} />,

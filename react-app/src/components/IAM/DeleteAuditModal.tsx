@@ -1,3 +1,5 @@
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
 import React, { useState } from 'react';
 import styles from './IAM.module.css';
 
@@ -59,21 +61,23 @@ const DeleteAuditModal: React.FC<DeleteAuditModalProps> = ({
                         {error && <span style={{ color: 'red', fontSize: '12px' }}>{error}</span>}
                     </div>
                 </div>
-                <div className={styles.formActions} style={{ marginTop: '1.5rem' }}>
-                    <button
-                        type="button"
-                        className={styles.saveButton}
-                        onClick={handleConfirm}
-                        disabled={reason.trim().length < 5}
-                        style={{ backgroundColor: '#ef4444', opacity: reason.trim().length < 5 ? 0.5 : 1, cursor: reason.trim().length < 5 ? 'not-allowed' : 'pointer' }}
-                        title={reason.trim().length < 5 ? 'Enter an audit reason (min 5 characters) first' : undefined}
-                    >
-                        {confirmText}
-                    </button>
-                    <button type="button" className={styles.cancelButton} onClick={onCancel}>
-                        {cancelText}
-                    </button>
-                </div>
+                <FormActions
+                    cancel={<>
+                        <button className={actionStyles.danger} type="button" onClick={onCancel}>
+                            {cancelText}
+                        </button>
+                    </>}
+                    primary={<>
+                        <button className={actionStyles.danger}
+                            type="button"
+                            onClick={handleConfirm}
+                            disabled={reason.trim().length < 5}
+                            title={reason.trim().length < 5 ? 'Enter an audit reason (min 5 characters) first' : undefined}
+                        >
+                            {confirmText}
+                        </button>
+                    </>}
+                />
             </div>
         </div>
     );

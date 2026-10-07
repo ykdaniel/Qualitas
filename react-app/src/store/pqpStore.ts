@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import api from '../services/api';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
-import { getProjectFilterParams } from '../utils/projectFilter';
+import { getProjectFilterParams, getCurrentProjectScopeId } from '../utils/projectFilter';
 
 export interface PQPItem {
     id: string;
@@ -51,6 +51,13 @@ interface PQPState {
     getPQPByVendor: (vendor: string) => PQPItem[];
 }
 
+// Module-level, not store state: see itpStore.ts's itpFetchSeq for why — discards a fetch's
+// response if a newer fetchPQPs has started since (BACKLOG #28/#37).
+let pqpFetchSeq = 0;
+// See itpStore.ts's itpDataScopeId for why — clears the list on a cross-scope failure instead of
+// leaving the previous scope's rows visible to plain consumers of this store (BACKLOG #28/#37).
+let pqpDataScopeId: string | null = null;
+
 export const usePQPStore = create<PQPState>((set, get) => ({
     pqpList: [],
     loading: false,
@@ -60,12 +67,23 @@ export const usePQPStore = create<PQPState>((set, get) => ({
     setError: (error: string | null) => set({ error }),
 
     fetchPQPs: async (params?: FilterParams) => {
+        const seq = ++pqpFetchSeq;
+        const requestedScopeId = getCurrentProjectScopeId();
         set({ loading: true, error: null });
         try {
             const response = await api.get('/pqp/', { params: { ...getProjectFilterParams(), ...params } });
+            if (seq !== pqpFetchSeq) return;
+            pqpDataScopeId = requestedScopeId;
             set({ pqpList: response.data || [], loading: false });
         } catch (err: any) {
-            set({ error: getErrorMessage(err, 'Failed to fetch PQPs'), loading: false });
+            if (seq !== pqpFetchSeq) return;
+            const message = getErrorMessage(err, 'Failed to fetch PQPs');
+            if (requestedScopeId !== pqpDataScopeId) {
+                pqpDataScopeId = requestedScopeId;
+                set({ pqpList: [], error: message, loading: false });
+            } else {
+                set({ error: message, loading: false });
+            }
         }
     },
 

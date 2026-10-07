@@ -3,7 +3,7 @@ import api from '../services/api';
 import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
-import { getProjectFilterParams } from '../utils/projectFilter';
+import { getProjectFilterParams, getCurrentProjectScopeId } from '../utils/projectFilter';
 
 export interface Attendee {
     name: string;
@@ -64,6 +64,11 @@ interface MeetingMinutesState {
     setError: (err: string | null) => void;
 }
 
+// See itpStore.ts's itpFetchSeq — discards a stale (superseded) response (BACKLOG #28/#37).
+let meetingFetchSeq = 0;
+// See itpStore.ts's itpDataScopeId — clears the list on a cross-scope failure (BACKLOG #28/#37).
+let meetingDataScopeId: string | null = null;
+
 export const useMeetingMinutesStore = create<MeetingMinutesState>((set, get) => ({
     meetingList: [],
     loading: false,
@@ -73,12 +78,23 @@ export const useMeetingMinutesStore = create<MeetingMinutesState>((set, get) => 
     setError: (error: string | null) => set({ error }),
 
     fetchMeetingMinutes: async (params?: FilterParams) => {
+        const seq = ++meetingFetchSeq;
+        const requestedScopeId = getCurrentProjectScopeId();
         set({ loading: true, error: null });
         try {
             const response = await api.get('/meeting-minutes/', { params: { ...getProjectFilterParams(), ...params } });
+            if (seq !== meetingFetchSeq) return;
+            meetingDataScopeId = requestedScopeId;
             set({ meetingList: (response.data || []).map(normalizeItem), loading: false });
         } catch (err: any) {
-            set({ error: getErrorMessage(err, 'Failed to fetch Meeting Minutes'), loading: false });
+            if (seq !== meetingFetchSeq) return;
+            const message = getErrorMessage(err, 'Failed to fetch Meeting Minutes');
+            if (requestedScopeId !== meetingDataScopeId) {
+                meetingDataScopeId = requestedScopeId;
+                set({ meetingList: [], error: message, loading: false });
+            } else {
+                set({ error: message, loading: false });
+            }
         }
     },
 

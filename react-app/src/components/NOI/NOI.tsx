@@ -18,7 +18,8 @@ import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { RowSelectionState } from '@tanstack/react-table';
 import { useDebounce } from '../../hooks/useDebounce';
-import { getErrorMessage } from '../../utils/errorUtils';
+import { runSaveFlow, sameWrite, SaveOutcome } from '../../utils/saveFlow';
+import { describeSaveError } from '../../utils/saveErrors';
 
 import {
   NOIDetailModal,
@@ -34,6 +35,8 @@ const NOI: React.FC = () => {
   const { t } = useLanguage();
   const { hasPermission } = useAuth();
   const { noiList, loading, error, refetch, addNOI, addBulkNOI, updateNOI, deleteNOI } = useNOIStore();
+  // The last successful record write of the open modal (id + serialized payload) — see runSaveFlow / sameWrite.
+  const lastWriteRef = useRef<{ id: string; key: string } | null>(null);
   const ncrList = useNCRStore(state => state.ncrList);
   const itrList = useITRStore(state => state.itrList);
 
@@ -117,6 +120,7 @@ const NOI: React.FC = () => {
   const statistics = useNOIStats(noiList);
 
   const handleEdit = React.useCallback((id: string) => {
+    lastWriteRef.current = null;
     setCurrentNoiId(id);
     setIsModalOpen(true);
   }, []);
@@ -146,11 +150,33 @@ const NOI: React.FC = () => {
   }, [searchParams, noiList, handleEdit, setSearchParams]);
 
   const handleAddNew = () => {
+    lastWriteRef.current = null;
     setCurrentNoiId('new');
     setIsModalOpen(true);
   };
 
-  const handleSaveNOIDetails = async (details: NOIDetailData, pendingUploads: File[], deletedFileIds: string[]) => {
+  const fileSteps = {
+    upload: (id: string, group: { category: string; files: File[] }) => uploadFiles('noi', id, group.files, group.category),
+    remove: deleteFile,
+    reload: async () => { await refetch(); return !useNOIStore.getState().error; },
+    describe: (e: unknown) => describeSaveError(e, t),
+  };
+
+  // Retry of the unfinished file steps only. The record is stored already; it is NOT written again (an account with create but
+  // without update permission could not do that anyway, and the retry must never create it a second time).
+  const handleRetryNOIFiles = async (pendingUploads: File[], deletedFileIds: string[]): Promise<SaveOutcome> => {
+    const id = lastWriteRef.current?.id;
+    if (!id) return { status: 'failed', message: t('common.saveFailed') };
+    return runSaveFlow({
+      writeRecord: async () => { throw new Error('a file retry never writes the record'); },
+      reuseId: id,
+      uploads: pendingUploads.length > 0 ? [{ category: 'attachment', files: pendingUploads }] : [],
+      deletedFileIds,
+      ...fileSteps,
+    });
+  };
+
+  const handleSaveNOIDetails = async (details: NOIDetailData, pendingUploads: File[], deletedFileIds: string[]): Promise<SaveOutcome> => {
     if (currentNoiId) {
       const isNew = currentNoiId === 'new';
       const existingItem = isNew ? undefined : noiList.find(item => item.id === currentNoiId);
@@ -178,32 +204,29 @@ const NOI: React.FC = () => {
         dueDate: details.dueDate || '',
       };
 
-      try {
-        let savedNOI;
-        if (existingItem) {
-          await updateNOI(currentNoiId, updatedItem);
-          savedNOI = updatedItem;
-        } else {
-          savedNOI = await addNOI(updatedItem);
-        }
-
-        const finalId = savedNOI?.id || currentNoiId;
-
-        if (deletedFileIds && deletedFileIds.length > 0) {
-          await Promise.all(deletedFileIds.map(id => deleteFile(id).catch(e => console.error('Failed to delete file', e))));
-        }
-        if (pendingUploads && pendingUploads.length > 0 && finalId) {
-          await uploadFiles('noi', finalId, pendingUploads, 'attachment');
-        }
-
-        setIsModalOpen(false);
-        setCurrentNoiId(null);
-        refetch();
-      } catch (error: any) {
-        const detail = getErrorMessage(error, t('common.saveFailed'));
-        toast.error(detail);
-      }
+      // A retry after "saved, but a file step failed" with unchanged content must not write the record again.
+      const currentId = currentNoiId;
+      const outcome = await runSaveFlow({
+        writeRecord: async () => {
+          if (existingItem) {
+            await updateNOI(currentId, updatedItem);
+            return currentId;
+          }
+          return (await addNOI(updatedItem))?.id ?? '';
+        },
+        reuseId: sameWrite(lastWriteRef.current, currentId, { ...updatedItem, id: '' }) ? currentId : null,
+        uploads: pendingUploads && pendingUploads.length > 0 ? [{ category: 'attachment', files: pendingUploads }] : [],
+        deletedFileIds,
+        ...fileSteps,
+        // (the id is left out of the key: it is '' while creating and the real id afterwards, but the content is the same)
+        // (the id is left out of the key: it is '' while creating and the real id afterwards, but the content is the same)
+        onRecordSaved: (id) => { lastWriteRef.current = { id, key: JSON.stringify({ ...updatedItem, id: '' }) }; },
+      });
+      // The record exists now: a retry must update it, never create it again.
+      if (outcome.status === 'saved-incomplete' && isNew && outcome.id) setCurrentNoiId(outcome.id);
+      return outcome;
     }
+    return { status: 'failed', message: t('common.saveFailed') };
   };
 
   const handleDeleteClick = React.useCallback((id: string) => {
@@ -223,39 +246,43 @@ const NOI: React.FC = () => {
 
   const columns = useMemo(() => createColumns(handleDeleteClick, t), [t, handleDeleteClick]);
 
-  const chips: { id: StatusFilter; label: string; count: number }[] = [
-    { id: 'all', label: t('common.all') || 'All', count: statistics.total },
-    { id: 'open', label: t('noi.stats.open') || 'Open', count: statistics.opening },
-    { id: 'closed', label: t('noi.stats.closed') || 'Closed', count: statistics.closed },
-    { id: 'reject', label: t('noi.status.reject') || 'Reject', count: statistics.reject },
+  // A failed load is not "zero records": with an error and nothing loaded the counts are unknown and are shown as "—".
+  const loadFailed = !!error && noiList.length === 0;
+  const shown = <T,>(v: T): T | string => (loadFailed ? '—' : v);
+
+  const chips: { id: StatusFilter; label: string; count: number | string }[] = [
+    { id: 'all', label: t('common.all') || 'All', count: shown(statistics.total) },
+    { id: 'open', label: t('noi.stats.open') || 'Open', count: shown(statistics.opening) },
+    { id: 'closed', label: t('noi.stats.closed') || 'Closed', count: shown(statistics.closed) },
+    { id: 'reject', label: t('noi.status.reject') || 'Reject', count: shown(statistics.reject) },
   ];
 
   const summary = [
     {
       key: 'open',
       label: t('noi.stats.open') || 'Open',
-      value: statistics.opening,
+      value: shown(statistics.opening),
       icon: <Clock size={18} strokeWidth={1.8} />,
       accent: '#c8753f',
     },
     {
       key: 'closed',
       label: t('noi.stats.closed') || 'Closed',
-      value: statistics.closed,
+      value: shown(statistics.closed),
       icon: <CheckCircle2 size={18} strokeWidth={1.8} />,
       accent: '#7a8f5a',
     },
     {
       key: 'total',
       label: t('noi.stats.total') || 'Total',
-      value: statistics.total,
+      value: shown(statistics.total),
       icon: <BarChart3 size={18} strokeWidth={1.8} />,
       accent: '#8a6a3a',
     },
     {
       key: 'rate',
       label: t('noi.stats.openRate') || 'Open Rate',
-      value: `${statistics.openRate}%`,
+      value: shown(`${statistics.openRate}%`),
       icon: <Zap size={18} strokeWidth={1.8} />,
       accent: '#b8945a',
     },
@@ -380,7 +407,10 @@ const NOI: React.FC = () => {
           existingItem={currentNoiId ? noiList.find(item => item.id === currentNoiId) : undefined}
           noiList={noiList}
           onSave={handleSaveNOIDetails}
+          onRetryFiles={handleRetryNOIFiles}
+          attachmentsAllowed={hasPermission('noi:update:all')}
           onClose={() => {
+            lastWriteRef.current = null;
             if (openedViaDeepLinkRef.current) {
               openedViaDeepLinkRef.current = false;
               navigate(-1);

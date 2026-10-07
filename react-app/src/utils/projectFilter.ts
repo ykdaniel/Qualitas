@@ -11,3 +11,11 @@ export const getProjectFilterParams = (): { project_id: string } | Record<string
     }
     return {};
 };
+
+// A stable scope identifier (never `undefined`) for stores to tag which scope a fetch's result
+// belongs to — see e.g. itpStore.ts's `itpDataScopeId`. "All Projects" gets its own fixed string
+// rather than `null`/`undefined` so "no project selected yet" (the initial state, before ANY fetch
+// has tagged data) stays distinguishable from "All Projects was the selected scope".
+export const CURRENT_SCOPE_ALL = '__all__';
+export const getCurrentProjectScopeId = (): string =>
+    useProjectStore.getState().currentProject?.id ?? CURRENT_SCOPE_ALL;

@@ -278,8 +278,11 @@ export interface Permission {
   module: string;
 }
 
-export const getUsers = async (): Promise<User[]> => {
-  const response = await api.get<User[]>('/iam/users/');
+// BACKLOG #21 gap 1 (2026-10-05): defaults to active-only so "pick a person"
+// pickers stop offering deactivated users forever. The IAM admin page passes
+// activeOnly=false explicitly to keep seeing (and reactivating) them.
+export const getUsers = async (activeOnly: boolean = true): Promise<User[]> => {
+  const response = await api.get<User[]>('/iam/users/', { params: { active_only: activeOnly } });
   return response.data;
 };
 
