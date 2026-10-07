@@ -85,3 +85,6 @@ backend/uploads/
 !backend/requirements.txt
 !react-app/package.json
 !react-app/package-lock.json
+
+# Vite dependency pre-bundle cache
+.vite/
