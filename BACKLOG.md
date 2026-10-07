@@ -2835,3 +2835,17 @@ Construction Engineer 核准欄位都還是 Pending——跟 `obsFormSchema.ts::
    不確定之前先不要假設。
 
 使用者本批要求先記錄、不修正。
+
+---
+
+## 53. docx 匯出共用的附件路徑防護用前綴比對 · NOT STARTED · 【優先度：低】
+
+**Where:** `backend/core/docx_builder.py::resolve_local_upload_path`（ITR／NCR／NOI 的 Word 匯出共用）。
+
+**Found:** 2026-10-07，審 `NOI-EXPORT-DOCX-2026-001` 時讀碼發現（讀碼結論，未實測）。
+
+**問題：** 以 `full.startswith(root)` 判斷路徑是否在上傳根目錄內，沒有補路徑分隔符；與上傳根目錄同前綴的兄弟目錄（例如 `<root>_evil/`）會被判為合法。
+
+**影響：** 匯出只列檔名、不讀內容，且舊版附件欄位需有該模組寫入權限才能塞值，所以最多洩漏「某檔案存在及其檔名」，嚴重度低。
+
+**建議做法：** 改用 `os.path.commonpath([root, full]) == root`，並補一個含同前綴兄弟目錄的負向測試。需另案處理，不夾帶進 NOI 匯出任務。
