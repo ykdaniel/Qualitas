@@ -1,0 +1,25 @@
+# REVIEW.md — 獨立審查
+
+TASK_ID: NOI-EXPORT-DOCX-2026-001
+SOURCE_TASK_ID: ITR-EXPORT-DOCX-2026-001
+審查日期：待審
+
+## EVIDENCE_CHECK
+（待審）
+
+## SCOPE_CHECK
+（待審）
+
+## DECISIONS_CHECK
+（待審）
+
+## VERDICT
+- [ ] PASS
+- [ ] REVISE
+- [ ] HUMAN_REQUIRED
+
+## REQUIRED_FIXES
+（待審）
+
+## NEXT_STEP
+（待審）
