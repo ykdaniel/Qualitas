@@ -65,3 +65,22 @@ CRLF 檔案（AuditWizard.tsx、auditStore.ts、LanguageContext.tsx、FollowUpIs
 ## 未做／限制
 - 「清單重新抓取時變成重複新增」的修正只有讀碼確認，沒有重現；觸發條件是精靈開著時清單剛好重新抓取，而且新清單裡沒有這筆紀錄。
 - Follow Up 跳到 Audit 的連結只有讀碼確認，沒有在瀏覽器點過；deep link 本身已實測。
+
+## 上線紀錄（2026-10-09，依 DECISIONS 的 PASS 後部署授權）
+- 提交與推送：`e9a4a7f6`（程式）、`2ee72666`（文件），推送到 `ui/sidebar-shell-preview`。只加入本輪檔案，另一工作階段的材料改動仍留在工作樹，沒有被提交。
+- NAS 工作目錄：`~/deploy-audit-polish-20261009T152518Z`。
+  - 部署前備份：資料庫線上備份 integrity ok，舊的 2 個後端檔放在 `backend-old/`，前端舊入口放在 `frontend-index-pre-audit-polish.html`。
+  - R2 的前端候選重新上傳並核對（`nas-prep-output-r2.txt`）。
+- 後端：
+  - 16:11Z 套用 2 個檔案（`apply-backend-output.txt`）。
+  - 使用者第一次執行 sudo 指令時沒有實際重建（日誌與自動備份都沒有新紀錄），第二次執行才成功。
+  - 重建前容器內的 `audit_service.py` 是 `b793dbcc…`（A＋B＋C 版本）。回退映像：`qualitas-backend:pre-audit-polish-20261009T152518Z`。
+  - 新容器 16:19:50Z 啟動：啟動時自動備份 `qualitas_20261009_161950.db`、migration 完成、權限同步 72 項、排程啟動，日誌裡沒有 ERROR、Traceback 或 ABORTED。三個容器都是 Up。
+- 前端：16:20Z 新增 67 個資產（38 個原本就有），之後原子替換 `index.html`。dist inode 不變，106 個候選檔案全部在線上（`apply-frontend-output.txt`）。
+- 對外核對（`post-deploy-http-check.txt`）：
+  - `/` 和 `/index.html` 都是 `0ee33607…`；
+  - 主 bundle、CSS、Audit、FollowUpIssue 都是 200 且雜湊相符；
+  - 上一版的 Audit 資產仍是 200；
+  - `/api/user/profile` 未登入回 401。
+- 回退：前端用 `rollback-frontend.sh`；後端用 `rollback-backend-code.sh` 加重建，或改用 pre-audit-polish 映像。沒有資料庫結構變更。
+- 未完成：登入後的唯讀冒煙由使用者執行。

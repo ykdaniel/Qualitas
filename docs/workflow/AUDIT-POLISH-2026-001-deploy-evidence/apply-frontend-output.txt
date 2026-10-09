@@ -1,0 +1,4 @@
+assets: added 67, already present 38
+OK all candidate assets live
+dist inode unchanged (376368)
+SWITCHED: dist == candidate manifest (106 files present)
