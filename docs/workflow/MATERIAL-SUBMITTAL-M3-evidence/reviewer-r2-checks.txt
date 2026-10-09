@@ -1,0 +1,321 @@
+COMMAND: ['npm', 'test']
+
+> qualitas-react-app@0.0.0 test
+> node scripts/run-unit-tests.mjs
+
+✔ formatUtc: stored server time, always labelled UTC; garbage is returned as-is, never replaced (1.782666ms)
+✔ formatLocalWithZone includes the zone name; unparseable input gives null (nothing invented) (14.6135ms)
+✔ actorOf: as recorded; blank or missing parts stay missing (1.485125ms)
+✔ revokedTarget: known, unknown (pre-event approval), or not applicable (0.322041ms)
+✔ pageWindow arithmetic (0.397875ms)
+✔ snapshotItems: only object items, verbatim; missing list is empty, not invented (0.209542ms)
+✔ classifyDeleteResults: all succeed -> every id is deleted, no errors (2.559125ms)
+✔ classifyDeleteResults: one succeeds, one fails -> only the failed id stays out of deletedIds (0.357542ms)
+✔ classifyDeleteResults: a 404 is NOT counted as deleted (never silently treated as success) (0.107708ms)
+✔ classifyDeleteResults: a 404 and a network failure produce DIFFERENT wording (two distinct unknowns) (0.089084ms)
+✔ classifyDeleteResults: a generic 4xx/5xx surfaces the backend detail, not a generic label (0.074709ms)
+✔ classifyDeleteResults: order of ids and results must line up positionally (0.065208ms)
+✔ isUnchangedSincePriorWrite: first write (no prior key) is never skipped (0.064125ms)
+✔ isUnchangedSincePriorWrite: identical payload to the last written one is skipped (0.051ms)
+✔ isUnchangedSincePriorWrite: a changed field (mid-retry edit) is NOT skipped, even if almost everything else matches (0.048958ms)
+✔ isUnchangedSincePriorWrite: key order in the object does not matter for JSON.stringify only when keys are inserted the same way — this documents that constraint (0.088667ms)
+✔ ITP combined key: main payload AND detail both unchanged -> skip (both were written together last time) (0.056792ms)
+✔ ITP combined key: main payload unchanged but DETAIL changed -> NOT skipped (detail work still owed) (0.150417ms)
+✔ ITP combined key: a prior attempt where the DETAIL write failed never reaches this comparison with a matching key in the first place — simulated here by the caller simply never having recorded a prior key, which must not skip (0.068708ms)
+✔ classify: four states + legacy/unknown (4.303584ms)
+✔ summary: N/A is judged but not pass; unknown and unfilled are not judged (1.888625ms)
+✔ counts follow O / X only (0.201083ms)
+✔ status derivation: the unified rule (0.347875ms)
+✔ pass/fail counts stay O / X only; N/A is judged but never counted as a pass (0.109125ms)
+✔ display helpers: one description of an Ongoing checklist (0.208041ms)
+✔ approval-limiting note applies to any N/A (mixed or all) (0.069917ms)
+✔ N/A reason: required for a new N/A, exempt for an untouched historical one (0.132042ms)
+✔ withResult drops the reason when leaving N/A; other items untouched (0.0765ms)
+✔ itemsForSave never normalises legacy values (0.1215ms)
+(node:38312) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ loading: always "loading", regardless of any other input (5.291459ms)
+✔ first load for a scope, not yet observed loading and not yet confirmed: "loading" even if not currently loading (the scope-switch race) (0.1645ms)
+✔ failed, nothing usable for this scope (never confirmed, or confirmed for a DIFFERENT scope): "error-empty" (0.09375ms)
+✔ failed, but a previous successful load for THIS SAME scope is still held: "error-stale" (keep showing the data, flag it) (0.792208ms)
+✔ failed with confirmedThisScope=true but hasData=false: still "error-empty" (nothing to keep showing) (0.728708ms)
+✔ no error, sawLoadingThisScope or confirmedThisScope true: "ok" — list.length may legitimately be 0 (a real "no records") (0.11525ms)
+✔ pagination with 0 records at index 0 (27.15425ms)
+✔ pagination with 1 records at index 0 (41.751375ms)
+✔ pagination with 21 records at index 1 (4.546542ms)
+✔ issuesOf / fieldIssues tolerate rows without the field (older API, normal rows) (2.064417ms)
+✔ formatStrictDate never rolls a non-existent day over and never shifts by the time zone (5.621541ms)
+✔ dateCell shows the stored value as-is when it has an issue, formats only clean values, dash only for blanks (0.669583ms)
+✔ preserveHistoricalDates: a blank form value cannot silently erase an invalid stored date; real edits are kept (0.27925ms)
+✔ issueMessageKey maps every stable code and falls back for unknown ones (0.149416ms)
+✔ getErrorMessage: a 500 never shows the server stack; a date 422 names the field; other messages are unchanged (0.494541ms)
+✔ getEntityFiles asks for the exact backend route — no trailing slash, so no 307 redirect is needed (32.53175ms)
+✔ getEntityFiles without a category sends no category parameter (2.265917ms)
+✔ IAM preserves distinct login names when users share the same display name (56.458041ms)
+✔ combined IAM reload and create/update responses retain login names (2.385166ms)
+✔ English only, Chinese only, or both count as filled (0.90975ms)
+✔ empty, missing and whitespace-only values do not count (0.192417ms)
+✔ a legacy plain-string Standard is judged by its own text (0.148291ms)
+✔ Activity and Standard are each required independently (1.193666ms)
+✔ preferEnglishText: English first, Chinese only when English is blank after trim (0.195042ms)
+✔ preferEnglishText returns the original string untouched (no trimming, no copying) (0.178667ms)
+✔ preferEnglishText keeps the previous output when neither language has content (0.117917ms)
+(node:38318) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ addITP passes detail_data through UNCHANGED, matching the phase-split shape its one real caller (ITP.tsx) sends (7.521417ms)
+✔ addITP with no detail_data at all (a plain new record) sends detail_data as null/undefined, not an empty array or throwing (4.502375ms)
+✔ addITP preserves the explicitly selected project in its POST (0.374ms)
+✔ empty editor initialization does not mark a new draft dirty (1.880625ms)
+✔ actual content and metadata edits remain dirty (0.226208ms)
+✔ editor snapshot preserves only the selected article and its own chapters (1.161584ms)
+✔ failed and missing article loads reject instead of presenting an empty editable chapter (0.276667ms)
+✔ KM denied load hides prior articles and recovery clears access denial (4.566542ms)
+✔ KM network failure is not classified as missing permission or empty success (0.406042ms)
+✔ confirmed create survives a later chapter failure; retry updates same main with latest content/version (5.243458ms)
+✔ main rejection does not advance saved id/version; confirmed updates carry fresh version into retry (0.275708ms)
+✔ KM delete action is absent by default and without delete permission (0.675917ms)
+✔ KM authorized delete action targets its own article without triggering the row (0.308875ms)
+✔ R1: A requested, switch to B, B answers first, A answers last -> only B is accepted (0.645792ms)
+✔ R1: within one revision only the newest load is accepted (initial load vs refresh after a write) (0.053292ms)
+✔ R1: switching revision clears the list at once (no old files under the new revision while loading) (0.616ms)
+✔ R2: upload rejected, then the list reloads fine -> the rejection is still shown (0.053083ms)
+✔ R2: delete rejected, then the list reloads fine -> the rejection is still shown (0.047333ms)
+✔ R2: unknown outcome stays UNKNOWN after a successful reload (never turned into a definite failure) (0.0565ms)
+✔ R2: the notice goes only when the user dismisses it or starts another write (0.055417ms)
+✔ R3: retry with a newly picked file B uploads B first, then the result; nothing pending -> result only (0.052041ms)
+✔ R3: picking files is offered only while a save can still upload them (0.11175ms)
+✔ no response (network error / timeout) is UNKNOWN, never "not saved" (1.356292ms)
+✔ a 5xx is UNKNOWN: the server may have committed before failing (1.478083ms)
+✔ a 4xx is a definite refusal and keeps the server detail (0.346875ms)
+✔ reconcileResult: the re-read shows our result -> saved (0.304417ms)
+✔ reconcileResult: still Submitted with no entry -> notSaved (only then is a retry safe) (0.075333ms)
+✔ reconcileResult: someone stored a DIFFERENT result -> savedDifferent, never a blind retry (0.065375ms)
+✔ reconcileResult: re-read failed or revision missing -> unconfirmed (0.044584ms)
+✔ reconcileCorrection: current entry unchanged -> notSaved; our correction on top -> saved; another -> savedDifferent (0.134375ms)
+✔ versionSummary keeps the latest revision and the current approved one apart (0.611625ms)
+✔ addCalendarDays: calendar days, weekends included, no rollover; invalid -> null (1.781042ms)
+✔ allowedActions: correction only on the latest revision with a result and no later revision (0.319583ms)
+✔ NCR: standard 5-state data — opening folds Open+In Progress+Resolved, closed/void stay exact (2.593709ms)
+✔ NCR: a non-standard status value counts toward opening, not silently dropped (0.877875ms)
+✔ NCR: opening + closed + void always equals total, for any mix (0.736917ms)
+✔ OBS: standard 5-state data — opening folds Open+In Progress+Resolved (0.199042ms)
+✔ OBS: a blank status now counts toward opening (previous bug: fell through every bucket) (0.182291ms)
+✔ OBS: opening + closed + void always equals total, for any mix (0.083292ms)
+✔ dayNumber: strict calendar days only — nothing rolls over and no time zone is involved (3.738917ms)
+✔ lateClosureDays: positive only when the close-out date is after the due date (0.496042ms)
+✔ ncrOverdueState keeps "open and overdue" apart from "closed late" — a late closure is Closed, not overdue (0.521959ms)
+✔ the closed-late fact is never also "open-overdue" (the states are exclusive, so no count can double-count a closed NCR) (0.288584ms)
+✔ a refused change of the due date of a closed NCR reads as "<field>：<reason>", not as an unknown problem (0.612042ms)
+✔ clean success: write, deletes, uploads, reload — and the outcome says saved (3.328208ms)
+✔ record write fails: nothing else is attempted and the outcome is failed with the described message (0.380959ms)
+✔ an upload failing after the record was written is NOT reported as "not saved": incomplete, id kept, only the failed group remains (0.19475ms)
+✔ a failed delete stays in the retry list; the ones that worked do not (0.092958ms)
+✔ retry with reuseId: the record is not written again and only the leftover files are processed (no duplicate upload, no repeat delete) (0.08375ms)
+✔ only the reload fails: everything is stored, nothing to retry — saved-reload-failed (a throw counts too) (0.158ms)
+✔ file failure AND reload failure: incomplete, with reloadFailed set (0.216083ms)
+✔ onRecordSaved fires as soon as the id is known — also for reuseId — and before any follow-up (0.082666ms)
+✔ a record without a usable id never uploads to a made-up id: the groups stay pending (0.384833ms)
+✔ groups without files are skipped (1.280625ms)
+✔ sameWrite: only an identical payload for the same record id counts as already written (0.24075ms)
+✔ a date 422 becomes "<field label>：<reason>", one line per distinct problem, no Pydantic text or loc path (0.522875ms)
+✔ an unknown field name is shown as sent, a plain-text detail (403/409/400) as written (0.177875ms)
+✔ network failure, server error and unknown errors: friendly fixed lines, the response body is never shown (0.252667ms)
+✔ presentOutcome: incomplete saves use the banner only; other outcomes keep their toast (0.242541ms)
+✔ followUpOf: only an incomplete save leaves work; categories are de-duplicated; `created` is carried through (0.417583ms)
+✔ isClosedStatus: only "Closed" (case/whitespace-insensitive) is closed (2.356917ms)
+✔ isVoidStatus: only "Void" (case/whitespace-insensitive) is void (0.144958ms)
+✔ isOutstandingStatus: Open, In Progress, Resolved and any non-standard value are all outstanding — Closed and Void are not (0.109917ms)
+✔ isOutstandingStatus is the exact complement of isClosedStatus||isVoidStatus for all five real statuses (0.069ms)
+✔ buildParetoCumulative: denominator excludes Void — a contractor with a Void record still reaches 100% cumulative once open+closed rows are exhausted (0.241208ms)
+✔ buildParetoCumulative: running total across multiple contractors, denominator is the grand total of open+closed only (0.196ms)
+✔ buildParetoCumulative: no rows or all-zero open/closed -> 0%, not NaN or a divide-by-zero crash (1.904958ms)
+✔ buildParetoCumulative: preserves every input field (does not drop open/closed/contractor) and only adds cumulativePercent (0.152167ms)
+✔ reproduction: the old window loses the current month in zones ahead of UTC (5.574792ms)
+✔ [Asia/Taipei] window = local current month + previous five, oldest first (0.912333ms)
+✔ [Asia/Taipei] known counts per month, current month included (1.352209ms)
+✔ [Asia/Taipei] outside the window is not counted (before the first month, after the current month) (0.658958ms)
+✔ [Asia/Taipei] a window that crosses the year (0.804292ms)
+✔ [Asia/Taipei] plain dates belong to the month written in them (no zone shift at month end / start) (1.347958ms)
+✔ [Asia/Taipei] the current month follows the LOCAL clock at a month boundary (1.131125ms)
+✔ [Asia/Taipei] timestamps: zone-less as written, zone-qualified converted to the user's local month (2.535459ms)
+✔ [UTC] window = local current month + previous five, oldest first (3.200125ms)
+✔ [UTC] known counts per month, current month included (1.47ms)
+✔ [UTC] outside the window is not counted (before the first month, after the current month) (2.636833ms)
+✔ [UTC] a window that crosses the year (1.19375ms)
+✔ [UTC] plain dates belong to the month written in them (no zone shift at month end / start) (0.537625ms)
+✔ [UTC] the current month follows the LOCAL clock at a month boundary (1.345917ms)
+✔ [UTC] timestamps: zone-less as written, zone-qualified converted to the user's local month (1.226083ms)
+✔ [America/Los_Angeles] window = local current month + previous five, oldest first (1.486042ms)
+✔ [America/Los_Angeles] known counts per month, current month included (1.276292ms)
+✔ [America/Los_Angeles] outside the window is not counted (before the first month, after the current month) (1.624542ms)
+✔ [America/Los_Angeles] a window that crosses the year (0.668583ms)
+✔ [America/Los_Angeles] plain dates belong to the month written in them (no zone shift at month end / start) (1.225208ms)
+✔ [America/Los_Angeles] the current month follows the LOCAL clock at a month boundary (0.667292ms)
+✔ [America/Los_Angeles] timestamps: zone-less as written, zone-qualified converted to the user's local month (0.94175ms)
+✔ missing, non-string and invalid dates are never counted (never treated as the current month) (2.407041ms)
+✔ calendar rules: 29 February is valid only in a leap year (0.063458ms)
+✔ the vendor filter is unchanged: a named vendor keeps only its own rows, "all" keeps everything (0.711958ms)
+✔ each card keeps its own date source (NCR/OBS raiseDate, NOI issueDate, ITP submissionDate, Checklist date, PQP updatedAt then dueDate) (0.712958ms)
+✔ a blocked improvement cell says why (one message per reason), an old server answer without the new fields says nothing (3.222833ms)
+✔ verified and unverified counts are reported separately, with the underlying reasons for the unverified ones (0.466667ms)
+✔ the percentage note appears only when something passed without verification, and never claims verification (0.460583ms)
+✔ the wording itself: zh and en both keep "not verified" and never say "verified" for the Closed-status pass (5.615708ms)
+✔ workflow list retrieves beyond 200 and keeps selected project on every page (2.376209ms)
+✔ later workflow page failure rejects instead of reporting a partial list as complete (0.626791ms)
+✔ workflow stats and attention send the same explicit project filter (0.2685ms)
+ℹ tests 156
+ℹ suites 0
+ℹ pass 156
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 670.430625
+npm notice
+npm notice New minor version of npm available! 11.11.0 -> 11.21.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.21.0
+npm notice To update run: npm install -g npm@11.21.0
+npm notice
+
+EXIT: 0
+COMMAND: ['./node_modules/.bin/tsc', '--noEmit', '-p', '.']
+
+EXIT: 0
+COMMAND: ['./node_modules/.bin/eslint', 'src/components/MaterialSubmittal', 'src/utils/materialAttachmentState.ts', 'tests-unit/materialAttachmentState.test.ts', '--max-warnings', '0']
+
+EXIT: 0
+COMMAND: ['./node_modules/.bin/vite', 'build', '--outDir', '/var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax']
+vite v5.4.21 building for production...
+
+(!) outDir /var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax is not inside project root and will not be emptied.
+Use --emptyOutDir to override.
+
+transforming...
+✓ 3093 modules transformed.
+rendering chunks...
+computing gzip size...
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/index.html                                    0.52 kB │ gzip:   0.32 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/OwnerPerformance-cHT7M3fV.css          0.24 kB │ gzip:   0.19 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/ITPDetail-uVXEdI_g.css                 0.84 kB │ gzip:   0.37 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/StatusBadge-BlM2oXDr.css               0.88 kB │ gzip:   0.43 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/ITP-BVefYkJ7.css                       1.08 kB │ gzip:   0.50 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/DocumentNamingRules-10EraVHd.css       1.22 kB │ gzip:   0.55 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/Home-hanbAqvl.css                      1.76 kB │ gzip:   0.72 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/KPI-CEHCcU_e.css                       2.03 kB │ gzip:   0.77 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/RelatedDocuments-Cs8EDcJZ.css          2.51 kB │ gzip:   0.90 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/Login-CH_MYU_E.css                     2.85 kB │ gzip:   1.07 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/MeetingMinutes-DPtfgJi_.css            4.17 kB │ gzip:   1.25 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/ModuleShell-C6YfhypF.css               4.18 kB │ gzip:   1.29 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/OBS-D0ZhL82t.css                       4.42 kB │ gzip:   1.33 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/OSD-CzwreGAc.css                       4.49 kB │ gzip:   1.33 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/PQP-Be6vBOec.css                       5.19 kB │ gzip:   1.65 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/Workflow-B2FQP5UI.css                  5.29 kB │ gzip:   1.49 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/ITR-BvLiiOU4.css                       5.77 kB │ gzip:   1.53 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/FAT-TLuSNY2l.css                       6.16 kB │ gzip:   1.81 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/NCR-Dld6BS49.css                       7.19 kB │ gzip:   2.01 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/FormShell-B6QrKzCD.css                 7.94 kB │ gzip:   2.18 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/NOI-Cr-393VZ.css                       8.85 kB │ gzip:   2.21 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/Checklist-B7SJk8ua.css                10.47 kB │ gzip:   2.58 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/Audit-D9yFl-Y8.css                    11.08 kB │ gzip:   2.68 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/Contractors-kLYgIlw7.css              11.36 kB │ gzip:   2.43 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/Dashboard-BrS4tO7C.css                15.56 kB │ gzip:   3.42 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/IAM-Hl4Pwl9z.css                      15.85 kB │ gzip:   3.32 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/KM-DVv4x-49.css                       45.53 kB │ gzip:   8.38 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/index-ClR4Gxrz.css                    76.48 kB │ gzip:  15.19 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/useDebounce-BwGSqeJA.js                0.19 kB │ gzip:   0.17 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/dateValidation-Bxi_ns38.js             0.23 kB │ gzip:   0.17 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/revision-Ccufz_-Y.js                   0.24 kB │ gzip:   0.20 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/statusBuckets-B_a05HwV.js              0.32 kB │ gzip:   0.24 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/plus-CzEd2Vfx.js                       0.33 kB │ gzip:   0.26 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/x-B80TEx0q.js                          0.33 kB │ gzip:   0.26 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/clock-M_kDKA-Z.js                      0.34 kB │ gzip:   0.27 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/circle-check-CkyrwTL1.js               0.35 kB │ gzip:   0.27 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/ban-BgRRS_FX.js                        0.35 kB │ gzip:   0.28 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/user-p2Iq4uHT.js                       0.37 kB │ gzip:   0.29 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/clsx-B-dksMZM.js                       0.37 kB │ gzip:   0.24 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/lock-Ca62orvX.js                       0.38 kB │ gzip:   0.29 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/circle-x-Dqoxqmc5.js                   0.38 kB │ gzip:   0.28 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/activity-DVe9y2KR.js                   0.41 kB │ gzip:   0.31 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/circle-alert-CXtnwmwv.js               0.42 kB │ gzip:   0.29 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/chart-column-BEclSVo4.js               0.42 kB │ gzip:   0.30 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/map-pin-B6KTO9La.js                    0.43 kB │ gzip:   0.33 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/OwnerPerformance-yjHTN45J.js           0.49 kB │ gzip:   0.28 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/printer-BK1nIwrz.js                    0.49 kB │ gzip:   0.34 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/shield-check-iUUCE06A.js               0.49 kB │ gzip:   0.35 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/save-RNshGBP7.js                       0.50 kB │ gzip:   0.33 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/trash-2-CLYSezK6.js                    0.50 kB │ gzip:   0.32 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/attachmentOutcome-Dbx9a4Dw.js          0.65 kB │ gzip:   0.65 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/formatters-CR8HXx_Z.js                 0.71 kB │ gzip:   0.43 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/circle-question-mark-BPpQwH96.js       0.74 kB │ gzip:   0.39 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/PrintPrimitives-B9rzYGen.js            0.87 kB │ gzip:   0.48 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/BackButton-DOquI4tz.js                 0.95 kB │ gzip:   0.63 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/ModuleShell.module-BB-C7AX0.js         0.95 kB │ gzip:   0.43 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/StatusBadge-BHM9mhNN.js                1.02 kB │ gzip:   0.56 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/auditStore-yU3Sq9dM.js                 1.33 kB │ gzip:   0.53 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/CreationProjectField-jeKaCLtu.js       1.54 kB │ gzip:   1.05 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/saveFlow-CXSa_mny.js                   1.55 kB │ gzip:   0.84 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/FormShell.module-MMYFQYjo.js           1.60 kB │ gzip:   0.63 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/fatStore-D1joDvsY.js                   1.69 kB │ gzip:   0.75 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/cascadeDelete-CSlg8Ooz.js              2.00 kB │ gzip:   0.85 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/Home-BwzMaY0R.js                       2.17 kB │ gzip:   0.82 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/saveErrors-zhxtz9Pi.js                 2.59 kB │ gzip:   1.24 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/ImagePreviewOverlay-DtkqKxT_.js        2.97 kB │ gzip:   1.50 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/SaveFollowUpBanner-Bj91MXPN.js         3.17 kB │ gzip:   1.21 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/Login-RBEVUPUd.js                      3.30 kB │ gzip:   1.41 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/RelatedDocuments-Bw8o0Lt8.js           3.51 kB │ gzip:   1.39 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/ChecklistResultControls-BRsRaN6P.js    4.08 kB │ gzip:   1.68 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/SecuritySettings-U4LubT_7.js           4.68 kB │ gzip:   1.70 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/itpParser-DmoB_fYm.js                  4.99 kB │ gzip:   2.09 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/FileAttachment-D5zA15_G.js             6.42 kB │ gzip:   2.45 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/statusValidation-F0OcbfWa.js           6.64 kB │ gzip:   2.58 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/DocumentNamingRules-BJlR_NYo.js        7.40 kB │ gzip:   2.73 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/DataTableColumnHeader-CnGFH_xO.js      9.35 kB │ gzip:   3.45 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/Workflow-CVDt4OvZ.js                  10.00 kB │ gzip:   3.43 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/KPI-D4ROAixu.js                       11.37 kB │ gzip:   4.11 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/Contractors-DsXCV-F-.js               17.17 kB │ gzip:   4.30 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/FollowUpIssue-Cbi7dvXU.js             22.01 kB │ gzip:   6.14 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/PQP-PS4Gmuzw.js                       23.10 kB │ gzip:   7.40 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/zod-B4XVS0_L.js                       29.07 kB │ gzip:  10.69 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/button-3oSu0NcJ.js                    29.21 kB │ gzip:   9.62 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/FAT-hYGLxByA.js                       29.27 kB │ gzip:   7.20 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/Checklist-Dfz3ZTYB.js                 30.12 kB │ gzip:   8.52 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/OSD-D2Iq237s.js                       30.19 kB │ gzip:   8.84 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/ITPDetail-I6dSNihd.js                 33.08 kB │ gzip:   6.79 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/OBS-BXUwAHyc.js                       34.63 kB │ gzip:  10.13 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/IAM-COBf7I3s.js                       35.67 kB │ gzip:   9.83 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/MeetingMinutes-5dczdTSk.js            36.73 kB │ gzip:   9.86 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/NOI-DylG_rvW.js                       38.83 kB │ gzip:  10.53 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/MaterialSubmittal-BlSK8Wh8.js         41.46 kB │ gzip:  11.23 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/Dashboard-Kvs-eznE.js                 59.28 kB │ gzip:  16.94 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/Audit-J-qL_uef.js                     62.09 kB │ gzip:  14.90 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/ITP-C0rOx8mD.js                       62.28 kB │ gzip:  16.48 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/schemas-3edHhHNv.js                   64.91 kB │ gzip:  17.59 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/ITR-eiN36seE.js                       73.30 kB │ gzip:  19.59 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/NCR-CqHhnq9_.js                       76.25 kB │ gzip:  19.50 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/DataTable-Cd8wABOQ.js                177.07 kB │ gzip:  52.87 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/CartesianChart-C8X2-wt0.js           351.98 kB │ gzip: 104.48 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/KM-Kh9gDnce.js                       362.59 kB │ gzip: 104.15 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/index-g63rxg1c.js                    464.58 kB │ gzip: 152.88 kB
+../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m3-r2-review-build-_xdvduax/assets/mammoth.browser-D9W9z1KN.js          499.39 kB │ gzip: 124.65 kB
+✓ built in 3.87s
+
+EXIT: 0
+HASH MATCH: react-app/src/components/MaterialSubmittal/Dialogs.tsx
+HASH MATCH: react-app/src/components/MaterialSubmittal/MaterialSubmittal.tsx
+HASH MATCH: react-app/src/components/MaterialSubmittal/ResultDialogs.tsx
+HASH MATCH: react-app/src/components/MaterialSubmittal/RevisionFiles.tsx
+HASH MATCH: react-app/src/components/MaterialSubmittal/SubmittalDetailModal.tsx
+HASH MATCH: react-app/src/components/MaterialSubmittal/materialText.ts
+HASH MATCH: react-app/src/components/MaterialSubmittal/parts.tsx
+HASH MATCH: react-app/src/services/materialApi.ts
+HASH MATCH: react-app/src/utils/materialSubmittal.ts
+HASH MATCH: react-app/src/utils/materialAttachmentState.ts
+HASH MATCH: react-app/tests-unit/materialSubmittal.test.ts
+HASH MATCH: react-app/tests-unit/materialAttachmentState.test.ts
+HASH MATCH: react-app/src/App.tsx
+HASH MATCH: react-app/src/components/Shared/AppLayout.tsx
+HASH MATCH: react-app/src/components/DocumentNamingRules/DocumentNamingRules.tsx
+HASH MATCH: react-app/tests-browser/material-m3-vite-launcher.mjs
+HASH MATCH: backend/scripts/verification/seed_material_m3_review.py
+HASH MATCH: backend/scripts/verification/seed_material_m3_review_noperm.py
+HASH MATCH: react-app/src/context/LanguageContext.tsx

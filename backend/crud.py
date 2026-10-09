@@ -1,25 +1,33 @@
-from sqlalchemy.orm import Session
-from sqlalchemy import text
-from datetime import datetime
-import uuid
 import json
+import logging
 import re
+import uuid
+from datetime import datetime
+
+from sqlalchemy.orm import Session, joinedload
 
 import models
 import schemas
+
+logger = logging.getLogger(__name__)
 from models import (
+    FAT,
     ITP,
+    ITR,
     NCR,
     NOI,
-    ITR,
-    PQP,
     OBS,
+    PQP,
+    AuditLog,
+    Checklist,
     Contractor,
-    ReferenceSequence,
     DocumentNamingRule,
     FollowUp,
-    Checklist,
+    KPIWeight,
+    OwnerPerformance,
+    ReferenceSequence,
 )
+
 # NOTE: 移除重複的 import (uuid, json, re 已在上方匯入)
 
 # 固定專案代碼
@@ -28,9 +36,41 @@ PROJECT_CODE = "QTS"
 def _json_serialize(d: dict, list_fields: list):
     d = d.copy()
     for k in list_fields:
-        if k in d and d[k] is not None and isinstance(d[k], list):
-            d[k] = json.dumps(d[k])
+        if k in d and d[k] is not None:
+             if isinstance(d[k], (list, dict)):
+                d[k] = json.dumps(d[k])
     return d
+
+
+# WorkflowEngine has been consolidated into core/utils.py
+# Import from there if needed:
+# from core.utils import WorkflowEngine
+
+
+def log_audit(db: Session, action: str, entity_type: str, entity_id: str,
+              entity_name: str = None, old_value: dict = None, new_value: dict = None,
+              user_id: int = None, username: str = None, reason: str = None):
+    """
+    記錄審計日誌
+    NOTE: 建議在業務操作同一個 db 事務中調用，並在外部統一 commit
+    """
+    try:
+        audit_log = AuditLog(
+            timestamp=datetime.now().isoformat(),
+            action=action,
+            entity_type=entity_type,
+            entity_id=str(entity_id),
+            entity_name=entity_name,
+            old_value=json.dumps(old_value) if old_value and isinstance(old_value, dict) else (old_value if isinstance(old_value, str) else None),
+            new_value=json.dumps(new_value) if new_value and isinstance(new_value, dict) else (new_value if isinstance(new_value, str) else None),
+            user_id=user_id,
+            username=username,
+            reason=reason
+        )
+        db.add(audit_log)
+    except Exception as e:
+        # 日誌記錄失敗不應中斷主流程，僅記錄錯誤
+        logger.error(f"Error logging audit: {e}")
 
 
 def get_contractor_abbreviation(db: Session, vendor_name: str) -> str:
@@ -42,6 +82,13 @@ def get_contractor_abbreviation(db: Session, vendor_name: str) -> str:
         return contractor.abbreviation.upper()
     # fallback: 用名稱前 3 字元
     return re.sub(r'[^A-Z0-9]', '', vendor_name.upper()[:10]) or "NA"
+
+def _resolve_vendor_id(db: Session, vendor_name: str) -> str:
+    """Helper: Resolve vendor name to ID"""
+    if not vendor_name:
+        return None
+    contractor = db.query(Contractor).filter(Contractor.name == vendor_name).first()
+    return contractor.id if contractor else None
 
 
 def generate_reference_no(db: Session, vendor_name: str, doc_type: str) -> str:
@@ -66,7 +113,7 @@ def generate_reference_no(db: Session, vendor_name: str, doc_type: str) -> str:
         ReferenceSequence.vendor == vendor_abbrev,
         ReferenceSequence.doc == doc_type
     ).with_for_update().first()  # 加鎖防止並發
-    
+
     if seq_record:
         seq_record.last_seq += 1
         next_seq = seq_record.last_seq
@@ -80,7 +127,7 @@ def generate_reference_no(db: Session, vendor_name: str, doc_type: str) -> str:
             last_seq=next_seq
         )
         db.add(seq_record)
-    
+
     db.flush()  # 確保序號已寫入
 
     # 依規則組合編號；若沒有規則則走 fallback
@@ -93,247 +140,6 @@ def generate_reference_no(db: Session, vendor_name: str, doc_type: str) -> str:
     seq_str = str(next_seq).zfill(6)
     return f"{PROJECT_CODE}-{vendor_abbrev}-{doc_type.upper()}-{seq_str}"
 
-# ---- ITP ----
-def get_itp(db: Session, itp_id: str):
-    return db.query(ITP).filter(ITP.id == itp_id).first()
-
-def get_itps(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(ITP).offset(skip).limit(limit).all()
-
-def create_itp(db: Session, itp: schemas.ITPCreate):
-    data = _json_serialize(itp.dict(), ['attachments'])
-    # 自動產生 Reference No（若未提供或為空）
-    if not data.get('referenceNo'):
-        data['referenceNo'] = generate_reference_no(db, data.get('vendor', ''), 'ITP')
-    db_itp = ITP(**data)
-    if not db_itp.id:
-        db_itp.id = str(uuid.uuid4())
-    db.add(db_itp)
-    db.commit()
-    db.refresh(db_itp)
-    return db_itp
-
-def update_itp(db: Session, itp_id: str, itp: schemas.ITPUpdate):
-    db_itp = db.query(ITP).filter(ITP.id == itp_id).first()
-    if db_itp:
-        d = itp.dict(exclude_unset=True)
-        d = _json_serialize(d, ['attachments'])
-        for key, value in d.items():
-            setattr(db_itp, key, value)
-        db.commit()
-        db.refresh(db_itp)
-    return db_itp
-
-def delete_itp(db: Session, itp_id: str):
-    db_itp = db.query(ITP).filter(ITP.id == itp_id).first()
-    if db_itp:
-        db.delete(db_itp)
-        db.commit()
-    return db_itp
-
-def update_itp_detail(db: Session, itp_id: str, detail_body: dict):
-    db_itp = db.query(ITP).filter(ITP.id == itp_id).first()
-    if db_itp:
-        db_itp.detail_data = json.dumps(detail_body) if detail_body else None
-        db.commit()
-        db.refresh(db_itp)
-    return db_itp
-
-# ---- NCR ----
-def get_ncr(db: Session, ncr_id: str):
-    return db.query(NCR).filter(NCR.id == ncr_id).first()
-
-def get_ncrs(db: Session, skip: int = 0, limit: int = 500):
-    return db.query(NCR).offset(skip).limit(limit).all()
-
-def create_ncr(db: Session, ncr: schemas.NCRCreate):
-    d = _json_serialize(ncr.dict(), ['defectPhotos', 'improvementPhotos', 'attachments'])
-    # 自動產生 Reference No（若未提供或為空）
-    if not d.get('documentNumber'):
-        d['documentNumber'] = generate_reference_no(db, d.get('vendor', ''), 'NCR')
-    db_ncr = NCR(**d)
-    if not db_ncr.id:
-        db_ncr.id = str(uuid.uuid4())
-    db.add(db_ncr)
-    db.commit()
-    db.refresh(db_ncr)
-    return db_ncr
-
-def update_ncr(db: Session, ncr_id: str, ncr: schemas.NCRUpdate):
-    db_ncr = db.query(NCR).filter(NCR.id == ncr_id).first()
-    if db_ncr:
-        d = ncr.dict(exclude_unset=True)
-        d = _json_serialize(d, ['defectPhotos', 'improvementPhotos', 'attachments'])
-        for key, value in d.items():
-            setattr(db_ncr, key, value)
-        db.commit()
-        db.refresh(db_ncr)
-    return db_ncr
-
-def delete_ncr(db: Session, ncr_id: str):
-    db_ncr = db.query(NCR).filter(NCR.id == ncr_id).first()
-    if db_ncr:
-        db.delete(db_ncr)
-        db.commit()
-        return db_ncr
-    return None
-
-# ---- NOI ----
-def get_noi(db: Session, noi_id: str):
-    return db.query(NOI).filter(NOI.id == noi_id).first()
-
-def get_nois(db: Session, skip: int = 0, limit: int = 500):
-    return db.query(NOI).offset(skip).limit(limit).all()
-
-def create_noi(db: Session, noi: schemas.NOICreate):
-    data = _json_serialize(noi.dict(), ['attachments'])
-    # 自動產生 Reference No（若未提供或為空）
-    if not data.get('referenceNo'):
-        data['referenceNo'] = generate_reference_no(db, data.get('contractor', ''), 'NOI')
-    db_noi = NOI(**data)
-    if not db_noi.id:
-        db_noi.id = str(uuid.uuid4())
-    db.add(db_noi)
-    db.commit()
-    db.refresh(db_noi)
-    return db_noi
-
-def update_noi(db: Session, noi_id: str, noi: schemas.NOIUpdate):
-    db_noi = db.query(NOI).filter(NOI.id == noi_id).first()
-    if db_noi:
-        d = _json_serialize(noi.dict(exclude_unset=True), ['attachments'])
-        for key, value in d.items():
-            setattr(db_noi, key, value)
-        db.commit()
-        db.refresh(db_noi)
-    return db_noi
-
-def delete_noi(db: Session, noi_id: str):
-    db_noi = db.query(NOI).filter(NOI.id == noi_id).first()
-    if db_noi:
-        db.delete(db_noi)
-        db.commit()
-        return db_noi
-    return None
-
-# ---- ITR ----
-def get_itr(db: Session, itr_id: str):
-    return db.query(ITR).filter(ITR.id == itr_id).first()
-
-def get_itrs(db: Session, skip: int = 0, limit: int = 500):
-    return db.query(ITR).offset(skip).limit(limit).all()
-
-def create_itr(db: Session, itr: schemas.ITRCreate):
-    d = _json_serialize(itr.dict(), ['defectPhotos', 'improvementPhotos', 'attachments'])
-    # 自動產生 Reference No（若未提供或為空）
-    if not d.get('documentNumber'):
-        d['documentNumber'] = generate_reference_no(db, d.get('vendor', ''), 'ITR')
-    db_itr = ITR(**d)
-    if not db_itr.id:
-        db_itr.id = str(uuid.uuid4())
-    db.add(db_itr)
-    db.commit()
-    db.refresh(db_itr)
-    return db_itr
-
-def update_itr(db: Session, itr_id: str, itr: schemas.ITRUpdate):
-    db_itr = db.query(ITR).filter(ITR.id == itr_id).first()
-    if db_itr:
-        d = itr.dict(exclude_unset=True)
-        d = _json_serialize(d, ['defectPhotos', 'improvementPhotos', 'attachments'])
-        for key, value in d.items():
-            setattr(db_itr, key, value)
-        db.commit()
-        db.refresh(db_itr)
-    return db_itr
-
-def delete_itr(db: Session, itr_id: str):
-    db_itr = db.query(ITR).filter(ITR.id == itr_id).first()
-    if db_itr:
-        db.delete(db_itr)
-        db.commit()
-        return db_itr
-    return None
-
-# ---- PQP ----
-def get_pqp(db: Session, pqp_id: str):
-    return db.query(PQP).filter(PQP.id == pqp_id).first()
-
-def get_pqps(db: Session, skip: int = 0, limit: int = 500):
-    return db.query(PQP).offset(skip).limit(limit).all()
-
-def create_pqp(db: Session, pqp: schemas.PQPCreate):
-    data = pqp.dict()
-    data = _json_serialize(data, ['attachments'])
-    # 自動產生 Reference No（若未提供或為空）
-    if not data.get('pqpNo'):
-        data['pqpNo'] = generate_reference_no(db, data.get('vendor', ''), 'PQP')
-    db_pqp = PQP(**data)
-    if not db_pqp.id:
-        db_pqp.id = str(uuid.uuid4())
-    db.add(db_pqp)
-    db.commit()
-    db.refresh(db_pqp)
-    return db_pqp
-
-def update_pqp(db: Session, pqp_id: str, pqp: schemas.PQPUpdate):
-    db_pqp = db.query(PQP).filter(PQP.id == pqp_id).first()
-    if db_pqp:
-        d = pqp.dict(exclude_unset=True)
-        d = _json_serialize(d, ['attachments'])
-        for key, value in d.items():
-            setattr(db_pqp, key, value)
-        db.commit()
-        db.refresh(db_pqp)
-    return db_pqp
-
-def delete_pqp(db: Session, pqp_id: str):
-    db_pqp = db.query(PQP).filter(PQP.id == pqp_id).first()
-    if db_pqp:
-        db.delete(db_pqp)
-        db.commit()
-        return db_pqp
-    return None
-
-# ---- OBS ----
-def get_obs(db: Session, obs_id: str):
-    return db.query(OBS).filter(OBS.id == obs_id).first()
-
-def get_obss(db: Session, skip: int = 0, limit: int = 500):
-    return db.query(OBS).offset(skip).limit(limit).all()
-
-def create_obs(db: Session, obs: schemas.OBSCreate):
-    d = _json_serialize(obs.dict(), ['defectPhotos', 'improvementPhotos', 'attachments'])
-    # 自動產生 Reference No（若未提供或為空）
-    if not d.get('documentNumber'):
-        d['documentNumber'] = generate_reference_no(db, d.get('vendor', ''), 'OBS')
-    db_obs = OBS(**d)
-    if not db_obs.id:
-        db_obs.id = str(uuid.uuid4())
-    db.add(db_obs)
-    db.commit()
-    db.refresh(db_obs)
-    return db_obs
-
-def update_obs(db: Session, obs_id: str, obs: schemas.OBSUpdate):
-    db_obs = db.query(OBS).filter(OBS.id == obs_id).first()
-    if db_obs:
-        d = obs.dict(exclude_unset=True)
-        d = _json_serialize(d, ['defectPhotos', 'improvementPhotos', 'attachments'])
-        for key, value in d.items():
-            setattr(db_obs, key, value)
-        db.commit()
-        db.refresh(db_obs)
-    return db_obs
-
-def delete_obs(db: Session, obs_id: str):
-    db_obs = db.query(OBS).filter(OBS.id == obs_id).first()
-    if db_obs:
-        db.delete(db_obs)
-        db.commit()
-        return db_obs
-    return None
-
 # ---- Contractor ----
 def get_contractor(db: Session, contractor_id: str):
     return db.query(Contractor).filter(Contractor.id == contractor_id).first()
@@ -341,69 +147,45 @@ def get_contractor(db: Session, contractor_id: str):
 def get_contractors(db: Session, skip: int = 0, limit: int = 500):
     return db.query(Contractor).offset(skip).limit(limit).all()
 
-def create_contractor(db: Session, contractor: schemas.ContractorCreate):
+def create_contractor(db: Session, contractor: schemas.ContractorCreate, user_id: int = None, username: str = None):
     db_c = Contractor(**contractor.dict())
     if not db_c.id:
         db_c.id = str(uuid.uuid4())
     db.add(db_c)
+
+    log_audit(db, "CREATE", "Contractor", db_c.id, db_c.name,
+              new_value=contractor.dict(), user_id=user_id, username=username)
+
     db.commit()
     db.refresh(db_c)
     return db_c
 
-def update_contractor(db: Session, contractor_id: str, contractor: schemas.ContractorUpdate):
+def update_contractor(db: Session, contractor_id: str, contractor: schemas.ContractorUpdate, user_id: int = None, username: str = None):
     db_c = db.query(Contractor).filter(Contractor.id == contractor_id).first()
     if db_c:
+        old_val = {c.name: getattr(db_c, c.name) for c in db_c.__table__.columns}
         for key, value in contractor.dict(exclude_unset=True).items():
             setattr(db_c, key, value)
+
+        log_audit(db, "UPDATE", "Contractor", contractor_id, db_c.name,
+                  old_value=old_val, new_value=contractor.dict(exclude_unset=True),
+                  user_id=user_id, username=username)
+
         db.commit()
         db.refresh(db_c)
     return db_c
 
-def delete_contractor(db: Session, contractor_id: str):
+def delete_contractor(db: Session, contractor_id: str, user_id: int = None, username: str = None):
     db_c = db.query(Contractor).filter(Contractor.id == contractor_id).first()
     if db_c:
+        old_val = {c.name: getattr(db_c, c.name) for c in db_c.__table__.columns}
+        log_audit(db, "DELETE", "Contractor", contractor_id, db_c.name,
+                  old_value=old_val, user_id=user_id, username=username)
         db.delete(db_c)
         db.commit()
         return db_c
     return None
 
-
-# ---- FollowUp ----
-def get_followup(db: Session, followup_id: str):
-    return db.query(FollowUp).filter(FollowUp.id == followup_id).first()
-
-def get_followups(db: Session, skip: int = 0, limit: int = 500):
-    return db.query(FollowUp).offset(skip).limit(limit).all()
-
-def create_followup(db: Session, followup: schemas.FollowUpCreate):
-    data = followup.dict()
-    # 自動產生 Reference No（若未提供或為空）
-    if not data.get('issueNo'):
-        data['issueNo'] = generate_reference_no(db, data.get('vendor', '') or data.get('assignedTo', ''), 'followup')
-    db_f = FollowUp(**data)
-    if not db_f.id:
-        db_f.id = str(uuid.uuid4())
-    db.add(db_f)
-    db.commit()
-    db.refresh(db_f)
-    return db_f
-
-def update_followup(db: Session, followup_id: str, followup: schemas.FollowUpUpdate):
-    db_f = db.query(FollowUp).filter(FollowUp.id == followup_id).first()
-    if db_f:
-        for key, value in followup.dict(exclude_unset=True).items():
-            setattr(db_f, key, value)
-        db.commit()
-        db.refresh(db_f)
-    return db_f
-
-def delete_followup(db: Session, followup_id: str):
-    db_f = db.query(FollowUp).filter(FollowUp.id == followup_id).first()
-    if db_f:
-        db.delete(db_f)
-        db.commit()
-        return db_f
-    return None
 
 # ---- IAM (Users & Roles) ----
 
@@ -414,19 +196,18 @@ def get_user_by_email(db: Session, email: str):
     return db.query(models.User).filter(models.User.email == email).first()
 
 def get_user_by_username(db: Session, username: str):
-    return db.query(models.User).filter(models.User.username == username).first()
+    # Eagerly load role and permissions to avoid N+1 and detached session errors
+    return db.query(models.User).options(
+        joinedload(models.User.role).joinedload(models.Role.permissions_rel)
+    ).filter(models.User.username == username).first()
 
 def get_users(db: Session, skip: int = 0, limit: int = 100):
-    users = db.query(models.User).offset(skip).limit(limit).all()
-    # Populate role_name for UI convenience
-    for user in users:
-        if user.role_id:
-            role = get_role(db, user.role_id)
-            if role:
-                user.role_name = role.name
-    return users
+    # Use joinedload to prevent N+1 queries when accessing role_name property
+    return db.query(models.User).options(
+        joinedload(models.User.role)
+    ).offset(skip).limit(limit).all()
 
-def create_user(db: Session, user: schemas.UserCreate, hashed_password: str):
+def create_user(db: Session, user: schemas.UserCreate, hashed_password: str, current_user_id: int = None, current_username: str = None):
     db_user = models.User(
         username=user.username,
         email=user.email,
@@ -434,36 +215,71 @@ def create_user(db: Session, user: schemas.UserCreate, hashed_password: str):
         full_name=user.full_name,
         is_active=user.is_active,
         role_id=user.role_id,
-        created_at=datetime.now().strftime("%Y-%m-%d")  # 記錄建立日期
+        created_at=datetime.now().strftime("%Y-%m-%d")
     )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+
+    log_audit(db, "CREATE", "User", str(db_user.id), db_user.username,
+              new_value=user.dict(exclude={"password"}),
+              user_id=current_user_id, username=current_username, reason=user.reason)
+    db.commit()
     return db_user
 
-def update_user(db: Session, user_id: int, user: schemas.UserUpdate, hashed_password: str = None):
+def update_user(db: Session, user_id: int, user: schemas.UserUpdate, hashed_password: str = None, current_user_id: int = None, current_username: str = None):
     db_user = get_user(db, user_id)
     if db_user:
+        # Last Admin Protection: Prevent deactivating the last active Admin
+        if user.is_active is False and db_user.role_name == "Admin":
+            admin_count = db.query(models.User).join(models.Role).filter(models.Role.name == "Admin", models.User.is_active).count()
+            if admin_count <= 1:
+                from fastapi import HTTPException
+                raise HTTPException(status_code=400, detail="Cannot deactivate the last active Admin user")
+
+        old_data = {
+            "username": db_user.username,
+            "email": db_user.email,
+            "full_name": db_user.full_name,
+            "is_active": db_user.is_active,
+            "role_id": db_user.role_id
+        }
+
         if user.username is not None: db_user.username = user.username
         if user.email is not None: db_user.email = user.email
         if user.full_name is not None: db_user.full_name = user.full_name
         if user.is_active is not None: db_user.is_active = user.is_active
         if user.role_id is not None: db_user.role_id = user.role_id
         if hashed_password: db_user.hashed_password = hashed_password
-        
+
         db.commit()
         db.refresh(db_user)
-        
-        # Populate role_name
-        if db_user.role_id:
-            role = get_role(db, db_user.role_id)
-            if role:
-                db_user.role_name = role.name
+
+        log_audit(db, "UPDATE", "User", str(db_user.id), db_user.username,
+                  old_value=old_data, new_value=user.dict(exclude={"password", "reason"}),
+                  user_id=current_user_id, username=current_username, reason=user.reason)
+        db.commit()
     return db_user
 
-def delete_user(db: Session, user_id: int):
+def delete_user(db: Session, user_id: int, current_user_id: int = None, current_username: str = None, reason: str = None):
     db_user = get_user(db, user_id)
     if db_user:
+        # Last Admin Protection
+        if db_user.role_name == "Admin":
+            admin_count = db.query(models.User).join(models.Role).filter(models.Role.name == "Admin", models.User.is_active).count()
+            if admin_count <= 1:
+                from fastapi import HTTPException
+                raise HTTPException(status_code=400, detail="Cannot delete the last active Admin user")
+
+        old_data = {
+            "username": db_user.username,
+            "email": db_user.email,
+            "is_active": db_user.is_active,
+            "role_id": db_user.role_id
+        }
+        log_audit(db, "DELETE", "User", str(db_user.id), db_user.username,
+                  old_value=old_data, user_id=current_user_id, username=current_username, reason=reason)
+
         db.delete(db_user)
         db.commit()
     return db_user
@@ -477,114 +293,72 @@ def get_role_by_name(db: Session, name: str):
 def get_roles(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Role).offset(skip).limit(limit).all()
 
-def create_role(db: Session, role: schemas.RoleCreate):
+def create_role(db: Session, role: schemas.RoleCreate, current_user_id: int = None, current_username: str = None):
     db_role = models.Role(
         name=role.name,
-        description=role.description,
-        permissions=json.dumps(role.permissions) if role.permissions else "[]"
+        description=role.description
     )
+    if role.permissions:
+        perms = db.query(models.Permission).filter(models.Permission.code.in_(role.permissions)).all()
+        db_role.permissions_rel = perms
+
     db.add(db_role)
     db.commit()
     db.refresh(db_role)
+
+    log_audit(db, "CREATE", "Role", str(db_role.id), db_role.name,
+              new_value=role.dict(exclude={"reason"}),
+              user_id=current_user_id, username=current_username, reason=role.reason)
+    db.commit()
     return db_role
 
-def update_role(db: Session, role_id: int, role: schemas.RoleUpdate):
+def update_role(db: Session, role_id: int, role: schemas.RoleUpdate, current_user_id: int = None, current_username: str = None):
     db_role = get_role(db, role_id)
     if db_role:
+        old_data = {
+            "name": db_role.name,
+            "description": db_role.description,
+            "permissions": db_role.permissions
+        }
+
         if role.name is not None: db_role.name = role.name
         if role.description is not None: db_role.description = role.description
-        if role.permissions is not None: db_role.permissions = json.dumps(role.permissions)
-        
+        if role.permissions is not None:
+            perms = db.query(models.Permission).filter(models.Permission.code.in_(role.permissions)).all()
+            db_role.permissions_rel = perms
+
         db.commit()
         db.refresh(db_role)
+
+        log_audit(db, "UPDATE", "Role", str(db_role.id), db_role.name,
+                  old_value=old_data, new_value=role.dict(exclude={"reason"}),
+                  user_id=current_user_id, username=current_username, reason=role.reason)
+        db.commit()
     return db_role
 
-def delete_role(db: Session, role_id: int):
+def get_permissions(db: Session, skip: int = 0, limit: int = 100):
+    """取得系統中所有定義的權限"""
+    return db.query(models.Permission).offset(skip).limit(limit).all()
+
+def delete_role(db: Session, role_id: int, current_user_id: int = None, current_username: str = None, reason: str = None):
     db_role = get_role(db, role_id)
     if db_role:
+        # Last Admin protection
+        if db_role.name == "Admin":
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail="Cannot delete the core Admin role")
+
+        old_data = {
+            "name": db_role.name,
+            "description": db_role.description,
+            "permissions": db_role.permissions
+        }
+        log_audit(db, "DELETE", "Role", str(db_role.id), db_role.name,
+                  old_value=old_data, user_id=current_user_id, username=current_username, reason=reason)
+
         db.delete(db_role)
         db.commit()
     return db_role
 
-# ---- Audit ----
-def get_audit(db: Session, audit_id: str):
-    return db.query(models.Audit).filter(models.Audit.id == audit_id).first()
+    # Audit CRUD functions have been consolidated into services/audit_service.py
 
-def get_audits(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(models.Audit).offset(skip).limit(limit).all()
-
-def create_audit(db: Session, audit: schemas.AuditCreate):
-    db_audit = models.Audit(
-        id=str(uuid.uuid4()),
-        auditNo=audit.auditNo,
-        title=audit.title,
-        date=audit.date,
-        auditor=audit.auditor,
-        status=audit.status,
-        location=audit.location,
-        findings=audit.findings,
-        contractor=audit.contractor
-    )
-    if not db_audit.auditNo:
-         db_audit.auditNo = f"AUD-{datetime.now().year}-{str(uuid.uuid4())[:6]}"
-
-    db.add(db_audit)
-    db.commit()
-    db.refresh(db_audit)
-    return db_audit
-
-def update_audit(db: Session, audit_id: str, audit: schemas.AuditUpdate):
-    db_audit = get_audit(db, audit_id)
-    if db_audit:
-        update_data = audit.dict(exclude_unset=True)
-        for key, value in update_data.items():
-            setattr(db_audit, key, value)
-        db.commit()
-        db.refresh(db_audit)
-    return db_audit
-
-def delete_audit(db: Session, audit_id: str):
-    db_audit = get_audit(db, audit_id)
-    if db_audit:
-        db.delete(db_audit)
-        db.commit()
-    return db_audit
-
-# ---- Checklist ----
-def get_checklist(db: Session, checklist_id: str):
-    return db.query(Checklist).filter(Checklist.id == checklist_id).first()
-
-def get_checklists(db: Session, skip: int = 0, limit: int = 500):
-    return db.query(Checklist).offset(skip).limit(limit).all()
-
-def create_checklist(db: Session, chk: schemas.ChecklistCreate):
-    data = chk.dict()
-    # 自動產生 Records No（若未提供或由前端傳來的佔位符）
-    if not data.get('recordsNo') or data.get('recordsNo') == "[AUTO-GENERATE]":
-        # 注意這裡傳給 generate_reference_no 的 doc_type 建議統一為 CHECKLIST 或 CHK
-        data['recordsNo'] = generate_reference_no(db, data.get('packageName', ''), 'CHECKLIST')
-    
-    db_chk = Checklist(**data)
-    if not db_chk.id:
-        db_chk.id = str(uuid.uuid4())
-    db.add(db_chk)
-    db.commit()
-    db.refresh(db_chk)
-    return db_chk
-
-def update_checklist(db: Session, checklist_id: str, chk: schemas.ChecklistUpdate):
-    db_chk = db.query(Checklist).filter(Checklist.id == checklist_id).first()
-    if db_chk:
-        for key, value in chk.dict(exclude_unset=True).items():
-            setattr(db_chk, key, value)
-        db.commit()
-        db.refresh(db_chk)
-    return db_chk
-
-def delete_checklist(db: Session, checklist_id: str):
-    db_chk = db.query(Checklist).filter(Checklist.id == checklist_id).first()
-    if db_chk:
-        db.delete(db_chk)
-        db.commit()
-        return db_chk
-    return None

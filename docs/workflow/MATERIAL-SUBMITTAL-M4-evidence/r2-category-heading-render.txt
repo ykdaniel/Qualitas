@@ -1,0 +1,164 @@
+MATERIAL-SUBMITTAL M4 R2 — rendered SubmittalBoard headings (real component + real LanguageProvider via react-dom/server; not a browser), 2026-10-09 00:07 CST
+Same category inputs as the reviewer probe plus constructor/toString/other/Pipe/whitespace. HTML entities as rendered.
+{
+  "categoryInputs": [
+    "Draft",
+    "Approved",
+    "other",
+    "constructor",
+    "toString",
+    "__uncategorised__",
+    "Pipe",
+    "",
+    "   ",
+    null
+  ],
+  "zh/category": {
+    "sections": [
+      {
+        "key": "category:__uncategorised__",
+        "kind": "category",
+        "count": 1,
+        "heading": "__uncategorised__"
+      },
+      {
+        "key": "category:Approved",
+        "kind": "category",
+        "count": 1,
+        "heading": "Approved"
+      },
+      {
+        "key": "category:constructor",
+        "kind": "category",
+        "count": 1,
+        "heading": "constructor"
+      },
+      {
+        "key": "category:Draft",
+        "kind": "category",
+        "count": 1,
+        "heading": "Draft"
+      },
+      {
+        "key": "category:other",
+        "kind": "category",
+        "count": 1,
+        "heading": "other"
+      },
+      {
+        "key": "category:Pipe",
+        "kind": "category",
+        "count": 1,
+        "heading": "Pipe"
+      },
+      {
+        "key": "category:toString",
+        "kind": "category",
+        "count": 1,
+        "heading": "toString"
+      },
+      {
+        "key": "uncategorised",
+        "kind": "uncategorised",
+        "count": 3,
+        "heading": "未分類"
+      }
+    ],
+    "uniqueKeys": true,
+    "cardsRendered": 10,
+    "rows": 10
+  },
+  "en/category": {
+    "sections": [
+      {
+        "key": "category:__uncategorised__",
+        "kind": "category",
+        "count": 1,
+        "heading": "__uncategorised__"
+      },
+      {
+        "key": "category:Approved",
+        "kind": "category",
+        "count": 1,
+        "heading": "Approved"
+      },
+      {
+        "key": "category:constructor",
+        "kind": "category",
+        "count": 1,
+        "heading": "constructor"
+      },
+      {
+        "key": "category:Draft",
+        "kind": "category",
+        "count": 1,
+        "heading": "Draft"
+      },
+      {
+        "key": "category:other",
+        "kind": "category",
+        "count": 1,
+        "heading": "other"
+      },
+      {
+        "key": "category:Pipe",
+        "kind": "category",
+        "count": 1,
+        "heading": "Pipe"
+      },
+      {
+        "key": "category:toString",
+        "kind": "category",
+        "count": 1,
+        "heading": "toString"
+      },
+      {
+        "key": "uncategorised",
+        "kind": "uncategorised",
+        "count": 3,
+        "heading": "Uncategorised"
+      }
+    ],
+    "uniqueKeys": true,
+    "cardsRendered": 10,
+    "rows": 10
+  },
+  "zh/status": {
+    "sections": [
+      {
+        "key": "status:Draft",
+        "kind": "status",
+        "count": 5,
+        "heading": "草稿"
+      },
+      {
+        "key": "status:Submitted",
+        "kind": "status",
+        "count": 0,
+        "heading": "外部審查中"
+      },
+      {
+        "key": "status:ReviseAndResubmit",
+        "kind": "status",
+        "count": 0,
+        "heading": "修正後再送"
+      },
+      {
+        "key": "status:Rejected",
+        "kind": "status",
+        "count": 0,
+        "heading": "拒絕"
+      },
+      {
+        "key": "status:Approved",
+        "kind": "status",
+        "count": 5,
+        "heading": "已核准（含附意見核准）"
+      }
+    ],
+    "uniqueKeys": true,
+    "cardsRendered": 10,
+    "rows": 10
+  }
+}
+EXIT 0

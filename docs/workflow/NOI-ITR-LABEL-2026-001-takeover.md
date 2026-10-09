@@ -1,0 +1,44 @@
+# 同批接手前狀態
+
+## STATUS.md
+
+# STATUS.md — Claude 執行結果
+
+TASK_ID: NOI-ITR-LABEL-2026-001
+SOURCE_TASK_ID: NOI-ITR-NAV-2026-002
+
+## RESULT
+- [ ] DONE
+- [ ] PARTIAL
+- [ ] BLOCKED
+
+執行中，尚未完成。
+
+
+## REVIEW.md
+
+# REVIEW.md — 獨立審查
+
+TASK_ID: NOI-ITR-LABEL-2026-001
+SOURCE_TASK_ID: NOI-ITR-NAV-2026-002
+審查日期：（待審查填入）
+
+## EVIDENCE_CHECK
+（待審查）
+
+## SCOPE_CHECK
+（待審查）
+
+## DECISIONS_CHECK
+（待審查）
+
+## VERDICT
+- [ ] PASS
+- [ ] REVISE
+- [ ] HUMAN_REQUIRED
+
+## REQUIRED_FIXES
+（待審查）
+
+## NEXT_STEP
+（待審查）

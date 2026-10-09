@@ -1,0 +1,215 @@
+import { create } from 'zustand';
+import api from '../services/api';
+import { parseJsonFields } from '../utils/normalizeApiItem';
+import { FilterParams } from '../types/api';
+import { getErrorMessage } from '../utils/errorUtils';
+import { getProjectFilterParams, getCurrentProjectScopeId } from '../utils/projectFilter';
+
+export interface ITRItem {
+    id: string;
+    vendor: string;
+    documentNumber: string;
+    description: string;
+    rev: string;
+    submit: string;
+    status: string;
+    remark: string;
+    hasDetails?: boolean;
+    raiseDate?: string;
+    closeoutDate?: string;
+    aconex?: string;
+    type?: string;
+    subject?: string;
+    ncrNumber?: string;  // 若檢驗失敗，連結到產生的 NCR
+    raisedBy?: string;
+    foundLocation?: string;
+    noiNumber?: string;  // 連結到產生此 ITR 的 NOI（取代舊的 itpNo）
+    eventNumber?: string;
+    checkpoint?: string;
+    dueDate?: string;
+    defectPhotos?: any[];
+    improvementPhotos?: any[];
+    attachments?: any[];
+    itpNo?: string;  // Related ITP Reference Number
+    drawings?: any[]; // Latest Drawings
+    certificates?: any[]; // Calibration Certificates
+    linkedChecklists?: any[]; // Snapshot of linked checklists
+    detail_data?: any; // Raw detail data from backend
+    inspectionResult?: string; // Pass / Fail / Conditional — drives Q-Workflow checkpoints 3 & 7
+}
+
+function normalizeItem(item: unknown): ITRItem {
+    const record = (typeof item === 'object' && item !== null ? { ...item } : {}) as Record<string, unknown>;
+    const parsedRecord = parseJsonFields(record, ['defectPhotos', 'improvementPhotos', 'attachments', 'drawings', 'certificates', 'detail_data']) as Record<string, unknown>;
+
+    // Extract linkedChecklists from detail_data if exists
+    if (parsedRecord.detail_data && typeof parsedRecord.detail_data === 'object') {
+        const detailData = parsedRecord.detail_data as Record<string, any>;
+        if (Array.isArray(detailData.linkedChecklists)) {
+            parsedRecord.linkedChecklists = detailData.linkedChecklists;
+        }
+    }
+
+    return parsedRecord as unknown as ITRItem;
+}
+
+interface ITRState {
+    itrList: ITRItem[];
+    loading: boolean;
+    error: string | null;
+
+    // Actions
+    fetchITRs: (params?: FilterParams) => Promise<void>;
+    refetch: (params?: FilterParams) => Promise<void>;
+    addITR: (itr: Omit<ITRItem, 'id'>) => Promise<ITRItem>;
+    updateITR: (id: string, itr: Partial<ITRItem>) => Promise<void>;
+    deleteITR: (id: string) => Promise<void>;
+    clearError: () => void;
+    setError: (err: string | null) => void;
+
+    // Getters
+    getITRList: () => ITRItem[];
+    getITRByNOI: (noiNumber: string) => ITRItem[];
+    getITRByNCR: (ncrNumber: string) => ITRItem[];
+}
+
+// See itpStore.ts's itpFetchSeq — discards a stale (superseded) response (BACKLOG #28/#37).
+let itrFetchSeq = 0;
+// See itpStore.ts's itpDataScopeId — clears the list on a cross-scope failure (BACKLOG #28/#37).
+let itrDataScopeId: string | null = null;
+
+export const useITRStore = create<ITRState>((set, get) => ({
+    itrList: [],
+    loading: false,
+    error: null,
+
+    clearError: () => set({ error: null }),
+    setError: (error: string | null) => set({ error }),
+
+    fetchITRs: async (params?: FilterParams) => {
+        const seq = ++itrFetchSeq;
+        const requestedScopeId = getCurrentProjectScopeId();
+        set({ loading: true, error: null });
+        try {
+            const response = await api.get('/itr/', { params: { ...getProjectFilterParams(), ...params } });
+            if (seq !== itrFetchSeq) return;
+            itrDataScopeId = requestedScopeId;
+            set({ itrList: (response.data || []).map(normalizeItem), loading: false });
+        } catch (err: any) {
+            if (seq !== itrFetchSeq) return;
+            const message = getErrorMessage(err, 'Failed to fetch ITRs');
+            if (requestedScopeId !== itrDataScopeId) {
+                itrDataScopeId = requestedScopeId;
+                set({ itrList: [], error: message, loading: false });
+            } else {
+                set({ error: message, loading: false });
+            }
+        }
+    },
+
+    refetch: async (params?: FilterParams) => {
+        await get().fetchITRs(params);
+    },
+
+    addITR: async (itr: Omit<ITRItem, 'id'>) => {
+        try {
+            // Pack linkedChecklists into detail_data
+            const payload = { ...itr } as any;
+
+            let detailData: any = {};
+            if (payload.detail_data) {
+                try {
+                    detailData = typeof payload.detail_data === 'string'
+                        ? JSON.parse(payload.detail_data)
+                        : payload.detail_data;
+                } catch (e) {
+                    console.error("Failed to parse payload.detail_data in addITR", e);
+                }
+            }
+
+            // §17: checklists are now standalone instance rows (itrId FK), not
+            // packed into detail_data. Drop any stray linkedChecklists field.
+            delete payload.linkedChecklists;
+
+            // Always stringify detail_data for backend
+            payload.detail_data = JSON.stringify(detailData);
+
+            const response = await api.post('/itr/', payload);
+            const newITR = normalizeItem(response.data);
+            set((state) => ({ itrList: [...state.itrList, newITR] }));
+            return newITR;
+        } catch (error: any) {
+            const msg = getErrorMessage(error, 'Failed to add ITR');
+            set({ error: msg });
+            throw error;
+        }
+    },
+
+    updateITR: async (id: string, updates: Partial<ITRItem>) => {
+        try {
+            const payload = { ...updates } as any;
+            const { itrList } = get();
+
+            // §17: checklists are standalone instance rows now, not packed into
+            // detail_data. Drop any stray linkedChecklists field.
+            delete payload.linkedChecklists;
+
+            // Merge detail_data with the existing record so we don't clobber
+            // other extended fields the form didn't touch.
+            if (payload.detail_data) {
+                const existingItem = itrList.find(i => i.id === id);
+                let existingDetail = {};
+
+                if (existingItem?.detail_data) {
+                    try {
+                        existingDetail = typeof existingItem.detail_data === 'string'
+                            ? JSON.parse(existingItem.detail_data)
+                            : existingItem.detail_data;
+                    } catch (e) {
+                        console.error("Failed to parse existing detail_data", e);
+                    }
+                }
+
+                let newDetail = {};
+                try {
+                    newDetail = typeof payload.detail_data === 'string'
+                        ? JSON.parse(payload.detail_data)
+                        : payload.detail_data;
+                } catch (e) {
+                    console.error("Failed to parse payload detail_data", e);
+                }
+
+                payload.detail_data = JSON.stringify({ ...existingDetail, ...newDetail });
+            }
+
+            const response = await api.put(`/itr/${id}`, payload);
+            const updated = normalizeItem(response.data);
+            set((state) => ({ itrList: state.itrList.map(i => i.id === id ? updated : i) }));
+        } catch (error: any) {
+            const msg = getErrorMessage(error, 'Failed to update ITR');
+            set({ error: msg });
+            throw error;
+        }
+    },
+
+    deleteITR: async (id: string) => {
+        try {
+            await api.delete(`/itr/${id}`);
+            set((state) => ({ itrList: state.itrList.filter(i => i.id !== id) }));
+        } catch (error: any) {
+            const msg = getErrorMessage(error, 'Failed to delete ITR');
+            set({ error: msg });
+            throw error;
+        }
+    },
+
+    getITRList: () => get().itrList,
+
+    getITRByNOI: (noiNumber: string) => {
+        return get().itrList.filter(itr => itr.noiNumber === noiNumber);
+    },
+
+    getITRByNCR: (ncrNumber: string) => {
+        return get().itrList.filter(itr => itr.ncrNumber === ncrNumber);
+    }
+}));

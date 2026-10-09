@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   LineChart,
   Line,
@@ -11,19 +12,24 @@ import {
   ResponsiveContainer,
   LabelList,
 } from 'recharts';
+import { Search } from 'lucide-react';
+import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
-import { useContractors } from '../../context/ContractorsContext';
-import { usePQP } from '../../context/PQPContext';
-import { useITP } from '../../context/ITPContext';
-import { useOBS } from '../../context/OBSContext';
-import { useNCR } from '../../context/NCRContext';
+import { useAuth } from '../../context/AuthContext';
+import { useContractorsStore } from '../../store/contractorsStore';
+import { usePQPStore } from '../../store/pqpStore';
+import { useITPStore } from '../../store/itpStore';
+import { useOBSStore } from '../../store/obsStore';
+import { useNCRStore } from '../../store/ncrStore';
+import { getKPIWeight, updateKPIWeight } from '../../services/api';
 import styles from './KPI.module.css';
+import shellStyles from '../Shared/ModuleShell.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns, KPIItem } from './columns';
 
 const VENDOR_COLORS = [
-  '#3b82f6', '#f97316', '#6b7280', '#eab308', '#22d3ee', '#10b981',
-  '#8b5cf6', '#ec4899', '#14b8a6', '#f59e0b',
+  '#2563eb', '#c8753f', '#7a8f5a', '#b8945a', '#0ea5e9', '#059669',
+  '#7c3aed', '#db2777', '#0d9488', '#d97706',
 ];
 
 function parseMonth(dateStr: string | undefined): string | null {
@@ -38,17 +44,53 @@ function parseMonth(dateStr: string | undefined): string | null {
 const DEFAULT_WEIGHTS = { pqp: 0.25, itp: 0.25, obs: 0.25, ncr: 0.25 };
 
 const KPI: React.FC = () => {
-  const navigate = useNavigate();
   const { t, language } = useLanguage();
-  const { getActiveContractors } = useContractors();
-  const { pqpList } = usePQP();
-  const { itpList } = useITP();
-  const { obsList } = useOBS();
-  const { ncrList } = useNCR();
+  const { hasPermission } = useAuth();
+  const { getActiveContractors } = useContractorsStore();
+  const pqpList = usePQPStore(state => state.pqpList);
+  const itpList = useITPStore(state => state.itpList);
+  const obsList = useOBSStore(state => state.obsList);
+  const ncrList = useNCRStore(state => state.ncrList);
 
   const [weights, setWeights] = useState(DEFAULT_WEIGHTS);
   const [showWeights, setShowWeights] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState<string>('all');
+  const [savingWeights, setSavingWeights] = useState(false);
+  const canEditWeights = hasPermission('kpi:update:all');
+
+  // Weights used to live only in local state and silently reset to
+  // DEFAULT_WEIGHTS on every reload — the backend GET/PUT /kpi/weights
+  // endpoints existed but nothing ever called them. Load the saved value on
+  // mount so a customized weighting actually persists across sessions.
+  useEffect(() => {
+    getKPIWeight()
+      .then((w) => {
+        setWeights({
+          pqp: w.pqp_weight / 100,
+          itp: w.itp_weight / 100,
+          obs: w.obs_weight / 100,
+          ncr: w.ncr_weight / 100,
+        });
+      })
+      .catch(() => { /* fall back to DEFAULT_WEIGHTS if the fetch fails */ });
+  }, []);
+
+  const handleSaveWeights = async () => {
+    setSavingWeights(true);
+    try {
+      await updateKPIWeight({
+        pqp_weight: Math.round(weights.pqp * 100),
+        itp_weight: Math.round(weights.itp * 100),
+        obs_weight: Math.round(weights.obs * 100),
+        ncr_weight: Math.round(weights.ncr * 100),
+      });
+      toast.success(t('kpi.weightsSaved') || 'Weights saved');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || (err as Error)?.message || t('kpi.weightsSaveFailed') || 'Failed to save weights');
+    } finally {
+      setSavingWeights(false);
+    }
+  };
 
   const { chartData, vendorKeys, sortedMonths, vendorRates } = useMemo(() => {
     const filterByVendor = <T extends { vendor?: string }>(list: T[]): T[] => {
@@ -71,49 +113,62 @@ const KPI: React.FC = () => {
 
     const getVendor = (item: { vendor?: string }) => (item.vendor || 'Unknown').trim() || 'Unknown';
 
+    // Void records are excluded from every sub-metric's denominator (not just
+    // the "closed"/"approved" numerator) — a voided record isn't part of the
+    // active population a vendor's performance is being measured against,
+    // and counting it in `total` without ever counting it as closed/approved
+    // silently drags the score down for something that isn't the vendor's
+    // outstanding work.
     const pqpByVendorMonth: Record<string, Record<string, { approved: number; total: number }>> = {};
     filteredPqp.forEach((item) => {
+      const status = (item.status || '').toLowerCase();
+      if (status === 'void') return;
       const month = parseMonth(item.updatedAt || item.createdAt);
       const vendor = getVendor(item);
       if (!month) return;
       if (!pqpByVendorMonth[vendor]) pqpByVendorMonth[vendor] = {};
       if (!pqpByVendorMonth[vendor][month]) pqpByVendorMonth[vendor][month] = { approved: 0, total: 0 };
       pqpByVendorMonth[vendor][month].total++;
-      if ((item.status || '').toLowerCase() === 'approved') pqpByVendorMonth[vendor][month].approved++;
+      if (status === 'approved') pqpByVendorMonth[vendor][month].approved++;
     });
 
     const itpByVendorMonth: Record<string, Record<string, { closed: number; total: number }>> = {};
     filteredItp.forEach((item) => {
+      const s = (item.status || '').toLowerCase();
+      if (s === 'void') return;
       const month = parseMonth(item.submissionDate);
       const vendor = getVendor(item);
       if (!month) return;
       if (!itpByVendorMonth[vendor]) itpByVendorMonth[vendor] = {};
       if (!itpByVendorMonth[vendor][month]) itpByVendorMonth[vendor][month] = { closed: 0, total: 0 };
       itpByVendorMonth[vendor][month].total++;
-      const s = (item.status || '').toLowerCase();
       if (s === 'approved' || s === 'approved with comments' || s === 'submitted') itpByVendorMonth[vendor][month].closed++;
     });
 
     const obsByVendorMonth: Record<string, Record<string, { closed: number; total: number }>> = {};
     filteredObs.forEach((item) => {
+      const status = (item.status || '').toLowerCase();
+      if (status === 'void') return;
       const month = parseMonth(item.closeoutDate || item.raiseDate);
       const vendor = getVendor(item);
       if (!month) return;
       if (!obsByVendorMonth[vendor]) obsByVendorMonth[vendor] = {};
       if (!obsByVendorMonth[vendor][month]) obsByVendorMonth[vendor][month] = { closed: 0, total: 0 };
       obsByVendorMonth[vendor][month].total++;
-      if ((item.status || '').toLowerCase() === 'closed') obsByVendorMonth[vendor][month].closed++;
+      if (status === 'closed') obsByVendorMonth[vendor][month].closed++;
     });
 
     const ncrByVendorMonth: Record<string, Record<string, { closed: number; total: number }>> = {};
     filteredNcr.forEach((item) => {
+      const status = (item.status || '').toLowerCase();
+      if (status === 'void') return;
       const month = parseMonth(item.closeoutDate || item.raiseDate);
       const vendor = getVendor(item);
       if (!month) return;
       if (!ncrByVendorMonth[vendor]) ncrByVendorMonth[vendor] = {};
       if (!ncrByVendorMonth[vendor][month]) ncrByVendorMonth[vendor][month] = { closed: 0, total: 0 };
       ncrByVendorMonth[vendor][month].total++;
-      if ((item.status || '').toLowerCase() === 'closed') ncrByVendorMonth[vendor][month].closed++;
+      if (status === 'closed') ncrByVendorMonth[vendor][month].closed++;
     });
 
     const allMonths = new Set<string>();
@@ -216,45 +271,40 @@ const KPI: React.FC = () => {
 
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <button type="button" className={styles.backButton} onClick={() => navigate('/')}>
-            ← {t('common.back') || 'Back'}
-          </button>
-          <h1 className={styles.title}>
-            {t('kpi.title')}
-          </h1>
-        </div>
-        <div className={styles.headerRight}>
-          <input
-            type="text"
-            className={styles.searchInput}
-            placeholder={t('common.search') || "Search..."}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          <label className={styles.vendorLabel}>
-            {t('common.contractor')}
-            <select
-              className={styles.vendorSelect}
-              value={selectedVendor}
-              onChange={(e) => setSelectedVendor(e.target.value)}
-            >
-              <option value="all">{t('common.allContractors')}</option>
-              {getActiveContractors().map((c) => (
-                <option key={c.id} value={c.name}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </div>
-
+    <div className={shellStyles.container}>
       <p className={styles.subtitle}>
         {t('kpi.subtitle')}
       </p>
+
+      <div className={shellStyles.toolbar}>
+        <label className={styles.vendorLabel}>
+          {t('common.contractor')}
+          <select
+            className={styles.vendorSelect}
+            value={selectedVendor}
+            onChange={(e) => setSelectedVendor(e.target.value)}
+          >
+            <option value="all">{t('common.allContractors')}</option>
+            {getActiveContractors().map((c) => (
+              <option key={c.id} value={c.name}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className={shellStyles.toolbarRight}>
+          <div className={shellStyles.searchWrap}>
+            <Search size={15} className={shellStyles.searchIcon} strokeWidth={2} />
+            <input
+              type="text"
+              className={shellStyles.searchInput}
+              placeholder={t('common.search') || 'Search...'}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
 
       <div className={styles.weightSection}>
         <button
@@ -266,6 +316,7 @@ const KPI: React.FC = () => {
           {showWeights ? ' ▼' : ' ▶'}
         </button>
         {showWeights && (
+          <>
           <div className={styles.weightGrid}>
             <label>
               <span>PQP</span>
@@ -275,6 +326,7 @@ const KPI: React.FC = () => {
                 max={100}
                 value={Math.round(weights.pqp * 100)}
                 onChange={(e) => handleWeightChange('pqp', Number(e.target.value))}
+                disabled={!canEditWeights}
               />
               %
             </label>
@@ -286,6 +338,7 @@ const KPI: React.FC = () => {
                 max={100}
                 value={Math.round(weights.itp * 100)}
                 onChange={(e) => handleWeightChange('itp', Number(e.target.value))}
+                disabled={!canEditWeights}
               />
               %
             </label>
@@ -297,6 +350,7 @@ const KPI: React.FC = () => {
                 max={100}
                 value={Math.round(weights.obs * 100)}
                 onChange={(e) => handleWeightChange('obs', Number(e.target.value))}
+                disabled={!canEditWeights}
               />
               %
             </label>
@@ -308,10 +362,21 @@ const KPI: React.FC = () => {
                 max={100}
                 value={Math.round(weights.ncr * 100)}
                 onChange={(e) => handleWeightChange('ncr', Number(e.target.value))}
+                disabled={!canEditWeights}
               />
               %
             </label>
           </div>
+          {canEditWeights && (
+                          <FormActions primary={<button className={actionStyles.primary}
+                              type="button"
+                              onClick={handleSaveWeights}
+                              disabled={savingWeights}
+                          >
+                              {savingWeights ? (t('common.saving') || 'Saving...') : (t('common.save') || 'Save')}
+                          </button>} />
+          )}
+          </>
         )}
       </div>
 
@@ -323,36 +388,49 @@ const KPI: React.FC = () => {
               {t('kpi.noData')}
             </p>
           ) : (
-            <ResponsiveContainer width="100%" height={400}>
+            <ResponsiveContainer width="100%" height={340}>
               <LineChart
                 data={chartData}
-                margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                margin={{ top: 16, right: 40, left: 60, bottom: 60 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(184, 148, 90, 0.18)" />
                 <XAxis
                   dataKey="month"
-                  tick={{ fill: '#9ca3af', fontSize: 12 }}
+                  tick={{ fill: '#000000', fontSize: 12 }}
                   angle={-45}
                   textAnchor="end"
                   height={60}
                   interval={0}
+                  padding={{ left: 56, right: 32 }}
+                  tickMargin={14}
                 />
                 <YAxis
                   domain={[0, 100]}
-                  tick={{ fill: '#9ca3af', fontSize: 12 }}
+                  tick={{ fill: '#000000', fontSize: 12 }}
                   tickFormatter={(v) => `${v}%`}
+                  tickMargin={16}
                   label={{
                     value: language === 'en' ? 'KPI %' : 'KPI %',
                     angle: -90,
                     position: 'insideLeft',
-                    style: { fill: '#9ca3af' },
+                    offset: -10,
+                    style: { fill: '#000000' },
                   }}
                 />
                 <Tooltip
                   formatter={(value: number | string | null) => (value == null ? '—' : `${value}%`)}
                   labelFormatter={(label) => (`${t('kpi.month')}: ${label}`)}
                 />
-                <Legend />
+                <Legend
+                  iconType="circle"
+                  iconSize={10}
+                  wrapperStyle={{ paddingTop: 12 }}
+                  formatter={(value) => (
+                    <span style={{ color: '#2d2a24', fontSize: 13, fontWeight: 600, marginRight: 8 }}>
+                      {value}
+                    </span>
+                  )}
+                />
                 {vendorKeys.map((vendor, i) => (
                   <Line
                     key={vendor}
@@ -366,8 +444,13 @@ const KPI: React.FC = () => {
                   >
                     <LabelList
                       position="top"
-                      formatter={(v: number | string | null) => (v == null ? '' : `${v}%`)}
-                      style={{ fontSize: 11, fill: '#e5e7eb' }}
+                      offset={8}
+                      formatter={(v: number | string | null) => {
+                        if (v == null) return '';
+                        const n = typeof v === 'number' ? v : parseFloat(v);
+                        return Number.isFinite(n) && n > 0 ? `${v}%` : '';
+                      }}
+                      style={{ fontSize: 11, fill: '#4a4238' }}
                     />
                   </Line>
                 ))}
@@ -377,28 +460,10 @@ const KPI: React.FC = () => {
         </div>
       </div>
 
-      {/* KPI 表格：放在趨勢圖之下 */}
-      <div className={styles.tableWrapper}>
+      <div className={shellStyles.content}>
         <DataTable
           title={t('kpi.tableTitle')}
-          actions={
-            <label className={styles.vendorLabel}>
-              {t('common.contractor')}
-              <select
-                className={styles.vendorSelect}
-                value={selectedVendor}
-                onChange={(e) => setSelectedVendor(e.target.value)}
-              >
-                <option value="all">{t('common.allContractors')}</option>
-                {getActiveContractors().map((c) => (
-                  <option key={c.id} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          }
-          columns={createColumns(sortedMonths, t, language)}
+          columns={useMemo(() => createColumns(sortedMonths, t, language), [sortedMonths, t, language])}
           data={filteredTableRows}
           searchKey=""
           getRowId={(row) => row.vendor}

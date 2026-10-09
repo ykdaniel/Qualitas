@@ -10,14 +10,30 @@ export interface StatusTransition {
 }
 
 /**
- * NOI 狀態轉換規則
+ * NOI 狀態轉換規則 (aligned with backend WorkflowEngine)
+ * Backend: Open → [In Progress, Reject, Void]
+ *          In Progress → [Resolved, Reject, Void]
+ *          Resolved → [Closed, Void]
+ *          Reject → [Open, Void]
+ *          Closed → []
  */
-export const NOIStatusTransitions: StatusTransition[] = [
-  { from: 'Open', to: 'Closed', allowed: true },
-  { from: 'Closed', to: 'Open', allowed: true },
-  { from: 'Open', to: 'Reject', allowed: true },
-  { from: 'Under Review', to: 'Reject', allowed: true },
-  { from: 'Reject', to: 'Open', allowed: true },
+export const NOIStatusTransitions: Record<string, string[]> = {
+  'Open':        ['In Progress', 'Reject', 'Void'],
+  'In Progress': ['Resolved', 'Reject', 'Void'],
+  'Resolved':    ['Closed', 'Void'],
+  'Reject':      ['Open', 'Void'],
+  'Closed':      [],
+  'Void':        [],
+};
+
+// Legacy array format for validateStatusTransition helper (kept for backward compat)
+export const NOIStatusTransitionList: StatusTransition[] = [
+  { from: 'Open',        to: 'In Progress', allowed: true },
+  { from: 'Open',        to: 'Reject',      allowed: true },
+  { from: 'In Progress', to: 'Resolved',    allowed: true },
+  { from: 'In Progress', to: 'Reject',      allowed: true },
+  { from: 'Resolved',    to: 'Closed',      allowed: true },
+  { from: 'Reject',      to: 'Open',        allowed: true },
 ];
 
 /**
@@ -37,8 +53,23 @@ export const ITPStatusTransitions: StatusTransition[] = [
 export const ITRStatusTransitions: StatusTransition[] = [
   { from: 'In Progress', to: 'Approved', allowed: true },
   { from: 'In Progress', to: 'Reject', allowed: true },
-  { from: 'Approved', to: 'Reject', allowed: false, message: '已批准的 ITR 不能改為拒絕' },
+  { from: 'In Progress', to: 'Void', allowed: true },
+  // 2026-09-19: backend now blocks ANY status change away from Approved via
+  // the normal update path, unconditionally — only the dedicated
+  // revoke-approval action (ITR_APPROVE-gated, requires a reason) may move
+  // an ITR out of Approved. The UI's status dropdown is also disabled
+  // outright once persisted-Approved (see ITRModals.tsx's isLocked), so
+  // these are unreachable through the normal form; kept accurate here as a
+  // defense-in-depth check, not as documentation of a still-open path.
+  { from: 'Approved', to: 'Reject', allowed: false, message: '已核准的 ITR 無法直接改為拒絕，須先由具核准權限者撤回核准（Revoke Approval）' },
+  { from: 'Approved', to: 'In Progress', allowed: false, message: '已核准的 ITR 無法直接改回進行中，須先由具核准權限者撤回核准（Revoke Approval）' },
+  { from: 'Approved', to: 'Void', allowed: false, message: '已核准的 ITR 無法直接作廢，須先由具核准權限者撤回核准（Revoke Approval）' },
+  { from: 'Reject', to: 'In Progress', allowed: true },
   { from: 'Reject', to: 'Approved', allowed: true },
+  { from: 'Reject', to: 'Void', allowed: true },
+  { from: 'Void', to: 'In Progress', allowed: false, message: '已作廢的 ITR 無法變更狀態' },
+  { from: 'Void', to: 'Approved', allowed: false, message: '已作廢的 ITR 無法變更狀態' },
+  { from: 'Void', to: 'Reject', allowed: false, message: '已作廢的 ITR 無法變更狀態' },
 ];
 
 /**
@@ -107,3 +138,65 @@ export const checkRelatedStatusConsistency = (
 
   return { consistent: true };
 };
+
+/**
+ * 欄位驗證規則介面
+ */
+export interface FieldValidationRule {
+  field: string;
+  required: boolean;
+  requiredIfStatus?: string[]; // 只有在這些狀態下才必填
+  excludedIfStatus?: string[]; // 在這些狀態下不必填（優先權高於 required）
+  message: string; // 錯誤訊息 Key 或文字
+}
+
+/**
+ * 驗證欄位是否符合規則
+ */
+export const validateRequiredFields = (
+  data: any,
+  status: string,
+  rules: FieldValidationRule[]
+): { valid: boolean; message?: string; invalidFields: string[] } => {
+  const invalidFields: string[] = [];
+  let firstMessage: string | undefined;
+
+  for (const rule of rules) {
+    if (rule.excludedIfStatus && rule.excludedIfStatus.map(s => s.toLowerCase()).includes(status.toLowerCase())) {
+      continue;
+    }
+
+    let isRequired = rule.required;
+    if (rule.requiredIfStatus) {
+      isRequired = rule.required || rule.requiredIfStatus.map(s => s.toLowerCase()).includes(status.toLowerCase());
+    }
+
+    if (isRequired) {
+      const value = data[rule.field];
+      if (value === undefined || value === null || value === '') {
+        invalidFields.push(rule.field);
+        if (!firstMessage) firstMessage = rule.message;
+      }
+    }
+  }
+
+  return { valid: invalidFields.length === 0, message: firstMessage, invalidFields };
+};
+
+/**
+ * NOI 欄位驗證規則 configuration
+ */
+export const NOIValidationRules: FieldValidationRule[] = [
+  { field: 'contractor', required: true, message: 'common.selectContractor' },
+  { field: 'issueDate', required: true, message: 'common.selectDate' },
+  { field: 'itpNo', required: true, excludedIfStatus: ['Reject'], message: 'noi.validation.missingITP' },
+  { field: 'package', required: true, message: 'noi.validation.missingPackage' },
+  { field: 'inspectionDate', required: true, message: 'noi.validation.missingInspectionDate' },
+  { field: 'inspectionTime', required: true, message: 'noi.validation.missingInspectionTime' },
+  { field: 'checkpoint', required: true, message: 'noi.validation.missingCheckpoint' },
+  { field: 'eventNumber', required: true, message: 'noi.validation.missingEventNumber' },
+  { field: 'contacts', required: true, message: 'noi.validation.missingContacts' },
+  { field: 'phone', required: true, message: 'noi.validation.missingPhone' },
+  { field: 'email', required: true, message: 'noi.validation.missingEmail' },
+  { field: 'ncrNumber', required: true, message: 'noi.validation.missingNcrSelection' },
+];

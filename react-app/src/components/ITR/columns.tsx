@@ -1,15 +1,14 @@
 import { ColumnDef } from "@tanstack/react-table";
-import { ITRItem } from "../../context/ITRContext";
+import { ITRItem } from "../../store/itrStore";
 import { DataTableColumnHeader } from "@/components/Shared/DataTable/DataTableColumnHeader";
 import { Button } from "@/components/ui/button";
-import { Eye, Pencil, Trash2, FileText, AlertTriangle } from "lucide-react";
-import { getLocalizedStatus } from "../../utils/formatters";
+import { Trash2, FileText, AlertTriangle } from "lucide-react";
+import { getLocalizedStatus, formatDateISO } from "../../utils/formatters";
+import { addSevenWorkingDays } from "../../utils/dateUtils";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useNavigate } from "react-router-dom";
+
 
 export const createColumns = (
-    handleEdit: (id: string) => void,
-    handleViewDetails: (id: string) => void,
     handleDeleteClick: (id: string) => void,
     navigate: (path: string) => void,
     t: (key: string) => string
@@ -65,6 +64,7 @@ export const createColumns = (
                         { label: t('itr.status.approved'), value: 'Approved' },
                         { label: t('itr.status.reject'), value: 'Reject' },
                         { label: t('itr.status.inProgress'), value: 'In Progress' },
+                        { label: t('status.void'), value: 'Void' },
                     ]}
                 />
             ),
@@ -106,6 +106,29 @@ export const createColumns = (
             cell: ({ row }) => <div className="text-center">{row.getValue("raiseDate") || '-'}</div>,
         },
         {
+            accessorKey: "dueDate",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title={t('common.dueDate')} />
+            ),
+            cell: ({ row }) => {
+                const stored = row.original.dueDate;
+                const raiseDate = row.original.raiseDate;
+                const computed = stored || (raiseDate ? addSevenWorkingDays(formatDateISO(raiseDate)) : null);
+                const status = (row.original.status || '').toLowerCase();
+                const isTerminal = status === 'approved' || status === 'void';
+                const isOverdue = !isTerminal && !!computed && computed < new Date().toISOString().slice(0, 10);
+                return (
+                    <div
+                        className="text-center"
+                        style={isOverdue ? { color: '#ef4444', fontWeight: 600 } : undefined}
+                    >
+                        {isOverdue && <AlertTriangle className="inline-block h-3.5 w-3.5 mr-1 align-text-bottom" />}
+                        {computed || '-'}
+                    </div>
+                );
+            },
+        },
+        {
             accessorKey: "ncrNumber",
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title={t('itr.ncrNo')} />
@@ -133,30 +156,12 @@ export const createColumns = (
                 const itr = row.original;
                 return (
                     <div className="flex items-center justify-center space-x-2">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-100"
-                            onClick={() => handleEdit(itr.id)}
-                            title={t('itr.tooltip.edit')}
-                        >
-                            <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-blue-500 hover:text-blue-600 hover:bg-blue-100"
-                            onClick={() => handleViewDetails(itr.id)}
-                            title={t('itr.tooltip.details')}
-                        >
-                            <Eye className="h-4 w-4" />
-                        </Button>
                         {itr.noiNumber && (
                             <Button
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 text-gray-500 hover:text-gray-600 hover:bg-gray-100"
-                                onClick={() => navigate('/noi')}
+                                onClick={(e) => { e.stopPropagation(); navigate(`/noi?openId=${encodeURIComponent(itr.noiNumber!)}`); }}
                                 title={t('itr.tooltip.viewRelatedNOI')}
                             >
                                 <FileText className="h-4 w-4" />
@@ -167,7 +172,7 @@ export const createColumns = (
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
-                                onClick={() => navigate('/ncr')}
+                                onClick={(e) => { e.stopPropagation(); navigate(`/ncr?openId=${encodeURIComponent(itr.ncrNumber!)}`); }}
                                 title={t('itr.tooltip.viewRelatedNCR')}
                             >
                                 <AlertTriangle className="h-4 w-4" />
@@ -177,7 +182,7 @@ export const createColumns = (
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-100"
-                            onClick={() => handleDeleteClick(itr.id)}
+                            onClick={(e) => { e.stopPropagation(); handleDeleteClick(itr.id); }}
                             title={t('itr.tooltip.delete')}
                         >
                             <Trash2 className="h-4 w-4" />

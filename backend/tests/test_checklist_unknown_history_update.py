@@ -1,0 +1,74 @@
+"""Live edits must not promote unknown legacy history to a known first save."""
+
+import json
+
+import pytest
+from sqlalchemy.orm import sessionmaker
+
+import models
+import schemas
+from repositories.checklist_repository import ChecklistRepository
+from services.checklist_service import ChecklistService, _instance_has_historical_evidence
+
+
+@pytest.mark.parametrize("timestamp", [None, "2026-09-01T10:00:00"])
+@pytest.mark.parametrize("previously_reliable", [False, True])
+def test_legacy_edit_preserves_unknown_history_and_audit(
+    db_session, timestamp, previously_reliable,
+):
+    db_session.add(models.ITR(id="parent", documentNumber="ITR-TEST", status="In Progress"))
+    db_session.add(models.Checklist(
+        id="legacy", recordsNo="CHK-TEST", itrId="parent", status="Ongoing",
+        evidence_historical_unknown=True,
+        evidence_recorded_at=timestamp,
+        evidence_recorded_at_reliable=previously_reliable,
+        # A real instance's item/criteria is always populated at link
+        # time (link_checklist deep-copies the template) — matching that
+        # here so the update below is a legitimate situation-only edit,
+        # not a structural change the 2026-09-19 item-lock guard would
+        # (correctly) reject as add/remove/rewrite.
+        detail_data=json.dumps({"items": [{"item": "Spacing", "criteria": "10mm", "situation": "", "result": ""}]}),
+    ))
+    db_session.commit()
+    service = ChecklistService(ChecklistRepository(db_session))
+    for observation in ("Measured 14mm", ""):
+        service.update_checklist(
+            "legacy", schemas.ChecklistUpdate(detail_data=json.dumps({"items": [{
+                "item": "Spacing", "criteria": "10mm",
+                "situation": observation, "result": "",
+            }]})), username="reviewer",
+        )
+
+    with sessionmaker(bind=db_session.get_bind())() as independent:
+        record = independent.get(models.Checklist, "legacy")
+        assert record.evidence_recorded_at == timestamp
+        assert record.evidence_recorded_at_reliable is False
+        assert record.evidence_historical_unknown is True
+        assert _instance_has_historical_evidence(record)
+        logs = independent.query(models.AuditLog).filter_by(
+            entity_type="Checklist", entity_id="legacy", action="UPDATE",
+        ).all()
+        assert len(logs) == 2
+        assert any("Measured 14mm" in log.new_value for log in logs)
+        assert any("Measured 14mm" in log.old_value for log in logs)
+
+
+def test_new_instance_first_save_remains_reliable(db_session):
+    db_session.add(models.ITR(id="parent", documentNumber="ITR-TEST", status="In Progress"))
+    db_session.add(models.Checklist(
+        id="new", recordsNo="CHK-NEW", itrId="parent", status="Ongoing",
+        evidence_historical_unknown=False,
+        # Same reasoning as above — a real instance is never actually
+        # itemless.
+        detail_data=json.dumps({"items": [{"item": "Spacing", "criteria": "10mm", "situation": "", "result": ""}]}),
+    ))
+    db_session.commit()
+    service = ChecklistService(ChecklistRepository(db_session))
+    service.update_checklist("new", schemas.ChecklistUpdate(detail_data=json.dumps({
+        "items": [{"item": "Spacing", "criteria": "10mm", "situation": "10mm", "result": ""}],
+    })), username="reviewer")
+    with sessionmaker(bind=db_session.get_bind())() as independent:
+        record = independent.get(models.Checklist, "new")
+        assert record.evidence_recorded_at is not None
+        assert record.evidence_recorded_at_reliable is True
+        assert record.evidence_historical_unknown is False

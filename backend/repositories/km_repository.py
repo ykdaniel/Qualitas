@@ -1,0 +1,204 @@
+import json
+import uuid
+from datetime import datetime
+
+from sqlalchemy.orm import Session, joinedload
+
+import models
+import schemas
+from core.utils import _reference_seq_lock, sanitize_pagination, sanitize_search_term
+
+
+class KMRepository:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def get_next_km_no(self) -> str:
+        rule = self.db.query(models.DocumentNamingRule).filter(models.DocumentNamingRule.doc_type == "km").first()
+        prefix = rule.prefix if rule else "QTS-KM-"
+        digits = rule.sequence_digits if rule else 6
+
+        with _reference_seq_lock:
+            seq_record = self.db.query(models.ReferenceSequence).filter(
+                models.ReferenceSequence.project == "QTS",
+                models.ReferenceSequence.vendor == "SYS",
+                models.ReferenceSequence.doc == "km"
+            ).with_for_update().first()
+
+            if seq_record:
+                seq_record.last_seq += 1
+                next_seq = seq_record.last_seq
+            else:
+                next_seq = 1
+                seq_record = models.ReferenceSequence(
+                    project="QTS",
+                    vendor="SYS",
+                    doc="km",
+                    last_seq=next_seq
+                )
+                self.db.add(seq_record)
+
+            self.db.flush()
+
+        return f"{prefix}{str(next_seq).zfill(digits)}"
+
+    def get_all(self, skip: int = 0, limit: int = 10000, category: str | None = None, search: str | None = None) -> list[models.KMArticle]:
+        # KM articles include child chapters — need a high default limit
+        # to avoid silently truncating chapters. Skip sanitize_pagination
+        # which caps at MAX_PAGE_LIMIT (500).
+        skip = max(0, skip)
+
+        query = self.db.query(models.KMArticle).options(
+            joinedload(models.KMArticle.author)
+        )
+        if category:
+            query = query.filter(models.KMArticle.category == category)
+        if search:
+            search = sanitize_search_term(search)
+            if search:
+                query = query.filter(models.KMArticle.title.ilike(f"%{search}%"))
+        return query.offset(skip).limit(limit).all()
+
+    def get_by_id(self, id: str) -> models.KMArticle | None:
+        return self.db.query(models.KMArticle).options(
+            joinedload(models.KMArticle.author)
+        ).filter(models.KMArticle.id == id).first()
+
+    def get_children(self, parent_id: str) -> list[models.KMArticle]:
+        return self.db.query(models.KMArticle).options(
+            joinedload(models.KMArticle.author)
+        ).filter(models.KMArticle.parent_id == parent_id).all()
+
+    def create(self, article: schemas.KMArticleCreate, author_id: int, commit: bool = True) -> models.KMArticle:
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        new_id = article.id or str(uuid.uuid4())
+
+        attachments_val = "[]"
+        if article.attachments is not None:
+            if isinstance(article.attachments, str):
+                attachments_val = article.attachments
+            else:
+                attachments_val = json.dumps(article.attachments)
+
+        article_no = article.articleNo or self.get_next_km_no()
+
+        db_article = models.KMArticle(
+            id=new_id,
+            articleNo=article_no,
+            title=article.title,
+            content=article.content,
+            category=article.category,
+            tags=article.tags,
+            status=article.status,
+            author_id=author_id,
+            created_at=now,
+            updated_at=now,
+            attachments=attachments_val,
+            parent_id=article.parent_id,
+            chapter_no=article.chapter_no,
+            version_no=1
+        )
+        self.db.add(db_article)
+
+        # Create initial history record
+        history_record = models.KMArticleHistory(
+            id=str(uuid.uuid4()),
+            article_id=new_id,
+            version_no=1,
+            title=article.title,
+            content=article.content,
+            category=article.category,
+            tags=article.tags,
+            status=article.status,
+            author_id=author_id,
+            attachments=attachments_val,
+            parent_id=article.parent_id,
+            chapter_no=article.chapter_no,
+            change_summary=getattr(article, 'change_summary', None) or "Initial version",
+            created_at=now
+        )
+        self.db.add(history_record)
+
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
+        self.db.refresh(db_article)
+        return db_article
+
+    def update(self, db_article: models.KMArticle, update_data: dict, commit: bool = True) -> models.KMArticle:
+        if "attachments" in update_data and not isinstance(update_data["attachments"], str):
+            update_data["attachments"] = json.dumps(update_data["attachments"])
+
+        # Track change summary before removing it from update_data (as it's not in KMArticle)
+        change_summary = update_data.pop("change_summary", None) or "Auto-saved version"
+
+        # Optimistic locking: verify version_no matches before updating
+        expected_version = update_data.pop("version_no", None)
+        if expected_version is not None and db_article.version_no != expected_version:
+            raise ValueError(
+                "This article has been modified by another user. Please refresh and try again."
+            )
+
+        update_data["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Increment version_no
+        new_version = (db_article.version_no or 1) + 1
+        update_data["version_no"] = new_version
+
+        for key, value in update_data.items():
+            setattr(db_article, key, value)
+
+        # Create history record
+        history_record = models.KMArticleHistory(
+            id=str(uuid.uuid4()),
+            article_id=db_article.id,
+            version_no=new_version,
+            title=db_article.title,
+            content=db_article.content,
+            category=db_article.category,
+            tags=db_article.tags,
+            status=db_article.status,
+            author_id=db_article.author_id, # Keep author who last touched it, or should we track updater? Assuming author is updater for now if we don't have update_author.
+            attachments=db_article.attachments,
+            parent_id=db_article.parent_id,
+            chapter_no=db_article.chapter_no,
+            change_summary=change_summary,
+            created_at=update_data["updated_at"]
+        )
+        self.db.add(history_record)
+
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
+        self.db.refresh(db_article)
+        return db_article
+
+    def delete(self, db_article: models.KMArticle, commit: bool = True) -> None:
+        # Cascade delete: remove all child chapters first
+        children = self.get_children(db_article.id)
+
+        # Clean up history snapshots for the book and every chapter.
+        # KMArticleHistory.article_id declares ondelete="CASCADE" and the
+        # ORM relationship declares cascade="all, delete-orphan", but
+        # SQLite's FK enforcement is off (PRAGMA foreign_keys never set)
+        # so neither actually fires — without this, every history row
+        # would be left orphaned, article_id pointing at a deleted row.
+        article_ids = [db_article.id] + [child.id for child in children]
+        self.db.query(models.KMArticleHistory).filter(
+            models.KMArticleHistory.article_id.in_(article_ids)
+        ).delete(synchronize_session=False)
+
+        for child in children:
+            self.db.delete(child)
+        self.db.delete(db_article)
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
+
+    def get_history(self, article_id: str) -> list[models.KMArticleHistory]:
+        return self.db.query(models.KMArticleHistory).filter(
+            models.KMArticleHistory.article_id == article_id
+        ).order_by(models.KMArticleHistory.version_no.desc()).all()

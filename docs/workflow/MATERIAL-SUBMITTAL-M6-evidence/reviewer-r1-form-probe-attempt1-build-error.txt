@@ -1,0 +1,34 @@
+✘ [ERROR] No matching export in "ui:react/jsx-runtime" for import "jsx"
+
+    react-app/src/components/MaterialSubmittal/RegisterDialog.tsx:88:8:
+      88 │         <label className={required ? formStyles.requiredLabel : fo...
+         ╵         ^
+
+✘ [ERROR] No matching export in "ui:react/jsx-runtime" for import "jsxs"
+
+    react-app/src/components/MaterialSubmittal/RegisterDialog.tsx:189:16:
+      189 │                 <div className={formStyles.modalHeader}>
+          ╵                 ^
+
+/Users/nook/Documents/Qualitas/react-app/node_modules/esbuild/lib/main.js:1472
+  let error = new Error(text);
+              ^
+
+Error: Build failed with 2 errors:
+react-app/src/components/MaterialSubmittal/RegisterDialog.tsx:88:8: ERROR: No matching export in "ui:react/jsx-runtime" for import "jsx"
+react-app/src/components/MaterialSubmittal/RegisterDialog.tsx:189:16: ERROR: No matching export in "ui:react/jsx-runtime" for import "jsxs"
+    at failureErrorWithLog (/Users/nook/Documents/Qualitas/react-app/node_modules/esbuild/lib/main.js:1472:15)
+    at /Users/nook/Documents/Qualitas/react-app/node_modules/esbuild/lib/main.js:945:25
+    at runOnEndCallbacks (/Users/nook/Documents/Qualitas/react-app/node_modules/esbuild/lib/main.js:1315:45)
+    at buildResponseToResult (/Users/nook/Documents/Qualitas/react-app/node_modules/esbuild/lib/main.js:943:7)
+    at /Users/nook/Documents/Qualitas/react-app/node_modules/esbuild/lib/main.js:970:16
+    at responseCallbacks.<computed> (/Users/nook/Documents/Qualitas/react-app/node_modules/esbuild/lib/main.js:622:9)
+    at handleIncomingPacket (/Users/nook/Documents/Qualitas/react-app/node_modules/esbuild/lib/main.js:677:12)
+    at Socket.readFromStdout (/Users/nook/Documents/Qualitas/react-app/node_modules/esbuild/lib/main.js:600:7)
+    at Socket.emit (node:events:508:20)
+    at addChunk (node:internal/streams/readable:564:12) {
+  errors: [Getter/Setter],
+  warnings: [Getter/Setter]
+}
+
+Node.js v25.8.0

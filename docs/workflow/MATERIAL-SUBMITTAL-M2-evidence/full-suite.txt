@@ -1,0 +1,157 @@
+M2 full backend suite — started 2026-10-08T13:14:54Z
+python: Python 3.14.6
+cmd: DATABASE_URL=sqlite:///:memory: python3 -m pytest tests -p no:cacheprovider -W ignore::DeprecationWarning -rfEs
+
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-9.0.2, pluggy-1.6.0
+rootdir: /Users/nook/Documents/Qualitas/backend
+configfile: pytest.ini
+plugins: anyio-4.13.0
+collected 2406 items
+
+tests/test_active_assignee_http.py ...........                           [  0%]
+tests/test_attachment_authorization_http.py ............................ [  1%]
+.........................F.............................................. [  4%]
+........................................................................ [  7%]
+..................................................                       [  9%]
+tests/test_attachment_hardening_http.py ................................ [ 11%]
+........................................................................ [ 14%]
+...............................................................          [ 16%]
+tests/test_audit_service.py ................                             [ 17%]
+tests/test_checklist_evidence_first_time_reliability_repair.py ......    [ 17%]
+tests/test_checklist_evidence_marker_migration.py .....                  [ 17%]
+tests/test_checklist_evidence_timestamp_repair.py .....                  [ 17%]
+tests/test_checklist_itr_isolation_integration.py ............           [ 18%]
+tests/test_checklist_na_reason_http.py .................                 [ 19%]
+tests/test_checklist_pass_integrity_http.py ............................ [ 20%]
+...................                                                      [ 21%]
+tests/test_checklist_reopen_http.py ....                                 [ 21%]
+tests/test_checklist_service.py ......................                   [ 22%]
+tests/test_checklist_status_rule_http.py ............................... [ 23%]
+..........................................                               [ 25%]
+tests/test_checklist_unknown_history_update.py .....                     [ 25%]
+tests/test_checklist_validation.py ..........                            [ 25%]
+tests/test_checklist_version_migration.py ...                            [ 25%]
+tests/test_date_write_guard_http.py .................................... [ 27%]
+........................................................................ [ 30%]
+...........................................................              [ 32%]
+tests/test_docx_path_guard.py ..............................             [ 34%]
+tests/test_docx_path_guard_http.py ..                                    [ 34%]
+tests/test_fat_service.py ....                                           [ 34%]
+tests/test_file_list_route_http.py ..                                    [ 34%]
+tests/test_followup_service.py .....                                     [ 34%]
+tests/test_followup_validation.py ......                                 [ 34%]
+tests/test_iam_admin_role_boundary_http.py ............................. [ 36%]
+...................................................................      [ 38%]
+tests/test_iam_admin_takeover_http.py .................................. [ 40%]
+........................................................................ [ 43%]
+...........                                                              [ 43%]
+tests/test_iam_role_audit_http.py ............                           [ 44%]
+tests/test_iam_router.py .....                                           [ 44%]
+tests/test_iam_user_security_http.py ................................... [ 45%]
+.....................................................                    [ 48%]
+tests/test_integration_real_db.py ..............                         [ 48%]
+tests/test_integrity_fixes.py ..........                                 [ 49%]
+tests/test_isolated_stack_tool.py ....................................ss [ 50%]
+...........................                                              [ 51%]
+tests/test_itp_checklist_km_project_audit_http.py ...................... [ 52%]
+............                                                             [ 53%]
+tests/test_itp_service.py ....................                           [ 54%]
+tests/test_itr_approval_authority_http.py ........                       [ 54%]
+tests/test_itr_approval_events_http.py ...........................       [ 55%]
+tests/test_itr_approval_events_migration.py .............                [ 56%]
+tests/test_itr_approval_history_api_http.py .........                    [ 56%]
+tests/test_itr_checklist_http_e2e.py ....                                [ 56%]
+tests/test_itr_history_preservation_http.py ..............               [ 57%]
+tests/test_itr_revoke_approval_acceptance.py ............                [ 57%]
+tests/test_itr_revoke_approval_evidence_integrity.py .........           [ 58%]
+tests/test_itr_service.py ..........................                     [ 59%]
+tests/test_itr_state_protection_http.py ........................         [ 60%]
+tests/test_itr_write_paths_atomic_http.py ...........................    [ 61%]
+tests/test_km_docx_import.py ...                                         [ 61%]
+tests/test_km_repository.py .                                            [ 61%]
+tests/test_km_service.py ..                                              [ 61%]
+tests/test_km_upload_security.py ..                                      [ 61%]
+tests/test_kpi_service.py ...                                            [ 61%]
+tests/test_login_no_env_password.py .........                            [ 62%]
+tests/test_material_schema_migration.py .........................        [ 63%]
+tests/test_material_submittals_http.py ................................. [ 64%]
+........................................................................ [ 67%]
+.......................                                                  [ 68%]
+tests/test_materials_http.py .................................           [ 69%]
+tests/test_meeting_minutes_service.py ............                       [ 70%]
+tests/test_ncr_audit_atomic_http.py ......................               [ 71%]
+tests/test_ncr_close_permission_http.py .......................          [ 72%]
+tests/test_ncr_closed_creation_http.py ........................          [ 73%]
+tests/test_ncr_closure_photos_http.py ...........................        [ 74%]
+tests/test_ncr_field_improvements.py .................                   [ 75%]
+tests/test_ncr_late_closure_http.py ............................         [ 76%]
+tests/test_ncr_photo_evidence.py ...............                         [ 76%]
+tests/test_ncr_router.py ...                                             [ 76%]
+tests/test_ncr_service.py ...........                                    [ 77%]
+tests/test_ncr_tbc_na_status_migration.py .....                          [ 77%]
+tests/test_noi_create_atomic_http.py ................                    [ 78%]
+tests/test_noi_legacy_itp_read_http.py ....                              [ 78%]
+tests/test_noi_qworkflow_backfill_rule_http.py ...............           [ 79%]
+tests/test_noi_service.py .........                                      [ 79%]
+tests/test_obs_engineer_approval_identity.py .......                     [ 79%]
+tests/test_obs_engineer_approval_migration.py ...                        [ 79%]
+tests/test_obs_service.py .......                                        [ 80%]
+tests/test_osd_service.py ....                                           [ 80%]
+tests/test_permission_remap_migration.py ...                             [ 80%]
+tests/test_pqp_router.py ....                                            [ 80%]
+tests/test_pqp_service.py ........                                       [ 80%]
+tests/test_project_service.py ...                                        [ 81%]
+tests/test_qty_affected_split_migration.py ....                          [ 81%]
+tests/test_qworkflow_photo_impact_script.py ...                          [ 81%]
+tests/test_related_service.py ...........                                [ 81%]
+tests/test_remaining_audit_paths_http.py ............................... [ 83%]
+...................................................                      [ 85%]
+tests/test_reviewed_audit_paths_http.py ................................ [ 86%]
+........                                                                 [ 86%]
+tests/test_scheduler.py .........                                        [ 87%]
+tests/test_scheduler_active_recipients.py ........................       [ 88%]
+tests/test_schemas.py ..                                                 [ 88%]
+tests/test_scope_all_modules.py ..........                               [ 88%]
+tests/test_scope_extra.py ...........                                    [ 89%]
+tests/test_scope_http.py ...                                             [ 89%]
+tests/test_scope_instance_contractor_http.py ........................... [ 90%]
+.........                                                                [ 90%]
+tests/test_scope_isolation.py ................                           [ 91%]
+tests/test_scope_related.py ...                                          [ 91%]
+tests/test_seeder_admin_initialisation.py ..........                     [ 92%]
+tests/test_seeder_permission_persistence.py ....                         [ 92%]
+tests/test_settings_naming_rules.py ......                               [ 92%]
+tests/test_startup_isolation_guard.py .................................. [ 93%]
+........................                                                 [ 94%]
+tests/test_upload_root.py ........                                       [ 95%]
+tests/test_user_active_only_filter.py ....                               [ 95%]
+tests/test_user_scope_api.py ......                                      [ 95%]
+tests/test_user_service.py ..........                                    [ 96%]
+tests/test_utils.py ..............                                       [ 96%]
+tests/test_validation_fixes.py .......s..............                    [ 97%]
+tests/test_workflow_photo_evidence_http.py ...........................   [ 98%]
+tests/test_workflow_project_filter_http.py ...                           [ 98%]
+tests/test_workflow_service.py .............................             [100%]
+
+=================================== FAILURES ===================================
+_______ test_the_permission_table_covers_exactly_the_legal_entity_types ________
+
+    def test_the_permission_table_covers_exactly_the_legal_entity_types():
+        import routers.file_router as fr
+>       assert set(ENTITY_PERMISSIONS) == fr._VALID_ENTITY_TYPES == set(MATRIX)
+E       AssertionError: assert {'audit', 'ch...', 'itp', ...} == {'audit', 'ch...', 'itp', ...}
+E         
+E         Extra items in the left set:
+E         'material_rev'
+E         Use -v to get more diff
+
+tests/test_attachment_authorization_http.py:323: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_attachment_authorization_http.py::test_the_permission_table_covers_exactly_the_legal_entity_types
+SKIPPED [2] tests/test_isolated_stack_tool.py:250: `ps` is unavailable here (platform/sandbox limitation): real-process lifecycle not exercisable
+SKIPPED [1] tests/test_validation_fixes.py:61: Type hint mismatch: validator parses to dict/list but field expects str
+============ 1 failed, 2402 passed, 3 skipped in 2629.21s (0:43:49) ============
+
+EXIT CODE: 1
+finished 2026-10-08T13:58:48Z

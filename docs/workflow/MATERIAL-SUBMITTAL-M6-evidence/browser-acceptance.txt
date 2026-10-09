@@ -1,0 +1,221 @@
+MATERIAL-SUBMITTAL M6 — browser acceptance (2026-10-09, local ISOLATED stack 8310/3310 restarted with the M6 backend; Chrome
+"Browser 1"; user m3_full; seeds: M3 + M4 + M6 (seed_material_m6_review.py writes 3 real PNG files as `photo` attachments of
+two APPROVED revisions). Values read back from the DOM / API.)
+
+Submittal list (shared DataTable) — screenshot submittal-list-revision-status.jpg
+- Columns: #, Submittal No., Material, Category, Brand, Contractor, Revision, Status, Submitted. "Expected reply" and "Updated"
+  removed (user: 「這兩欄也不需要了」); the old two-value "latest / current approved" column replaced by Revision (Rev n) + Status
+  (badge) (user: 「我只需要版次」).
+- Overdue still marked in the list (spec AC-M4-3): MSA-000003 → status cell 「Under external review」 + red 「Overdue」.
+- 10 rows per page, "Loaded 200 of 206" + Load more as before.
+
+Approved materials (Materials tab) — approved-materials-list.jpg
+- Hint "Only materials with a current approved revision …"; "Loaded 2 of 2": MSA-000001 (Rev 1 Approved — NOT the Rev 2 under
+  review) and MSA-000004 (Rev 0 Approved with comments). No New material button, rows are not editable.
+- Row click → "Approved material — Fire stop sealant": summary QTS-MV-MSA-000001 · Approved rev. Rev 1 · Approved · Approved on
+  2026-09-20 · Consultant Lin; Material photos sealant-label.png / sealant-front.png (naturalWidth 480 = real images loaded through
+  the authenticated route); approved-revision fields; Basis "Spec 07 84 00". (approved-material-photos.jpg)
+- Photo tiles enlarged after user feedback 「太小了」: 260 px tiles, modal 920 px (approved-material-photos-large.jpg); the file list
+  in the submittal detail keeps 132 px thumbnails.
+- Photo click → lightbox (photo-enlarged.jpg); Escape closes the lightbox only, the material view stays.
+- "Open submittal" → submittal detail; Rev 1 → "Material photos" shows the 2 thumbnails, no upload input, no delete button
+  (Approved = locked) (detail-photos-locked.jpg).
+
+Photo upload end to end (MSA-000002, Draft)
+- Photo picker accept="image/*"; uploaded ui-photo.png (Chrome file upload) → thumbnail + Delete shown.
+- Uploaded not-image.txt to the photo category → refused: 「Upload failed: File 'not-image.txt' is not an image; this category only
+  accepts images」, the uploaded photo unchanged (draft-photo-upload-and-nonimage-refused.jpg).
+- Submit (UI) → photo locked: no upload input, no delete. Record external result Approved (UI, decision maker "Consultant M6").
+- Materials tab → "Loaded 3 of 3", MSA-000002 Rev 0 Approved 2026-10-09; its view shows ui-photo.png (naturalWidth 320)
+  (ui-approved-with-uploaded-photo.jpg).
+
+Sidebar/breadcrumb English "Material" (from the superseded TABLE round, kept).
+Not checked in this round: Chinese UI of the new views (texts added for zh and en), 1280 width of the new tab, board (unchanged).
+
+=====================================================================================================================
+REGISTER VERSION (after the user's decision 「材料模組只當核准材料登錄簿」, 2026-10-09). The sections above describe the
+intermediate version (submittal tab / submittal detail / 'Open submittal'); those screens were removed — kept here only as history.
+Isolated stack restarted again with the register backend (run dir qualitas-manual-brpymnko), seeds M3 + M4 + M6, Chrome, m3_full.
+
+- Page: title "Approved materials", project select, search, "+ Register approved material"; NO submittal tab / board / detail.
+  List "Loaded 2 of 2" (MSA-000001 Approved, MSA-000004 Approved with comments); columns # · Material · Category · Brand · Model ·
+  Specification · Manufacturer · Supplier · Contractor · Record no. · Result · Approved on. (register-list.jpg)
+- Register form: Save disabled until contractor + name (+ result/date, pre-filled Approved / today) are set; contractor list = active
+  contractors; photo picker accept=image/*. Filled M3 Vendor / "Waterproof membrane" / Sika / WP-100 + ui-photo.png →
+  Save → dialog closed, list "Loaded 3 of 3", new row QTS-MV-MSA-000207 Approved 2026-10-09. (register-form.jpg)
+- View of MSA-000207: summary "QTS-MV-MSA-000207 Approved Approved on 2026-10-09", photo ui-photo.png loaded (naturalWidth 320),
+  Edit button + "Upload photos" + per-photo Delete (m3_full holds material:manage).
+- Edit: contractor select disabled, no photo picker in the edit form; model WP-100 → WP-200 and result → Approved with comments →
+  Save → view and list show WP-200 / Approved with comments.
+  DB (isolated stack.db): result entries [(1 initial Approved, superseded), (2 correction ApprovedWithComments, current,
+  reason "Register edit")]; revision status ApprovedWithComments, snap_model WP-200; audit REGISTER + UPDATE
+  old {"model": "WP-100", "result_code": "Approved"} → new {"model": "WP-200", "result_code": "ApprovedWithComments"}.
+- Photos in the view: uploaded ui-photo-2.png → 2 photos; deleted ui-photo.png → 1 photo left, no error notice.
+  (register-view-after-edit-two-photos.jpg = state before the delete)
+- Project form (Contractors → Projects) no longer has the reply-days field: ProjectModal.tsx and projectStore.ts are byte-identical to HEAD.
+Observed: photo Delete has no confirmation step (the attachment is soft-deleted server-side). Not changed — for the user to decide.
+
+Label change (user: 「不需要送審編號 有reference no就好」): number column header now "Reference no." (zh 參考編號), same wording as
+the other modules (common.referenceNo); no separate submittal document number field. Chrome: headers # · Material · Category · Brand ·
+Model · Specification · Manufacturer · Supplier · Contractor · Reference no. · Result · Approved on.
+
+Column order (user: 「順序跟其他模組有差異」): now # · Reference no. · Result · Contractor · Material · Category · Brand · Model ·
+Specification · Manufacturer · Supplier · Approved on — the OSD / NCR / ITR / OBS order (# · number · status · contractor · content ·
+dates). Chrome-verified; screenshot register-list-column-order.jpg.
+
+View layout (user: 「圖片放左邊 詳細資料放右邊」): summary on top; photos column on the LEFT (208 px tiles, 2 per row, click to
+enlarge, upload / delete for manage), details on the RIGHT in 2 columns; modal max 1120 px; columns wrap (stack) on narrow screens
+(flex-wrap, min 280 px each). Chrome: photos col x 429–869, details col x 893–1491, same top → side by side.
+Screenshot approved-view-photos-left-details-right.jpg.
+
+Bigger view + zoomable viewer (user: 「表單可以大一點 因為照片太小 而且點開要可以放大檢視」):
+- Approved-material modal max 1400 px (shared .modalContent: width 95%, max-height 90vh); photo column 640 px; tiles 300 px.
+  Chrome (viewport 1920): modal 1400, tiles 300 / 300. Screenshot approved-view-1400-photos-300.jpg.
+- Photo viewer: opens at "fill screen" (image box 96vw x 86vh, object-fit contain — small photos are enlarged too): 1843x751 at
+  100%; toolbar file name · － · 100% · ＋ · Fit screen · Original (opens the file in a new tab) · Close. ＋ twice → 200%,
+  image 3686x1502, the viewer scrolls (scrollWidth 3686 > 1873, scrollHeight 1502 > 799). Double-click toggles 2x / 100%
+  (200% → 100%). Keys + / − zoom, Esc closes the viewer only (material view stays). Screenshot photo-viewer-fill-screen.jpg.
+
+Photos for any number of photos (user chose 「主圖＋縮圖列」 and 「全螢幕可切換上一張／下一張」):
+- Left column = one MAIN photo (640 wide, height min(440px, 48vh), object-fit contain → portrait and landscape both whole),
+  file name, "n / total", Delete; THUMBNAIL strip (84 px, selected one outlined) under it — hidden for 1 photo, scrolls sideways
+  when it does not fit. Click on a thumbnail swaps the main photo; click on the main photo opens the viewer.
+- 1 photo (MSA-000207 before upload): count 1, no counter, no strip (gallery-1-photo.jpg).
+- 2 photos (MSA-000001): counter "1 / 2", 2 thumbs; thumb 2 → main sealant-front.png, "2 / 2" (gallery-2-photos.jpg).
+  Thumbnail strip fully in view (bottom 754 < viewport 873).
+- 7 photos (uploaded 6 mixed landscape/portrait PNGs in one go through the view): counter "1 / 7", 7 thumbs (strip exactly
+  fits 640 px; more would scroll), portrait main photo shown whole (gallery-7-photos.jpg).
+- Viewer: opened on photo 2 → "2 / 2"; ArrowRight → wraps to "1 / 2"; ‹ button → back to photo 2; arrows hidden for a single
+  photo; zoom / fit / original / Esc as before (viewer-prev-next.jpg).
+
+Photo delete confirmation (user: 「刪除前要確認」): Delete under the main photo opens the shared ConfirmModal (danger) "Delete photo —
+Delete the photo \"many-6.png\"?" (photo-delete-confirm.jpg). Cancel → nothing deleted (7 photos). Delete again → confirm →
+6 photos left, many-6.png gone, main photo moves to many-5.png.
+
+Right-column layout (user: 「右邊資訊位置可以調整 因為右下角太空白了」): the one-line summary on top was moved INTO the right
+column as section "Approval / 核准資訊" (Reference no. · Approval result · Approved on · Approved by · External approval no. ·
+Contractor) followed by "Material details / 材料資料" (Material · Category · Brand · Model · Specification · Manufacturer ·
+Supplier · Basis); 3 fields per row. Chrome (MSA-000001, 2 photos): left column 577 px, right column 548 px, modal body
+scrollHeight 625 = clientHeight 625 (no scrolling). An intermediate 2-per-row try was 706 px (too tall) — replaced.
+Screenshot approved-view-balanced.jpg.
+
+List columns trimmed (user: manufacturer / supplier are secondary; chose 「清單拿掉，表單與詳細保留選填」): list now # · Reference no. ·
+Result · Contractor · Material · Category · Brand · Model · Specification · Approved on; no horizontal scroll at this width.
+Manufacturer and supplier stay optional in the register form and in the material view. Screenshot register-list-final.jpg.
+
+Page header aligned with the other modules (user chose: no page title; the global project selector; chips left, search + add
+right; "loaded N of T" only while more rows exist):
+- Isolated stack restarted again (run dir qualitas-manual-87ow2qbn) for the backend result filter; seeds M3 + M4 + M6.
+- Global selector "All Projects" → prompt "Choose a project at the top right first (approved materials are kept per project)",
+  no list (page-all-projects-prompt.jpg). No in-page title or project dropdown any more.
+- M3 Project One → chips All 2 · Approved 1 · Approved with comments 1 (server totals, follow the search), search + "Register
+  approved material" on the right, table below, no loaded-count line (all rows loaded) (page-module-layout.jpg).
+- Chip AWC → [MSA-000004]; Approved → [MSA-000001]; All → both.
+- Switching the global project to M3 Project Two → chips 0 · 0 · 0, table "No data found"; switched back to Project One.
+
+Form and add button aligned with the other modules (user: 「登錄表單也要跟其他模組一致」 and 「???」 on the "+ Register approved
+material" button):
+- Button "Add New Material" / 「新增材料」 (others: "Add New NCR / OSD", no "+"). Form titles "Add Material" / "Edit Material — <no.>".
+- Form = OSD pattern: FormShell frame (title + ×), "Fields marked with * are required", sections 核准資訊 / Approval ·
+  材料資料 / Material · 照片 / Photos, requiredLabel / optionalLabel, shared FileAttachment (pending NEW photos, ×, "+ Upload
+  Files"; removals wait for Save), FormActions footer (Cancel / Save → "Saving..."), runSaveFlow (record write → photo deletes /
+  uploads → list reload; a record written by an earlier attempt is never written again; unknown write outcome → list re-read +
+  warning), unsaved-changes guard on × / Cancel. (form-add-material.jpg, form-photos-pending.jpg)
+- Save with nothing filled: dialog stays, "required" under Contractor and Material.
+- Add: M3 Vendor / "Anchor bolt M12" + 2 photos → dialog closed, chips All 3 · Approved 2 · AWC 1, new row QTS-MV-MSA-000207;
+  its view shows 2 photos (many-2, many-1).
+- Edit (from the view): contractor locked, existing photos listed; brand → Hilti, × on many-1.png → Save → view + list show
+  Hilti, 1 photo (many-2.png). (after-edit-view.jpg)
+
+=====================================================================================================================
+FINAL ROUND (user: 「全部處理」 — every item decided in chat on 2026-10-09). Isolated stack restarted with the final backend
+(run dir qualitas-manual-wn_3o4l7) and the new seed seed_material_register_review.py (+ seed_material_m3_review_noperm.py):
+M3-P1 = 208 registered records (3 named + 205 bulk), photos on MSA-000001 (2) and MSA-000002 (1). Chrome "Browser 1", m3_full.
+- Old address /material-submittals → redirected to /materials; sidebar / breadcrumb "Material" (en) and 「材料」 (zh). (r-final-list-en.jpg)
+- List: chips All 208 · Approved 207 · AWC 1; search placeholder shortened ("Search no., name, model"); "Export Excel" +
+  "Add New Material"; 200 of 208 loaded → "Loaded 200 of 208 · Load more".
+- Export Excel (download intercepted in the page, no file saved): "Materials_M3-P1_2026-10-09.xlsx" (local date), parsed in the
+  page with the same xlsx module: sheet "Materials", 208 rows = ALL matching records (more than the 200 loaded), 15 columns
+  (#, Reference no., Approval result, Contractor, Material, Category, Brand, Model, Specification, Manufacturer, Supplier,
+  Approved on, Approved by, External approval no., Basis). First attempt had a UTC date in the file name → fixed.
+- Material view: read-only (no upload link, no delete buttons); footer Print · Close · Edit.
+- Print (window.print intercepted): portal .msa-print-root in <body>, hidden on screen, head QTS-MV-MSA-000001 / 「核准材料記錄 APPROVED
+  MATERIAL RECORD」, sections 1. 核准資訊 · 2. 材料資料 · 依據 · 3. 材料照片 with both photos loaded (480 px); removed after
+  afterprint. Rendered on screen once for a visual check (r-final-print-layout.jpg).
+- Duplicate warning: Add with " fire stop sealant " / A brand / FS-200 (case + spaces differ) → 「Possible duplicate … QTS-MV-MSA-000001.
+  Save anyway?」 (r-final-duplicate-warning.jpg) → Save anyway → saved (All 209).
+- Photos only in the edit form: Edit MSA-000001, × on sealant-label.png → Save → 「Saving will delete 1 photo(s) … Continue?」
+  (r-final-delete-confirm-on-save.jpg); name/brand/model unchanged → no duplicate question; Delete → saved, view shows 1 photo.
+- Dashboard: tile 「APPROVED MATERIALS 209 · Registered this month 209」 next to NCR / OBS / NOI (those show "Could not load" because
+  m3_full has no NCR/OBS/NOI permission — existing behaviour) (r-final-dashboard-tile.jpg).
+- Chinese UI: list headers 參考編號／核准結果／承包商／材料名稱／分類／廠牌／型號／規格／核准日, chips 全部／核准／附意見核准, buttons 匯出 Excel／
+  新增材料, view 核准資訊／材料資料, 依據 label without 「送審」 (fixed in this round) (r-final-list-zh.jpg, r-final-view-zh.jpg).
+- 900 px window: no page-level horizontal scroll (the table scrolls in its frame); the material view stacks photos above details
+  (r-final-list-900.jpg, r-final-view-900-stacked.jpg). Window restored to 1920x1050, language back to en.
+
+=== R2 ROUND (2026-10-09 03:13–03:18 CST) — Chrome (Claude in Chrome), isolated stack 8310/3310 ===
+Stack: R1 run dir taken down; fresh `isolated_stack.py up` (run qualitas-manual-qbu5w7bt) on the R2 code, seeded with
+seed_material_register_review.py (R2: every 10th bulk item "approved with comments"): M3-P1 = 208 records (186 Approved / 22 AWC),
+M3-P2 = 1. Fresh schema has material_submittals.client_request_id; permissions = material:view:all, material:manage:all only.
+User m3_full (material view + manage). Network faults were injected IN THE PAGE by wrapping XMLHttpRequest (delay an answer,
+throw an answer away after the server handled it, or fail before sending); the backend itself was not modified.
+Record counts / attachments were read from the isolated stack.db with `sqlite3 -readonly`.
+
+R6 load more (review R6)
+- Page-2 answer delayed 2.5 s; "Load more" clicked 3× → button disabled + "Loading…" at 300 ms; exactly 1 request with offset=200;
+  afterwards 208 rows (no duplicates), load-more gone.
+- Page-2 answer of the "All" list delayed; switched to the AWC chip 200 ms later → 22 rows; the late old page arrived (status 200,
+  delayed) and was DROPPED: still 22 rows, all AWC.
+- Page-2 request failed once → toast "Failed to load. Please retry.", still 200 rows, button enabled; second click → 208 rows.
+
+R5 Excel export (review R5) — list loaded 200 of 208 at the time of each export
+- Column filters Result = "Approved with comments" + Material = "bulk ITEM 2", top search "Bulk": screen shows no row (the only match is
+  beyond the loaded page); export → Materials_M3-P1_2026-10-09.xlsx with exactly 1 row: QTS-MV-MSA-000205 Bulk item 200 (AWC).
+- Chip "All" + column filter Result = AWC only (the reviewer's example): screen 21 rows (loaded); export 22 rows, all "Approved with
+  comments", 22 distinct numbers, includes Bulk item 200. Screenshot r2-column-filter-awc-loaded-21.jpg.
+
+R1 one record per form (review R1)
+- Double click on Save (two synchronous clicks): button disabled 50 ms later; requests = 1 duplicate check + 1 POST; DB: 1 record
+  (QTS-MV-MSA-000210 "R2 double click test").
+- POST answer thrown away AFTER the server committed: dialog stays open, toast "Connection lost or timed out, so it is not certain …
+  You can simply press Save again …", Save enabled, contractor field locked. Name changed, Save again → POST with the SAME request id
+  (29d2e7a9…) returned the existing record, then PUT of the changed name; dialog closed. DB: 1 record (QTS-MV-MSA-000211, edited name).
+- Photo: text file renamed fake-photo.png → record created, upload 400 "File 'fake-photo.png' is not a valid image (PNG, JPEG, GIF or
+  WebP)…", toast "Saved, but the photo upload failed: …", dialog open, contractor locked (r2-form-contractor-locked-after-create.jpg).
+  Removed the pending file, added a real PNG, renamed, Save → requests: duplicate check, PUT (same record), upload 200; dialog closed.
+  DB: 1 record (QTS-MV-MSA-000212, renamed), 1 attachment image/png real-photo.png; attachments rows 4 = files on disk 4 (the refused
+  file left neither a row nor a file).
+
+R3 duplicate check (review R3)
+- "  fire STOP sealant " / "a brand" / "fs-200" → server check found QTS-MV-MSA-000001 (trim + case-insensitive), "Possible duplicate"
+  dialog, no POST (r2-duplicate-warning-server-check.png). Cancel → nothing written.
+- Duplicate check request failed → "Duplicate check failed" dialog with Cancel / "Skip check and save" (r2-duplicate-check-failed.png);
+  cancelled.
+  (Beyond-500 matches, exclusions and the continue / cancel branches are covered by the HTTP tests and r2-form-probe.)
+
+R4 dashboard (review R4)
+- Project M3 Project One: tile "APPROVED MATERIALS 211 · Registered this month 211" (208 seeded + 3 added above).
+- Switched to All Projects with the /stats request failing once → tile "Could not load" + Retry (no number); Retry (stays on the
+  dashboard) → 212 = M3-P1 211 + M3-P2 1 (r2-dashboard-all-projects.jpg). The other tiles show "Could not load" because m3_full has no
+  NCR / OBS / NOI / ITP / PQP permission — unrelated to this round, unchanged.
+  (> 200 visible projects and the contractor filter are covered by test_stats_cover_every_visible_project_beyond_the_project_list_page.)
+
+R7 permissions (review R7): not a browser item. Fresh isolated DB lists only view / manage; the upgrade of a database that still holds
+material:record_result:all is covered by test_retired_record_result_permission_is_removed_and_every_other_grant_is_kept (boots).
+
+Not done in the browser: mobile width; Chinese UI for the new messages (the zh texts are in materialText.ts, not viewed).
+
+=== R2 — SHELF VIEW (2026-10-09 ~13:00 CST; user request folded into R2) — Chrome, isolated stack 8310/3310 ===
+Stack re-created on the code with the photo summary (run qualitas-manual-t0j1i2xt), same seed (208 / 186 / 22, 2 records with photos).
+- Toolbar shows a "Table | Shelf" switch next to the search (r2-table-with-view-switch.jpg).
+- Shelf: one level per category with a count and a board under it — Bulk (197 of the 200 loaded), Electrical (1), Fire (1), Pipe (1);
+  cards show the first photo (M4 cable tray, Fire stop sealant with a "2 photos" badge), name, brand / model, result badge; records
+  without photos show "No photo" (r2-shelf-view-top.jpg, r2-shelf-view-photos.jpg). The two photo URLs answered 200 image/png.
+  Note: the photos use loading="lazy"; a check run before scrolling saw them not yet loaded, after scrolling they loaded (480 px).
+- Card click opens the existing approved-material view ("Material — Fire stop sealant"); Close returns to the shelf.
+- AWC chip on the shelf: Bulk 21 + Electrical 1 cards, every badge "Approved with comments".
+- Column filter Material = "item 01" set in the table (10 rows) → shelf shows the same 10 → back to the table still 10 (the hidden table
+  keeps its header filters).
+- Chinese UI: switch "表格 / 展示架", badges 核准 / 附意見核准, "尚無照片", "2 張照片"; the choice survives a reload
+  (r2-shelf-view-zh.jpg). Language and view were set back to the user's previous values (en, table) afterwards.
+Not checked in the browser: phone width (CSS has a 2-column rule under 600 px).

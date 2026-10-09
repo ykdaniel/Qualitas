@@ -1,0 +1,11 @@
+MATERIAL-SUBMITTAL M4 — sha256 of files touched in M4 (+ LanguageContext.tsx as unchanged control), 2026-10-08 23:41 CST
+baab710371eb4157382c8bed520c0d454ad8ffcb4f223a64ba60baa64d8f58a1  react-app/src/utils/materialSubmittal.ts
+5ae172b319e8b5746f96842de0054ab9058ce8e78efcb9e5a2487d5b23e34707  react-app/tests-unit/materialBoard.test.ts
+35000297f28e51b349c275e66184d862c371cadada1acb7a8b2c38120fc7c49d  react-app/src/components/MaterialSubmittal/SubmittalBoard.tsx
+ccfcde36c50cf3d1e5d644724037ba49ff0ad731fab8ae9459141b2bb235e40d  react-app/src/components/MaterialSubmittal/MaterialSubmittal.tsx
+aeb358581c70fc5cd940e0fe1b3269b4c0ba245205e186747a81744737ff5ffa  react-app/src/components/MaterialSubmittal/materialText.ts
+72929ada1e75f6926def86d02e552c4fdf6a097cd6311ee550c7ec32af137f27  react-app/src/services/api.ts
+4589130214b025fc944ba94155f14f950a7a228916f25887ab87ef116a78c18e  react-app/src/store/projectStore.ts
+26d0f5a00ee1246bb688d615530e935ac2e31275e70a71fec49dc96e0487e166  react-app/src/components/Contractors/ProjectModal.tsx
+4767ad4c02d7af5c59eb5b1125f2b8becd38421c4a6eb4588eeaa8fb2d252f16  backend/scripts/verification/seed_material_m4_review.py
+eeca6b2d8ca0c4da9c90b748a759b8bcdd482288802774b4cfe965e140e579d1  react-app/src/context/LanguageContext.tsx

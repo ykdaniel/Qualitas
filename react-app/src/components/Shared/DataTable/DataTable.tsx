@@ -1,4 +1,5 @@
 import * as React from "react"
+import { useLanguage } from '../../../context/LanguageContext'
 import {
     ColumnDef,
     ColumnFiltersState,
@@ -40,9 +41,12 @@ interface DataTableProps<TData, TValue> {
     rowSelection?: RowSelectionState
     onRowSelectionChange?: OnChangeFn<RowSelectionState>
     getRowId?: (originalRow: TData, index: number, parent?: any) => string
+    onRowClick?: (row: TData) => void
+    /** Optional: told whenever the column-header filters change (e.g. so a page can export what is filtered). Display unchanged. */
+    onColumnFiltersChange?: (filters: ColumnFiltersState) => void
 }
 
-export function DataTable<TData, TValue>({
+const DataTableInner = <TData, TValue>({
     columns,
     data,
     searchKey,
@@ -51,8 +55,11 @@ export function DataTable<TData, TValue>({
     title,
     actions,
     getRowClassName,
+    onRowClick,
+    onColumnFiltersChange,
     ...props
-}: DataTableProps<TData, TValue>) {
+}: DataTableProps<TData, TValue>) => {
+    const { t } = useLanguage()
     const [sorting, setSorting] = React.useState<SortingState>([])
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
         []
@@ -60,7 +67,9 @@ export function DataTable<TData, TValue>({
     const [columnVisibility, setColumnVisibility] =
         React.useState<VisibilityState>({})
     const [rowSelection, setRowSelection] = React.useState({})
+    React.useEffect(() => { onColumnFiltersChange?.(columnFilters) }, [columnFilters, onColumnFiltersChange])
 
+    // eslint-disable-next-line react-hooks/incompatible-library
     const table = useReactTable({
         data,
         columns,
@@ -111,14 +120,15 @@ export function DataTable<TData, TValue>({
                         {table.getHeaderGroups().map((headerGroup) => (
                             <TableRow key={headerGroup.id}>
                                 {headerGroup.headers.map((header) => {
+                                    const explicitSize = header.column.columnDef.size;
                                     return (
                                         <TableHead key={header.id} style={{
                                             textAlign: 'center',
-                                            backgroundColor: '#1e3a5f',
-                                            color: 'white',
-                                            border: '1px solid #2d4a6f',
-                                            width: header.getSize(),
-                                            minWidth: header.getSize(),
+                                            backgroundColor: '#4a4238',
+                                            color: '#faf7f1',
+                                            border: '1px solid #2d2a24',
+                                            width: explicitSize,
+                                            minWidth: explicitSize,
                                         }}>
                                             {header.isPlaceholder
                                                 ? null
@@ -138,15 +148,18 @@ export function DataTable<TData, TValue>({
                                 <TableRow
                                     key={row.id}
                                     data-state={row.getIsSelected() && "selected"}
-                                    className={cn("even:bg-muted/30", getRowClassName?.(row.original))}
+                                    className={cn("even:bg-muted/30", getRowClassName?.(row.original), onRowClick && "cursor-pointer")}
+                                    onClick={() => onRowClick?.(row.original)}
                                 >
-                                    {row.getVisibleCells().map((cell) => (
+                                    {row.getVisibleCells().map((cell) => {
+                                        const explicitSize = cell.column.columnDef.size;
+                                        return (
                                         <TableCell
                                             key={cell.id}
                                             className="text-center border p-2"
                                             style={{
-                                                width: cell.column.getSize(),
-                                                minWidth: cell.column.getSize(),
+                                                width: explicitSize,
+                                                minWidth: explicitSize,
                                             }}
                                         >
                                             {flexRender(
@@ -154,7 +167,8 @@ export function DataTable<TData, TValue>({
                                                 cell.getContext()
                                             )}
                                         </TableCell>
-                                    ))}
+                                        );
+                                    })}
                                 </TableRow>
                             ))
                         ) : (
@@ -163,7 +177,7 @@ export function DataTable<TData, TValue>({
                                     colSpan={columns.length}
                                     className="h-24 text-center"
                                 >
-                                    No results.
+                                    {t('common.noData')}
                                 </TableCell>
                             </TableRow>
                         )}
@@ -174,3 +188,7 @@ export function DataTable<TData, TValue>({
         </div>
     )
 }
+
+export const DataTable = React.memo(DataTableInner) as <TData, TValue>(
+    props: DataTableProps<TData, TValue> & React.RefAttributes<HTMLDivElement>
+) => JSX.Element;

@@ -1,4 +1,6 @@
+import React, { useRef, useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { useLanguage } from '../../context/LanguageContext';
 import styles from './Dashboard.module.css';
 
 interface ITPGaugeChartProps {
@@ -7,42 +9,57 @@ interface ITPGaugeChartProps {
   maturity: number;
 }
 
-const ITPGaugeChart: React.FC<ITPGaugeChartProps> = ({ approved, total, maturity }) => {
-  // 创建gauge数据 - 使用180度的半圆，分成三段
-  // 40% 橙色 (0-40%), 40% 蓝色 (40-80%), 20% 绿色 (80-100%)
+const ITPGaugeChart: React.FC<ITPGaugeChartProps> = React.memo(({ approved, maturity }) => {
+  const { t } = useLanguage();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [{ chartHeight, outerRadius, innerRadius }, setDims] = useState({
+    chartHeight: 136, outerRadius: 120, innerRadius: 80,
+  });
+
+  // ResizeObserver: bound the gauge radius by the available width. A half-gauge
+  // spans 2*R horizontally, so if R is tied to height alone (as before) it gets
+  // clipped into a "ribbon" and the needle detaches once the column is narrow
+  // on smaller laptop screens. Deriving R from width keeps the arc, needle and
+  // height proportional and always inside the column.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const w = entry.contentRect.width;
+        const outer = Math.max(48, Math.min(Math.floor(w / 2) - 4, 120));
+        setDims({
+          chartHeight: outer + 16,            // arc radius + room for the pivot dot
+          outerRadius: outer,
+          innerRadius: Math.round(outer * 0.667),  // 80 / 120 ≈ 0.667
+        });
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const gaugeData = [
-    { name: 'Low', value: 40, color: '#f59e0b' },      // 橙色 (0-40%)
-    { name: 'Medium', value: 40, color: '#3b82f6' },  // 蓝色 (40-80%)
-    { name: 'High', value: 20, color: '#10b981' },     // 绿色 (80-100%)
+    { name: 'Low',    value: 40, color: '#f59e0b' },
+    { name: 'Medium', value: 40, color: '#3b82f6' },
+    { name: 'High',   value: 20, color: '#10b981' },
   ];
 
-  // 计算指针角度
-  // PieChart从180度（左边）开始，到0度（右边）结束
-  // 180度对应0%，0度对应100%
-  // 指针默认垂直向上（90度），需要旋转到目标位置
-  // 目标角度：180 - (maturity / 100) * 180
-  // 从90度旋转到目标角度：目标角度 - 90
-  // maturity为0%时，目标180度（左边），旋转90度（180-90）
-  // maturity为100%时，目标0度（右边），旋转-90度（0-90）
-  // maturity为50%时，目标90度（中间），旋转0度（90-90）
+  // Needle angle calculation (unchanged logic)
   const targetAngle = 180 - (maturity / 100) * 180;
   const needleAngle = 90 - targetAngle;
 
-  // 根据 maturity 值确定数值颜色
   const getValueColor = () => {
-    if (maturity === 0) return '#9ca3af'; // 灰色
-    if (maturity === 100) return '#10b981'; // 绿色
-    if (maturity < 50) return '#f59e0b'; // 橙色（警告色）
-    return '#10b981'; // 绿色（50%以上）
+    if (maturity === 0) return '#9ca3af';
+    return '#0f172a';
   };
-  
   const valueColor = getValueColor();
 
   return (
-    <div className={styles.gaugeChartContainer}>
-      <h3 className={styles.gaugeTitle}>ITP Approved or with comment (Qty & %)</h3>
-      <div className={styles.gaugeWrapper}>
-        <ResponsiveContainer width="100%" height={260}>
+    <div className={styles.gaugeChartContainer} ref={containerRef}>
+      <h3 className={styles.gaugeTitle}>{t('dashboard.gaugeItpTitle')}</h3>
+      <div className={styles.gaugeWrapper} style={{ height: chartHeight }}>
+        <ResponsiveContainer width="100%" height={chartHeight}>
           <PieChart>
             <Pie
               data={gaugeData}
@@ -50,8 +67,8 @@ const ITPGaugeChart: React.FC<ITPGaugeChartProps> = ({ approved, total, maturity
               cy="100%"
               startAngle={180}
               endAngle={0}
-              innerRadius={100}
-              outerRadius={150}
+              innerRadius={innerRadius}
+              outerRadius={outerRadius}
               paddingAngle={0}
               dataKey="value"
             >
@@ -61,25 +78,26 @@ const ITPGaugeChart: React.FC<ITPGaugeChartProps> = ({ approved, total, maturity
             </Pie>
           </PieChart>
         </ResponsiveContainer>
-        
-        {/* 指针 */}
-        <div 
+
+        {/* Needle — height follows outerRadius instead of hardcoded 120px */}
+        <div
           className={styles.gaugeNeedle}
           style={{
             transform: `translateX(-50%) rotate(${needleAngle}deg)`,
+            height: outerRadius,
           }}
         >
           <div className={styles.needleLineRed}></div>
         </div>
       </div>
-      
-      {/* 数值显示 - 放在仪表盘下方 */}
+
       <div className={styles.gaugeValue}>
         <span className={styles.gaugeNumber} style={{ color: valueColor }}>{approved}</span>
-        <span className={styles.gaugeMaturity} style={{ color: valueColor }}>Maturity = {maturity}%</span>
+        <span className={styles.gaugeMaturity} style={{ color: valueColor }}>{t('dashboard.maturityValue', { value: maturity })}</span>
       </div>
     </div>
   );
-};
+});
 
+ITPGaugeChart.displayName = 'ITPGaugeChart';
 export default ITPGaugeChart;

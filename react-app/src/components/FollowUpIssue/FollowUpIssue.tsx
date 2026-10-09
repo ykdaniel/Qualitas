@@ -1,20 +1,55 @@
+import { useDraftGuard } from '../Shared/LeaveGuard';
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { Clock, CheckCircle2, BarChart3, Search } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
-import { useContractors } from '../../context/ContractorsContext';
-import { useNCR } from '../../context/NCRContext';
-import { useOBS } from '../../context/OBSContext';
-import { useNOI } from '../../context/NOIContext';
-import { useITR } from '../../context/ITRContext';
-import { useITP } from '../../context/ITPContext';
-import { usePQP } from '../../context/PQPContext';
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { useContractorsStore } from '../../store/contractorsStore';
+import { useNCRStore } from '../../store/ncrStore';
+import { useOBSStore } from '../../store/obsStore';
+import { useNOIStore } from '../../store/noiStore';
+import { useITRStore } from '../../store/itrStore';
+import { useITPStore } from '../../store/itpStore';
+import { usePQPStore } from '../../store/pqpStore';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './FollowUpIssue.module.css';
-import api from '../../services/api';
+import formStyles from '../Shared/FormShell.module.css';
+import shellStyles from '../Shared/ModuleShell.module.css';
+import api, { getUsers, formatUserLabel, type User as ApiUser } from '../../services/api';
+import { getProjectFilterParams, getCurrentProjectScopeId } from '../../utils/projectFilter';
+import { useProjectStore } from '../../store/projectStore';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
-import { BackButton } from '@/components/ui/BackButton';
+import { useFollowUpIssueStats } from '../../hooks/useFollowUpIssueStats';
+
+type StatusFilter = 'all' | 'open' | 'closed';
+
+const DonutGauge: React.FC<{ percent: number; size?: number }> = ({ percent, size = 28 }) => {
+  const stroke = 4;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference * (1 - Math.max(0, Math.min(100, percent)) / 100);
+  const cx = size / 2;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
+      <circle cx={cx} cy={cx} r={radius} fill="none" stroke="currentColor" strokeOpacity="0.25" strokeWidth={stroke} />
+      <circle
+        cx={cx}
+        cy={cx}
+        r={radius}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={stroke}
+        strokeLinecap="round"
+        strokeDasharray={circumference}
+        strokeDashoffset={offset}
+        transform={`rotate(-90 ${cx} ${cx})`}
+      />
+    </svg>
+  );
+};
 
 interface FollowUpIssueItem {
   id: string;
@@ -24,6 +59,7 @@ interface FollowUpIssueItem {
   status: string;
   priority: string;
   assignedTo: string;
+  assignedToUserId?: number | null;
   vendor?: string;
   dueDate: string;
   createdAt: string;
@@ -38,31 +74,52 @@ const FollowUpIssue: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const [manualIssues, setManualIssues] = useState<FollowUpIssueItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
 
   // 引入其他模組資料
-  const { ncrList } = useNCR();
-  const { obsList } = useOBS();
-  const { noiList } = useNOI();
-  const { itrList } = useITR();
-  const { itpList } = useITP();
-  const { pqpList } = usePQP();
+  const ncrList = useNCRStore(state => state.ncrList);
+  const obsList = useOBSStore(state => state.obsList);
+  const noiList = useNOIStore(state => state.noiList);
+  const itrList = useITRStore(state => state.itrList);
+  const itpList = useITPStore(state => state.itpList);
+  const pqpList = usePQPStore(state => state.pqpList);
+
+  // BACKLOG #28 (2026-09-29): this page's real FollowUp rows were fetched here directly, bypassing
+  // both `getProjectFilterParams()` (so the project selector never actually narrowed them) and
+  // `useFollowUpStore` (so the store's own race/scope-clearing fix — see itpStore.ts — never
+  // applied here either). Fixed the same way, locally: a per-mount fetch-sequence ref discards a
+  // stale response, and a cross-scope failure clears `manualIssues` instead of leaving the
+  // previous project's rows displayed with no error state. The NCR/OBS/NOI/ITR/ITP/PQP rows merged
+  // in below already come from their own (already-fixed) shared stores.
+  const currentScopeId = useProjectStore(s => s.currentProject?.id ?? '__all__');
+  const fetchSeqRef = useRef(0);
+  const dataScopeIdRef = useRef<string | null>(null);
 
   const fetchManualIssues = async () => {
+    const seq = ++fetchSeqRef.current;
+    const requestedScopeId = getCurrentProjectScopeId();
     setLoading(true);
     try {
-      const res = await api.get('/followup/');
+      const res = await api.get('/followup/', { params: { ...getProjectFilterParams() } });
+      if (seq !== fetchSeqRef.current) return;
+      dataScopeIdRef.current = requestedScopeId;
       setManualIssues(res.data);
     } catch (err) {
+      if (seq !== fetchSeqRef.current) return;
       console.error('Failed to fetch issues:', err);
+      if (requestedScopeId !== dataScopeIdRef.current) {
+        dataScopeIdRef.current = requestedScopeId;
+        setManualIssues([]);
+      }
     } finally {
-      setLoading(false);
+      if (seq === fetchSeqRef.current) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchManualIssues();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentScopeId]);
 
   // 合併所有 Open 狀態的項目
   const issues = useMemo(() => {
@@ -196,6 +253,7 @@ const FollowUpIssue: React.FC = () => {
   }, [manualIssues, ncrList, obsList, noiList, itrList, itpList, pqpList]);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
@@ -207,12 +265,16 @@ const FollowUpIssue: React.FC = () => {
     message: '',
   });
 
-  // 先套用日期範圍篩選與全域搜尋
   const filteredList = useMemo(() => {
     let result = [...issues];
 
+    if (statusFilter !== 'all') {
+      result = result.filter(issue => {
+        const s = (issue.status || '').toLowerCase();
+        return statusFilter === 'closed' ? s === 'closed' : s !== 'closed';
+      });
+    }
 
-    // Global Search
     if (searchQuery) {
       const lowerQuery = searchQuery.toLowerCase();
       result = result.filter(issue =>
@@ -226,49 +288,16 @@ const FollowUpIssue: React.FC = () => {
     }
 
     return result;
-  }, [issues, searchQuery]);
+  }, [issues, searchQuery, statusFilter]);
 
-  const statistics = useMemo(() => {
-    const statusCounts = {
-      opening: 0,
-      closed: 0,
-    };
-
-    issues.forEach((item) => {
-      const status = (item.status || 'Open').toLowerCase();
-      if (status === 'open') {
-        statusCounts.opening++;
-      } else if (status === 'closed') {
-        statusCounts.closed++;
-      }
-    });
-
-    const total = issues.length;
-    const openRate = total > 0 ? Math.round((statusCounts.opening / total) * 100) : 0;
-    const closedRate = total > 0 ? Math.round((statusCounts.closed / total) * 100) : 0;
-
-    return {
-      ...statusCounts,
-      total,
-      openRate,
-      closedRate,
-    };
-  }, [issues]);
-
-  const pieData = useMemo(() => [
-    { name: 'Open', value: statistics.opening, color: '#f59e0b' },
-    { name: 'Closed', value: statistics.closed, color: '#10b981' },
-  ], [statistics.opening, statistics.closed]);
+  const statistics = useFollowUpIssueStats(issues);
 
   const handleEdit = (id: string) => {
     setCurrentIssueId(id);
     setIsEditModalOpen(true);
   };
 
-  const handleViewDetails = (id: string) => {
-    setViewingIssueId(id);
-    setIsDetailsModalOpen(true);
-  };
+
 
   const handleAddNew = () => {
     setCurrentIssueId(null);
@@ -296,7 +325,7 @@ const FollowUpIssue: React.FC = () => {
       fetchManualIssues();
     } catch (err) {
       console.error('Failed to save issue:', err);
-      alert('儲存失敗');
+      toast.error(t('common.saveFailed') || '儲存失敗');
     }
   };
 
@@ -312,165 +341,106 @@ const FollowUpIssue: React.FC = () => {
         setDeleteModal({ isOpen: false, id: null, message: '' });
       } catch (err) {
         console.error('Failed to delete issue:', err);
-        alert('刪除失敗');
+        toast.error(t('common.deleteFailed') || '刪除失敗');
       }
     }
   };
 
+  const chips: { id: StatusFilter; label: string; count: number }[] = [
+    { id: 'all', label: t('common.all') || 'All', count: statistics.total },
+    { id: 'open', label: t('status.open') || 'Open', count: statistics.opening },
+    { id: 'closed', label: t('status.closed') || 'Closed', count: statistics.closed },
+  ];
+
+  const summary = [
+    {
+      key: 'open',
+      label: t('status.open') || 'Open',
+      value: statistics.opening,
+      icon: <Clock size={18} strokeWidth={1.8} />,
+      accent: '#c8753f',
+    },
+    {
+      key: 'closed',
+      label: t('status.closed') || 'Closed',
+      value: statistics.closed,
+      icon: <CheckCircle2 size={18} strokeWidth={1.8} />,
+      accent: '#7a8f5a',
+    },
+    {
+      key: 'total',
+      label: t('common.total') || 'Total',
+      value: statistics.total,
+      icon: <BarChart3 size={18} strokeWidth={1.8} />,
+      accent: '#8a6a3a',
+    },
+    {
+      key: 'rate',
+      label: t('noi.stats.openRate') || 'Open Rate',
+      value: `${statistics.openRate}%`,
+      icon: <DonutGauge percent={statistics.openRate} />,
+      accent: '#b8945a',
+    },
+  ];
+
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <BackButton />
-          <h1>{t('followup.title')}</h1>
-        </div>
-        <div className={styles.headerRight}>
-          <input
-            type="text"
-            className={styles.searchInput}
-            placeholder={t('common.search')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-      </div>
-
-      <div className={styles.summaryRow}>
-        <div className={styles.summarySection}>
-          <h2 className={styles.summaryTitle}>{t('followup.statsTitle')}</h2>
-          <div className={styles.statusStatsGrid}>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('status.open')}</div>
-                <div className={styles.statValue}>{statistics.opening}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.grayIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('status.closed')}</div>
-                <div className={styles.statValue}>{statistics.closed}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.grayIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('common.total')}</div>
-                <div className={styles.statValue}>{statistics.total}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('noi.stats.openRate')}</div>
-                <div className={styles.statValue}>{statistics.opening} ({statistics.openRate}%)</div>
-              </div>
+    <div className={shellStyles.container}>
+      <section className={shellStyles.summaryGrid}>
+        {summary.map((card) => (
+          <div
+            key={card.key}
+            className={shellStyles.summaryCard}
+            style={{ '--accent': card.accent } as React.CSSProperties}
+          >
+            <div className={shellStyles.summaryIcon}>{card.icon}</div>
+            <div className={shellStyles.summaryBody}>
+              <div className={shellStyles.summaryLabel}>{card.label}</div>
+              <div className={shellStyles.summaryValue}>{card.value}</div>
             </div>
           </div>
-        </div>
-        <div className={styles.chartSection}>
-          <div className={styles.pieChartInner}>
-            {statistics.total > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart margin={{ top: 4, right: 24, bottom: 4, left: 24 }}>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={40}
-                    outerRadius={64}
-                    paddingAngle={2}
-                    dataKey="value"
-                    label={({ cx, cy, midAngle, outerRadius, name, value, percent }) => {
-                      const RADIAN = Math.PI / 180;
-                      const extendLen = 14;   // 徑向延伸長度
-                      const hLen = 24;       // 水平轉折後長度
-                      const sx = cx + outerRadius * Math.cos(-midAngle * RADIAN);
-                      const sy = cy + outerRadius * Math.sin(-midAngle * RADIAN);
-                      const bx = sx + extendLen * Math.cos(-midAngle * RADIAN);
-                      const by = sy + extendLen * Math.sin(-midAngle * RADIAN);
-                      const toRight = bx >= cx;
-                      const tx = bx + (toRight ? hLen : -hLen);
-                      const pct = Math.round((percent ?? 0) * 100);
-                      return (
-                        <g>
-                          <polyline
-                            points={`${sx},${sy} ${bx},${by} ${tx},${by}`}
-                            fill="none"
-                            stroke="#9ca3af"
-                            strokeWidth={1}
-                          />
-                          <text
-                            x={tx}
-                            y={by}
-                            textAnchor={toRight ? 'start' : 'end'}
-                            dominantBaseline="middle"
-                            fill="#1f2937"
-                            fontSize={13}
-                            fontWeight={500}
-                          >
-                            <tspan x={tx} dy="-0.4em" display="block">{name}</tspan>
-                            <tspan x={tx} dy="1.2em" fontSize={12} fill="#6b7280" fontWeight={400}>
-                              {value} 筆 · {pct}%
-                            </tspan>
-                          </text>
-                        </g>
-                      );
-                    }}
-                    labelLine={false}
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className={styles.pieChartEmpty}>{t('common.noData')}</div>
-            )}
-          </div>
-        </div>
-      </div>
+        ))}
+      </section>
 
-      <div className={styles.content}>
-        <DataTable
-          title={t('followup.listTitle')}
-          actions={
+      <div className={shellStyles.toolbar}>
+        <div className={shellStyles.chipGroup}>
+          {chips.map((chip) => (
             <button
-              className={styles.addNewButton}
-              onClick={handleAddNew}
+              key={chip.id}
+              type="button"
+              className={`${shellStyles.chip} ${statusFilter === chip.id ? shellStyles.chipActive : ''}`}
+              onClick={() => setStatusFilter(chip.id)}
             >
-              {t('followup.addNew')}
+              {chip.label}
+              <span className={shellStyles.chipCount}>{chip.count}</span>
             </button>
-          }
-          columns={createColumns(handleEdit, handleViewDetails, handleDeleteClick, navigate, t)}
+          ))}
+        </div>
+        <div className={shellStyles.toolbarRight}>
+          <div className={shellStyles.searchWrap}>
+            <Search size={15} className={shellStyles.searchIcon} strokeWidth={2} />
+            <input
+              type="text"
+              className={shellStyles.searchInput}
+              placeholder={t('common.search')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+            {t('followup.addNew')}
+          </button>
+        </div>
+      </div>
+
+      <div className={shellStyles.content}>
+        <DataTable
+          columns={createColumns(handleDeleteClick, navigate, t)}
           data={filteredList}
           searchKey=""
-          searchPlaceholder={t('common.search')}
           getRowClassName={(row) =>
-            (row.status || '').toLowerCase() === 'closed'
-              ? 'bg-emerald-100/50 text-gray-500 hover:bg-emerald-200/50'
-              : ''
+            (row.status || '').toLowerCase() === 'closed' ? shellStyles.rowDim : ''
           }
+          onRowClick={(row) => handleEdit(row.id)}
         />
       </div>
 
@@ -517,16 +487,24 @@ interface FollowUpIssueDetailModalProps {
   onClose: () => void;
 }
 
-const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ issueId, existingItem, onSave, onClose }) => {
+const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ existingItem, onSave, onClose }) => {
   const { t } = useLanguage();
-  const { getActiveContractors } = useContractors();
+  const { getActiveContractors } = useContractorsStore();
   const contractors = getActiveContractors();
+
+  const ncrList = useNCRStore(state => state.ncrList);
+  const obsList = useOBSStore(state => state.obsList);
+  const noiList = useNOIStore(state => state.noiList);
+  const itrList = useITRStore(state => state.itrList);
+  const itpList = useITPStore(state => state.itpList);
+  const pqpList = usePQPStore(state => state.pqpList);
   const [formData, setFormData] = useState<Partial<FollowUpIssueItem>>({
     issueNo: existingItem?.issueNo || '',
     title: existingItem?.title || '',
     description: existingItem?.description || '',
     status: existingItem?.status || 'Open',
     assignedTo: existingItem?.assignedTo || '',
+    assignedToUserId: existingItem?.assignedToUserId ?? null,
     vendor: existingItem?.vendor || '',
     dueDate: existingItem?.dueDate || '',
     action: existingItem?.action || '',
@@ -534,8 +512,32 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ iss
   // ... rest of modal logic
   const actionTextareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Users for the assignedTo person picker — same pattern as NCR/OBS/OSD's
+  // own assignedTo pickers (getUsers() requires iam:user:view; if the
+  // current user lacks it this just stays empty, matching those modules'
+  // existing non-fatal degrade).
+  const [users, setUsers] = useState<ApiUser[]>([]);
+  useEffect(() => {
+    let alive = true;
+    getUsers().then(u => { if (alive) setUsers(u); }).catch(() => {/* non-fatal */});
+    return () => { alive = false; };
+  }, []);
+
   const handleFieldChange = (field: keyof FollowUpIssueItem, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleAssigneeChange = (userId: string) => {
+    if (!userId) {
+      setFormData(prev => ({ ...prev, assignedToUserId: null, assignedTo: '' }));
+      return;
+    }
+    const picked = users.find(u => u.id === Number(userId));
+    setFormData(prev => ({
+      ...prev,
+      assignedToUserId: Number(userId),
+      assignedTo: picked?.full_name || picked?.username || '',
+    }));
   };
 
   const handleInsertDate = () => {
@@ -561,58 +563,85 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ iss
     }, 0);
   };
 
-  const handleSave = () => {
-    onSave(formData);
-    onClose();
+  const [saving, setSaving] = useState(false);
+  const leaveGuard = useDraftGuard(formData, saving, existingItem?.status !== 'Closed');
+  const requestClose = () => leaveGuard.requestClose(onClose);
+  const handleSave = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await onSave(formData);
+      onClose();
+    } catch (err) {
+      toast.error((err as Error)?.message || 'Save failed');
+    } finally { setSaving(false); }
   };
 
+  // A Closed FollowUp is an unconditional dead end backend-side (see
+  // followup_service.py::update_followup) — lock the form the same way so
+  // the UI doesn't show editable fields that would just 400 on save.
+  const readOnly = existingItem?.status === 'Closed';
+
   return (
-    <div className={styles.modalOverlay}>
-      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.modalHeader}>
+    <div className={formStyles.modalOverlay}>
+      <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
+        <div className={formStyles.modalHeader}>
           <h2>{existingItem ? t('followup.editTitle') : t('followup.addTitle')}</h2>
-          <button className={styles.closeButton} onClick={onClose}>×</button>
+          <button className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={requestClose}>×</button>
         </div>
-        <div className={styles.modalBody}>
-          <div className={styles.formSections}>
-            <div className={styles.formSection}>
-              <h3 className={styles.sectionTitle}>{t('common.baseInfo')}</h3>
-              <div className={styles.formGrid}>
-                <div className={styles.formGroup}>
+        <div className={formStyles.modalBody}>
+          <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
+          <div className={formStyles.formSections}>
+            <div className={formStyles.formSection}>
+              <h3 className={formStyles.sectionTitle}>{t('common.baseInfo')}</h3>
+              <div className={formStyles.formGrid}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.issueNo')}</label>
                   <input
                     type="text"
-                    className={styles.formInput}
-                    value={formData.issueNo || ''}
-                    onChange={(e) => handleFieldChange('issueNo', e.target.value)}
-                    readOnly={!!existingItem}
-                    style={existingItem ? { backgroundColor: '#f3f4f6', cursor: 'not-allowed' } : {}}
+                    className={formStyles.formInput}
+                    value={formData.issueNo || t('form.autoGenerated')}
+                    readOnly
+                    style={{ backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: formData.issueNo ? '#000000' : '#666666' }}
                   />
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.status')}</label>
                   <select
-                    className={styles.formSelect}
+                    className={formStyles.formSelect}
                     value={formData.status || 'Open'}
                     onChange={(e) => handleFieldChange('status', e.target.value)}
                   >
                     <option value="Open">Open</option>
                     <option value="Closed">Closed</option>
+                    <option value="Void">{t('status.void') || 'Void'}</option>
                   </select>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.assignedTo')}</label>
-                  <input
-                    type="text"
-                    className={styles.formInput}
-                    value={formData.assignedTo || ''}
-                    onChange={(e) => handleFieldChange('assignedTo', e.target.value)}
-                  />
+                  <select
+                    className={formStyles.formSelect}
+                    value={formData.assignedToUserId ?? ''}
+                    onChange={(e) => handleAssigneeChange(e.target.value)}
+                  >
+                    <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
+                    {existingItem?.assignedToUserId != null && !users.some(u => u.id === existingItem?.assignedToUserId) && (
+                      <option value={existingItem?.assignedToUserId} disabled>{`原指派 / Existing assignee #${existingItem?.assignedToUserId}`}</option>
+                    )}
+                    {users.filter(u => u.is_active || u.id === existingItem?.assignedToUserId).map(u => (
+                      <option key={u.id} value={u.id} disabled={!u.is_active}>{formatUserLabel(u)}{!u.is_active ? '（已停用 / Inactive）' : ''}</option>
+                    ))}
+                  </select>
+                  {!formData.assignedToUserId && formData.assignedTo && (
+                    <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0' }}>
+                      {t('followup.legacyAssignedToHint', { name: formData.assignedTo })}
+                    </p>
+                  )}
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.vendor')}</label>
                   <select
-                    className={styles.formSelect}
+                    className={formStyles.formSelect}
                     value={formData.vendor || ''}
                     onChange={(e) => handleFieldChange('vendor', e.target.value)}
                   >
@@ -622,10 +651,10 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ iss
                     ))}
                   </select>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.sourceModule')}</label>
                   <select
-                    className={styles.formSelect}
+                    className={formStyles.formSelect}
                     value={formData.sourceModule || ''}
                     onChange={(e) => handleFieldChange('sourceModule', e.target.value)}
                   >
@@ -639,17 +668,34 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ iss
                     <option value="Other">Other</option>
                   </select>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.sourceRef')}</label>
-                  <input
-                    type="text"
-                    className={styles.formInput}
-                    value={formData.sourceReferenceNo || ''}
-                    onChange={(e) => handleFieldChange('sourceReferenceNo', e.target.value)}
-                    placeholder="e.g. NCR-2026-001"
-                  />
+                  {formData.sourceModule && formData.sourceModule !== 'Other' ? (
+                    <select
+                      className={formStyles.formSelect}
+                      value={formData.sourceReferenceNo || ''}
+                      onChange={(e) => handleFieldChange('sourceReferenceNo', e.target.value)}
+                    >
+                      <option value="">-- {t('common.selectPlaceholder')} --</option>
+                      {formData.sourceModule === 'NCR' && ncrList.map((n: any) => <option key={n.id} value={n.referenceNo || n.documentNumber}>{n.referenceNo || n.documentNumber}</option>)}
+                      {formData.sourceModule === 'OBS' && obsList.map((o: any) => <option key={o.id} value={o.referenceNo || o.documentNumber}>{o.referenceNo || o.documentNumber}</option>)}
+                      {formData.sourceModule === 'NOI' && noiList.map((n: any) => <option key={n.id} value={n.referenceNo || n.documentNumber}>{n.referenceNo || n.documentNumber}</option>)}
+                      {formData.sourceModule === 'ITR' && itrList.map((i: any) => <option key={i.id} value={i.referenceNo || i.documentNumber}>{i.referenceNo || i.documentNumber}</option>)}
+                      {formData.sourceModule === 'ITP' && itpList.map((i: any) => <option key={i.id} value={i.referenceNo || i.documentNumber}>{i.referenceNo || i.documentNumber}</option>)}
+                      {formData.sourceModule === 'PQP' && pqpList.map((p: any) => <option key={p.id} value={p.referenceNo || p.documentNumber}>{p.referenceNo || p.documentNumber}</option>)}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      className={formStyles.formInput}
+                      value={formData.sourceReferenceNo || ''}
+                      onChange={(e) => handleFieldChange('sourceReferenceNo', e.target.value)}
+                      placeholder={formData.sourceModule === 'Other' ? "Enter external reference..." : "Select source module first"}
+                      disabled={!formData.sourceModule}
+                    />
+                  )}
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.createdDate')}</label>
                   <input
                     type={existingItem?.createdAt ? 'date' : 'text'}
@@ -659,13 +705,13 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ iss
                     onBlur={(e) => {
                       if (!e.target.value) e.target.type = 'text';
                     }}
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={existingItem?.createdAt || ''}
                     readOnly
                     style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
                   />
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.dueDate')}</label>
                   <input
                     type={formData.dueDate ? 'date' : 'text'}
@@ -675,36 +721,26 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ iss
                     onBlur={(e) => {
                       if (!e.target.value) e.target.type = 'text';
                     }}
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={formData.dueDate || ''}
                     onChange={(e) => handleFieldChange('dueDate', e.target.value)}
                   />
                 </div>
-                <div className={styles.formGroupFull}>
+                <div className={formStyles.formGroupFull}>
                   <label>{t('followup.description')}</label>
                   <textarea
-                    className={styles.formTextarea}
+                    className={formStyles.formTextarea}
                     value={formData.description || ''}
                     onChange={(e) => handleFieldChange('description', e.target.value)}
                     rows={4}
                   />
                 </div>
-                <div className={styles.formGroupFull}>
+                <div className={formStyles.formGroupFull}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                     <label>{t('followup.action')}</label>
-                    <button
+                    <button className={actionStyles.compact}
                       type="button"
                       onClick={handleInsertDate}
-                      style={{
-                        padding: '6px 12px',
-                        backgroundColor: '#4CAF50',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '14px',
-                        fontWeight: '500',
-                      }}
                       onMouseOver={(e) => {
                         e.currentTarget.style.backgroundColor = '#45a049';
                       }}
@@ -717,7 +753,7 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ iss
                   </div>
                   <textarea
                     ref={actionTextareaRef}
-                    className={styles.formTextarea}
+                    className={formStyles.formTextarea}
                     value={formData.action || ''}
                     onChange={(e) => handleFieldChange('action', e.target.value)}
                     rows={4}
@@ -726,15 +762,22 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ iss
               </div>
             </div>
           </div>
+          </fieldset>
         </div>
-        <div className={styles.modalActions}>
-          <button className={styles.saveButton} onClick={handleSave}>
-            {t('common.save')}
-          </button>
-          <button className={styles.cancelButton} onClick={onClose}>
-            {t('common.cancel')}
-          </button>
-        </div>
+              <FormActions
+                  cancel={<>
+                      <button className={actionStyles.secondary} onClick={requestClose}>
+                          {t('common.cancel')}
+                      </button>
+                  </>}
+                  primary={<>
+                      {!readOnly && (
+                          <button className={actionStyles.primary} onClick={handleSave} disabled={saving}>
+                              {t('common.save')}
+                          </button>
+                      )}
+                  </>}
+              />
       </div>
     </div>
   );
@@ -746,7 +789,7 @@ interface FollowUpIssueDetailsViewModalProps {
   onClose: () => void;
 }
 
-const FollowUpIssueDetailsViewModal: React.FC<FollowUpIssueDetailsViewModalProps> = ({ issueId, issueItem, onClose }) => {
+const FollowUpIssueDetailsViewModal: React.FC<FollowUpIssueDetailsViewModalProps> = ({ issueItem, onClose }) => {
   const { t } = useLanguage();
   const handlePrint = () => {
     window.print();
@@ -757,57 +800,61 @@ const FollowUpIssueDetailsViewModal: React.FC<FollowUpIssueDetailsViewModalProps
   }
 
   return (
-    <div className={styles.modalOverlay}>
-      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.modalHeader}>
+    <div className={formStyles.modalOverlay}>
+      <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
+        <div className={formStyles.modalHeader}>
           <h2>{t('followup.detailsTitle')}</h2>
-          <button className={styles.closeButton} onClick={onClose}>×</button>
+          <button className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={onClose}>×</button>
         </div>
-        <div className={styles.modalBody}>
-          <div className={styles.formSections}>
-            <div className={styles.formSection}>
-              <h3 className={styles.sectionTitle}>{t('common.baseInfo')}</h3>
-              <div className={styles.formGrid}>
-                <div className={styles.formGroup}>
+        <div className={formStyles.modalBody}>
+          <div className={formStyles.formSections}>
+            <div className={formStyles.formSection}>
+              <h3 className={formStyles.sectionTitle}>{t('common.baseInfo')}</h3>
+              <div className={formStyles.formGrid}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.issueNo')}</label>
-                  <div className={styles.readOnlyField}>{issueItem.issueNo || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{issueItem.issueNo || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.status')}</label>
-                  <div className={styles.readOnlyField}>{issueItem.status || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{issueItem.status || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.assignedTo')}</label>
-                  <div className={styles.readOnlyField}>{issueItem.assignedTo || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{issueItem.assignedTo || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.createdDate')}</label>
-                  <div className={styles.readOnlyField}>{issueItem.createdAt || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{issueItem.createdAt || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.dueDate')}</label>
-                  <div className={styles.readOnlyField}>{issueItem.dueDate || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{issueItem.dueDate || '-'}</div>
                 </div>
-                <div className={styles.formGroupFull}>
+                <div className={formStyles.formGroupFull}>
                   <label>{t('followup.description')}</label>
-                  <div className={styles.readOnlyField}>{issueItem.description || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{issueItem.description || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('followup.action')}</label>
-                  <div className={styles.readOnlyField}>{issueItem.action || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{issueItem.action || '-'}</div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-        <div className={styles.modalActions}>
-          <button className={styles.printButton} onClick={handlePrint}>
-            {t('common.print')}
-          </button>
-          <button className={styles.cancelButton} onClick={onClose}>
-            {t('common.close')}
-          </button>
-        </div>
+              <FormActions
+                  tools={<>
+                      <button className={actionStyles.secondary} onClick={handlePrint}>
+                          {t('common.print')}
+                      </button>
+                  </>}
+                  cancel={<>
+                      <button className={actionStyles.secondary} onClick={onClose}>
+                          {t('common.close')}
+                      </button>
+                  </>}
+              />
       </div>
     </div>
   );

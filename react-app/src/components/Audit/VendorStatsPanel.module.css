@@ -1,0 +1,177 @@
+.panel {
+  background: #ffffff;
+  border: 1px solid rgba(184, 148, 90, 0.22);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  max-height: 520px;
+  overflow: hidden;
+}
+
+.panelHeader {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(184, 148, 90, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 70px;
+  justify-content: space-between;
+}
+
+.headerTitleGroup {
+  min-height: 32px;
+}
+
+.headerTitleGroup {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panelTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: #2d2a24;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.badge {
+  background: linear-gradient(135deg, #b8945a 0%, #8a6a3a 100%);
+  color: #faf7f1;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(138, 106, 58, 0.22);
+}
+
+.panelSubtitle {
+  margin: 0;
+  font-size: 13px;
+  color: #8b8275;
+  font-weight: 500;
+}
+
+/* Vendor List — wrapped in a frame matching the schedule matrix container so rows align */
+.vendorList {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid rgba(184, 148, 90, 0.18);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.vendorList::-webkit-scrollbar {
+  width: 6px;
+}
+
+.vendorList::-webkit-scrollbar-track {
+  background: rgba(184, 148, 90, 0.05);
+  border-radius: 4px;
+}
+
+.vendorList::-webkit-scrollbar-thumb {
+  background: rgba(184, 148, 90, 0.4);
+  border-radius: 4px;
+}
+
+.vendorList::-webkit-scrollbar-thumb:hover {
+  background: rgba(184, 148, 90, 0.65);
+}
+
+.vendorItem {
+  padding: 0 14px;
+  height: 44px;
+  background: #ffffff;
+  border-bottom: 1px solid rgba(184, 148, 90, 0.18);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.vendorItem:last-child {
+  border-bottom: none;
+}
+
+.vendorItem:hover {
+  border-color: #b8945a;
+  background: rgba(184, 148, 90, 0.04);
+}
+
+.vendorItem.active {
+  background: rgba(184, 148, 90, 0.08);
+  border-color: #b8945a;
+}
+
+.vendorItem.pastUnfinished {
+  background: #fdecec;
+}
+
+.vendorItem.pastUnfinished:hover {
+  background: #fbdcdc;
+}
+
+.vendorItem.pastUnfinished.active {
+  background: #fbdcdc;
+}
+
+.vendorHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.vendorName {
+  font-weight: 600;
+  color: #4a4238;
+  font-size: 13px;
+}
+
+.auditCount {
+  font-weight: 700;
+  color: #2d2a24;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Progress Chart — hidden in compact mode for row-alignment with the schedule matrix */
+.chartTrack {
+  display: none;
+  height: 5px;
+  background: rgba(184, 148, 90, 0.12);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.chartBar {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #c8a97a, #b8945a);
+  transition: width 0.4s ease, background 0.2s ease;
+}
+
+.vendorItem:hover .chartBar {
+  background: linear-gradient(90deg, #b8945a, #8a6a3a);
+}
+
+.vendorItem.active .chartBar {
+  background: linear-gradient(90deg, #8a6a3a, #6b502b);
+}
+
+.allBar {
+  background: linear-gradient(90deg, #4a4238, #2d2a24);
+}
+
+.vendorItem.active .allBar {
+  background: linear-gradient(90deg, #2d2a24, #1a1814);
+}

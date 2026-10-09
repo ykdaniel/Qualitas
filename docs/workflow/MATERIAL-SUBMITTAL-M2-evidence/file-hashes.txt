@@ -1,0 +1,57 @@
+M2 source hashes before the full-suite run (2026-10-08T13:14:49Z); base commit 056c245ca3ff630f74bfc7af86233e7cbc7dc51b
+61f03bdab444415320fae143d6e5570ca320823c652a39fabdd67e00dee89e8c  backend/models.py
+a0f2c9df982c93d149937a8ac8142423bf94eb2b42b2cdf9f0adb191fd60b2e6  backend/db_migrations.py
+db3a33999fbd611f329e2bd28e73c2523e590344e0b5df5b598fad9d3294666f  backend/schemas.py
+7cabd8e82c37449962af2f681bf364a03e45c5beb4abfc84e81f41d0ed7802a9  backend/main.py
+605887fcd9287fa778b50609c597609f7b9632a880185b8135669e8ece53bf39  backend/core/perms.py
+c5000f84381be526231afd067d70846bc8904c5338dce6f65d6c2599fcb0e026  backend/core/validators.py
+aca2d0fd5a3c6c12d2ee61886eb413b72c0f20cee055b96fe515d69e59831e95  backend/core/attachment_access.py
+c591d92dbf602ae8deb6a153d6f95f00782c6bc766a75f10c903a087b5dcbca3  backend/core/scope.py
+0f978bdd5d3eeedb3b457c94b1c359b4fa723fd1322d86099a3ff216db182bfb  backend/core/utils.py
+d4c409706352fc1cafc57f8f3725d00116e440561534fedcdef59fe4ac475fd5  backend/core/material_access.py
+71034c8e9216f97d7ec1f869203be7e74135cd0546c0f9b2227e6d2081bcfa35  backend/routers/file_router.py
+8684e15fd9eaed7a882860c2a5b6ca7c0b4404ae8de252e93662af7b27311f61  backend/routers/settings.py
+5a0c29192bd61c02d529bf9d54253e8bf4aebe067522a398b90f981f64aae522  backend/routers/materials.py
+278b9e82886ce0dc0ae5eb07a789c2dffb0ce539ef4d1546002e46e69046818a  backend/routers/material_submittals.py
+113e9c2a4d749d4492133fb160cda06551d197e69395d86ba7ca5c0557d7179a  backend/services/material_service.py
+379ceffda3f014a041769ed41e286ec207ba166361e861cb820c0d8151cd5d32  backend/services/material_submittal_service.py
+c5c5a3c88603fac1e964b1aa6bf79a9fbb4a976b235e2d6030aaf8921d675d94  backend/repositories/material_repository.py
+a08c68f83b980dcbb9a51e08352c1ea5ba7f4052e6b24483b65495284930b592  backend/tests/test_materials_http.py
+047e2dfa6cfbfced654409c2d117b7439d4861a7aed5f15c56648393614b02a9  backend/tests/test_material_schema_migration.py
+6039cf8f0b70473d8f50e74a86a1c7e5a439c60596e0504f3713ddfb802d9df8  backend/tests/test_material_submittals_http.py
+
+CRLF files (must stay fully CRLF):
+backend/core/perms.py lines=210 crlf=210
+backend/core/validators.py lines=395 crlf=395
+backend/db_migrations.py lines=1680 crlf=1680
+backend/routers/file_router.py lines=487 crlf=487
+backend/routers/settings.py lines=89 crlf=89
+backend/core/utils.py lines=638 crlf=638
+
+git diff --stat -- backend (core/docx_builder.py = separate reviewed DOCX-PATH-GUARD change, not M2):
+ backend/core/attachment_access.py |  32 ++++-
+ backend/core/docx_builder.py      |   7 +-
+ backend/core/perms.py             |   8 ++
+ backend/core/scope.py             |   1 +
+ backend/core/utils.py             |   1 +
+ backend/core/validators.py        |   2 +
+ backend/db_migrations.py          | 212 ++++++++++++++++++++++++++++
+ backend/main.py                   |   5 +-
+ backend/models.py                 | 150 +++++++++++++++++++-
+ backend/routers/file_router.py    |  43 +++++-
+ backend/routers/settings.py       |   1 +
+ backend/schemas.py                | 281 +++++++++++++++++++++++++++++++++++++-
+ 12 files changed, 731 insertions(+), 12 deletions(-)
+
+Post-run hash check 2026-10-08T13:58:56Z: all 20 source hashes identical to the pre-run list
+
+After the matrix-coverage round (2026-10-08T14:18:11Z):
+- the 20 files above: identical to the pre-full-suite hashes — no product or M2-test change in this round
+- changed in this round (test only):
+43e20f8d9dc51cd65ca2c991a50d37502913d8b19820fc6e9be8d813404329dc  backend/tests/test_attachment_authorization_http.py
+  (pre-change copy sha256: a67f643aade5f1a32ccf10fe3e571b318e8808519e14298618eb7c4abba0f814; git HEAD version sha256: a67f643aade5f1a32ccf10fe3e571b318e8808519e14298618eb7c4abba0f814)
+
+Plan A round (2026-10-08T14:46:57Z):
+- the 20 product/M2 files: identical vs the pre-full-suite hashes (no product change)
+- test changed again (vendor cases split per endpoint):
+d37d5a8d8c67471e17d06c0be770d41c453ec529f92e14e07f1df0911080ce2c  backend/tests/test_attachment_authorization_http.py

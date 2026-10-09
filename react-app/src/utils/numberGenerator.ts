@@ -1,4 +1,4 @@
-import { Contractor } from '../context/ContractorsContext';
+import { Contractor } from '../store/contractorsStore';
 
 /**
  * 統一的編號生成工具函數
@@ -41,7 +41,7 @@ export const generateDocumentNumber = (
   contractorName: string,
   contractors: Contractor[],
   existingNumbers: string[],
-  excludeId?: string
+  _excludeId?: string
 ): string => {
   const abbreviation = getContractorAbbreviation(contractorName, contractors);
 

@@ -1,33 +1,37 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Line, LineChart, LabelList } from 'recharts';
-import { useNCR } from '../../context/NCRContext';
-import { useDashboardFilter } from '../../context/DashboardFilterContext';
-import { useMemo } from 'react';
+import { Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Line, LabelList } from 'recharts';
+import React, { useMemo } from 'react';
+import { useNCRStore } from '../../store/ncrStore';
+import { useDashboardFilterStore } from '../../store/dashboardFilterStore';
+import { isClosedStatus, isOutstandingStatus, isVoidStatus, buildParetoCumulative } from '../../utils/statusBuckets';
 import styles from './Dashboard.module.css';
 
-const NCRParetoChart: React.FC = () => {
-  const { ncrList } = useNCR();
-  const { selectedVendor } = useDashboardFilter();
+const NCRParetoChart: React.FC = React.memo(() => {
+  const ncrList = useNCRStore(state => state.ncrList);
+  const selectedVendor = useDashboardFilterStore(state => state.selectedVendor);
 
   // 计算按承包商分组的NCR统计数据
   const paretoData = useMemo(() => {
     // 根据选中的厂商过滤数据
-    const filteredList = selectedVendor === 'all' 
-      ? ncrList 
+    const filteredList = selectedVendor === 'all'
+      ? ncrList
       : ncrList.filter(item => item.vendor === selectedVendor);
-    
-    // 按承包商分组统计
-    const contractorStats: Record<string, { total: number; open: number; closed: number }> = {};
+
+    // 按承包商分组统计。open/closed 判斷改用共用的 utils/statusBuckets.ts（與
+    // NCRStatsCard.tsx／useDashboardStats.ts 同一來源，2026-09-29 統一）。`total` 仍包含 Void
+    // （供逐筆核對用，圖表本身不直接顯示這個欄位），`voided` 另外記錄。
+    const contractorStats: Record<string, { total: number; open: number; closed: number; voided: number }> = {};
 
     filteredList.forEach(ncr => {
       const contractor = ncr.vendor || 'Unknown';
       if (!contractorStats[contractor]) {
-        contractorStats[contractor] = { total: 0, open: 0, closed: 0 };
+        contractorStats[contractor] = { total: 0, open: 0, closed: 0, voided: 0 };
       }
       contractorStats[contractor].total++;
-      const status = (ncr.status || '').toLowerCase();
-      if (status === 'closed') {
+      if (isClosedStatus(ncr.status)) {
         contractorStats[contractor].closed++;
-      } else {
+      } else if (isVoidStatus(ncr.status)) {
+        contractorStats[contractor].voided++;
+      } else if (isOutstandingStatus(ncr.status)) {
         contractorStats[contractor].open++;
       }
     });
@@ -42,48 +46,50 @@ const NCRParetoChart: React.FC = () => {
       }))
       .sort((a, b) => b.total - a.total);
 
-    // 计算总NCR数
-    const totalNCRs = sortedData.reduce((sum, item) => sum + item.total, 0);
-
-    // 计算累积百分比
-    let cumulative = 0;
-    const dataWithCumulative = sortedData.map(item => {
-      cumulative += item.total;
-      const cumulativePercent = totalNCRs > 0 ? Math.round((cumulative / totalNCRs) * 100) : 0;
-      return {
-        ...item,
-        cumulativePercent,
-      };
-    });
-
-    return dataWithCumulative;
+    // 累積比例分母排除 Void（2026-09-29 使用者決定，見 utils/statusBuckets.ts::buildParetoCumulative
+    // 的完整說明與單元測試）：柱狀圖只畫 Open／Closed，累積線的範圍須與柱狀圖一致，否則最後一根
+    // 柱子的柱高會低於累積線標示的 100%。
+    return buildParetoCumulative(sortedData);
   }, [ncrList, selectedVendor]);
+
+  // Recharts' "nice tick" rounding can inflate the left axis well past the
+  // actual max bar (observed: a max of 2 rendering against a 0-4 axis), and
+  // does so inconsistently between otherwise-identical charts. Pass explicit
+  // integer ticks so the axis always matches the data exactly.
+  const leftAxisMax = Math.max(1, Math.ceil(Math.max(0, ...paretoData.map(d => d.open + d.closed)) * 1.15));
+  const leftAxisTicks = useMemo(
+    () => Array.from({ length: leftAxisMax + 1 }, (_, i) => i),
+    [leftAxisMax]
+  );
 
   return (
     <div className={styles.paretoChartContainer}>
-      <h3 className={styles.paretoTitle}>NCR Status</h3>
-      <ResponsiveContainer width="100%" height={400}>
-        <ComposedChart data={paretoData} margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
+      <ResponsiveContainer width="100%" height={460}>
+        <ComposedChart data={paretoData} margin={{ top: 16, right: 30, left: 20, bottom: 8 }}>
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis 
-            dataKey="contractor" 
+          <XAxis
+            dataKey="contractor"
             angle={-45}
             textAnchor="end"
-            height={80}
+            height={120}
             interval={0}
-            dy={10}
+            tickMargin={16}
+            tick={{ fill: '#2d2a24', fontSize: 12 }}
           />
-          <YAxis 
+          <YAxis
             yAxisId="left"
+            allowDecimals={false}
+            domain={[0, leftAxisMax]}
+            ticks={leftAxisTicks}
             label={{ value: 'NCR Count', angle: -90, position: 'insideLeft' }}
           />
-          <YAxis 
+          <YAxis
             yAxisId="right"
             orientation="right"
             domain={[0, 100]}
             label={{ value: 'Cumulative %', angle: 90, position: 'insideRight' }}
           />
-          <Tooltip 
+          <Tooltip
             formatter={(value: any, name: string) => {
               if (name === 'cumulativePercent') {
                 return [`${value}%`, 'Cumulative %'];
@@ -91,55 +97,64 @@ const NCRParetoChart: React.FC = () => {
               return [value, name];
             }}
           />
-          <Legend />
-          <Bar yAxisId="left" dataKey="closed" stackId="a" fill="#10b981" name="Closed">
-            <LabelList 
-              dataKey="closed" 
+          <Legend
+            iconType="circle"
+            iconSize={10}
+            wrapperStyle={{ paddingTop: 12 }}
+            formatter={(value) => (
+              <span style={{ color: '#2d2a24', fontSize: 13, fontWeight: 600, marginRight: 8 }}>
+                {value}
+              </span>
+            )}
+          />
+          <Bar yAxisId="left" dataKey="closed" stackId="a" fill="#10b981" name="Closed" maxBarSize={80}>
+            <LabelList
+              dataKey="closed"
               position="inside"
               formatter={(value: number) => value > 0 ? value : ''}
-              style={{ 
-                fill: '#ffffff', 
-                fontSize: 12, 
+              style={{
+                fill: '#ffffff',
+                fontSize: 12,
                 fontWeight: 600,
                 textAnchor: 'middle',
                 dominantBaseline: 'middle'
               }}
             />
           </Bar>
-          <Bar yAxisId="left" dataKey="open" stackId="a" fill="#f59e0b" name="Open">
-            <LabelList 
-              dataKey="open" 
+          <Bar yAxisId="left" dataKey="open" stackId="a" fill="#f59e0b" name="Open" maxBarSize={80}>
+            <LabelList
+              dataKey="open"
               position="inside"
               formatter={(value: number) => value > 0 ? value : ''}
-              style={{ 
-                fill: '#1f2937', 
-                fontSize: 12, 
+              style={{
+                fill: '#1f2937',
+                fontSize: 12,
                 fontWeight: 600,
                 textAnchor: 'middle',
                 dominantBaseline: 'middle'
               }}
             />
           </Bar>
-          <Line 
-            yAxisId="right" 
-            type="monotone" 
-            dataKey="cumulativePercent" 
-            stroke="#fbbf24" 
-            strokeWidth={2}
-            dot={{ fill: '#fbbf24', r: 4 }}
+          <Line
+            yAxisId="right"
+            type="monotone"
+            dataKey="cumulativePercent"
+            stroke="#7c3aed"
+            strokeWidth={2.5}
+            dot={{ fill: '#7c3aed', r: 4 }}
             name="Cumulative %"
           >
-            <LabelList 
-              dataKey="cumulativePercent" 
+            <LabelList
+              dataKey="cumulativePercent"
               position="top"
               formatter={(value: number) => `${value}%`}
-              style={{ fill: '#fbbf24', fontSize: 12, fontWeight: 600 }}
+              style={{ fill: '#7c3aed', fontSize: 12, fontWeight: 700 }}
             />
           </Line>
         </ComposedChart>
       </ResponsiveContainer>
     </div>
   );
-};
+});
 
 export default NCRParetoChart;

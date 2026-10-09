@@ -1,12 +1,48 @@
-import { NOIItem } from '../context/NOIContext';
-import { NCRItem } from '../context/NCRContext';
-import { ITRItem } from '../context/ITRContext';
+import { NOIItem } from '../store/noiStore';
+import { NCRItem } from '../store/ncrStore';
+import { ITRItem } from '../store/itrStore';
+import { ChecklistRecord } from '../store/checklistStore';
 
 // FATItem interface for type checking
 interface FATItem {
   id: string;
   equipment: string;
   supplier: string;
+  [key: string]: any;
+}
+
+// ITPItem interface for type checking
+interface ITPItem {
+  id: string;
+  vendor: string;
+  [key: string]: any;
+}
+
+// PQPItem interface for type checking
+interface PQPItem {
+  id: string;
+  vendor?: string;
+  [key: string]: any;
+}
+
+// OBSItem interface for type checking
+interface OBSItem {
+  id: string;
+  vendor?: string;
+  [key: string]: any;
+}
+
+// FollowUpItem interface for type checking
+interface FollowUpItem {
+  id: string;
+  vendor?: string;
+  [key: string]: any;
+}
+
+// AuditItem interface for type checking
+interface AuditItem {
+  id: string;
+  vendor?: string;
   [key: string]: any;
 }
 
@@ -75,13 +111,100 @@ export const checkNCRReferences = (
 };
 
 /**
+ * 檢查刪除 ITP 時是否被 Checklist 引用
+ */
+export const checkITPChecklistReferences = (
+  itpId: string,
+  checklistList: ChecklistRecord[]
+): {
+  hasReferences: boolean;
+  references: { type: string; count: number }[];
+} => {
+  const checklistReferences = checklistList.filter(item => item.itpId === itpId);
+
+  return {
+    hasReferences: checklistReferences.length > 0,
+    references: [{ type: 'Checklist', count: checklistReferences.length }]
+  };
+};
+
+/**
+ * 檢查刪除 ITR 時是否被 Checklist 引用
+ */
+export const checkITRChecklistReferences = (
+  itrId: string,
+  checklistList: ChecklistRecord[]
+): {
+  hasReferences: boolean;
+  references: { type: string; count: number }[];
+} => {
+  const checklistReferences = checklistList.filter(item => item.itrId === itrId);
+
+  return {
+    hasReferences: checklistReferences.length > 0,
+    references: [{ type: 'Checklist', count: checklistReferences.length }]
+  };
+};
+
+/**
+ * 檢查刪除 Contractor 時的關聯數據
+ * Contractor 被多個模組引用，需全面檢查
+ */
+export const checkContractorReferences = (
+  contractorId: string,
+  contractorName: string,
+  itpList: ITPItem[],
+  ncrList: NCRItem[],
+  noiList: NOIItem[],
+  itrList: ITRItem[],
+  pqpList: PQPItem[],
+  obsList: OBSItem[],
+  fatList: FATItem[],
+  followupList: FollowUpItem[],
+  auditList: AuditItem[]
+): {
+  hasReferences: boolean;
+  references: { type: string; count: number }[];
+} => {
+  // Check all modules that reference contractors by vendor field
+  const itpReferences = itpList.filter(item => item.vendor === contractorName);
+  const ncrReferences = ncrList.filter(item => item.vendor === contractorName);
+  const noiReferences = noiList.filter(item => item.contractor === contractorName);
+  const itrReferences = itrList.filter(item => item.vendor === contractorName);
+  const pqpReferences = pqpList.filter(item => item.vendor === contractorName);
+  const obsReferences = obsList.filter(item => item.vendor === contractorName);
+  const fatReferences = fatList.filter(item => item.supplier === contractorName); // FAT uses 'supplier' instead of 'vendor'
+  const followupReferences = followupList.filter(item => item.vendor === contractorName);
+  const auditReferences = auditList.filter(item => item.contractor === contractorName);
+
+  const references = [
+    { type: 'ITP', count: itpReferences.length },
+    { type: 'NCR', count: ncrReferences.length },
+    { type: 'NOI', count: noiReferences.length },
+    { type: 'ITR', count: itrReferences.length },
+    { type: 'PQP', count: pqpReferences.length },
+    { type: 'OBS', count: obsReferences.length },
+    { type: 'FAT', count: fatReferences.length },
+    { type: 'FollowUp', count: followupReferences.length },
+    { type: 'Audit', count: auditReferences.length }
+  ];
+
+  const hasReferences = references.some(ref => ref.count > 0);
+
+  return {
+    hasReferences,
+    references
+  };
+};
+
+/**
  * 檢查刪除 FAT 時的關聯數據
  * 目前沒有其他模組引用 FAT，但保留此函數以保持一致性
  * 未來如果有模組引用 FAT，可以在這裡添加檢查邏輯
  */
 export const checkFATReferences = (
-  fatId: string,
-  fatIdentifier: string,
+  _fatId: string,
+  _fatIdentifier: string,
   // 未來可以添加其他模組的列表參數，例如 itrList, noiList 等
 ): {
   hasReferences: boolean;

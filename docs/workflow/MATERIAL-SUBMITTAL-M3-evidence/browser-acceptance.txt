@@ -1,0 +1,50 @@
+MATERIAL-SUBMITTAL M3 — browser acceptance in an ISOLATED stack (2026-10-08, local)
+
+Environment
+- backend/scripts/verification/isolated_stack.py up --port 8310 --vite-script react-app/tests-browser/material-m3-vite-launcher.mjs --vite-port 3310
+  run dir /private/var/folders/.../qualitas-manual-22w9k8ww (own stack.db, logs); never 8240/3240 or 8198/3198; no development database.
+- Seeds (isolated only, password from env, random, kept 600 in the run dir and never printed in these notes):
+  seed_material_m3_review.py (projects M3-P1 with 14 reply days / M3-P2 without; vendor M3-V; m3_full, m3_viewer; materials;
+  MSA-1 Rev0 R&R -> Rev1 Approved -> Rev2 Submitted via the real service; MSA-2 Rev0 Draft) and seed_material_m3_review_noperm.py (m3_nomat).
+  Note: the first seed run committed every step, then its final print line failed on a key name (snake_case dict); data verified in
+  sqlite (MSA-1 latest 2 Submitted / current 1 Approved; MSA-2 0 Draft); the print line was fixed, the seed was NOT re-run.
+- Built-in browser, desktop viewport 1366x900, UI language 中文.
+- Save-state scenarios use a test-only XHR interceptor injected into the page (axios uses XHR): it only touches POST .../result and
+  .../result-corrections (and, in drop-all, GET /material-submittals/{id}); window.__m3.log records what it did.
+
+Results (each item read back from the DOM / API, not only seen on screen)
+1. Sidebar: 品質管控 = PQP, 材料送審, ITP ... ; entry shown for m3_full / m3_viewer; HIDDEN for m3_nomat (PQP is followed by ITP),
+   direct URL shows 「您沒有查看材料送審的權限。」, GET /api/material-submittals/ -> 403.            (browser-no-permission.jpg)
+2. List (M3-P1): 「已載入 2／共 2 筆」; MSA-1 shows 最新送審版 Rev 2 外部審查中 and 現行核准版 Rev 1 核准 side by side; MSA-2 shows
+   Rev 0 草稿 / 尚無核准版.                                                                         (browser-list-latest-vs-current.jpg, later state)
+3. Detail MSA-1: header pair as above; tabs Rev 0 / Rev 1 / Rev 2 · 最新; Rev 2 snapshot read-only (「此版已送出，內容唯讀。」).
+4. Scenario "request never reached the server" (drop-before, result, ApprovedWithComments, a reply document already on the revision):
+   log = ["dropped-before .../result"]; states = save-state-notSaved 「重新讀取確認：尚未保存，可以重試。」 +
+   save-state-reply-uploaded 「回覆文件已上傳，結果尚未登錄……只會重送結果，不會重複上傳文件。」; only button = retry-result.
+   Retry with the interceptor off -> dialog closed; 現行核准版 Rev 2 附意見核准 (own badge); entry #1 〔現行〕; reply files still 1.
+5. Scenario "saved, response lost" (drop-after, correction to ReviseAndResubmit, reason given; save stayed disabled until a reason):
+   log = ["sent-then-dropped .../result-corrections"]; state 「重新讀取確認：已保存。」; save button hidden (no duplicate);
+   behind: #1 附意見核准 〔已被更正〕, #2 修正後再送 〔現行〕 with reason; 最新 Rev 2 修正後再送; 現行核准版 back to Rev 1 核准 (derived).
+                                                                                                     (browser-detail-corrected-entry-history.jpg)
+6. Submit MSA-2 Rev 0, submitted 2026-10-03 (Saturday), project 14 days -> 「依專案天數自動計算：2026-10-17」, field 2026-10-17;
+   server expectedReplyDate 2026-10-17.
+7. Scenario "cannot confirm" (drop-all): log = [POST .../result dropped, GET detail dropped] — the result was sent ONCE, never re-sent;
+   state 「無法確認登錄結果。請稍後重新開啟本送審確認；系統不會自動重送。」; buttons = recheck, save-result(disabled);
+   server: 0 entries, still Submitted.
+8. Scenario "definite refusal": interceptor off, recheck -> notSaved, button retry-result; another user then records a result directly
+   (200); retry -> state 「未儲存：A result can only be recorded for the latest revision while it is Submitted.」
+9. New revision dialog text 「建立 Rev 1 草稿？內容由上一版複製，附件不會自動帶入。新版審查期間，現行核准版維持不變。」; tabs Rev 0 / Rev 1 · 最新.
+   Draft edit Rev 1 model SCH40 -> SCH80: Rev 1 SCH80, Rev 0 still SCH40, notice 「與目前材料資料不同：型號（快照不會被改寫）」.
+10. New submittal: material options are ONLY M3-P1's two materials (the M3-P2 material is absent); in-place material "In-place sealant"
+    created QTS-MV-MSA-000003, Rev 0 草稿 / 尚無核准版; list 「已載入 3／共 3 筆」.
+11. Materials tab: M3-P1 = 3 materials; switching to M3-P2 = only 「Project two only material」; M3-P2 submittals 0.
+12. m3_viewer: project select only M3-P1; no 新增送審, no action buttons, no upload inputs, no draft edit; version pair shown.
+13. Document naming rules: search "MSA" -> row 「Material Submittal / QTS-RKS-A-MSA-000001 / 材料送審編號」, prefix QTS-RKS-[ABBREV]-MSA-.
+    OBSERVED, NOT INVESTIGATED: the table's next-page control did not move to page 2 (by script click and by coordinate click); rows
+    11–12 (OSD, MSA) are only reachable through search. The table rebuilds its data array on every render, which may reset paging —
+    root cause not verified; presumably pre-existing (OSD was already row 11 before M3).
+14. Console: the only errors are 403s for /api/itp, /ncr, /noi, /itr, /pqp, /obs, /checklist, /followup preloaded by the shared app
+    shell for these limited test accounts — none for material endpoints; no material request loops.
+15. Found and fixed during this run: (a) reply category title showed the raw key 「cat.replyDocument」 (text key missing; not caught by
+    tsc because the key is built from a template string and cast) — key added, title now 「回覆文件」; (b) history line wording
+    「· 1 〔已被更正〕」 -> 「已更正 1 次」.

@@ -1,0 +1,8 @@
+# reviewer-r1-probes.py re-run UNCHANGED against the R2 code (2026-10-09 03:11:44). Its photo test asserts the R1 DEFECT (200); with R2 the uploads are refused (400), so that assertion is expected to FAIL. The projects probe is about /api/projects paging, which R2 does not change (the dashboard no longer depends on it).
+NON_IMAGE fake.png HTTP 400
+FPROJECTS default= 200 remaining= 3 visible= 203
+            print('NON_IMAGE', filename, 'HTTP', response.status_code)
+>           assert response.status_code == 200  # reproduces the defect; expected product behavior is 400
+E           assert 400 == 200
+1 failed, 1 passed in 5.39s
+PYTEST_EXIT=1

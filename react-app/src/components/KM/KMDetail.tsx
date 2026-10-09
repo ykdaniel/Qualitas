@@ -1,0 +1,498 @@
+import React, { useRef, useEffect, useMemo, useCallback } from 'react';
+import DOMPurify from 'dompurify';
+import 'react-quill/dist/quill.snow.css';
+import '../ui/RichTextEditor.css';
+import './kmArticle.css';
+import { useLanguage } from '../../context/LanguageContext';
+import { KMArticle } from '../../types/km';
+import { useKMStore } from '../../store/kmStore';
+import { BackButton } from '../ui/BackButton';
+import { KMHistoryModal } from './KMHistoryModal';
+import { SectionToc } from './SectionToc';
+import { extractSectionToc, computeNumberedLevel, stripDecorativeZeros, compareChapterNo } from '../../utils/extractSectionToc';
+import { injectAuthTokenIntoHtml } from '../../utils/authUrl';
+import { getAuthenticatedFileUrl } from '../../services/api';
+import { kmService } from '../../services/kmService';
+import styles from './KMDetail.module.css';
+
+/**
+ * Single chapter body + its auto-generated section TOC.
+ *
+ * Extracted into its own component so useMemo can be called per chapter
+ * without violating the rules of hooks. Keeps the HTML-parsing work
+ * cached as long as the chapter's content hasn't changed, which matters
+ * because ChapterSection re-renders on every scroll event via the sticky
+ * sidebar effect in KMDetail's parent.
+ */
+interface ChapterSectionProps {
+    chapter: KMArticle;
+    showTitle: boolean;
+    showDivider: boolean;
+    onEditChapter?: (chapterId: string) => void;
+}
+
+const ChapterSection: React.FC<ChapterSectionProps> = ({
+    chapter,
+    showTitle,
+    showDivider,
+    onEditChapter,
+}) => {
+    const { processedHtml, toc } = useMemo(
+        () => extractSectionToc(chapter.content || '', `ch-${chapter.id}-sec`),
+        [chapter.content, chapter.id]
+    );
+
+    const sanitizedHtml = useMemo(
+        () => injectAuthTokenIntoHtml(DOMPurify.sanitize(processedHtml)),
+        [processedHtml]
+    );
+
+    const chapterPrefix = stripDecorativeZeros(chapter.chapter_no || '');
+    // "1.0" → depth 0, "2.1" → depth 1, "2.1.1" → depth 2
+    const chNoClean = (chapter.chapter_no || '').replace(/\.0$/, '');
+    const depth = Math.max(0, (chNoClean.match(/\./g) || []).length);
+
+    return (
+        <div id={`chapter-${chapter.id}`} className={styles.chapterSection} data-depth={depth} style={{ marginLeft: depth * 32 }}>
+            {showDivider && <hr className={styles.chapterDivider} />}
+            {showTitle && (
+                <h2 className={styles.chapterTitle}>
+                    <span>
+                        {chapter.chapter_no ? `${chapter.chapter_no} ` : ''}
+                        {chapter.title}
+                    </span>
+                    {onEditChapter && (
+                        <button
+                            className={styles.chapterEditBtn}
+                            onClick={() => onEditChapter(chapter.id)}
+                            title="編輯此章節"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                        </button>
+                    )}
+                </h2>
+            )}
+            {/* SectionToc removed — sidebar chapter navigation is sufficient */}
+            {/* Wrapper carries km-article (bullet/indent rules) and
+                the chapter-prefix attribute/variable. The INNER div
+                is the .ql-editor — same DOM shape as edit mode, so
+                kmArticle.css can use a single `.km-article .ql-editor`
+                selector form instead of duplicated `wrapper OR editor`
+                variants. */}
+            <div
+                className={`km-article ${styles.editorContainer}`}
+                data-chapter-prefix={chapterPrefix}
+                style={{ ['--chapter-prefix' as any]: `"${chapterPrefix}"` }}
+            >
+                <div
+                    className="ql-editor"
+                    dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
+                />
+            </div>
+        </div>
+    );
+};
+
+interface KMDetailProps {
+    article: KMArticle;
+    onClose: () => void;
+    onEdit: (focusChapterId?: string) => void;
+    canEdit: boolean;
+    onSelectArticle?: (article: KMArticle) => void;
+}
+
+export const KMDetail: React.FC<KMDetailProps> = ({ article, onClose, onEdit, onSelectArticle, canEdit }) => {
+    const { t } = useLanguage();
+    const { kmList, fetchKMs } = useKMStore();
+    const [isHistoryModalOpen, setIsHistoryModalOpen] = React.useState(false);
+    const [isExporting, setIsExporting] = React.useState(false);
+    const [isImporting, setIsImporting] = React.useState(false);
+    const importInputRef = useRef<HTMLInputElement>(null);
+
+    const handleExportDocx = useCallback(async () => {
+        setIsExporting(true);
+        try {
+            await kmService.exportDocx(article.id, article.title);
+        } catch (e) {
+            alert('匯出失敗，請稍後再試');
+        } finally {
+            setIsExporting(false);
+        }
+    }, [article.id, article.title]);
+
+    const handleImportDocx = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!canEdit) return;
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setIsImporting(true);
+        try {
+            const result = await kmService.importDocx(article.id, file);
+            await fetchKMs();
+            const updatedList = result.updated.map((u: any) => `${u.chapter_no} ${u.title}`).join('\n');
+            const skippedList = result.skipped.length > 0 ? `\n\n未匹配章節：\n${result.skipped.join('\n')}` : '';
+            alert(`匯入完成！\n已更新 ${result.updated.length}/${result.total_sections} 個章節：\n${updatedList}${skippedList}`);
+        } catch (e: any) {
+            alert(`匯入失敗：${e?.response?.data?.detail || e?.message || '請確認檔案格式正確'}`);
+        } finally {
+            setIsImporting(false);
+            if (importInputRef.current) importInputRef.current.value = '';
+        }
+    }, [article.id, fetchKMs, canEdit]);
+
+    // Determine the main book and its chapters.
+    //
+    // Two storage shapes are supported:
+    //   - Multi-chapter: a book record with N child chapter records.
+    //     The book itself is just a container; its content/chapter_no
+    //     fields are ignored here so it doesn't render as a phantom
+    //     chapter alongside its children.
+    //   - Single-chapter: a book record with no children. The book
+    //     itself carries the only chapter, so we render it as one.
+    const bookId = article.parent_id ? article.parent_id : article.id;
+    const book = kmList.find(km => km.id === bookId);
+    const childChapters = kmList.filter(km => km.parent_id === bookId);
+
+    const sortedChapters = childChapters.length > 0
+        ? [...childChapters].sort((a, b) => compareChapterNo(a.chapter_no, b.chapter_no))
+        : (book ? [book] : []);
+
+    React.useEffect(() => {
+        if (article && article.id) {
+            setTimeout(() => {
+                document.getElementById(`chapter-${article.id}`)?.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
+        }
+    }, [article]);
+
+    const hasChapters = sortedChapters.length > 1;
+
+    // JS-based sticky sidebar
+    const sidebarRef = useRef<HTMLDivElement>(null);
+    const layoutRef = useRef<HTMLDivElement>(null);
+    const placeholderRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        const sidebar = sidebarRef.current;
+        const layout = layoutRef.current;
+        if (!sidebar || !layout) return;
+
+        // Find the nearest scrollable ancestor
+        const getScrollParent = (el: HTMLElement): HTMLElement | Window => {
+            let parent = el.parentElement;
+            while (parent) {
+                const style = getComputedStyle(parent);
+                if (/(auto|scroll)/.test(style.overflow + style.overflowY)) {
+                    return parent;
+                }
+                parent = parent.parentElement;
+            }
+            return window;
+        };
+
+        const scrollParent = getScrollParent(sidebar);
+        const sidebarTopOffset = 24;
+        let isFixed = false;
+
+        // Create a placeholder to reserve space when sidebar is fixed
+        const placeholder = document.createElement('div');
+        placeholder.style.display = 'none';
+        placeholder.style.width = '320px';
+        placeholder.style.flexShrink = '0';
+        sidebar.parentElement?.insertBefore(placeholder, sidebar.nextSibling);
+        placeholderRef.current = placeholder;
+
+        const handleScroll = () => {
+            const layoutRect = layout.getBoundingClientRect();
+
+            if (layoutRect.top < sidebarTopOffset) {
+                if (!isFixed) {
+                    // Record left position BEFORE switching to fixed
+                    const sidebarRect = sidebar.getBoundingClientRect();
+                    sidebar.style.position = 'fixed';
+                    sidebar.style.top = `${sidebarTopOffset}px`;
+                    sidebar.style.left = `${sidebarRect.left}px`;
+                    sidebar.style.width = `${sidebarRect.width}px`;
+                    placeholder.style.display = 'block';
+                    placeholder.style.height = `${sidebarRect.height}px`;
+                    isFixed = true;
+                }
+            } else {
+                if (isFixed) {
+                    sidebar.style.position = '';
+                    sidebar.style.top = '';
+                    sidebar.style.left = '';
+                    sidebar.style.width = '';
+                    placeholder.style.display = 'none';
+                    isFixed = false;
+                }
+            }
+        };
+
+        const target = scrollParent === window ? window : scrollParent;
+        target.addEventListener('scroll', handleScroll, { passive: true });
+        const handleResize = () => { if (isFixed) { isFixed = false; handleScroll(); } };
+        window.addEventListener('resize', handleResize, { passive: true });
+        handleScroll();
+
+        return () => {
+            target.removeEventListener('scroll', handleScroll);
+            window.removeEventListener('resize', handleResize);
+            placeholder.remove();
+            if (sidebar) {
+                sidebar.style.position = '';
+                sidebar.style.top = '';
+                sidebar.style.left = '';
+                sidebar.style.width = '';
+            }
+        };
+    }, []);
+
+    return (
+        <div className={styles.container}>
+            {/* Sticky header: nav + hero pinned at top on scroll */}
+            <div className={styles.stickyHeader}>
+                {/* Top Navigation Bar: Back Button (Left) & Edit Button (Right) */}
+                <div className={styles.topNav}>
+                    <BackButton
+                        onClick={onClose}
+                        className="!bg-white !border !border-slate-200 !text-slate-600 hover:!bg-slate-50 hover:!text-slate-900 rounded-full"
+                    />
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                        <button className={styles.printBtn} onClick={() => window.print()}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                            {t('common.print') || '列印'}
+                        </button>
+                        {/* Word Export */}
+                        <button className={styles.printBtn} onClick={handleExportDocx} disabled={isExporting}
+                            title="匯出為 Word 文件">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                            {isExporting ? '匯出中...' : '匯出 Word'}
+                        </button>
+                        {canEdit && <>
+                        {/* Word Import */}
+                        <input ref={importInputRef} type="file" accept=".docx" style={{ display: 'none' }}
+                            onChange={handleImportDocx} />
+                        <button className={styles.printBtn} onClick={() => importInputRef.current?.click()}
+                            disabled={isImporting} title="從 Word 匯入章節內容">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+                            {isImporting ? '匯入中...' : '匯入 Word'}
+                        </button>
+                        <button className={styles.editBtn} onClick={() => onEdit()}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                            {t('common.edit') || '編輯內容'}
+                        </button>
+                        </>}
+                    </div>
+                </div>
+
+                {/* Hero Title Card */}
+                <div className={styles.heroCard}>
+                <div className={styles.metaRow}>
+                    <span className={styles.categoryBadge}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px' }}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                        {article.category || 'Quality'}
+                    </span>
+                    <span className={styles.metaItem}># {article.articleNo}</span>
+                    <span className={styles.metaItem}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px' }}><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                        {article.updated_at}
+                    </span>
+                </div>
+                <div className={styles.titleWrapper}>
+                    <div className={styles.titleIcon}>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    </div>
+                    <h1 className={styles.title}>{article.title}</h1>
+                </div>
+                {article.tags && (
+                    <div className={styles.tagsContainer}>
+                        {article.tags.split(',').map(tag => (
+                            <span key={tag.trim()} className={styles.tag}>{tag.trim()}</span>
+                        ))}
+                    </div>
+                )}
+            </div>
+            </div>{/* end stickyHeader */}
+
+            {/* Layout Wrapper: Left Document, Right Sidebar */}
+            <div className={styles.layoutWrapper} ref={layoutRef}>
+                {/* Main Content Area */}
+                <div className={styles.mainContent}>
+                    <div className={styles.contentHeader}>
+                        <div className={styles.contentIcon}>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                        </div>
+                        <h3>{t('km.documentDetails') || '文件內容 (Document Details)'}</h3>
+                    </div>
+                    {/* Print-only index page. Hidden on screen by CSS.
+                        Each <a href="#chapter-..."> gets a target-counter(page)
+                        injected via ::after — works in Chrome/Edge and
+                        Safari 17.4+. Firefox degrades to no page numbers. */}
+                    {hasChapters && (
+                        <div className={styles.printIndexPage}>
+                            <div className={styles.printDocHeader}>
+                                <h1>{article.title}</h1>
+                                <div className={styles.printDocMeta}>
+                                    <span>{article.category || 'Quality'}</span>
+                                    <span>#{article.articleNo}</span>
+                                    <span>v{article.version_no || 1}.0</span>
+                                    <span>{article.updated_at}</span>
+                                </div>
+                            </div>
+                            <h2 className={styles.printIndexTitle}>目錄 Index</h2>
+                            <ol className={styles.printTocList}>
+                                {sortedChapters.map(ch => {
+                                    const level = computeNumberedLevel(ch.chapter_no || '1');
+                                    return (
+                                        <li
+                                            key={ch.id}
+                                            className={styles.printTocItem}
+                                            style={{ paddingLeft: `${(level - 1) * 18}pt` }}
+                                        >
+                                            <a href={`#chapter-${ch.id}`} className={styles.printTocLink}>
+                                                <span className={styles.printTocNum}>{ch.chapter_no}</span>
+                                                <span className={styles.printTocTitle}>{ch.title}</span>
+                                            </a>
+                                        </li>
+                                    );
+                                })}
+                            </ol>
+                        </div>
+                    )}
+
+                    <div className={styles.contentBody}>
+                        {sortedChapters.map((ch, index) => (
+                            <ChapterSection
+                                key={ch.id}
+                                chapter={ch}
+                                showTitle={hasChapters}
+                                showDivider={index > 0}
+                                onEditChapter={canEdit ? (chapterId) => onEdit(chapterId) : undefined}
+                            />
+                        ))}
+                    </div>
+                </div>
+
+                {/* Right Sidebars & TOC */}
+                <div className={styles.rightLayout} ref={sidebarRef}>
+                    {/* Version History Card */}
+                    <div className={styles.sideCard}>
+                        <div className={styles.sideCardHeader}>
+                            <span>版本數據</span>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.fadedIcon}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                        </div>
+                        <div className={styles.statRow}>
+                            <span className={styles.statLabel}>目前版本 (Current)</span>
+                            <span className={styles.statValue}>v{article.version_no || 1}.0</span>
+                        </div>
+                        <button
+                            style={{
+                                width: '100%',
+                                marginTop: '12px',
+                                padding: '8px',
+                                backgroundColor: '#f8fafc',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '6px',
+                                color: '#334155',
+                                cursor: 'pointer',
+                                fontSize: '0.875rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px'
+                            }}
+                            onClick={() => setIsHistoryModalOpen(true)}
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                            檢視歷史版本 (History)
+                        </button>
+                    </div>
+
+                    {/* Table of Contents (If chapters exist) */}
+                    {hasChapters && (
+                        <div className={styles.sideCard}>
+                            <div className={styles.sideCardHeader}>
+                                <span>章節導覽</span>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.fadedIcon}><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                            </div>
+                            <ul className={styles.tocList}>
+                                {sortedChapters.map(ch => (
+                                    <li key={ch.id} className={styles.tocItem}>
+                                        <button
+                                            onClick={() => {
+                                                document.getElementById(`chapter-${ch.id}`)?.scrollIntoView({ behavior: 'smooth' });
+                                                if (onSelectArticle) onSelectArticle(ch);
+                                            }}
+                                            className={`${styles.tocButton} ${ch.id === article.id ? styles.tocButtonActive : ''}`}
+                                        >
+                                            <div className={styles.tocChapterMeta}>
+                                                {ch.chapter_no ? `Chapter ${ch.chapter_no}` : (ch.parent_id ? 'Section' : 'Main Text')}
+                                            </div>
+                                            <div>{ch.title}</div>
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
+                    {/* Attachments Card (Matching Mockup) */}
+                    <div className={styles.sideCard}>
+                        <div className={styles.sideCardHeader}>
+                            <span>附件檔案</span>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.fadedIcon}><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                        </div>
+                        <div className={styles.attachmentList}>
+                            {article.attachments && (() => {
+                                try {
+                                    const parsedAttachments = typeof article.attachments === 'string'
+                                        ? JSON.parse(article.attachments)
+                                        : article.attachments;
+
+                                    if (Array.isArray(parsedAttachments) && parsedAttachments.length > 0) {
+                                        return parsedAttachments.map((att: any, idx: number) => (
+                                            <a
+                                                key={idx}
+                                                className={styles.attachmentItem}
+                                                href={getAuthenticatedFileUrl(att.url)}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                            >
+                                                <div className={`${styles.attachmentIconBox} ${styles.iconBlue}`}>
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                                                </div>
+                                                <div className={styles.attachmentInfo}>
+                                                    <span className={styles.attachmentName}>{att.name || att.filename || `File_${idx + 1}`}</span>
+                                                    <span className={styles.attachmentSize}>{att.size || 'Unknown size'}</span>
+                                                </div>
+                                            </a>
+                                        ));
+                                    }
+                                } catch (e) {
+                                    console.error('Failed to parse attachments', e);
+                                }
+                            })()}
+
+                            {(!article.attachments || article.attachments === '[]') && (
+                                <div className={styles.emptyAttachment}>
+                                    無附件檔案
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* History Modal Drawer. Defaults to the first chapter's history
+                rather than the book's own (a multi-chapter book's own
+                history is essentially always empty — editing happens at
+                the chapter level; see KMHistoryModal's `chapters` prop). */}
+            <KMHistoryModal
+                isOpen={isHistoryModalOpen}
+                onClose={() => setIsHistoryModalOpen(false)}
+                articleId={sortedChapters[0]?.id || article.id}
+                chapters={sortedChapters.map(ch => ({ id: ch.id, title: ch.title, chapter_no: ch.chapter_no }))}
+            />
+        </div>
+    );
+};

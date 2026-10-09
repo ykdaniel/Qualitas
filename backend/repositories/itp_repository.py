@@ -1,0 +1,64 @@
+from typing import Optional, List
+from sqlalchemy.orm import Session, joinedload
+import models
+from core.scope import apply_scope
+from core.utils import sanitize_pagination, sanitize_search_term
+
+class ITPRepository:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def get_by_id(self, itp_id: str) -> Optional[models.ITP]:
+        return self.db.query(models.ITP).options(joinedload(models.ITP.vendor_ref)).filter(models.ITP.id == itp_id).first()
+
+    def get_all(self, skip: int = 0, limit: int = 100, search: str = None, status: str = None, start_date: str = None, end_date: str = None, project_id: str = None, scope=None) -> List[models.ITP]:
+        # 驗證分頁參數
+        skip, limit = sanitize_pagination(skip, limit)
+
+        query = self.db.query(models.ITP).options(joinedload(models.ITP.vendor_ref))
+        if project_id:
+            query = query.filter(models.ITP.project_id == project_id)
+        if search:
+            search = sanitize_search_term(search)
+            if search:
+                query = query.filter(
+                    (models.ITP.referenceNo.ilike(f"%{search}%")) |
+                    (models.ITP.description.ilike(f"%{search}%"))
+                )
+        if status:
+            query = query.filter(models.ITP.status == status)
+        if start_date:
+            query = query.filter(models.ITP.submissionDate >= start_date)
+        if end_date:
+            query = query.filter(models.ITP.submissionDate <= end_date)
+
+        # P0 data isolation: restrict to the caller's project/contractor scope.
+        query = apply_scope(query, models.ITP, scope)
+
+        return query.offset(skip).limit(limit).all()
+
+    def create(self, itp: models.ITP, commit: bool = True) -> models.ITP:
+        self.db.add(itp)
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
+        self.db.refresh(itp)
+        return itp
+
+    def update(self, itp: models.ITP, update_data: dict, commit: bool = True) -> models.ITP:
+        for key, value in update_data.items():
+            setattr(itp, key, value)
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
+        self.db.refresh(itp)
+        return itp
+
+    def delete(self, itp: models.ITP, commit: bool = True):
+        self.db.delete(itp)
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()

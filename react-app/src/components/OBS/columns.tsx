@@ -1,12 +1,11 @@
 import { ColumnDef } from "@tanstack/react-table";
-import { OBSItem } from "../../context/OBSContext";
+import { OBSItem } from "../../store/obsStore";
 import { DataTableColumnHeader } from "@/components/Shared/DataTable/DataTableColumnHeader";
 import { Button } from "@/components/ui/button";
-import { Eye, Pencil, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
+import { DateCell } from "@/components/Shared/DateIssueMark";
 
 export const createColumns = (
-    handleEdit: (id: string) => void,
-    handleViewDetails: (id: string) => void,
     confirmDelete: (id: string) => void,
     t: (key: string) => string,
     getActiveContractors: () => { name: string }[]
@@ -35,7 +34,10 @@ export const createColumns = (
                     title={t('obs.status')}
                     filterOptions={[
                         { label: 'Open', value: 'Open' },
+                        { label: 'In Progress', value: 'In Progress' },
+                        { label: 'Resolved', value: 'Resolved' },
                         { label: 'Closed', value: 'Closed' },
+                        { label: 'Void', value: 'Void' },
                     ]}
                 />
             ),
@@ -81,14 +83,14 @@ export const createColumns = (
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title={t('obs.raiseDate')} />
             ),
-            cell: ({ row }) => <div className="text-center">{row.getValue("raiseDate") || '-'}</div>,
+            cell: ({ row }) => <div className="text-center"><DateCell item={row.original} field="raiseDate" /></div>,
         },
         {
             accessorKey: "closeoutDate",
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title={t('obs.closeoutDate')} />
             ),
-            cell: ({ row }) => <div className="text-center">{row.getValue("closeoutDate") || '-'}</div>,
+            cell: ({ row }) => <div className="text-center"><DateCell item={row.original} field="closeoutDate" /></div>,
         },
         {
             accessorKey: "foundBy",
@@ -125,30 +127,12 @@ export const createColumns = (
             cell: ({ row }) => {
                 const obs = row.original;
                 return (
-                    <div className="flex items-center justify-center space-x-2">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-100"
-                            onClick={() => handleEdit(obs.id)}
-                            title={t('common.edit')}
-                        >
-                            <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-blue-500 hover:text-blue-600 hover:bg-blue-100"
-                            onClick={() => handleViewDetails(obs.id)}
-                            title={t('common.details')}
-                        >
-                            <Eye className="h-4 w-4" />
-                        </Button>
+                    <div className="flex items-center justify-center">
                         <Button
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-100"
-                            onClick={() => confirmDelete(obs.id)}
+                            onClick={(e) => { e.stopPropagation(); confirmDelete(obs.id); }}
                             title={t('common.delete')}
                         >
                             <Trash2 className="h-4 w-4" />

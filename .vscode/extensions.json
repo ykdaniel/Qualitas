@@ -1,5 +1,18 @@
 {
     "recommendations": [
-        "dwtexe.cursor-stats"
+        "dwtexe.cursor-stats",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "eamodio.gitlens",
+        "usernamehw.errorlens",
+        "antfu.vite",
+        "bradlc.vscode-tailwindcss",
+        "christian-kohler.path-intellisense",
+        "formulahendry.auto-rename-tag",
+        "mechatroner.rainbow-csv",
+        "tamasfe.even-better-toml"
     ]
 }

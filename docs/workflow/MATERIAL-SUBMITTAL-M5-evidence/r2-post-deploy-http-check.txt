@@ -1,0 +1,11 @@
+# M5 R2 post-deploy external check 2026-10-09T06:46:50Z
+/ sha256=4f71ef9fe332390e8951fb55c2d51302cdd366f42170faf4bbcf5a8aad0f3a5e expected=4f71ef9fe332390e8951fb55c2d51302cdd366f42170faf4bbcf5a8aad0f3a5e
+/index.html sha256=4f71ef9fe332390e8951fb55c2d51302cdd366f42170faf4bbcf5a8aad0f3a5e expected=4f71ef9fe332390e8951fb55c2d51302cdd366f42170faf4bbcf5a8aad0f3a5e
+assets/index-BgiH-VPI.js http= 200 match=yes
+assets/Dashboard-BrS4tO7C.css http= 200 match=yes
+assets/Dashboard-CBTnabVj.js http= 200 match=yes
+assets/MaterialSubmittal-DQOyLBR2.css http= 200 match=yes
+assets/MaterialSubmittal-DiPZ24Ej.js http= 200 match=yes
+old asset /assets/index-Ba-6qph1.js http=200
+/api/user/profile http=401 (401 expected)
+/api/material-submittals/stats http=401 (401 expected; was 404 before)

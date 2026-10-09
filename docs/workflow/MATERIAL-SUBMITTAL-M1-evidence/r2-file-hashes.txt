@@ -1,0 +1,17 @@
+R2 final source hashes (2026-10-08T12:53:38Z); base commit 056c245ca3ff630f74bfc7af86233e7cbc7dc51b
+(first attempt to write this file failed: a relative path after cd; regenerated with an absolute path)
+6f6e71753cfbbb47489d47ba3888d704fbcc856ef45bea5a7bf541e0456e5954  backend/models.py
+a0f2c9df982c93d149937a8ac8142423bf94eb2b42b2cdf9f0adb191fd60b2e6  backend/db_migrations.py
+46db933a5979ffecff310a0525ae8029841c4e99b4ade499f41a82ce96a01996  backend/schemas.py
+e232bceec748db10177287e115675bb3254ecab449ce66fbf6524535a45e5ed9  backend/main.py
+605887fcd9287fa778b50609c597609f7b9632a880185b8135669e8ece53bf39  backend/core/perms.py
+c5000f84381be526231afd067d70846bc8904c5338dce6f65d6c2599fcb0e026  backend/core/validators.py
+4edc6a0126f5e1189074c52acb3657602375b8a17bfd10b351bec3abd3e23b71  backend/routers/materials.py
+ce1b02a2606f4b764095fb178b2cf26441213f1506d149741cb098aff59ace12  backend/services/material_service.py
+c5c5a3c88603fac1e964b1aa6bf79a9fbb4a976b235e2d6030aaf8921d675d94  backend/repositories/material_repository.py
+a08c68f83b980dcbb9a51e08352c1ea5ba7f4052e6b24483b65495284930b592  backend/tests/test_materials_http.py
+047e2dfa6cfbfced654409c2d117b7439d4861a7aed5f15c56648393614b02a9  backend/tests/test_material_schema_migration.py
+
+backend/core/perms.py lines=210 crlf=210
+backend/core/validators.py lines=395 crlf=395
+backend/db_migrations.py lines=1680 crlf=1680

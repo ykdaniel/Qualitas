@@ -10,13 +10,19 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    // Don't ship source maps to production — they expose component names,
+    // file structure, and inline comments that make reverse-engineering
+    // (and finding new attack surface) trivial.
+    sourcemap: false,
+  },
   server: {
     port: 3000,
     host: '0.0.0.0',
     strictPort: true,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:3001',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         secure: false,
         ws: true,
@@ -25,12 +31,27 @@ export default defineConfig({
             console.log('[Vite Proxy] Error:', err.message);
           });
           proxy.on('proxyReq', (proxyReq, req, _res) => {
-            console.log('[Vite Proxy] Proxying:', req.method, req.url, '->', 'http://127.0.0.1:3001' + req.url);
+            console.log('[Vite Proxy] Proxying:', req.method, req.url, '->', 'http://127.0.0.1:8000' + req.url);
           });
           proxy.on('proxyRes', (proxyRes, req, _res) => {
             console.log('[Vite Proxy] Response:', proxyRes.statusCode, req.url);
+            // Rewrite 307/308 redirect Location headers so the browser follows
+            // them through the Vite proxy (same origin) instead of hitting
+            // the backend directly and losing the Authorization header.
+            if ((proxyRes.statusCode === 307 || proxyRes.statusCode === 308) && proxyRes.headers.location) {
+              try {
+                const url = new URL(proxyRes.headers.location);
+                proxyRes.headers.location = url.pathname + (url.search || '');
+              } catch {
+                // Already a relative path, leave as-is
+              }
+            }
           });
         },
+      },
+      '/uploads': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
       }
     }
   }

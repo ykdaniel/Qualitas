@@ -4,32 +4,19 @@ import { DataTableColumnHeader } from "../Shared/DataTable/DataTableColumnHeader
 // It is defined in FAT.tsx but not exported. I should probably export it or redefine it.
 // To avoid circular dependency or editing FAT.tsx just for export before refactor, 
 // I will define a matching interface here since I will eventually update FAT.tsx to use this.
-export interface FATItem {
-    id: string;
-    equipment: string;
-    supplier: string;
-    procedure: string;
-    location: string;
-    startDate: string;
-    endDate: string;
-    deliveryFrom: string;
-    deliveryTo: string;
-    siteReadiness: string;
-    moveInDate: string;
-    hasDetails?: boolean;
-}
+import { FATItem, type FATResult } from "../../store/fatStore";
 
-import { Edit, FileText, Trash2, PlusSquare } from "lucide-react";
+import { Trash2, PlusSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+
+const RESULT_COLOR: Record<FATResult, string> = { Pass: '#15803d', Fail: '#b91c1c', Pending: '#a16207' };
 
 export const createColumns = (
-    handleEdit: (id: string) => void,
-    handleViewDetails: (id: string) => void,
     handleAddDetails: (id: string) => void,
     handleDelete: (id: string) => void,
     t: (key: string) => string,
-    activeContractors: { name: string }[]
+    activeContractors: { name: string }[],
+    getResult: (id: string) => FATResult
 ): ColumnDef<FATItem>[] => [
         {
             id: "index",
@@ -117,6 +104,37 @@ export const createColumns = (
             cell: ({ row }) => <div className="text-center">{row.getValue("moveInDate")}</div>,
         },
         {
+            accessorKey: "status",
+            header: ({ column }) => (
+                <DataTableColumnHeader
+                    column={column}
+                    title={t('common.status')}
+                    filterOptions={[
+                        { label: t('fat.status.scheduled'), value: 'Scheduled' },
+                        { label: t('fat.status.inProgress'), value: 'In Progress' },
+                        { label: t('fat.status.completed'), value: 'Completed' },
+                        { label: t('fat.status.cancelled'), value: 'Cancelled' },
+                    ]}
+                />
+            ),
+            cell: ({ row }) => <div className="text-center">{row.getValue("status") || 'Scheduled'}</div>,
+            filterFn: (row, id, value) => {
+                return value.includes(row.getValue(id));
+            },
+        },
+        {
+            id: "overallResult",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title={t('fat.overallResult') || 'Result'} />
+            ),
+            cell: ({ row }) => {
+                const r = getResult(row.original.id);
+                const label = ({ Pass: t('fat.result.pass'), Fail: t('fat.result.fail'), Pending: t('fat.result.pending') } as Record<FATResult, string>)[r] || r;
+                return <div className="text-center" style={{ color: RESULT_COLOR[r], fontWeight: 700 }}>{label}</div>;
+            },
+            enableSorting: false,
+        },
+        {
             id: "actions",
             header: t('common.operations'),
             cell: ({ row }) => {
@@ -126,26 +144,8 @@ export const createColumns = (
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0 text-emerald-500 hover:text-white hover:bg-emerald-500"
-                            onClick={() => handleEdit(fat.id)}
-                            title={t('fat.tooltip.edit')}
-                        >
-                            <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 text-purple-500 hover:text-white hover:bg-purple-500"
-                            onClick={() => handleViewDetails(fat.id)}
-                            title={t('fat.tooltip.details')}
-                        >
-                            <FileText className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
                             className="h-8 w-8 p-0 text-blue-500 hover:text-white hover:bg-blue-500"
-                            onClick={() => handleAddDetails(fat.id)}
+                            onClick={(e) => { e.stopPropagation(); handleAddDetails(fat.id); }}
                             title={t('fat.tooltip.addDetails')}
                         >
                             <PlusSquare className="h-4 w-4" />
@@ -154,7 +154,7 @@ export const createColumns = (
                             variant="ghost"
                             size="sm"
                             className="h-8 w-8 p-0 text-red-500 hover:text-white hover:bg-red-500"
-                            onClick={() => handleDelete(fat.id)}
+                            onClick={(e) => { e.stopPropagation(); handleDelete(fat.id); }}
                             title={t('fat.tooltip.delete')}
                         >
                             <Trash2 className="h-4 w-4" />

@@ -1,123 +1,138 @@
-import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Clock, CheckCircle2, BarChart3, Zap, Search, Ban } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
-import { useContractors } from '../../context/ContractorsContext';
-import { useNOI } from '../../context/NOIContext';
-import { useNCR, NCRItem } from '../../context/NCRContext';
-import { useITR } from '../../context/ITRContext';
+import { useAuth } from '../../context/AuthContext';
+
+import { useNCRStore } from '../../store/ncrStore';
+import type { NCRItem } from '../../store/ncrStore';
+import { useITRStore } from '../../store/itrStore';
 import { checkNCRReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
 import ConfirmModal from '../Shared/ConfirmModal';
-import styles from './NCR.module.css';
-import { NCRDetailModal, NCRDetailsViewModal, NCRDetailData } from './NCRModals';
+import shellStyles from '../Shared/ModuleShell.module.css';
+import { NCRDetailModal, NCRDetailData, PendingUploads } from './NCRModals';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
-import { BackButton } from '@/components/ui/BackButton';
+import { useDebounce } from '../../hooks/useDebounce';
+import { uploadFiles, deleteFile } from '../../services/api';
+import { useNCRStats } from '../../hooks/useNCRStats';
+import { runSaveFlow, sameWrite, SaveOutcome } from '../../utils/saveFlow';
+import { describeSaveError } from '../../utils/saveErrors';
+
+type StatusFilter = 'all' | 'open' | 'inProgress' | 'resolved' | 'closed' | 'void';
 
 const NCR: React.FC = () => {
-  const navigate = useNavigate();
   const { t } = useLanguage();
-  const { getActiveContractors } = useContractors();
-  const { ncrList, loading, error, refetch, addNCR, updateNCR, deleteNCR } = useNCR();
-  const { itrList } = useITR();
+  const { hasPermission } = useAuth();
 
-  // Search & Filter States
+  const { ncrList, loading, error, refetch, addNCR, updateNCR, deleteNCR } = useNCRStore();
+  const itrList = useITRStore(state => state.itrList);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 500);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
-  // Pre-filter data by Date Range and Global Search
+  React.useEffect(() => {
+    refetch({ search: debouncedSearch });
+  }, [debouncedSearch, refetch]);
+
   const filteredList = useMemo(() => {
-    let filtered = [...ncrList];
+    if (statusFilter === 'all') return ncrList;
+    const target = ({
+      open: 'open',
+      inProgress: 'in progress',
+      resolved: 'resolved',
+      closed: 'closed',
+      void: 'void',
+    } as const)[statusFilter];
+    return ncrList.filter((item) => (item.status || '').toLowerCase() === target);
+  }, [ncrList, statusFilter]);
 
-
-    // Global Search
-    if (searchQuery) {
-      const lowerQuery = searchQuery.toLowerCase();
-      filtered = filtered.filter(item =>
-        (item.documentNumber && item.documentNumber.toLowerCase().includes(lowerQuery)) ||
-        (item.vendor && item.vendor.toLowerCase().includes(lowerQuery)) ||
-        (item.description && item.description.toLowerCase().includes(lowerQuery)) ||
-        (item.status && item.status.toLowerCase().includes(lowerQuery)) ||
-        (item.subject && item.subject.toLowerCase().includes(lowerQuery))
-      );
-    }
-
-    return filtered;
-  }, [ncrList, searchQuery]);
-
-  // Modal States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [currentNcrId, setCurrentNcrId] = useState<string | null>(null);
-  const [viewingNcrId, setViewingNcrId] = useState<string | null>(null);
-  const [ncrDetails, setNcrDetails] = useState<{ [key: string]: NCRDetailData }>({});
 
-  // Delete Confirmation State
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null; message: string }>({
     isOpen: false,
     id: null,
     message: '',
   });
 
-  const statistics = useMemo(() => {
-    const statusCounts = {
-      opening: 0,
-      closed: 0,
-    };
+  const statistics = useNCRStats(ncrList);
+  // The last successful record write of the open modal (id + serialized payload) — see runSaveFlow / sameWrite.
+  const lastWriteRef = useRef<{ id: string; key: string } | null>(null);
 
-    ncrList.forEach((item) => {
-      const status = (item.status || '').toLowerCase();
-      if (status === 'open' || status === 'opening') {
-        statusCounts.opening++;
-      } else if (status === 'closed') {
-        statusCounts.closed++;
-      }
-    });
-
-    const total = ncrList.length;
-    const openRate = total > 0 ? Math.round((statusCounts.opening / total) * 100) : 0;
-
-    return {
-      ...statusCounts,
-      total,
-      openRate,
-    };
-  }, [ncrList]);
-
-  const handleAdd = (id: string) => {
-    navigate(`/ncr/${id}`);
-  };
-
-  const handleViewDetails = (id: string) => {
-    setViewingNcrId(id);
-    setIsDetailsModalOpen(true);
-  };
-
-  const handleEdit = (id: string) => {
+  const handleEdit = React.useCallback((id: string) => {
+    lastWriteRef.current = null;
     setCurrentNcrId(id);
     setIsEditModalOpen(true);
-  };
+  }, []);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const deepLinkAppliedRef = useRef(false);
+  // Set true only when the currently-open modal was reached via ?openId=
+  // (e.g. from Follow Up Issues) — lets onClose send the user back where
+  // they came from via browser history instead of just landing on this
+  // page's plain list, which is otherwise indistinguishable from having
+  // navigated here directly from the sidebar.
+  const openedViaDeepLinkRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkAppliedRef.current) return;
+    const openId = searchParams.get('openId');
+    if (!openId) return;
+    if (ncrList.length === 0) return;
+    const match = ncrList.find(item => item.id === openId || item.documentNumber === openId);
+    if (!match) return;
+    handleEdit(match.id);
+    openedViaDeepLinkRef.current = true;
+    deepLinkAppliedRef.current = true;
+    const next = new URLSearchParams(searchParams);
+    next.delete('openId');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, ncrList, handleEdit, setSearchParams]);
 
   const handleAddNew = () => {
-    const newId = String(Date.now());
-    setCurrentNcrId(newId);
+    lastWriteRef.current = null;
+    setCurrentNcrId('new');
     setIsEditModalOpen(true);
   };
 
-  const handleSaveNCRDetails = async (details: NCRDetailData) => {
-    if (currentNcrId) {
-      setNcrDetails(prev => ({ ...prev, [currentNcrId]: details }));
-      const existingItem = ncrList.find(item => item.id === currentNcrId);
+  const fileSteps = {
+    upload: (id: string, group: { category: string; files: File[] }) => uploadFiles('ncr', id, group.files, group.category),
+    remove: deleteFile,
+    reload: async () => { await refetch(); return !useNCRStore.getState().error; },
+    describe: (e: unknown) => describeSaveError(e, t),
+  };
 
-      // documentNumber 由後端自動產生，新建時不送；更新時也不覆蓋
+  // Retry of the unfinished file steps only. The record is stored already; it is NOT written again (an account with create but
+  // without update permission could not do that anyway, and the retry must never create it a second time).
+  const handleRetryNCRFiles = async (pendingUploads: PendingUploads[], deletedFileIds: string[]): Promise<SaveOutcome> => {
+    const id = lastWriteRef.current?.id;
+    if (!id) return { status: 'failed', message: t('common.saveFailed') };
+    return runSaveFlow({
+      writeRecord: async () => { throw new Error('a file retry never writes the record'); },
+      reuseId: id,
+      uploads: pendingUploads,
+      deletedFileIds,
+      ...fileSteps,
+    });
+  };
+
+  const handleSaveNCRDetails = async (details: NCRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]): Promise<SaveOutcome> => {
+    if (currentNcrId) {
+      const isNew = currentNcrId === 'new';
+      const existingItem = isNew ? undefined : ncrList.find(item => item.id === currentNcrId);
+
       const updatedItem: Record<string, unknown> = {
         vendor: details.contractor || '',
-        description: details.subject || details.detailsDescription || '',
+        description: details.subject || details.deviation || details.detailsDescription || '',
         rev: '',
         submit: 'v',
         status: details.status || 'Open',
         remark: details.remark || '',
         hasDetails: true,
         raiseDate: details.raiseDate,
+        dueDate: details.dueDate,
         closeoutDate: details.closeoutDate,
         aconex: details.aconex,
         type: details.type,
@@ -129,40 +144,105 @@ const NCR: React.FC = () => {
         productIntegrityRelated: details.productIntegrityRelated,
         permanentProductDeviation: details.permanentProductDeviation,
         impactToOM: details.impactToOM,
-        noiNumber: details.noiNumber,  // 連結到觸發此 NCR 的 NOI
+        noiNumber: details.noiNumber,
+        itrNumber: details.itrNumber,
         defectPhotos: details.defectPhotos,
+        progressPhotos: details.progressPhotos,
         improvementPhotos: details.improvementPhotos,
         attachments: details.attachments,
+        referenceStandards: details.referenceStandards,
+        serialNumbers: details.serialNumbers,
+        repairMethodStatement: details.repairMethodStatement,
+        // Sent as-is (not `|| undefined`) so clearing a status to '' actually
+        // reaches the backend — axios drops undefined keys entirely, which
+        // would make the auto-clear-on-type behavior never persist.
+        repairMethodStatementStatus: details.repairMethodStatementStatus,
+        immediateCorrectionAction: details.immediateCorrectionAction,
+        immediateCorrectionActionStatus: details.immediateCorrectionActionStatus,
+        rootCauseAnalysis: details.rootCauseAnalysis,
+        rootCauseAnalysisStatus: details.rootCauseAnalysisStatus,
+        correctiveActions: details.correctiveActions,
+        correctiveActionsStatus: details.correctiveActionsStatus,
+        preventiveAction: details.preventiveAction,
+        preventiveActionStatus: details.preventiveActionStatus,
+        finalProductIntegrityStatement: details.finalProductIntegrityStatement,
+        reInspectionNumber: details.reInspectionNumber,
+        projectQualityManager: details.projectQualityManager,
+        // NCR field-model improvements (BACKLOG #13). closedBy / verifiedBy /
+        // effectivenessVerifiedBy are stamped server-side, so not sent here.
+        severity: details.severity || undefined,
+        discipline: details.discipline || undefined,
+        assignedTo: details.assignedTo ?? undefined,
+        effectivenessVerified: details.effectivenessVerified || undefined,
+        effectivenessVerifiedDate: details.effectivenessVerifiedDate || undefined,
+        effectivenessNotes: details.effectivenessNotes || undefined,
+        effectivenessNotesStatus: details.effectivenessNotesStatus,
+        // NCR formal-report fields (BACKLOG #15)
+        drawingNo: details.drawingNo || undefined,
+        specNo: details.specNo || undefined,
+        poContract: details.poContract || undefined,
+        wbs: details.wbs || undefined,
+        lineNo: details.lineNo || undefined,
+        weldJointNo: details.weldJointNo || undefined,
+        heatBatchNo: details.heatBatchNo || undefined,
+        qtyAffected: details.qtyAffected || undefined,
+        // No `|| undefined` below: these can be legitimately cleared back to
+        // '' (e.g. the disposition-change effect resets ownerApproval*), and
+        // axios drops `undefined` keys entirely — that silently kept the old
+        // stale value on the backend instead of persisting the clear.
+        qtyAffectedUnit: details.qtyAffectedUnit,
+        extent: details.extent || undefined,
+        costScheduleImpact: details.costScheduleImpact || undefined,
+        requirement: details.requirement || undefined,
+        asFound: details.asFound || undefined,
+        deviation: details.deviation || undefined,
+        concessionNo: details.concessionNo || undefined,
+        ownerApproval: details.ownerApproval,
+        ownerApprovalBy: details.ownerApprovalBy,
+        ownerApprovalDate: details.ownerApprovalDate,
+        ownerApprovalNotes: details.ownerApprovalNotes,
+        rcaMethod: details.rcaMethod || undefined,
+        directCause: details.directCause || undefined,
+        directCauseStatus: details.directCauseStatus,
+        recurrence: details.recurrence || undefined,
+        recurrenceRef: details.recurrenceRef || undefined,
+        correctiveActionOwner: details.correctiveActionOwner || undefined,
+        correctiveActionTargetDate: details.correctiveActionTargetDate || undefined,
+        preventiveActionOwner: details.preventiveActionOwner || undefined,
+        preventiveActionTargetDate: details.preventiveActionTargetDate || undefined,
       };
 
-      if (existingItem) {
-        await updateNCR(currentNcrId, updatedItem);
-      } else {
-        const newNCR = await addNCR(updatedItem as Omit<NCRItem, 'id'>);
-        setNcrDetails(prev => {
-          const newDetails = { ...prev };
-          newDetails[newNCR.id] = details;
-          return newDetails;
-        });
-      }
+      // A retry after "saved, but a file step failed" with unchanged content must not write the record again.
+      const outcome = await runSaveFlow({
+        writeRecord: async () => {
+          if (existingItem) {
+            await updateNCR(currentNcrId, updatedItem);
+            return currentNcrId;
+          }
+          return (await addNCR(updatedItem as Omit<NCRItem, 'id'>)).id;
+        },
+        reuseId: sameWrite(lastWriteRef.current, currentNcrId, updatedItem) ? currentNcrId : null,
+        uploads: pendingUploads,
+        deletedFileIds,
+        ...fileSteps,
+        onRecordSaved: (id) => { lastWriteRef.current = { id, key: JSON.stringify(updatedItem) }; },
+      });
+      // The record exists now: a retry must update it, never create it again.
+      if (outcome.status === 'saved-incomplete' && isNew) setCurrentNcrId(outcome.id);
+      return outcome;
     }
-    setIsEditModalOpen(false);
-    setCurrentNcrId(null);
+    return { status: 'failed', message: t('common.saveFailed') };
   };
 
-  const confirmDelete = (id: string) => {
+  const confirmDelete = React.useCallback((id: string) => {
     const ncr = ncrList.find(item => item.id === id);
     if (!ncr) return;
 
     const references = checkNCRReferences(id, ncr.documentNumber, itrList);
     const message = generateDeleteMessage('NCR', ncr.documentNumber, references.references, t);
 
-    setDeleteModal({
-      isOpen: true,
-      id,
-      message,
-    });
-  };
+    setDeleteModal({ isOpen: true, id, message });
+  }, [ncrList, itrList, t]);
 
   const handleDelete = async () => {
     if (deleteModal.id) {
@@ -171,110 +251,136 @@ const NCR: React.FC = () => {
     }
   };
 
+  const columns = useMemo(() => createColumns(confirmDelete, t), [t, confirmDelete]);
+
+  // A failed load is not "zero records": with an error and nothing loaded the counts are unknown and are shown as "—".
+  const loadFailed = !!error && ncrList.length === 0;
+  const shown = <T,>(v: T): T | string => (loadFailed ? '—' : v);
+
+  const chips: { id: StatusFilter; label: string; count: number | string }[] = [
+    { id: 'all', label: t('common.all') || 'All', count: shown(statistics.total) },
+    { id: 'open', label: t('obs.statOpen') || 'Open', count: shown(statistics.open) },
+    { id: 'inProgress', label: t('status.inProgress') || 'In Progress', count: shown(statistics.inProgress) },
+    { id: 'resolved', label: t('status.resolved') || 'Resolved', count: shown(statistics.resolved) },
+    { id: 'closed', label: t('obs.statClosed') || 'Closed', count: shown(statistics.closed) },
+    { id: 'void', label: t('itp.status.void') || 'Void', count: shown(statistics.void) },
+  ];
+
+  const summary = [
+    {
+      key: 'open',
+      label: t('obs.statOpen') || 'Open',
+      value: shown(statistics.opening),
+      icon: <Clock size={18} strokeWidth={1.8} />,
+      accent: '#c8753f',
+    },
+    {
+      key: 'closed',
+      label: t('obs.statClosed') || 'Closed',
+      value: shown(statistics.closed),
+      icon: <CheckCircle2 size={18} strokeWidth={1.8} />,
+      accent: '#7a8f5a',
+    },
+    {
+      key: 'void',
+      label: t('itp.status.void') || 'Void',
+      value: shown(statistics.void),
+      icon: <Ban size={18} strokeWidth={1.8} />,
+      accent: '#9aa0a8',
+    },
+    {
+      key: 'total',
+      label: t('obs.statTotal') || 'Total',
+      value: shown(statistics.total),
+      icon: <BarChart3 size={18} strokeWidth={1.8} />,
+      accent: '#8a6a3a',
+    },
+    {
+      key: 'rate',
+      label: t('obs.statOpenRate') || 'Open Rate',
+      value: shown(`${statistics.openRate}%`),
+      icon: <Zap size={18} strokeWidth={1.8} />,
+      accent: '#b8945a',
+    },
+  ];
+
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <BackButton />
-          <h1>{t('ncr.title') || t('home.ncr.description') || 'NCR'}</h1>
+    <div className={shellStyles.container}>
+      {error && (
+        <div className={shellStyles.errorBanner}>
+          <span>{error}</span>
+          <button type="button" className={shellStyles.retryButton} onClick={() => refetch()}>
+            {t('common.retry')}
+          </button>
         </div>
-        <div className={styles.headerRight}>
-          <input
-            type="text"
-            className={styles.searchInput}
-            placeholder={t('ncr.searchPlaceholder')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-      </div>
+      )}
 
-      <div className={styles.summarySection}>
-        <h2 className={styles.summaryTitle}>{t('obs.statsTitle')}</h2>
-        <div className={styles.statsContainer}>
-          <div className={styles.statusStatsGrid}>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('obs.statOpen')}</div>
-                <div className={styles.statValue}>{statistics.opening}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.greenIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('obs.statClosed')}</div>
-                <div className={styles.statValue}>{statistics.closed}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.grayIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('obs.statTotal')}</div>
-                <div className={styles.statValue}>{statistics.total}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('obs.statOpenRate')}</div>
-                <div className={styles.statValue}>{statistics.opening} ({statistics.openRate}%)</div>
-              </div>
+      <section className={shellStyles.summaryGrid}>
+        {summary.map((card) => (
+          <div
+            key={card.key}
+            className={shellStyles.summaryCard}
+            style={{ '--accent': card.accent } as React.CSSProperties}
+          >
+            <div className={shellStyles.summaryIcon}>{card.icon}</div>
+            <div className={shellStyles.summaryBody}>
+              <div className={shellStyles.summaryLabel}>{card.label}</div>
+              <div className={shellStyles.summaryValue}>{card.value}</div>
             </div>
           </div>
-        </div>
-      </div>
+        ))}
+      </section>
 
-      <div className={styles.content}>
-        {loading && <p className={styles.loadingMessage}>{t('common.loading')}</p>}
-        {error && (
-          <div className={styles.loadingError}>
-            <p>{error}</p>
-            <button type="button" className={styles.retryButton} onClick={() => refetch()}>{t('common.retry')}</button>
-          </div>
-        )}
-        {!loading && !error && (
-          <>
-            <DataTable
-              title={t('ncr.title')}
-              actions={
-                <button
-                  className={styles.addNewButton}
-                  onClick={handleAddNew}
-                >
-                  {t('ncr.addNew')}
-                </button>
-              }
-              columns={createColumns(handleEdit, handleViewDetails, confirmDelete, t)}
-              data={filteredList}
-              searchKey=""
-              searchPlaceholder={t('ncr.searchPlaceholder')}
-              getRowClassName={(row) =>
-                (row.status || '').toLowerCase() === 'closed'
-                  ? 'bg-emerald-100/50 text-gray-500 hover:bg-emerald-200/50'
-                  : ''
-              }
+      <div className={shellStyles.toolbar}>
+        <div className={shellStyles.chipGroup}>
+          {chips.map((chip) => (
+            <button
+              key={chip.id}
+              type="button"
+              className={`${shellStyles.chip} ${statusFilter === chip.id ? shellStyles.chipActive : ''}`}
+              onClick={() => setStatusFilter(chip.id)}
+            >
+              {chip.label}
+              <span className={shellStyles.chipCount}>{chip.count}</span>
+            </button>
+          ))}
+        </div>
+        <div className={shellStyles.toolbarRight}>
+          <div className={shellStyles.searchWrap}>
+            <Search size={15} className={shellStyles.searchIcon} strokeWidth={2} />
+            <input
+              type="text"
+              className={shellStyles.searchInput}
+              placeholder={t('ncr.searchPlaceholder')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
             />
-          </>
-        )}
+          </div>
+          {hasPermission('ncr:create:all') && (
+            <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+              {t('ncr.addNew')}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {loading && (
+        <div className={shellStyles.loadingNote}>{t('common.loading')}</div>
+      )}
+
+      <div className={shellStyles.content}>
+        <DataTable
+          columns={columns}
+          data={filteredList}
+          searchKey=""
+          getRowClassName={(row) => {
+            const s = (row.status || '').toLowerCase();
+            if (s === 'closed') return shellStyles.rowDim;
+            if (s === 'void') return shellStyles.rowDim;
+            return '';
+          }}
+          onRowClick={(row) => handleEdit(row.id)}
+        />
       </div>
 
       <ConfirmModal
@@ -287,31 +393,36 @@ const NCR: React.FC = () => {
         cancelText={t('common.cancel')}
       />
 
-      {isEditModalOpen && currentNcrId && (
-        <NCRDetailModal
-          ncrId={currentNcrId}
-          existingData={ncrDetails[currentNcrId]}
-          existingItem={ncrList.find(item => item.id === currentNcrId)}
-          ncrList={ncrList}
-          onSave={handleSaveNCRDetails}
-          onClose={() => {
-            setIsEditModalOpen(false);
-            setCurrentNcrId(null);
-          }}
-        />
-      )}
-
-      {isDetailsModalOpen && viewingNcrId && (
-        <NCRDetailsViewModal
-          ncrId={viewingNcrId}
-          ncrItem={ncrList.find(item => item.id === viewingNcrId)}
-          ncrDetailData={ncrDetails[viewingNcrId]}
-          onClose={() => {
-            setIsDetailsModalOpen(false);
-            setViewingNcrId(null);
-          }}
-        />
-      )}
+      {isEditModalOpen && currentNcrId && (() => {
+        const editingItem = currentNcrId !== 'new' ? ncrList.find(item => item.id === currentNcrId) : undefined;
+        // Read-only when the user lacks edit rights, or the record is locked
+        // (Closed/Void) and they lack the higher close/reopen permission.
+        const status = (editingItem?.status || '').toLowerCase();
+        const locked = status === 'closed' || status === 'void';
+        const canEdit = currentNcrId === 'new'
+          ? hasPermission('ncr:create:all')
+          : locked ? hasPermission('ncr:close:all') : hasPermission('ncr:update:all');
+        return (
+          <NCRDetailModal
+            ncrId={currentNcrId}
+            existingItem={editingItem}
+            readOnly={!canEdit}
+            onSave={handleSaveNCRDetails}
+            onRetryFiles={handleRetryNCRFiles}
+            attachmentsAllowed={hasPermission('ncr:update:all')}
+            onClose={() => {
+              lastWriteRef.current = null;
+              if (openedViaDeepLinkRef.current) {
+                openedViaDeepLinkRef.current = false;
+                navigate(-1);
+                return;
+              }
+              setIsEditModalOpen(false);
+              setCurrentNcrId(null);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 };

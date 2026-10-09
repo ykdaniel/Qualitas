@@ -1,137 +1,190 @@
-import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useContractors } from '../../context/ContractorsContext';
-import { usePQP, PQPItem } from '../../context/PQPContext';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
+import { CheckCircle2, XCircle, BarChart3, TrendingUp, Search } from 'lucide-react';
+import { useContractorsStore } from '../../store/contractorsStore';
+import { usePQPStore } from '../../store/pqpStore';
+import type { PQPItem } from '../../store/pqpStore';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './PQP.module.css';
+import shellStyles from '../Shared/ModuleShell.module.css';
+import { usePQPStats } from '../../hooks/usePQPStats';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
-import { PQPDetailModal, PQPDetailsViewModal } from './PQPModals';
-import { BackButton } from '@/components/ui/BackButton';
+import { PQPDetailModal, type SaveOutcome } from './PQPModals';
+import { useDebounce } from '../../hooks/useDebounce';
+import { uploadFiles, deleteFile } from '../../services/api';
+import { classifyDeleteResults } from '../../utils/attachmentOutcome';
 
-type SortKey = keyof PQPItem;
-type SortDirection = 'asc' | 'desc';
-
-interface SortConfig {
-  key: SortKey;
-  direction: SortDirection;
-}
-
-const getLocalizedStatus = (status: string, t: (key: string) => string) => {
-  const s = (status || '').toLowerCase();
-  if (s === 'approved') return t('pqp.status.approved');
-  if (s === 'reject') return t('pqp.status.reject');
-  if (s === 'not submit') return t('pqp.status.notSubmit');
-  if (s === 'under review') return t('pqp.status.underReview');
-  return status;
-};
+type StatusFilter = 'all' | 'notSubmit' | 'underReview' | 'approved' | 'reject' | 'reviseResubmit';
 
 const PQP: React.FC = () => {
-  const navigate = useNavigate();
   const { t } = useLanguage();
-  const { getActiveContractors } = useContractors();
-  const { pqpList, addPQP, updatePQP, deletePQP } = usePQP();
+  const { hasPermission } = useAuth();
+  const { getActiveContractors } = useContractorsStore();
+  const { pqpList, loading, error, refetch, addPQP, updatePQP, publishPQP, deletePQP } = usePQPStore();
 
-
-  // Search & Filter States
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 500);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
-  // Modal States
+  React.useEffect(() => {
+    refetch({ search: debouncedSearch });
+  }, [debouncedSearch, refetch]);
+
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [currentPqpId, setCurrentPqpId] = useState<string | null>(null);
-  const [viewingPqpId, setViewingPqpId] = useState<string | null>(null);
-
-  // Delete Confirmation State
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null }>({
     isOpen: false,
     id: null,
   });
 
-  // Filter by Date Range and Global Search
   const filteredList = useMemo(() => {
-    let result = [...pqpList];
+    if (statusFilter === 'all') return pqpList;
+    const target = ({
+      notSubmit: 'not submit',
+      underReview: 'under review',
+      approved: 'approved',
+      reject: 'reject',
+      reviseResubmit: 'revise & resubmit',
+    } as const)[statusFilter];
+    return pqpList.filter((item) => (item.status || 'Not Submit').toLowerCase() === target);
+  }, [pqpList, statusFilter]);
 
+  const statistics = usePQPStats(pqpList);
 
-    // Global Search
-    if (searchQuery) {
-      const lowerQuery = searchQuery.toLowerCase();
-      result = result.filter(item =>
-        (item.pqpNo && item.pqpNo.toLowerCase().includes(lowerQuery)) ||
-        (item.title && item.title.toLowerCase().includes(lowerQuery)) ||
-        (item.vendor && item.vendor.toLowerCase().includes(lowerQuery)) ||
-        (item.status && item.status.toLowerCase().includes(lowerQuery))
-      );
-    }
-
-    return result;
-  }, [pqpList, searchQuery]);
-
-  const statistics = useMemo(() => {
-    const statusCounts = {
-      approved: 0,
-      reject: 0,
-    };
-
-    pqpList.forEach((item) => {
-      const status = (item.status || 'Approved').toLowerCase();
-      if (status === 'approved') {
-        statusCounts.approved++;
-      } else if (status === 'reject') {
-        statusCounts.reject++;
-      }
-    });
-
-    const total = pqpList.length;
-    const activeRate = total > 0 ? Math.round((statusCounts.approved / total) * 100) : 0;
-
-    return {
-      ...statusCounts,
-      total,
-      activeRate,
-    };
-  }, [pqpList]);
-
-  const handleEdit = (id: string) => {
+  const handleEdit = React.useCallback((id: string) => {
     setCurrentPqpId(id);
     setIsEditModalOpen(true);
-  };
+  }, []);
 
-  const handleViewDetails = (id: string) => {
-    setViewingPqpId(id);
-    setIsDetailsModalOpen(true);
-  };
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const deepLinkAppliedRef = useRef(false);
+  // Set true only when the currently-open modal was reached via ?openId=
+  // (e.g. from Follow Up Issues) — lets onClose send the user back where
+  // they came from via browser history instead of just landing on this
+  // page's plain list, which is otherwise indistinguishable from having
+  // navigated here directly from the sidebar.
+  const openedViaDeepLinkRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkAppliedRef.current) return;
+    const openId = searchParams.get('openId');
+    if (!openId) return;
+    if (pqpList.length === 0) return;
+    const match = pqpList.find(item => item.id === openId || item.pqpNo === openId);
+    if (!match) return;
+    handleEdit(match.id);
+    openedViaDeepLinkRef.current = true;
+    deepLinkAppliedRef.current = true;
+    const next = new URLSearchParams(searchParams);
+    next.delete('openId');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, pqpList, handleEdit, setSearchParams]);
+
+  const confirmDelete = React.useCallback((id: string) => {
+    setDeleteModal({ isOpen: true, id });
+  }, []);
+
+  const columns = useMemo(
+    () => createColumns(confirmDelete, t, getActiveContractors),
+    [t, getActiveContractors, confirmDelete],
+  );
 
   const handleAddNew = () => {
     setCurrentPqpId('new');
     setIsEditModalOpen(true);
   };
 
-  const handleSavePQPDetails = async (updates: Partial<PQPItem>) => {
+  const handleSavePQPDetails = async (updates: Partial<PQPItem>, pendingFiles: File[], deletedFileIds: string[], _removedAttachments?: string[], skipRecordWrite?: boolean): Promise<SaveOutcome> => {
     const existingItem = currentPqpId && currentPqpId !== 'new' ? pqpList.find(item => item.id === currentPqpId) : undefined;
     const today = new Date().toISOString().split('T')[0];
+
+    // Phase 1: persist the record itself. Left to throw straight through —
+    // the modal's own handleSave is the single owner of "record failed to
+    // save" (shown via its saveError state, kept open, input untouched).
+    //
+    // skipRecordWrite (set by PQPModals.tsx via isUnchangedSincePriorWrite: true when
+    // JSON.stringify(formData) is string-equal to the last successfully written attempt's — a
+    // serialized-string comparison, not semantic equality) only ever applies here — `create`
+    // (the else branch) happens at most once per record, before `existingItem` exists, so a
+    // retry is always an update. Without this, retrying after an attachment-only failure would
+    // re-send an identical PUT and create a second, real audit-log UPDATE entry every time — the
+    // same underlying pattern independently confirmed for ITP's Publish retry (audit_logs rows
+    // went 0→2 on first Publish, then 2→4 on an unedited retry, before this fix) and directly
+    // re-verified here for PQP's plain Save via the same request-log check (see the test suite).
+    let targetId = '';
     if (existingItem) {
-      const merged = { ...existingItem, ...updates, updatedAt: today };
-      const { id: _omit, pqpNo: _pqpNo, ...payload } = merged;  // 移除 pqpNo，不允許更新
-      await updatePQP(existingItem.id, payload);
+      targetId = existingItem.id;
+      if (!skipRecordWrite) {
+        const merged = { ...existingItem, ...updates, updatedAt: today };
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { id, pqpNo, ...payload } = merged;
+        await updatePQP(existingItem.id, payload);
+      }
     } else {
-      // pqpNo 由後端自動產生，不需要前端送
-      await addPQP({
+      const createdPqp = await addPQP({
         title: updates.title || '',
         description: updates.description || '',
         vendor: updates.vendor || '',
-        status: updates.status || 'Approved',
+        status: updates.status || 'Not Submit',
         version: updates.version || 'Rev1.0',
         createdAt: today,
         updatedAt: today,
         attachments: updates.attachments || [],
       } as Omit<PQPItem, 'id'>);
+      targetId = createdPqp.id;
+      // The record now exists — switch the modal from "new" to "editing
+      // this record" BEFORE touching attachments below, so that if the
+      // attachment phase fails and the modal stays open, a retry updates
+      // this same record instead of creating a second one.
+      setCurrentPqpId(createdPqp.id);
     }
-  };
 
-  const confirmDelete = (id: string) => {
-    setDeleteModal({ isOpen: true, id });
+    // Phase 2: attachment housekeeping. The record is ALREADY saved by this point — Phase 2
+    // never throws, it always returns a SaveOutcome describing exactly what it confirmed, so
+    // the modal can prune its own queues per-item instead of clearing or keeping them wholesale.
+    //
+    // Deletes go through Promise.allSettled (each is independent), so one can fail while
+    // another succeeds — only the CONFIRMED-successful ids go in `deletedIds`. A 404 is NOT
+    // treated as "already gone = success": routers/file_router.py's delete endpoint returns the
+    // same 404 whether the attachment was already deleted, never existed, or fell out of scope,
+    // so silently treating it as success here would mask a real problem in some of those cases.
+    // It stays in the retry queue instead — see the outcome's `errors` for the caveat this
+    // creates (a truly-already-deleted id can never resolve itself; the user has to re-open the
+    // record instead of retrying indefinitely). A network failure with no response at all is
+    // recorded distinctly from a 404, since the two situations are not the same unknown.
+    //
+    // Upload is a single all-or-nothing backend transaction (validates every file, then writes
+    // all of them in one commit — see routers/file_router.py::upload_files), so it is a single
+    // boolean, not a per-file list; retrying it never re-uploads an already-successful file.
+    let errors: string[] = [];
+    let deletedIds: string[] = [];
+    if (deletedFileIds.length > 0) {
+      const uniqueIds = [...new Set(deletedFileIds)];
+      const results = await Promise.allSettled(uniqueIds.map((fileId) => deleteFile(fileId)));
+      const classified = classifyDeleteResults(uniqueIds, results);
+      deletedIds = classified.deletedIds;
+      errors = classified.errors;
+    }
+    let uploadedPending = false;
+    if (pendingFiles.length > 0 && targetId) {
+      try {
+        await uploadFiles('pqp', targetId, pendingFiles);
+        uploadedPending = true;
+      } catch (err: any) {
+        const detail = err?.response?.data?.detail || err?.message;
+        errors.push(`上傳附件：${detail || '上傳失敗'}`);
+      }
+    }
+
+    if (errors.length === 0) {
+      setIsEditModalOpen(false);
+      setCurrentPqpId(null);
+    }
+    return { deletedIds, uploadedPending, errors };
   };
 
   const handleDelete = async () => {
@@ -141,102 +194,125 @@ const PQP: React.FC = () => {
       setDeleteModal({ isOpen: false, id: null });
     } catch (err) {
       console.error('Delete PQP failed:', err);
-      alert((err as Error)?.message || t('common.deleteFailed'));
+      toast.error((err as Error)?.message || t('common.deleteFailed'));
     }
   };
 
-  return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <BackButton />
-          <h1>{t('pqp.title') || t('pqp.titleShort')}</h1>
-        </div>
-        <div className={styles.headerRight}>
-          <input
-            type="text"
-            className={styles.searchInput}
-            placeholder={t('pqp.searchPlaceholder')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-      </div>
+  const chips: { id: StatusFilter; label: string; count: number }[] = [
+    { id: 'all', label: t('common.all') || 'All', count: statistics.total },
+    { id: 'notSubmit', label: t('pqp.status.notSubmit'), count: statistics.notSubmit },
+    { id: 'underReview', label: t('pqp.status.underReview'), count: statistics.underReview },
+    { id: 'approved', label: t('pqp.status.approved'), count: statistics.approved },
+    { id: 'reject', label: t('pqp.status.reject'), count: statistics.reject },
+    { id: 'reviseResubmit', label: t('pqp.status.reviseResubmit'), count: statistics.reviseResubmit },
+  ];
 
-      <div className={styles.summarySection}>
-        <h2 className={styles.summaryTitle}>{t('pqp.statsTitle')}</h2>
-        <div className={styles.statsContainer}>
-          <div className={styles.statusStatsGrid}>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('pqp.status.approved')}</div>
-                <div className={styles.statValue}>{statistics.approved}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.orangeIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('pqp.status.reject')}</div>
-                <div className={styles.statValue}>{statistics.reject}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.grayIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('pqp.statTotal') || 'Total'}</div>
-                <div className={styles.statValue}>{statistics.total}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('pqp.activeRate')}</div>
-                <div className={styles.statValue}>{statistics.approved} ({statistics.activeRate}%)</div>
-              </div>
+  const summary = [
+    {
+      key: 'approved',
+      label: t('pqp.status.approved'),
+      value: statistics.approved,
+      icon: <CheckCircle2 size={18} strokeWidth={1.8} />,
+      accent: '#7a8f5a',
+    },
+    {
+      key: 'reject',
+      label: t('pqp.status.reject'),
+      value: statistics.reject,
+      icon: <XCircle size={18} strokeWidth={1.8} />,
+      accent: '#c8753f',
+    },
+    {
+      key: 'total',
+      label: t('pqp.total'),
+      value: statistics.total,
+      icon: <BarChart3 size={18} strokeWidth={1.8} />,
+      accent: '#8a6a3a',
+    },
+    {
+      key: 'rate',
+      label: t('pqp.approvedRate'),
+      value: `${statistics.activeRate}%`,
+      icon: <TrendingUp size={18} strokeWidth={1.8} />,
+      accent: '#b8945a',
+    },
+  ];
+
+  return (
+    <div className={shellStyles.container}>
+      {error && (
+        <div className={shellStyles.errorBanner}>
+          <span>{error}</span>
+          <button type="button" className={shellStyles.retryButton} onClick={() => refetch()}>
+            {t('common.retry')}
+          </button>
+        </div>
+      )}
+
+      <section className={shellStyles.summaryGrid}>
+        {summary.map((card) => (
+          <div
+            key={card.key}
+            className={shellStyles.summaryCard}
+            style={{ '--accent': card.accent } as React.CSSProperties}
+          >
+            <div className={shellStyles.summaryIcon}>{card.icon}</div>
+            <div className={shellStyles.summaryBody}>
+              <div className={shellStyles.summaryLabel}>{card.label}</div>
+              <div className={shellStyles.summaryValue}>{card.value}</div>
             </div>
           </div>
+        ))}
+      </section>
+
+      <div className={shellStyles.toolbar}>
+        <div className={shellStyles.chipGroup}>
+          {chips.map((chip) => (
+            <button
+              key={chip.id}
+              type="button"
+              className={`${shellStyles.chip} ${statusFilter === chip.id ? shellStyles.chipActive : ''}`}
+              onClick={() => setStatusFilter(chip.id)}
+            >
+              {chip.label}
+              <span className={shellStyles.chipCount}>{chip.count}</span>
+            </button>
+          ))}
+        </div>
+        <div className={shellStyles.toolbarRight}>
+          <div className={shellStyles.searchWrap}>
+            <Search size={15} className={shellStyles.searchIcon} strokeWidth={2} />
+            <input
+              type="text"
+              className={shellStyles.searchInput}
+              placeholder={t('pqp.searchPlaceholder')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          {hasPermission('pqp:create:all') && (
+            <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+              {t('pqp.addNew')}
+            </button>
+          )}
         </div>
       </div>
 
-      <div className={styles.content}>
+      {loading && (
+        <div className={shellStyles.loadingNote}>{t('common.loading')}</div>
+      )}
+
+      <div className={shellStyles.content}>
         <DataTable
-          title={t('pqp.title')}
-          actions={
-            <button
-              type="button"
-              className={styles.addNewButton}
-              onClick={handleAddNew}
-            >
-              {t('pqp.addNew')}
-            </button>
-          }
-          columns={createColumns(handleEdit, handleViewDetails, confirmDelete, t, getActiveContractors)}
+          columns={columns}
           data={filteredList}
           searchKey=""
-          searchPlaceholder={t('pqp.searchPlaceholder')}
-          getRowClassName={(row) =>
-            (row.status || 'Approved').toLowerCase() === 'reject'
-              ? 'bg-emerald-100/50 text-gray-500 hover:bg-emerald-200/50'
-              : ''
-          }
+          getRowClassName={(row) => {
+            const s = (row.status || 'Not Submit').toLowerCase();
+            if (s === 'reject' || s === 'revise & resubmit') return shellStyles.rowAlert;
+            return '';
+          }}
+          onRowClick={(row) => handleEdit(row.id)}
         />
       </div>
 
@@ -250,35 +326,46 @@ const PQP: React.FC = () => {
         cancelText={t('common.cancel')}
       />
 
-      {
-        isEditModalOpen && currentPqpId && (
-          <PQPDetailModal
-            pqpId={currentPqpId}
-            existingItem={currentPqpId !== 'new' ? pqpList.find(item => item.id === currentPqpId) : undefined}
-            onSave={handleSavePQPDetails}
-            onClose={() => {
-              setIsEditModalOpen(false);
-              setCurrentPqpId(null);
-            }}
-          />
-        )
-      }
-
-      {
-        isDetailsModalOpen && viewingPqpId && (
-          <PQPDetailsViewModal
-            pqpId={viewingPqpId}
-            pqpItem={pqpList.find(item => item.id === viewingPqpId)}
-            onClose={() => {
-              setIsDetailsModalOpen(false);
-              setViewingPqpId(null);
-            }}
-          />
-        )
-      }
-    </div >
+      {isEditModalOpen && currentPqpId && (() => {
+        const editingItem = currentPqpId !== 'new' ? pqpList.find(item => item.id === currentPqpId) : undefined;
+        // Read-only when the user lacks edit rights, or the record is
+        // Approved and they lack the higher approve permission. Approved
+        // still has a real reopen path (WorkflowEngine "Approved": ["Under
+        // Review", "Void"]), so this mirrors OBS's fieldset-level soft lock
+        // rather than NOI's unconditional one — the backend's own
+        // Approved-state field lock (pqp_service.py) is reopen-aware to
+        // match.
+        const status = (editingItem?.status || '').toLowerCase();
+        const locked = status === 'approved';
+        const canEdit = currentPqpId === 'new'
+          ? hasPermission('pqp:create:all')
+          : locked ? hasPermission('pqp:approve:all') : hasPermission('pqp:update:all');
+        return (
+        <PQPDetailModal
+          pqpId={currentPqpId}
+          existingItem={editingItem}
+          readOnly={!canEdit}
+          canPublish={hasPermission('pqp:approve:all')}
+          onSave={handleSavePQPDetails}
+          onPublish={async (id, changeSummary) => {
+            await publishPQP(id, changeSummary);
+            setIsEditModalOpen(false);
+            setCurrentPqpId(null);
+          }}
+          onClose={() => {
+            if (openedViaDeepLinkRef.current) {
+              openedViaDeepLinkRef.current = false;
+              navigate(-1);
+              return;
+            }
+            setIsEditModalOpen(false);
+            setCurrentPqpId(null);
+          }}
+        />
+        );
+      })()}
+    </div>
   );
 };
 
 export default PQP;
-

@@ -1,0 +1,324 @@
+.subtitle {
+  color: #8b8275;
+  font-size: 13px;
+  margin: 0;
+}
+
+/* ── Tracker table ─────────────────────────────────────────────── */
+.tableWrapper {
+  background: #ffffff;
+  border: 1px solid rgba(184, 148, 90, 0.22);
+  border-radius: 12px;
+  padding: 4px;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.table th {
+  background: #f9fafb;
+  padding: 10px 8px;
+  text-align: center;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+  font-weight: 600;
+  border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 13px;
+  color: #1f2937;
+  text-align: center;
+}
+
+/* Left-anchored columns (NCR number + subject) stay visible as the
+   13-column checkpoint strip scrolls horizontally. */
+.stickyCol {
+  position: sticky;
+  left: 0;
+  background: white;
+  z-index: 2;
+  min-width: 120px;
+  max-width: 140px;
+  font-weight: 600;
+  border-right: 1px solid #f3f4f6;
+}
+
+.stickyCol2 {
+  position: sticky;
+  left: 140px;
+  background: white;
+  z-index: 2;
+  min-width: 200px;
+  max-width: 260px;
+  border-right: 1px solid #e5e7eb;
+}
+
+.table th.stickyCol,
+.table th.stickyCol2,
+.table th.percentCol {
+  background: #f9fafb;
+}
+
+.subjectCell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* QWORKFLOW-UX-2026-001: one extra line in the sticky NOI cell stating the current checkpoint
+   (or Accepted once fully done) — kept inside the cell's own max-width so it wraps/ellipses
+   instead of widening the sticky column or forcing new page-level horizontal scroll. */
+.currentStepLine {
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 400;
+  color: #8b8275;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+/* NOI's checkpoint/scope description — not sticky (unlike reference/NOI),
+   since it's supplementary context, not a primary identifier; letting it
+   scroll away with the checkpoint strip keeps the sticky-left group from
+   eating further into the space the 9 checkpoints need. */
+.subjectCol {
+  min-width: 160px;
+  max-width: 220px;
+  text-align: left;
+}
+
+.ncrCell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.checkpointHead {
+  text-align: center;
+  min-width: 88px;
+  vertical-align: middle;
+  padding: 10px 6px;
+}
+
+/* Horizontal checkpoint headers. The table wrapper already scrolls
+   horizontally on narrow screens, so we keep labels upright for
+   legibility rather than rotating them. */
+.checkpointHeadLabel {
+  display: inline-block;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 1.1;
+}
+
+/* ── Per-row progress bar ─────────────────────────────────────────
+   Each checkpoint cell is still present in the DOM so the markers
+   stay aligned with the column headers above, but instead of
+   rendering ✓/● glyphs we paint a continuous progress bar using
+   two ::before/::after pseudo-elements per cell (left half of the
+   track and right half of the track). The marker dot sits in the
+   cell's centre, layered on top of the track.
+
+   Progress semantics (matches the linear-front model in
+   workflow_service._evaluate_checkpoints):
+     done    → both track halves green, green dot
+     current → left half green (trail up to here), right half
+               gray, orange dot
+     pending → both halves gray, gray dot
+
+   The first cell drops its left half (track starts at NOI's
+   centre) and the last cell drops its right half (track ends at
+   Accepted's centre) so the bar doesn't bleed into the adjacent
+   sticky/percent columns. */
+.progressCell {
+  position: relative;
+  min-width: 88px;
+  height: 56px;
+  padding: 0;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.progressCell::before,
+.progressCell::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 50%;
+  height: 6px;
+  margin-top: -3px;
+  background: #e5e7eb;
+  z-index: 0;
+}
+
+.progressCell::before { left: 0; }
+.progressCell::after { left: 50%; }
+
+/* First cell (NOI) drops its left-half track so the bar starts
+   cleanly at the NOI marker. Last cell (Accepted) drops its right
+   half for the same reason. */
+.progressCell.first::before { content: none; }
+.progressCell.last::after { content: none; }
+
+/* Done: both halves of the track are green. */
+.progressCell.done::before,
+.progressCell.done::after {
+  background: #10b981;
+}
+
+/* Current: the trail up to here is green, the rest is still gray. */
+.progressCell.current::before {
+  background: #10b981;
+}
+
+.progressMarker {
+  position: relative;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  margin: 0 auto;
+  background: white;
+  border: 2px solid #d1d5db;
+  box-sizing: border-box;
+}
+
+.progressCell.done .progressMarker {
+  background: #10b981;
+  border-color: #047857;
+}
+
+.progressCell.current .progressMarker {
+  background: #f59e0b;
+  border-color: #b45309;
+  width: 16px;
+  height: 16px;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.18);
+}
+
+.progressCell.pending .progressMarker {
+  background: white;
+  border-color: #d1d5db;
+}
+
+/* Clickable checkpoint markers — pointer cursor + hover lift */
+.progressCell.clickable {
+  cursor: pointer;
+}
+
+.progressCell.clickable:hover .progressMarker {
+  transform: scale(1.35);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.18);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.progressCell.current.clickable:hover .progressMarker {
+  box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.25);
+}
+
+/* The completion % is the single most important number on this page (it's
+   what "spot the stragglers" is sorted by) — pin it to the right, same as
+   the reference/NOI columns are pinned left, so it's never scrolled out of
+   view behind the 9-checkpoint strip (that strip alone is wider than most
+   viewports at 9 * 88px min-width). */
+.percentCol {
+  text-align: center;
+  min-width: 64px;
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  border-left: 1px solid #e5e7eb;
+}
+
+.percentCell {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: #111827;
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: white;
+  border-left: 1px solid #f3f4f6;
+}
+
+.row {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.row:hover td {
+  background: #f9fafb;
+}
+
+.row:hover .stickyCol,
+.row:hover .stickyCol2,
+.row:hover .percentCell {
+  background: #f9fafb;
+}
+
+.empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.error {
+  padding: 16px;
+  margin-bottom: 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+/* Records that pass the improvement checkpoint on their Closed status only (photos NOT verified): a small line under the marker, and a note under
+   the percentage, so 100% is never read as "all evidence verified". */
+.unverifiedMark {
+  position: relative;
+  z-index: 1;
+  display: block;
+  margin: 2px 4px 0;
+  font-size: 10px;
+  line-height: 1.2;
+  color: #92400e;
+}
+
+.unverifiedNote {
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: #92400e;
+  white-space: nowrap;
+}
+
+
+/* Separate record fields; only the workflow identifier stays pinned. */
+.table .stickyCol { width: 180px; min-width: 180px; max-width: 180px; box-sizing: border-box; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.noiCol { min-width: 200px; white-space: nowrap; }
+.stepCol { min-width: 130px; white-space: nowrap; }
+.completionCol { min-width: 110px; font-variant-numeric: tabular-nums; }
+.unverifiedNote { white-space: normal; }
+.legend { display: flex; flex-wrap: wrap; gap: 12px 20px; padding: 8px 0; color: #57534e; font-size: 12px; }
+.legendItem { display: inline-flex; align-items: center; gap: 8px; }
+.legendItem .progressMarker { margin: 0; }
+.legendItem.done .progressMarker { background: #10b981; border-color: #047857; }
+.legendItem.current .progressMarker { background: #f59e0b; border-color: #b45309; }
+@media (max-width: 640px) {
+  .table .stickyCol { width: 144px; min-width: 144px; max-width: 144px; }
+}
+
+.indexCol { min-width: 40px; width: 40px; font-variant-numeric: tabular-nums; color: #78716c; }
+.rowCount { margin: 0 0 8px; font-size: 12px; color: #6b7280; }

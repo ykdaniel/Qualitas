@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run pytest
+        run: python -m pytest -q
+
+  frontend:
+    name: Frontend typecheck
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: react-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: react-app/package-lock.json
+
+      # --legacy-peer-deps: the lockfile has never resolved cleanly under npm's
+      # strict peer check (eslint-plugin-react-refresh@0.5.0 vs eslint@8), so a
+      # plain `npm ci` fails at install on Node 20 / npm 10 — verified against
+      # HEAD without any other change. Matches how the project is installed locally.
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build

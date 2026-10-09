@@ -415,15 +415,6 @@ textarea.input {
   border-color: #2563eb;
 }
 
-.selfInspectionInputShort {
-  width: 72px;
-  padding: 4px 6px;
-  border: 1px solid #d1d5db;
-  border-radius: 2px;
-  font-size: 13px;
-  box-sizing: border-box;
-}
-
 .selfInspectionInputTiny {
   width: 48px;
   padding: 2px 4px;
@@ -575,7 +566,35 @@ textarea.input {
 }
 
 /* Print Styles */
+/* Print Styles */
 @media print {
+
+  /* Hide the main application */
+  :global(#root) {
+    display: none !important;
+  }
+
+  :global(body) {
+    margin: 0 !important;
+    padding: 0 !important;
+    visibility: visible !important;
+  }
+
+  /* Style the portal root for printing */
+  :global(#itp-print-root) {
+    display: block !important;
+    position: static !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 1cm !important;
+    visibility: visible !important;
+    background: white !important;
+    color: black !important;
+    z-index: 9999;
+  }
+
   .container {
     position: static;
     background: white;
@@ -723,7 +742,6 @@ textarea.input {
   }
 
   .selfInspectionInput,
-  .selfInspectionInputShort,
   .selfInspectionInputTiny {
     border: 1px solid #000 !important;
     background: #fff !important;

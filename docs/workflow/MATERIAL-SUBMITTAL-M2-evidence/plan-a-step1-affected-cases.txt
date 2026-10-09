@@ -1,0 +1,32 @@
+Plan A step 1 — affected cases only — started 2026-10-08T14:30:33Z, Python 3.14.6
+cmd: DATABASE_URL=sqlite:///:memory: python3 -m pytest tests/test_attachment_authorization_http.py -v -p no:cacheprovider -W ignore::DeprecationWarning -rfEs -k "contractor_scoped or contractor_account_in_scope or covers_exactly"
+
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-9.0.2, pluggy-1.6.0 -- /opt/homebrew/opt/python@3.14/bin/python3.14
+rootdir: /Users/nook/Documents/Qualitas/backend
+configfile: pytest.ini
+plugins: anyio-4.13.0
+collecting ... collected 264 items / 247 deselected / 17 selected
+
+tests/test_attachment_authorization_http.py::test_the_permission_table_covers_exactly_the_legal_entity_types PASSED [  5%]
+tests/test_attachment_authorization_http.py::test_contractor_scoped_accounts_cannot_reach_material_revision_attachments[sA-upload] PASSED [ 11%]
+tests/test_attachment_authorization_http.py::test_contractor_scoped_accounts_cannot_reach_material_revision_attachments[sA-list] PASSED [ 17%]
+tests/test_attachment_authorization_http.py::test_contractor_scoped_accounts_cannot_reach_material_revision_attachments[sA-metadata] PASSED [ 23%]
+tests/test_attachment_authorization_http.py::test_contractor_scoped_accounts_cannot_reach_material_revision_attachments[sA-delete] PASSED [ 29%]
+tests/test_attachment_authorization_http.py::test_contractor_scoped_accounts_cannot_reach_material_revision_attachments[sA-download] PASSED [ 35%]
+tests/test_attachment_authorization_http.py::test_contractor_scoped_accounts_cannot_reach_material_revision_attachments[sB-upload] PASSED [ 41%]
+tests/test_attachment_authorization_http.py::test_contractor_scoped_accounts_cannot_reach_material_revision_attachments[sB-list] PASSED [ 47%]
+tests/test_attachment_authorization_http.py::test_contractor_scoped_accounts_cannot_reach_material_revision_attachments[sB-metadata] PASSED [ 52%]
+tests/test_attachment_authorization_http.py::test_contractor_scoped_accounts_cannot_reach_material_revision_attachments[sB-delete] PASSED [ 58%]
+tests/test_attachment_authorization_http.py::test_contractor_scoped_accounts_cannot_reach_material_revision_attachments[sB-download] PASSED [ 64%]
+tests/test_attachment_authorization_http.py::test_contractor_scoped_accounts_cannot_reach_material_revision_attachments[sV-upload] PASSED [ 70%]
+tests/test_attachment_authorization_http.py::test_contractor_scoped_accounts_cannot_reach_material_revision_attachments[sV-list] PASSED [ 76%]
+tests/test_attachment_authorization_http.py::test_contractor_scoped_accounts_cannot_reach_material_revision_attachments[sV-metadata] PASSED [ 82%]
+tests/test_attachment_authorization_http.py::test_contractor_scoped_accounts_cannot_reach_material_revision_attachments[sV-delete] PASSED [ 88%]
+tests/test_attachment_authorization_http.py::test_contractor_scoped_accounts_cannot_reach_material_revision_attachments[sV-download] PASSED [ 94%]
+tests/test_attachment_authorization_http.py::test_a_contractor_account_in_scope_still_reaches_its_other_attachment_types PASSED [100%]
+
+===================== 17 passed, 247 deselected in 37.80s ======================
+
+PYTEST EXIT CODE: 0
+finished 2026-10-08T14:31:12Z

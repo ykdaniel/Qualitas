@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
 @layer base {
@@ -107,22 +108,11 @@
   }
 }
 
-/* Legacy global styles */
-:root {
-  --primary-color: #2563eb;
-  --primary-hover: #1d4ed8;
-  --text-primary: #1f2937;
-  --text-secondary: #6b7280;
-  --border-color: #e5e7eb;
-  --glass-bg: rgba(255, 255, 255, 0.9);
-  --glass-border: rgba(255, 255, 255, 0.18);
-  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-}
-
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
+  letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -130,4 +120,47 @@ body {
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
+}
+
+/* --- Print Styles --- */
+@media print {
+  /* Hide unnecessary UI elements */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Force background colors and exact colors to print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Remove typical modal overlay background/shadows for clean print */
+  .print-modal-content {
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  /* Reset background for print */
+  body {
+    background-color: white !important;
+  }
+
+  /* Page breaks for tables to avoid cutting rows in half */
+  table {
+    page-break-inside: auto;
+  }
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  
+  /* Make sure the checklist overflow container expands fully for print */
+  .print-expand {
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
 }

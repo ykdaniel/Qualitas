@@ -3,7 +3,10 @@ node_modules/
 dist/
 build/
 .npm
-scripts/
+
+# One-off / debug scripts — keep scripts/ itself tracked so legitimate
+# build and deploy scripts can live there.
+scripts/debug/
 
 # Python
 __pycache__/
@@ -15,11 +18,73 @@ env/
 .env
 
 # IDEs
-.vscode/
+.vscode/*
+!.vscode/extensions.json
 .idea/
 *.swp
 *.swo
 
+# Claude Code worktrees (should never be committed)
+.claude/worktrees/
+.claude/settings.local.json
+
+# Local backup archive (moved out of project tree)
+backups/
+
 # OS
 .DS_Store
 Thumbs.db
+
+# Database
+*.db
+*.db.backup*
+*.db.bak*
+*.bak.*
+*.backup.*
+
+# Logs
+logs/
+*.log
+
+# Experimental / debug scripts
+comprehensive_dump.py
+db_complete_dump.txt
+deep_search_db.py
+dump_db_data.py
+raw_dump.py
+search_partial_db.py
+verify_backend_integrity.py
+verify_km_api.py
+update_itp017.py
+import_concrete_itp.py
+test_api.py
+token.json
+nul
+~$*
+
+# Stray backup/dump artifacts
+*.xlsm.bak
+
+# Lint / tsc / test output dumps (accidentally tracked before)
+*_output.txt
+*_error.txt
+alembic_error.txt
+full-lint.txt
+eslint_*.txt
+*-lint.txt
+tsc_*.txt
+defined_keys.txt
+used_keys.txt
+frontend_stdout.log
+test_write.txt
+
+# User-uploaded files (runtime artifacts, not source)
+backend/uploads/
+
+# Specific files to include
+!backend/requirements.txt
+!react-app/package.json
+!react-app/package-lock.json
+
+# Vite dependency pre-bundle cache
+.vite/

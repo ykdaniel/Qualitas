@@ -1,0 +1,208 @@
+# Permission Constants (Enterprise Format: module:action:scope:level)
+
+# ITP Permissions
+ITP_VIEW = "itp:view:all"
+ITP_CREATE = "itp:create:all"
+ITP_UPDATE = "itp:update:all"
+ITP_DELETE = "itp:delete:all"
+ITP_APPROVE = "itp:approve:all"
+ITP_VOID = "itp:void:all"
+
+# NCR Permissions
+NCR_VIEW = "ncr:view:all"
+NCR_CREATE = "ncr:create:all"
+NCR_UPDATE = "ncr:update:all"
+NCR_DELETE = "ncr:delete:all"
+NCR_APPROVE = "ncr:approve:all"
+NCR_CLOSE = "ncr:close:all"
+
+# NOI Permissions
+NOI_VIEW = "noi:view:all"
+NOI_CREATE = "noi:create:all"
+NOI_UPDATE = "noi:update:all"
+NOI_DELETE = "noi:delete:all"
+NOI_APPROVE = "noi:approve:all"
+
+# Checklist Permissions
+CHECKLIST_VIEW = "checklist:view:all"
+CHECKLIST_CREATE = "checklist:create:all"
+CHECKLIST_UPDATE = "checklist:update:all"
+CHECKLIST_DELETE = "checklist:delete:all"
+CHECKLIST_CLOSE = "checklist:close:all"
+
+# PQP Permissions
+PQP_VIEW = "pqp:view:all"
+PQP_CREATE = "pqp:create:all"
+PQP_UPDATE = "pqp:update:all"
+PQP_DELETE = "pqp:delete:all"
+PQP_APPROVE = "pqp:approve:all"
+
+# ITR Permissions
+ITR_VIEW = "itr:view:all"
+ITR_CREATE = "itr:create:all"
+ITR_UPDATE = "itr:update:all"
+ITR_DELETE = "itr:delete:all"
+ITR_APPROVE = "itr:approve:all"
+
+
+# FAT Permissions
+FAT_VIEW = "fat:view:all"
+FAT_CREATE = "fat:create:all"
+FAT_UPDATE = "fat:update:all"
+FAT_DELETE = "fat:delete:all"
+
+# Audit Permissions
+AUDIT_VIEW = "audit:view:all"
+AUDIT_CREATE = "audit:create:all"
+AUDIT_UPDATE = "audit:update:all"
+AUDIT_DELETE = "audit:delete:all"
+
+# OBS Permissions
+OBS_VIEW = "obs:view:all"
+OBS_CREATE = "obs:create:all"
+OBS_UPDATE = "obs:update:all"
+OBS_DELETE = "obs:delete:all"
+OBS_APPROVE = "obs:approve:all"
+
+# OSD Permissions (Over/Short/Damage Report)
+OSD_VIEW = "osd:view:all"
+OSD_CREATE = "osd:create:all"
+OSD_UPDATE = "osd:update:all"
+OSD_DELETE = "osd:delete:all"
+
+# Material (approved-material register) Permissions — MATERIAL-SUBMITTAL V1 2026-10-08; record_result removed in M6 (register only)
+MATERIAL_VIEW = "material:view:all"
+MATERIAL_MANAGE = "material:manage:all"
+
+# Meeting Minutes Permissions
+MEETING_VIEW = "meeting:view:all"
+MEETING_CREATE = "meeting:create:all"
+MEETING_UPDATE = "meeting:update:all"
+MEETING_DELETE = "meeting:delete:all"
+
+# KPI Permissions
+KPI_VIEW = "kpi:view:all"
+KPI_UPDATE = "kpi:update:all"
+
+# FollowUp Permissions
+FOLLOWUP_VIEW = "followup:view:all"
+FOLLOWUP_CREATE = "followup:create:all"
+FOLLOWUP_UPDATE = "followup:update:all"
+FOLLOWUP_DELETE = "followup:delete:all"
+
+# Contractors Permissions
+CONTRACTOR_VIEW = "contractors:view:all"
+CONTRACTOR_MANAGE = "contractors:manage:all"
+
+# Knowledge Management Permissions
+KM_VIEW = "km:view:all"
+KM_CREATE = "km:create:all"
+KM_UPDATE = "km:update:all"
+KM_DELETE = "km:delete:all"
+
+# Administrative (IAM)
+USER_MANAGE = "iam:user:manage"
+USER_VIEW = "iam:user:view"
+ROLE_MANAGE = "iam:role:manage"
+ROLE_VIEW = "iam:role:view"
+
+# List of all permissions for seeding
+ALL_PERMISSIONS = [
+    {"code": ITP_VIEW, "description": "查看 ITP 記錄"},
+    {"code": ITP_CREATE, "description": "建立 ITP"},
+    {"code": ITP_UPDATE, "description": "更新 ITP 內容"},
+    {"code": ITP_DELETE, "description": "刪除 ITP"},
+    {"code": ITP_APPROVE, "description": "審核 ITP"},
+    {"code": ITP_VOID, "description": "作廢 ITP"},
+
+    {"code": NCR_VIEW, "description": "查看 NCR 記錄"},
+    {"code": NCR_CREATE, "description": "建立 NCR"},
+    {"code": NCR_UPDATE, "description": "更新 NCR 內容"},
+    {"code": NCR_DELETE, "description": "刪除 NCR"},
+    {"code": NCR_APPROVE, "description": "審核 NCR"},
+    {"code": NCR_CLOSE, "description": "關閉 NCR"},
+
+    {"code": NOI_VIEW, "description": "查看 NOI 記錄"},
+    {"code": NOI_CREATE, "description": "建立 NOI"},
+    {"code": NOI_UPDATE, "description": "更新 NOI 內容"},
+    {"code": NOI_DELETE, "description": "刪除 NOI"},
+    {"code": NOI_APPROVE, "description": "審核 NOI"},
+
+    {"code": CHECKLIST_VIEW, "description": "查看 Checklist 記錄"},
+    {"code": CHECKLIST_CREATE, "description": "建立 Checklist"},
+    {"code": CHECKLIST_UPDATE, "description": "更新 Checklist"},
+    {"code": CHECKLIST_DELETE, "description": "刪除 Checklist"},
+    {"code": CHECKLIST_CLOSE, "description": "編輯已結案 (Pass/Fail) 的 Checklist"},
+
+    {"code": PQP_VIEW, "description": "查看 PQP 記錄"},
+    {"code": PQP_CREATE, "description": "建立 PQP"},
+    {"code": PQP_UPDATE, "description": "更新 PQP 內容"},
+    {"code": PQP_DELETE, "description": "刪除 PQP"},
+    {"code": PQP_APPROVE, "description": "審核 PQP"},
+
+    {"code": CONTRACTOR_VIEW, "description": "查看 Contractors 記錄"},
+    {"code": CONTRACTOR_MANAGE, "description": "管理 Contractors (增刪改)"},
+
+    {"code": FAT_VIEW, "description": "查看 FAT 記錄"},
+    {"code": FAT_CREATE, "description": "建立 FAT"},
+    {"code": FAT_UPDATE, "description": "更新 FAT"},
+    {"code": FAT_DELETE, "description": "刪除 FAT"},
+
+    {"code": AUDIT_VIEW, "description": "查看 Audit 記錄"},
+    {"code": AUDIT_CREATE, "description": "建立 Audit"},
+    {"code": AUDIT_UPDATE, "description": "更新 Audit"},
+    {"code": AUDIT_DELETE, "description": "刪除 Audit"},
+
+    {"code": OBS_VIEW, "description": "查看 OBS 記錄"},
+    {"code": OBS_CREATE, "description": "建立 OBS"},
+    {"code": OBS_UPDATE, "description": "更新 OBS 內容"},
+    {"code": OBS_DELETE, "description": "刪除 OBS"},
+    {"code": OBS_APPROVE, "description": "審核 OBS"},
+
+    {"code": OSD_VIEW, "description": "查看 OSD 記錄"},
+    {"code": OSD_CREATE, "description": "建立 OSD"},
+    {"code": OSD_UPDATE, "description": "更新 OSD 內容"},
+    {"code": OSD_DELETE, "description": "刪除 OSD"},
+    {"code": MATERIAL_VIEW, "description": "查看核准材料"},
+    {"code": MATERIAL_MANAGE, "description": "登錄與編輯核准材料"},
+    {"code": MEETING_VIEW, "description": "查看會議記錄"},
+    {"code": MEETING_CREATE, "description": "建立會議記錄"},
+    {"code": MEETING_UPDATE, "description": "更新會議記錄"},
+    {"code": MEETING_DELETE, "description": "刪除會議記錄"},
+
+    {"code": KPI_VIEW, "description": "查看 KPI 數據"},
+    {"code": KPI_UPDATE, "description": "更新 KPI 權重"},
+
+    {"code": FOLLOWUP_VIEW, "description": "查看 Follow-up 記錄"},
+    {"code": FOLLOWUP_CREATE, "description": "建立 Follow-up"},
+    {"code": FOLLOWUP_UPDATE, "description": "更新 Follow-up 內容"},
+    {"code": FOLLOWUP_DELETE, "description": "刪除 Follow-up"},
+
+    {"code": ITR_VIEW, "description": "查看 ITR 記錄"},
+    {"code": ITR_CREATE, "description": "建立 ITR"},
+    {"code": ITR_UPDATE, "description": "更新 ITR 內容"},
+    {"code": ITR_DELETE, "description": "刪除 ITR"},
+    {"code": ITR_APPROVE, "description": "審核 ITR"},
+
+    {"code": KM_VIEW, "description": "查看知識庫文章"},
+    {"code": KM_CREATE, "description": "建立知識庫文章"},
+    {"code": KM_UPDATE, "description": "更新知識庫文章"},
+    {"code": KM_DELETE, "description": "刪除知識庫文章"},
+
+    {"code": USER_VIEW, "description": "查看使用者"},
+    {"code": USER_MANAGE, "description": "管理使用者 (增刪改)"},
+    {"code": ROLE_VIEW, "description": "查看角色"},
+    {"code": ROLE_MANAGE, "description": "管理角色權限"},
+    {"code": "settings:manage:all", "description": "管理系統設定"},
+]
+
+
+class PermissionDenied(Exception):
+    """Raised by a SERVICE layer when a specific permission code — supplied by the router as an
+    explicit, trusted set derived from the authenticated user's own role.permissions_rel (never
+    inferred from role NAME, and never client-supplied) — is missing for the write being
+    attempted. An omitted or empty permission set must always be treated as "no permissions",
+    never as "skip this check" — callers must not default it to "allow"."""
+    def __init__(self, required_permission: str):
+        self.required_permission = required_permission
+        super().__init__(f"Operation not permitted. Required: {required_permission}")

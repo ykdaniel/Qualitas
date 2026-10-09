@@ -1,0 +1,38 @@
+MATERIAL-SUBMITTAL M4 frontend checks (2026-10-08 23:40 CST); EXIT = the command's own exit code
+
+$ npm test
+✔ the wording itself: zh and en both keep "not verified" and never say "verified" for the Closed-status pass (3.808541ms)
+✔ workflow list retrieves beyond 200 and keeps selected project on every page (1.910292ms)
+✔ later workflow page failure rejects instead of reporting a partial list as complete (0.581833ms)
+✔ workflow stats and attention send the same explicit project filter (0.226916ms)
+ℹ tests 163
+ℹ suites 0
+ℹ pass 163
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 452.199292
+EXIT 0
+
+$ npx tsc --noEmit -p .
+EXIT 0
+
+$ npx eslint --max-warnings 0 src/utils/materialSubmittal.ts src/components/MaterialSubmittal/SubmittalBoard.tsx src/components/MaterialSubmittal/MaterialSubmittal.tsx src/components/MaterialSubmittal/materialText.ts src/components/Contractors/ProjectModal.tsx src/store/projectStore.ts src/services/api.ts tests-unit/materialBoard.test.ts
+EXIT 0
+
+$ npx vite build --outDir /tmp/claude-501/m4-vite-build --emptyOutDir
+../../../../../tmp/claude-501/m4-vite-build/assets/Dashboard-CxPJ322o.js                 59.28 kB │ gzip:  16.94 kB
+../../../../../tmp/claude-501/m4-vite-build/assets/Audit-BYmFjWwd.js                     62.09 kB │ gzip:  14.90 kB
+../../../../../tmp/claude-501/m4-vite-build/assets/ITP-DahssGOk.js                       62.28 kB │ gzip:  16.48 kB
+../../../../../tmp/claude-501/m4-vite-build/assets/schemas-3edHhHNv.js                   64.91 kB │ gzip:  17.59 kB
+../../../../../tmp/claude-501/m4-vite-build/assets/ITR-DTW3rHft.js                       73.30 kB │ gzip:  19.58 kB
+../../../../../tmp/claude-501/m4-vite-build/assets/NCR-DgFzBMn2.js                       76.25 kB │ gzip:  19.50 kB
+../../../../../tmp/claude-501/m4-vite-build/assets/DataTable-C5NL-6pi.js                177.07 kB │ gzip:  52.87 kB
+../../../../../tmp/claude-501/m4-vite-build/assets/CartesianChart-CuS0jm06.js           351.98 kB │ gzip: 104.48 kB
+../../../../../tmp/claude-501/m4-vite-build/assets/KM-BVLGT1CQ.js                       362.59 kB │ gzip: 104.15 kB
+../../../../../tmp/claude-501/m4-vite-build/assets/index-DTSAWv0H.js                    465.09 kB │ gzip: 153.06 kB
+../../../../../tmp/claude-501/m4-vite-build/assets/mammoth.browser-CoiKvXMZ.js          499.39 kB │ gzip: 124.65 kB
+✓ built in 4.20s
+EXIT 0
+

@@ -11,8 +11,8 @@ Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PSScriptRoot
 Start-Sleep -Seconds 2
 
 # 啟動 Node 後端 (登入/驗證, port 3001)
-Write-Host "啟動 Node 後端 (port 3001)..." -ForegroundColor Yellow
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PSScriptRoot\backend'; Write-Host 'Node 後端運行在 http://localhost:3001' -ForegroundColor Green; npm start"
+Write-Host "啟動 Node 後端 (port 3002)..." -ForegroundColor Yellow
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PSScriptRoot\backend'; Write-Host 'Node 後端運行在 http://localhost:3002' -ForegroundColor Green; npm start"
 
 # 等待 2 秒
 Start-Sleep -Seconds 2

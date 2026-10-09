@@ -1,0 +1,8 @@
+# M5 py311 re-check with a repository-shaped layout (/q/backend + /q/react-app), same M5 candidate export; 2026-10-08T17:19:43Z
+# reason: the full-suite run mounted backend at /work (parent '/'), so the startup guard saw every temp dir as inside the project tree
+# ---- output ----
+........................................................................ [ 35%]
+....................s.ss...s......ssssssss.............................. [ 70%]
+...............................ss...........................             [100%]
+190 passed, 14 skipped in 179.86s (0:02:59)
+EXIT 0

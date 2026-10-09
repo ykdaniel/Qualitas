@@ -1,0 +1,198 @@
+/*
+ * KM article list styling for Quill (.ql-editor) content.
+ *
+ * Scoped to `.km-article` — a wrapper class applied in both edit mode
+ * (KMModals) and view mode (KMDetail). The wrapper also carries the
+ * `data-chapter-prefix` attribute + `--chapter-prefix` CSS variable
+ * that drive the chapter-scoped ordered-list numbering.
+ *
+ * This file used to live inside `ui/RichTextEditor.css`, but the rules
+ * are specific to KM articles (chapter numbering, Chinese-doc marker
+ * conventions) and don't belong to the shared editor — moving them here
+ * keeps `RichTextEditor.css` focused on font/size dropdowns and stops
+ * these rules from affecting every RichTextEditor in the app.
+ *
+ * Design conventions this file enforces:
+ *   - Top-level <ol> items: "{chapter-prefix}.1", "{chapter-prefix}.2", ...
+ *     (only when data-chapter-prefix is non-empty; otherwise fall back
+ *      to Quill's defaults)
+ *   - Top-level <ul> items: ○ marker, text column aligned under the
+ *     parent ol's text column — reads as "a sub-point under the 4.x
+ *     clause" rather than a sibling of the 4.x marker in the gutter.
+ *   - ul nested one level (ql-indent-1): "- " marker
+ *   - ol nested one level (ql-indent-1): Quill defaults (a., i., A., I.)
+ *     are kept — we don't override them, so ordered-list semantics stay
+ *     intact.
+ *
+ * Deeper nesting (ql-indent-2..6) keeps Quill's default markers but
+ * gets our indent step spacing so it matches the base 3em column.
+ */
+
+.km-article {
+    /* Base indent for top-level list text. The ol chapter prefix sits
+       at left: 0 and text starts at 3em; ul text starts one step deeper
+       (4.5em) so its ○ marker can align at the 3em column. */
+    --km-base-indent: 3em;
+    --km-step: 1.5em;
+
+    /* Chapter-scoped ordered-list counter.
+     *
+     * Why we can't just use Quill's own `list-0`: Quill's CSS increments
+     * `list-0` on every `.ql-editor ol li` but never explicitly resets it,
+     * so in principle it should be a document-global counter. In practice,
+     * when a single chapter's content is fragmented into many separate
+     * <ol> blocks (e.g. `<ol><li>A</li></ol> <ul>...</ul> <ol><li>B</li></ol>`
+     * — which happens a LOT when users toggle between numbered and bullet
+     * lists mid-chapter), each <ol> starts its own `list-0` scope and
+     * every first li re-renders as "{prefix}.1". Chapter 4 of the real
+     * data has 42 separate <ol> elements and 8 top-level items — all of
+     * which were rendering as "4.1".
+     *
+     * The fix: define our own counter reset ONCE at the .km-article
+     * wrapper level, and increment it ourselves on top-level ol items.
+     * Since nothing between the wrapper and the li ever resets km-list-0,
+     * it stays cumulative across every sub-<ol> in the chapter. */
+    counter-reset: km-list-0 0 km-list-1 0;
+}
+
+.km-article .ql-editor ol > li:not([class*="ql-indent"]) {
+    counter-increment: km-list-0;
+    counter-reset: km-list-1 0;
+}
+
+.km-article .ql-editor ol > li.ql-indent-1 {
+    counter-increment: km-list-1;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+ * 1. Positioning context — every li in a KM article gets
+ *    `position: relative` so absolute-positioned ::before markers
+ *    land inside the item instead of escaping to the viewport. One
+ *    blanket rule replaces the per-level repetition we used to have.
+ * ───────────────────────────────────────────────────────────────── */
+.km-article .ql-editor li {
+    position: relative;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+ * 2. Padding for top-level list items
+ *    Text columns: ol → 3em, ul → 4.5em (one step deeper)
+ * ───────────────────────────────────────────────────────────────── */
+.km-article .ql-editor ol > li:not([class*="ql-indent"]) {
+    padding-left: var(--km-base-indent);
+}
+.km-article .ql-editor ul > li:not([class*="ql-indent"]):not(.ql-direction-rtl) {
+    padding-left: calc(var(--km-base-indent) + var(--km-step));
+}
+
+/* ─────────────────────────────────────────────────────────────────
+ * 3. Padding for nested (ql-indent-N) list items
+ *
+ *    Quill uses a flat DOM with ql-indent-1..6 classes instead of
+ *    nested <ol>/<ul>. Defaults are 4.5em + 3em per level, which
+ *    doesn't line up with our 3em base. We re-derive each level
+ *    from --km-base-indent + N * --km-step so text always lands
+ *    on a predictable column.
+ *
+ *    Text columns: 3em → 4.5em → 6em → 7.5em → 9em → 10.5em
+ * ───────────────────────────────────────────────────────────────── */
+/* indent-1: prefix "3.6.1" aligns with ○ text (base + step = 4.5em),
+   sub-text starts further right (base + step + 4em = 8.5em). */
+.km-article .ql-editor li.ql-indent-1:not(.ql-direction-rtl) {
+    padding-left: calc(var(--km-base-indent) + var(--km-step) + 4em) !important;
+}
+.km-article .ql-editor li.ql-indent-2:not(.ql-direction-rtl) {
+    padding-left: calc(var(--km-base-indent) + var(--km-step));
+}
+.km-article .ql-editor li.ql-indent-3:not(.ql-direction-rtl) {
+    padding-left: calc(var(--km-base-indent) + 2 * var(--km-step));
+}
+.km-article .ql-editor li.ql-indent-4:not(.ql-direction-rtl) {
+    padding-left: calc(var(--km-base-indent) + 3 * var(--km-step));
+}
+.km-article .ql-editor li.ql-indent-5:not(.ql-direction-rtl) {
+    padding-left: calc(var(--km-base-indent) + 4 * var(--km-step));
+}
+.km-article .ql-editor li.ql-indent-6:not(.ql-direction-rtl) {
+    padding-left: calc(var(--km-base-indent) + 5 * var(--km-step));
+}
+
+/* ─────────────────────────────────────────────────────────────────
+ * 4. Top-level ordered-list chapter prefix
+ *
+ *    Only applied when data-chapter-prefix is non-empty. When empty
+ *    (e.g. an article with no chapter number), top-level <ol> items
+ *    fall back to Quill's default "1.", "2.", ... from its own CSS.
+ *
+ *    Absolute positioning (rather than Quill's negative-margin hang)
+ *    is essential because prefixes have variable width — "1.1" vs
+ *    "1.1.1" — and the negative-margin math ends up negative for the
+ *    longer prefixes, which makes text drift left and overlap the
+ *    marker. Absolute takes the marker out of inline flow, so text
+ *    always starts cleanly at padding-left: 3em.
+ * ───────────────────────────────────────────────────────────────── */
+.km-article[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor ol > li:not([class*="ql-indent"])::before {
+    /* Use our own km-list-0 counter (see the counter-reset comment on
+       .km-article above for why Quill's list-0 doesn't work here). */
+    content: var(--chapter-prefix) "." counter(km-list-0);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: auto;
+    margin: 0;
+    padding: 0;
+    text-align: left;
+    white-space: nowrap;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+ * 4b. Indent-1 ordered-list: x.x.1 format
+ *
+ *     Number starts at parent's text column (--km-base-indent),
+ *     aligned with parent text. Sub-text starts one step further.
+ *
+ *     Layout:
+ *       3.7  不符合事項報告...        ← prefix at 0, text at 3em
+ *            3.7.1 於工作過程中...    ← prefix at 3em, text at 4.5em
+ * ───────────────────────────────────────────────────────────────── */
+.km-article[data-chapter-prefix]:not([data-chapter-prefix=""]) .ql-editor ol > li.ql-indent-1::before {
+    content: var(--chapter-prefix) "." counter(km-list-0) "." counter(km-list-1) !important;
+    position: absolute;
+    left: calc(var(--km-base-indent) + var(--km-step));
+    top: 0;
+    width: auto;
+    margin: 0;
+    padding: 0;
+    text-align: left;
+    white-space: nowrap;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+ * 5. Bullet list markers — Chinese official-doc convention
+ *
+ *    Top-level <ul>   → ○  (replaces Quill's default •)
+ *    <ul> ql-indent-1 → -  (scoped to ul so nested ORDERED lists
+ *                            keep their counter markers)
+ *
+ *    Unlike the ol chapter prefix rules, these markers are NOT gated
+ *    on data-chapter-prefix — they apply to any KM article bullet
+ *    list regardless of whether the article has a chapter number.
+ * ───────────────────────────────────────────────────────────────── */
+.km-article .ql-editor ul > li:not([class*="ql-indent"]):not(.ql-direction-rtl)::before {
+    content: "○ ";
+    position: absolute;
+    left: var(--km-base-indent);
+    top: 0;
+    width: auto;
+    margin: 0;
+    padding: 0;
+}
+.km-article .ql-editor ul > li.ql-indent-1:not(.ql-direction-rtl)::before {
+    content: "- ";
+    position: absolute;
+    left: var(--km-step);
+    top: 0;
+    width: auto;
+    margin: 0;
+    padding: 0;
+}

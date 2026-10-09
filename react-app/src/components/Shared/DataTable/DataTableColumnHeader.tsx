@@ -8,13 +8,6 @@ import { Column } from "@tanstack/react-table"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
@@ -50,7 +43,7 @@ export function DataTableColumnHeader<TData, TValue>({
                     <Button
                         variant="ghost"
                         size="sm"
-                        className="-ml-3 h-8 data-[state=open]:bg-accent data-[state=open]:text-accent-foreground text-white hover:text-white hover:bg-[#2d4a6f]"
+                        className="-ml-3 h-8 text-[#faf7f1] hover:text-[#faf7f1] hover:bg-[#2d2a24]"
                     >
                         <span>{title}</span>
                         {column.getIsSorted() === "desc" ? (

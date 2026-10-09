@@ -1,12 +1,11 @@
 import { ColumnDef } from "@tanstack/react-table";
-import { NCRItem } from "../../context/NCRContext";
+import { NCRItem } from "../../store/ncrStore";
 import { DataTableColumnHeader } from "@/components/Shared/DataTable/DataTableColumnHeader";
 import { Button } from "@/components/ui/button";
-import { Eye, Pencil, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
+import { DateCell } from "@/components/Shared/DateIssueMark";
 
 export const createColumns = (
-    handleEdit: (id: string) => void,
-    handleViewDetails: (id: string) => void,
     confirmDelete: (id: string) => void,
     t: (key: string) => string
 ): ColumnDef<NCRItem>[] => [
@@ -34,13 +33,24 @@ export const createColumns = (
                     title={t('obs.status')}
                     filterOptions={[
                         { label: t('status.open'), value: 'Open' },
+                        { label: t('status.inProgress'), value: 'In Progress' },
+                        { label: t('status.resolved'), value: 'Resolved' },
                         { label: t('status.closed'), value: 'Closed' },
+                        { label: t('status.void'), value: 'Void' },
                     ]}
                 />
             ),
             cell: ({ row }) => {
                 const status = row.getValue("status") as string;
-                return <div className="text-center">{status.toLowerCase() === 'open' ? t('status.open') : t('status.closed')}</div>;
+                const s = (status || '').toLowerCase();
+                const statusKeyMap: Record<string, string> = {
+                    'open': 'status.open',
+                    'in progress': 'status.inProgress',
+                    'resolved': 'status.resolved',
+                    'closed': 'status.closed',
+                    'void': 'status.void',
+                };
+                return <div className="text-center">{t(statusKeyMap[s] || '') || status}</div>;
             },
             filterFn: (row, id, value) => {
                 return value.includes(row.getValue(id));
@@ -79,14 +89,14 @@ export const createColumns = (
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title={t('ncr.raiseDate')} />
             ),
-            cell: ({ row }) => <div className="text-center">{row.getValue("raiseDate") || '-'}</div>,
+            cell: ({ row }) => <div className="text-center"><DateCell item={row.original} field="raiseDate" /></div>,
         },
         {
             accessorKey: "closeoutDate",
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title={t('obs.closeoutDate')} />
             ),
-            cell: ({ row }) => <div className="text-center">{row.getValue("closeoutDate") || '-'}</div>,
+            cell: ({ row }) => <div className="text-center"><DateCell item={row.original} field="closeoutDate" /></div>,
         },
         {
             accessorKey: "foundBy",
@@ -168,30 +178,12 @@ export const createColumns = (
             cell: ({ row }) => {
                 const ncr = row.original;
                 return (
-                    <div className="flex items-center justify-center space-x-2">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-100"
-                            onClick={() => handleEdit(ncr.id)}
-                            title={t('common.edit')}
-                        >
-                            <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-blue-500 hover:text-blue-600 hover:bg-blue-100"
-                            onClick={() => handleViewDetails(ncr.id)}
-                            title={t('common.details')}
-                        >
-                            <Eye className="h-4 w-4" />
-                        </Button>
+                    <div className="flex items-center justify-center">
                         <Button
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-100"
-                            onClick={() => confirmDelete(ncr.id)}
+                            onClick={(e) => { e.stopPropagation(); confirmDelete(ncr.id); }}
                             title={t('common.delete')}
                         >
                             <Trash2 className="h-4 w-4" />

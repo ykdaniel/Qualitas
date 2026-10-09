@@ -1,0 +1,695 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    background: transparent;
+    overflow: visible;
+    font-family: 'Inter', -apple-system, sans-serif;
+    animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ======== Top Navigation ======== */
+/* Sticky wrapper: keeps Back/Print/Edit + hero card pinned.
+   top: 56px, not 0 — AppLayout's own .topBar (the breadcrumb bar above
+   this page) is already sticky at top:0 with a higher z-index, so
+   sticking here at 0 too just gets hidden behind it on scroll. */
+.stickyHeader {
+    position: sticky;
+    top: 56px;
+    z-index: 20;
+    background: #f3f4f6;
+    margin: 0 -24px;
+    padding: 12px 24px 0;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+@supports (animation-timeline: scroll()) {
+    .stickyHeader {
+        animation: topNavShadow linear both;
+        animation-timeline: scroll(nearest);
+        animation-range: 0px 80px;
+    }
+}
+
+@keyframes topNavShadow {
+    from { border-bottom-color: transparent; box-shadow: none; }
+    to   { border-bottom-color: #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+}
+
+.topNav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 0 12px 0;
+}
+
+.editBtn {
+    background-color: #1e293b;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.2);
+}
+
+.editBtn:hover {
+    background-color: #0f172a;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.25);
+}
+
+.printBtn {
+    background-color: #ffffff;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.printBtn:hover {
+    background-color: #f1f5f9;
+    color: #0f172a;
+    border-color: #94a3b8;
+    transform: translateY(-2px);
+}
+
+/* ======== Print Index Page (screen: hidden) ======== */
+.printIndexPage {
+    display: none;
+}
+
+/* ======== Hero Card ======== */
+.heroCard {
+    background-color: #ffffff;
+    border-radius: 20px;
+    padding: 24px 32px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+    margin-bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.metaRow {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.categoryBadge {
+    background-color: #4f46e5;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    box-shadow: 0 2px 4px rgba(79, 70, 229, 0.2);
+}
+
+.metaItem {
+    background-color: #f1f5f9;
+    color: #475569;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+}
+
+.titleWrapper {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 8px;
+}
+
+.titleIcon {
+    background-color: #eff6ff;
+    color: #3b82f6;
+    padding: 12px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.title {
+    font-size: 2.25rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0;
+    letter-spacing: -0.025em;
+}
+
+.tagsContainer {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.tag {
+    background-color: #f8fafc;
+    color: #64748b;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border: 1px solid #e2e8f0;
+}
+
+/* ======== Layout Wrapper (Split) ======== */
+.layoutWrapper {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+}
+
+/* ======== Main Content (Left) ======== */
+.mainContent {
+    flex: 1;
+    background-color: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    min-height: 600px;
+}
+
+.contentHeader {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 24px 32px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.contentIcon {
+    background-color: #f1f5f9;
+    color: #64748b;
+    padding: 8px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.contentHeader h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.contentBody {
+    padding: 32px;
+    font-family: Calibri, "Helvetica Neue", Arial,
+        "Microsoft JhengHei", "微軟正黑體", "PingFang TC", sans-serif;
+    line-height: 1.8;
+    color: #334155;
+    font-size: 12pt;
+}
+
+.editorContainer {
+    padding: 0;
+}
+
+/* Chapter Rendering Styles */
+.chapterSection {
+    margin-bottom: 24px;
+    /* Offset scroll target so sticky header doesn't cover the title */
+    scroll-margin-top: 200px;
+}
+
+.chapterDivider {
+    border: 0;
+    height: 1px;
+    background: linear-gradient(to right, transparent, #e2e8f0, transparent);
+    margin: 40px 0;
+}
+
+.chapterTitle {
+    font-size: 14pt;
+    font-weight: 700;
+    font-family: Calibri, "Helvetica Neue", Arial,
+        "Microsoft JhengHei", "微軟正黑體", "PingFang TC", sans-serif;
+    color: #1e293b;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Force every character in the "{chapter_no} {title}" text — including
+   the "." in "1.0" — to the same dark color. Reported: some browsers'
+   print/PDF export renders the "." in a chapter number as a stray accent
+   color (observed consistently across every chapter, unrelated to any
+   background/::before rule found in this file or kmArticle.css — most
+   likely a WebKit data-detector/system-accent-color artifact rather than
+   anything this stylesheet controls). !important + explicit color on the
+   text node's own span neutralizes it regardless of the actual source. */
+.chapterTitle > span:first-child {
+    color: #1e293b !important;
+}
+
+.chapterEditBtn {
+    background: none;
+    border: 1px solid transparent;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    opacity: 0;
+    transition: all 0.2s ease;
+}
+
+.chapterTitle:hover .chapterEditBtn {
+    opacity: 1;
+}
+
+.chapterEditBtn:hover {
+    color: #3b82f6;
+    background-color: #eff6ff;
+    border-color: #bfdbfe;
+}
+
+/* ======== Right Sidebar ======== */
+.rightLayout {
+    width: 320px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+}
+
+.sideCard {
+    background-color: #ffffff;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.sideCardHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #64748b;
+    margin-bottom: 20px;
+}
+
+.fadedIcon {
+    color: #cbd5e1;
+}
+
+.statRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.statRow:last-child {
+    margin-bottom: 0;
+}
+
+.statLabel {
+    color: #64748b;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.statValue {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: #334155;
+}
+
+/* Table of Contents overrides */
+.tocList {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.tocItem {
+    margin-bottom: 8px;
+}
+
+.tocButton {
+    background: none;
+    border: 1px solid transparent;
+    text-align: left;
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #475569;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.tocButton:hover {
+    background-color: #f8fafc;
+    transform: translateX(4px);
+}
+
+.tocButtonActive {
+    color: #3b82f6;
+    font-weight: 700;
+    background-color: #eff6ff;
+}
+
+.tocChapterMeta {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+}
+
+.tocButtonActive .tocChapterMeta {
+    color: #3b82f6;
+}
+
+/* ======== Attachment Card Styles ======== */
+.attachmentList {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.emptyAttachment {
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.9rem;
+    padding: 24px 0;
+    font-style: italic;
+}
+
+.attachmentItem {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    cursor: pointer;
+    border-radius: 8px;
+    padding: 4px;
+    margin: -4px;
+    transition: background-color 0.15s;
+}
+
+.attachmentItem:hover {
+    background-color: #f1f5f9;
+}
+
+.attachmentIconBox {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+
+.iconBlue {
+    background-color: #dbeafe;
+    color: #3b82f6;
+}
+
+.attachmentIconBox svg {
+    width: 18px;
+    height: 18px;
+}
+
+.attachmentInfo {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.attachmentName {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e293b;
+    line-height: 1.4;
+    word-break: break-all;
+}
+
+.attachmentSize {
+    font-size: 12px;
+    color: #64748b;
+}
+
+/* ======== Print Layout ========
+   Triggered by Cmd+P or the 列印 button. Produces:
+     Page 1:        Document header + 目錄 Index (page numbers via target-counter)
+     Page 2..N:     One printed chapter per page break
+   Page numbers render in the bottom-right of every page via @page @bottom-right.
+
+   Browser support for target-counter(attr(href), page):
+     - Chrome/Edge 85+   ✓ full
+     - Safari 17.4+       ✓
+     - Firefox            ✗ page numbers in TOC will be blank (graceful)
+   Page numbers themselves (the @bottom-right counter) work everywhere. */
+@media print {
+    @page {
+        size: A4;
+        margin: 2cm 1.8cm 2.5cm 1.8cm;
+
+        @bottom-right {
+            content: counter(page) " of " counter(pages);
+            font-size: 10pt;
+            color: #64748b;
+        }
+    }
+
+    /* Suppress page number on the first page (the index itself) */
+    @page :first {
+        @bottom-right {
+            content: none;
+        }
+    }
+
+    /* Hide all UI chrome */
+    .stickyHeader,
+    .topNav,
+    .heroCard,
+    .rightLayout,
+    .contentHeader,
+    .chapterDivider,
+    .chapterEditBtn {
+        display: none !important;
+    }
+
+    /* Strip screen-only styling from containers */
+    .container,
+    .layoutWrapper,
+    .mainContent,
+    .contentBody {
+        background: transparent !important;
+        box-shadow: none !important;
+        border: none !important;
+        border-radius: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        min-height: 0 !important;
+        overflow: visible !important;
+        display: block !important;
+        position: static !important;
+    }
+
+    /* ---- Index page ---- */
+    .printIndexPage {
+        display: block !important;
+        page-break-after: always;
+        color: #000;
+    }
+
+    .printDocHeader {
+        text-align: center;
+        border-bottom: 2pt solid #000;
+        padding-bottom: 16pt;
+        margin-bottom: 24pt;
+    }
+
+    .printDocHeader h1 {
+        font-size: 20pt;
+        font-weight: 700;
+        margin: 0 0 10pt 0;
+        color: #000;
+    }
+
+    .printDocMeta {
+        display: flex;
+        justify-content: center;
+        gap: 14pt;
+        font-size: 10pt;
+        color: #475569;
+    }
+
+    .printDocMeta span::before {
+        content: "";
+    }
+
+    .printDocMeta span:not(:first-child)::before {
+        content: "·  ";
+    }
+
+    .printIndexTitle {
+        font-size: 16pt;
+        font-weight: 700;
+        text-align: center;
+        margin: 0 0 20pt 0;
+        color: #000;
+    }
+
+    .printTocList {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        font-size: 11pt;
+    }
+
+    .printTocItem {
+        margin: 0;
+    }
+
+    .printTocLink {
+        display: flex;
+        align-items: baseline;
+        text-decoration: none;
+        color: #000;
+        padding: 5pt 0;
+        border-bottom: 1pt dotted #94a3b8;
+    }
+
+    .printTocNum {
+        flex-shrink: 0;
+        width: 55pt;
+        font-weight: 600;
+    }
+
+    .printTocTitle {
+        flex-grow: 1;
+        padding-right: 8pt;
+    }
+
+    /* Page number injected by CSS Paged Media target-counter.
+       In unsupported browsers (Firefox) this resolves to empty string. */
+    .printTocLink::after {
+        content: target-counter(attr(href), page);
+        flex-shrink: 0;
+        min-width: 24pt;
+        text-align: right;
+        font-weight: 600;
+    }
+
+    /* ---- Chapter content ----
+       Page break only before TOP-LEVEL chapters (data-depth="0", e.g.
+       "1.0", "2.0"). Applying it to every row used to also break before
+       every nested sub-chapter (4.1, 4.1.1, ...), which produces a lot of
+       near-empty pages for deeply-structured documents — sub-chapters
+       should just flow within their parent's pages. */
+    .chapterSection {
+        margin: 0 !important;
+    }
+
+    .chapterSection[data-depth="0"] {
+        page-break-before: always;
+    }
+
+    /* First top-level chapter doesn't need an extra page break — the
+       index page already ends with page-break-after: always, so it
+       naturally lands on page 2. */
+    .chapterSection[data-depth="0"]:first-of-type {
+        page-break-before: auto;
+    }
+
+    /* Avoid a heading stranded alone at the bottom of a page, or a
+       paragraph's last/first line orphaned across a page break. */
+    .chapterTitle {
+        page-break-after: avoid;
+    }
+    .editorContainer :global(p),
+    .editorContainer :global(li) {
+        orphans: 2;
+        widows: 2;
+    }
+
+    /* font-family forced to plain system fonts for print specifically:
+       the screen stack starts with "Calibri" (a licensed Microsoft font
+       not installed on macOS), and print's font-resolution pipeline can
+       pick a different fallback per-character than the on-screen renderer
+       does — observed as the "." in a chapter number like "1.0" coming out
+       in a stray accent color in exported PDFs (both Safari and Chrome,
+       print-only, not reproducible on screen — consistent with a color/
+       emoji-adjacent glyph substitution for the missing-font fallback
+       rather than anything controllable via the `color` property, which
+       is why the color !important below alone didn't fix it). */
+    .chapterTitle {
+        font-size: 16pt !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial,
+            "Microsoft JhengHei", "微軟正黑體", "PingFang TC", sans-serif !important;
+        color: #000 !important;
+        border-bottom-color: #000 !important;
+        margin-top: 0 !important;
+    }
+
+    .editorContainer {
+        color: #000 !important;
+        font-size: 11pt !important;
+        line-height: 1.6 !important;
+    }
+
+    .editorContainer :global(img) {
+        max-width: 100% !important;
+        page-break-inside: avoid;
+    }
+
+    .editorContainer :global(table) {
+        page-break-inside: avoid;
+    }
+
+    /* The Quill section TOC (inside each chapter) is useful on screen
+       but noise on print — hide it. */
+    .editorContainer :global(section),
+    .editorContainer :global(nav) {
+        page-break-inside: avoid;
+    }
+}

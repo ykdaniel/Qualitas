@@ -1,0 +1,171 @@
+import { create } from 'zustand';
+import api from '../services/api';
+import { getErrorMessage } from '../utils/errorUtils';
+import { getProjectFilterParams, getCurrentProjectScopeId } from '../utils/projectFilter';
+
+export interface FATItem {
+    project_id?: string | null;
+    id: string;
+    equipment: string;
+    supplier: string;
+    procedure: string;
+    location: string;
+    startDate: string;
+    endDate: string;
+    deliveryFrom: string;
+    deliveryTo: string;
+    siteReadiness: string;
+    moveInDate: string;
+    status?: string;
+    hasDetails?: boolean;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface FATDetailItem {
+    id: string;
+    sNo: string;
+    itemName: string;
+    specification: string;
+    qty: string;
+    unit: string;
+    acceptanceCriteria: string;
+    fatActualValue: string;
+    fatJudgment: string;
+    remarks: string;
+}
+
+/**
+ * Overall FAT verdict derived from the per-item judgments (not stored / not
+ * hand-picked): any Fail → Fail; any unjudged/Pending → Pending; all Pass → Pass.
+ */
+export type FATResult = 'Pass' | 'Fail' | 'Pending';
+export function deriveFATResult(details: FATDetailItem[] | undefined): FATResult {
+    if (!details || details.length === 0) return 'Pending';
+    if (details.some(d => d.fatJudgment === 'Fail')) return 'Fail';
+    if (details.some(d => !d.fatJudgment || d.fatJudgment === 'Pending')) return 'Pending';
+    return 'Pass';
+}
+
+interface FATState {
+    fatList: FATItem[];
+    fatDetails: { [key: string]: FATDetailItem[] };
+    loading: boolean;
+    error: string | null;
+
+    // Actions
+    fetchFATs: () => Promise<void>;
+    refetch: () => Promise<void>;
+    addFAT: (fat: Omit<FATItem, 'id'>) => Promise<FATItem>;
+    updateFAT: (id: string, fat: Partial<FATItem>) => Promise<void>;
+    deleteFAT: (id: string) => Promise<void>;
+    saveFATDetails: (fatId: string, details: FATDetailItem[]) => Promise<void>;
+    clearError: () => void;
+    setError: (err: string | null) => void;
+}
+
+// See itpStore.ts's itpFetchSeq — discards a stale (superseded) response (BACKLOG #28/#37).
+let fatFetchSeq = 0;
+// See itpStore.ts's itpDataScopeId — clears the list on a cross-scope failure (BACKLOG #28/#37).
+let fatDataScopeId: string | null = null;
+
+export const useFATStore = create<FATState>((set, get) => ({
+    fatList: [],
+    fatDetails: {},
+    loading: false,
+    error: null,
+
+    clearError: () => set({ error: null }),
+    setError: (error: string | null) => set({ error }),
+
+    fetchFATs: async () => {
+        const seq = ++fatFetchSeq;
+        const requestedScopeId = getCurrentProjectScopeId();
+        set({ loading: true, error: null });
+        try {
+            const response = await api.get('/fat/', { params: { ...getProjectFilterParams() } });
+            if (seq !== fatFetchSeq) return;
+            const list = response.data || [];
+            // NOTE: 從後端回應中解析 detail_data 並填入 fatDetails
+            const detailsMap: { [key: string]: FATDetailItem[] } = {};
+            list.forEach((item: any) => {
+                if (item.detail_data) {
+                    detailsMap[item.id] = item.detail_data;
+                }
+            });
+            fatDataScopeId = requestedScopeId;
+            set({ fatList: list, fatDetails: detailsMap, loading: false });
+        } catch (err: any) {
+            if (seq !== fatFetchSeq) return;
+            const message = getErrorMessage(err, 'Failed to fetch FAT list');
+            if (requestedScopeId !== fatDataScopeId) {
+                fatDataScopeId = requestedScopeId;
+                set({ fatList: [], fatDetails: {}, error: message, loading: false });
+            } else {
+                set({ error: message, loading: false });
+            }
+        }
+    },
+
+    refetch: async () => {
+        await get().fetchFATs();
+    },
+
+    addFAT: async (fat) => {
+        try {
+            const response = await api.post('/fat/', fat);
+            const newFAT = response.data;
+            set((state) => ({ fatList: [...state.fatList, newFAT] }));
+            return newFAT;
+        } catch (error: any) {
+            const msg = getErrorMessage(error, 'Failed to add FAT');
+            set({ error: msg });
+            throw error;
+        }
+    },
+
+    updateFAT: async (id, updates) => {
+        try {
+            const response = await api.put(`/fat/${id}`, updates);
+            set((state) => ({
+                fatList: state.fatList.map(f => (f.id === id ? response.data : f)),
+            }));
+        } catch (error: any) {
+            const msg = getErrorMessage(error, 'Failed to update FAT');
+            set({ error: msg });
+            throw error;
+        }
+    },
+
+    deleteFAT: async (id) => {
+        try {
+            await api.delete(`/fat/${id}`);
+            set((state) => ({
+                fatList: state.fatList.filter(f => f.id !== id),
+                fatDetails: Object.fromEntries(
+                    Object.entries(state.fatDetails).filter(([key]) => key !== id)
+                ),
+            }));
+        } catch (error: any) {
+            const msg = getErrorMessage(error, 'Failed to delete FAT');
+            set({ error: msg });
+            throw error;
+        }
+    },
+
+    saveFATDetails: async (fatId, details) => {
+        try {
+            await api.put(`/fat/${fatId}/details`, details);
+            set((state) => ({
+                fatDetails: { ...state.fatDetails, [fatId]: details },
+                fatList: state.fatList.map(f =>
+                    f.id === fatId ? { ...f, hasDetails: details.length > 0 } : f
+                ),
+            }));
+        } catch (error: any) {
+            const msg = getErrorMessage(error, 'Failed to save FAT details');
+            set({ error: msg });
+            throw error;
+        }
+    },
+}));

@@ -1,39 +1,45 @@
-import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
+import { Clock, CheckCircle2, BarChart3, Zap, Search, Ban } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
-import { useContractors } from '../../context/ContractorsContext';
-import { useOBS } from '../../context/OBSContext';
-import type { OBSItem as ContextOBSItem } from '../../context/OBSContext';
-import styles from './OBS.module.css';
+import { useAuth } from '../../context/AuthContext';
+import { useContractorsStore } from '../../store/contractorsStore';
+import { useOBSStore } from '../../store/obsStore';
+import type { OBSItem as ContextOBSItem } from '../../store/obsStore';
+import shellStyles from '../Shared/ModuleShell.module.css';
 import ConfirmModal from '../Shared/ConfirmModal';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
-import { OBSDetailModal, OBSDetailsViewModal, OBSItem, OBSDetailData } from './OBSModals';
+import { OBSDetailModal, OBSDetailData, PendingUploads } from './OBSModals';
+import { useDebounce } from '../../hooks/useDebounce';
+import { uploadFiles, deleteFile } from '../../services/api';
+import { useOBSStats } from '../../hooks/useOBSStats';
+import { runSaveFlow, sameWrite, SaveOutcome } from '../../utils/saveFlow';
+import { describeSaveError } from '../../utils/saveErrors';
 
-
-type SortKey = keyof OBSItem;
-type SortDirection = 'asc' | 'desc';
-
-interface SortConfig {
-  key: SortKey;
-  direction: SortDirection;
-}
+type StatusFilter = 'all' | 'open' | 'closed' | 'void';
 
 const OBS: React.FC = () => {
-  const navigate = useNavigate();
   const { t } = useLanguage();
-  const { getActiveContractors } = useContractors();
-  const { obsList, loading, error, addOBS, updateOBS, deleteOBS } = useOBS();
+  const { hasPermission } = useAuth();
+  const { getActiveContractors } = useContractorsStore();
+  const { obsList, loading, error, refetch, addOBS, updateOBS, deleteOBS } = useOBSStore();
 
 
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 500);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+
+  // Trigger server-side refetch when debounced search changes
+  React.useEffect(() => {
+    refetch({ search: debouncedSearch });
+  }, [debouncedSearch, refetch]);
 
   // Modal States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [currentObsId, setCurrentObsId] = useState<string | null>(null);
-  const [viewingObsId, setViewingObsId] = useState<string | null>(null);
 
   // Delete Confirmation State
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null; message: string }>({
@@ -42,74 +48,87 @@ const OBS: React.FC = () => {
     message: '',
   });
 
-  // Filter by Date Range and Global Search
+  // Search hits the server via the debounced effect; the status chip is a
+  // client-side slice over whatever the server returned.
   const filteredList = useMemo(() => {
-    let result = [...obsList];
-
-
-    // Global Search
-    if (searchQuery) {
-      const lowerQuery = searchQuery.toLowerCase();
-      result = result.filter(item =>
-        (item.documentNumber && item.documentNumber.toLowerCase().includes(lowerQuery)) ||
-        (item.vendor && item.vendor.toLowerCase().includes(lowerQuery)) ||
-        (item.description && item.description.toLowerCase().includes(lowerQuery)) ||
-        (item.status && item.status.toLowerCase().includes(lowerQuery)) ||
-        (item.subject && item.subject.toLowerCase().includes(lowerQuery))
-      );
-    }
-
-    return result;
-  }, [obsList, searchQuery]);
-
-  // ... (statistics logic)
-  const statistics = useMemo(() => {
-    const statusCounts = {
-      opening: 0,
-      closed: 0,
-    };
-
-    obsList.forEach((item) => {
-      const status = (item.status || '').toLowerCase();
-      if (status === 'open' || status === 'opening') {
-        statusCounts.opening++;
-      } else if (status === 'closed') {
-        statusCounts.closed++;
-      }
+    if (statusFilter === 'all') return obsList;
+    return obsList.filter((item) => {
+      const s = (item.status || '').toLowerCase();
+      if (statusFilter === 'closed') return s === 'closed';
+      if (statusFilter === 'void') return s === 'void';
+      // 'open' = active (not closed, not void)
+      return s !== 'closed' && s !== 'void';
     });
+  }, [obsList, statusFilter]);
 
-    const total = obsList.length;
-    const openRate = total > 0 ? Math.round((statusCounts.opening / total) * 100) : 0;
+  const statistics = useOBSStats(obsList);
+  // The last successful record write of the open modal (id + serialized payload) — see runSaveFlow / sameWrite.
+  const lastWriteRef = useRef<{ id: string; key: string } | null>(null);
 
-    return {
-      ...statusCounts,
-      total,
-      openRate,
-    };
-  }, [obsList]);
 
-  // ... (handlers)
-  const handleAdd = (id: string) => {
-    navigate(`/obs/${id}`);
-  };
 
-  const handleViewDetails = (id: string) => {
-    setViewingObsId(id);
-    setIsDetailsModalOpen(true);
-  };
 
-  const handleEdit = (id: string) => {
+
+  const handleEdit = React.useCallback((id: string) => {
+    lastWriteRef.current = null;
     setCurrentObsId(id);
     setIsEditModalOpen(true);
-  };
+  }, []);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const deepLinkAppliedRef = useRef(false);
+  // Set true only when the currently-open modal was reached via ?openId=
+  // (e.g. from Follow Up Issues) — lets onClose send the user back where
+  // they came from via browser history instead of just landing on this
+  // page's plain list, which is otherwise indistinguishable from having
+  // navigated here directly from the sidebar.
+  const openedViaDeepLinkRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkAppliedRef.current) return;
+    const openId = searchParams.get('openId');
+    if (!openId) return;
+    if (obsList.length === 0) return;
+    const match = obsList.find(item => item.id === openId || item.documentNumber === openId);
+    if (!match) return;
+    handleEdit(match.id);
+    openedViaDeepLinkRef.current = true;
+    deepLinkAppliedRef.current = true;
+    const next = new URLSearchParams(searchParams);
+    next.delete('openId');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, obsList, handleEdit, setSearchParams]);
 
   const handleAddNew = () => {
+    lastWriteRef.current = null;
     setCurrentObsId('new');
     setIsEditModalOpen(true);
   };
 
-  const handleSaveOBSDetails = async (details: OBSDetailData) => {
-    if (!currentObsId) return;
+  const fileSteps = {
+    upload: (id: string, group: { category: string; files: File[] }) => uploadFiles('obs', id, group.files, group.category),
+    remove: deleteFile,
+    // The store already merged the saved record into the list and this page never re-fetched after a save.
+    reload: async () => true,
+    describe: (e: unknown) => describeSaveError(e, t),
+  };
+
+  // Retry of the unfinished file steps only. The record is stored already; it is NOT written again (an account with create but
+  // without update permission could not do that anyway, and the retry must never create it a second time).
+  const handleRetryOBSFiles = async (pendingUploads: PendingUploads[], deletedFileIds: string[]): Promise<SaveOutcome> => {
+    const id = lastWriteRef.current?.id;
+    if (!id) return { status: 'failed', message: t('common.saveFailed') };
+    return runSaveFlow({
+      writeRecord: async () => { throw new Error('a file retry never writes the record'); },
+      reuseId: id,
+      uploads: pendingUploads,
+      deletedFileIds,
+      ...fileSteps,
+    });
+  };
+
+  const handleSaveOBSDetails = async (details: OBSDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]): Promise<SaveOutcome> => {
+    if (!currentObsId) return { status: 'failed', message: t('common.saveFailed') };
     const isNew = currentObsId === 'new';
     // documentNumber 由後端自動產生，新建時不送
     const payload: Record<string, unknown> = {
@@ -132,27 +151,43 @@ const OBS: React.FC = () => {
       defectPhotos: details.defectPhotos,
       improvementPhotos: details.improvementPhotos,
       attachments: details.attachments,
+      dueDate: details.dueDate || undefined,
+      qualityEngineerApproval: details.qualityEngineerApproval || undefined,
+      qualityEngineerApprovalBy: details.qualityEngineerApprovalBy || undefined,
+      qualityEngineerApprovalDate: details.qualityEngineerApprovalDate || undefined,
+      constructionEngineerApproval: details.constructionEngineerApproval || undefined,
+      constructionEngineerApprovalBy: details.constructionEngineerApprovalBy || undefined,
+      constructionEngineerApprovalDate: details.constructionEngineerApprovalDate || undefined,
     };
-    try {
-      if (isNew) {
-        await addOBS(payload as Omit<ContextOBSItem, 'id'>);
-      } else {
-        await updateOBS(currentObsId, payload);
-      }
-    } catch (err) {
-      console.error('Failed to save OBS:', err);
-    }
-    setIsEditModalOpen(false);
-    setCurrentObsId(null);
+    // A retry after "saved, but a file step failed" with unchanged content must not write the record again.
+    const currentId = currentObsId;
+    const outcome = await runSaveFlow({
+      writeRecord: async () => {
+        if (isNew) return (await addOBS(payload as Omit<ContextOBSItem, 'id'>)).id;
+        await updateOBS(currentId, payload);
+        return currentId;
+      },
+      reuseId: sameWrite(lastWriteRef.current, currentId, payload) ? currentId : null,
+      uploads: pendingUploads,
+      deletedFileIds,
+      ...fileSteps,
+      onRecordSaved: (id) => { lastWriteRef.current = { id, key: JSON.stringify(payload) }; },
+    });
+    // The record exists now: a retry must update it, never create it again.
+    if (outcome.status === 'saved-incomplete' && isNew) setCurrentObsId(outcome.id);
+    return outcome;
   };
 
-  const confirmDelete = (id: string) => {
+  const confirmDelete = React.useCallback((id: string) => {
     setDeleteModal({
       isOpen: true,
       id,
       message: t('common.deleteConfirmMessage', { item: 'OBS' }),
     });
-  };
+  }, [t]);
+
+  // Columns memoization
+  const columns = useMemo(() => createColumns(confirmDelete, t, getActiveContractors), [t, getActiveContractors, confirmDelete]);
 
   const handleDelete = async () => {
     if (deleteModal.id) {
@@ -160,115 +195,126 @@ const OBS: React.FC = () => {
         await deleteOBS(deleteModal.id);
       } catch (err) {
         console.error('Failed to delete OBS:', err);
+        toast.error((err as Error)?.message || t('common.deleteFailed'));
       }
       setDeleteModal({ isOpen: false, id: null, message: '' });
     }
   };
 
 
+  // A failed load is not "zero records": with an error and nothing loaded the counts are unknown and are shown as "—".
+  const loadFailed = !!error && obsList.length === 0;
+  const shown = <T,>(v: T): T | string => (loadFailed ? '—' : v);
+
+  const chips: { id: StatusFilter; label: string; count: number | string }[] = [
+    { id: 'all', label: t('common.all') || 'All', count: shown(statistics.total) },
+    { id: 'open', label: t('obs.statOpen') || 'Open', count: shown(statistics.opening) },
+    { id: 'closed', label: t('obs.statClosed') || 'Closed', count: shown(statistics.closed) },
+    { id: 'void', label: t('itp.status.void') || 'Void', count: shown(statistics.void) },
+  ];
+
+  const summary = [
+    {
+      key: 'open',
+      label: t('obs.statOpen'),
+      value: shown(statistics.opening),
+      icon: <Clock size={18} strokeWidth={1.8} />,
+      accent: '#c8753f',
+    },
+    {
+      key: 'closed',
+      label: t('obs.statClosed'),
+      value: shown(statistics.closed),
+      icon: <CheckCircle2 size={18} strokeWidth={1.8} />,
+      accent: '#7a8f5a',
+    },
+    {
+      key: 'void',
+      label: t('itp.status.void') || 'Void',
+      value: shown(statistics.void),
+      icon: <Ban size={18} strokeWidth={1.8} />,
+      accent: '#9aa0a8',
+    },
+    {
+      key: 'total',
+      label: t('obs.statTotal'),
+      value: shown(statistics.total),
+      icon: <BarChart3 size={18} strokeWidth={1.8} />,
+      accent: '#8a6a3a',
+    },
+    {
+      key: 'rate',
+      label: t('obs.statOpenRate'),
+      value: shown(`${statistics.openRate}%`),
+      icon: <Zap size={18} strokeWidth={1.8} />,
+      accent: '#b8945a',
+    },
+  ];
+
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <button type="button" className={styles.backButton} onClick={() => navigate('/')}>
-            ← {t('common.back') || 'Back'}
-          </button>
-          <h1>{t('home.obs.description') || 'OBS'}</h1>
-        </div>
-        <div className={styles.headerRight}>
-          <input
-            type="text"
-            className={styles.searchInput}
-            placeholder={t('obs.searchPlaceholder')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-      </div>
-
+    <div className={shellStyles.container}>
       {error && (
-        <div style={{ background: '#fef2f2', color: '#b91c1c', padding: '12px 16px', borderRadius: 8, marginBottom: 16 }}>
-          {error}
-        </div>
-      )}
-      {loading && (
-        <div style={{ padding: 24, textAlign: 'center', color: '#6b7280' }}>{t('common.loading') || 'Loading OBS list...'}</div>
+        <div className={shellStyles.errorBanner}>{error}</div>
       )}
 
-      <div className={styles.summarySection}>
-        <h2 className={styles.summaryTitle}>{t('obs.statsTitle')}</h2>
-        <div className={styles.statsContainer}>
-          <div className={styles.statusStatsGrid}>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('obs.statOpen')}</div>
-                <div className={styles.statValue}>{statistics.opening}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.greenIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('obs.statClosed')}</div>
-                <div className={styles.statValue}>{statistics.closed}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.grayIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('obs.statTotal')}</div>
-                <div className={styles.statValue}>{statistics.total}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('obs.statOpenRate')}</div>
-                <div className={styles.statValue}>{statistics.opening} ({statistics.openRate}%)</div>
-              </div>
+      <section className={shellStyles.summaryGrid}>
+        {summary.map((card) => (
+          <div key={card.key} className={shellStyles.summaryCard} style={{ '--accent': card.accent } as React.CSSProperties}>
+            <div className={shellStyles.summaryIcon}>{card.icon}</div>
+            <div className={shellStyles.summaryBody}>
+              <div className={shellStyles.summaryLabel}>{card.label}</div>
+              <div className={shellStyles.summaryValue}>{card.value}</div>
             </div>
           </div>
+        ))}
+      </section>
+
+      <div className={shellStyles.toolbar}>
+        <div className={shellStyles.chipGroup}>
+          {chips.map((chip) => (
+            <button
+              key={chip.id}
+              type="button"
+              className={`${shellStyles.chip} ${statusFilter === chip.id ? shellStyles.chipActive : ''}`}
+              onClick={() => setStatusFilter(chip.id)}
+            >
+              {chip.label}
+              <span className={shellStyles.chipCount}>{chip.count}</span>
+            </button>
+          ))}
+        </div>
+        <div className={shellStyles.toolbarRight}>
+          <div className={shellStyles.searchWrap}>
+            <Search size={15} className={shellStyles.searchIcon} strokeWidth={2} />
+            <input
+              type="text"
+              className={shellStyles.searchInput}
+              placeholder={t('obs.searchPlaceholder')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          {hasPermission('obs:create:all') && (
+            <button className={shellStyles.addNewButton} onClick={handleAddNew}>
+              {t('obs.addNew')}
+            </button>
+          )}
         </div>
       </div>
 
-      <div className={styles.content}>
+      {loading && (
+        <div className={shellStyles.loadingNote}>{t('common.loading') || 'Loading OBS list...'}</div>
+      )}
+
+      <div className={shellStyles.content}>
         <DataTable
-          title={t('obs.listTitle')}
-          actions={
-            <button
-              className={styles.addNewButton}
-              onClick={handleAddNew}
-            >
-              {t('obs.addNew')}
-            </button>
-          }
-          columns={createColumns(handleEdit, handleViewDetails, confirmDelete, t, getActiveContractors)}
+          columns={columns}
           data={filteredList}
           searchKey=""
-          searchPlaceholder={t('obs.searchPlaceholder')}
           getRowClassName={(row) =>
-            (row.status || '').toLowerCase() === 'closed'
-              ? 'bg-emerald-100/50 text-gray-500 hover:bg-emerald-200/50'
-              : ''
+            (row.status || '').toLowerCase() === 'closed' ? shellStyles.rowDim : ''
           }
+          onRowClick={(row) => handleEdit(row.id)}
         />
       </div>
 
@@ -282,30 +328,36 @@ const OBS: React.FC = () => {
         cancelText={t('common.cancel')}
       />
 
-      {isEditModalOpen && currentObsId && (
-        <OBSDetailModal
-          obsId={currentObsId}
-          existingData={undefined}
-          existingItem={currentObsId === 'new' ? undefined : obsList.find(item => item.id === currentObsId)}
-          onSave={handleSaveOBSDetails}
-          onClose={() => {
-            setIsEditModalOpen(false);
-            setCurrentObsId(null);
-          }}
-        />
-      )}
-
-      {isDetailsModalOpen && viewingObsId && (
-        <OBSDetailsViewModal
-          obsId={viewingObsId}
-          obsItem={obsList.find(item => item.id === viewingObsId)}
-          obsDetailData={undefined}
-          onClose={() => {
-            setIsDetailsModalOpen(false);
-            setViewingObsId(null);
-          }}
-        />
-      )}
+      {isEditModalOpen && currentObsId && (() => {
+        const editingItem = currentObsId === 'new' ? undefined : obsList.find(item => item.id === currentObsId);
+        // Read-only when the user lacks edit rights, or the record is locked
+        // (Closed/Void) and they lack the higher approve permission.
+        const status = (editingItem?.status || '').toLowerCase();
+        const locked = status === 'closed' || status === 'void';
+        const canEdit = currentObsId === 'new'
+          ? hasPermission('obs:create:all')
+          : locked ? hasPermission('obs:approve:all') : hasPermission('obs:update:all');
+        return (
+          <OBSDetailModal
+            obsId={currentObsId}
+            existingItem={editingItem}
+            readOnly={!canEdit}
+            onSave={handleSaveOBSDetails}
+            onRetryFiles={handleRetryOBSFiles}
+            attachmentsAllowed={hasPermission('obs:update:all')}
+            onClose={() => {
+              lastWriteRef.current = null;
+              if (openedViaDeepLinkRef.current) {
+                openedViaDeepLinkRef.current = false;
+                navigate(-1);
+                return;
+              }
+              setIsEditModalOpen(false);
+              setCurrentObsId(null);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 };

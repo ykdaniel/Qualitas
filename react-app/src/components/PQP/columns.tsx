@@ -1,22 +1,21 @@
 import { ColumnDef } from "@tanstack/react-table";
-import { PQPItem } from "../../context/PQPContext";
+import { PQPItem } from "../../store/pqpStore";
 import { DataTableColumnHeader } from "@/components/Shared/DataTable/DataTableColumnHeader";
 import { Button } from "@/components/ui/button";
-import { Eye, Pencil, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import styles from "./PQP.module.css";
 
 const getLocalizedStatus = (status: string, t: (key: string) => string) => {
     const s = (status || '').toLowerCase();
     if (s === 'approved') return t('pqp.status.approved');
     if (s === 'reject') return t('pqp.status.reject');
-    if (s === 'not submit') return t('pqp.status.notSubmit');
+    if (s === 'revise & resubmit') return t('pqp.status.reviseResubmit');
+    if (s === 'not submit') return t('pqp.status.notSubmitted');
     if (s === 'under review') return t('pqp.status.underReview');
     return status;
 };
 
 export const createColumns = (
-    handleEdit: (id: string) => void,
-    handleViewDetails: (id: string) => void,
     confirmDelete: (id: string) => void,
     t: (key: string) => string,
     getActiveContractors: () => { name: string }[]
@@ -44,10 +43,11 @@ export const createColumns = (
                     column={column}
                     title={t('common.status')}
                     filterOptions={[
-                        { label: t('pqp.status.notSubmit'), value: 'Not Submit' },
+                        { label: t('pqp.status.notSubmitted'), value: 'Not Submit' },
                         { label: t('pqp.status.underReview'), value: 'Under Review' },
                         { label: t('pqp.status.approved'), value: 'Approved' },
                         { label: t('pqp.status.reject'), value: 'Reject' },
+                        { label: t('pqp.status.reviseResubmit'), value: 'Revise & Resubmit' },
                     ]}
                 />
             ),
@@ -58,6 +58,7 @@ export const createColumns = (
 
                 if (s === 'approved') badgeClass = styles.statusApproved;
                 else if (s === 'reject') badgeClass = styles.statusReject;
+                else if (s === 'revise & resubmit') badgeClass = styles.statusReviseResubmit || styles.statusReject;
                 else if (s === 'under review') badgeClass = styles.statusUnderReview;
                 else if (s === 'not submit') badgeClass = styles.statusNotSubmit;
 
@@ -114,30 +115,12 @@ export const createColumns = (
             cell: ({ row }) => {
                 const pqp = row.original;
                 return (
-                    <div className="flex items-center justify-center space-x-2">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-100"
-                            onClick={() => handleEdit(pqp.id)}
-                            title={t('pqp.tooltip.edit')}
-                        >
-                            <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-blue-500 hover:text-blue-600 hover:bg-blue-100"
-                            onClick={() => handleViewDetails(pqp.id)}
-                            title={t('pqp.tooltip.details')}
-                        >
-                            <Eye className="h-4 w-4" />
-                        </Button>
+                    <div className="flex items-center justify-center">
                         <Button
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-100"
-                            onClick={() => confirmDelete(pqp.id)}
+                            onClick={(e) => { e.stopPropagation(); confirmDelete(pqp.id); }}
                             title={t('pqp.tooltip.delete')}
                         >
                             <Trash2 className="h-4 w-4" />

@@ -1,0 +1,17 @@
+MATERIAL-SUBMITTAL M5 frontend candidate = 056c245c (git archive react-app) + 24 overlay files (7 live ITP + 17 material) + reviewed unit tests; node_modules = repo's (symlink). 2026-10-09 00:31:03 CST
+node v25.8.0
+$ npx tsc --noEmit -p .
+EXIT 0
+$ npm test
+✔ failed, but a previous successful load for THIS SAME scope is still held: "error-stale" (keep showing the data, flag it) (0.059417ms)
+✔ failed with confirmedThisScope=true but hasData=false: still "error-empty" (nothing to keep showing) (0.04275ms)
+✔ no error, sawLoadingThisScope or confirmedThisScope true: "ok" — list.length may legitimately be 0 (a real "no records") (0.03625ms)
+✔ no response (network error / timeout) is UNKNOWN, never "not saved" (2.808959ms)
+✔ network failure, server error and unknown errors: friendly fixed lines, the response body is never shown (0.150625ms)
+ℹ tests 168
+ℹ pass 168
+ℹ fail 0
+EXIT 0
+$ npx vite build --outDir /Users/nook/Documents/Qualitas-deploy-artifacts/MATERIAL-SUBMITTAL-M5/frontend-dist --emptyOutDir
+✓ built in 3.84s
+EXIT 0

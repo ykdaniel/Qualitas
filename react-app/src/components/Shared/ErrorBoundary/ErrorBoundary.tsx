@@ -78,7 +78,7 @@ class ErrorBoundary extends Component<Props, State> {
                         </p>
 
                         {import.meta.env.DEV && this.state.error && (
-                            <details className={styles.details}>
+                            <details className={styles.details} open>
                                 <summary>{t('error.details')} (DEV)</summary>
                                 <pre className={styles.errorStack}>
                                     {this.state.error.toString()}

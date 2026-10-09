@@ -1,9 +1,23 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "../Shared/DataTable/DataTableColumnHeader";
-import { ITPItem } from "../../context/ITPContext";
-import { Edit, FileText, Trash2, CheckSquare, Link } from "lucide-react";
+import { ITPItem } from "../../store/itpStore";
+import { Trash2, Link } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { StatusBadge } from "@/components/Shared/StatusBadge";
+
+// Maps ITP statuses onto StatusBadge colour classes (green = approved, teal = approved with comments,
+// yellow = pending, orange = revise & resubmit, red = rejected, grey = no submit / void).
+const getBadgeKey = (status: string) => {
+    const s = status.toLowerCase();
+    if (s === 'approved') return 'approved';
+    if (s === 'approved with comments') return 'approvedwithcomments';
+    if (s === 'revise & resubmit' || s === 'revise and resubmit') return 'reviseresubmit';
+    if (s === 'rejected') return 'rejected';
+    if (s === 'pending') return 'pending';
+    if (s === 'void') return 'cancelled';
+    return 'na';
+};
 
 const getLocalizedStatus = (status: string, t: (key: string) => string) => {
     const s = status.toLowerCase();
@@ -18,9 +32,6 @@ const getLocalizedStatus = (status: string, t: (key: string) => string) => {
 };
 
 export const createColumns = (
-    handleEdit: (id: string) => void,
-    handleViewDetails: (id: string) => void,
-    handleAdd: (id: string) => void, // This was "Review" button in ITP.tsx (named handleAdd but calls addITP logic or navigate?) -> It navigates to /itp/:id
     handleDelete: (id: string) => void,
     navigate: (path: string) => void,
     t: (key: string) => string,
@@ -43,7 +54,7 @@ export const createColumns = (
             cell: ({ row }) => {
                 const isVoid = row.getValue('status')?.toString().toLowerCase() === 'void';
                 return (
-                    <div className={cn("text-center", isVoid && "line-through text-gray-400")}>
+                    <div className={cn("text-center font-medium text-[#8a6a3a] underline-offset-2 group-hover:underline", isVoid && "line-through text-gray-400")}>
                         {row.getValue("referenceNo") || '-'}
                     </div>
                 );
@@ -71,8 +82,12 @@ export const createColumns = (
                 const status = row.getValue("status") as string;
                 const isVoid = status.toLowerCase() === 'void';
                 return (
-                    <div className={cn("text-center", isVoid && "line-through text-gray-400")}>
-                        {getLocalizedStatus(status, t)}
+                    <div className="text-center">
+                        <StatusBadge
+                            status={getBadgeKey(status)}
+                            label={getLocalizedStatus(status, t)}
+                            className={cn(isVoid && "line-through")}
+                        />
                     </div>
                 );
             },
@@ -156,51 +171,25 @@ export const createColumns = (
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0 text-emerald-500 hover:text-white hover:bg-emerald-500"
-                            onClick={() => handleEdit(itp.id)}
-                            title={t('itp.tooltip.edit')}
-                        >
-                            <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 text-purple-500 hover:text-white hover:bg-purple-500"
-                            onClick={() => handleViewDetails(itp.id)}
-                            title={t('itp.tooltip.details')}
-                        >
-                            <FileText className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 text-indigo-500 hover:text-white hover:bg-indigo-500"
-                            onClick={() => handleAdd(itp.id)}
-                            title={t('itp.tooltip.review')}
-                        >
-                            <CheckSquare className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
                             className={cn(
-                                "h-auto px-2 py-1 text-xs gap-1",
+                                "h-8 px-2 gap-1 text-xs",
                                 relatedNoiCount > 0
                                     ? "text-blue-500 hover:text-white hover:bg-blue-500"
                                     : "text-gray-400 bg-gray-100 cursor-not-allowed hover:bg-gray-100 hover:text-gray-400"
                             )}
-                            onClick={() => relatedNoiCount > 0 && navigate('/noi')}
+                            onClick={(e) => { e.stopPropagation(); if (relatedNoiCount > 0) navigate('/noi'); }}
                             disabled={relatedNoiCount === 0}
                             title={relatedNoiCount > 0 ? t('itp.tooltip.viewRelatedNOI').replace('{count}', relatedNoiCount.toString()) : t('itp.tooltip.noRelatedNOI')}
                         >
-                            <Link className="h-3 w-3" />
+                            <Link className="h-4 w-4" />
                             {relatedNoiCount}
                         </Button>
+
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0 text-red-500 hover:text-white hover:bg-red-500"
-                            onClick={() => handleDelete(itp.id)}
+                            className="h-8 w-8 p-0 text-slate-300 group-hover:text-red-500 focus-visible:text-red-500 hover:text-white hover:bg-red-500"
+                            onClick={(e) => { e.stopPropagation(); handleDelete(itp.id); }}
                             title={t('itp.tooltip.delete')}
                         >
                             <Trash2 className="h-4 w-4" />
@@ -210,6 +199,6 @@ export const createColumns = (
             },
             enableSorting: false,
             enableHiding: false,
-            size: 200, // Make it wider for the group of buttons
+            size: 120,
         },
     ];

@@ -1,0 +1,116 @@
+/*
+ * Custom font + size styling for the shared RichTextEditor (Quill).
+ *
+ * This has to be a regular CSS file (not a .module.css) because Quill
+ * mounts its own DOM with global class names like .ql-font-* and
+ * .ql-picker-*, which a scoped CSS module cannot reach.
+ *
+ * The classes and dropdown labels listed here must stay in sync with
+ * the Font.whitelist and Size.whitelist registered in RichTextEditor.tsx
+ * — if the whitelists add a new entry, this file must add matching
+ * .ql-font-<value> + dropdown ::before rules or the picker will show
+ * an empty item.
+ */
+
+/* ─────────────────────────────────────────────────────────────────
+ * 1. Default font — bilingual fallback chain
+ *
+ * Calibri first so Latin characters render in Calibri; it has no CJK
+ * glyphs, so Chinese characters fall through to Microsoft JhengHei
+ * automatically without any per-character tagging. The rest are safety
+ * fallbacks for systems that don't have Calibri/JhengHei installed.
+ * ───────────────────────────────────────────────────────────────── */
+.ql-editor {
+    font-family: Calibri, "Helvetica Neue", Arial,
+        "Microsoft JhengHei", "微軟正黑體", "PingFang TC", sans-serif;
+    font-size: 12pt;
+    line-height: 1.6;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+ * 2. Font family — applied to selected text via the picker
+ * ───────────────────────────────────────────────────────────────── */
+.ql-font-calibri {
+    font-family: Calibri, "Helvetica Neue", Arial, sans-serif;
+}
+.ql-font-ms-jhenghei {
+    font-family: "Microsoft JhengHei", "微軟正黑體", "PingFang TC",
+        "Heiti TC", sans-serif;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+ * 3. Font-family dropdown labels
+ *    Quill's default picker labels are baked into the snow theme for
+ *    only sans-serif/serif/monospace. Since we've swapped the whitelist
+ *    to calibri + ms-jhenghei, we must provide labels for BOTH.
+ * ───────────────────────────────────────────────────────────────── */
+
+/* Widen the dropdown so CJK labels don't get clipped */
+.ql-snow .ql-picker.ql-font {
+    width: 120px;
+}
+
+/* Clear default labels */
+.ql-snow .ql-picker.ql-font .ql-picker-label::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item::before {
+    content: "";
+}
+
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="calibri"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="calibri"]::before {
+    content: "Calibri";
+    font-family: Calibri, "Helvetica Neue", Arial, sans-serif;
+}
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="ms-jhenghei"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="ms-jhenghei"]::before {
+    content: "微軟正黑體";
+    font-family: "Microsoft JhengHei", "PingFang TC", sans-serif;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+ * 3. Font size dropdown — display the raw px value as the label
+ * ───────────────────────────────────────────────────────────────── */
+.ql-snow .ql-picker.ql-size {
+    width: 70px;
+}
+.ql-snow .ql-picker.ql-size .ql-picker-label::before,
+.ql-snow .ql-picker.ql-size .ql-picker-item::before {
+    content: attr(data-value);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+ * 4. Line-height dropdown — display the value with a "行高" prefix
+ *    and a visual line-spacing icon as the default label.
+ * ───────────────────────────────────────────────────────────────── */
+.ql-snow .ql-picker.ql-lineHeight {
+    width: 80px;
+}
+
+/* Default label when nothing is selected */
+.ql-snow .ql-picker.ql-lineHeight .ql-picker-label::before {
+    content: "行高";
+}
+
+/* Dropdown items: show the numeric value with × suffix */
+.ql-snow .ql-picker.ql-lineHeight .ql-picker-item::before {
+    content: attr(data-value) "×";
+}
+
+/* Selected value: show in the label too */
+.ql-snow .ql-picker.ql-lineHeight .ql-picker-label[data-value]::before {
+    content: attr(data-value) "×";
+}
+
+/* Highlight the active item */
+.ql-snow .ql-picker.ql-lineHeight .ql-picker-item.ql-selected {
+    color: #3b82f6;
+    font-weight: 600;
+}
+
+/*
+ * NOTE: The chapter-scoped list styling (chapter-prefix numbering, ○/-
+ * bullet markers, per-level indent steps) used to live here but was
+ * specific to KM articles, not to every RichTextEditor in the app.
+ * It now lives in `src/components/KM/kmArticle.css` and is imported
+ * only by KM modules. Keep this file focused on the editor core.
+ */

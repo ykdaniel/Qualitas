@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
 import {
   getContractors,
   createContractor,
@@ -8,6 +8,7 @@ import {
   CreateContractorPayload
 } from '../services/api';
 import { useErrorHandler } from '../hooks/useErrorHandler';
+import { useAuth } from './AuthContext';
 
 // Keep the internal interface consistent with UI usage, or refactor UI to match API.
 // Refactoring UI to match API (snake_case from backend) might be too much change.
@@ -69,8 +70,9 @@ export const ContractorsProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [contractors, setContractors] = useState<Contractor[]>([]);
   const [error, setError] = useState<string | null>(null);
   const { handleError } = useErrorHandler();
+  const { isAuthenticated } = useAuth();
 
-  const fetchContractors = async () => {
+  const fetchContractors = useCallback(async () => {
     try {
       const data = await getContractors();
       setContractors(data.map(mapApiToInternal));
@@ -78,13 +80,19 @@ export const ContractorsProvider: React.FC<{ children: ReactNode }> = ({ childre
       const msg = handleError(err, 'Failed to fetch contractors');
       setError(msg);
     }
-  };
-
-  useEffect(() => {
-    fetchContractors();
   }, [handleError]);
 
-  const addContractor = async (contractor: Omit<Contractor, 'id'>) => {
+  useEffect(() => {
+    if (isAuthenticated) {
+      const timeoutId = setTimeout(() => {
+        void fetchContractors();
+      }, 0);
+      return () => clearTimeout(timeoutId);
+    }
+    return undefined;
+  }, [isAuthenticated, fetchContractors]);
+
+  const addContractor = useCallback(async (contractor: Omit<Contractor, 'id'>) => {
     try {
       const payload = mapInternalToApi(contractor);
       const newContractor = await createContractor(payload);
@@ -93,9 +101,9 @@ export const ContractorsProvider: React.FC<{ children: ReactNode }> = ({ childre
       handleError(error, 'Failed to add contractor');
       throw error;
     }
-  };
+  }, [handleError]);
 
-  const updateContractor = async (id: string, updates: Partial<Contractor>) => {
+  const updateContractor = useCallback(async (id: string, updates: Partial<Contractor>) => {
     try {
       // Construct payload. Ideally we should merging updates with existing data if API requires full payload,
       // but our API updateContractor takes Partial<CreateContractorPayload>.
@@ -118,9 +126,9 @@ export const ContractorsProvider: React.FC<{ children: ReactNode }> = ({ childre
       handleError(error, 'Failed to update contractor');
       throw error;
     }
-  };
+  }, [contractors, handleError]);
 
-  const deleteContractor = async (id: string) => {
+  const deleteContractor = useCallback(async (id: string) => {
     try {
       await apiDeleteContractor(id);
       setContractors(prev => prev.filter(c => c.id !== id));
@@ -128,13 +136,13 @@ export const ContractorsProvider: React.FC<{ children: ReactNode }> = ({ childre
       handleError(error, 'Failed to delete contractor');
       throw error;
     }
-  };
+  }, [handleError]);
 
-  const getActiveContractors = () => contractors.filter(c => c.status === 'active');
+  const getActiveContractors = useCallback(() => contractors.filter(c => c.status === 'active'), [contractors]);
 
   const value = useMemo(
     () => ({ contractors, error, addContractor, updateContractor, deleteContractor, getActiveContractors }),
-    [contractors, error]
+    [contractors, error, addContractor, updateContractor, deleteContractor, getActiveContractors]
   );
 
   return (

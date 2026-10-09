@@ -1,36 +1,70 @@
-import React, { useState } from 'react';
+import { useDraftGuard } from '../Shared/LeaveGuard';
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
+import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { useLanguage } from '../../context/LanguageContext';
-import { useContractors } from '../../context/ContractorsContext';
-import { PQPItem } from '../../context/PQPContext';
+import { useContractorsStore } from '../../store/contractorsStore';
+import { usePQPStore } from '../../store/pqpStore';
+import type { PQPItem, PQPHistoryItem } from '../../store/pqpStore';
 import FileAttachment from '../Shared/FileAttachment';
+import ImagePreviewOverlay from '../Shared/ImagePreviewOverlay';
+import PQPPrintTemplate from './PQPPrintTemplate';
+import { getErrorMessage } from '../../utils/errorUtils';
+import { isUnchangedSincePriorWrite } from '../../utils/attachmentOutcome';
 import styles from './PQP.module.css';
+import './PQP.print.css';
 
+import formStyles from '../Shared/FormShell.module.css';
 const getLocalizedStatus = (status: string, t: (key: string) => string) => {
     const s = (status || '').toLowerCase();
     if (s === 'approved') return t('pqp.status.approved');
-    if (s === 'reject') return t('pqp.status.reject');
-    if (s === 'not submit') return t('pqp.status.notSubmit');
+    if (s === 'reject' || s === 'rejected') return t('pqp.status.reject');
+    if (s === 'revise & resubmit') return t('pqp.status.reviseResubmit');
+    if (s === 'not submit' || s === 'not submitted') return t('pqp.status.notSubmitted');
     if (s === 'under review') return t('pqp.status.underReview');
     return status;
 };
 
+/** Result of ONE save attempt's attachment phase (Phase 2 — the record itself, Phase 1, has
+ * already succeeded by the time this is built; a Phase 1 failure throws instead of returning
+ * this). Never invented to look like a full success/failure — each field says exactly what this
+ * attempt actually confirmed, so the modal can prune its own queues per-item instead of
+ * clearing or keeping them all together. */
+export interface SaveOutcome {
+    /** Attachment ids this attempt confirmed deleted (HTTP success) — safe to drop from the
+     * modal's pending-delete queue; anything NOT in this list (whether it failed outright or
+     * came back 404/unknown) stays queued for retry. */
+    deletedIds: string[];
+    /** True only if the pending-files upload call itself succeeded — routers/file_router.py's
+     * upload endpoint is one all-or-nothing transaction, so this is a single boolean, not a
+     * per-file list. Safe to clear the pending-upload queue only when true. */
+    uploadedPending: boolean;
+    /** Human-readable description of every step that did NOT complete this attempt, in the
+     * order attempted. Empty means the whole attachment phase succeeded. */
+    errors: string[];
+}
+
 export interface PQPDetailModalProps {
     pqpId: string;
     existingItem?: PQPItem;
-    onSave: (updates: Partial<PQPItem>) => void | Promise<void>;
+    readOnly?: boolean;
+    canPublish?: boolean;
+    onSave: (updates: Partial<PQPItem>, pendingFiles: File[], deletedFileIds: string[], removedAttachments?: string[], skipRecordWrite?: boolean) => Promise<SaveOutcome>;
+    onPublish?: (id: string, changeSummary?: string) => Promise<void>;
     onClose: () => void;
 }
 
-export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId, existingItem, onSave, onClose }) => {
+export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, existingItem, readOnly = false, canPublish = true, onSave, onPublish, onClose }) => {
     const { t } = useLanguage();
-    const { getActiveContractors } = useContractors();
+    const { getActiveContractors } = useContractorsStore();
     const VERSION_OPTIONS = ['Rev1.0', 'Rev2.0', 'Rev3.0', 'Rev4.0'];
     const [formData, setFormData] = useState<Partial<PQPItem>>({
         pqpNo: existingItem?.pqpNo || '',
         title: existingItem?.title || '',
         description: existingItem?.description || '',
         vendor: existingItem?.vendor || '',
-        status: existingItem?.status || 'Approved',
+        status: existingItem?.status || 'Not Submit',
         // 將舊資料的 "V1.0" 正規化為 "Rev1.0"
         version: existingItem
             ? (existingItem.version === 'V1.0' ? 'Rev1.0' : existingItem.version)
@@ -42,6 +76,27 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId, existingI
     const [errors, setErrors] = useState<{ [key: string]: string }>({});
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState('');
+    const [pendingUploads, setPendingUploads] = useState<File[]>([]);
+    const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
+    // Attachment preview (BACKLOG #23, 2026-10-05): FileAttachment's thumbnail click only fires
+    // if the parent supplies onPreview — this never did, so clicking a photo silently did
+    // nothing. Same handlePreview/ImagePreviewOverlay pattern already used by OBS/NCR/OSD/NOI.
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [previewName, setPreviewName] = useState<string>('');
+    const handlePreview = (url: string, name?: string) => {
+        setPreviewUrl(url);
+        setPreviewName(name || '');
+    };
+    const leaveGuard = useDraftGuard({ formData, pendingUploads, deletedFileIds }, saving, !readOnly);
+    const requestClose = () => leaveGuard.requestClose(onClose);
+    // JSON.stringify(formData) from the last successfully written attempt this session (a
+    // serialized-string key, not a semantic/deep-equality snapshot — see
+    // utils/attachmentOutcome.ts::isUnchangedSincePriorWrite). A retry after an attachment-only
+    // failure whose current formData serializes to the SAME string must not re-send that write
+    // (that previously created a second, real audit-log UPDATE entry on every retry, the same
+    // bug independently confirmed and fixed for ITP's Publish retry). Any change to formData
+    // produces a different string, so it is never skipped.
+    const [lastWrittenPayloadKey, setLastWrittenPayloadKey] = useState<string | null>(null);
     const [versionMode, setVersionMode] = useState<'select' | 'custom'>(() => {
         let currentVersion = existingItem?.version;
         if (currentVersion === 'V1.0') {
@@ -70,34 +125,7 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId, existingI
         }));
     };
 
-    const handleFileAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (files && files.length > 0) {
-            const newAttachments: string[] = [];
-            Array.from(files).forEach(file => {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    if (typeof reader.result === 'string') {
-                        newAttachments.push(reader.result);
-                        if (newAttachments.length === files.length) {
-                            setFormData(prev => ({
-                                ...prev,
-                                attachments: [...(prev.attachments || []), ...newAttachments]
-                            }));
-                        }
-                    }
-                };
-                reader.readAsDataURL(file);
-            });
-        }
-    };
-
-    const handleRemoveFileAttachment = (index: number) => {
-        setFormData(prev => ({
-            ...prev,
-            attachments: (prev.attachments || []).filter((_, i) => i !== index)
-        }));
-    };
+    // Replaced by FileAttachment component props
 
     const validate = () => {
         const newErrors: { [key: string]: string } = {};
@@ -127,52 +155,123 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId, existingI
         setSaving(true);
         setSaveError('');
         try {
-            await onSave(formData);
+            // onSave throwing here means Phase 1 (the record itself) failed to save — nothing
+            // below runs, the queues are untouched, and the catch below is the record's own
+            // single "not saved" notice.
+            const { key: payloadKey, skip: skipRecordWrite } = isUnchangedSincePriorWrite(formData, lastWrittenPayloadKey);
+            const outcome = await onSave(formData, pendingUploads, deletedFileIds, undefined, skipRecordWrite);
+            if (!skipRecordWrite) setLastWrittenPayloadKey(payloadKey);
+            // Prune only what THIS attempt actually confirmed — a delete/upload not mentioned
+            // here (whether it failed outright or the response was ambiguous) stays queued so
+            // the next Save retries exactly that, and only that.
+            if (outcome.deletedIds.length > 0) {
+                setDeletedFileIds(prev => prev.filter(id => !outcome.deletedIds.includes(id)));
+            }
+            if (outcome.uploadedPending) {
+                setPendingUploads([]);
+            }
+            if (outcome.errors.length > 0) {
+                // The record itself IS saved at this point — a different situation from Phase 1
+                // failing, so it gets a distinctly worded, single notice (not "save failed").
+                setSaveError(
+                    (t('pqp.recordSavedPartialFailure') || 'Record saved, but some attachment steps did not complete') +
+                    '：' + outcome.errors.join('；')
+                );
+            } else {
+                leaveGuard.release();
+            onClose();
+            }
+        } catch (err) {
+            setSaveError(getErrorMessage(err, t('pqp.saveError')));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    // Version history
+    const { getHistory } = usePQPStore();
+    const [historyItems, setHistoryItems] = useState<PQPHistoryItem[]>([]);
+    const [showHistory, setShowHistory] = useState(false);
+
+    useEffect(() => {
+        if (existingItem?.id) {
+            getHistory(existingItem.id).then(setHistoryItems).catch(() => {});
+        }
+    }, [existingItem?.id, getHistory]);
+
+    // Print: mount the report portal, print, unmount (same pattern as NCR/OBS).
+    const [isPrinting, setIsPrinting] = useState(false);
+    useEffect(() => {
+        if (!isPrinting) return;
+        const timer = setTimeout(() => window.print(), 200);
+        const onAfterPrint = () => setIsPrinting(false);
+        window.addEventListener('afterprint', onAfterPrint);
+        return () => { clearTimeout(timer); window.removeEventListener('afterprint', onAfterPrint); };
+    }, [isPrinting]);
+
+    const handlePublish = async () => {
+        if (!existingItem) {
+            // Must save first before publishing
+            setSaveError(t('pqp.saveBeforePublish') || 'Please save before publishing');
+            return;
+        }
+        if (!validate()) return;
+        const changeSummary = window.prompt(t('pqp.publishChangeSummary') || 'Change summary (optional):');
+        if (changeSummary === null) return; // cancelled
+        setSaving(true);
+        try {
+            if (onPublish) {
+                await onPublish(existingItem.id, changeSummary || undefined);
+            }
+            leaveGuard.release();
             onClose();
         } catch (err) {
-            setSaveError((err as Error)?.message || t('pqp.saveError'));
+            setSaveError(getErrorMessage(err, t('pqp.saveError')));
         } finally {
             setSaving(false);
         }
     };
 
     return (
-        <div className={styles.modalOverlay}>
-            <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-                <div className={styles.modalHeader}>
+        <div className={formStyles.modalOverlay}>
+            <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
+                <div className={formStyles.modalHeader}>
                     <h2>{existingItem ? t('pqp.editTitle') : t('pqp.addTitle')}</h2>
-                    <button type="button" className={styles.closeButton} onClick={onClose}>×</button>
+                    <button type="button" className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={requestClose}>×</button>
                 </div>
-                <div className={styles.modalBody}>
-                    <p className={styles.formRequiredHint}>{t('form.requiredHint')}</p>
-                    <div className={styles.formSections}>
-                        <div className={styles.formSection}>
-                            <h3 className={styles.sectionTitle}>{t('pqp.infoSection')}</h3>
-                            <div className={styles.formGrid}>
-                                <div className={styles.formGroup}>
+                <div className={formStyles.modalBody}>
+                    <p className={formStyles.formRequiredHint}>{t('form.requiredHint')}</p>
+                    <div className={formStyles.formSections}>
+                    {/* A single disabled fieldset locks every input/select/textarea
+                        and inline button below in one shot when readOnly. */}
+                    <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
+                        <div className={formStyles.formSection}>
+                            <h3 className={formStyles.sectionTitle}>{t('pqp.infoSection')}</h3>
+                            <div className={formStyles.formGrid}>
+                                <div className={formStyles.formGroup}>
                                     <label>{t('pqp.referenceNo')}</label>
                                     <input
                                         type="text"
-                                        className={styles.formInput}
+                                        className={formStyles.formInput}
                                         value={formData.pqpNo || t('form.autoGenerated')}
                                         readOnly
                                         style={{ backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: formData.pqpNo ? '#000000' : '#666666' }}
                                     />
                                 </div>
-                                <div className={styles.formGroup}>
-                                    <label className={styles.requiredLabel}>{t('pqp.subject')}</label>
+                                <div className={formStyles.formGroup}>
+                                    <label className={formStyles.requiredLabel}>{t('pqp.subject')}</label>
                                     <input
                                         type="text"
-                                        className={`${styles.formInput} ${errors.title ? styles.errorInput : ''}`}
+                                        className={`${formStyles.formInput} ${errors.title ? formStyles.errorInput : ''}`}
                                         value={formData.title || ''}
                                         onChange={(e) => handleFieldChange('title', e.target.value)}
                                     />
-                                    {errors.title && <span className={styles.errorMessage}>{errors.title}</span>}
+                                    {errors.title && <span className={formStyles.errorMessage}>{errors.title}</span>}
                                 </div>
-                                <div className={styles.formGroup}>
-                                    <label className={styles.requiredLabel}>{t('pqp.contractor')}</label>
+                                <div className={formStyles.formGroup}>
+                                    <label className={formStyles.requiredLabel}>{t('pqp.contractor')}</label>
                                     <select
-                                        className={`${styles.formSelect} ${errors.vendor ? styles.errorInput : ''}`}
+                                        className={`${formStyles.formSelect} ${errors.vendor ? formStyles.errorInput : ''}`}
                                         value={formData.vendor || ''}
                                         onChange={(e) => handleFieldChange('vendor', e.target.value)}
                                     >
@@ -183,13 +282,13 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId, existingI
                                             </option>
                                         ))}
                                     </select>
-                                    {errors.vendor && <span className={styles.errorMessage}>{errors.vendor}</span>}
+                                    {errors.vendor && <span className={formStyles.errorMessage}>{errors.vendor}</span>}
                                 </div>
-                                <div className={styles.formGroup}>
-                                    <label className={styles.requiredLabel}>{t('pqp.version')}</label>
+                                <div className={formStyles.formGroup}>
+                                    <label className={formStyles.requiredLabel}>{t('pqp.version')}</label>
                                     {versionMode === 'select' && (
                                         <select
-                                            className={`${styles.formSelect} ${errors.version ? styles.errorInput : ''}`}
+                                            className={`${formStyles.formSelect} ${errors.version ? formStyles.errorInput : ''}`}
                                             value={
                                                 VERSION_OPTIONS.includes(formData.version || '')
                                                     ? formData.version
@@ -215,15 +314,15 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId, existingI
                                     {versionMode === 'custom' && (
                                         <input
                                             type="text"
-                                            className={`${styles.formInput} ${errors.version ? styles.errorInput : ''}`}
+                                            className={`${formStyles.formInput} ${errors.version ? formStyles.errorInput : ''}`}
                                             value={formData.version || ''}
                                             onChange={(e) => handleFieldChange('version', e.target.value)}
                                             placeholder={t('pqp.revPlaceholder')}
                                         />
                                     )}
-                                    {errors.version && <span className={styles.errorMessage}>{errors.version}</span>}
+                                    {errors.version && <span className={formStyles.errorMessage}>{errors.version}</span>}
                                 </div>
-                                <div className={styles.formGroup}>
+                                <div className={formStyles.formGroup}>
                                     <label>{t('common.dueDate')}</label>
                                     <input
                                         type={formData.dueDate ? 'date' : 'text'}
@@ -233,7 +332,7 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId, existingI
                                         onBlur={(e) => {
                                             if (!e.target.value) e.target.type = 'text';
                                         }}
-                                        className={styles.formInput}
+                                        className={formStyles.formInput}
                                         value={formData.dueDate || ''}
                                         onChange={(e) => handleFieldChange('dueDate', e.target.value)}
                                     />
@@ -242,44 +341,68 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId, existingI
                         </div>
 
 
-                        <div className={styles.formSection}>
+                        <div className={formStyles.formSection}>
+                            <h3 className={formStyles.sectionTitle}>{t('common.attachments')}</h3>
                             <FileAttachment
-                                attachments={formData.attachments || []}
-                                onUpload={handleFileAttachmentUpload}
-                                onRemove={handleRemoveFileAttachment}
+                                attachments={formData.attachments || [] as any[]}
+                                onPendingFilesChange={(files) => setPendingUploads(files)}
+                                onDeleteExistingFile={async (id) => {
+                                    setDeletedFileIds(prev => [...prev, id]);
+                                    setFormData(prev => ({
+                                        ...prev,
+                                        attachments: (prev.attachments || []).filter((a: any) => typeof a === 'string' || a?.id !== id),
+                                    }));
+                                }}
+                                onRemoveLegacy={(legacyIdx) => {
+                                    setFormData(prev => {
+                                        const arr = (prev.attachments || []) as any[];
+                                        let strSeen = -1;
+                                        const filtered = arr.filter((a: any) => {
+                                            if (typeof a !== 'string') return true;
+                                            strSeen += 1;
+                                            return strSeen !== legacyIdx;
+                                        });
+                                        return { ...prev, attachments: filtered };
+                                    });
+                                }}
                                 id="pqp"
+                                entityType="pqp"
+                                category="attachment"
+                                hideTitle
+                                onPreview={handlePreview}
                             />
                         </div>
 
-                        <div className={styles.formSection}>
-                            <h3 className={styles.sectionTitle}>{t('pqp.qualityAssessment')}</h3>
-                            <div className={styles.formGrid}>
-                                <div className={styles.formGroup}>
+                        <div className={formStyles.formSection}>
+                            <h3 className={formStyles.sectionTitle}>{t('pqp.qualityAssessment')}</h3>
+                            <div className={formStyles.formGrid}>
+                                <div className={formStyles.formGroup}>
                                     <label>{t('common.status')}</label>
                                     <select
-                                        className={styles.formSelect}
+                                        className={formStyles.formSelect}
                                         value={formData.status || 'Approved'}
                                         onChange={(e) => handleFieldChange('status', e.target.value)}
                                     >
-                                        <option value="Not Submit">{t('pqp.status.notSubmit')}</option>
+                                        <option value="Not Submit">{t('pqp.status.notSubmitted')}</option>
                                         <option value="Under Review">{t('pqp.status.underReview')}</option>
                                         <option value="Approved">{t('pqp.status.approved')}</option>
                                         <option value="Reject">{t('pqp.status.reject')}</option>
+                                        <option value="Revise & Resubmit">{t('pqp.status.reviseResubmit')}</option>
                                     </select>
                                 </div>
-                                <div className={styles.formGroupFull}>
-                                    <div className={styles.labelWithButton}>
+                                <div className={formStyles.formGroupFull}>
+                                    <div className={formStyles.labelWithButton}>
                                         <label>{t('pqp.remark')}</label>
                                         <button
                                             type="button"
-                                            className={styles.tbcButton}
+                                            className={formStyles.tbcButton}
                                             onClick={() => handleDateButton('description')}
                                         >
                                             {t('pqp.addDate')}
                                         </button>
                                     </div>
                                     <textarea
-                                        className={styles.formTextarea}
+                                        className={formStyles.formTextarea}
                                         value={formData.description || ''}
                                         onChange={(e) => handleFieldChange('description', e.target.value)}
                                         rows={4}
@@ -287,18 +410,85 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId, existingI
                                 </div>
                             </div>
                         </div>
+                    </fieldset>
                     </div>
                 </div>
-                {saveError && <p className={styles.saveError}>{saveError}</p>}
-                <div className={styles.modalActions}>
-                    <button type="button" className={styles.saveButton} onClick={handleSave} disabled={saving}>
-                        {saving ? t('pqp.saving') : t('common.save')}
-                    </button>
-                    <button type="button" className={styles.cancelButton} onClick={onClose} disabled={saving}>
-                        {t('common.cancel')}
-                    </button>
-                </div>
+                {existingItem && historyItems.length > 0 && (
+                    <div className={formStyles.formSection} style={{ margin: '0 24px' }}>
+                        <h3
+                            className={formStyles.sectionTitle}
+                            style={{ cursor: 'pointer', userSelect: 'none' }}
+                            onClick={() => setShowHistory(!showHistory)}
+                        >
+                            {t('pqp.versionHistory') || 'Version History'} ({historyItems.length})
+                            <span style={{ marginLeft: 8, fontSize: 12 }}>{showHistory ? '▲' : '▼'}</span>
+                        </h3>
+                        {showHistory && (
+                            <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+                                <thead>
+                                    <tr style={{ borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>
+                                        <th style={{ padding: '6px 8px' }}>{t('pqp.version')}</th>
+                                        <th style={{ padding: '6px 8px' }}>{t('common.status')}</th>
+                                        <th style={{ padding: '6px 8px' }}>{t('pqp.subject')}</th>
+                                        <th style={{ padding: '6px 8px' }}>{t('pqp.changeSummary') || 'Change Summary'}</th>
+                                        <th style={{ padding: '6px 8px' }}>{t('pqp.createdDate')}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {historyItems.map((h) => (
+                                        <tr key={h.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                            <td style={{ padding: '6px 8px' }}>{h.version}</td>
+                                            <td style={{ padding: '6px 8px' }}>{h.status}</td>
+                                            <td style={{ padding: '6px 8px' }}>{h.title}</td>
+                                            <td style={{ padding: '6px 8px' }}>{h.change_summary || '-'}</td>
+                                            <td style={{ padding: '6px 8px' }}>{h.created_at?.split('T')[0]}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                )}
+                {saveError && <p className={formStyles.saveError}>{saveError}</p>}
+                <FormActions
+                    tools={<>
+                        <button className={actionStyles.secondary} type="button" onClick={() => setIsPrinting(true)} disabled={saving} title={t('common.print') || 'Print'}>
+                            {t('common.print') || 'Print'}
+                        </button>
+                    </>}
+                    secondary={<>
+                        {canPublish && (
+                            <button className={actionStyles.workflow}
+                                type="button"
+                                onClick={handlePublish}
+                                disabled={saving}
+                                title="Publish as next revision"
+                            >
+                                Publish
+                            </button>
+                        )}
+                    </>}
+                    cancel={<>
+                        <button className={actionStyles.secondary} type="button" onClick={requestClose} disabled={saving}>
+                            {t('common.cancel')}
+                        </button>
+                    </>}
+                    primary={<>
+                        {!readOnly && (
+                            <button className={actionStyles.primary} type="button" onClick={handleSave} disabled={saving}>
+                                {saving ? t('pqp.saving') : t('common.save')}
+                            </button>
+                        )}
+                    </>}
+                />
             </div>
+            {isPrinting && ReactDOM.createPortal(
+                <PQPPrintTemplate data={formData as PQPItem} history={historyItems} />,
+                document.body
+            )}
+            {previewUrl && (
+                <ImagePreviewOverlay key={previewUrl} url={previewUrl} name={previewName} onClose={() => setPreviewUrl(null)} />
+            )}
         </div>
     );
 };
@@ -309,10 +499,17 @@ export interface PQPDetailsViewModalProps {
     onClose: () => void;
 }
 
-export const PQPDetailsViewModal: React.FC<PQPDetailsViewModalProps> = ({ pqpId, pqpItem, onClose }) => {
+export const PQPDetailsViewModal: React.FC<PQPDetailsViewModalProps> = ({ pqpId: _pqpId, pqpItem, onClose }) => {
     const { t } = useLanguage();
     const handlePrint = () => {
         window.print();
+    };
+    // Attachment preview (BACKLOG #23, 2026-10-05) — see PQPDetailModal above for why.
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [previewName, setPreviewName] = useState<string>('');
+    const handlePreview = (url: string, name?: string) => {
+        setPreviewUrl(url);
+        setPreviewName(name || '');
     };
 
     if (!pqpItem) {
@@ -320,72 +517,80 @@ export const PQPDetailsViewModal: React.FC<PQPDetailsViewModalProps> = ({ pqpId,
     }
 
     return (
-        <div className={styles.modalOverlay}>
-            <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-                <div className={styles.modalHeader}>
+        <div className={formStyles.modalOverlay}>
+            <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
+                <div className={formStyles.modalHeader}>
                     <h2>{t('pqp.detail.title')}</h2>
-                    <button className={styles.closeButton} onClick={onClose}>×</button>
+                    <button className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={onClose}>×</button>
                 </div>
-                <div className={styles.modalBody}>
-                    <div className={styles.formSections}>
-                        <div className={styles.formSection}>
-                            <h3 className={styles.sectionTitle}>{t('pqp.infoSection')}</h3>
-                            <div className={styles.formGrid}>
-                                <div className={styles.formGroup}>
+                <div className={formStyles.modalBody}>
+                    <div className={formStyles.formSections}>
+                        <div className={formStyles.formSection}>
+                            <h3 className={formStyles.sectionTitle}>{t('pqp.infoSection')}</h3>
+                            <div className={formStyles.formGrid}>
+                                <div className={formStyles.formGroup}>
                                     <label>{t('pqp.referenceNo')}</label>
-                                    <div className={styles.readOnlyField}>{pqpItem.pqpNo || '-'}</div>
+                                    <div className={formStyles.readOnlyField}>{pqpItem.pqpNo || '-'}</div>
                                 </div>
-                                <div className={styles.formGroup}>
+                                <div className={formStyles.formGroup}>
                                     <label>{t('pqp.subject')}</label>
-                                    <div className={styles.readOnlyField}>{pqpItem.title || '-'}</div>
+                                    <div className={formStyles.readOnlyField}>{pqpItem.title || '-'}</div>
                                 </div>
-                                <div className={styles.formGroup}>
+                                <div className={formStyles.formGroup}>
                                     <label>{t('common.status')}</label>
-                                    <div className={styles.readOnlyField}>{getLocalizedStatus(pqpItem.status, t) || '-'}</div>
+                                    <div className={formStyles.readOnlyField}>{getLocalizedStatus(pqpItem.status, t) || '-'}</div>
                                 </div>
-                                <div className={styles.formGroup}>
+                                <div className={formStyles.formGroup}>
                                     <label>{t('pqp.contractor')}</label>
-                                    <div className={styles.readOnlyField}>{pqpItem.vendor || '-'}</div>
+                                    <div className={formStyles.readOnlyField}>{pqpItem.vendor || '-'}</div>
                                 </div>
-                                <div className={styles.formGroup}>
+                                <div className={formStyles.formGroup}>
                                     <label>{t('pqp.version')}</label>
-                                    <div className={styles.readOnlyField}>{pqpItem.version || '-'}</div>
+                                    <div className={formStyles.readOnlyField}>{pqpItem.version || '-'}</div>
                                 </div>
-                                <div className={styles.formGroup}>
+                                <div className={formStyles.formGroup}>
                                     <label>{t('pqp.createdDate')}</label>
-                                    <div className={styles.readOnlyField}>{pqpItem.createdAt || '-'}</div>
+                                    <div className={formStyles.readOnlyField}>{pqpItem.createdAt || '-'}</div>
                                 </div>
                                 {pqpItem.updatedAt && (
-                                    <div className={styles.formGroup}>
+                                    <div className={formStyles.formGroup}>
                                         <label>{t('pqp.updatedDate')}</label>
-                                        <div className={styles.readOnlyField}>{pqpItem.updatedAt}</div>
+                                        <div className={formStyles.readOnlyField}>{pqpItem.updatedAt}</div>
                                     </div>
                                 )}
-                                <div className={styles.formGroupFull}>
+                                <div className={formStyles.formGroupFull}>
                                     <label>{t('pqp.remark')}</label>
-                                    <div className={styles.readOnlyField}>{pqpItem.description || '-'}</div>
+                                    <div className={formStyles.readOnlyField}>{pqpItem.description || '-'}</div>
                                 </div>
                             </div>
                         </div>
 
                         <FileAttachment
-                            attachments={pqpItem.attachments || []}
-                            onUpload={() => { }}
-                            onRemove={() => { }}
+                            attachments={pqpItem.attachments || [] as any[]}
                             id="pqp-view"
+                            entityType="pqp"
+                            category="attachment"
                             readOnly={true}
+                            onPreview={handlePreview}
                         />
                     </div>
                 </div>
             </div>
-            <div className={styles.modalActions}>
-                <button className={styles.printButton} onClick={handlePrint}>
-                    {t('common.print') || 'Print'}
-                </button>
-                <button className={styles.cancelButton} onClick={onClose}>
-                    {t('common.close') || 'Close'}
-                </button>
-            </div>
+            <FormActions
+                tools={<>
+                    <button className={actionStyles.secondary} onClick={handlePrint}>
+                        {t('common.print') || 'Print'}
+                    </button>
+                </>}
+                cancel={<>
+                    <button className={actionStyles.secondary} onClick={onClose}>
+                        {t('common.close') || 'Close'}
+                    </button>
+                </>}
+            />
+            {previewUrl && (
+                <ImagePreviewOverlay key={previewUrl} url={previewUrl} name={previewName} onClose={() => setPreviewUrl(null)} />
+            )}
         </div>
     );
 };

@@ -1,0 +1,88 @@
+"""
+PQP (Pre-Qualification Package) Repository
+
+Data access layer for PQP module
+"""
+
+from typing import List, Optional
+from sqlalchemy import func
+from sqlalchemy.orm import Session, joinedload
+
+import models
+from core.scope import apply_scope
+from core.utils import sanitize_pagination, sanitize_search_term
+
+
+class PQPRepository:
+    """Repository for PQP data access operations"""
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def get_by_id(self, pqp_id: str) -> Optional[models.PQP]:
+        """Get PQP by ID with preloaded relationships"""
+        return (self.db.query(models.PQP)
+                .options(joinedload(models.PQP.vendor_ref))
+                .filter(models.PQP.id == pqp_id)
+                .first())
+
+    def get_all(self, skip: int = 0, limit: int = 500, project_id: str = None, scope=None, **filters) -> List[models.PQP]:
+        """Get all PQPs with optional filters"""
+        skip, limit = sanitize_pagination(skip, limit)
+        query = self.db.query(models.PQP).options(joinedload(models.PQP.vendor_ref))
+        if project_id:
+            query = query.filter(models.PQP.project_id == project_id)
+
+        if filters.get('search'):
+            search_term = sanitize_search_term(filters['search'])
+            if search_term:
+                query = query.filter(
+                    (models.PQP.pqpNo.ilike(f"%{search_term}%")) |
+                    (models.PQP.title.ilike(f"%{search_term}%"))
+                )
+        if filters.get('status'):
+            status_filter = str(filters['status']).strip().lower()
+            status_aliases = {
+                "not submitted": "not submit",
+                "rejected": "reject",
+            }
+            status_filter = status_aliases.get(status_filter, status_filter)
+            query = query.filter(func.lower(models.PQP.status) == status_filter)
+        if filters.get('start_date'):
+            query = query.filter(models.PQP.createdAt >= filters['start_date'])
+        if filters.get('end_date'):
+            query = query.filter(models.PQP.createdAt <= filters['end_date'])
+
+        # P0 data isolation: restrict to the caller's project/contractor scope.
+        query = apply_scope(query, models.PQP, scope)
+
+        return query.offset(skip).limit(limit).all()
+
+    def create(self, pqp: models.PQP, commit: bool = True) -> models.PQP:
+        """Create a new PQP record"""
+        self.db.add(pqp)
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
+        self.db.refresh(pqp)
+        return pqp
+
+    def update(self, pqp: models.PQP, update_data: dict, commit: bool = True) -> models.PQP:
+        """Update an existing PQP record"""
+        for key, value in update_data.items():
+            setattr(pqp, key, value)
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
+        self.db.refresh(pqp)
+        return pqp
+
+    def delete(self, pqp: models.PQP, commit: bool = True):
+        """Delete a PQP record"""
+        self.db.delete(pqp)
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()

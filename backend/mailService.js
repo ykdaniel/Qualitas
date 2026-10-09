@@ -40,7 +40,7 @@ Qualitas 工程管理系統
         `,
         html: `
             <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
-                <h2 style="color: #f59e0b;">⚠️ 案收到期提醒</h2>
+                <h2 style="color: #f59e0b;">⚠️ 案件到期提醒</h2>
                 <p>您好，</p>
                 <p>系統提醒您，以下案件預計將在 <strong>3 天後 (${dueDate})</strong> 到期，請盡快處理：</p>
                 <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">

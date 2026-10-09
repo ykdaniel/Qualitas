@@ -1,0 +1,22 @@
+✔ M4 board by status: fixed order, Approved and ApprovedWithComments share the last column (1.104ms)
+✔ M4 board: every loaded card appears exactly once (cards = loaded rows) in both modes (5.580083ms)
+✔ M4 board by category: sorted categories, blank / missing category grouped last (0.07125ms)
+✔ M4 board: an unknown status is never hidden (defensive extra column) (0.060833ms)
+✔ M4 board: empty input gives the five empty status columns and no category columns (0.062292ms)
+✔ M4 project reply days: blank -> null (no default); non-negative integers accepted (0.114042ms)
+✔ M4 project reply days: negative, decimal, exponent and text are refused (0.0535ms)
+✔ M4 R1 category mode: tricky names stay real categories; keys unique; only blank/missing is uncategorised (7.168292ms)
+✔ M4 R1 status mode is unchanged by category names: five columns, Approved + ApprovedWithComments merged (0.133625ms)
+✔ M4 R1 rendered SubmittalBoard (zh, category): headings are the categories as typed; blank shows uncategorised once (4.043958ms)
+✔ M4 R1 rendered SubmittalBoard (en, category): headings are the categories as typed; blank shows uncategorised once (1.388792ms)
+✔ M4 R1 rendered SubmittalBoard (zh, status): status headings still translated, five columns (0.834625ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 86.825167
+
+EXIT 0

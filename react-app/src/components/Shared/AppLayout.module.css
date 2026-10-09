@@ -1,0 +1,379 @@
+/* ─── App Shell — Persistent Sidebar Layout ──────────────────── */
+
+.shell {
+  display: flex;
+  min-height: 100vh;
+  background: #fbfaf6;
+  font-family: 'Inter', 'Noto Sans TC', system-ui, -apple-system, sans-serif;
+  color: #2d2a24;
+}
+
+/* .sidebar/.topBar are hidden via the global .no-print class, but that
+   only hides those two children — .shell itself keeps painting this cream
+   background behind whatever page content remains, and print forces exact
+   color rendering (index.css: print-color-adjust: exact), so it still
+   shows through unless reset here too. */
+@media print {
+  .shell {
+    background: white !important;
+  }
+}
+
+/* ─── Sidebar ───────────────────────────────────────────────── */
+
+.sidebar {
+  width: 232px;
+  flex-shrink: 0;
+  background: #fbfaf6;
+  border-right: 1px solid rgba(184, 148, 90, 0.18);
+  padding: 20px 12px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  z-index: 50;
+}
+
+.sidebarBrand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px 16px;
+  border-bottom: 1px solid rgba(184, 148, 90, 0.22);
+}
+
+.logoMark {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #b8945a 0%, #8a6a3a 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  font-weight: 900;
+  color: #faf7f1;
+  letter-spacing: -0.5px;
+  box-shadow: 0 3px 10px rgba(138, 106, 58, 0.25);
+  flex-shrink: 0;
+}
+
+.brandTitle {
+  font-size: 15px;
+  font-weight: 800;
+  color: #2d2a24;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+.brandSubtitle {
+  font-size: 10px;
+  color: #8b8275;
+  margin-top: 3px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sidebarNav {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.navGroupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 12px;
+  padding: 7px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.navGroupHeader:hover {
+  background: rgba(184, 148, 90, 0.10);
+}
+
+.navGroupLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.navGroupIcon {
+  color: #a39786;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.navGroupHeaderActive .navGroupIcon {
+  color: var(--card-color, #b8945a);
+}
+
+.navGroupLabel {
+  font-size: 11px;
+  font-weight: 700;
+  color: #8b8275;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.navGroupHeaderActive .navGroupLabel {
+  color: #4a4238;
+}
+
+.navGroupCaret {
+  color: #a39786;
+  transition: transform 0.18s ease;
+}
+
+.navGroupCaretOpen {
+  transform: rotate(-180deg);
+}
+
+.navItemNested {
+  padding-left: 22px;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease, color 0.15s ease;
+  position: relative;
+}
+
+.navItem:hover {
+  background: rgba(184, 148, 90, 0.12);
+}
+
+.navItem::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 0;
+  background: var(--card-color, #b8945a);
+  border-radius: 0 3px 3px 0;
+  transition: height 0.2s ease;
+}
+
+.navItem:hover::before {
+  height: 55%;
+}
+
+.navItemActive {
+  background: rgba(184, 148, 90, 0.18);
+}
+
+.navItemActive::before {
+  height: 70% !important;
+}
+
+.navItemActive .navLabel {
+  color: #2d2a24;
+  font-weight: 700;
+}
+
+.navIcon {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--card-color, #8a6a3a);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(184, 148, 90, 0.22);
+  flex-shrink: 0;
+}
+
+.navItemActive .navIcon {
+  background: var(--card-color, #b8945a);
+  color: white;
+  border-color: transparent;
+}
+
+.navLabel {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #5a5247;
+  line-height: 1;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ─── Main column ──────────────────────────────────────────── */
+
+.mainColumn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topBar {
+  height: 56px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 28px;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(184, 148, 90, 0.18);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #8b8275;
+  font-weight: 500;
+}
+
+.crumbLink {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: #8b8275;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.crumbLink:hover {
+  color: #8a6a3a;
+}
+
+.crumbSep {
+  color: #c5b99f;
+}
+
+.crumbCurrent {
+  color: #2d2a24;
+  font-weight: 700;
+}
+
+.userName {
+  font-size: 13px;
+  font-weight: 700;
+  color: #4a4238;
+  margin-right: 4px;
+}
+
+.topActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logoutButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  background: rgba(255, 255, 255, 0.7);
+  color: #6b6355;
+  border: 1px solid rgba(184, 148, 90, 0.22);
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.logoutButton:hover {
+  background: white;
+  color: #a84a3a;
+  border-color: #d9a59a;
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ─── Responsive ────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .shell {
+    flex-direction: column;
+  }
+  .sidebar {
+    width: 100%;
+    height: auto;
+    position: static;
+    border-right: none;
+    border-bottom: 1px solid rgba(184, 148, 90, 0.22);
+  }
+  .sidebarNav {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 4px;
+  }
+  .navItem::before {
+    display: none;
+  }
+}
+
+/* BACKLOG #38 (2026-09-29): below ~900px the sidebar already stacks full-width above the content
+   (the block above), so it was never the cause of the header's own horizontal overflow. The
+   header row itself (`.topBar`: breadcrumb + username + ProjectSelector + logout, all in one
+   `justify-content: space-between` row with no wrap) is what overflowed — only visible in
+   English, where "Welcome / Dashboard", a full name, "All Projects" and "Logout" together are
+   wider than a phone viewport; the same Chinese labels happened to fit. Reproduced on `/dashboard`
+   AND `/pqp` (an unrelated page) before concluding this was the shared shell, not a Dashboard
+   change. Fixed by letting the row WRAP onto a second line at this width — every control stays
+   its full, real, clickable size (nothing shrunk to icon-only, nothing clipped by overflow:hidden,
+   nothing removed) — rather than trying to cram everything into one row. */
+@media (max-width: 640px) {
+  .topBar {
+    height: auto;
+    min-height: 56px;
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding: 10px 16px;
+  }
+
+  .breadcrumb {
+    flex: 1 1 100%;
+  }
+
+  .topActions {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    row-gap: 8px;
+    justify-content: flex-start;
+  }
+
+  .userName {
+    /* Stays fully visible (no ellipsis) — this is who is signed in, not decorative text. */
+    margin-right: 0;
+  }
+}

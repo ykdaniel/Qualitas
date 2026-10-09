@@ -1,0 +1,65 @@
+# MATERIAL-SUBMITTAL M5 upgrade/rollback rehearsal, run(UTC) 2026-10-08T16:29:48Z. Throwaway SQLite file inside a disposable python:3.11-slim container.
+# base      = 056c245c (git archive) + DOCX overlay (docx_builder.py + 2 tests)
+# candidate = base + reviewed material overlay (same tree as py311-backend-full-suite.txt)
+# (attempt 1 failed before any check: runner installed requirements.txt only, TestClient needs httpx from requirements-dev.txt; fixed in the runner)
+# script sha256 907576fcdb12083968ad983742c149877abec91038e6c7fff69a2a0af2958bdf  backend/scripts/verification/m5_upgrade_rollback_rehearsal.py
+# runner sha256 fb68e2356292bc547cf41140f90670651abd6254f16088b284d7a221fe64af74  run_rehearsal.sh (copy below)
+#   | #!/bin/sh
+#   | # Inside python:3.11-slim. /src-base and /src-cand are read-only code trees; everything is written under /work-* and /rehearsal.
+#   | set -u
+#   | cp -a /src-base /work-base && cp -a /src-cand /work-cand || exit 70
+#   | pip install -q --disable-pip-version-check -r /work-cand/requirements.txt -r /work-cand/requirements-dev.txt >/tmp/pip.log 2>&1 || { tail -20 /tmp/pip.log; exit 71; }
+#   | cmp -s /work-base/requirements.txt /work-cand/requirements.txt && echo "requirements identical (base vs candidate)" || { echo "requirements differ"; exit 72; }
+#   | mkdir -p /rehearsal
+#   | export M5_REHEARSAL=1 DATABASE_URL=sqlite:////rehearsal/rh.db PYTHONDONTWRITEBYTECODE=1
+#   | export INITIAL_ADMIN_PASSWORD="$(python -c 'import secrets;print(secrets.token_urlsafe(24))')" SECRET_KEY="$(python -c 'import secrets;print(secrets.token_urlsafe(48))')"
+#   | python --version
+#   | for step in "A base" "B cand" "B2 cand" "B3 cand" "C base" "D cand"; do
+#   |   set -- $step
+#   |   echo "=== phase $1 on $2"
+#   |   ( cd /work-$2 && PYTHONPATH=. python /tools/m5_upgrade_rollback_rehearsal.py $1 2>/tmp/phase-$1.err ); rc=$?
+#   |   if [ $rc -ne 0 ]; then echo "phase $1 EXIT $rc"; tail -30 /tmp/phase-$1.err; exit $rc; fi
+#   | done
+#   | echo "ALL PHASES PASS"
+# ---- output ----
+requirements identical (base vs candidate)
+Python 3.11.17
+=== phase A on base
+{"phase": "A", "check": "old API: create project", "ok": true, "detail": 200}
+{"phase": "A", "check": "old API: create contractor", "ok": true, "detail": 200}
+{"phase": "A", "check": "old API: naming rules", "ok": true, "detail": 200}
+{"phase": "A", "check": "old schema has no material tables", "ok": true, "detail": []}
+{"phase": "A", "result": "PASS", "failed": []}
+=== phase B on cand
+{"phase": "B", "check": "migration added exactly the 4 material tables", "ok": true, "detail": {"changed": ["permissions", "role_permissions"], "added": ["material_submittal_result_entries", "material_submittal_revisions", "material_submittals", "materials"], "removed": []}}
+{"phase": "B", "check": "only permissions / role_permissions changed among old tables (old columns compared)", "ok": true, "detail": ["permissions", "role_permissions"]}
+{"phase": "B", "check": "3 material permission codes exist", "ok": true, "detail": ["material:manage:all", "material:record_result:all", "material:view:all"]}
+{"phase": "B", "check": "projects.material_reply_days is a nullable INTEGER", "ok": true, "detail": [[6, "material_reply_days", "INTEGER", 0, null, 0]]}
+{"phase": "B", "check": "all 11 named material indexes exist", "ok": true, "detail": []}
+{"phase": "B", "result": "PASS", "failed": []}
+=== phase B2 on cand
+{"phase": "B2", "check": "new API: set project reply days", "ok": true, "detail": 200}
+{"phase": "B2", "check": "new API: create submittal", "ok": true, "detail": [200, "{\"id\":\"5cad25a0-5d5e-435c-8a3c-b70eac4d7fab\",\"projectId\":\"RH-P1\",\"vendorId\":\"RH-V1\",\"vendorName\":\"Rehearsal vendor\",\"materialId\":\"8851fdf2-6d3c-4353-baaf-a30bcf61ad5e\",\"documentNumber\":\"QTS-RV-MSA-000"]}
+{"phase": "B2", "check": "new API: submit (expected reply = +10 days)", "ok": true, "detail": [200, "2026-10-11"]}
+{"phase": "B2", "result": "PASS", "failed": []}
+=== phase B3 on cand
+{"phase": "B3", "check": "second start of the candidate changes nothing (idempotent)", "ok": true, "detail": {"changed": [], "added": [], "removed": []}}
+{"phase": "B3", "result": "PASS", "failed": []}
+=== phase C on base
+{"phase": "C", "check": "old code starts on the migrated file; material tables untouched", "ok": true, "detail": {"changed": ["role_permissions"], "added": [], "removed": []}}
+{"phase": "C", "check": "old start-up changes only role_permissions (admin re-synced to the old code list)", "ok": true, "detail": ["role_permissions"]}
+{"phase": "C", "check": "old API: list projects", "ok": true, "detail": 200}
+{"phase": "C", "check": "old API: update project", "ok": true, "detail": 200}
+{"phase": "C", "check": "old API: naming rules still readable (msa row may remain)", "ok": true, "detail": 200}
+{"phase": "C", "check": "old code has no material routes (404, data stays in the file)", "ok": true, "detail": 404}
+{"phase": "C", "check": "projects.material_reply_days kept through an old-code update", "ok": true, "detail": [10]}
+{"phase": "C", "check": "material rows kept", "ok": true, "detail": {"material_submittal_result_entries": 0, "material_submittal_revisions": 1, "material_submittals": 1, "materials": 1}}
+{"phase": "C", "result": "PASS", "failed": []}
+=== phase D on cand
+{"phase": "D", "check": "roll forward: the submittal written before the rollback is listed", "ok": true, "detail": 200}
+{"phase": "D", "check": "roll forward: detail readable, still Submitted with its reply date", "ok": true, "detail": 200}
+{"phase": "D", "check": "roll forward: project keeps reply days 10 and the rollback-time rename", "ok": true, "detail": {"name": "Renamed during rollback", "code": "RH", "description": null, "owner": null, "materialReplyDays": 10, "id": "RH-P1", "created_at": "2026-10-08T16:30:03Z"}}
+{"phase": "D", "check": "roll forward: admin holds the 3 material permissions again", "ok": true, "detail": 3}
+{"phase": "D", "result": "PASS", "failed": []}
+ALL PHASES PASS
+EXIT 0

@@ -1,11 +1,14 @@
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+
 import schemas
-import crud
+from core.dependencies import RoleChecker, get_obs_service
+from core.perms import OBS_CREATE, OBS_DELETE, OBS_UPDATE, OBS_VIEW
+from core.scope import Scope, ScopeForbidden, get_scope
+from core.strict_dates import DateValidationError
 from database import get_db
-from middleware.auth import PermissionChecker, Permission
+from services.obs_service import OBSService
 
 router = APIRouter(
     prefix="/obs",
@@ -13,14 +16,39 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
-# 讀取操作 - 無需認證
-@router.get("/", response_model=List[schemas.OBS])
-def read_obss(skip: int = 0, limit: int = 500, db: Session = Depends(get_db)):
-    return crud.get_obss(db, skip=skip, limit=limit)
+# 讀取操作 - 需要 OBS_VIEW
+@router.get("/", response_model=list[schemas.OBS])
+def read_obss(
+    skip: int = 0,
+    limit: int = 500,
+    search: str = None,
+    status: str = None,
+    start_date: str = None,
+    end_date: str = None,
+    project_id: str = None,
+    obs_service: OBSService = Depends(get_obs_service),
+    scope: Scope = Depends(get_scope),
+    current_user: schemas.User = Depends(RoleChecker(OBS_VIEW))
+):
+    return obs_service.get_obss(
+        skip=skip,
+        limit=limit,
+        search=search,
+        status=status,
+        start_date=start_date,
+        end_date=end_date,
+        project_id=project_id,
+        scope=scope,
+    )
 
 @router.get("/{obs_id}", response_model=schemas.OBS)
-def read_obs(obs_id: str, db: Session = Depends(get_db)):
-    db_obs = crud.get_obs(db, obs_id=obs_id)
+def read_obs(
+    obs_id: str,
+    obs_service: OBSService = Depends(get_obs_service),
+    scope: Scope = Depends(get_scope),
+    current_user: schemas.User = Depends(RoleChecker(OBS_VIEW))
+):
+    db_obs = obs_service.get_obs(obs_id=obs_id, scope=scope)
     if db_obs is None:
         raise HTTPException(status_code=404, detail="OBS not found")
     return db_obs
@@ -28,30 +56,46 @@ def read_obs(obs_id: str, db: Session = Depends(get_db)):
 # 寫入操作 - 需要認證
 @router.post("/", response_model=schemas.OBS)
 def create_obs(
-    obs: schemas.OBSCreate, 
-    db: Session = Depends(get_db),
-    _: bool = Depends(PermissionChecker([Permission.WRITE]))
+    obs: schemas.OBSCreate,
+    obs_service: OBSService = Depends(get_obs_service),
+    scope: Scope = Depends(get_scope),
+    current_user: schemas.User = Depends(RoleChecker(OBS_CREATE))
 ):
-    return crud.create_obs(db=db, obs=obs)
+    try:
+        return obs_service.create_obs(obs_create=obs, user_id=current_user.id, username=current_user.username, scope=scope)
+    except ScopeForbidden as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except DateValidationError as e:
+        raise HTTPException(status_code=422, detail=e.http_detail())
 
 @router.put("/{obs_id}", response_model=schemas.OBS)
 def update_obs(
-    obs_id: str, 
-    obs: schemas.OBSUpdate, 
-    db: Session = Depends(get_db),
-    _: bool = Depends(PermissionChecker([Permission.WRITE]))
+    obs_id: str,
+    obs: schemas.OBSUpdate,
+    obs_service: OBSService = Depends(get_obs_service),
+    scope: Scope = Depends(get_scope),
+    current_user: schemas.User = Depends(RoleChecker(OBS_UPDATE))
 ):
-    db_obs = crud.update_obs(db, obs_id=obs_id, obs=obs)
+    try:
+        db_obs = obs_service.update_obs(obs_id=obs_id, obs_update=obs, user_id=current_user.id, username=current_user.username, scope=scope)
+    except ScopeForbidden as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except DateValidationError as e:
+        raise HTTPException(status_code=422, detail=e.http_detail())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if db_obs is None:
         raise HTTPException(status_code=404, detail="OBS not found")
     return db_obs
 
 @router.delete("/{obs_id}")
 def delete_obs(
-    obs_id: str, 
-    db: Session = Depends(get_db),
-    _: bool = Depends(PermissionChecker([Permission.DELETE]))
+    obs_id: str,
+    obs_service: OBSService = Depends(get_obs_service),
+    scope: Scope = Depends(get_scope),
+    current_user: schemas.User = Depends(RoleChecker(OBS_DELETE))
 ):
-    if crud.delete_obs(db, obs_id=obs_id) is None:
+    deleted = obs_service.delete_obs(obs_id=obs_id, user_id=current_user.id, username=current_user.username, scope=scope)
+    if not deleted:
         raise HTTPException(status_code=404, detail="OBS not found")
     return {"ok": True}

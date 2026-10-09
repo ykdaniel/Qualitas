@@ -1,0 +1,120 @@
+/* PQP (Pre-Qualification Package) print report — lightweight sibling of the
+   NCR/OBS reports. Portal-mounted into <body> (sibling of #root), shown only
+   while printing. All rules are scoped under .pqp-print-root so the generic
+   table/td/th selectors never leak into the app. The masthead lives in the
+   outer table's <thead> so the browser repeats it on every printed page. */
+
+:root {
+    --pqp-ink: #1c1f24;
+    --pqp-muted: #5b6068;
+    --pqp-line: #9aa0a8;
+    --pqp-line-soft: #c9ced4;
+    --pqp-fill: #eef1f4;
+    --pqp-fill-head: #dfe4ea;
+    --pqp-accent: #4f46e5;
+    --pqp-status: #1f6f8b;
+    --pqp-note: #7a818a;
+}
+
+.pqp-print-root { display: none; }
+
+.pqp-print-root {
+    font-family: "Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    color: var(--pqp-ink);
+    font-size: 9.3px;
+    line-height: 1.5;
+    background: #fff;
+}
+.pqp-print-root * { box-sizing: border-box; }
+
+.pqp-print-root .pqp-report { width: 100%; border-collapse: collapse; }
+.pqp-print-root .head-cell,
+.pqp-print-root .body-cell { border: none; padding: 0; text-align: left; font-weight: 400; }
+
+.pqp-print-root .doc-head {
+    display: flex; align-items: stretch;
+    border-bottom: 2.2px solid var(--pqp-ink);
+    padding-bottom: 6px; margin-bottom: 10px;
+}
+.pqp-print-root .logo-box {
+    width: 78px; min-height: 46px;
+    border: 1px dashed var(--pqp-line-soft);
+    display: flex; align-items: center; justify-content: center;
+    color: #b8bdc4; font-size: 9px; letter-spacing: 1px;
+}
+.pqp-print-root .head-mid { flex: 1; padding: 2px 14px; }
+.pqp-print-root .head-mid .co { font-size: 14px; font-weight: 700; letter-spacing: .5px; }
+.pqp-print-root .head-mid .sub { font-size: 9.5px; color: var(--pqp-muted); margin-top: 2px; }
+.pqp-print-root .head-right { text-align: right; font-size: 9px; line-height: 1.6; min-width: 120px; }
+.pqp-print-root .head-right .docno { font-weight: 700; font-size: 10px; letter-spacing: .3px; }
+
+.pqp-print-root .badge {
+    display: inline-block; padding: 1px 7px; border-radius: 2px;
+    font-weight: 700; font-size: 8.6px; letter-spacing: .4px; color: #fff;
+}
+.pqp-print-root .b-status { background: var(--pqp-status); }
+
+.pqp-print-root .title {
+    text-align: center; font-size: 16px; font-weight: 700;
+    letter-spacing: 3px; margin: 4px 0 12px;
+}
+.pqp-print-root .title .en {
+    font-size: 9px; font-weight: 500; letter-spacing: 2px;
+    color: var(--pqp-muted); display: block; margin-top: 2px;
+}
+
+.pqp-print-root .sec-head {
+    background: var(--pqp-fill-head);
+    border-left: 3px solid var(--pqp-accent);
+    padding: 3px 9px; font-weight: 700; font-size: 10px;
+    letter-spacing: .5px; margin: 11px 0 0;
+}
+.pqp-print-root .sec-head .en { font-weight: 500; color: var(--pqp-muted); font-size: 8.6px; letter-spacing: .5px; }
+
+/* Fixed layout so the two value columns split the remaining width evenly
+   (88px labels + equal values) instead of stretching to fit content. */
+.pqp-print-root table { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: -1px; }
+.pqp-print-root .val { word-break: break-word; }
+.pqp-print-root td, .pqp-print-root th { border: 1px solid var(--pqp-line); padding: 3px 6px; vertical-align: top; }
+.pqp-print-root td.lbl {
+    background: var(--pqp-fill); font-weight: 600; white-space: nowrap;
+    width: 88px; color: #2a2e34;
+}
+.pqp-print-root td.lbl small { display: block; color: var(--pqp-note); font-weight: 500; font-size: 7.6px; letter-spacing: .2px; }
+.pqp-print-root .val { min-height: 14px; }
+.pqp-print-root .blank { color: #aeb3ba; }
+
+.pqp-print-root .field-box { border: 1px solid var(--pqp-line); min-height: 34px; padding: 4px 6px; white-space: pre-wrap; }
+.pqp-print-root .field-box.fb-desc { min-height: 72px; }
+.pqp-print-root .guide { color: #aeb3ba; }
+
+/* approval sign-off (mirrors the NCR/OBS reports) */
+.pqp-print-root .sign-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 4px; }
+.pqp-print-root .sign-cell { border: 1px solid var(--pqp-line); padding: 6px 8px 7px; }
+.pqp-print-root .sign-cell .role { font-weight: 700; font-size: 9px; }
+.pqp-print-root .sign-cell .role .en { color: var(--pqp-muted); font-weight: 500; font-size: 7.6px; }
+.pqp-print-root .sign-line { border-bottom: 1px solid var(--pqp-ink); height: 24px; margin: 6px 0 4px; }
+.pqp-print-root .sign-meta { display: flex; justify-content: space-between; font-size: 8px; color: var(--pqp-muted); }
+.pqp-print-root .sign-meta span { flex: 1; }
+
+.pqp-print-root .foot {
+    margin-top: 12px; border-top: 1px solid var(--pqp-line-soft); padding-top: 6px;
+    display: flex; justify-content: space-between; gap: 14px; font-size: 7.6px; color: var(--pqp-note);
+}
+
+/* keep rows / boxes intact across page breaks */
+.pqp-print-root tr,
+.pqp-print-root .sign-cell,
+.pqp-print-root .field-box { break-inside: avoid; page-break-inside: avoid; }
+.pqp-print-root .sec-head { break-after: avoid; page-break-after: avoid; }
+
+@media print {
+    @page { size: A4; margin: 13mm 12mm; }
+    #root { display: none !important; }
+    .pqp-print-root { display: block !important; }
+    .pqp-print-root .pqp-report > thead { display: table-header-group; }
+    .pqp-print-root * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+}

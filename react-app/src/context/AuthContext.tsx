@@ -1,12 +1,19 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import api, { User } from '../services/api';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import api, { User, setupLogoutHandler } from '../services/api';
+
 export type { User };
 
 interface AuthContextType {
   isAuthenticated: boolean;
   user: User | null;
-  login: (accessToken: string, refreshToken: string) => Promise<void>;
+  /** Call after a successful POST /auth/login. The JWTs are already set as
+   *  httpOnly cookies by the server, so no token values are passed here. */
+  login: () => Promise<void>;
   logout: () => void;
+  loading: boolean;
+  /** True if the current user's role grants the given permission code
+   *  (e.g. "ncr:update:all"). False while logged out or still loading. */
+  hasPermission: (code: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -14,55 +21,65 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      verifyToken(token);
-    }
-  }, []);
-
-  const verifyToken = async (token: string) => {
-    try {
-      const response = await api.get('/auth/verify');
-      if (response.data) {
-        setIsAuthenticated(true);
-        await fetchUser();
-      }
-    } catch (error) {
-      localStorage.removeItem('token');
-      setIsAuthenticated(false);
-    }
-  };
-
-  const fetchUser = async () => {
+  const fetchUser = useCallback(async () => {
     try {
       const response = await api.get('/user/profile');
       setUser(response.data);
     } catch (error) {
       console.error('Failed to fetch user:', error);
     }
-  };
+  }, []);
 
-  const login = async (accessToken: string, refreshToken: string) => {
-    localStorage.setItem('token', accessToken);
-    if (refreshToken) {
-      localStorage.setItem('refreshToken', refreshToken);
+  const verifyToken = useCallback(async () => {
+    try {
+      const response = await api.get('/auth/verify');
+      if (response.data) {
+        setIsAuthenticated(true);
+        await fetchUser();
+      }
+    } catch {
+      setIsAuthenticated(false);
+    } finally {
+      setLoading(false);
     }
+  }, [fetchUser]);
+
+  useEffect(() => {
+    // Register the logout function to be called on 401 responses
+    setupLogoutHandler(logout);
+
+    // Always attempt verification on mount. Auth may now come from the
+    // httpOnly access_token cookie (which JS cannot read), so we can't gate
+    // verification on localStorage being populated — that would make a fresh
+    // tab look "logged out" even when the cookie is still valid.
+    verifyToken();
+  }, [verifyToken]);
+
+  const login = async () => {
+    // Cookies were already set by the server's login response; just reflect the
+    // authenticated state and load the profile.
     setIsAuthenticated(true);
     await fetchUser();
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
+    // Best-effort: tell the server to blacklist the access/refresh tokens and
+    // expire the cookies. Don't await — local state should clear regardless.
+    api.post('/auth/logout').catch(() => {/* server may already be unreachable */});
     setIsAuthenticated(false);
     setUser(null);
   };
 
+  const hasPermission = useCallback(
+    (code: string) => !!user?.permissions?.includes(code),
+    [user],
+  );
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, logout }}>
-      {children}
+    <AuthContext.Provider value={{ isAuthenticated, user, login, logout, loading, hasPermission }}>
+      {!loading && children}
     </AuthContext.Provider>
   );
 };

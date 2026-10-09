@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "qualitas-frontend-3198",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["react-app/tests-browser/qualitas-frontend-3198-launcher.mjs"],
+      "port": 3198
+    }
+  ]
+}

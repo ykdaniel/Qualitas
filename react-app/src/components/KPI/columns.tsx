@@ -1,6 +1,5 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "../Shared/DataTable/DataTableColumnHeader";
-import { cn } from "@/lib/utils";
 
 export interface KPIItem {
     index: number;
@@ -18,7 +17,7 @@ export interface KPIItem {
 export const createColumns = (
     sortedMonths: string[],
     t: (key: string) => string,
-    language: string
+    _language: string
 ): ColumnDef<KPIItem>[] => {
     const baseColumns: ColumnDef<KPIItem>[] = [
         {

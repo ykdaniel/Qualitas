@@ -1,0 +1,44 @@
+✔ M4 board by status: fixed order, Approved and ApprovedWithComments share the last column (1.129709ms)
+✔ M4 board: every loaded card appears exactly once (cards = loaded rows) in both modes (5.850625ms)
+✔ M4 board by category: sorted categories, blank / missing category grouped last (0.065834ms)
+✔ M4 board: an unknown status is never hidden (defensive extra column) (0.058417ms)
+✔ M4 board: empty input gives the five empty status columns and no category columns (0.059625ms)
+✔ M4 project reply days: blank -> null (no default); non-negative integers accepted (0.116458ms)
+✔ M4 project reply days: negative, decimal, exponent and text are refused (0.055167ms)
+/private/var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m4-review-22epHh/materialBoardCategoryNames.test.css:2
+.FormActions_button {
+^
+
+SyntaxError: Unexpected token '.'
+    at wrapSafe (node:internal/modules/cjs/loader:1762:18)
+    at Module._compile (node:internal/modules/cjs/loader:1805:20)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1971:10)
+    at Module.load (node:internal/modules/cjs/loader:1552:32)
+    at Module._load (node:internal/modules/cjs/loader:1354:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+    at node:internal/main/run_main_module:33:47
+
+Node.js v25.8.0
+✖ /var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m4-review-22epHh/materialBoardCategoryNames.test.css (49.377916ms)
+✔ M4 R1 category mode: tricky names stay real categories; keys unique; only blank/missing is uncategorised (6.766166ms)
+✔ M4 R1 status mode is unchanged by category names: five columns, Approved + ApprovedWithComments merged (0.140958ms)
+✔ M4 R1 rendered SubmittalBoard (zh, category): headings are the categories as typed; blank shows uncategorised once (4.044708ms)
+✔ M4 R1 rendered SubmittalBoard (en, category): headings are the categories as typed; blank shows uncategorised once (1.413167ms)
+✔ M4 R1 rendered SubmittalBoard (zh, status): status headings still translated, five columns (0.862917ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 12
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 86.716458
+
+✖ failing tests:
+
+test at ../../../../../var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m4-review-22epHh/materialBoardCategoryNames.test.css:1:1
+✖ /var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/m4-review-22epHh/materialBoardCategoryNames.test.css (49.377916ms)
+  'test failed'
+
+EXIT 1

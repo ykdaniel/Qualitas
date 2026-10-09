@@ -1,33 +1,36 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Line, LineChart, LabelList } from 'recharts';
-import { useOBS } from '../../context/OBSContext';
-import { useDashboardFilter } from '../../context/DashboardFilterContext';
-import { useMemo } from 'react';
+import { Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Line, LabelList } from 'recharts';
+import React, { useMemo } from 'react';
+import { useOBSStore } from '../../store/obsStore';
+import { useDashboardFilterStore } from '../../store/dashboardFilterStore';
+import { isClosedStatus, isOutstandingStatus, isVoidStatus, buildParetoCumulative } from '../../utils/statusBuckets';
 import styles from './Dashboard.module.css';
 
-const OBSParetoChart: React.FC = () => {
-  const { obsList } = useOBS();
-  const { selectedVendor } = useDashboardFilter();
+const OBSParetoChart: React.FC = React.memo(() => {
+  const obsList = useOBSStore(state => state.obsList);
+  const selectedVendor = useDashboardFilterStore(state => state.selectedVendor);
 
   // 计算按承包商分组的OBS统计数据
   const paretoData = useMemo(() => {
     // 根据选中的厂商过滤数据
-    const filteredList = selectedVendor === 'all' 
-      ? obsList 
+    const filteredList = selectedVendor === 'all'
+      ? obsList
       : obsList.filter(item => item.vendor === selectedVendor);
-    
-    // 按承包商分组统计
-    const contractorStats: Record<string, { total: number; open: number; closed: number }> = {};
+
+    // 按承包商分组统计。open/closed 判斷改用共用的 utils/statusBuckets.ts（與
+    // OBSStatsCard.tsx／useDashboardStats.ts 同一來源，2026-09-29 統一）。
+    const contractorStats: Record<string, { total: number; open: number; closed: number; voided: number }> = {};
 
     filteredList.forEach(obs => {
       const contractor = obs.vendor || 'Unknown';
       if (!contractorStats[contractor]) {
-        contractorStats[contractor] = { total: 0, open: 0, closed: 0 };
+        contractorStats[contractor] = { total: 0, open: 0, closed: 0, voided: 0 };
       }
       contractorStats[contractor].total++;
-      const status = (obs.status || '').toLowerCase();
-      if (status === 'closed') {
+      if (isClosedStatus(obs.status)) {
         contractorStats[contractor].closed++;
-      } else {
+      } else if (isVoidStatus(obs.status)) {
+        contractorStats[contractor].voided++;
+      } else if (isOutstandingStatus(obs.status)) {
         contractorStats[contractor].open++;
       }
     });
@@ -42,48 +45,49 @@ const OBSParetoChart: React.FC = () => {
       }))
       .sort((a, b) => b.total - a.total);
 
-    // 计算总OBS数
-    const totalOBSs = sortedData.reduce((sum, item) => sum + item.total, 0);
-
-    // 计算累积百分比
-    let cumulative = 0;
-    const dataWithCumulative = sortedData.map(item => {
-      cumulative += item.total;
-      const cumulativePercent = totalOBSs > 0 ? Math.round((cumulative / totalOBSs) * 100) : 0;
-      return {
-        ...item,
-        cumulativePercent,
-      };
-    });
-
-    return dataWithCumulative;
+    // 累積比例分母排除 Void（2026-09-29 使用者決定，見 utils/statusBuckets.ts::buildParetoCumulative
+    // 的完整說明與單元測試），與柱狀圖（只畫 Open／Closed）範圍一致。
+    return buildParetoCumulative(sortedData);
   }, [obsList, selectedVendor]);
+
+  // Recharts' "nice tick" rounding can inflate the left axis well past the
+  // actual max bar (observed: a max of 2 rendering against a 0-4 axis), and
+  // does so inconsistently between otherwise-identical charts. Pass explicit
+  // integer ticks so the axis always matches the data exactly.
+  const leftAxisMax = Math.max(1, Math.ceil(Math.max(0, ...paretoData.map(d => d.open + d.closed)) * 1.15));
+  const leftAxisTicks = useMemo(
+    () => Array.from({ length: leftAxisMax + 1 }, (_, i) => i),
+    [leftAxisMax]
+  );
 
   return (
     <div className={styles.paretoChartContainer}>
-      <h3 className={styles.paretoTitle}>OBS Status</h3>
-      <ResponsiveContainer width="100%" height={400}>
-        <ComposedChart data={paretoData} margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
+      <ResponsiveContainer width="100%" height={460}>
+        <ComposedChart data={paretoData} margin={{ top: 16, right: 30, left: 20, bottom: 8 }}>
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis 
-            dataKey="contractor" 
+          <XAxis
+            dataKey="contractor"
             angle={-45}
             textAnchor="end"
-            height={80}
+            height={120}
             interval={0}
-            dy={10}
+            tickMargin={16}
+            tick={{ fill: '#2d2a24', fontSize: 12 }}
           />
-          <YAxis 
+          <YAxis
             yAxisId="left"
+            allowDecimals={false}
+            domain={[0, leftAxisMax]}
+            ticks={leftAxisTicks}
             label={{ value: 'OBS Count', angle: -90, position: 'insideLeft' }}
           />
-          <YAxis 
+          <YAxis
             yAxisId="right"
             orientation="right"
             domain={[0, 100]}
             label={{ value: 'Cumulative %', angle: 90, position: 'insideRight' }}
           />
-          <Tooltip 
+          <Tooltip
             formatter={(value: any, name: string) => {
               if (name === 'cumulativePercent') {
                 return [`${value}%`, 'Cumulative %'];
@@ -91,55 +95,64 @@ const OBSParetoChart: React.FC = () => {
               return [value, name];
             }}
           />
-          <Legend />
-          <Bar yAxisId="left" dataKey="closed" stackId="a" fill="#10b981" name="Closed">
-            <LabelList 
-              dataKey="closed" 
+          <Legend
+            iconType="circle"
+            iconSize={10}
+            wrapperStyle={{ paddingTop: 12 }}
+            formatter={(value) => (
+              <span style={{ color: '#2d2a24', fontSize: 13, fontWeight: 600, marginRight: 8 }}>
+                {value}
+              </span>
+            )}
+          />
+          <Bar yAxisId="left" dataKey="closed" stackId="a" fill="#10b981" name="Closed" maxBarSize={80}>
+            <LabelList
+              dataKey="closed"
               position="inside"
               formatter={(value: number) => value > 0 ? value : ''}
-              style={{ 
-                fill: '#ffffff', 
-                fontSize: 12, 
+              style={{
+                fill: '#ffffff',
+                fontSize: 12,
                 fontWeight: 600,
                 textAnchor: 'middle',
                 dominantBaseline: 'middle'
               }}
             />
           </Bar>
-          <Bar yAxisId="left" dataKey="open" stackId="a" fill="#f59e0b" name="Open">
-            <LabelList 
-              dataKey="open" 
+          <Bar yAxisId="left" dataKey="open" stackId="a" fill="#f59e0b" name="Open" maxBarSize={80}>
+            <LabelList
+              dataKey="open"
               position="inside"
               formatter={(value: number) => value > 0 ? value : ''}
-              style={{ 
-                fill: '#1f2937', 
-                fontSize: 12, 
+              style={{
+                fill: '#1f2937',
+                fontSize: 12,
                 fontWeight: 600,
                 textAnchor: 'middle',
                 dominantBaseline: 'middle'
               }}
             />
           </Bar>
-          <Line 
-            yAxisId="right" 
-            type="monotone" 
-            dataKey="cumulativePercent" 
-            stroke="#fbbf24" 
-            strokeWidth={2}
-            dot={{ fill: '#fbbf24', r: 4 }}
+          <Line
+            yAxisId="right"
+            type="monotone"
+            dataKey="cumulativePercent"
+            stroke="#7c3aed"
+            strokeWidth={2.5}
+            dot={{ fill: '#7c3aed', r: 4 }}
             name="Cumulative %"
           >
-            <LabelList 
-              dataKey="cumulativePercent" 
+            <LabelList
+              dataKey="cumulativePercent"
               position="top"
               formatter={(value: number) => `${value}%`}
-              style={{ fill: '#fbbf24', fontSize: 12, fontWeight: 600 }}
+              style={{ fill: '#7c3aed', fontSize: 12, fontWeight: 700 }}
             />
           </Line>
         </ComposedChart>
       </ResponsiveContainer>
     </div>
   );
-};
+});
 
 export default OBSParetoChart;

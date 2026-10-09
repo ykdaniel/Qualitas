@@ -1,0 +1,71 @@
+R2 round — M1 test files, 2026-10-08T12:51:53Z, Python 3.14.6
+cmd: DATABASE_URL=sqlite:///:memory: python3 -m pytest tests/test_material_schema_migration.py tests/test_materials_http.py -v -p no:cacheprovider -W ignore::DeprecationWarning
+
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-9.0.2, pluggy-1.6.0 -- /opt/homebrew/opt/python@3.14/bin/python3.14
+rootdir: /Users/nook/Documents/Qualitas/backend
+configfile: pytest.ini
+plugins: anyio-4.13.0
+collecting ... collected 58 items
+
+tests/test_material_schema_migration.py::test_fresh_database_gets_full_schema PASSED [  1%]
+tests/test_material_schema_migration.py::test_material_tables_are_not_created_by_startup_create_all PASSED [  3%]
+tests/test_material_schema_migration.py::test_model_indexes_match_the_migration_list PASSED [  5%]
+tests/test_material_schema_migration.py::test_old_database_is_upgraded_without_touching_existing_data PASSED [  6%]
+tests/test_material_schema_migration.py::test_second_start_changes_no_schema PASSED [  8%]
+tests/test_material_schema_migration.py::test_existing_table_missing_a_column_aborts PASSED [ 10%]
+tests/test_material_schema_migration.py::test_existing_column_without_required_not_null_aborts PASSED [ 12%]
+tests/test_material_schema_migration.py::test_same_named_index_on_wrong_columns_aborts PASSED [ 13%]
+tests/test_material_schema_migration.py::test_one_open_index_without_where_aborts PASSED [ 15%]
+tests/test_material_schema_migration.py::test_unique_index_made_non_unique_aborts PASSED [ 17%]
+tests/test_material_schema_migration.py::test_old_code_runs_on_upgraded_database_and_data_survives PASSED [ 18%]
+tests/test_material_schema_migration.py::test_one_open_index_with_any_other_condition_aborts_and_keeps_data[status IN ('draft','submitted')] PASSED [ 20%]
+tests/test_material_schema_migration.py::test_one_open_index_with_any_other_condition_aborts_and_keeps_data[status IN ('Submitted','Draft')] PASSED [ 22%]
+tests/test_material_schema_migration.py::test_one_open_index_with_any_other_condition_aborts_and_keeps_data[status IN ('Draft')] PASSED [ 24%]
+tests/test_material_schema_migration.py::test_one_open_index_with_any_other_condition_aborts_and_keeps_data["status" IN ('Draft','Submitted')] PASSED [ 25%]
+tests/test_material_schema_migration.py::test_one_open_index_whitespace_and_keyword_case_only_is_adopted PASSED [ 27%]
+tests/test_material_schema_migration.py::test_one_open_index_blocks_a_second_open_revision PASSED [ 29%]
+tests/test_material_schema_migration.py::test_text_column_with_wrong_type_aborts_and_keeps_data[NUMERIC] PASSED [ 31%]
+tests/test_material_schema_migration.py::test_text_column_with_wrong_type_aborts_and_keeps_data[REAL] PASSED [ 32%]
+tests/test_material_schema_migration.py::test_text_column_with_wrong_type_aborts_and_keeps_data[BLOB] PASSED [ 34%]
+tests/test_material_schema_migration.py::test_text_column_with_wrong_type_aborts_and_keeps_data[] PASSED [ 36%]
+tests/test_material_schema_migration.py::test_text_column_with_wrong_type_aborts_and_keeps_data[INT] PASSED [ 37%]
+tests/test_material_schema_migration.py::test_text_column_with_wrong_type_aborts_and_keeps_data[NVARCHAR] PASSED [ 39%]
+tests/test_material_schema_migration.py::test_integer_primary_key_must_be_exactly_integer PASSED [ 41%]
+tests/test_material_schema_migration.py::test_reply_days_column_with_other_integer_type_aborts PASSED [ 43%]
+tests/test_materials_http.py::test_create_returns_camelcase_and_audits PASSED [ 44%]
+tests/test_materials_http.py::test_create_in_invisible_or_missing_project_is_404_and_writes_nothing[P2] PASSED [ 46%]
+tests/test_materials_http.py::test_create_in_invisible_or_missing_project_is_404_and_writes_nothing[NOPE] PASSED [ 48%]
+tests/test_materials_http.py::test_create_rejects_blank_name_and_unknown_or_controlled_fields[body0] PASSED [ 50%]
+tests/test_materials_http.py::test_create_rejects_blank_name_and_unknown_or_controlled_fields[body1] PASSED [ 51%]
+tests/test_materials_http.py::test_create_rejects_blank_name_and_unknown_or_controlled_fields[body2] PASSED [ 53%]
+tests/test_materials_http.py::test_create_rejects_blank_name_and_unknown_or_controlled_fields[body3] PASSED [ 55%]
+tests/test_materials_http.py::test_create_rejects_blank_name_and_unknown_or_controlled_fields[body4] PASSED [ 56%]
+tests/test_materials_http.py::test_create_rejects_blank_name_and_unknown_or_controlled_fields[body5] PASSED [ 58%]
+tests/test_materials_http.py::test_create_requires_project_id PASSED     [ 60%]
+tests/test_materials_http.py::test_scoped_user_sees_only_own_project PASSED [ 62%]
+tests/test_materials_http.py::test_list_requires_project_and_reports_full_total PASSED [ 63%]
+tests/test_materials_http.py::test_list_search_and_category_stay_inside_project PASSED [ 65%]
+tests/test_materials_http.py::test_update_changes_allowed_fields_and_audits PASSED [ 67%]
+tests/test_materials_http.py::test_update_cannot_move_project_clear_name_or_set_controlled_fields[body0] PASSED [ 68%]
+tests/test_materials_http.py::test_update_cannot_move_project_clear_name_or_set_controlled_fields[body1] PASSED [ 70%]
+tests/test_materials_http.py::test_update_cannot_move_project_clear_name_or_set_controlled_fields[body2] PASSED [ 72%]
+tests/test_materials_http.py::test_update_cannot_move_project_clear_name_or_set_controlled_fields[body3] PASSED [ 74%]
+tests/test_materials_http.py::test_update_cannot_move_project_clear_name_or_set_controlled_fields[body4] PASSED [ 75%]
+tests/test_materials_http.py::test_audit_failure_rolls_back[create] PASSED [ 77%]
+tests/test_materials_http.py::test_audit_failure_rolls_back[update] PASSED [ 79%]
+tests/test_materials_http.py::test_permissions PASSED                    [ 81%]
+tests/test_materials_http.py::test_vendor_scoped_account_is_refused_even_with_material_permissions PASSED [ 82%]
+tests/test_materials_http.py::test_there_is_no_delete_route PASSED       [ 84%]
+tests/test_materials_http.py::test_project_reply_days_accepts_null_and_non_negative_integers[None] PASSED [ 86%]
+tests/test_materials_http.py::test_project_reply_days_accepts_null_and_non_negative_integers[0] PASSED [ 87%]
+tests/test_materials_http.py::test_project_reply_days_accepts_null_and_non_negative_integers[14] PASSED [ 89%]
+tests/test_materials_http.py::test_project_reply_days_rejects_invalid[-1] PASSED [ 91%]
+tests/test_materials_http.py::test_project_reply_days_rejects_invalid[1.5] PASSED [ 93%]
+tests/test_materials_http.py::test_project_reply_days_rejects_invalid[14] PASSED [ 94%]
+tests/test_materials_http.py::test_project_reply_days_rejects_invalid[True] PASSED [ 96%]
+tests/test_materials_http.py::test_project_reply_days_has_no_default_and_can_be_cleared PASSED [ 98%]
+tests/test_materials_http.py::test_project_with_materials_cannot_be_deleted PASSED [100%]
+
+======================== 58 passed in 94.61s (0:01:34) =========================
+EXIT CODE: 0

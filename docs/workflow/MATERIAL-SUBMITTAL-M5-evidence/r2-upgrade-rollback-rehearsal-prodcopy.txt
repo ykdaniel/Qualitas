@@ -1,0 +1,47 @@
+# M5 R2 rehearsal, MODE=prod (copy of the production DB taken 20261009T055016Z by SQLite online backup, sha256 8c926896…715da; the container works on its own copy, the local copy stays unchanged); run(UTC) 2026-10-09T05:50:31Z
+requirements identical (base vs candidate)
+Python 3.11.17
+production copy sha256 8c926896b228de479e91f18b1f53947b473edf809ebbd253a08dd36a26c715da (rehearsal works on its own copy)
+=== phase P on cand
+{"phase": "P", "check": "production copy has no material tables yet", "ok": true, "detail": []}
+{"phase": "P", "check": "production copy integrity_check ok", "ok": true, "detail": null}
+{"phase": "P", "check": "production copy has a project and a contractor to register against", "ok": true, "detail": [1, 1]}
+{"phase": "P", "check": "production copy has the admin role", "ok": true, "detail": null}
+{"phase": "P", "result": "PASS", "failed": []}
+=== phase B on cand
+{"phase": "B", "check": "migration added exactly the 4 material tables", "ok": true, "detail": {"changed": ["permissions", "role_permissions"], "added": ["material_submittal_result_entries", "material_submittal_revisions", "material_submittals", "materials"], "removed": []}}
+{"phase": "B", "check": "only permissions / role_permissions changed among old tables (old columns compared)", "ok": true, "detail": ["permissions", "role_permissions"]}
+{"phase": "B", "check": "exactly the 2 material permission codes exist (record_result retired)", "ok": true, "detail": ["material:manage:all", "material:view:all"]}
+{"phase": "B", "check": "projects.material_reply_days is a nullable INTEGER", "ok": true, "detail": [[6, "material_reply_days", "INTEGER", 0, null, 0]]}
+{"phase": "B", "check": "material_submittals.client_request_id exists (nullable)", "ok": true, "detail": [[12, "client_request_id", "VARCHAR", 0, null, 0]]}
+{"phase": "B", "check": "all 12 named material indexes exist", "ok": true, "detail": []}
+{"phase": "B", "result": "PASS", "failed": []}
+=== phase B2 on cand
+{"phase": "B2", "check": "new API: register", "ok": true, "detail": [200, "{\"submittalId\":\"2f93f32a-a086-4e2c-8498-e5494cbdbde2\",\"revisionId\":\"1f68ecb8-e8ad-4d62-86e4-6ee8fa8d51f0\",\"projectId\":\"927f87cd-204c-4988-8954-1694bf576e69\",\"vendorId\":\"3d081380-d657-4ef7-977a-c028330"]}
+{"phase": "B2", "check": "new API: repeated request id returns the same record", "ok": true, "detail": 200}
+{"phase": "B2", "check": "new API: photo upload decoded by Pillow on Python 3.11", "ok": true, "detail": [200, "[{\"id\":\"dc6de75d60c64e239096277c77fef4d2\",\"entity_type\":\"material_rev\",\"entity_id\":\"1f68ecb8-e8ad-4d62-86e4-6ee8fa8d51f0\",\"file_name\":\"rehearsal.png\",\"file_url\":\"http://testserver/api/files/download/m"]}
+{"phase": "B2", "check": "new API: a non-image photo is refused", "ok": true, "detail": 400}
+{"phase": "B2", "check": "new API: edit appends a correction", "ok": true, "detail": 200}
+{"phase": "B2", "check": "new API: approved list shows the record with its photo", "ok": true, "detail": {"items": [{"submittalId": "2f93f32a-a086-4e2c-8498-e5494cbdbde2", "revisionId": "1f68ecb8-e8ad-4d62-86e4-6ee8fa8d51f0", "projectId": "927f87cd-204c-4988-8954-1694bf576e69", "vendorId": "3d081380-d657-4ef7-977a-c0283308d5ba", "vendorName": "Hailong", "documentNumber": "QTS-HL-MSA-000001", "revNo": 0, "result": "ApprovedWithComments", "approvedDate": "2026-10-01", "decisionMaker": null, "externalDocNo": null, "name": "M5 rehearsal sealant", "category": "Rehearsal", "brand": "RB", "model": "R-1", "specification": null, "manufacturer": null, "supplier": null, "specReference": null, "coverPhotoPath": "material_rev/125fadcae6574a22becb63a501605566.png", "photoCount": 1}], "total": 1, "limit": 200, "offset": 0}}
+{"phase": "B2", "check": "new API: dashboard stats", "ok": true, "detail": 200}
+{"phase": "B2", "check": "new API: duplicate check finds it", "ok": true, "detail": 200}
+{"phase": "B2", "result": "PASS", "failed": []}
+=== phase B3 on cand
+{"phase": "B3", "check": "second start of the candidate changes nothing (idempotent)", "ok": true, "detail": {"changed": [], "added": [], "removed": []}}
+{"phase": "B3", "result": "PASS", "failed": []}
+=== phase C on base
+{"phase": "C", "check": "old code starts on the migrated file; material tables untouched", "ok": true, "detail": {"changed": ["role_permissions"], "added": [], "removed": []}}
+{"phase": "C", "check": "old start-up changes only role_permissions (admin re-synced to the old code list)", "ok": true, "detail": ["role_permissions"]}
+{"phase": "C", "check": "old API: list projects", "ok": true, "detail": 200}
+{"phase": "C", "check": "old API: naming rules still readable (msa row may remain)", "ok": true, "detail": 200}
+{"phase": "C", "check": "old code has no material routes (404, data stays in the file)", "ok": true, "detail": 404}
+{"phase": "C", "check": "material rows kept", "ok": true, "detail": {"material_submittal_result_entries": 2, "material_submittal_revisions": 1, "material_submittals": 1, "materials": 1}}
+{"phase": "C", "result": "PASS", "failed": []}
+=== phase D on cand
+{"phase": "D", "check": "roll forward: the record written before the rollback is listed", "ok": true, "detail": 200}
+{"phase": "D", "check": "roll forward: detail readable with its initial + correction history", "ok": true, "detail": 200}
+{"phase": "D", "check": "roll forward: admin holds the 2 material permissions again", "ok": true, "detail": 2}
+{"phase": "D", "check": "roll forward: no pre-existing table lost rows", "ok": true, "detail": {}}
+{"phase": "D", "result": "PASS", "failed": []}
+ALL PHASES PASS
+EXIT 0

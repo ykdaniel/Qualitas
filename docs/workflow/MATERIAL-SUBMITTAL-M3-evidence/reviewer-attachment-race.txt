@@ -1,0 +1,3 @@
+Lightweight hook harness executing transpiled RevisionFiles; not a browser test.
+Current props revisionId=B; resolved B response then A response.
+Final files state=[{"id":"A-file"}]

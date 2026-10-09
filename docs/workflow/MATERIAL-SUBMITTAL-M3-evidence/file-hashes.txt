@@ -1,0 +1,26 @@
+M3 final source hashes (2026-10-08T15:07:49Z); base commit 056c245ca3ff630f74bfc7af86233e7cbc7dc51b
+f488efe05f0c6c7acc379abd1f562afe016cdb68fa208c3ef6f34c7bfcf578be  react-app/src/components/MaterialSubmittal/Dialogs.tsx
+4fd147ac257d343de02c7c4d8d9d50baa269c5f7c3912d2c585a0470fc67a522  react-app/src/components/MaterialSubmittal/MaterialSubmittal.tsx
+130e86dc9a53de6da599f587c22cdd5b568bcd8d30d6d8603017b22eb07d8876  react-app/src/components/MaterialSubmittal/ResultDialogs.tsx
+75a0d9658544a2d62c31b0b082ccd5eda3841c8fb4a7c29b1fcf092ad770a27e  react-app/src/components/MaterialSubmittal/RevisionFiles.tsx
+4fc7291dead5f2cdd339bf61739b07abc10085c2b71a786cb045530cb9a2333c  react-app/src/components/MaterialSubmittal/SubmittalDetailModal.tsx
+7907b3a0b49f729bf0047870e4f4dd16d4b94d7f2722fe243413b2f9fc57666f  react-app/src/components/MaterialSubmittal/materialText.ts
+915e27b07aa8afc7aee0008ede5a790be502f21f36439f815681b50bcafabbd0  react-app/src/components/MaterialSubmittal/parts.tsx
+414c3ba7387a799b504c6f7993bdad9e288af46adb03a5558d53a43450b4edaf  react-app/src/services/materialApi.ts
+1725207947638c3a8f0094a6dccf55a1c19e5623c575faef2165252f3794def2  react-app/src/utils/materialSubmittal.ts
+e73dc8ea103a0aa9a3ae5556027319c08b42529bd9bd6cf13fe56014affada4e  react-app/tests-unit/materialSubmittal.test.ts
+969c48e79e6b75115baeb8396cd5b7dab65ee8f142f249012229596a73b37f39  react-app/src/App.tsx
+c071732652e7999f1f4dbd411131d2e1e707bc48fd020e644fbf0ca51fd9a7ad  react-app/src/components/Shared/AppLayout.tsx
+a4a55db22835fd0b1d4122fd95469e56e584183d4e141b13ff3fe40b6d8cee6e  react-app/src/components/DocumentNamingRules/DocumentNamingRules.tsx
+94277e16fef7caaf4fcf6c9f619be1fb6267e9f750f1fdacbd07f75ac45a7390  react-app/tests-browser/material-m3-vite-launcher.mjs
+2a0864c9827a39e7bfb57c3eb70fb7f2858eb8ee29141cf0fa45a984319a72a6  backend/scripts/verification/seed_material_m3_review.py
+1d3f85ce500cf8bd03b8e828dd16d92d3d0e6b0e894eb202d5bbcb80513b7bf8  backend/scripts/verification/seed_material_m3_review_noperm.py
+
+LanguageContext.tsx (must be unchanged by M3; carries earlier deployed ITP edits):
+eeca6b2d8ca0c4da9c90b748a759b8bcdd482288802774b4cfe965e140e579d1  react-app/src/context/LanguageContext.tsx
+
+git diff --stat (tracked, M3-touched):
+ react-app/src/App.tsx                                         |  2 ++
+ .../components/DocumentNamingRules/DocumentNamingRules.tsx    | 10 +++++++---
+ react-app/src/components/Shared/AppLayout.tsx                 | 11 ++++++++---
+ 3 files changed, 17 insertions(+), 6 deletions(-)

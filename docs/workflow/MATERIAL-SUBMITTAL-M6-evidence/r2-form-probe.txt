@@ -1,0 +1,20 @@
+# 2026-10-09 03:11:28 node v25.8.0 — real RegisterDialog + runSaveFlow, fake server adapter (not a browser)
+PASS 1a record created once although the photo failed
+PASS 1b retry after edit: still ONE record, edited in place
+PASS 1c photo finished on the retry, exactly once
+PASS 1d dialog closed after the complete save
+PASS 2 A→B→A: final content A, one record, photo once
+PASS 3a lost answer: user told it is safe to retry, Save usable, contractor locked
+PASS 3b retry: two requests, ONE record (returned by request id), then edited; photos once
+PASS 4 double click: 1 duplicate check, 1 POST, 1 record
+PASS 4c button disabled immediately after the click
+PASS 5a duplicate: question shown with its number, nothing written
+PASS 5b cancel: nothing written
+PASS 5c save anyway: one record
+PASS 6a check failed: told, nothing written
+PASS 6b Save again re-checks and now finds the duplicate
+PASS 6c skip the failed check and save: one record
+PASS 7 edit A→B→A: both changes sent, final A, no add request
+
+16 passed, 0 failed
+NODE_EXIT=0

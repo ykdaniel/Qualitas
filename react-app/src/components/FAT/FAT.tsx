@@ -1,124 +1,71 @@
+import { useDraftGuard } from '../Shared/LeaveGuard';
+import FormActions from '../Shared/FormActions';
+import actionStyles from '../Shared/FormActions.module.css';
+import { useCreationProjects } from '../../hooks/useCreationProjects';
+import { CreationProjectField } from '../Shared/CreationProjectField';
 import React, { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { BarChart3, FileCheck, TrendingUp, Search } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
-import { useContractors } from '../../context/ContractorsContext';
+import { useAuth } from '../../context/AuthContext';
+import { useContractorsStore } from '../../store/contractorsStore';
 import { checkFATReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
-import { createColumns, FATItem } from './columns';
+import { createColumns } from './columns';
+import { useFATStore, deriveFATResult } from '../../store/fatStore';
+import type { FATItem, FATDetailItem } from '../../store/fatStore';
+import ReactDOM from 'react-dom';
+import FATPrintTemplate from './FATPrintTemplate';
+import './FAT.print.css';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './FAT.module.css';
-import { BackButton } from '@/components/ui/BackButton';
+import formStyles from '../Shared/FormShell.module.css';
+import shellStyles from '../Shared/ModuleShell.module.css';
+import { useFATStats } from '../../hooks/useFATStats';
+import { checkDateOrder } from '../../utils/dateValidation';
+
+type StatusFilter = 'all' | 'scheduled' | 'inProgress' | 'completed' | 'cancelled';
 
 // ... (keep constants and interfaces that are NOT FATItem if any, or move them)
 // FATDetailItem is used in FAT.tsx. Keep it.
 
-const STORAGE_KEY_FAT_LIST = 'qualitas_fat_list';
-const STORAGE_KEY_FAT_DETAILS = 'qualitas_fat_details';
-
-interface FATDetailItem {
-  id: string;
-  sNo: string;
-  itemName: string;
-  specification: string;
-  qty: string;
-  unit: string;
-  acceptanceCriteria: string;
-  fatActualValue: string;
-  fatJudgment: string;
-  remarks: string;
-}
-
-const defaultFatList: FATItem[] = [
-  {
-    id: '1',
-    equipment: 'Equipment A',
-    supplier: '廠商A',
-    procedure: 'Procedure 1',
-    location: 'Location A',
-    startDate: '2026-01-01',
-    endDate: '2026-01-31',
-    deliveryFrom: 'Factory A',
-    deliveryTo: 'Site A',
-    siteReadiness: 'Ready',
-    moveInDate: '2026-02-01',
-    hasDetails: true,
-  },
-];
-
-const defaultFatDetails: { [key: string]: FATDetailItem[] } = {
-  '1': [
-    {
-      id: '1-1',
-      sNo: '1',
-      itemName: 'Item 1',
-      specification: 'Spec 1',
-      qty: '10',
-      unit: 'pcs',
-      acceptanceCriteria: 'Standard A',
-      fatActualValue: '9.8',
-      fatJudgment: 'Pass',
-      remarks: 'Test passed',
-    },
-  ],
-};
-
-function loadFatListFromStorage(): FATItem[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_FAT_LIST);
-    if (raw) {
-      const parsed = JSON.parse(raw) as FATItem[];
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch (_) { }
-  return defaultFatList;
-}
-
-function loadFatDetailsFromStorage(): { [key: string]: FATDetailItem[] } {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_FAT_DETAILS);
-    if (raw) {
-      const parsed = JSON.parse(raw) as { [key: string]: FATDetailItem[] };
-      if (parsed && typeof parsed === 'object') return parsed;
-    }
-  } catch (_) { }
-  return defaultFatDetails;
-}
-
 const FAT: React.FC = () => {
-  const navigate = useNavigate();
   const { t } = useLanguage();
-  const { getActiveContractors } = useContractors();
-  const [fatList, setFatList] = useState<FATItem[]>(loadFatListFromStorage);
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission('fat:create:all');
+  const canEdit = hasPermission('fat:update:all');
+  const { getActiveContractors } = useContractorsStore();
+  const { fatList, addFAT, updateFAT, deleteFAT, saveFATDetails, fatDetails, fetchFATs } = useFATStore();
   const [searchQuery, setSearchQuery] = useState<string>('');
-  // Vendor filter removed (handled by DataTable)
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+
+  useEffect(() => {
+    fetchFATs();
+  }, [fetchFATs]);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isDetailsEditModalOpen, setIsDetailsEditModalOpen] = useState(false);
   const [currentFatId, setCurrentFatId] = useState<string | null>(null);
   const [viewingFatId, setViewingFatId] = useState<string | null>(null);
-  const [fatDetails, setFatDetails] = useState<{ [key: string]: FATDetailItem[] }>(loadFatDetailsFromStorage);
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null; message: string }>({
     isOpen: false,
     id: null,
     message: '',
   });
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_FAT_LIST, JSON.stringify(fatList));
-    } catch (_) { }
-  }, [fatList]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_FAT_DETAILS, JSON.stringify(fatDetails));
-    } catch (_) { }
-  }, [fatDetails]);
-
-  // Only handle Global Search here. Column filters are handled by DataTable.
   const filteredFatList = useMemo(() => {
     let filtered = fatList;
+
+    if (statusFilter !== 'all') {
+      const target = ({
+        scheduled: 'scheduled',
+        inProgress: 'in progress',
+        completed: 'completed',
+        cancelled: 'cancelled',
+      } as const)[statusFilter];
+      filtered = filtered.filter(item => (item.status || '').toLowerCase() === target);
+    }
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -134,56 +81,56 @@ const FAT: React.FC = () => {
     }
 
     return filtered;
-  }, [fatList, searchQuery]);
+  }, [fatList, searchQuery, statusFilter]);
 
-  const statistics = useMemo(() => {
-    const total = fatList.length;
-    const withDetails = fatList.filter(item => item.hasDetails).length;
-    const detailsRate = total > 0 ? Math.round((withDetails / total) * 100) : 0;
-
-    return {
-      total,
-      withDetails,
-      detailsRate,
-    };
+  const statusCounts = useMemo(() => {
+    return fatList.reduce((acc, item) => {
+      const s = (item.status || '').toLowerCase();
+      if (s === 'scheduled') acc.scheduled++;
+      else if (s === 'in progress') acc.inProgress++;
+      else if (s === 'completed') acc.completed++;
+      else if (s === 'cancelled') acc.cancelled++;
+      return acc;
+    }, { scheduled: 0, inProgress: 0, completed: 0, cancelled: 0 });
   }, [fatList]);
 
+  const statistics = useFATStats(filteredFatList);
+
   const handleAddNew = () => {
-    const newId = String(Date.now());
-    setCurrentFatId(newId);
+    setCurrentFatId(null);
     setIsEditModalOpen(true);
   };
 
-  const handleSaveFATDetails = (updates: Partial<FATItem>) => {
+  // NOTE: deliberately does NOT catch here. The caller (FATEditModal.handleSave) is the one that
+  // knows whether to keep the modal open and the user's input intact — it must see this reject if
+  // the write fails, otherwise it can't tell success from failure and would close unconditionally
+  // (the bug this fixed: a swallowed error here made the child's own `await onSave(...); onClose()`
+  // always reach onClose(), even after a failed create/update).
+  const handleSaveFATDetails = async (updates: Partial<FATItem>) => {
     if (currentFatId) {
-      const existingItem = fatList.find(item => item.id === currentFatId);
-      if (existingItem) {
-        setFatList(prevList =>
-          prevList.map(item =>
-            item.id === currentFatId ? { ...item, ...updates } : item
-          )
-        );
-      } else {
-        const activeContractors = getActiveContractors();
-        const defaultSupplier = activeContractors.length > 0 ? activeContractors[0].name : '';
-        const newItem: FATItem = {
-          id: currentFatId,
-          equipment: updates.equipment || '',
-          supplier: updates.supplier || defaultSupplier,
-          procedure: updates.procedure || '',
-          location: updates.location || '',
-          startDate: updates.startDate || '',
-          endDate: updates.endDate || '',
-          deliveryFrom: updates.deliveryFrom || '',
-          deliveryTo: updates.deliveryTo || '',
-          siteReadiness: updates.siteReadiness || '',
-          moveInDate: updates.moveInDate || '',
-          hasDetails: false, // Default
-        } as FATItem; // Cast because 'hasDetails' might be missing in updates
-        setFatList(prevList => [...prevList, newItem]);
-        setFatDetails(prev => ({ ...prev, [currentFatId]: [] }));
-      }
+      await updateFAT(currentFatId, updates);
+    } else {
+      const activeContractors = getActiveContractors();
+      const defaultSupplier = activeContractors.length > 0 ? activeContractors[0].name : '';
+      const newItem: Omit<FATItem, 'id'> = {
+        project_id: updates.project_id || undefined,
+        equipment: updates.equipment || '',
+        supplier: updates.supplier || defaultSupplier,
+        procedure: updates.procedure || '',
+        location: updates.location || '',
+        startDate: updates.startDate || '',
+        endDate: updates.endDate || '',
+        deliveryFrom: updates.deliveryFrom || '',
+        deliveryTo: updates.deliveryTo || '',
+        siteReadiness: updates.siteReadiness || '',
+        moveInDate: updates.moveInDate || '',
+        status: updates.status || 'Scheduled',
+        hasDetails: false,
+      } as any; // safe cast for omit id
+      await addFAT(newItem);
     }
+    setIsEditModalOpen(false);
+    setCurrentFatId(null);
   };
 
   const handleAddDetails = (id: string) => {
@@ -191,22 +138,15 @@ const FAT: React.FC = () => {
     setIsDetailsEditModalOpen(true);
   };
 
-  const handleViewDetails = (id: string) => {
-    setViewingFatId(id);
-    setIsDetailsModalOpen(true);
-  };
-
-  const handleSaveDetails = (details: FATDetailItem[]) => {
+  // NOTE: does NOT catch here, same reasoning as handleSaveFATDetails above — the caller
+  // (FATDetailModal.handleSave) must see a rejection to keep the modal open and the entered
+  // details intact, instead of always reaching onClose() regardless of outcome.
+  const handleSaveDetails = async (details: FATDetailItem[]) => {
     if (currentFatId) {
-      setFatDetails(prev => ({ ...prev, [currentFatId]: details }));
-      setFatList(prevList =>
-        prevList.map(item =>
-          item.id === currentFatId ? { ...item, hasDetails: details.length > 0 } : item
-        )
-      );
+      await saveFATDetails(currentFatId, details);
+      setIsDetailsEditModalOpen(false);
+      setCurrentFatId(null);
     }
-    setIsDetailsEditModalOpen(false);
-    setCurrentFatId(null);
   };
 
   const handleEdit = (id: string) => {
@@ -223,107 +163,123 @@ const FAT: React.FC = () => {
     setDeleteModal({ isOpen: true, id, message });
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (deleteModal.id) {
-      setFatList(prevList => prevList.filter(item => item.id !== deleteModal.id));
-      setFatDetails(prev => {
-        const newDetails = { ...prev };
-        delete newDetails[deleteModal.id!];
-        return newDetails;
-      });
-      setDeleteModal({ isOpen: false, id: null, message: '' });
+      try {
+        await deleteFAT(deleteModal.id);
+        setDeleteModal({ isOpen: false, id: null, message: '' });
+      } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
+        // Error handled in context
+      }
     }
   };
 
-  return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <BackButton />
-          <h1>{t('fat.title') || t('home.fat.description') || 'FAT'}</h1>
-        </div>
-        <div className={styles.headerRight}>
-          <input
-            type="text"
-            className={styles.searchInput}
-            placeholder={t('fat.searchPlaceholder')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-      </div>
+  const chips: { id: StatusFilter; label: string; count: number }[] = [
+    { id: 'all', label: t('common.all') || 'All', count: statistics.total },
+    { id: 'scheduled', label: t('fat.status.scheduled') || 'Scheduled', count: statusCounts.scheduled },
+    { id: 'inProgress', label: t('fat.status.inProgress') || 'In Progress', count: statusCounts.inProgress },
+    { id: 'completed', label: t('fat.status.completed') || 'Completed', count: statusCounts.completed },
+    { id: 'cancelled', label: t('fat.status.cancelled') || 'Cancelled', count: statusCounts.cancelled },
+  ];
 
-      <div className={styles.summarySection}>
-        <h2 className={styles.summaryTitle}>{t('fat.statsTitle') || '統計'}</h2>
-        <div className={styles.statsContainer}>
-          <div className={styles.statusStatsGrid}>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.grayIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M18 17V9M12 17V5M6 17v-3" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('fat.stats.total')}</div>
-                <div className={styles.statValue}>{statistics.total}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M9 11l3 3L22 4" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('fat.stats.withDetails')}</div>
-                <div className={styles.statValue}>{statistics.withDetails}</div>
-              </div>
-            </div>
-            <div className={styles.statItem}>
-              <div className={`${styles.statIcon} ${styles.blueIcon}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className={styles.statContent}>
-                <div className={styles.statLabel}>{t('fat.stats.detailsRate')}</div>
-                <div className={styles.statValue}>{statistics.detailsRate}%</div>
-              </div>
+  const summary = [
+    {
+      key: 'total',
+      label: t('fat.stats.total'),
+      value: statistics.total,
+      icon: <BarChart3 size={18} strokeWidth={1.8} />,
+      accent: '#8a6a3a',
+    },
+    {
+      key: 'withDetails',
+      label: t('fat.stats.withDetails'),
+      value: statistics.withDetails,
+      icon: <FileCheck size={18} strokeWidth={1.8} />,
+      accent: '#7a8f5a',
+    },
+    {
+      key: 'detailsRate',
+      label: t('fat.stats.detailsRate'),
+      value: `${statistics.detailsRate}%`,
+      icon: <TrendingUp size={18} strokeWidth={1.8} />,
+      accent: '#b8945a',
+    },
+  ];
+
+  return (
+    <div className={shellStyles.container}>
+      <section className={shellStyles.summaryGrid}>
+        {summary.map((card) => (
+          <div
+            key={card.key}
+            className={shellStyles.summaryCard}
+            style={{ '--accent': card.accent } as React.CSSProperties}
+          >
+            <div className={shellStyles.summaryIcon}>{card.icon}</div>
+            <div className={shellStyles.summaryBody}>
+              <div className={shellStyles.summaryLabel}>{card.label}</div>
+              <div className={shellStyles.summaryValue}>{card.value}</div>
             </div>
           </div>
+        ))}
+      </section>
+
+      <div className={shellStyles.toolbar}>
+        <div className={shellStyles.chipGroup}>
+          {chips.map((chip) => (
+            <button
+              key={chip.id}
+              type="button"
+              className={`${shellStyles.chip} ${statusFilter === chip.id ? shellStyles.chipActive : ''}`}
+              onClick={() => setStatusFilter(chip.id)}
+            >
+              {chip.label}
+              <span className={shellStyles.chipCount}>{chip.count}</span>
+            </button>
+          ))}
+        </div>
+        <div className={shellStyles.toolbarRight}>
+          <div className={shellStyles.searchWrap}>
+            <Search size={15} className={shellStyles.searchIcon} strokeWidth={2} />
+            <input
+              type="text"
+              className={shellStyles.searchInput}
+              placeholder={t('fat.searchPlaceholder')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          {hasPermission('fat:create:all') && (
+            <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+              {t('fat.addNew')}
+            </button>
+          )}
         </div>
       </div>
 
-      <div className={styles.content}>
+      <div className={shellStyles.content}>
         <DataTable
-          title={t('fat.listTitle')}
-          actions={
-            <button
-              className={styles.addNewButton}
-              onClick={handleAddNew}
-            >
-              {t('fat.addNew')}
-            </button>
-          }
-          columns={createColumns(handleEdit, handleViewDetails, handleAddDetails, handleDeleteClick, t, getActiveContractors())}
+          columns={createColumns(handleAddDetails, handleDeleteClick, t, getActiveContractors(), (id) => deriveFATResult(fatDetails[id]))}
           data={filteredFatList}
           searchKey=""
-          searchPlaceholder={t('fat.searchPlaceholder')}
+          getRowClassName={(row) =>
+            (row.status || '').toLowerCase() === 'cancelled' ? shellStyles.rowDim : ''
+          }
           getRowId={(row) => row.id}
+          onRowClick={(row) => handleEdit(row.id)}
         />
       </div>
 
-      {isEditModalOpen && currentFatId && (
+      {isEditModalOpen && (
         <FATEditModal
-          fatId={currentFatId}
-          existingItem={fatList.find(item => item.id === currentFatId)}
+          fatId={currentFatId || 'new'}
+          existingItem={currentFatId ? fatList.find(item => item.id === currentFatId) : undefined}
           onSave={handleSaveFATDetails}
           onClose={() => {
             setIsEditModalOpen(false);
             setCurrentFatId(null);
           }}
+          readOnly={currentFatId ? !canEdit : !canCreate}
         />
       )}
 
@@ -336,6 +292,7 @@ const FAT: React.FC = () => {
             setIsDetailsEditModalOpen(false);
             setCurrentFatId(null);
           }}
+          readOnly={!canEdit}
         />
       )}
 
@@ -369,9 +326,10 @@ interface FATDetailModalProps {
   details: FATDetailItem[];
   onSave: (details: FATDetailItem[]) => void;
   onClose: () => void;
+  readOnly?: boolean;
 }
 
-const FATDetailModal: React.FC<FATDetailModalProps> = ({ fatId, details, onSave, onClose }) => {
+const FATDetailModal: React.FC<FATDetailModalProps> = ({ fatId, details, onSave, onClose, readOnly = false }) => {
   const { t } = useLanguage();
   const [detailList, setDetailList] = useState<FATDetailItem[]>(details.length > 0 ? details : [{
     id: '1',
@@ -427,19 +385,42 @@ const FATDetailModal: React.FC<FATDetailModalProps> = ({ fatId, details, onSave,
     );
   };
 
-  const handleSave = () => {
-    onSave(detailList);
-    onClose();
+  const [saving, setSaving] = useState(false);
+    const leaveGuard = useDraftGuard(detailList, saving, !readOnly);
+    const requestClose = () => leaveGuard.requestClose(onClose);
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await onSave(detailList);
+      onClose(); // only reached on success — detailList/modal are left untouched on any rejection
+    } catch (err) {
+      toast.error((err as Error)?.message || 'Save failed');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div className={styles.modalOverlay}>
-      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.modalHeader}>
+    <div className={formStyles.modalOverlay}>
+      <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
+        <div className={formStyles.modalHeader}>
           <h2>{t('fat.detailModalTitle')}</h2>
-          <button className={styles.closeButton} onClick={onClose}>×</button>
+          <button className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={requestClose}>×</button>
         </div>
-        <div className={styles.modalBody}>
+        <div className={formStyles.modalBody}>
+        <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
+          {(() => {
+            const r = deriveFATResult(detailList);
+            const color = r === 'Pass' ? '#15803d' : r === 'Fail' ? '#b91c1c' : '#a16207';
+            const label = ({ Pass: t('fat.result.pass'), Fail: t('fat.result.fail'), Pending: t('fat.result.pending') } as Record<string, string>)[r] || r;
+            return (
+              <div style={{ marginBottom: 10, fontSize: 13 }}>
+                {t('fat.overallResult') || 'Overall Result'}：
+                <span style={{ color, fontWeight: 700 }}>{label}</span>
+                <span style={{ color: '#6b7280', marginLeft: 8, fontSize: 11 }}>（由各項判定自動計算 / auto from item judgments）</span>
+              </div>
+            );
+          })()}
           <div className={styles.tableContainer}>
             <table className={styles.detailTable}>
               <thead>
@@ -536,8 +517,7 @@ const FATDetailModal: React.FC<FATDetailModalProps> = ({ fatId, details, onSave,
                       />
                     </td>
                     <td>
-                      <button
-                        className={styles.deleteRowButton}
+                      <button className={actionStyles.danger}
                         onClick={() => handleDeleteRow(item.id)}
                         disabled={detailList.length <= 1}
                       >
@@ -549,20 +529,31 @@ const FATDetailModal: React.FC<FATDetailModalProps> = ({ fatId, details, onSave,
               </tbody>
             </table>
           </div>
-          <div className={styles.modalActions}>
-            <button className={styles.addRowButton} onClick={handleAddRow}>
-              {t('fat.addRow')}
+          {!readOnly && (
+            <FormActions
+              tools={<>
+                <button className={actionStyles.secondary} onClick={handleAddRow}>
+                  {t('fat.addRow')}
+                </button>
+              </>}
+            />
+          )}
+        </fieldset>
+        </div>
+        <FormActions
+          cancel={<>
+            <button className={actionStyles.secondary} onClick={requestClose}>
+              {readOnly ? t('common.close') : t('common.cancel')}
             </button>
-            <div className={styles.actionButtons}>
-              <button className={styles.saveButton} onClick={handleSave}>
+          </>}
+          primary={<>
+            {!readOnly && (
+              <button className={actionStyles.primary} onClick={handleSave} disabled={saving}>
                 {t('common.save')}
               </button>
-              <button className={styles.cancelButton} onClick={onClose}>
-                {t('common.cancel')}
-              </button>
-            </div>
-          </div>
-        </div>
+            )}
+          </>}
+        />
       </div>
     </div>
   );
@@ -573,11 +564,12 @@ interface FATEditModalProps {
   existingItem?: FATItem;
   onSave: (updates: Partial<FATItem>) => void;
   onClose: () => void;
+  readOnly?: boolean;
 }
-
-const FATEditModal: React.FC<FATEditModalProps> = ({ fatId, existingItem, onSave, onClose }) => {
+const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem, onSave, onClose, readOnly = false }) => {
+  const creationProjects = useCreationProjects(!existingItem);
   const { t } = useLanguage();
-  const { getActiveContractors } = useContractors();
+  const { getActiveContractors } = useContractorsStore();
   const [formData, setFormData] = useState<Partial<FATItem>>({
     equipment: existingItem?.equipment || '',
     supplier: existingItem?.supplier || '',
@@ -589,42 +581,69 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId, existingItem, onSave
     deliveryTo: existingItem?.deliveryTo || '',
     siteReadiness: existingItem?.siteReadiness || '',
     moveInDate: existingItem?.moveInDate || '',
+    status: existingItem?.status || 'Scheduled',
   });
 
   const handleFieldChange = (field: keyof FATItem, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData(prev => {
+      const updated = { ...prev, [field]: value };
+      if (field === 'startDate' || field === 'endDate') {
+        const check = checkDateOrder(updated.startDate, updated.endDate, t('fat.startDate') || 'Start Date', t('fat.endDate') || 'End Date');
+        if (!check.valid) toast.warning(check.message);
+      }
+      if (field === 'endDate' || field === 'moveInDate') {
+        const check = checkDateOrder(updated.endDate, updated.moveInDate, t('fat.endDate') || 'End Date', t('fat.moveInDate') || 'Move-in Date');
+        if (!check.valid) toast.warning(check.message);
+      }
+      return updated;
+    });
   };
 
-  const handleSave = () => {
-    onSave(formData);
-    onClose();
+  const [saving, setSaving] = useState(false);
+    const leaveGuard = useDraftGuard(formData, saving, !readOnly);
+    const requestClose = () => leaveGuard.requestClose(onClose);
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      if (!existingItem && (creationProjects.loading || creationProjects.error)) return;
+      await onSave(formData);
+      onClose(); // only reached on success — formData/modal are left untouched on any rejection
+    } catch (err) {
+      toast.error((err as Error)?.message || 'Save failed');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div className={styles.modalOverlay}>
-      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.modalHeader}>
+    <div className={formStyles.modalOverlay}>
+      <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
+        <div className={formStyles.modalHeader}>
           <h2>{existingItem ? t('fat.editTitle') : t('fat.addTitle')}</h2>
-          <button className={styles.closeButton} onClick={onClose}>×</button>
+          <button className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={requestClose}>×</button>
         </div>
-        <div className={styles.modalBody}>
-          <div className={styles.formSections}>
-            <div className={styles.formSection}>
-              <h3 className={styles.sectionTitle}>{t('fat.sectionInfo')}</h3>
-              <div className={styles.formGrid}>
-                <div className={styles.formGroup}>
+        <div className={formStyles.modalBody}>
+        <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
+          <div className={formStyles.formSections}>
+            <div className={formStyles.formSection}>
+              <h3 className={formStyles.sectionTitle}>{t('fat.sectionInfo')}</h3>
+              {!existingItem && <CreationProjectField state={creationProjects} value={formData.project_id}
+                onChange={value => handleFieldChange('project_id', value)} />}
+
+              <div className={formStyles.formGrid}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.equipment')}</label>
                   <input
                     type="text"
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={formData.equipment || ''}
                     onChange={(e) => handleFieldChange('equipment', e.target.value)}
                   />
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.supplier')}</label>
                   <select
-                    className={styles.formSelect}
+                    className={formStyles.formSelect}
                     value={formData.supplier || ''}
                     onChange={(e) => handleFieldChange('supplier', e.target.value)}
                   >
@@ -636,25 +655,25 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId, existingItem, onSave
                     ))}
                   </select>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.procedure')}</label>
                   <input
                     type="text"
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={formData.procedure || ''}
                     onChange={(e) => handleFieldChange('procedure', e.target.value)}
                   />
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.location')}</label>
                   <input
                     type="text"
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={formData.location || ''}
                     onChange={(e) => handleFieldChange('location', e.target.value)}
                   />
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.startDate')}</label>
                   <input
                     type={formData.startDate ? 'date' : 'text'}
@@ -664,12 +683,12 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId, existingItem, onSave
                     onBlur={(e) => {
                       if (!e.target.value) e.target.type = 'text';
                     }}
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={formData.startDate || ''}
                     onChange={(e) => handleFieldChange('startDate', e.target.value)}
                   />
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.endDate')}</label>
                   <input
                     type={formData.endDate ? 'date' : 'text'}
@@ -679,39 +698,39 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId, existingItem, onSave
                     onBlur={(e) => {
                       if (!e.target.value) e.target.type = 'text';
                     }}
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={formData.endDate || ''}
                     onChange={(e) => handleFieldChange('endDate', e.target.value)}
                   />
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.deliveryFrom')}</label>
                   <input
                     type="text"
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={formData.deliveryFrom || ''}
                     onChange={(e) => handleFieldChange('deliveryFrom', e.target.value)}
                   />
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.deliveryTo')}</label>
                   <input
                     type="text"
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={formData.deliveryTo || ''}
                     onChange={(e) => handleFieldChange('deliveryTo', e.target.value)}
                   />
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.siteReadiness')}</label>
                   <input
                     type="text"
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={formData.siteReadiness || ''}
                     onChange={(e) => handleFieldChange('siteReadiness', e.target.value)}
                   />
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.moveInDate')}</label>
                   <input
                     type={formData.moveInDate ? 'date' : 'text'}
@@ -721,23 +740,43 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId, existingItem, onSave
                     onBlur={(e) => {
                       if (!e.target.value) e.target.type = 'text';
                     }}
-                    className={styles.formInput}
+                    className={formStyles.formInput}
                     value={formData.moveInDate || ''}
                     onChange={(e) => handleFieldChange('moveInDate', e.target.value)}
                   />
                 </div>
+                <div className={formStyles.formGroup}>
+                  <label>{t('common.status')}</label>
+                  <select
+                    className={formStyles.formSelect}
+                    value={formData.status || 'Scheduled'}
+                    onChange={(e) => handleFieldChange('status', e.target.value)}
+                  >
+                    <option value="Scheduled">{t('fat.status.scheduled')}</option>
+                    <option value="In Progress">{t('fat.status.inProgress')}</option>
+                    <option value="Completed">{t('fat.status.completed')}</option>
+                    <option value="Cancelled">{t('fat.status.cancelled')}</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
+        </fieldset>
         </div>
-        <div className={styles.modalActions}>
-          <button className={styles.saveButton} onClick={handleSave}>
-            {t('common.save')}
-          </button>
-          <button className={styles.cancelButton} onClick={onClose}>
-            {t('common.cancel')}
-          </button>
-        </div>
+              <FormActions
+                  cancel={<>
+                      <button className={actionStyles.secondary} onClick={requestClose}>
+                          {readOnly ? t('common.close') : t('common.cancel')}
+                      </button>
+                  </>}
+                  primary={<>
+                      {!readOnly && (
+                          <button className={actionStyles.primary} onClick={handleSave} disabled={saving || (!existingItem && (creationProjects.loading || creationProjects.error))}>
+                              {t('common.save')}
+                          </button>
+                      )}
+                  </>}
+              />
       </div>
     </div>
   );
@@ -749,75 +788,86 @@ interface FATDetailsViewModalProps {
   fatDetails: FATDetailItem[];
   onClose: () => void;
 }
-
-const FATDetailsViewModal: React.FC<FATDetailsViewModalProps> = ({ fatId, fatItem, fatDetails, onClose }) => {
+const FATDetailsViewModal: React.FC<FATDetailsViewModalProps> = ({ fatId: _fatId, fatItem, fatDetails, onClose }) => {
   const { t } = useLanguage();
-  const handlePrint = () => {
-    window.print();
-  };
+  const [isPrinting, setIsPrinting] = useState(false);
+  useEffect(() => {
+    if (!isPrinting) return;
+    const timer = setTimeout(() => window.print(), 200);
+    const onAfterPrint = () => setIsPrinting(false);
+    window.addEventListener('afterprint', onAfterPrint);
+    return () => { clearTimeout(timer); window.removeEventListener('afterprint', onAfterPrint); };
+  }, [isPrinting]);
 
   if (!fatItem) {
     return null;
   }
+  const overallResult = deriveFATResult(fatDetails);
+  const resultColor = overallResult === 'Pass' ? '#15803d' : overallResult === 'Fail' ? '#b91c1c' : '#a16207';
+  const resultLabel = ({ Pass: t('fat.result.pass'), Fail: t('fat.result.fail'), Pending: t('fat.result.pending') } as Record<string, string>)[overallResult] || overallResult;
 
   return (
-    <div className={styles.modalOverlay}>
-      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.modalHeader}>
+    <div className={formStyles.modalOverlay}>
+      <div className={formStyles.modalContent} onClick={(e) => e.stopPropagation()}>
+        <div className={formStyles.modalHeader}>
           <h2>{t('fat.detailsTitle')}</h2>
-          <button className={styles.closeButton} onClick={onClose}>×</button>
+          <button className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={onClose}>×</button>
         </div>
-        <div className={styles.modalBody}>
-          <div className={styles.formSections}>
-            <div className={styles.formSection}>
-              <h3 className={styles.sectionTitle}>{t('fat.sectionBaseInfo')}</h3>
-              <div className={styles.formGrid}>
-                <div className={styles.formGroup}>
+        <div className={formStyles.modalBody}>
+          <div className={formStyles.formSections}>
+            <div className={formStyles.formSection}>
+              <h3 className={formStyles.sectionTitle}>{t('fat.sectionBaseInfo')}</h3>
+              <div className={formStyles.formGrid}>
+                <div className={formStyles.formGroup}>
+                  <label>{t('fat.overallResult') || 'Overall Result'}</label>
+                  <div className={formStyles.readOnlyField} style={{ color: resultColor, fontWeight: 700 }}>{resultLabel}</div>
+                </div>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.equipment')}</label>
-                  <div className={styles.readOnlyField}>{fatItem.equipment || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{fatItem.equipment || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.supplier')}</label>
-                  <div className={styles.readOnlyField}>{fatItem.supplier || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{fatItem.supplier || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.procedure')}</label>
-                  <div className={styles.readOnlyField}>{fatItem.procedure || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{fatItem.procedure || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.location')}</label>
-                  <div className={styles.readOnlyField}>{fatItem.location || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{fatItem.location || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.startDate')}</label>
-                  <div className={styles.readOnlyField}>{fatItem.startDate || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{fatItem.startDate || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.endDate')}</label>
-                  <div className={styles.readOnlyField}>{fatItem.endDate || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{fatItem.endDate || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.deliveryFrom')}</label>
-                  <div className={styles.readOnlyField}>{fatItem.deliveryFrom || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{fatItem.deliveryFrom || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.deliveryTo')}</label>
-                  <div className={styles.readOnlyField}>{fatItem.deliveryTo || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{fatItem.deliveryTo || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.siteReadiness')}</label>
-                  <div className={styles.readOnlyField}>{fatItem.siteReadiness || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{fatItem.siteReadiness || '-'}</div>
                 </div>
-                <div className={styles.formGroup}>
+                <div className={formStyles.formGroup}>
                   <label>{t('fat.moveInDate')}</label>
-                  <div className={styles.readOnlyField}>{fatItem.moveInDate || '-'}</div>
+                  <div className={formStyles.readOnlyField}>{fatItem.moveInDate || '-'}</div>
                 </div>
               </div>
             </div>
 
             {fatDetails.length > 0 && (
-              <div className={styles.formSection}>
-                <h3 className={styles.sectionTitle}>{t('fat.sectionDetails')}</h3>
+              <div className={formStyles.formSection}>
+                <h3 className={formStyles.sectionTitle}>{t('fat.sectionDetails')}</h3>
                 <table className={styles.detailTable}>
                   <thead>
                     <tr>
@@ -852,15 +902,23 @@ const FATDetailsViewModal: React.FC<FATDetailsViewModalProps> = ({ fatId, fatIte
             )}
           </div>
         </div>
-        <div className={styles.modalActions}>
-          <button className={styles.printButton} onClick={handlePrint}>
-            {t('common.print')}
-          </button>
-          <button className={styles.cancelButton} onClick={onClose}>
-            {t('common.close')}
-          </button>
-        </div>
+              <FormActions
+                  tools={<>
+                      <button className={actionStyles.secondary} onClick={() => setIsPrinting(true)}>
+                          {t('common.print')}
+                      </button>
+                  </>}
+                  cancel={<>
+                      <button className={actionStyles.secondary} onClick={onClose}>
+                          {t('common.close')}
+                      </button>
+                  </>}
+              />
       </div>
+      {isPrinting && ReactDOM.createPortal(
+        <FATPrintTemplate fat={fatItem} details={fatDetails} result={overallResult} />,
+        document.body
+      )}
     </div>
   );
 };

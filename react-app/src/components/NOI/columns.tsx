@@ -1,15 +1,18 @@
 import { ColumnDef } from "@tanstack/react-table";
-import { NOIItem } from "../../context/NOIContext";
+import { NOIItem } from "../../store/noiStore";
 import { DataTableColumnHeader } from "@/components/Shared/DataTable/DataTableColumnHeader";
 import { Button } from "@/components/ui/button";
-import { Eye, Pencil, Trash2 } from "lucide-react";
-import { formatTime24h, getLocalizedStatus } from "../../utils/formatters";
+import { Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import styles from "./NOI.module.css";
+import { StatusBadge } from "@/components/Shared/StatusBadge";
+import { formatTime24h, getLocalizedStatus } from "../../utils/formatters";
+import { DateCell } from "@/components/Shared/DateIssueMark";
+import { formatStrictDate } from "../../utils/dateIssues";
+
+// Plain dates are formatted from the string, never through `Date` (which rolls 2026-02-30 over to 2 March and shifts by the UTC offset).
+const noiDate = (raw: string) => formatStrictDate(raw) ?? raw;
 
 export const createColumns = (
-    handleEdit: (id: string) => void,
-    handleViewDetails: (id: string) => void,
     handleDeleteClick: (id: string) => void,
     t: (key: string) => string
 ): ColumnDef<NOIItem>[] => [
@@ -68,8 +71,11 @@ export const createColumns = (
                 />
             ),
             cell: ({ row }) => (
-                <div className="text-center">
-                    {getLocalizedStatus(row.getValue("status"), t)}
+                <div className="flex justify-center">
+                    <StatusBadge
+                        status={row.getValue("status")}
+                        label={getLocalizedStatus(row.getValue("status"), t)}
+                    />
                 </div>
             ),
             filterFn: (row, id, value) => {
@@ -109,14 +115,14 @@ export const createColumns = (
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title={t('noi.issueDate')} />
             ),
-            cell: ({ row }) => <div className="text-center">{row.getValue("issueDate")}</div>,
+            cell: ({ row }) => <div className="text-center"><DateCell item={row.original} field="issueDate" format={noiDate} /></div>,
         },
         {
             accessorKey: "inspectionDate",
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title={t('noi.inspectionDate')} />
             ),
-            cell: ({ row }) => <div className="text-center">{row.getValue("inspectionDate")}</div>,
+            cell: ({ row }) => <div className="text-center"><DateCell item={row.original} field="inspectionDate" format={noiDate} /></div>,
         },
         {
             accessorKey: "inspectionTime",
@@ -145,30 +151,12 @@ export const createColumns = (
             cell: ({ row }) => {
                 const noi = row.original;
                 return (
-                    <div className="flex items-center justify-center space-x-2">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-100"
-                            onClick={() => handleEdit(noi.id)}
-                            title={t('noi.tooltip.edit')}
-                        >
-                            <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-blue-500 hover:text-blue-600 hover:bg-blue-100"
-                            onClick={() => handleViewDetails(noi.id)}
-                            title={t('noi.tooltip.details')}
-                        >
-                            <Eye className="h-4 w-4" />
-                        </Button>
+                    <div className="flex items-center justify-center">
                         <Button
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-100"
-                            onClick={() => handleDeleteClick(noi.id)}
+                            onClick={(e) => { e.stopPropagation(); handleDeleteClick(noi.id); }}
                             title={t('noi.tooltip.delete')}
                         >
                             <Trash2 className="h-4 w-4" />

@@ -1,0 +1,16 @@
+baseline: PASS
+lowercase_predicate: correctly rejected: material submittal schema does not match what the application needs: index ux_msr_one_open condition is status IN ('draft','submitted'), expected status IN ('Draft','Submitted'). Nothing was dropped, rebuilt or rewritten. Fix the listed objects by hand (they may hold data), then start again.
+numeric_name: correctly rejected: material submittal schema does not match what the application needs: materials.name type NUMERIC does not match VARCHAR. Nothing was dropped, rebuilt or rewritten. Fix the listed objects by hand (they may hold data), then start again.
+
+EXIT_CODE=0
+HASH MATCH backend/models.py
+HASH MATCH backend/db_migrations.py
+HASH MATCH backend/schemas.py
+HASH MATCH backend/main.py
+HASH MATCH backend/core/perms.py
+HASH MATCH backend/core/validators.py
+HASH MATCH backend/routers/materials.py
+HASH MATCH backend/services/material_service.py
+HASH MATCH backend/repositories/material_repository.py
+HASH MATCH backend/tests/test_materials_http.py
+HASH MATCH backend/tests/test_material_schema_migration.py

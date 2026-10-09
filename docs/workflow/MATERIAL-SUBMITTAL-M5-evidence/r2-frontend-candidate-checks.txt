@@ -1,0 +1,12 @@
+# M5 R2 frontend candidate (git archive 056c245ca3ff630f74bfc7af86233e7cbc7dc51b + overlay); 2026-10-09T05:49:11Z; node v25.8.0
+## tsc
+EXIT 0
+## npm test
+ℹ tests 144
+ℹ pass 144
+ℹ fail 0
+EXIT 0
+## vite build
+dist/assets/mammoth.browser-B0cLlJXF.js          499.39 kB │ gzip: 124.65 kB
+✓ built in 4.18s
+EXIT 0

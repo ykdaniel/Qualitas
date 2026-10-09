@@ -1,0 +1,8 @@
+Independent M1 review probe: memory-only databases; actual migration called twice.
+baseline validation_problems= []
+lowercase_predicate validation_problems= []
+simultaneous_Draft_count= 2
+numeric_name validation_problems= []
+stored_name_and_type= (123, 'integer')
+
+EXIT_CODE=0

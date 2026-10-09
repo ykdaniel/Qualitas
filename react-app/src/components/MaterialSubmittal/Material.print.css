@@ -1,0 +1,130 @@
+/* Approved-material print record (MATERIAL-SUBMITTAL M6) — derived from the OSD
+   report so the printouts look alike. Portal-mounted into <body> (sibling of #root), shown only
+   while printing. All rules are scoped under .msa-print-root so the generic
+   table/td/th selectors never leak into the app. The masthead lives in the
+   outer table's <thead> so the browser repeats it on every printed page. */
+
+:root {
+    --msa-ink: #1c1f24;
+    --msa-muted: #5b6068;
+    --msa-line: #9aa0a8;
+    --msa-line-soft: #c9ced4;
+    --msa-fill: #eef1f4;
+    --msa-fill-head: #dfe4ea;
+    --msa-accent: #a1642a;
+    --msa-status: #1f6f8b;
+    --msa-note: #7a818a;
+}
+
+.msa-print-root { display: none; }
+
+.msa-print-root {
+    font-family: "Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    color: var(--msa-ink);
+    font-size: 9.3px;
+    line-height: 1.5;
+    background: #fff;
+}
+.msa-print-root * { box-sizing: border-box; }
+
+.msa-print-root .msa-report { width: 100%; border-collapse: collapse; }
+.msa-print-root .head-cell,
+.msa-print-root .body-cell { border: none; padding: 0; text-align: left; font-weight: 400; }
+
+.msa-print-root .doc-head {
+    display: flex; align-items: stretch;
+    border-bottom: 2.2px solid var(--msa-ink);
+    padding-bottom: 6px; margin-bottom: 10px;
+}
+.msa-print-root .logo-box {
+    width: 78px; min-height: 46px;
+    border: 1px dashed var(--msa-line-soft);
+    display: flex; align-items: center; justify-content: center;
+    color: #b8bdc4; font-size: 9px; letter-spacing: 1px;
+}
+.msa-print-root .head-mid { flex: 1; padding: 2px 14px; }
+.msa-print-root .head-mid .co { font-size: 14px; font-weight: 700; letter-spacing: .5px; }
+.msa-print-root .head-mid .sub { font-size: 9.5px; color: var(--msa-muted); margin-top: 2px; }
+.msa-print-root .head-right { text-align: right; font-size: 9px; line-height: 1.6; min-width: 120px; }
+.msa-print-root .head-right .docno { font-weight: 700; font-size: 10px; letter-spacing: .3px; }
+
+.msa-print-root .badge {
+    display: inline-block; padding: 1px 7px; border-radius: 2px;
+    font-weight: 700; font-size: 8.6px; letter-spacing: .4px; color: #fff;
+}
+.msa-print-root .b-status { background: var(--msa-status); }
+
+.msa-print-root .title {
+    text-align: center; font-size: 16px; font-weight: 700;
+    letter-spacing: 3px; margin: 4px 0 12px;
+}
+.msa-print-root .title .en {
+    font-size: 9px; font-weight: 500; letter-spacing: 2px;
+    color: var(--msa-muted); display: block; margin-top: 2px;
+}
+
+.msa-print-root .sec-head {
+    background: var(--msa-fill-head);
+    border-left: 3px solid var(--msa-accent);
+    padding: 3px 9px; font-weight: 700; font-size: 10px;
+    letter-spacing: .5px; margin: 11px 0 0;
+}
+.msa-print-root .sec-head.sec-head-sub { margin-top: 6px; }
+.msa-print-root .sec-head .en { font-weight: 500; color: var(--msa-muted); font-size: 8.6px; letter-spacing: .5px; }
+
+/* Fixed layout so the two value columns split the remaining width evenly
+   (88px labels + equal values) instead of stretching to fit content. */
+.msa-print-root table { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: -1px; }
+.msa-print-root .val { word-break: break-word; }
+.msa-print-root td, .msa-print-root th { border: 1px solid var(--msa-line); padding: 3px 6px; vertical-align: top; }
+.msa-print-root td.lbl {
+    background: var(--msa-fill); font-weight: 600; white-space: nowrap;
+    width: 88px; color: #2a2e34;
+}
+.msa-print-root td.lbl small { display: block; color: var(--msa-note); font-weight: 500; font-size: 7.6px; letter-spacing: .2px; }
+.msa-print-root .val { min-height: 14px; }
+.msa-print-root .blank { color: #aeb3ba; }
+
+.msa-print-root .field-box { border: 1px solid var(--msa-line); min-height: 34px; padding: 4px 6px; white-space: pre-wrap; }
+.msa-print-root .field-box.fb-desc { min-height: 60px; }
+.msa-print-root .field-box.fb-action { min-height: 60px; margin-top: 4px; }
+.msa-print-root .guide { color: #aeb3ba; }
+
+/* closure sign-off (mirrors the OBS/NCR reports) */
+.msa-print-root .sign-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 4px; }
+.msa-print-root .sign-cell { border: 1px solid var(--msa-line); padding: 6px 8px 7px; }
+.msa-print-root .sign-cell .role { font-weight: 700; font-size: 9px; }
+.msa-print-root .sign-cell .role .en { color: var(--msa-muted); font-weight: 500; font-size: 7.6px; }
+.msa-print-root .sign-line { border-bottom: 1px solid var(--msa-ink); height: 24px; margin: 6px 0 4px; }
+.msa-print-root .sign-meta { display: flex; justify-content: space-between; font-size: 8px; color: var(--msa-muted); }
+.msa-print-root .sign-meta span { flex: 1; }
+
+.msa-print-root .foot {
+    margin-top: 12px; border-top: 1px solid var(--msa-line-soft); padding-top: 6px;
+    display: flex; justify-content: space-between; gap: 14px; font-size: 7.6px; color: var(--msa-note);
+}
+
+/* photo report — two per row, file name under each photo. */
+.msa-print-root .photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+.msa-print-root .photo-item { border: 1px solid var(--msa-line); padding: 4px; text-align: center; }
+.msa-print-root .photo-item img { width: 100%; height: auto; max-height: 300px; object-fit: contain; }
+.msa-print-root .subhead { font-weight: 700; font-size: 9px; margin: 6px 0 2px; color: var(--msa-accent); }
+
+/* keep rows / boxes intact across page breaks */
+.msa-print-root tr,
+.msa-print-root .sign-cell,
+.msa-print-root .field-box { break-inside: avoid; page-break-inside: avoid; }
+.msa-print-root .sec-head { break-after: avoid; page-break-after: avoid; }
+
+@media print {
+    @page { size: A4; margin: 13mm 12mm; }
+    #root { display: none !important; }
+    .msa-print-root { display: block !important; }
+    .msa-print-root .msa-report > thead { display: table-header-group; }
+    .msa-print-root * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+}
+.msa-print-root .photo-item .photo-name { font-size: 7.6px; color: var(--msa-note); margin-top: 2px; word-break: break-all; }
+.msa-print-root .photo-item { break-inside: avoid; page-break-inside: avoid; }
