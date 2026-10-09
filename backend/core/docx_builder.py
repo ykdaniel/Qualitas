@@ -386,6 +386,11 @@ def resolve_local_upload_path(url_or_path: str, upload_root: str) -> str:
     rel = rel.split("?")[0]  # strip any query string (auth token, cache-bust, ...)
     full = os.path.realpath(os.path.join(upload_root, rel))
     root = os.path.realpath(upload_root)
-    if not full.startswith(root):
+    # commonpath, not startswith: a sibling such as `<root>_evil/` shares the string prefix but is outside the root.
+    try:
+        inside = os.path.commonpath([root, full]) == root
+    except ValueError:
+        inside = False
+    if not inside:
         return None
     return full if os.path.isfile(full) else None
