@@ -4,7 +4,8 @@ import schemas
 from core.dependencies import RoleChecker, get_audit_service
 from core.perms import AUDIT_VIEW, AUDIT_CREATE, AUDIT_UPDATE, AUDIT_DELETE
 from core.scope import Scope, ScopeForbidden, get_scope
-from services.audit_service import AuditService
+from core.strict_dates import DateValidationError
+from services.audit_service import AuditConflict, AuditService
 
 router = APIRouter(
     prefix="/audit",
@@ -54,6 +55,12 @@ def create_audit_route(
         )
     except ScopeForbidden as e:
         raise HTTPException(status_code=403, detail=str(e))
+    except DateValidationError as e:
+        raise HTTPException(status_code=422, detail=e.http_detail())
+    except AuditConflict as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.put("/{audit_id}", response_model=schemas.Audit)
 def update_audit_route(
@@ -74,6 +81,10 @@ def update_audit_route(
         )
     except ScopeForbidden as e:
         raise HTTPException(status_code=403, detail=str(e))
+    except DateValidationError as e:
+        raise HTTPException(status_code=422, detail=e.http_detail())
+    except AuditConflict as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if db_audit is None:

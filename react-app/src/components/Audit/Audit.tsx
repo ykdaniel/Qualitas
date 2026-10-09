@@ -3,6 +3,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useAuditStore, AuditItem } from '../../store/auditStore';
+import { useProjectStore } from '../../store/projectStore';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './Audit.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
@@ -34,9 +35,16 @@ const Audit: React.FC = () => {
     );
 
     useEffect(() => {
-        useAuditStore.getState().fetchAudits();
         useContractorsStore.getState().fetchContractors();
     }, []);
+
+    // Audits are not part of AppProviders' preloadProjectScopedData, so this page re-fetches its
+    // own list whenever the header's project changes (same as FollowUpIssue.tsx); auditStore's
+    // fetch sequence discards a superseded response.
+    const currentScopeId = useProjectStore(s => s.currentProject?.id ?? '__all__');
+    useEffect(() => {
+        useAuditStore.getState().fetchAudits();
+    }, [currentScopeId]);
 
     // 1. Compute Vendor Statistics (Unaffected by SearchQuery to keep left panel stable)
     const { vendorStats, maxAudits } = useMemo(() => {
@@ -167,8 +175,12 @@ const Audit: React.FC = () => {
     }, [t]);
 
     const handleDeleteConfirm = async () => {
-        if (deleteModal.id) {
+        if (!deleteModal.id) return;
+        try {
             await deleteAudit(deleteModal.id);
+        } catch {
+            // auditStore has already put the (friendly) reason in this page's error banner
+        } finally {
             setDeleteModal({ isOpen: false, id: null, message: '' });
         }
     };
@@ -240,7 +252,7 @@ const Audit: React.FC = () => {
             <div className={shellStyles.content}>
                 <DataTable
                     title={t('audit.listTitle')}
-                    columns={createColumns(handleEdit, handleDeleteClick, t, activeContractors)}
+                    columns={createColumns(handleEdit, handleDeleteClick, t, activeContractors, hasPermission('audit:delete:all'))}
                     data={filteredData}
                     searchKey=""
                     getRowId={(row: AuditItem) => row.id}
@@ -253,11 +265,12 @@ const Audit: React.FC = () => {
                 <AuditWizard
                     auditId={currentAuditId}
                     existingItem={currentAuditId ? auditList.find(item => item.id === currentAuditId) : undefined}
-                    // Closed is a true dead end (WorkflowEngine's "Closed": []
-                    // for Audit, same shape as NOI) — unconditional lock, no
-                    // permission escape hatch, matching audit_service.py's
-                    // backend guard.
-                    readOnly={currentAuditId ? auditList.find(item => item.id === currentAuditId)?.status === 'Closed' : false}
+                    // Closed / Void are true dead ends (WorkflowEngine's "Closed": [] /
+                    // "Void": []) — the wizard locks those itself from the record's
+                    // status, unconditionally, matching audit_service.py. Here: an
+                    // existing record is also read-only for anyone without
+                    // audit:update:all (the backend refuses their save anyway).
+                    readOnly={currentAuditId ? !hasPermission('audit:update:all') : false}
                     onClose={() => {
                         setIsEditModalOpen(false);
                         setCurrentAuditId(null);

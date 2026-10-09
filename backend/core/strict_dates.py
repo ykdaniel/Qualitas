@@ -1,8 +1,8 @@
-"""Strict date rules for NCR / OBS / NOI (2026-09-20) — a SEPARATE module on purpose.
+"""Strict date rules for NCR / OBS / NOI (2026-09-20) and internal Audit (2026-10-09) — a SEPARATE module on purpose.
 
-The older, lenient ``schemas.validate_date_format`` (prefix regex, silently truncates timestamps) is still used by eight
-other modules that have not been verified, so it is left untouched. Everything here is NEW and only wired into NCR, OBS
-and NOI.
+The older, lenient ``schemas.validate_date_format`` (prefix regex, silently truncates timestamps) is still used by seven
+other modules that have not been verified, so it is left untouched. Everything here is NEW and only wired into NCR, OBS,
+NOI and internal Audit.
 
 WRITES accept only a complete, calendar-valid ``YYYY-MM-DD``: no time stamp, no trailing characters, no surrounding
 whitespace, no non-existent day; nothing is truncated or normalised. NULL / '' are governed by each field's own
@@ -60,6 +60,15 @@ OBS_DATE_FIELDS = ('raiseDate', 'closeoutDate', 'dueDate', 'verifiedDate',
                    'qualityEngineerApprovalDate', 'constructionEngineerApprovalDate')
 NOI_DATE_FIELDS = ('issueDate', 'inspectionDate', 'closeoutDate', 'dueDate')
 NOI_REQUIRED_DATE_FIELDS = ('issueDate', 'inspectionDate')
+
+# Internal Audit (2026-10-09, AUDIT-HARDENING-A): `date` is a NOT NULL column, so NULL is refused; '' (no start date yet — the
+# wizard saves drafts that way) stays allowed exactly as before. The start-before-end rule used to sit on the shared schema
+# base, which the READ schema inherits, so one inverted row could break the whole list; it now lives here (writes only).
+AUDIT_DATE_FIELDS = ('date', 'end_date')
+AUDIT_REQUIRED_DATE_FIELDS = ('date',)
+AUDIT_ORDER_RELATIONS: Tuple[Tuple[str, str, str, str], ...] = (
+    ('date', 'end_date', 'start_after_end', 'Start date must be before or equal to end date'),
+)
 
 
 def date_problem(value: Any) -> Optional[str]:

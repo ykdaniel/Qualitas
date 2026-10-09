@@ -5,6 +5,7 @@ import { getProjectFilterParams } from '../utils/projectFilter';
 
 export interface AuditItem {
     id: string;
+    project_id?: string | null;
     auditNo: string;
     title: string;
     date: string;

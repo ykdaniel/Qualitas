@@ -1348,10 +1348,9 @@ class AuditBase(BaseModel):
     selected_templates: list[str] | None = []
     custom_check_items: Any | None = []
 
-    @field_validator('date', 'end_date', mode='before')
-    @classmethod
-    def check_dates(cls, v):
-        return validate_date_format(v)
+    # Date fields: no validator on the base (the READ schema Audit derives from it and must return stored dates untouched —
+    # the old lenient check + start-before-end rule here turned one bad row into a 500 for the whole list). Strict checking
+    # of new writes: AuditCreate (field level) and AuditService (create + update, final content, incl. the order rule).
 
     @field_validator('selected_templates', 'custom_check_items', mode='before')
     @classmethod
@@ -1363,18 +1362,18 @@ class AuditBase(BaseModel):
                 return []
         return v
 
-    @model_validator(mode='after')
-    def check_date_ranges(self):
-        if self.date and self.end_date:
-            if self.date > self.end_date:
-                raise ValueError('Start date must be before or equal to end date')
-        return self
-
 class AuditCreate(AuditBase):
+    # Accepted for compatibility with existing callers but ignored: the server always assigns id and auditNo.
     id: str | None = None
+
+    @field_validator(*strict_dates.AUDIT_DATE_FIELDS, mode='before')
+    @classmethod
+    def check_strict_dates(cls, v):
+        return strict_dates.strict_date_input(v)
 
 class AuditUpdate(BaseModel):
     project_id: str | None = None
+    # Accepted for compatibility (the wizard resends the whole record) but ignored: auditNo never changes after create.
     auditNo: str | None = None
     title: str | None = None
     date: str | None = None

@@ -9,7 +9,8 @@ export const createColumns = (
     handleEdit: (id: string) => void,
     handleDelete: (id: string) => void,
     t: (key: string) => string,
-    activeContractors: { name: string }[]
+    activeContractors: { name: string }[],
+    canDeletePermission: boolean
 ): ColumnDef<AuditItem>[] => [
         {
             id: "index",
@@ -81,6 +82,7 @@ export const createColumns = (
                         { label: 'In Progress', value: 'In Progress' },
                         { label: 'Completed', value: 'Completed' },
                         { label: 'Closed', value: 'Closed' },
+                        { label: 'Void', value: 'Void' },
                     ]}
                 />
             ),
@@ -111,8 +113,10 @@ export const createColumns = (
                 const item = row.original;
                 // Only Void audits can be deleted (mirrors NCR) — a Closed
                 // audit especially is meant to be a permanent record, not
-                // something a stray click can erase.
-                const canDelete = item.status === 'Void';
+                // something a stray click can erase. And only by someone
+                // holding audit:delete:all (the backend checks it too).
+                const canDelete = canDeletePermission && item.status === 'Void';
+                const hint = !canDeletePermission ? t('audit.deleteNoPermissionHint') : t('audit.deleteVoidOnlyHint');
                 return (
                     <div className="flex items-center justify-center gap-2">
                         <Button
@@ -120,8 +124,9 @@ export const createColumns = (
                             size="sm"
                             disabled={!canDelete}
                             className="h-8 w-8 p-0 text-red-500 hover:text-white hover:bg-red-500 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-red-500"
-                            onClick={() => canDelete && handleDelete(item.id)}
-                            title={canDelete ? t('common.delete') : (t('audit.deleteVoidOnlyHint') || 'Void this audit first, then delete')}
+                            // the row itself opens the record; a click here must not also open it
+                            onClick={(e) => { e.stopPropagation(); if (canDelete) handleDelete(item.id); }}
+                            title={canDelete ? t('common.delete') : hint}
                         >
                             <Trash2 className="h-4 w-4" />
                         </Button>

@@ -150,8 +150,10 @@ def test_create_audit_without_vendor(audit_service, mock_repo, mock_db):
     mock_db.add = Mock()
     mock_db.flush = Mock()
 
+    # date is a NOT NULL column: '' (no start date yet) is what the wizard sends for such a draft; NULL is refused.
     audit_create = schemas.AuditCreate(
         auditNo="QTS-RKS-XXX-AUD-000002",
+        date="",
         status="Draft"
     )
 
@@ -235,7 +237,8 @@ def test_update_closed_audit_rejects_field_change(audit_service, mock_repo, samp
 def test_update_closed_audit_allows_noop_resave(audit_service, mock_repo, sample_audit, mock_db):
     """The frontend resends the whole record on every save, so a field
     being present in the payload with its existing value (no real change)
-    must not be treated as an attempted edit."""
+    must not be treated as an attempted edit — and, the record being Closed,
+    nothing is written for it (no UPDATE, no audit-log row)."""
     sample_audit.status = "Closed"
     mock_repo.get_by_id = Mock(return_value=sample_audit)
     mock_repo.update = Mock(return_value=sample_audit)
@@ -249,7 +252,8 @@ def test_update_closed_audit_allows_noop_resave(audit_service, mock_repo, sample
 
     assert result is not None
     assert result.status == "Closed"
-    mock_repo.update.assert_called_once()
+    mock_repo.update.assert_not_called()
+    mock_db.commit.assert_not_called()
 
 
 def test_update_audit_not_found(audit_service, mock_repo):

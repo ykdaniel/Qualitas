@@ -17,6 +17,31 @@ import { checkDateOrder } from '../../utils/dateValidation';
 const ALL_CATEGORY = '__ALL__';
 const UNCATEGORIZED = '__UNCATEGORIZED__';
 
+// Mirrors backend/core/utils.py::WorkflowEngine.TRANSITIONS["Audit"] — the backend is the only
+// source of truth for which transitions it accepts (same approach as ITP_STATUS_TRANSITIONS in
+// ITPModals.tsx). Keep this in sync if the backend map ever changes.
+const AUDIT_STATUS_TRANSITIONS: Record<string, string[]> = {
+  'Draft': ['Planned', 'Void'],
+  'Planned': ['In Progress', 'Draft', 'Void'],
+  'In Progress': ['Completed', 'Void'],
+  'Completed': ['Closed', 'In Progress', 'Void'],
+  'Closed': [],
+  'Void': [],
+};
+// A new audit may start in any status that still has a way forward (audit_service.py refuses
+// Closed / Void on create: a record created in a dead end could never be edited or deleted).
+const AUDIT_CREATE_STATUSES = ['Draft', 'Planned', 'In Progress', 'Completed'];
+// Closed and Void are dead ends ("Closed": [] / "Void": []): read-only here and in the backend.
+const AUDIT_LOCKED_STATUSES = new Set(['Closed', 'Void']);
+const AUDIT_STATUS_LABELS: Record<string, string> = {
+  'Draft': '✏️ Draft（草稿）',
+  'Planned': '📅 Planned（計畫中）',
+  'In Progress': '👣 In Progress（進行中）',
+  'Completed': '✅ Completed（已完成）',
+  'Closed': '🔒 Closed（已關閉）',
+  'Void': '⛔ Void（作廢）',
+};
+
 // 內建 ISO 9001:2015 條文資料庫
 const ISO_CLAUSES = [
   { no: '4.1', clause: 'Understanding the organization and its context', task: 'How has the organization determined external and internal issues relevant to its purpose and strategic direction?' },
@@ -49,12 +74,12 @@ interface AuditWizardProps {
   onSaveSuccess: () => void;
 }
 
-export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly = false, onClose, onSaveSuccess }) => {
+export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly: readOnlyProp = false, onClose, onSaveSuccess }) => {
   const { t } = useLanguage();
   const { addAudit, updateAudit, loading } = useAuditStore();
   const { getActiveContractors } = useContractorsStore();
   const activeContractors = useMemo(() => getActiveContractors(), [getActiveContractors]);
-  const { projectList, fetchProjects } = useProjectStore();
+  const { projectList, fetchProjects, currentProject } = useProjectStore();
   React.useEffect(() => { fetchProjects(); }, [fetchProjects]);
 
   const [isSaving, setIsSaving] = useState(false);
@@ -64,9 +89,11 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
 
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
-    auditDocNo: existingItem?.auditNo || '',
     auditTitle: existingItem?.title || '',
-    projectName: existingItem?.project_name || '',
+    // A new audit starts in the project currently selected in the header (blank under "All
+    // projects"), so it doesn't vanish from the list it was created from; always changeable.
+    projectId: existingItem ? (existingItem.project_id || '') : (currentProject?.id || ''),
+    projectName: existingItem ? (existingItem.project_name || '') : (currentProject?.name || ''),
     findings: existingItem?.findings || '',
     auditStartDate: existingItem?.date || '',
     auditEndDate: existingItem?.end_date || '',
@@ -83,6 +110,21 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     vendorId: existingItem?.vendor_id || '',
     status: existingItem?.status || 'Draft',
   });
+  // Server-assigned and never edited, so kept out of formData (and out of the leave guard): after
+  // the first Save Draft of a new record it is filled in from the create response.
+  const [auditNo, setAuditNo] = useState(existingItem?.auditNo || '');
+  // Status of the last successful save (undefined = not saved yet). Drives the status options and
+  // the lock, so a record saved as Void mid-session locks without reopening the wizard.
+  const [savedStatus, setSavedStatus] = useState<string | undefined>(existingItem?.status);
+  const readOnly = readOnlyProp || (savedStatus !== undefined && AUDIT_LOCKED_STATUSES.has(savedStatus));
+  const statusOptions = savedStatus === undefined
+    ? AUDIT_CREATE_STATUSES
+    : [savedStatus, ...(AUDIT_STATUS_TRANSITIONS[savedStatus] || [])];
+  // A legacy record may have only a project name (no project_id): show the project that name
+  // matches, and save that link the next time the record is saved.
+  const selectedProjectId = formData.projectId
+    || projectList.find(p => p.name === formData.projectName)?.id
+    || '';
 
   const [newItem, setNewItem] = useState({ no: '', clause: '', task: '' });
   const [isCustomNew, setIsCustomNew] = useState(false);
@@ -209,6 +251,12 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     });
   };
 
+  const handleProjectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const projectId = e.target.value;
+    const selected = projectList.find(p => p.id === projectId);
+    setFormData(prev => ({ ...prev, projectId, projectName: selected?.name || '' }));
+  };
+
   const handleContractorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const vendorId = e.target.value;
     const selectedVendor = activeContractors.find((v: any) => v.id === vendorId);
@@ -247,10 +295,13 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
 
   const prepareAuditData = (status: string): Omit<AuditItem, 'id'> => {
     return {
-      auditNo: formData.auditDocNo || '',
+      // The backend assigns auditNo on create and ignores it on update; sent only because the
+      // create schema still lists it.
+      auditNo: auditNo,
       title: formData.auditTitle || '',
       date: formData.auditStartDate || '',
       end_date: formData.auditEndDate || '',
+      project_id: selectedProjectId || null,
       project_name: formData.projectName || '',
       auditor: formData.leadAuditor || '',
       project_director: formData.projectDirector || '',
@@ -287,6 +338,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
   };
 
   const handleSaveDraft = async () => {
+    if (readOnly) return;
     if (blockSaveForUnconfirmedNewItem()) return;
     setIsDraftSaving(true);
     setSaveError('');
@@ -296,9 +348,12 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
       const updates = prepareAuditData(formData.status || 'Draft');
       if (recordId) {
         await updateAudit(recordId, updates);
+        setSavedStatus(updates.status);
       } else {
         const created = await addAudit(updates);
         setCreatedId(created.id);
+        setAuditNo(created.auditNo);
+        setSavedStatus(created.status);
       }
 
       leaveGuard.markSaved();
@@ -316,6 +371,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (readOnly) return;
     if (blockSaveForUnconfirmedNewItem()) return;
     setIsSaving(true);
     setSaveError('');
@@ -327,6 +383,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
       } else {
         const created = await addAudit(updates);
         setCreatedId(created.id);
+        setAuditNo(created.auditNo);
       }
 
       leaveGuard.release();
@@ -378,7 +435,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
             <CheckCircle size={56} />
           </div>
           <h2 className="text-3xl font-black text-slate-800 mb-2">{t('audit.wizard.successTitle')}</h2>
-          <p className="text-slate-500 mb-8">{t('audit.wizard.successSubtitle')}{formData.auditDocNo || t('audit.wizard.successSubtitleAuto')}</p>
+          <p className="text-slate-500 mb-8">{t('audit.wizard.successSubtitle')}{auditNo || t('audit.wizard.successSubtitleAuto')}</p>
 
           <div className="grid grid-cols-2 gap-4 text-left bg-slate-50 p-6 rounded-2xl mb-8 border border-slate-100">
             <div className="col-span-2">
@@ -451,7 +508,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                        <span className="text-sm font-bold text-slate-800">Audit Doc No</span>
                        <span className="text-xs font-medium text-slate-400">(稽核文件編號)</span>
                     </label>
-                    <input type="text" name="auditDocNo" value={formData.auditDocNo} className="w-full md:w-1/2 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl outline-none text-slate-400 font-medium cursor-not-allowed" placeholder="系統自動產生" readOnly style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }} />
+                    <input type="text" name="auditDocNo" value={auditNo} className="w-full md:w-1/2 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl outline-none text-slate-400 font-medium cursor-not-allowed" placeholder="系統自動產生" readOnly style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }} />
                   </div>
                   <div className="col-span-full">
                     <label className="flex items-baseline gap-2 mb-2">
@@ -466,14 +523,14 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                        <span className="text-xs font-medium text-slate-400">(專案名稱)</span>
                     </label>
                     <select
-                      name="projectName"
-                      value={formData.projectName}
-                      onChange={handleInputChange}
+                      name="projectId"
+                      value={selectedProjectId}
+                      onChange={handleProjectChange}
                       className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none"
                     >
                       <option value="">{t('audit.wizard.selectProject')}</option>
                       {projectList.map(p => (
-                        <option key={p.id} value={p.name}>{p.code ? `[${p.code}] ` : ''}{p.name}</option>
+                        <option key={p.id} value={p.id}>{p.code ? `[${p.code}] ` : ''}{p.name}</option>
                       ))}
                     </select>
                   </div>
@@ -507,11 +564,10 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                        <span className="text-xs font-medium text-slate-400">(稽核狀態)</span>
                     </label>
                     <select name="status" value={formData.status} onChange={handleInputChange} className="w-full md:w-1/3 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none">
-                      <option value="Draft">✏️ Draft（草稿）</option>
-                      <option value="Planned">📅 Planned（計畫中）</option>
-                      <option value="In Progress">👣 In Progress（進行中）</option>
-                      <option value="Completed">✅ Completed（已完成）</option>
-                      <option value="Closed">🔒 Closed（已關閉）</option>
+                      {/* Only what the workflow allows from the last saved status (the backend refuses anything else). */}
+                      {statusOptions.map(status => (
+                        <option key={status} value={status}>{AUDIT_STATUS_LABELS[status] || status}</option>
+                      ))}
                     </select>
                   </div>
                 </fieldset>
@@ -602,7 +658,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                     {/* Step 1 Info */}
                     <div className="col-span-1 border-b border-slate-100 pb-2">
                       <span className="font-bold text-slate-500 block mb-0.5 text-xs">Audit No. (稽核編號)</span>
-                      <p className="font-semibold text-slate-800 text-sm">{formData.auditDocNo || 'TBD'}</p>
+                      <p className="font-semibold text-slate-800 text-sm">{auditNo || 'TBD'}</p>
                     </div>
                     <div className="col-span-1 border-b border-slate-100 pb-2">
                       <span className="font-bold text-slate-500 block mb-0.5 text-xs">Project Name (專案名稱)</span>
@@ -869,6 +925,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                         placeholder={t('audit.wizard.searchPlaceholder')}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
+                        // The only text input on step 5, inside the form that has the submit button:
+                        // Enter would otherwise submit (save and close) the whole audit.
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
                         className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-slate-50"
                       />
                     </div>
