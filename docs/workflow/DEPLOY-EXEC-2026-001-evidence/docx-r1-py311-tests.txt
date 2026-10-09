@@ -1,0 +1,10 @@
+# DOCX deploy r1 — Python 3.11 tests on the DOCX candidate (= live material candidate + 3 DOCX files); 2026-10-09T11:45:04Z
+image_id=sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce
+# overlay 0e43664f4e600804688cd37263bcd1b84e0c48da64f4767cc147cf2cf07b4cdd  core/docx_builder.py
+# overlay 4222b14bdc40aea5e7ac23dedf7663e6c27e8e1b67922386614db1ca151ad348  tests/test_docx_path_guard.py
+# overlay 8251ca31b871a542ce7f1e23b9cb4adf4bb12a3a9bd72196f5672d7efccc984f  tests/test_docx_path_guard_http.py
+# files: tests/test_docx_path_guard_http.py tests/test_km_docx_import.py tests/test_docx_path_guard.py 
+Python 3.11.17
+...................................                                      [100%]
+35 passed in 1.75s
+EXIT 0
