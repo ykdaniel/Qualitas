@@ -183,6 +183,33 @@ export const getContractors = async (): Promise<Contractor[]> => {
   return response.data;
 };
 
+// Picker fields only, for any signed-in user (GET /contractors/options; the full list above needs contractors:view:all).
+export interface ContractorOptionApi {
+  id: string;
+  name: string;
+  abbreviation?: string | null;
+  scope?: string | null;
+  status?: string | null;
+}
+
+export const getContractorOptions = async (): Promise<ContractorOptionApi[]> => {
+  const response = await api.get<ContractorOptionApi[]>('/contractors/options');
+  return response.data;
+};
+
+// One contractor's contact details for the NOI form's auto-fill (needs noi:create or noi:update).
+export interface ContractorContactApi {
+  id: string;
+  contactPerson?: string | null;
+  phone?: string | null;
+  email?: string | null;
+}
+
+export const getNoiContractorContact = async (contractorId: string): Promise<ContractorContactApi> => {
+  const response = await api.get<ContractorContactApi>(`/noi/contractor-contact/${encodeURIComponent(contractorId)}`);
+  return response.data;
+};
+
 export const createContractor = async (
   data: CreateContractorPayload
 ): Promise<Contractor> => {

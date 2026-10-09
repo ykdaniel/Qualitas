@@ -1084,6 +1084,27 @@ class Contractor(ContractorBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ContractorOption(BaseModel):
+    """A contractor as every module's picker / filter / list needs it (GET /contractors/options): no contact details,
+    so it is served to any signed-in user (CONTRACTOR-OPTIONS-2026-001). `status` is returned as stored ('Active' /
+    'active' / 'Inactive' all exist); the client compares it case-insensitively."""
+    id: str
+    name: str
+    abbreviation: str | None = None
+    scope: str | None = None
+    status: str | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ContractorContact(BaseModel):
+    """One contractor's contact details for the NOI form's auto-fill (GET /noi/contractor-contact/{id})."""
+    id: str
+    contactPerson: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+
 # Project
 # material_reply_days (MATERIAL-SUBMITTAL M1): calendar days for a material submittal's expected reply date. null = not set;
 # there is no default. Strict non-negative integer — -1, 1.5, "14" and true are rejected. JSON name: materialReplyDays.

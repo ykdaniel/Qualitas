@@ -24,9 +24,9 @@ const MaterialStatsTile: React.FC<{ selectedVendor: string; onOpen: () => void; 
     = ({ selectedVendor, onOpen, loadingText, errorText, retryText }) => {
     const mt = useMaterialText();
     const projectId = useProjectStore((s) => s.currentProject?.id);
-    const contractors = useContractorsStore((s) => s.contractors);
-    const contractorsError = useContractorsStore((s) => s.error);
-    const fetchContractors = useContractorsStore((s) => s.fetchContractors);
+    const contractors = useContractorsStore((s) => s.options);
+    const contractorsError = useContractorsStore((s) => s.optionsError);
+    const fetchContractors = useContractorsStore((s) => s.fetchOptions);
     const [token, setToken] = useState(0);
     /** the last answer, with the request it answers; any other request still shows "loading" */
     const [answer, setAnswer] = useState<{ key: string; state: TileState } | null>(null);

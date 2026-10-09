@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException
 import schemas
 from core.dependencies import RoleChecker, get_contractor_service
 from core.perms import CONTRACTOR_MANAGE, CONTRACTOR_VIEW
+from core.scope import Scope, get_scope
+from core.security import get_current_user
 from services.contractor_service import ContractorService
 
 router = APIRouter(
@@ -20,6 +22,15 @@ def read_contractors(
     current_user: schemas.User = Depends(RoleChecker(CONTRACTOR_VIEW))
 ):
     return service.get_contractors(skip=skip, limit=limit)
+
+@router.get("/options", response_model=list[schemas.ContractorOption])
+def read_contractor_options(
+    service: ContractorService = Depends(get_contractor_service),
+    scope: Scope = Depends(get_scope),
+    current_user: schemas.User = Depends(get_current_user)
+):
+    """Contractor names for every module's pickers (any signed-in user; no contact details). Declared before /{contractor_id}."""
+    return service.get_contractor_options(scope=scope)
 
 @router.get("/{contractor_id}", response_model=schemas.Contractor)
 def read_contractor(

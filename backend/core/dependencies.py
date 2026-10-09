@@ -123,6 +123,25 @@ def get_workflow_service(db: Session = Depends(get_db)) -> WorkflowService:
     # takes the session directly.
     return WorkflowService(db)
 
+class AnyPermissionChecker:
+    """Like RoleChecker, but holding ANY one of the given permissions is enough."""
+    def __init__(self, *permissions: str):
+        self.permissions = permissions
+
+    def __call__(self, user: models.User = Depends(get_current_user)):
+        if not user.is_active:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User is inactive")
+        if not user.role:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User has no assigned role")
+        held = {p.code for p in user.role.permissions_rel}
+        if not held.intersection(self.permissions):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Operation not permitted. Required one of: {', '.join(self.permissions)}"
+            )
+        return user
+
+
 class RoleChecker:
     def __init__(self, required_permission: str):
         self.required_permission = required_permission

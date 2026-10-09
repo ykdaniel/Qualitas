@@ -41,9 +41,9 @@ const MaterialSubmittal: React.FC = () => {
     // Same as the other modules: the project comes from the global selector at the top right. Approved materials are kept
     // per project (DECISIONS), so "All projects" shows a prompt instead of a cross-project list.
     const { currentProject } = useProjectStore();
-    const { getActiveContractors, fetchContractors } = useContractorsStore();
+    const { getActiveContractors, fetchOptions } = useContractorsStore();
 
-    useEffect(() => { void fetchContractors(); }, [fetchContractors]);
+    useEffect(() => { void fetchOptions(); }, [fetchOptions]);
 
     if (!canView) return <div className={shellStyles.container}><Notice tone="error">{mt('noPermission')}</Notice></div>;
 

@@ -324,9 +324,8 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
     const noiList = useNOIStore(state => state.noiList);
     const itpList = useITPStore(state => state.itpList);
     const itrList = useITRStore(state => state.itrList);
-    const { contractors } = useContractorsStore();
+    const { getActiveContractors } = useContractorsStore();
 
-    const getActiveContractors = () => contractors.filter(c => c.status === 'active');
 
     // Same shared check the list badge and the outer readOnly computation
     // use (isTemplateHistoricallyProtected) — recomputed here too so the

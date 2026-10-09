@@ -4,6 +4,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useAuditStore, AuditItem } from '../../store/auditStore';
 import { useProjectStore } from '../../store/projectStore';
+import { useContractorsStore } from '../../store/contractorsStore';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './Audit.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
@@ -37,9 +38,9 @@ const Audit: React.FC = () => {
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [currentAuditId, setCurrentAuditId] = useState<string | null>(null);
-    // Contractor names from GET /audit/contractors (audit:view is enough), not the contractors store —
-    // that one needs contractors:view:all, so audit-only roles used to get an empty vendor panel/schedule.
-    const contractors = useAuditStore(state => state.contractorOptions);
+    // The shared contractor picker list (GET /contractors/options, any signed-in user; status normalised so
+    // 'Active' and 'active' both count) — CONTRACTOR-OPTIONS-2026-001 replaced the Audit-only list.
+    const contractors = useContractorsStore(state => state.options);
     const [selectedVendorFilter, setSelectedVendorFilter] = useState<string | null>(null);
 
     // Get active contractors — depend on the contractors array itself so memo
@@ -50,7 +51,7 @@ const Audit: React.FC = () => {
     );
 
     useEffect(() => {
-        useAuditStore.getState().fetchContractorOptions();
+        void useContractorsStore.getState().fetchOptions();
     }, []);
 
     // Audits are not part of AppProviders' preloadProjectScopedData, so this page re-fetches its

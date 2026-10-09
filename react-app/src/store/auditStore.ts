@@ -26,23 +26,13 @@ export interface AuditItem {
     custom_check_items?: any[];
 }
 
-// GET /audit/contractors: names only, served with audit:view (the full /contractors list needs
-// contractors:view:all, which audit-only roles don't have).
-export interface AuditContractorOption {
-    id: string;
-    name: string;
-    status?: string | null;
-}
-
 interface AuditState {
     auditList: AuditItem[];
     loading: boolean;
     error: string | null;
-    contractorOptions: AuditContractorOption[];
 
     // Actions
     fetchAudits: () => Promise<void>;
-    fetchContractorOptions: () => Promise<void>;
     refetch: () => Promise<void>;
     addAudit: (audit: Omit<AuditItem, 'id'>) => Promise<AuditItem>;
     updateAudit: (id: string, audit: Partial<AuditItem>) => Promise<void>;
@@ -58,7 +48,6 @@ export const useAuditStore = create<AuditState>((set, get) => ({
     auditList: [],
     loading: false,
     error: null,
-    contractorOptions: [],
 
     clearError: () => set({ error: null }),
     setError: (error: string | null) => set({ error }),
@@ -85,17 +74,6 @@ export const useAuditStore = create<AuditState>((set, get) => ({
 
     refetch: async () => {
         await get().fetchAudits();
-    },
-
-    fetchContractorOptions: async () => {
-        try {
-            const response = await api.get('/audit/contractors');
-            set({ contractorOptions: response.data || [] });
-        } catch (err: any) {
-            // Not shown in the page banner: the audit list itself still works; only the contractor
-            // panel / schedule rows / picker stay empty.
-            console.error('Failed to fetch audit contractor options:', err);
-        }
     },
 
     addAudit: async (audit) => {

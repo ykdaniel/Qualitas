@@ -68,6 +68,12 @@ const Contractors: React.FC = () => {
         fetchProjects();
     }, [fetchProjects]);
 
+    // The full contractor list (contact details) is no longer preloaded app-wide (AppProviders loads only the picker
+    // options), so this page loads it itself.
+    useEffect(() => {
+        void useContractorsStore.getState().fetchContractors();
+    }, []);
+
     // ── Contractor handlers ──────────────────────────────────────────────────
     const filteredContractors = React.useMemo(() => {
         if (!deferredQuery.trim()) return contractors;

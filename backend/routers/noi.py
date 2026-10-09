@@ -4,11 +4,12 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 import schemas
-from core.dependencies import RoleChecker, get_noi_service, get_related_service
+from core.dependencies import AnyPermissionChecker, RoleChecker, get_contractor_service, get_noi_service, get_related_service
 from core.perms import NOI_CREATE, NOI_DELETE, NOI_UPDATE, NOI_VIEW
 from core.scope import Scope, ScopeForbidden, get_scope
 from core.strict_dates import DateValidationError
 from database import get_db
+from services.contractor_service import ContractorService
 from services.noi_service import NOIService
 from services.related_service import RelatedService
 
@@ -17,6 +18,20 @@ router = APIRouter(
     tags=["NOI"],
     responses={404: {"description": "Not found"}},
 )
+
+@router.get("/contractor-contact/{contractor_id}", response_model=schemas.ContractorContact)
+def read_noi_contractor_contact(
+    contractor_id: str,
+    service: ContractorService = Depends(get_contractor_service),
+    scope: Scope = Depends(get_scope),
+    current_user: schemas.User = Depends(AnyPermissionChecker(NOI_CREATE, NOI_UPDATE))
+):
+    """One contractor's contact person / phone / email for the NOI form's auto-fill — only for users who can create or
+    edit NOIs (the full contractor list needs contractors:view:all). CONTRACTOR-OPTIONS-2026-001."""
+    contractor = service.get_contractor_contact(contractor_id, scope=scope)
+    if contractor is None:
+        raise HTTPException(status_code=404, detail="Contractor not found")
+    return contractor
 
 # 讀取操作 - 無需認證
 @router.get("/", response_model=list[schemas.NOI])
