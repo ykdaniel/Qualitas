@@ -1,0 +1,8 @@
+audits_total|2
+status|Draft|2
+blank_auditNo|0
+name_only_no_project_id|1
+name_only_matching_project|1
+bad_or_inverted_dates|0
+refseq_audit|QTS|HL|audit|5
+refseq_audit|QTS|C|audit|1

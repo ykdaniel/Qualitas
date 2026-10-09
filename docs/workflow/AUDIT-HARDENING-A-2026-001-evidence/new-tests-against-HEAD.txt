@@ -1,0 +1,31 @@
+# run(UTC): 2026-10-09T10:44:51Z  product code = `git archive 4ad06cbf backend` (exported before 52986ac2 landed) + ONLY the final new test file copied in
+# 4ad06cbf..52986ac2 changes only docx_builder.py + 2 docx tests; audit_service/routers/audit/schemas/strict_dates/utils/audit_repository sha256 identical to 52986ac2 (checked)
+# test file sha256 54b4bc8195fb4a637f68c4db6cdb3ae8361b8a8af70505c9ba09f12393b89902
+E         Left contains 2 more items, first extra item: "IntegrityError('(sqlite3.IntegrityError) UNIQUE constraint failed: audits.auditNo')"
+FAILED tests/test_audit_hardening_http.py::test_create_refuses_dead_end_or_unknown_status[Closed]
+FAILED tests/test_audit_hardening_http.py::test_create_refuses_dead_end_or_unknown_status[Void]
+FAILED tests/test_audit_hardening_http.py::test_create_refuses_dead_end_or_unknown_status[Foo]
+FAILED tests/test_audit_hardening_http.py::test_create_refuses_dead_end_or_unknown_status[closed]
+FAILED tests/test_audit_hardening_http.py::test_create_refuses_dead_end_or_unknown_status[]
+FAILED tests/test_audit_hardening_http.py::test_second_save_with_blank_audit_no_keeps_the_number
+FAILED tests/test_audit_hardening_http.py::test_update_cannot_rename_the_number
+FAILED tests/test_audit_hardening_http.py::test_create_refuses_bad_dates_with_422[over2-date]
+FAILED tests/test_audit_hardening_http.py::test_create_refuses_bad_dates_with_422[over3-date]
+FAILED tests/test_audit_hardening_http.py::test_create_refuses_bad_dates_with_422[over4-date]
+FAILED tests/test_audit_hardening_http.py::test_create_without_date_key_is_422_not_500
+FAILED tests/test_audit_hardening_http.py::test_update_refuses_bad_dates_with_422[over0]
+FAILED tests/test_audit_hardening_http.py::test_update_refuses_bad_dates_with_422[over1]
+FAILED tests/test_audit_hardening_http.py::test_update_refuses_bad_dates_with_422[over2]
+FAILED tests/test_audit_hardening_http.py::test_update_refuses_bad_dates_with_422[over3]
+FAILED tests/test_audit_hardening_http.py::test_update_resending_an_untouched_legacy_date_is_not_blocked
+FAILED tests/test_audit_hardening_http.py::test_list_and_get_return_a_stored_bad_row_instead_of_500
+FAILED tests/test_audit_hardening_http.py::test_closed_full_resave_is_a_no_op_but_a_real_change_is_refused
+FAILED tests/test_audit_hardening_http.py::test_closed_wizard_shaped_resave_over_null_columns_writes_nothing
+FAILED tests/test_audit_hardening_http.py::test_counter_behind_the_table_does_not_collide
+FAILED tests/test_audit_hardening_http.py::test_write_lock_is_taken_before_the_sequence_is_read
+FAILED tests/test_audit_hardening_http.py::test_concurrent_creates_get_distinct_numbers
+FAILED tests/test_audit_hardening_http.py::test_client_supplied_id_is_ignored
+FAILED tests/test_audit_hardening_http.py::test_number_collision_is_409_and_writes_nothing
+FAILED tests/test_audit_hardening_http.py::test_audit_log_failure_rolls_everything_back[create]
+FAILED tests/test_audit_hardening_http.py::test_audit_log_failure_rolls_everything_back[update]
+26 failed, 7 passed in 14.59s

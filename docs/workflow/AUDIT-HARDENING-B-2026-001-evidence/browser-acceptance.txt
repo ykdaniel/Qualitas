@@ -1,0 +1,29 @@
+# AUDIT-HARDENING-B-2026-001 browser acceptance — 2026-10-09 (Asia/Taipei ~19:39–19:46)
+# Isolated stack: backend 8320 / vite 3320 (isolated_stack.py, fresh temp DB), seed scripts/verification/seed_audit_hardening_b_review.py
+# Built-in browser, real login per account. Values below read from the DOM / same-origin API after each action.
+# (First stack attempt: seed used @example.test e-mails -> /api/user/profile 500 (EmailStr); seed fixed to @example.com, stack torn down and rebuilt.)
+
+audit_full (view/create/update/delete, unscoped)
+  #2  header "All Projects" -> 4 rows; header P1 -> rows [AHB-DRAFT-1, AHB-VOID-1] (no reload, page re-fetched)       PASS
+  #11 Add Audit with header P1 -> select projectId=AHB-P1 "[AHB1] Audit Review P1" preselected                        PASS
+  #9  new record status options = [Draft, Planned, In Progress, Completed]                                              PASS
+  #1  Save Draft -> Audit Doc No field = QTS-NA-AUDIT-000001; status options now [Draft, Planned, Void]                 PASS
+  #10 step 5 search box: type "resource" + Enter -> wizard still open, 0 non-GET requests                                PASS
+  #1/#11 Submit -> API: auditNo QTS-NA-AUDIT-000001 (unchanged), project_id AHB-P1, project_name "Audit Review P1"     PASS
+  #9  delete buttons: Draft rows disabled "Void this audit first, then delete"; Void row enabled "Delete"               PASS
+  #9  open AHB-VOID-1 -> fieldset disabled, no Save Draft, status options [Void]   (screenshot void-record-read-only.jpg) PASS
+  #9  open AHB-DRAFT-1, status -> Void, Save Draft -> server status Void; wizard immediately read-only, options [Void]  PASS
+  L16 trash on AHB-VOID-1 -> confirm dialog only, wizard NOT opened; confirm -> GET 404, row gone, dialog closed         PASS
+  #11 header "All Projects", open AHB-LEGACY-1 (project_name only) -> select shows AHB-P1; Save Draft -> API project_id
+      AHB-P1, auditNo unchanged                                                                                        PASS
+audit_viewer (view/create only)
+  #8  every delete button disabled, title "You do not have permission to delete audits"                                 PASS
+  #8  open QTS-NA-AUDIT-000001 (Draft) -> fieldset disabled, no Save Draft                                              PASS
+audit_multi (view/create/update, scoped to AHB-P1 + AHB-P2)
+  #11 header P2 -> Add Audit preselects AHB-P2 -> Save Draft -> QTS-NA-AUDIT-000002, no error (was always 403 before:
+      the wizard never sent project_id)                                (screenshot multi-project-user-create-p2.jpg)     PASS
+
+Console: no Uncaught errors; only React Router future-flag warnings and 403s from these audit-only test accounts loading other
+modules / /api/contractors/ (needs contractors:view:all — pre-existing, see STATUS "found, not fixed").
+Not tested in browser: multi-project user creating under "All Projects" (blank project) -> backend 403 -> wizard shows the
+generic save error.

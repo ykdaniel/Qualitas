@@ -1,0 +1,15 @@
+# run(UTC): 2026-10-09T10:34:41Z  Python 3.14.6  base HEAD 52986ac243c875dfdd9e3d055a1be5d961aeb9a0 + working tree (FINAL version)
+331c334919acbcf7de862f82f6f38ebe099eefdc34ad5111a122aaae1210aa42  services/audit_service.py
+95b008723a2670e82e61226d85e08fabda11665f3fec43caa0e4d7df8bee5e41  routers/audit.py
+3ca15880857900de507a4ad8d77009ae60d75f225d03604baf6bb2a63263a0e3  schemas.py
+813f41ef2a90dc8ffaa1879986ed473955965320493b27599fe835df33d09c21  core/strict_dates.py
+a98f0df200f43c8e290e8787450ed109e2b28b9ad23b5ba48a61006341f67590  core/utils.py
+54b4bc8195fb4a637f68c4db6cdb3ae8361b8a8af70505c9ba09f12393b89902  tests/test_audit_hardening_http.py
+304d88349833089d754ddab52c43be8f1befadf64168fb0e89afbc39be611551  tests/test_audit_service.py
+# files: every test file that references Audit / strict_dates / reference numbering:
+# tests/test_audit_hardening_http.py tests/test_attachment_hardening_http.py tests/test_attachment_authorization_http.py tests/test_date_write_guard_http.py tests/test_audit_service.py tests/test_followup_service.py tests/test_iam_admin_role_boundary_http.py tests/test_checklist_service.py tests/test_integrity_fixes.py tests/test_checklist_validation.py tests/test_itr_approval_events_http.py tests/test_iam_admin_takeover_http.py tests/test_itr_write_paths_atomic_http.py tests/test_itr_service.py tests/test_itp_service.py tests/test_meeting_minutes_service.py tests/test_ncr_field_improvements.py tests/test_noi_service.py tests/test_ncr_service.py tests/test_obs_service.py tests/test_pqp_service.py tests/test_osd_service.py tests/test_scope_all_modules.py tests/test_validation_fixes.py 
+........................................................................ [ 90%]
+........................................................................ [ 97%]
+...............s..............                                           [100%]
+1109 passed, 1 skipped in 1568.63s (0:26:08)
+exit=0
