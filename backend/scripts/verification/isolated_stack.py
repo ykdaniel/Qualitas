@@ -121,8 +121,10 @@ def _load_state(root: Path, run_id: str) -> dict:
 # ── process identity: PID + start time + this run's id in the command line ──────────────────────────────
 
 def _ps(field: str, pid: int):
+    # -ww: never truncate. procps (Linux) cuts each line at 80 columns when stdout is not a terminal, which dropped the run id
+    # from long command lines (CI, 2026-10-09); BSD/macOS ps accepts the same flag.
     try:
-        r = subprocess.run(["ps", "-o", f"{field}=", "-p", str(pid)], capture_output=True, text=True, timeout=10)
+        r = subprocess.run(["ps", "-ww", "-o", f"{field}=", "-p", str(pid)], capture_output=True, text=True, timeout=10)
     except (OSError, subprocess.SubprocessError):
         return _UNKNOWN
     out = r.stdout.strip()
