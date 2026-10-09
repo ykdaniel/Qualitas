@@ -26,6 +26,7 @@ import { Printer, ShieldCheck, Save, LayoutTemplate, Plus, ClipboardList } from 
 import { toast } from 'sonner';
 import { getErrorMessage, getErrorStatusCode } from '../../utils/errorUtils';
 import { isUnchangedSincePriorWrite } from '../../utils/attachmentOutcome';
+import { preferEnglishText } from '../../utils/itpItemValidation';
 import api from '../../services/api';
 
 // Mirrors backend/core/utils.py::WorkflowEngine.TRANSITIONS["ITP"] exactly — the ONLY source of
@@ -457,9 +458,9 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
         }
 
         const checklistItems = advancedItems.map((item, idx) => {
-            const activityText = typeof item.activity === 'string' ? item.activity : (item.activity.en || '');
+            const activityText = preferEnglishText(item.activity);
             const criteriaText = Array.isArray(item.criteria)
-                ? item.criteria.map((c: any) => typeof c === 'string' ? c : c.en || '').filter(Boolean).join('; ')
+                ? item.criteria.map((c: any) => typeof c === 'string' ? c : preferEnglishText(c)).filter(Boolean).join('; ')
                 : typeof item.criteria === 'string' ? item.criteria : '';
 
             return {
@@ -658,16 +659,8 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                                             style={{ backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: formData.referenceNo ? '#000000' : '#666666' }}
                                         />
                                     </div>
-                                    <div className={formStyles.formGroup}>
-                                        <label>{t('itp.description')}</label>
-                                        <input
-                                            type="text"
-                                            className={formStyles.formInput}
-                                            value={formData.description || ''}
-                                            onChange={(e) => handleFieldChange('description', e.target.value)}
-                                        />
-                                    </div>
-                                    <div className={formStyles.formGroup}>
+                                    {/* Contractor spans two columns on desktop so Reference no. + Contractor fill row 1 with no empty cell. */}
+                                    <div className={`${formStyles.formGroup} ${formStyles.formGroupSpan2}`}>
                                         <label className={formStyles.requiredLabel}>{t('itp.vendor')}</label>
                                         <select
                                             className={`${formStyles.formSelect} ${errors.vendor ? formStyles.errorInput : ''}`}
@@ -682,6 +675,16 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                                             ))}
                                         </select>
                                         {errors.vendor && <span className={formStyles.errorMessage}>{errors.vendor}</span>}
+                                    </div>
+                                    {/* Subject gets its own full row (ITP-SUBJECT-WIDTH-2026-001): same single-line input and data behaviour, just wider. */}
+                                    <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>
+                                        <label>{t('itp.description')}</label>
+                                        <input
+                                            type="text"
+                                            className={formStyles.formInput}
+                                            value={formData.description || ''}
+                                            onChange={(e) => handleFieldChange('description', e.target.value)}
+                                        />
                                     </div>
                                     <div className={formStyles.formGroup}>
                                         <label>{t('itp.submissionDate')}</label>
@@ -708,7 +711,7 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                                             onChange={(e) => handleFieldChange('dueDate' as any, e.target.value)}
                                         />
                                     </div>
-                                    <div className={formStyles.formGroup}>
+                                    <div className={`${formStyles.formGroup} ${styles.versionFullRowWhenTwoColumns}`}>
                                         <label>{t('itp.rev')}</label>
                                         {revMode === 'select' && (
                                             <select

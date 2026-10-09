@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import VPBadge from './VPBadge';
 import { resolveItpRecordLink } from '../../utils/itpRecordLink';
 import { useLanguage } from '../../context/LanguageContext';
+import { missingRequiredItemFields, preferEnglishText } from '../../utils/itpItemValidation';
 // Define Props
 interface ITPAdvancedEditorProps {
     items: InspectionItem[];
@@ -134,12 +135,10 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
     const handleSaveItem = () => {
         if (!editingItem) return;
 
-        // Minimum-content guard (BACKLOG #35 follow-up, #36, 2026-10-07): previously let "Apply"
-        // through with every field blank — see ITPDetail.tsx's identical guard for the full note.
-        const activityEn = (editingItem.activity?.en || '').trim();
-        const standardEn = (typeof editingItem.standard === 'string' ? editingItem.standard : editingItem.standard?.en || '').trim();
-        if (!activityEn || !standardEn) {
-            toast.warning('Please fill in Activity (EN) and Standard (EN) before applying.');
+        // Activity and Standard each need English OR Chinese (DECISIONS.md 2026-10-07, BACKLOG #36); trimmed, other fields optional.
+        // Returning early keeps the panel open with everything the user typed.
+        if (missingRequiredItemFields(editingItem).length > 0) {
+            toast.warning(t('itp.itemPanel.eitherLanguageRequiredToast') || 'Activity and Standard each need English or Chinese (at least one) before applying.');
             return;
         }
 
@@ -496,7 +495,7 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
                                 {/* Event No. box removed (2026-10-07, "這有必要嗎"): read-only and already in the
                                     modal title. Phase stays (only way to move an item between phases);
                                     Insert After shares its row for new items. */}
-                                <div className={`grid grid-cols-1 gap-6 ${editingItem.isNew ? 'sm:grid-cols-2' : ''}`}>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                     <div>
                                         <div className="flex items-center gap-3 mb-2">
                                             <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.phase') || 'Phase'}</span>
@@ -521,7 +520,7 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
                                                 <option value="end">At the End (最後面)</option>
                                                 {items.filter(i => i.phase === editingItem.phase).map(item => (
                                                     <option key={item.id} value={item.id}>
-                                                        {item.id} - {item.activity.en}
+                                                        {item.id} - {preferEnglishText(item.activity)}
                                                     </option>
                                                 ))}
                                             </select>
@@ -538,7 +537,8 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                         <div>
                                             <div className="flex items-center gap-3 mb-2">
-                                                <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.activityLabel') || 'Activity (EN/CH)'} <span style={{ color: '#b91c1c' }}>*</span></span>
+                                                <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.activityLabel') || 'Activity (EN/CH)'}</span>
+                                                <span className="text-[11px] font-semibold text-[#b91c1c] whitespace-nowrap">{t('itp.itemPanel.eitherLanguageRequired') || 'English or Chinese — at least one'}</span>
                                                 <span className="flex-1 border-t-2 border-slate-400"></span>
                                             </div>
                                             <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
@@ -549,7 +549,8 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
 
                                         <div>
                                             <div className="flex items-center gap-3 mb-2">
-                                                <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.standardLabel') || 'Standard (EN/CH)'} <span style={{ color: '#b91c1c' }}>*</span></span>
+                                                <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.standardLabel') || 'Standard (EN/CH)'}</span>
+                                                <span className="text-[11px] font-semibold text-[#b91c1c] whitespace-nowrap">{t('itp.itemPanel.eitherLanguageRequired') || 'English or Chinese — at least one'}</span>
                                                 <span className="flex-1 border-t-2 border-slate-400"></span>
                                             </div>
                                             <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
@@ -573,15 +574,20 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
                                             <span className="flex-1 border-t-2 border-slate-400"></span>
                                         </div>
                                         {normalizeCriteria(editingItem.criteria).map((c, idx) => (
-                                            <div key={idx} className="flex items-start gap-2 mb-2">
+                                            <div key={idx} data-criteria-row={idx} className="flex items-start gap-2 mb-3 p-2 rounded-lg border border-slate-200 bg-slate-50/60">
                                                 {normalizeCriteria(editingItem.criteria).length > 1 && (
                                                     <span className="shrink-0 w-6 h-6 mt-0.5 rounded-full bg-slate-700 text-white text-xs font-bold flex items-center justify-center">{idx + 1}</span>
                                                 )}
-                                                <div className="flex-1">
-                                                    <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
-                                                    <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm resize-y mb-2" value={c.en} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'en')} />
-                                                    <span className="inline-block text-[11px] font-bold text-[#8a6a3a] bg-[#faf7f1] border border-[#b8945a]/40 rounded px-1.5 py-0.5 mb-1">中文</span>
-                                                    <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={c.ch} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'ch')} />
+                                                {/* One criterion = one framed row: EN left, 中文 right on desktop (stacked below sm). */}
+                                                <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                    <div className="min-w-0">
+                                                        <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
+                                                        <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm resize-y" value={c.en} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'en')} />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <span className="inline-block text-[11px] font-bold text-[#8a6a3a] bg-[#faf7f1] border border-[#b8945a]/40 rounded px-1.5 py-0.5 mb-1">中文</span>
+                                                        <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={c.ch} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'ch')} />
+                                                    </div>
                                                 </div>
                                                 <button className={actionStyles.iconDanger} type="button" onClick={() => handleCriteriaRemove(idx)}>✕</button>
                                             </div>

@@ -70,3 +70,11 @@
     border: none !important;
   }
 }
+
+/* ITP General Information only (ITP-SUBJECT-WIDTH-2026-001 R2): opt-in for the Version field. When the shared form grid drops to
+   two columns (<=1024px), Version takes the whole last row instead of leaving an empty half-row. The 3-column layout is untouched. */
+@media (max-width: 1024px) {
+  .versionFullRowWhenTwoColumns {
+    grid-column: 1 / -1;
+  }
+}

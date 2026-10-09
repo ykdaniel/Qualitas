@@ -172,6 +172,17 @@
   flex-direction: column;
 }
 
+/* Spans two columns of the 3-column desktop grid; falls back to one column where the grid has fewer columns. */
+.formGroupSpan2 {
+  grid-column: span 2;
+}
+
+@media (max-width: 1024px) {
+  .formGroupSpan2 {
+    grid-column: auto;
+  }
+}
+
 .formGroup label,
 .formGroupFull label {
   font-size: 13px;
