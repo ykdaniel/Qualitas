@@ -605,6 +605,7 @@ _DOC_TYPE_TABLES = {
     'CHECKLIST': ('checklist', 'recordsNo'),
     'OSD': ('osd', 'documentNumber'),
     'MEETING': ('meeting_minutes', 'documentNumber'),
+    'MSA': ('material_submittals', 'document_number'),
 }
 
 

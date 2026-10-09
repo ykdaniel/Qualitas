@@ -19,10 +19,12 @@ import schemas
 from database import get_db
 from core.scope import Scope, get_scope, compute_scope, entity_in_scope, attachment_target, find_attachment_record
 from core.attachment_access import (
-    ENTITY_PERMISSIONS, is_km_image_path, lock_reason, require_attachment_permission, validate_category,
+    ENTITY_PERMISSIONS, IMAGE_ONLY_CATEGORIES, is_km_image_path, lock_reason, require_attachment_permission, validate_category,
 )
 from core.uploads import upload_root
 from core.utils import lock_ncr_for_write
+from core.material_access import lock_material_submittal_for_write
+import models
 # Cookie-aware auth (accepts httpOnly access_token cookie OR legacy Bearer
 # header). middleware.auth.get_current_user is Bearer-only and 401s the
 # cookie-authenticated frontend, which logs the user out when opening a record
@@ -87,7 +89,7 @@ router = APIRouter(prefix="/files", tags=["files"])
 # The upload root is core.uploads.upload_root(): backend/uploads unless QUALITAS_UPLOAD_ROOT says otherwise (mandatory, and confined to the
 # run directory, in an isolated test process). It is read on every request — there is no module-level constant to import.
 _VALID_ENTITY_TYPES = {"itp", "ncr", "noi", "itr", "pqp", "obs", "osd", "fat",
-                       "audit", "checklist", "followup", "km", "contractor", "meeting"}
+                       "audit", "checklist", "followup", "km", "contractor", "meeting", "material_rev"}
 
 # 允許的 MIME 類型白名單
 ALLOWED_MIME_PREFIXES = ("image/", "application/pdf", "application/msword",
@@ -150,6 +152,33 @@ def _validate_upload_mime(content: bytes, filename: str, client_mime: str) -> st
     return client_mime
 
 
+# M6 R2: formats a material photo may have, by what the DECODER found (never by name or client MIME).
+_PHOTO_FORMATS = {"PNG": "image/png", "JPEG": "image/jpeg", "GIF": "image/gif", "WEBP": "image/webp"}
+
+
+def _decoded_image_mime(content: bytes) -> str | None:
+    """MIME of a REAL, fully decodable PNG / JPEG / GIF / WebP image, else None.
+
+    Used only for the image-only categories (material_rev/photo), so every other module keeps its upload contract.
+    The bytes are parsed by Pillow (from the file content alone): a renamed text file, a forged MIME, a RIFF/WAVE file
+    (the generic magic table above reads every RIFF as WebP) and a truncated / corrupt image all fail. A decompression
+    bomb is refused too (Pillow's warning is raised as an error)."""
+    import io
+    import warnings
+    from PIL import Image
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(io.BytesIO(content)) as img:
+                fmt = img.format
+                img.verify()                      # structure / checksums
+            with Image.open(io.BytesIO(content)) as img:
+                img.load()                        # decode every pixel: catches truncated data verify() lets through
+    except Exception:
+        return None
+    return _PHOTO_FORMATS.get(fmt or "")
+
+
 def _build_file_url(request: Request, file_path: str) -> str:
     """根據請求的 base URL 組裝完整的檔案存取 URL（經驗證端點）"""
     return f"{request.base_url}api/files/download/{file_path}"
@@ -199,7 +228,7 @@ async def upload_files(
         )
 
     # ── Permission on the record type first (a 403 says nothing about which records exist) ──
-    require_attachment_permission(current_user, entity_type, "update")
+    require_attachment_permission(current_user, entity_type, "update", category)
 
     # ── The category must be one this record type really uses (exact match: no empty value, no unknown value, no case variant) ──
     validate_category(entity_type, category)
@@ -249,7 +278,34 @@ async def upload_files(
                 status_code=400,
                 detail=f"File content does not match an allowed type (detected: {mime})"
             )
+        if (entity_type, category) in IMAGE_ONLY_CATEGORIES:
+            # M6 R2: decided by decoding the content; the stored MIME is the decoded format's
+            image_mime = _decoded_image_mime(content)
+            if image_mime is None:
+                raise HTTPException(status_code=400, detail=f"File '{filename}' is not a valid image (PNG, JPEG, GIF or WebP); this category only accepts images")
+            mime = image_mime
         prepared.append((file, content, mime))
+
+    if entity_type == "material_rev":
+        # MATERIAL-SUBMITTAL M2 (spec §4.4): the checks above ran before the (possibly slow) file reads. Take the submittal's
+        # write lock — the same one submit / result / new revision take — re-read, and decide again on FRESH state, so a file
+        # can never land in a revision that was submitted (or got a result) meanwhile. Nothing has been written yet.
+        try:
+            parent = db.query(models.MaterialSubmittalRevision.submittal_id).filter(models.MaterialSubmittalRevision.id == entity_id).scalar()
+            if parent is not None:
+                lock_material_submittal_for_write(db, parent)
+            db.expire_all()
+        except Exception:
+            db.rollback()
+            raise
+        target = attachment_target(db, entity_type, entity_id, scope)
+        if target is None:
+            db.rollback()
+            raise HTTPException(status_code=404, detail="Attachment target not found")
+        reason = lock_reason(db, entity_type, target, category)
+        if reason:
+            db.rollback()
+            raise HTTPException(status_code=409, detail=reason)
 
     results: list[AttachmentResponse] = []
     written: list[str] = []
@@ -361,7 +417,21 @@ def delete_file(
     if not attachment or not entity_in_scope(db, attachment.entity_type, attachment.entity_id, scope):
         raise HTTPException(status_code=404, detail="Attachment not found")
 
-    require_attachment_permission(current_user, attachment.entity_type, "update")
+    require_attachment_permission(current_user, attachment.entity_type, "update", attachment.category)
+    if attachment.entity_type == "material_rev":
+        # Same lock as submit / result (spec §4.4), then decide on fresh data.
+        try:
+            parent = db.query(models.MaterialSubmittalRevision.submittal_id).filter(
+                models.MaterialSubmittalRevision.id == attachment.entity_id).scalar()
+            if parent is not None:
+                lock_material_submittal_for_write(db, parent)
+            db.expire_all()
+        except Exception:
+            db.rollback()
+            raise
+        if attachment.is_deleted:
+            db.rollback()
+            raise HTTPException(status_code=404, detail="Attachment not found")
     if attachment.entity_type == "ncr":
         # Closing an NCR checks its improvement photos and then writes Closed (services/ncr_service.py::update_ncr, which takes this same lock
         # first). Deleting a photo is decided under that lock too and on FRESH data: the NCR may have been closed — or the photo already

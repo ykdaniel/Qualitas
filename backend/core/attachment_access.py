@@ -52,7 +52,26 @@ ENTITY_PERMISSIONS = {
     "meeting": (perms.MEETING_VIEW, perms.MEETING_UPDATE),
     "km": (perms.KM_VIEW, perms.KM_UPDATE),
     "contractor": (perms.CONTRACTOR_VIEW, perms.CONTRACTOR_MANAGE),
+    "material_rev": (perms.MATERIAL_VIEW, perms.MATERIAL_MANAGE),
 }
+
+# Per-CATEGORY upload / delete permission — only for the entity types listed here (MATERIAL-SUBMITTAL M2, spec §3.4):
+# a material revision's reply document is written by whoever records external results, not by whoever prepares the
+# submittal. Every other entity type keeps the single update permission of ENTITY_PERMISSIONS, unchanged.
+# Per-category update permissions. Empty since M6: the material register has no separate "record result" permission any more
+# (DECISIONS 材料：只作為核准材料登錄簿) — every material_rev category needs material:manage. The mechanism stays for other types.
+CATEGORY_UPDATE_PERMISSIONS: dict = {
+}
+
+# Entity types that contractor (vendor-scoped) accounts may not touch at all, whatever their permissions (spec §9.2).
+VENDOR_REFUSED_ENTITY_TYPES = {"material_rev"}
+
+MATERIAL_SUBMISSION_CATEGORIES = {"catalogue", "technicalData", "certificate", "testReport", "photo", "other"}
+# Categories that only accept images (checked on the DETECTED type, after the general allow-list). M6: material photos.
+IMAGE_ONLY_CATEGORIES = {("material_rev", "photo")}
+# Categories never locked by the record's state (M6, DECISIONS 材料：只作為核准材料登錄簿): registered materials are already
+# approved and their photos must stay maintainable; permission and scope checks still apply.
+NEVER_LOCKED_CATEGORIES = {("material_rev", "photo")}
 
 _UNCONDITIONAL_LOCKED_STATUSES = {
     "noi": {"Closed"},
@@ -60,10 +79,13 @@ _UNCONDITIONAL_LOCKED_STATUSES = {
     "followup": {"Closed"},
     "meeting": {"Published", "Void"},
     "itr": {"Approved", "Void"},          # Approved: services/itr_service.py; Void: the same records are frozen for their checklists (checklist_service)
+    "material_rev": {"Approved", "ApprovedWithComments", "ReviseAndResubmit", "Rejected"},   # a result is recorded: all frozen
 }
 _LOCKED_CATEGORIES = {
     ("obs", "Closed"): {"defectPhoto", "improvementPhoto"},
     ("ncr", "Closed"): {"improvementPhoto"},
+    ("material_rev", "Draft"): {"replyDocument"},                      # no reply before the revision is submitted
+    ("material_rev", "Submitted"): set(MATERIAL_SUBMISSION_CATEGORIES),  # what was submitted is frozen; replies stay open
 }
 
 PENDING_STATE_DECISIONS = [
@@ -90,6 +112,7 @@ ALLOWED_CATEGORIES = {
     "noi": {"attachment"}, "pqp": {"attachment"}, "itp": {"attachment"}, "meeting": {"attachment"},
     # no front end sends a category for these; the API default is the only value accepted
     "audit": {"attachment"}, "fat": {"attachment"}, "followup": {"attachment"}, "checklist": {"attachment"}, "km": {"attachment"}, "contractor": {"attachment"},
+    "material_rev": MATERIAL_SUBMISSION_CATEGORIES | {"replyDocument"},
 }
 
 
@@ -116,12 +139,19 @@ def permission_codes(user) -> set:
     return {p.code for p in (role.permissions_rel if role is not None else [])}
 
 
-def require_attachment_permission(user, entity_type: str, action: str) -> None:
-    """403 unless the user holds the record type's view (action='view') or update (action='update') permission."""
-    pair = ENTITY_PERMISSIONS.get((entity_type or "").lower())
+def require_attachment_permission(user, entity_type: str, action: str, category: Optional[str] = None) -> None:
+    """403 unless the user holds the record type's view (action='view') or update (action='update') permission.
+
+    For entity types in CATEGORY_UPDATE_PERMISSIONS the update permission depends on the category (pass `category`);
+    for every other type `category` is ignored and behaviour is unchanged. Entity types in VENDOR_REFUSED_ENTITY_TYPES
+    are refused to vendor-scoped accounts before any permission is looked at."""
+    etype = (entity_type or "").lower()
+    pair = ENTITY_PERMISSIONS.get(etype)
     if pair is None:
         raise HTTPException(status_code=404, detail="Attachment not found")
-    needed = pair[0] if action == "view" else pair[1]
+    if etype in VENDOR_REFUSED_ENTITY_TYPES and getattr(user, "vendor_id", None):
+        raise HTTPException(status_code=403, detail="Not available to contractor-scoped accounts.")
+    needed = pair[0] if action == "view" else CATEGORY_UPDATE_PERMISSIONS.get(etype, {}).get(category, pair[1])
     if needed not in permission_codes(user):
         raise HTTPException(status_code=403, detail=f"Operation not permitted. Required: {needed}")
 
@@ -130,6 +160,8 @@ def lock_reason(db: Session, entity_type: str, record, category: Optional[str]) 
     """Why an upload / delete on this record's attachments is refused because of the record's STATE; None when it is allowed."""
     etype = (entity_type or "").lower()
     status = getattr(record, "status", None)
+    if (etype, category) in NEVER_LOCKED_CATEGORIES:
+        return None
     if etype in _UNCONDITIONAL_LOCKED_STATUSES and status in _UNCONDITIONAL_LOCKED_STATUSES[etype]:
         return f"Cannot change attachments of a {status} {etype.upper()}: the record is locked."
     if etype == "pqp":

@@ -157,6 +157,14 @@ def run_migrations():
     # Unlike the best-effort steps above, a failure here RAISES MigrationError and stops start-up.
     _create_itr_approval_events_table()
 
+    # 21. Material submittal schema (MATERIAL-SUBMITTAL M1, 2026-10-08): four migration-owned tables, the
+    # MATERIAL_INDEXES list and projects.material_reply_days. Like step 20, a failure RAISES MigrationError.
+    _create_material_submittal_schema()
+
+    # 22. Retire the material "record result" permission (MATERIAL-SUBMITTAL M6 R2, 2026-10-09): the register has only
+    # view + manage. Removes that one permission and its role assignments; nothing else. Best effort, like steps 1–19.
+    _retire_material_record_result_permission()
+
     logger.info("Migrations completed.")
 
 class MigrationError(RuntimeError):
@@ -242,6 +250,251 @@ def _create_itr_approval_events_table():
             "possible); existing event rows are never rewritten or dropped. Every statement is IF NOT EXISTS, "
             "so fix the cause and start again — the step completes whatever is missing."
         ) from e
+
+
+# ── Material submittal schema (step 21) ────────────────────────────────────────────────────────────────────
+# The ONE index list for the material tables (spec §9.1). models.py declares the same Index() objects; a test
+# compares the two. The verification below checks every index's columns (in order), uniqueness and partial
+# WHERE clause — not only that a name exists.
+MATERIAL_TABLES = ("materials", "material_submittals", "material_submittal_revisions", "material_submittal_result_entries")
+MATERIAL_INDEXES = (
+    # (name, table, columns, unique, where)
+    ("ix_materials_project_id", "materials", ("project_id",), False, None),
+    ("ix_material_submittals_project_id", "material_submittals", ("project_id",), False, None),
+    ("ix_material_submittals_vendor_id", "material_submittals", ("vendor_id",), False, None),
+    ("ix_material_submittals_material_id", "material_submittals", ("material_id",), False, None),
+    ("ux_material_submittals_document_number", "material_submittals", ("document_number",), True, None),
+    ("ux_material_submittals_client_request", "material_submittals", ("project_id", "client_request_id"), True, None),
+    ("ix_msr_submittal_id", "material_submittal_revisions", ("submittal_id",), False, None),
+    ("ux_msr_submittal_rev", "material_submittal_revisions", ("submittal_id", "rev_no"), True, None),
+    ("ux_msr_one_open", "material_submittal_revisions", ("submittal_id",), True, "status IN ('Draft','Submitted')"),
+    ("ix_msre_revision_id", "material_submittal_result_entries", ("revision_id",), False, None),
+    ("ix_msre_submittal_id", "material_submittal_result_entries", ("submittal_id",), False, None),
+    ("ux_msre_revision_seq", "material_submittal_result_entries", ("revision_id", "seq"), True, None),
+)
+
+_MATERIAL_DDL = (
+    """CREATE TABLE IF NOT EXISTS materials (
+        id VARCHAR NOT NULL PRIMARY KEY,
+        project_id VARCHAR NOT NULL REFERENCES projects (id),
+        category VARCHAR, name VARCHAR NOT NULL, brand VARCHAR, model VARCHAR, specification VARCHAR,
+        manufacturer VARCHAR, supplier VARCHAR,
+        created_by VARCHAR, created_at VARCHAR, updated_by VARCHAR, updated_at VARCHAR
+    )""",
+    """CREATE TABLE IF NOT EXISTS material_submittals (
+        id VARCHAR NOT NULL PRIMARY KEY,
+        project_id VARCHAR NOT NULL REFERENCES projects (id),
+        vendor_id VARCHAR NOT NULL REFERENCES contractors (id),
+        material_id VARCHAR NOT NULL REFERENCES materials (id),
+        document_number VARCHAR NOT NULL,
+        latest_rev_no INTEGER NOT NULL,
+        latest_status VARCHAR NOT NULL,
+        current_approved_rev_no INTEGER,
+        current_approved_result VARCHAR,
+        created_by VARCHAR, created_at VARCHAR, updated_at VARCHAR,
+        client_request_id VARCHAR
+    )""",
+    """CREATE TABLE IF NOT EXISTS material_submittal_revisions (
+        id VARCHAR NOT NULL PRIMARY KEY,
+        submittal_id VARCHAR NOT NULL REFERENCES material_submittals (id),
+        project_id VARCHAR NOT NULL,
+        vendor_id VARCHAR NOT NULL,
+        rev_no INTEGER NOT NULL,
+        status VARCHAR NOT NULL,
+        snap_category VARCHAR, snap_name VARCHAR, snap_brand VARCHAR, snap_model VARCHAR,
+        snap_specification VARCHAR, snap_manufacturer VARCHAR, snap_supplier VARCHAR,
+        spec_reference TEXT,
+        submitted_date VARCHAR, expected_reply_date VARCHAR, expected_reply_date_auto VARCHAR,
+        submitted_by_user_id VARCHAR, submitted_by_name VARCHAR, submitted_at VARCHAR,
+        created_by VARCHAR, created_at VARCHAR
+    )""",
+    """CREATE TABLE IF NOT EXISTS material_submittal_result_entries (
+        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+        revision_id VARCHAR NOT NULL REFERENCES material_submittal_revisions (id),
+        submittal_id VARCHAR NOT NULL,
+        project_id VARCHAR NOT NULL,
+        vendor_id VARCHAR NOT NULL,
+        seq INTEGER NOT NULL,
+        entry_type VARCHAR NOT NULL,
+        result_code VARCHAR NOT NULL,
+        external_decision_maker VARCHAR NOT NULL,
+        external_decision_org VARCHAR,
+        external_decision_title VARCHAR,
+        external_reply_date VARCHAR NOT NULL,
+        external_doc_no VARCHAR,
+        logged_by_user_id VARCHAR NOT NULL,
+        logged_by_name VARCHAR NOT NULL,
+        logged_at VARCHAR NOT NULL,
+        supersedes_entry_id INTEGER,
+        superseded_by_entry_id INTEGER,
+        correction_reason TEXT
+    )""",
+)
+
+
+_SQL_TOKEN = re.compile(r"'(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"|[A-Za-z_][A-Za-z0-9_]*|\d+|\S")
+
+
+def _where_tokens(clause):
+    """Tokens of a partial-index condition for a CONSERVATIVE comparison (M1 review R1, 2026-10-08).
+
+    Only whitespace between tokens and the letter case of bare keywords / identifiers are ignored. String literals
+    ('Draft') and quoted identifiers are kept byte-for-byte — their case and content are data, not syntax. Anything
+    that is merely equivalent in meaning (another order of the IN list, extra parentheses, another quoting) does
+    NOT match: the verifier cannot prove equivalence, so start-up stops instead of adopting the index."""
+    if clause is None:
+        return None
+    return [t if t[0] in "'\"" else t.lower() for t in _SQL_TOKEN.findall(clause.strip())]
+
+
+# Exact declared types the material code needs (M1 review R2). A text column must be VARCHAR (as written by
+# _MATERIAL_DDL and by create_all for String) or TEXT (Text): a NUMERIC / REAL / BLOB / typeless column would
+# give the value another affinity and silently change stored data ('00123' -> 123). An Integer column must be
+# exactly INTEGER — for an INTEGER PRIMARY KEY that is also what makes it the rowid alias (AUTOINCREMENT);
+# "INT", "BIGINT" etc. have INTEGER affinity but are not accepted.
+_VARCHAR_DECL = re.compile(r"^VARCHAR(\(\d+\))?$")
+
+
+def _type_problem(col, declared):
+    from sqlalchemy import Integer as SAInteger, String as SAString, Text as SAText
+    decl = re.sub(r"\s+", " ", (declared or "").strip().upper())
+    if isinstance(col.type, SAInteger):
+        return None if decl == "INTEGER" else "INTEGER"
+    if isinstance(col.type, SAText):
+        return None if decl == "TEXT" else "TEXT"
+    if isinstance(col.type, SAString):
+        return None if _VARCHAR_DECL.match(decl) else "VARCHAR"
+    return f"a supported type (model type {type(col.type).__name__} has no rule)"
+
+
+def _material_schema_problems(conn):
+    """Every way the live schema differs from what the material code needs (empty list = OK). Read-only."""
+    import models
+    problems = []
+    model_tables = {t.name: t for t in models.Base.metadata.sorted_tables if t.name in MATERIAL_TABLES}
+    for table in MATERIAL_TABLES:
+        info = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()      # names come from the constant above
+        if not info:
+            problems.append(f"table {table} is missing")
+            continue
+        have = {r[1]: r for r in info}                                           # cid, name, type, notnull, dflt, pk
+        for col in model_tables[table].columns:
+            row = have.get(col.name)
+            if row is None:
+                problems.append(f"{table}.{col.name} is missing")
+                continue
+            want_notnull = (not col.nullable) or bool(col.primary_key)
+            if bool(row[3]) != want_notnull:
+                problems.append(f"{table}.{col.name} NOT NULL is {bool(row[3])}, expected {want_notnull}")
+            if bool(row[5]) != bool(col.primary_key):
+                problems.append(f"{table}.{col.name} PRIMARY KEY is {bool(row[5])}, expected {bool(col.primary_key)}")
+            wanted = _type_problem(col, row[2])
+            if wanted:
+                problems.append(f"{table}.{col.name} type {(row[2] or '(none)')!s} does not match {wanted}")
+    for name, table, columns, unique, where in MATERIAL_INDEXES:
+        listed = {r[1]: r for r in conn.execute(text(f"PRAGMA index_list({table})")).fetchall()}  # seq, name, unique, origin, partial
+        row = listed.get(name)
+        if row is None:
+            problems.append(f"index {name} on {table} is missing")
+            continue
+        cols = tuple(r[2] for r in sorted(conn.execute(text(f"PRAGMA index_info({name})")).fetchall()))
+        if cols != columns:
+            problems.append(f"index {name} covers {cols}, expected {columns}")
+        if bool(row[2]) != unique:
+            problems.append(f"index {name} unique={bool(row[2])}, expected {unique}")
+        sql = conn.execute(text("SELECT sql FROM sqlite_master WHERE type='index' AND name=:n"), {"n": name}).scalar() or ""
+        m = re.search(r"\bWHERE\b(.*)$", sql, re.IGNORECASE | re.DOTALL)
+        have_where = _where_tokens(m.group(1)) if m else None
+        if have_where != _where_tokens(where):
+            problems.append(f"index {name} condition is {m.group(1).strip() if m else 'none'}, expected {where or 'none'}")
+    proj = {r[1]: r for r in conn.execute(text("PRAGMA table_info(projects)")).fetchall()}
+    col = proj.get("material_reply_days")
+    if col is None:
+        problems.append("projects.material_reply_days is missing")
+    elif bool(col[3]) or (col[2] or "").strip().upper() != "INTEGER":
+        problems.append(f"projects.material_reply_days must be a nullable INTEGER (found {col[2] or '(none)'}, NOT NULL={bool(col[3])})")
+    return problems
+
+
+def _create_material_submittal_schema():
+    """Create the material submittal schema if missing, then verify it completely. Nothing else.
+
+    * Owns the schema of the four material tables (models flag them migration_owned, so start-up create_all
+      skips them) and the projects.material_reply_days column (added here on databases that predate it; a
+      brand-new database already has it from create_all, which is fine).
+    * Idempotent, no "done" flag: CREATE ... IF NOT EXISTS and add-if-missing only; re-running changes nothing.
+    * Never drops, rebuilds or rewrites a table, an index or a row. An existing table / index is adopted only if
+      it matches: every model column with the same NOT NULL / PRIMARY KEY / integer-vs-text type, and every
+      index in MATERIAL_INDEXES with the same columns, uniqueness and WHERE condition.
+    * FAILS THE START-UP with MigrationError on any mismatch or error. Because creation is IF NOT EXISTS, a
+      wrongly-shaped pre-existing object is NOT replaced — it is reported, and must be fixed by hand.
+    * SQLite only (like step 20: AUTOINCREMENT); any other dialect stops start-up rather than guessing.
+    """
+    try:
+        if engine.dialect.name != "sqlite":
+            raise MigrationError(f"material submittal schema migration supports SQLite only, not {engine.dialect.name}")
+        with engine.connect() as conn:
+            for ddl in _MATERIAL_DDL:
+                conn.execute(text(ddl))
+            # M6 R2: a material_submittals table created before this column existed gets it here (add-if-missing,
+            # nullable, no default: existing rows read NULL = "no request id"), BEFORE its unique index is created.
+            if "client_request_id" not in {r[1] for r in conn.execute(text("PRAGMA table_info(material_submittals)")).fetchall()}:
+                conn.execute(text("ALTER TABLE material_submittals ADD COLUMN client_request_id VARCHAR"))
+            for name, table, columns, unique, where in MATERIAL_INDEXES:
+                stmt = f"CREATE {'UNIQUE ' if unique else ''}INDEX IF NOT EXISTS {name} ON {table} ({', '.join(columns)})"
+                if where:
+                    stmt += f" WHERE {where}"
+                conn.execute(text(stmt))
+            if "material_reply_days" not in {r[1] for r in conn.execute(text("PRAGMA table_info(projects)")).fetchall()}:
+                conn.execute(text("ALTER TABLE projects ADD COLUMN material_reply_days INTEGER"))
+            conn.commit()
+            problems = _material_schema_problems(conn)
+        if problems:
+            raise MigrationError(
+                "material submittal schema does not match what the application needs: " + "; ".join(problems)
+                + ". Nothing was dropped, rebuilt or rewritten. Fix the listed objects by hand (they may hold data), then start again."
+            )
+    except MigrationError as e:
+        logger.error("STARTUP ABORTED: %s", e)
+        raise
+    except Exception as e:
+        logger.error("STARTUP ABORTED: material submittal schema could not be created or verified: %s", e)
+        raise MigrationError(
+            f"material submittal schema could not be created or verified ({type(e).__name__}: {e}). "
+            "Some objects may already exist (every statement is IF NOT EXISTS / add-if-missing); no table, index or row "
+            "was dropped or rewritten. Fix the cause and start again."
+        ) from e
+
+
+RETIRED_MATERIAL_PERMISSION = "material:record_result:all"
+_MATERIAL_PERMISSION_DESCRIPTIONS = {"material:view:all": "查看核准材料", "material:manage:all": "登錄與編輯核准材料"}
+
+
+def _retire_material_record_result_permission():
+    """Step 22 (MATERIAL-SUBMITTAL M6 R2). DECISIONS 材料：只作為核准材料登錄簿 — the register keeps only
+    `material:view:all` and `material:manage:all`; `material:record_result:all` was dropped from core.perms, but the seeder
+    only ADDS codes, so a database seeded before the change still lists it in role management.
+
+    * Deletes the role_permissions rows of THAT permission, then the permission row itself — one transaction.
+    * Every role keeps all its other permissions (including material view / manage); no role and no user is changed or
+      deleted; no other permission is touched. Nothing in the application checks the retired code any more.
+    * Refreshes the descriptions of the two remaining material permissions (system-defined labels, not user data).
+    * Idempotent: on a database without that permission it changes nothing. Best effort: a failure is logged and start-up
+      goes on (the leftover permission grants nothing).
+    """
+    try:
+        with engine.connect() as conn:
+            pid = conn.execute(text("SELECT id FROM permissions WHERE code = :c"), {"c": RETIRED_MATERIAL_PERMISSION}).scalar()
+            if pid is not None:
+                links = conn.execute(text("DELETE FROM role_permissions WHERE permission_id = :p"), {"p": pid}).rowcount
+                conn.execute(text("DELETE FROM permissions WHERE id = :p"), {"p": pid})
+                logger.info("Retired permission %s (removed from %s role(s)).", RETIRED_MATERIAL_PERMISSION, links)
+            for code, description in _MATERIAL_PERMISSION_DESCRIPTIONS.items():
+                conn.execute(text("UPDATE permissions SET description = :d WHERE code = :c AND (description IS NULL OR description != :d)"),
+                             {"c": code, "d": description})
+            conn.commit()
+    except Exception as e:
+        logger.error("Could not retire permission %s: %s", RETIRED_MATERIAL_PERMISSION, e)
 
 
 def _add_missing_columns():

@@ -221,6 +221,8 @@ def check_project_references(db: Session, project_id: str, project_name: str) ->
             (models.FAT, 'project_id', project_id, 'FAT'),
             (models.PQP, 'project_id', project_id, 'PQP'),
             (models.QWorkflow, 'project_id', project_id, 'QWorkflow'),
+            (models.Material, 'project_id', project_id, 'Material'),
+            (models.MaterialSubmittal, 'project_id', project_id, 'MaterialSubmittal'),
         ]
     )
 

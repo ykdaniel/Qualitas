@@ -4,6 +4,7 @@ import actionStyles from '../Shared/FormActions.module.css';
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
+import { materialText } from '../MaterialSubmittal/materialText';
 import { getNamingRules, updateNamingRules, NamingRuleApi } from '../../services/api';
 import styles from './DocumentNamingRules.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
@@ -22,16 +23,19 @@ const DEFAULT_RULE_DEFS = [
   { id: 'audit',     moduleName: 'Audit',            prefix: 'QTS-RKS-[ABBREV]-AUD-', sequenceDigits: 6, descKey: 'namingRules.desc.audit' },
   { id: 'checklist', moduleName: 'Checklist',        prefix: 'QTS-RKS-[ABBREV]-CHK-', sequenceDigits: 6, descKey: 'namingRules.desc.checklist' },
   { id: 'osd',       moduleName: 'OSD',              prefix: 'QTS-RKS-[ABBREV]-OSD-', sequenceDigits: 6, descKey: 'namingRules.desc.osd' },
+  // MATERIAL-SUBMITTAL: its description comes from the module's own text file, not from LanguageContext (see materialText.ts)
+  { id: 'msa',       moduleName: 'Material', prefix: 'QTS-RKS-[ABBREV]-MSA-', sequenceDigits: 6, descKey: 'namingRules.desc.msa' },
 ];
 
 
 
 const DocumentNamingRules: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { hasPermission } = useAuth();
+  const describe = (descKey: string) => (descKey === 'namingRules.desc.msa' ? materialText(language, 'namingDesc') : t(descKey));
 
   const buildDefaultRules = (): NamingRuleItem[] =>
-    DEFAULT_RULE_DEFS.map((def) => ({ ...def, description: t(def.descKey) }));
+    DEFAULT_RULE_DEFS.map((def) => ({ ...def, description: describe(def.descKey) }));
 
   const [rules, setRules] = useState<NamingRuleItem[]>(buildDefaultRules);
   const [saved, setSaved] = useState(false);
@@ -47,7 +51,7 @@ const DocumentNamingRules: React.FC = () => {
     const def = DEFAULT_RULE_DEFS.find((item) => item.id === rule.id);
     return {
       ...rule,
-      description: def ? t(def.descKey) : rule.description,
+      description: def ? describe(def.descKey) : rule.description,
     };
   });
 

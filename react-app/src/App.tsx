@@ -28,6 +28,7 @@ const PQP = React.lazy(() => import('./components/PQP/PQP'));
 const KPI = React.lazy(() => import('./components/KPI/KPI'));
 const DocumentNamingRules = React.lazy(() => import('./components/DocumentNamingRules/DocumentNamingRules'));
 const OSD = React.lazy(() => import('./components/OSD/OSD'));
+const MaterialSubmittal = React.lazy(() => import('./components/MaterialSubmittal/MaterialSubmittal'));
 const MeetingMinutes = React.lazy(() => import('./components/MeetingMinutes/MeetingMinutes'));
 const Checklist = React.lazy(() => import('./components/Checklist/Checklist'));
 const Workflow = React.lazy(() => import('./components/Workflow/Workflow'));
@@ -85,6 +86,9 @@ const router = createBrowserRouter(createRoutesFromElements(
             <Route path="/contractors" element={<Contractors />} />
             <Route path="/km" element={<KM />} />
             <Route path="/osd" element={<OSD />} />
+            <Route path="/materials" element={<MaterialSubmittal />} />
+            {/* old address of the material page (before M6) keeps working */}
+            <Route path="/material-submittals" element={<Navigate to="/materials" replace />} />
             <Route path="/meeting-minutes" element={<MeetingMinutes />} />
             <Route path="/obs" element={<OBS />} />
             <Route path="/ncr" element={<NCR />} />

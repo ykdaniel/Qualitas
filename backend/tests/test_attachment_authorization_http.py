@@ -23,7 +23,11 @@ from core.security import get_password_hash
 from core.startup_guard import BACKEND_DIR, ENV_UPLOAD_ROOT
 from test_itr_revoke_approval_acceptance import PW, Env, _get_or_create_perm
 
-VIEW_UPDATE = [v for k, v in vars(perms).items() if isinstance(v, str) and (v.endswith(":view:all") or v.endswith(":update:all"))] + [perms.CONTRACTOR_MANAGE]
+# The update-class permission of every attachment type. Most types call it `<module>:update:all`; contractor uses `contractors:manage:all`,
+# and a material revision uses `material:manage:all` for every category (the separate `material:record_result:all` for
+# `replyDocument` was removed in M6 — DECISIONS 材料：只作為核准材料登錄簿).
+VIEW_UPDATE = [v for k, v in vars(perms).items() if isinstance(v, str) and (v.endswith(":view:all") or v.endswith(":update:all"))] + [
+    perms.CONTRACTOR_MANAGE, perms.MATERIAL_MANAGE]
 
 
 # ── harness ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -103,6 +107,9 @@ def _seed(S):
         user("viewer", r_view)                   # unscoped, view only
         user("create_only", r_create)            # unscoped, view + create, no update
         user("updater", r_update)                # unscoped, update but no view
+        # material revisions: material:manage for every category (M6); a view-only account may not change files
+        user("mat_manage", role("MatManage", [perms.MATERIAL_VIEW, perms.MATERIAL_MANAGE]))
+        user("mat_view", role("MatView", [perms.MATERIAL_VIEW]))
         for name, project, vendor in (("a", "P-A", "C1"), ("b", "P-B", "C2")):
             db.add(models.NCR(id=f"ncr-{name}", documentNumber=f"NCR-{name}", project_id=project, vendor_id=vendor, status="Open", description="d", rev="0", submit=""))
             db.add(models.OBS(id=f"obs-{name}", documentNumber=f"OBS-{name}", project_id=project, vendor_id=vendor, status="Open", description="d", rev="0", submit=""))
@@ -121,7 +128,11 @@ def _mk(db, model, rid, **kw):
 
 # One record per attachment entity type, in their default (open) state, for the permission matrix.
 MATRIX = {"itp": "itp-1", "ncr": "ncr-a", "noi": "noi-1", "itr": "itr-1", "pqp": "pqp-1", "obs": "obs-a", "osd": "osd-1", "fat": "fat-1",
-          "audit": "audit-1", "checklist": "chk-1", "followup": "fu-1", "meeting": "mtg-1", "km": "km-1", "contractor": "C1"}
+          "audit": "audit-1", "checklist": "chk-1", "followup": "fu-1", "meeting": "mtg-1", "km": "km-1", "contractor": "C1",
+          "material_rev": "msr-1"}
+# The category the generic matrix uses for a type. `attachment` everywhere, except a material revision, which has no `attachment`
+# category (spec §3.4); `catalogue` is one of its submission categories, governed by `material:manage:all` while the revision is a Draft.
+MATRIX_CATEGORY = {"material_rev": "catalogue"}
 
 
 def _seed_matrix_records(db):
@@ -135,9 +146,15 @@ def _seed_matrix_records(db):
     _mk(db, models.Checklist, "chk-1", recordsNo="CHK-1", contractor_id="C1", activity="a")
     _mk(db, models.FollowUp, "fu-1", issueNo="FU-1", vendor_id="C1")
     _mk(db, models.MeetingMinutes, "mtg-1", documentNumber="MTG-1", vendor_id="C1", status="Draft")
+    db.add(models.Material(id="mat-1", project_id="P-A", name="Material"))
+    db.add(models.MaterialSubmittal(id="ms-1", project_id="P-A", vendor_id="C1", material_id="mat-1", document_number="MSA-1",
+                                    latest_rev_no=0, latest_status="Draft"))
+    db.add(models.MaterialSubmittalRevision(id="msr-1", submittal_id="ms-1", project_id="P-A", vendor_id="C1", rev_no=0,
+                                            status="Draft", snap_name="Material"))
 
 
-def up(client, etype, eid, files=(("a.txt", b"hello", "text/plain"),), category="attachment"):
+def up(client, etype, eid, files=(("a.txt", b"hello", "text/plain"),), category=None):
+    category = category or MATRIX_CATEGORY.get(etype, "attachment")
     return client.post("/api/files/upload", data={"entity_type": etype, "entity_id": eid, "category": category},
                        files=[("files", (n, c, m)) for n, c, m in files])
 
@@ -530,3 +547,176 @@ def test_PENDING_DECISION_states_without_an_attachment_policy_are_not_locked_yet
     When the policy is decided, this test is the one to change."""
     _set_state(aenv, model, rid, status=status)
     assert up(aenv.login("adm"), etype, rid).status_code == 200
+
+
+# ══ MATERIAL-SUBMITTAL M2 · material_rev in the shared attachment flow (spec §3.4, §9.2) ═════════════════════════════════════════════
+# The generic tests above cover material_rev through MATRIX (submission category `catalogue`, Draft revision). These pin what is
+# specific to it: the per-category update permission, the three state locks and the refusal of contractor-scoped accounts.
+
+SUBMISSION = ["catalogue", "technicalData", "certificate", "testReport", "other"]
+
+
+def _rev_state(env, status):
+    _set_state(env, models.MaterialSubmittalRevision, "msr-1", status=status)
+
+
+@pytest.mark.parametrize("category", SUBMISSION)
+def test_material_submission_categories_need_manage(aenv, category):
+    before = state(aenv)
+    r = up(aenv.login("mat_view"), "material_rev", "msr-1", category=category)
+    assert r.status_code == 403 and r.json()["detail"] == f"Operation not permitted. Required: {perms.MATERIAL_MANAGE}"
+    assert nothing_added(aenv, before)
+    assert up(aenv.login("mat_manage"), "material_rev", "msr-1", category=category).status_code == 200
+
+
+def test_material_reply_document_needs_manage_since_record_result_was_removed(aenv):
+    _rev_state(aenv, "Submitted")
+    before = state(aenv)
+    r = up(aenv.login("mat_view"), "material_rev", "msr-1", category="replyDocument")
+    assert r.status_code == 403 and r.json()["detail"] == f"Operation not permitted. Required: {perms.MATERIAL_MANAGE}"
+    assert nothing_added(aenv, before)
+    ok = up(aenv.login("mat_manage"), "material_rev", "msr-1", category="replyDocument")
+    assert ok.status_code == 200
+    assert aenv.login("mat_manage").delete(f"/api/files/{ok.json()[0]['id']}").status_code == 200
+
+
+@pytest.mark.parametrize("status,category,expect", [
+    ("Draft", "catalogue", 200), ("Draft", "replyDocument", 409),
+    ("Submitted", "catalogue", 409), ("Submitted", "testReport", 409), ("Submitted", "replyDocument", 200),
+    ("Approved", "catalogue", 409), ("Approved", "replyDocument", 409),
+    ("ApprovedWithComments", "replyDocument", 409), ("ReviseAndResubmit", "other", 409), ("Rejected", "replyDocument", 409),
+])
+def test_material_revision_state_locks_upload_and_delete(aenv, status, category, expect):
+    c = aenv.login("adm")
+    # an existing file of this category, put there in the one state that allows it
+    _rev_state(aenv, "Submitted" if category == "replyDocument" else "Draft")
+    existing = up(c, "material_rev", "msr-1", category=category).json()[0]["id"]
+    _rev_state(aenv, status)
+    before = state(aenv)
+    r = up(c, "material_rev", "msr-1", category=category)
+    assert r.status_code == expect, r.text
+    if expect != 200:
+        assert nothing_added(aenv, before)
+    assert c.delete(f"/api/files/{existing}").status_code == expect
+
+
+# M6: material photos — a submission category (manage permission, same state locks) that only accepts images.
+# R2: real, decodable images (the former constant was only a PNG signature followed by zero bytes).
+def _image(fmt, size=(24, 16)):
+    import io
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", size, (180, 90, 40)).save(buf, format=fmt)
+    return buf.getvalue()
+
+
+PNG = ("photo.png", _image("PNG"), "image/png")
+
+
+def test_material_photo_category_accepts_images_only(aenv):
+    c = aenv.login("mat_manage")
+    before = state(aenv)
+    r = up(c, "material_rev", "msr-1", category="photo")                                   # a.txt, text/plain
+    assert r.status_code == 400 and "only accepts images" in r.json()["detail"]
+    r = up(c, "material_rev", "msr-1", files=(("fake.png", b"%PDF-1.4 not an image", "image/png"),), category="photo")
+    assert r.status_code == 400                                                            # detected type wins over the name / claim
+    assert nothing_added(aenv, before)
+    ok = up(c, "material_rev", "msr-1", files=(PNG,), category="photo")
+    assert ok.status_code == 200 and ok.json()[0]["category"] == "photo"
+    assert up(c, "material_rev", "msr-1", category="catalogue").status_code == 200        # other categories unchanged
+
+
+def test_material_photo_is_decided_by_decoding_the_content_not_by_name_or_mime(aenv):
+    """M6 R2 (review R2): a renamed text file, a forged MIME, a RIFF/WAVE file named .webp and corrupt / truncated images are
+    refused with nothing written; one bad file in a multi-file upload refuses the whole upload. Real PNG / JPEG / GIF / WebP
+    pass and are stored with the DECODED type, whatever the client claimed."""
+    c = aenv.login("mat_manage")
+    png = _image("PNG")
+    wave = b"RIFF" + (36).to_bytes(4, "little") + b"WAVEfmt " + b"\x10\x00\x00\x00\x01\x00\x01\x00" + b"\x00" * 24
+    bad = {
+        "renamed text": ("fake.png", b"just some text, not a picture", "image/png"),
+        "text with image MIME, no extension": ("photo", b"plain text body", "image/jpeg"),
+        "RIFF/WAVE named webp": ("audio.webp", wave, "image/webp"),
+        "signature only": ("sig.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 32, "image/png"),
+        "truncated PNG": ("cut.png", png[: len(png) // 2], "image/png"),
+        "corrupt JPEG": ("broken.jpg", b"\xff\xd8\xff\xe0" + b"\x00" * 64, "image/jpeg"),
+        "PDF named png": ("doc.png", b"%PDF-1.4 not an image", "image/png"),
+    }
+    for label, f in bad.items():
+        before = state(aenv)
+        r = up(c, "material_rev", "msr-1", files=(f,), category="photo")
+        assert r.status_code == 400 and "not a valid image" in r.json()["detail"], (label, r.status_code, r.text)
+        assert nothing_added(aenv, before), label
+    before = state(aenv)
+    r = up(c, "material_rev", "msr-1", files=(PNG, bad["RIFF/WAVE named webp"]), category="photo")
+    assert r.status_code == 400 and nothing_added(aenv, before)                     # one bad file: nothing of the batch is kept
+    good = [("a.png", _image("PNG"), "image/png"), ("b.jpg", _image("JPEG"), "image/png"),    # wrong claim on purpose
+            ("c.gif", _image("GIF"), "image/gif"), ("d.webp", _image("WEBP"), "image/webp")]
+    r = up(c, "material_rev", "msr-1", files=good, category="photo")
+    assert r.status_code == 200, r.text
+    assert [a["mime_type"] for a in r.json()] == ["image/png", "image/jpeg", "image/gif", "image/webp"]   # decoded type, not the claim
+    assert up(c, "material_rev", "msr-1", files=(("a.txt", b"hello", "text/plain"),), category="catalogue").status_code == 200  # others unchanged
+    assert up(c, "material_rev", "msr-1", files=(("audio.webp", wave, "image/webp"),), category="catalogue").status_code == 200  # contract kept
+
+
+def test_material_photo_needs_manage_and_is_never_locked_by_state(aenv):
+    """DECISIONS 材料：只作為核准材料登錄簿 — photos of a registered (approved) material stay maintainable; permission and
+    scope still apply, and the OTHER submission categories keep their state locks."""
+    before = state(aenv)
+    r = up(aenv.login("mat_view"), "material_rev", "msr-1", files=(PNG,), category="photo")
+    assert r.status_code == 403 and r.json()["detail"] == f"Operation not permitted. Required: {perms.MATERIAL_MANAGE}"
+    assert nothing_added(aenv, before)
+    c = aenv.login("adm")
+    for status in ("Draft", "Submitted", "Approved", "ApprovedWithComments"):
+        _rev_state(aenv, status)
+        added = up(c, "material_rev", "msr-1", files=(PNG,), category="photo")
+        assert added.status_code == 200, (status, added.text)
+        assert c.delete(f"/api/files/{added.json()[0]['id']}").status_code == 200
+    _rev_state(aenv, "Approved")
+    before = state(aenv)
+    assert up(c, "material_rev", "msr-1", category="catalogue").status_code == 409        # other evidence: still locked
+    assert nothing_added(aenv, before)
+
+
+# Contractor-scoped accounts on material revisions (spec §9.2, plan A decided 2026-10-08). Every account here holds EVERY material permission.
+#   sA — the revision's OWN project and contractor: in scope, so the refusal itself shows (403) on every endpoint.
+#   sV, sB — another contractor (and project): upload and list check the permission first (403); the id / path endpoints check
+#            "exists and in scope" first and answer 404, which hides whether the id exists — the existing attachment-API rule.
+VENDOR_REFUSAL = "Not available to contractor-scoped accounts."
+VENDOR_CASES = {
+    #           upload,                     by-entity,                  metadata,                         delete,                           download
+    "sA": {"upload": (403, VENDOR_REFUSAL), "list": (403, VENDOR_REFUSAL), "metadata": (403, VENDOR_REFUSAL), "delete": (403, VENDOR_REFUSAL), "download": (403, VENDOR_REFUSAL)},
+    "sV": {"upload": (403, VENDOR_REFUSAL), "list": (403, VENDOR_REFUSAL), "metadata": (404, "Attachment not found"), "delete": (404, "Attachment not found"), "download": (404, "File not found")},
+    "sB": {"upload": (403, VENDOR_REFUSAL), "list": (403, VENDOR_REFUSAL), "metadata": (404, "Attachment not found"), "delete": (404, "Attachment not found"), "download": (404, "File not found")},
+}
+
+
+@pytest.mark.parametrize("endpoint", ["upload", "list", "metadata", "delete", "download"])
+@pytest.mark.parametrize("who", sorted(VENDOR_CASES))
+def test_contractor_scoped_accounts_cannot_reach_material_revision_attachments(aenv, who, endpoint):
+    """One endpoint per case, so a failure on one cannot hide the others. Exact status and detail per case (no "403 or 404")."""
+    fid, path = _seed_file(aenv, "material_rev")
+    c = aenv.login(who)
+    before = state(aenv)
+    r = {"upload": lambda: up(c, "material_rev", "msr-1"),
+         "list": lambda: c.get("/api/files/by-entity", params={"entity_type": "material_rev", "entity_id": "msr-1"}),
+         "metadata": lambda: c.get(f"/api/files/{fid}"),
+         "delete": lambda: c.delete(f"/api/files/{fid}"),
+         "download": lambda: c.get(f"/api/files/download/{path}")}[endpoint]()
+    code, detail = VENDOR_CASES[who][endpoint]
+    assert (r.status_code, r.json()["detail"]) == (code, detail), r.text
+    assert nothing_added(aenv, before)                       # no row added / flagged deleted, no file added / removed
+    if endpoint == "delete":
+        db = aenv.Session()
+        try:
+            att = db.get(models.Attachment, fid)
+            assert att is not None and att.is_deleted is False
+        finally:
+            db.close()
+        assert (aenv.root / path).is_file()
+        assert aenv.login("adm").get(f"/api/files/download/{path}").content == b"seed-bytes"
+
+
+def test_a_contractor_account_in_scope_still_reaches_its_other_attachment_types(aenv):
+    """The refusal is specific to material revisions: the same account (sA, P-A / C1) keeps its NCR attachments as before."""
+    assert up(aenv.login("sA"), "ncr", "ncr-a").status_code == 200

@@ -2,7 +2,7 @@ import json
 import re
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, EmailStr, computed_field, constr, field_validator, model_validator, model_serializer
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StrictInt, computed_field, constr, field_validator, model_validator, model_serializer
 
 from core import strict_dates
 
@@ -1085,25 +1085,34 @@ class Contractor(ContractorBase):
 
 
 # Project
+# material_reply_days (MATERIAL-SUBMITTAL M1): calendar days for a material submittal's expected reply date. null = not set;
+# there is no default. Strict non-negative integer — -1, 1.5, "14" and true are rejected. JSON name: materialReplyDays.
+MaterialReplyDays = StrictInt | None
+
+
 class ProjectBase(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
     name: str
     code: str | None = None
     description: str | None = None
     owner: str | None = None
+    material_reply_days: MaterialReplyDays = Field(default=None, ge=0, alias="materialReplyDays")
 
 class ProjectCreate(ProjectBase):
     id: str | None = None
 
 class ProjectUpdate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
     name: str | None = None
     code: str | None = None
     description: str | None = None
     owner: str | None = None
+    material_reply_days: MaterialReplyDays = Field(default=None, ge=0, alias="materialReplyDays")
 
 class Project(ProjectBase):
     id: str
     created_at: str | None = None
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 # FollowUp
@@ -1747,3 +1756,282 @@ class WorkflowStats(BaseModel):
     bucket_26_50: int
     bucket_51_75: int
     bucket_76_100: int
+
+
+# ── Material submittal (MATERIAL-SUBMITTAL V1) ──────────────────────────────────────────────────────────────
+# New tables use snake_case columns; the API speaks camelCase (alias_generator=to_camel). Input models forbid
+# unknown fields, so a client cannot set projectId on update or any server-controlled field (spec §3.7).
+from pydantic.alias_generators import to_camel  # noqa: E402
+
+_MATERIAL_TEXT_FIELDS = ("category", "brand", "model", "specification", "manufacturer", "supplier")
+
+
+class _MaterialCamel(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+
+class _MaterialInput(_MaterialCamel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
+
+    @field_validator(*_MATERIAL_TEXT_FIELDS, mode="before", check_fields=False)
+    @classmethod
+    def _blank_to_none(cls, v):
+        if isinstance(v, str):
+            v = v.strip()
+            return v or None
+        return v
+
+    @field_validator("name", mode="before", check_fields=False)
+    @classmethod
+    def _name_not_blank(cls, v):
+        if v is None:
+            raise ValueError("name is required")
+        if not isinstance(v, str) or not v.strip():
+            raise ValueError("name must not be blank")
+        return v.strip()
+
+
+class MaterialCreate(_MaterialInput):
+    project_id: constr(strip_whitespace=True, min_length=1)
+    name: str
+    category: str | None = None
+    brand: str | None = None
+    model: str | None = None
+    specification: str | None = None
+    manufacturer: str | None = None
+    supplier: str | None = None
+
+
+class MaterialUpdate(_MaterialInput):
+    """Every field optional; projectId is not a field, so sending it is rejected (422). name cannot be cleared."""
+    name: str | None = None
+    category: str | None = None
+    brand: str | None = None
+    model: str | None = None
+    specification: str | None = None
+    manufacturer: str | None = None
+    supplier: str | None = None
+
+
+class Material(_MaterialCamel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, from_attributes=True)
+    id: str
+    project_id: str
+    name: str
+    category: str | None = None
+    brand: str | None = None
+    model: str | None = None
+    specification: str | None = None
+    manufacturer: str | None = None
+    supplier: str | None = None
+    created_by: str | None = None
+    created_at: str | None = None
+    updated_by: str | None = None
+    updated_at: str | None = None
+
+
+class MaterialPage(_MaterialCamel):
+    items: list[Material]
+    total: int
+    limit: int
+    offset: int
+
+
+# ── Material register: records (M2 tables), result history, register input (M6) ──────────────────────────────
+import datetime as _dt  # noqa: E402
+from typing import Literal  # noqa: E402
+
+
+class MaterialResultEntryOut(_MaterialCamel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, from_attributes=True)
+    id: int
+    seq: int
+    entry_type: str
+    result_code: str
+    external_decision_maker: str
+    external_decision_org: str | None = None
+    external_decision_title: str | None = None
+    external_reply_date: str
+    external_doc_no: str | None = None
+    logged_by_user_id: str
+    logged_by_name: str
+    logged_at: str
+    supersedes_entry_id: int | None = None
+    superseded_by_entry_id: int | None = None
+    correction_reason: str | None = None
+    is_current: bool = False
+
+
+class MaterialRevisionOut(_MaterialCamel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, from_attributes=True)
+    id: str
+    rev_no: int
+    status: str
+    snap_category: str | None = None
+    snap_name: str | None = None
+    snap_brand: str | None = None
+    snap_model: str | None = None
+    snap_specification: str | None = None
+    snap_manufacturer: str | None = None
+    snap_supplier: str | None = None
+    spec_reference: str | None = None
+    submitted_date: str | None = None
+    expected_reply_date: str | None = None
+    expected_reply_date_auto: str | None = None
+    submitted_by_user_id: str | None = None
+    submitted_by_name: str | None = None
+    submitted_at: str | None = None
+    created_by: str | None = None
+    created_at: str | None = None
+    result_entries: list[MaterialResultEntryOut] = []
+    differs_from_material: list[str] = []
+
+
+class MaterialSubmittalCard(_MaterialCamel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+    id: str
+    project_id: str
+    vendor_id: str
+    vendor_name: str | None = None
+    material_id: str
+    document_number: str
+    latest_rev_no: int
+    latest_status: str
+    current_approved_rev_no: int | None = None
+    current_approved_result: str | None = None
+    material_name: str | None = None
+    material_category: str | None = None
+    material_brand: str | None = None
+    material_model: str | None = None
+    submitted_date: str | None = None
+    expected_reply_date: str | None = None
+    overdue: bool = False
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class MaterialSubmittalDetail(MaterialSubmittalCard):
+    material: Material
+    revisions: list[MaterialRevisionOut]
+
+
+class MaterialApprovedItem(_MaterialCamel):
+    """One approved material (MATERIAL-SUBMITTAL M6): the CURRENT approved revision of a submittal, as it was approved —
+    the revision's snapshot, not the material master (which may have been edited since)."""
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+    submittal_id: str
+    revision_id: str
+    project_id: str
+    vendor_id: str
+    vendor_name: str | None = None
+    document_number: str
+    rev_no: int
+    result: str
+    approved_date: str | None = None
+    decision_maker: str | None = None
+    external_doc_no: str | None = None
+    name: str | None = None
+    category: str | None = None
+    brand: str | None = None
+    model: str | None = None
+    specification: str | None = None
+    manufacturer: str | None = None
+    supplier: str | None = None
+    spec_reference: str | None = None
+    # shelf view (M6): the first photo's stored path (served by /api/files/download/<path>, same checks) and the photo count
+    cover_photo_path: str | None = None
+    photo_count: int = 0
+
+
+class MaterialRegisterCreate(_MaterialInput):
+    """Register an ALREADY externally approved material in one step (M6, DECISIONS 材料：只作為核准材料登錄簿).
+    Required: project, contractor, name, result (Approved / ApprovedWithComments) and approval date."""
+    project_id: constr(strip_whitespace=True, min_length=1)
+    vendor_id: constr(strip_whitespace=True, min_length=1)
+    name: str
+    category: str | None = None
+    brand: str | None = None
+    model: str | None = None
+    specification: str | None = None
+    manufacturer: str | None = None
+    supplier: str | None = None
+    spec_reference: str | None = None
+    result_code: Literal["Approved", "ApprovedWithComments"]
+    approved_date: _dt.date
+    decision_maker: str | None = None
+    external_doc_no: str | None = None
+    # M6 R2: one id per add-material form, sent with every attempt of that form. A repeated request (lost answer, retry,
+    # double click) returns the record the first one created instead of registering the material a second time.
+    client_request_id: constr(pattern=r"^[A-Za-z0-9-]{8,64}$") | None = None
+
+    @field_validator("spec_reference", "decision_maker", "external_doc_no", mode="before")
+    @classmethod
+    def _opt_text(cls, v):
+        if isinstance(v, str):
+            return v.strip() or None
+        return v
+
+
+class MaterialRegisterUpdate(_MaterialInput):
+    """Edit a registered material. Only the fields sent are changed; the project and the contractor cannot change
+    (the record number carries the contractor's abbreviation). Result fields are kept as an appended correction entry."""
+    name: str | None = None
+    category: str | None = None
+    brand: str | None = None
+    model: str | None = None
+    specification: str | None = None
+    manufacturer: str | None = None
+    supplier: str | None = None
+    spec_reference: str | None = None
+    result_code: Literal["Approved", "ApprovedWithComments"] | None = None
+    approved_date: _dt.date | None = None
+    decision_maker: str | None = None
+    external_doc_no: str | None = None
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def _name_not_blank(cls, v):
+        if v is None:
+            raise ValueError("name must not be cleared")
+        if not isinstance(v, str) or not v.strip():
+            raise ValueError("name must not be blank")
+        return v.strip()
+
+    @field_validator("spec_reference", "decision_maker", "external_doc_no", mode="before")
+    @classmethod
+    def _opt_text(cls, v):
+        if isinstance(v, str):
+            return v.strip() or None
+        return v
+
+    @field_validator("result_code", "approved_date", mode="before")
+    @classmethod
+    def _not_cleared(cls, v):
+        if v is None:
+            raise ValueError("required fields cannot be cleared")
+        return v
+
+
+class MaterialApprovedPage(_MaterialCamel):
+    items: list[MaterialApprovedItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class MaterialDuplicate(_MaterialCamel):
+    """M6 R2: another record of the same project with the same name + brand + model (trimmed, case-insensitive)."""
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+    submittal_id: str
+    document_number: str
+
+
+class MaterialDuplicates(_MaterialCamel):
+    items: list[MaterialDuplicate]
+
+
+class MaterialStats(_MaterialCamel):
+    """M6 R2 dashboard tile: approved materials in one project, or in every project the caller can see."""
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+    total: int
+    registered_since: int

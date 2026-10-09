@@ -12,6 +12,8 @@ import TrendAnalysisSection from './TrendAnalysisSection';
 import OBSParetoChart from './OBSParetoChart';
 import OBSStatsCard from './OBSStatsCard';
 import { ModuleStatusBox, StaleFlag } from './ModuleStatus';
+import MaterialStatsTile from './MaterialStatsTile';
+import { useAuth } from '../../context/AuthContext';
 import styles from './Dashboard.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
 
@@ -35,6 +37,7 @@ const DashboardContent: React.FC<{
   const { statistics, t } = useDashboardStats(selectedVendor);
   const upcomingTasks = useUpcomingTasks(selectedVendor);
   const currentProject = useProjectStore(s => s.currentProject);
+  const { hasPermission } = useAuth();
   // BACKLOG #37 (2026-09-29): one derived status per module (loading / error-empty / error-stale /
   // ok), read straight off each store's own existing `loading`/`error`/list — no new store state,
   // no calculation changed. Replaces the narrower NCR/OBS/NOI-only "failed = unknown, not zero"
@@ -148,6 +151,11 @@ const DashboardContent: React.FC<{
               </div>
             );
           })}
+          {/* MATERIAL-SUBMITTAL M6: approved-material register — own loading / error state, separate from `statistics` */}
+          {hasPermission('material:view:all') && (
+            <MaterialStatsTile selectedVendor={selectedVendor} onOpen={() => navigate('/materials')}
+                               loadingText={t('common.loading')} errorText={t('dashboard.loadError')} retryText={t('common.retry')} />
+          )}
         </div>
       </div>
 

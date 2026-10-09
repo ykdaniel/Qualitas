@@ -70,6 +70,10 @@ OSD_CREATE = "osd:create:all"
 OSD_UPDATE = "osd:update:all"
 OSD_DELETE = "osd:delete:all"
 
+# Material (approved-material register) Permissions — MATERIAL-SUBMITTAL V1 2026-10-08; record_result removed in M6 (register only)
+MATERIAL_VIEW = "material:view:all"
+MATERIAL_MANAGE = "material:manage:all"
+
 # Meeting Minutes Permissions
 MEETING_VIEW = "meeting:view:all"
 MEETING_CREATE = "meeting:create:all"
@@ -159,6 +163,8 @@ ALL_PERMISSIONS = [
     {"code": OSD_CREATE, "description": "建立 OSD"},
     {"code": OSD_UPDATE, "description": "更新 OSD 內容"},
     {"code": OSD_DELETE, "description": "刪除 OSD"},
+    {"code": MATERIAL_VIEW, "description": "查看核准材料"},
+    {"code": MATERIAL_MANAGE, "description": "登錄與編輯核准材料"},
     {"code": MEETING_VIEW, "description": "查看會議記錄"},
     {"code": MEETING_CREATE, "description": "建立會議記錄"},
     {"code": MEETING_UPDATE, "description": "更新會議記錄"},

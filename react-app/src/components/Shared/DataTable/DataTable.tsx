@@ -42,6 +42,8 @@ interface DataTableProps<TData, TValue> {
     onRowSelectionChange?: OnChangeFn<RowSelectionState>
     getRowId?: (originalRow: TData, index: number, parent?: any) => string
     onRowClick?: (row: TData) => void
+    /** Optional: told whenever the column-header filters change (e.g. so a page can export what is filtered). Display unchanged. */
+    onColumnFiltersChange?: (filters: ColumnFiltersState) => void
 }
 
 const DataTableInner = <TData, TValue>({
@@ -54,6 +56,7 @@ const DataTableInner = <TData, TValue>({
     actions,
     getRowClassName,
     onRowClick,
+    onColumnFiltersChange,
     ...props
 }: DataTableProps<TData, TValue>) => {
     const { t } = useLanguage()
@@ -64,6 +67,7 @@ const DataTableInner = <TData, TValue>({
     const [columnVisibility, setColumnVisibility] =
         React.useState<VisibilityState>({})
     const [rowSelection, setRowSelection] = React.useState({})
+    React.useEffect(() => { onColumnFiltersChange?.(columnFilters) }, [columnFilters, onColumnFiltersChange])
 
     // eslint-disable-next-line react-hooks/incompatible-library
     const table = useReactTable({

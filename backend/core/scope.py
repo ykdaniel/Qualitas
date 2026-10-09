@@ -179,6 +179,7 @@ _ENTITY_MODELS = {
     "obs": models.OBS, "osd": models.OSD, "pqp": models.PQP, "fat": models.FAT,
     "followup": models.FollowUp, "audit": models.Audit, "checklist": models.Checklist,
     "meeting": models.MeetingMinutes,
+    "material_rev": models.MaterialSubmittalRevision,   # carries its submittal's project_id / vendor_id (spec §3.2)
 }
 
 

@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, event
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, event, text
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -617,6 +617,7 @@ class Project(Base):
     description = Column(String, nullable=True)                      # 描述
     owner = Column(String, nullable=True)                            # 業主
     created_at = Column(String, nullable=True)
+    material_reply_days = Column(Integer, nullable=True)             # 材料送審預計回覆天數（日曆天）；null＝未設定，無預設值
 
     # Relationships to quality documents
     itps = relationship("ITP", backref="project_ref", passive_deletes=True)
@@ -1059,6 +1060,156 @@ class QWorkflow(Base):
     createdAt = Column(String, nullable=True)
 
     noi_ref = relationship("NOI", back_populates="qworkflow")
+
+
+# ── Material submittal (MATERIAL-SUBMITTAL V1, 2026-10-08) ────────────────────────────────────────────────
+# Spec: docs/planning/MATERIAL-SUBMITTAL-V1-SPEC-2026-10-08.md. New tables use snake_case columns (AGENTS.md);
+# the API maps them to camelCase. All four tables are migration_owned: their schema — columns, NOT NULL,
+# the index list in db_migrations.MATERIAL_INDEXES — comes from db_migrations._create_material_submittal_schema,
+# never from start-up create_all. The Index() declarations below must match that list (tests compare them).
+# SQLite does not enforce foreign keys here (PRAGMA foreign_keys is never set), so ownership checks live in services.
+_MIGRATION_OWNED = {"migration_owned": True}
+
+
+class Material(Base):
+    """A material's maintainable data. Belongs to exactly one project; never shared or selectable across projects."""
+    __tablename__ = "materials"
+    __table_args__ = (
+        Index("ix_materials_project_id", "project_id"),
+        {"info": _MIGRATION_OWNED},
+    )
+
+    id = Column(String, primary_key=True)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    category = Column(String, nullable=True)
+    name = Column(String, nullable=False)
+    brand = Column(String, nullable=True)
+    model = Column(String, nullable=True)
+    specification = Column(String, nullable=True)
+    manufacturer = Column(String, nullable=True)
+    supplier = Column(String, nullable=True)
+    created_by = Column(String, nullable=True)
+    created_at = Column(String, nullable=True)
+    updated_by = Column(String, nullable=True)
+    updated_at = Column(String, nullable=True)
+
+
+class MaterialSubmittal(Base):
+    """One submittal = one material = one board card; revisions keep the same document number (M2)."""
+    __tablename__ = "material_submittals"
+    __table_args__ = (
+        Index("ix_material_submittals_project_id", "project_id"),
+        Index("ix_material_submittals_vendor_id", "vendor_id"),
+        Index("ix_material_submittals_material_id", "material_id"),
+        Index("ux_material_submittals_document_number", "document_number", unique=True),
+        Index("ux_material_submittals_client_request", "project_id", "client_request_id", unique=True),
+        {"info": _MIGRATION_OWNED},
+    )
+
+    id = Column(String, primary_key=True)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    vendor_id = Column(String, ForeignKey("contractors.id"), nullable=False)
+    material_id = Column(String, ForeignKey("materials.id"), nullable=False)
+    document_number = Column(String, nullable=False)
+    latest_rev_no = Column(Integer, nullable=False)
+    latest_status = Column(String, nullable=False)
+    current_approved_rev_no = Column(Integer, nullable=True)     # cache, derived (spec §3.3); no FK on purpose
+    current_approved_result = Column(String, nullable=True)
+    created_by = Column(String, nullable=True)
+    created_at = Column(String, nullable=True)
+    updated_at = Column(String, nullable=True)
+    # M6 R2: the add-material form's request id; a repeated register request returns this record (NULLs never collide)
+    client_request_id = Column(String, nullable=True)
+
+
+class MaterialSubmittalRevision(Base):
+    """A revision: the frozen snapshot of what was submitted. At most one open (Draft/Submitted) per submittal."""
+    __tablename__ = "material_submittal_revisions"
+    __table_args__ = (
+        Index("ix_msr_submittal_id", "submittal_id"),
+        Index("ux_msr_submittal_rev", "submittal_id", "rev_no", unique=True),
+        Index("ux_msr_one_open", "submittal_id", unique=True,
+              sqlite_where=text("status IN ('Draft','Submitted')"),
+              postgresql_where=text("status IN ('Draft','Submitted')")),
+        {"info": _MIGRATION_OWNED},
+    )
+
+    id = Column(String, primary_key=True)
+    submittal_id = Column(String, ForeignKey("material_submittals.id"), nullable=False)
+    project_id = Column(String, nullable=False)
+    vendor_id = Column(String, nullable=False)
+    rev_no = Column(Integer, nullable=False)
+    status = Column(String, nullable=False)
+    snap_category = Column(String, nullable=True)
+    snap_name = Column(String, nullable=True)
+    snap_brand = Column(String, nullable=True)
+    snap_model = Column(String, nullable=True)
+    snap_specification = Column(String, nullable=True)
+    snap_manufacturer = Column(String, nullable=True)
+    snap_supplier = Column(String, nullable=True)
+    spec_reference = Column(Text, nullable=True)
+    submitted_date = Column(String, nullable=True)
+    expected_reply_date = Column(String, nullable=True)
+    expected_reply_date_auto = Column(String, nullable=True)
+    submitted_by_user_id = Column(String, nullable=True)
+    submitted_by_name = Column(String, nullable=True)
+    submitted_at = Column(String, nullable=True)
+    created_by = Column(String, nullable=True)
+    created_at = Column(String, nullable=True)
+
+
+class MaterialSubmittalResultEntry(Base):
+    """Append-only log of external-result entries for a revision (spec §3.2/§3.5). Schema only in M1."""
+    __tablename__ = "material_submittal_result_entries"
+    __table_args__ = (
+        Index("ix_msre_revision_id", "revision_id"),
+        Index("ix_msre_submittal_id", "submittal_id"),
+        Index("ux_msre_revision_seq", "revision_id", "seq", unique=True),
+        {"sqlite_autoincrement": True, "info": _MIGRATION_OWNED},
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    revision_id = Column(String, ForeignKey("material_submittal_revisions.id"), nullable=False)
+    submittal_id = Column(String, nullable=False)
+    project_id = Column(String, nullable=False)
+    vendor_id = Column(String, nullable=False)
+    seq = Column(Integer, nullable=False)
+    entry_type = Column(String, nullable=False)
+    result_code = Column(String, nullable=False)
+    external_decision_maker = Column(String, nullable=False)
+    external_decision_org = Column(String, nullable=True)
+    external_decision_title = Column(String, nullable=True)
+    external_reply_date = Column(String, nullable=False)
+    external_doc_no = Column(String, nullable=True)
+    logged_by_user_id = Column(String, nullable=False)
+    logged_by_name = Column(String, nullable=False)
+    logged_at = Column(String, nullable=False)
+    supersedes_entry_id = Column(Integer, nullable=True)
+    superseded_by_entry_id = Column(Integer, nullable=True)
+    correction_reason = Column(Text, nullable=True)
+
+
+class AppendOnlyViolation(RuntimeError):
+    """An ORM write tried to change or delete a material result entry (spec §3.2: append-only)."""
+
+
+@event.listens_for(MaterialSubmittalResultEntry, "before_update")
+def _result_entry_append_only(mapper, connection, target):
+    """The ONLY change ever allowed: superseded_by_entry_id from NULL to an id (when a correction supersedes it)."""
+    from sqlalchemy import inspect as sa_inspect
+    state = sa_inspect(target)
+    for attr in state.mapper.column_attrs:
+        hist = state.attrs[attr.key].history
+        if not hist.has_changes():
+            continue
+        if attr.key == "superseded_by_entry_id" and (hist.deleted in ((), [None], (None,))) and hist.added and hist.added[0] is not None:
+            continue
+        raise AppendOnlyViolation(f"material result entry {target.id}: {attr.key} cannot be changed")
+
+
+@event.listens_for(MaterialSubmittalResultEntry, "before_delete")
+def _result_entry_no_delete(mapper, connection, target):
+    raise AppendOnlyViolation(f"material result entry {target.id} cannot be deleted")
 
 
 def create_all_except_migration_owned(bind):

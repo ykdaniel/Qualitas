@@ -21,6 +21,7 @@ DEFAULT_NAMING_RULES = [
     {"doc_type": "checklist", "prefix": "QTS-RKS-[ABBREV]-CHK-", "sequence_digits": 6},
     {"doc_type": "osd", "prefix": "QTS-RKS-[ABBREV]-OSD-", "sequence_digits": 6},
     {"doc_type": "meeting", "prefix": "QTS-RKS-[ABBREV]-MOM-", "sequence_digits": 6},
+    {"doc_type": "msa", "prefix": "QTS-RKS-[ABBREV]-MSA-", "sequence_digits": 6},
 ]
 
 router = APIRouter(prefix="/settings", tags=["Settings"])

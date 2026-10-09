@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import ProjectSelector from './ProjectSelector';
+import { materialText } from '../MaterialSubmittal/materialText';
 import styles from './AppLayout.module.css';
 import {
   LayoutDashboard, TrendingUp, Search, FileText, ClipboardList,
@@ -11,6 +12,7 @@ import {
   Factory, Scale, HardHat, BookOpen, Shield, FileCode2, Trophy, LogOut, Home as HomeIcon,
   Workflow as WorkflowIcon, ChevronDown,
   ClipboardCheck, Flag, Settings as SettingsIcon, Users,
+  PackageCheck,
   type LucideIcon,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -18,7 +20,7 @@ import { useState } from 'react';
 type ModuleId =
   | 'home' | 'dashboard' | 'workflow' | 'kpi' | 'followup' | 'pqp' | 'itp' | 'checklist'
   | 'noi' | 'itr' | 'osd' | 'obs' | 'ncr' | 'fat' | 'audit' | 'meeting-minutes'
-  | 'contractors' | 'km' | 'iam' | 'document-naming-rules' | 'owner-performance' | 'security';
+  | 'contractors' | 'km' | 'iam' | 'document-naming-rules' | 'owner-performance' | 'security' | 'materials';
 
 const MODULE_ICONS: Record<ModuleId, LucideIcon> = {
   home: HomeIcon,
@@ -43,6 +45,7 @@ const MODULE_ICONS: Record<ModuleId, LucideIcon> = {
   'document-naming-rules': FileCode2,
   'owner-performance': Trophy,
   security: Shield,
+  materials: PackageCheck,
 };
 
 const AppLayout = () => {
@@ -50,7 +53,7 @@ const AppLayout = () => {
   const location = useLocation();
   const { user, logout, hasPermission } = useAuth();
   const leaveGuard = useLeaveGuard(false);
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const mainModules = useMemo(() => [
     { id: 'home' as ModuleId, title: t('home.welcome'), path: '/', color: '#b8945a' },
@@ -67,11 +70,12 @@ const AppLayout = () => {
 
   const qcModules = useMemo(() => [
     { id: 'pqp' as ModuleId, title: 'PQP', path: '/pqp', color: '#f59e0b' },
+    { id: 'materials' as ModuleId, title: materialText(language, 'navTitle'), path: '/materials', color: '#c2853d' },
     { id: 'itp' as ModuleId, title: 'ITP', path: '/itp', color: '#f093fb' },
     { id: 'checklist' as ModuleId, title: t('checklist.title'), path: '/checklist', color: '#43e97b' },
     { id: 'noi' as ModuleId, title: 'NOI', path: '/noi', color: '#4facfe' },
     { id: 'itr' as ModuleId, title: 'ITR', path: '/itr', color: '#5ec7f3' },
-  ], [t]);
+  ], [t, language]);
 
   const findingsModules = useMemo(() => [
     { id: 'osd' as ModuleId, title: 'OSD', path: '/osd', color: '#fa709a' },
@@ -118,6 +122,7 @@ const AppLayout = () => {
   type NavModule = { id: ModuleId; title: string; path: string; color: string };
   const renderNavItem = (module: NavModule, nested: boolean) => {
     if (module.id === 'km' && !hasPermission('km:view:all')) return null;
+    if (module.id === 'materials' && !hasPermission('material:view:all')) return null;
     const IconComponent = MODULE_ICONS[module.id];
     const active = isActive(module.path);
     return (
