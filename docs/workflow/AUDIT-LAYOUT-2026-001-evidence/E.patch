@@ -1,0 +1,692 @@
+diff --git a/react-app/src/components/Audit/AuditWizard.tsx b/react-app/src/components/Audit/AuditWizard.tsx
+index 808a5f7b..9b1e7baf 100755
+--- a/react-app/src/components/Audit/AuditWizard.tsx
++++ b/react-app/src/components/Audit/AuditWizard.tsx
+@@ -24,6 +24,11 @@ const localToday = () => {
+ // so both have to be checked (the old onKeyPress never fired for 229 — this keeps that behaviour).
+ const isPlainEnter = (e: React.KeyboardEvent) => e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229;
+ 
++// Wizard steps (label keys). Personnel and Scope & Location share one step (AUDIT-LAYOUT-2026-001): both are plan data,
++// a handful of fields each, and "Print Audit Plan" prints them together with step 1 anyway.
++const WIZARD_STEPS = ['audit.wizard.step1', 'audit.wizard.stepPersonnelScope', 'audit.wizard.step4', 'audit.wizard.step5'];
++const LAST_STEP = WIZARD_STEPS.length;
++
+ const ALL_CATEGORY = '__ALL__';
+ const UNCATEGORIZED = '__UNCATEGORIZED__';
+ 
+@@ -316,7 +321,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+     }));
+   };
+ 
+-  const nextStep = () => setStep(prev => Math.min(prev + 1, 5));
++  const nextStep = () => setStep(prev => Math.min(prev + 1, LAST_STEP));
+   const prevStep = () => setStep(prev => Math.max(prev - 1, 1));
+ 
+   const prepareAuditData = (status: string): Omit<AuditItem, 'id'> => {
+@@ -424,8 +429,10 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+   };
+ 
+   const renderProgressBar = () => (
+-    <div className="flex items-center justify-between mb-12 w-full max-w-4xl mx-auto">
+-      {[1, 2, 3, 4, 5].map((i) => (
++    // px-10: each label is centred under its circle and wider than it, so the first and last labels hang ~36px past the
++    // circles — the padding keeps them inside the wizard at every width (AUDIT-LAYOUT R2).
++    <div className="flex items-center justify-between mb-8 w-full max-w-4xl mx-auto px-10">
++      {WIZARD_STEPS.map((labelKey, index) => { const i = index + 1; return (
+         <React.Fragment key={i}>
+           <div className="flex flex-col items-center relative">
+             <button
+@@ -437,33 +444,34 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+             >
+               {step > i ? <CheckCircle size={20} /> : i}
+             </button>
+-            <span className={`absolute -bottom-8 text-xs font-bold whitespace-nowrap ${
++            {/* Below 640px four labels cannot fit side by side (they overlapped even with five steps before): numbers only. */}
++            <span className={`absolute -bottom-8 text-xs font-bold whitespace-nowrap hidden sm:block ${
+               step >= i ? 'text-teal-700' : 'text-slate-400'
+             }`}>
+-              {i === 1 ? t('audit.wizard.step1') : i === 2 ? t('audit.wizard.step2') : i === 3 ? t('audit.wizard.step3') : i === 4 ? t('audit.wizard.step4') : t('audit.wizard.step5')}
++              {t(labelKey)}
+             </span>
+           </div>
+-          {i < 5 && (
++          {i < LAST_STEP && (
+             <div className={`flex-1 h-1 mx-2 rounded-full transition-colors duration-300 drop-shadow-sm ${
+               step > i ? 'bg-teal-500' : 'bg-slate-600/50'
+             }`} />
+           )}
+         </React.Fragment>
+-      ))}
++      ); })}
+     </div>
+   );
+ 
+   return (
+     // print: the wizard is a fixed, internally scrolling overlay — printed as is, only the first screenful came out (one
+     // page, the rest cut off). In print it becomes normal flow so the browser paginates it; Audit.tsx hides the page behind.
+-    <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto py-12 px-4 flex justify-center items-start pt-16 print:static print:overflow-visible print:block print:p-0 print:bg-white">
+-      <div className="w-full max-w-5xl">
++    <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto py-8 px-4 md:px-8 flex justify-center items-start pt-10 print:static print:overflow-visible print:block print:p-0 print:bg-white">
++      <div className="w-full max-w-[1400px]">
+         <div className="flex justify-between items-center mb-6 no-print">
+             <div className="text-left flex items-center gap-4">
+-                <div className="inline-flex items-center justify-center p-3.5 bg-emerald-50 text-teal-700 rounded-2xl">
+-                    <ClipboardList size={28} />
++                <div className="inline-flex items-center justify-center p-2.5 bg-emerald-50 text-teal-700 rounded-2xl">
++                    <ClipboardList size={24} />
+                 </div>
+-                <h1 className="text-3xl font-black text-slate-800 tracking-tight">{t('audit.wizard.title')}</h1>
++                <h1 className="text-2xl font-black text-slate-800 tracking-tight">{t('audit.wizard.title')}</h1>
+             </div>
+             <button 
+                 onClick={requestClose}
+@@ -493,28 +501,21 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+             
+             {/* Step 1: Project Info */}
+             {step === 1 && (
+-              <div className="p-8 md:p-12 space-y-8 animate-in fade-in slide-in-from-bottom-4">
+-                <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-6">
+-                  <FileText className="text-teal-600" size={28} />
+-                  <h2 className="text-2xl font-bold text-slate-800">{t('audit.wizard.step1')}</h2>
++              <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4">
++                <div className="flex items-center gap-3 border-b border-slate-100 pb-3 mb-4">
++                  <FileText className="text-teal-600" size={24} />
++                  <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.step1')}</h2>
+                 </div>
+                 
+-                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="grid grid-cols-1 md:grid-cols-2 gap-8">
+-                  <div className="col-span-full">
++                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-5">
++                  <div>
+                     <label className="flex items-baseline gap-2 mb-2">
+                        <span className="text-sm font-bold text-slate-800">Audit Doc No</span>
+                        <span className="text-xs font-medium text-slate-400">(稽核文件編號)</span>
+                     </label>
+-                    <input type="text" name="auditDocNo" value={auditNo} className="w-full md:w-1/2 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl outline-none text-slate-400 font-medium cursor-not-allowed" placeholder="系統自動產生" readOnly style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }} />
+-                  </div>
+-                  <div className="col-span-full">
+-                    <label className="flex items-baseline gap-2 mb-2">
+-                       <span className="text-sm font-bold text-slate-800">{t('audit.auditTitle') || 'Audit Title'}</span>
+-                       <span className="text-xs font-medium text-slate-400">(稽核標題)</span>
+-                    </label>
+-                    <input type="text" name="auditTitle" value={formData.auditTitle} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" placeholder={t('audit.auditTitlePlaceholder')} />
++                    <input type="text" name="auditDocNo" value={auditNo} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl outline-none text-slate-400 font-medium cursor-not-allowed" placeholder="系統自動產生" readOnly style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }} />
+                   </div>
+-                  <div className="col-span-full">
++                  <div>
+                     <label className="flex items-baseline gap-2 mb-2">
+                        <span className="text-sm font-bold text-slate-800">Project No / Name</span>
+                        <span className="text-xs font-medium text-slate-400">(專案名稱)</span>
+@@ -523,7 +524,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                       name="projectId"
+                       value={selectedProjectId}
+                       onChange={handleProjectChange}
+-                      className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none"
++                      className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none"
+                     >
+                       <option value="">{t('audit.wizard.selectProject')}</option>
+                       {projectList.map(p => (
+@@ -531,36 +532,43 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                       ))}
+                     </select>
+                   </div>
+-                  <div className="col-span-full">
++                  <div>
+                     <label className="flex items-baseline gap-2 mb-2">
+                        <span className="text-sm font-bold text-slate-800">Contractor</span>
+                        <span className="text-xs font-medium text-slate-400">(受稽核廠商)</span>
+                     </label>
+-                    <select value={formData.vendorId} onChange={handleContractorChange} className="w-full md:w-1/2 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none">
++                    <select value={formData.vendorId} onChange={handleContractorChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none">
+                         <option value="">{t('audit.wizard.selectContractor')}</option>
+                         {pickerContractors.map(vendor => (
+                             <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
+                         ))}
+                     </select>
+                   </div>
+-                  <div className="col-span-1">
++                  <div className="col-span-full">
++                    <label className="flex items-baseline gap-2 mb-2">
++                       <span className="text-sm font-bold text-slate-800">{t('audit.auditTitle') || 'Audit Title'}</span>
++                       <span className="text-xs font-medium text-slate-400">(稽核標題)</span>
++                    </label>
++                    <input type="text" name="auditTitle" value={formData.auditTitle} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" placeholder={t('audit.auditTitlePlaceholder')} />
++                  </div>
++                  <div>
+                     <label className="flex items-baseline gap-2 mb-2">
+                        <span className="text-sm font-bold text-slate-800">Audit Start Date</span>
+                     </label>
+-                    <input type="date" name="auditStartDate" value={formData.auditStartDate} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
++                    <input type="date" name="auditStartDate" value={formData.auditStartDate} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                   </div>
+-                  <div className="col-span-1">
++                  <div>
+                     <label className="flex items-baseline gap-2 mb-2">
+                        <span className="text-sm font-bold text-slate-800">Audit End Date</span>
+                     </label>
+-                    <input type="date" name="auditEndDate" value={formData.auditEndDate} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
++                    <input type="date" name="auditEndDate" value={formData.auditEndDate} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                   </div>
+-                  <div className="col-span-full">
++                  <div>
+                     <label className="flex items-baseline gap-2 mb-2">
+                        <span className="text-sm font-bold text-slate-800">Status</span>
+                        <span className="text-xs font-medium text-slate-400">(稽核狀態)</span>
+                     </label>
+-                    <select name="status" value={formData.status} onChange={handleInputChange} className="w-full md:w-1/3 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none">
++                    <select name="status" value={formData.status} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none">
+                       {/* Only what the workflow allows from the last saved status (the backend refuses anything else). */}
+                       {statusOptions.map(status => (
+                         <option key={status} value={status}>{AUDIT_STATUS_LABELS[status] || status}</option>
+@@ -571,80 +579,77 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+               </div>
+             )}
+ 
+-            {/* Step 2: Personnel */}
++            {/* Step 2: Personnel + Scope & Location (merged, AUDIT-LAYOUT-2026-001) */}
+             {step === 2 && (
+-              <div className="p-8 md:p-12 space-y-8 animate-in fade-in slide-in-from-bottom-4">
+-                <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-6">
+-                  <Users className="text-teal-600" size={28} />
+-                  <h2 className="text-2xl font-bold text-slate-800">{t('audit.wizard.step2')} (Carried Out By)</h2>
++              <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4">
++                <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
++                  <div className="flex items-center gap-3">
++                    <Users className="text-teal-600" size={24} />
++                    <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.stepPersonnelScope')}</h2>
++                  </div>
++                  <button className={actionStyles.secondary} type="button" onClick={() => window.print()}>
++                    <Printer className="w-4 h-4" /> {t('audit.wizard.printPlan')}
++                  </button>
+                 </div>
+-                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="grid grid-cols-1 md:grid-cols-2 gap-8">
++
++                <h3 className="flex items-center gap-2 text-sm font-bold text-slate-500 uppercase tracking-wide no-print">
++                  <Users size={16} /> {t('audit.wizard.step2')} (Carried Out By)
++                </h3>
++                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-5 no-print">
+                   <div>
+                     <label className="flex items-baseline gap-2 mb-2">
+                        <span className="text-sm font-bold text-slate-800">Project Director</span>
+                     </label>
+-                    <input type="text" name="projectDirector" value={formData.projectDirector} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
++                    <input type="text" name="projectDirector" value={formData.projectDirector} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                   </div>
+                   <div>
+                     <label className="flex items-baseline gap-2 mb-2">
+                        <span className="text-sm font-bold text-slate-800">Package or Tech. Lead</span>
+                     </label>
+-                    <input type="text" name="techLead" value={formData.techLead} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
++                    <input type="text" name="techLead" value={formData.techLead} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                   </div>
+                   <div>
+                     <label className="flex items-baseline gap-2 mb-2">
+                        <span className="text-sm font-bold text-slate-800">Lead Auditor</span>
+                     </label>
+-                    <input type="text" name="leadAuditor" value={formData.leadAuditor} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
++                    <input type="text" name="leadAuditor" value={formData.leadAuditor} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                   </div>
+-                  <div>
++                  <div className="col-span-full">
+                     <label className="flex items-baseline gap-2 mb-2">
+                        <span className="text-sm font-bold text-slate-800">Support Auditor</span>
+                     </label>
+-                    <input type="text" name="supportAuditors" value={formData.supportAuditors} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
++                    <input type="text" name="supportAuditors" value={formData.supportAuditors} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                   </div>
+                 </fieldset>
+-              </div>
+-            )}
+ 
+-            {/* Step 3: Location */}
+-            {step === 3 && (
+-              <div className="p-8 md:p-12 space-y-8 animate-in fade-in slide-in-from-bottom-4">
+-                <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
+-                  <div className="flex items-center gap-3">
+-                    <MapPin className="text-teal-600" size={28} />
+-                    <h2 className="text-2xl font-bold text-slate-800">{t('audit.wizard.step3')}</h2>
+-                  </div>
+-                  <button className={actionStyles.secondary} type="button" onClick={() => window.print()}>
+-                    <Printer className="w-4 h-4" /> {t('audit.wizard.printPlan')}
+-                  </button>
+-                </div>
+-                
+-                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="space-y-8 no-print">
++                <h3 className="flex items-center gap-2 text-sm font-bold text-slate-500 uppercase tracking-wide pt-2 no-print">
++                  <MapPin size={16} /> {t('audit.wizard.step3')}
++                </h3>
++                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-5 no-print">
+                 <div>
+                   <label className="flex items-baseline gap-2 mb-2">
+                        <span className="text-sm font-bold text-slate-800">Location</span>
+                        <span className="text-xs font-medium text-slate-400">(稽核地點)</span>
+                   </label>
+-                  <input type="text" name="location" value={formData.location} onChange={handleInputChange} className="w-full md:w-1/2 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
++                  <input type="text" name="location" value={formData.location} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                 </div>
+-                <div>
++                <div className="md:col-span-1 xl:col-span-2">
+                   <label className="flex items-baseline gap-2 mb-2">
+                        <span className="text-sm font-bold text-slate-800">Audit Criteria</span>
+                        <span className="text-xs font-medium text-slate-400">(稽核準則)</span>
+                   </label>
+-                  <input type="text" name="auditCriteria" value={formData.auditCriteria} onChange={handleInputChange} placeholder="例如: 專案合約、ISO 9001、施工規範..." className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
++                  <input type="text" name="auditCriteria" value={formData.auditCriteria} onChange={handleInputChange} placeholder="例如: 專案合約、ISO 9001、施工規範..." className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                 </div>
+-                <div>
++                <div className="col-span-full">
+                   <label className="flex items-baseline gap-2 mb-2">
+                        <span className="text-sm font-bold text-slate-800">Audit Scope</span>
+                        <span className="text-xs font-medium text-slate-400">(範圍描述)</span>
+                   </label>
+-                  <textarea name="scopeDescription" value={formData.scopeDescription} onChange={handleInputChange} rows={5} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none resize-none transition-all text-slate-800 font-medium"></textarea>
++                  <textarea name="scopeDescription" value={formData.scopeDescription} onChange={handleInputChange} rows={5} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none resize-none transition-all text-slate-800 font-medium"></textarea>
+                 </div>
+                 </fieldset>
+ 
+-                {/* Print Only Summary for Steps 1-3 */}
++                {/* Print Only Summary for the plan (steps 1-2) */}
+                 <div className="hidden print:block space-y-4">
+                   <div className="text-center mb-6 border-b-2 border-slate-800 pb-3">
+                     <h1 className="text-2xl font-bold text-slate-900 mb-1">Internal Quality Audit Plan</h1>
+@@ -652,7 +657,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                   </div>
+ 
+                   <div className="grid grid-cols-2 gap-y-3 gap-x-6 text-sm border border-slate-300 p-5 rounded-lg">
+-                    {/* Step 1 Info */}
++                    {/* Project info (step 1) */}
+                     <div className="col-span-1 border-b border-slate-100 pb-2">
+                       <span className="font-bold text-slate-500 block mb-0.5 text-xs">Audit No. (稽核編號)</span>
+                       <p className="font-semibold text-slate-800 text-sm">{auditNo || 'TBD'}</p>
+@@ -671,7 +676,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                       <p className="font-semibold text-slate-800 text-sm">{formData.auditStartDate} {formData.auditEndDate ? `~ ${formData.auditEndDate}` : ''}</p>
+                     </div>
+ 
+-                    {/* Step 2 Info */}
++                    {/* Personnel (step 2) */}
+                     <div className="col-span-1 border-b border-slate-100 pb-2">
+                       <span className="font-bold text-slate-500 block mb-0.5 text-xs">Project Director (專案主管)</span>
+                       <p className="font-semibold text-slate-800 text-sm">{formData.projectDirector || '-'}</p>
+@@ -689,7 +694,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                       <p className="font-semibold text-slate-800 text-sm">{formData.supportAuditors || '-'}</p>
+                     </div>
+ 
+-                    {/* Step 3 Info */}
++                    {/* Scope & location (step 2) */}
+                     <div className="col-span-1 border-b border-slate-100 pb-2">
+                       <span className="font-bold text-slate-500 block mb-0.5 text-xs">Location (稽核地點)</span>
+                       <p className="font-semibold text-slate-800 text-sm">{formData.location || '-'}</p>
+@@ -708,13 +713,13 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+               </div>
+             )}
+ 
+-            {/* Step 4: Checklist Configuration */}
+-            {step === 4 && (
+-              <div className="p-8 md:p-12 space-y-8 animate-in fade-in slide-in-from-bottom-4">
+-                <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
++            {/* Step 3: Checklist Configuration */}
++            {step === 3 && (
++              <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4">
++                <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                   <div className="flex items-center gap-3">
+-                    <CheckSquare className="text-teal-600" size={28} />
+-                    <h2 className="text-2xl font-bold text-slate-800">{t('audit.wizard.step4')} Checklist</h2>
++                    <CheckSquare className="text-teal-600" size={24} />
++                    <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.step4')} Checklist</h2>
+                   </div>
+                   <button className={actionStyles.secondary} type="button" onClick={() => window.print()}>
+                     <Printer className="w-4 h-4" /> {t('audit.wizard.printChecklist')}
+@@ -840,9 +845,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+               </div>
+             )}
+ 
+-            {/* Step 5: Execution & Evaluation */}
+-            {step === 5 && (
+-              <div className="p-8 md:p-12 space-y-6 animate-in fade-in slide-in-from-bottom-4 bg-slate-50 min-h-[500px]">
++            {/* Step 4: Execution & Evaluation */}
++            {step === 4 && (
++              <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 bg-slate-50 min-h-[500px]">
+                 
+                 {/* Header Section */}
+                 <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+@@ -922,7 +927,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                         placeholder={t('audit.wizard.searchPlaceholder')}
+                         value={searchTerm}
+                         onChange={(e) => setSearchTerm(e.target.value)}
+-                        // The only text input on step 5, inside the form that has the submit button:
++                        // The only text input on the last step, inside the form that has the submit button:
+                         // Enter would otherwise submit (save and close) the whole audit.
+                         onKeyDown={(e) => { if (isPlainEnter(e)) e.preventDefault(); }}
+                         className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-slate-50"
+@@ -1062,7 +1067,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                     onChange={handleInputChange}
+                     rows={5}
+                     disabled={readOnly}
+-                    className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium resize-y print:hidden"
++                    className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium resize-y print:hidden"
+                     placeholder={t('audit.findingsPlaceholder')}
+                   />
+                   {/* A textarea prints only its visible rows; print the full findings as text instead. */}
+@@ -1095,7 +1100,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                               <span className="text-sm font-medium text-slate-500 animate-in fade-in hidden sm:block whitespace-nowrap absolute right-8 bottom-24">
+                                   {draftMessage}
+                               </span>
+-                          )}</>} primary={<>{step < 5 ? (
++                          )}</>} primary={<>{step < LAST_STEP ? (
+                               <button className={actionStyles.primary} key="btn-next" type="button" onClick={(e) => { e.preventDefault(); nextStep(); }}>
+                                   {t('audit.wizard.nextStep')} <ChevronRight size={20} />
+                               </button>
+diff --git a/react-app/src/context/LanguageContext.tsx b/react-app/src/context/LanguageContext.tsx
+index 5eb1a284..61709eac 100755
+--- a/react-app/src/context/LanguageContext.tsx
++++ b/react-app/src/context/LanguageContext.tsx
+@@ -869,6 +869,7 @@ const translations: Record<Language, Record<string, string>> = {
+     'audit.wizard.step3': 'Scope & Location',
+     'audit.wizard.step4': 'Checklist Setup',
+     'audit.wizard.step5': 'Execution & Review',
++    'audit.wizard.stepPersonnelScope': 'Personnel & Scope',
+     'audit.wizard.selectProject': '-- Select Project --',
+     'audit.wizard.selectContractor': '-- Select Contractor --',
+     'audit.wizard.allCategories': 'All',
+@@ -2338,6 +2339,7 @@ const translations: Record<Language, Record<string, string>> = {
+     'audit.wizard.step3': '地點與範圍',
+     'audit.wizard.step4': '配置查檢表',
+     'audit.wizard.step5': '執行與評估',
++    'audit.wizard.stepPersonnelScope': '人員與範圍',
+     'audit.wizard.selectProject': '-- 請選擇專案 --',
+     'audit.wizard.selectContractor': '-- 請選擇受稽核廠商 --',
+     'audit.wizard.allCategories': '全部',
+diff --git a/react-app/tests-browser/audit-ime-enter-check.mjs b/react-app/tests-browser/audit-ime-enter-check.mjs
+index 6104cba9..59473057 100644
+--- a/react-app/tests-browser/audit-ime-enter-check.mjs
++++ b/react-app/tests-browser/audit-ime-enter-check.mjs
+@@ -11,7 +11,7 @@ await p.goto(UI + '/login'); await p.fill('#email', 'audit_full'); await p.fill(
+ await p.waitForURL(u => !u.pathname.startsWith('/login'), { timeout: 15000 });
+ await p.goto(UI + '/audit?openId=AHB-RETIRED-1');
+ await p.waitForSelector('input[name=auditDocNo]');
+-await p.locator('button', { hasText: /^4$/ }).first().click();
++await p.locator('button', { hasText: /^3$/ }).first().click();  // Checklist Setup
+ await p.waitForSelector('input[name=task]');
+ const count = () => p.evaluate(() => document.querySelectorAll('[class*="rounded-2xl"] input[name=no], li, .group').length);
+ const items = () => p.evaluate(() => [...document.querySelectorAll('*')].filter(e => e.children.length === 0 && /^IME-/.test(e.textContent || '')).length);
+diff --git a/react-app/tests-browser/audit-polish-check.mjs b/react-app/tests-browser/audit-polish-check.mjs
+index 6ff1ed9d..f69df9a7 100644
+--- a/react-app/tests-browser/audit-polish-check.mjs
++++ b/react-app/tests-browser/audit-polish-check.mjs
+@@ -82,15 +82,15 @@ const closeWizard = async p => { await p.locator('.fixed button:has(svg.lucide-x
+   await p.context().close();
+ }
+ 
+-// 6. step-5 search is case-insensitive
++// 6. last-step (Execution & Review) search is case-insensitive
+ {
+   const p = await login('audit_full');
+   await openAudit(p, 'AHB-DRAFT-1');
+-  await p.locator('button', { hasText: /^5$/ }).first().click();
++  await p.locator('button', { hasText: /^4$/ }).first().click();  // last step (Execution & Review)
+   await p.fill('input[placeholder*="Search items"], input[placeholder*="搜尋"]', 'print-item-07');
+   await p.waitForTimeout(400);
+   const rows = await p.locator('tbody tr', { hasText: 'PRINT-ITEM-07' }).count();
+-  result('step-5 search ignores case', rows >= 1, `rows=${rows}`);
++  result('last-step search ignores case', rows >= 1, `rows=${rows}`);
+   await p.context().close();
+ }
+ await browser.close();
+diff --git a/react-app/tests-browser/audit-print-check.mjs b/react-app/tests-browser/audit-print-check.mjs
+index 47890d33..bfdf7089 100644
+--- a/react-app/tests-browser/audit-print-check.mjs
++++ b/react-app/tests-browser/audit-print-check.mjs
+@@ -1,5 +1,6 @@
+ // AUDIT-POLISH-2026-001: what the wizard's three print buttons actually print (isolated stack only).
+-// Opens an audit through ?openId= (also exercises the deep link), goes to steps 3 / 4 / 5 (the steps with a print button),
++// Opens an audit through ?openId= (also exercises the deep link), goes to steps 2 / 3 / 4 (the steps with a print button;
++// before AUDIT-LAYOUT-2026-001 merged Personnel into Scope & Location they were 3 / 4 / 5),
+ // renders each with print media into a PDF (page.pdf = the browser's print pipeline) and reports pages + text markers.
+ // Usage: node audit-print-check.mjs <stack.json> <outDir> <auditNo>
+ import { chromium } from '/Users/nook/Documents/Qualitas/react-app/node_modules/playwright/index.mjs';
+@@ -17,7 +18,7 @@ await p.waitForURL(u => !u.pathname.startsWith('/login'), { timeout: 15000 });
+ await p.goto(`${UI}/audit?openId=${encodeURIComponent(auditNo)}`);
+ await p.waitForSelector('input[name=auditDocNo]', { timeout: 15000 });
+ console.log('DEEPLINK opened', await p.inputValue('input[name=auditDocNo]'), 'url', new URL(p.url()).search || '(openId removed)');
+-for (const step of [3, 4, 5]) {
++for (const step of [2, 3, 4]) {
+   await p.locator('button', { hasText: new RegExp(`^${step}$`) }).first().click();
+   await p.waitForTimeout(600);
+   const hasPrintButton = await p.locator('button', { hasText: /列印|Print/ }).count();
+diff --git a/react-app/tests-browser/audit-layout-check.mjs b/react-app/tests-browser/audit-layout-check.mjs
+new file mode 100644
+index 00000000..945a1927
+--- /dev/null
++++ b/react-app/tests-browser/audit-layout-check.mjs
+@@ -0,0 +1,54 @@
++// AUDIT-LAYOUT-2026-001: wizard layout at three widths — columns per row and no horizontal page scroll — plus the merged
++// step 2 (Personnel + Scope & Location) and the 4-step progress bar. Isolated stack only. Usage: node audit-layout-check.mjs <stack.json> <outDir>
++import { chromium } from '/Users/nook/Documents/Qualitas/react-app/node_modules/playwright/index.mjs';
++import { readFileSync, mkdirSync } from 'node:fs';
++const stack = JSON.parse(readFileSync(process.argv[2], 'utf8'));
++const out = process.argv[3]; mkdirSync(out, { recursive: true });
++const UI = `http://127.0.0.1:${stack.vite_port}`;
++let failures = 0;
++const check = (name, ok, extra = '') => { if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${extra ? '  -> ' + extra : ''}`); };
++const browser = await chromium.launch({ headless: true });
++for (const [label, width, cols] of [['desktop 1440', 1440, 3], ['laptop 1024', 1024, 2], ['phone 390', 390, 1]]) {
++  const ctx = await browser.newContext({ viewport: { width, height: 900 } });
++  await ctx.addInitScript(() => localStorage.setItem('language', 'en'));
++  const p = await ctx.newPage();
++  await p.goto(UI + '/login'); await p.fill('#email', 'audit_full'); await p.fill('#password', 'Accept-Test-1234'); await p.click('button[type=submit]');
++  await p.waitForURL(u => !u.pathname.startsWith('/login'), { timeout: 15000 });
++  await p.goto(UI + '/audit?openId=AHB-DRAFT-1'); await p.waitForSelector('input[name=auditDocNo]', { timeout: 15000 });
++  // columns = how many of the first three fields (Doc No, Project, Contractor) sit on the same row as Doc No
++  const firstRow = await p.evaluate(() => {
++    const els = [document.querySelector('input[name=auditDocNo]'), document.querySelector('select[name=projectId]'),
++      [...document.querySelectorAll('select')].find(s => [...s.options].some(o => /Select Contractor/.test(o.text)))];
++    const tops = els.map(el => Math.round(el.getBoundingClientRect().top));
++    return { cols: tops.filter(t => t === tops[0]).length, tops };
++  });
++  // The wizard is a fixed overlay that scrolls by itself: overflow shows up in IT, not in the document.
++  const fit = await p.evaluate(() => {
++    const overlay = document.querySelector('input[name=auditDocNo]').closest('.fixed');
++    const labels = [...document.querySelectorAll('button')].filter(b => /^[0-9]$/.test(b.innerText.trim()))
++      .map(b => b.parentElement.querySelector('span')).filter(s => s && getComputedStyle(s).display !== 'none')
++      .map(s => { const r = s.getBoundingClientRect(); return { text: s.innerText, left: Math.round(r.left), right: Math.round(r.right) }; });
++    return { overlayOverflow: overlay.scrollWidth - overlay.clientWidth, pageOverflow: document.documentElement.scrollWidth - window.innerWidth,
++             viewport: window.innerWidth, labels };
++  });
++  const clipped = fit.labels.filter(l => l.left < 0 || l.right > fit.viewport);
++  check(`${label}: step 1 has ${cols} column(s)`, firstRow.cols === cols, JSON.stringify(firstRow));
++  check(`${label}: no horizontal overflow (wizard overlay and page)`, fit.overlayOverflow <= 0 && fit.pageOverflow <= 0, `overlay=${fit.overlayOverflow}px page=${fit.pageOverflow}px`);
++  check(`${label}: every visible progress label inside the viewport`, clipped.length === 0,
++    fit.labels.length ? JSON.stringify(fit.labels) : 'labels hidden at this width (numbers only)');
++  await p.screenshot({ path: `${out}/step1-${width}.png`, fullPage: true });
++  const steps = await p.evaluate(() => [...document.querySelectorAll('button')].filter(b => /^[0-9]$/.test(b.innerText.trim())).map(b => b.innerText.trim()));
++  if (width === 1440) check('progress bar has 4 steps', JSON.stringify(steps) === '["1","2","3","4"]', JSON.stringify(steps));
++  await p.locator('button', { hasText: /^2$/ }).first().click(); await p.waitForTimeout(400);
++  const step2 = await p.evaluate(() => ({
++    personnel: ['projectDirector', 'techLead', 'leadAuditor', 'supportAuditors'].every(n => document.querySelector(`input[name=${n}]`)),
++    scope: !!document.querySelector('input[name=location]') && !!document.querySelector('input[name=auditCriteria]') && !!document.querySelector('textarea[name=scopeDescription]'),
++    printPlan: [...document.querySelectorAll('button')].some(b => /Print Audit Plan/.test(b.innerText)),
++  }));
++  check(`${label}: step 2 holds personnel + scope fields and the print-plan button`, step2.personnel && step2.scope && step2.printPlan, JSON.stringify(step2));
++  await p.screenshot({ path: `${out}/step2-${width}.png`, fullPage: true });
++  await ctx.close();
++}
++await browser.close();
++console.log(failures === 0 ? 'ALL PASS' : `${failures} FAILED`);
++process.exit(failures ? 1 : 0);
+diff --git a/react-app/tests-browser/audit-smoke-all.mjs b/react-app/tests-browser/audit-smoke-all.mjs
+new file mode 100644
+index 00000000..a2e5fa3a
+--- /dev/null
++++ b/react-app/tests-browser/audit-smoke-all.mjs
+@@ -0,0 +1,171 @@
++// Audit module end-to-end smoke (isolated stack only) covering AUDIT-HARDENING A/B, AUDIT-CONTRACTORS and AUDIT-POLISH
++// behaviour as a user sees it. Seeds: seed_audit_hardening_b_review.py + seed_audit_polish_review.py. English UI.
++// Mutates data (creates audits, voids AHB-DRAFT-1, links AHB-LEGACY-1, deletes AHB-VOID-1) — run the read-mostly scripts
++// (audit-polish-check / audit-print-check / audit-ime-enter-check) BEFORE this one.
++// Usage: node audit-smoke-all.mjs <stack.json> <outDir>
++import { chromium } from '/Users/nook/Documents/Qualitas/react-app/node_modules/playwright/index.mjs';
++import { readFileSync, mkdirSync } from 'node:fs';
++const stack = JSON.parse(readFileSync(process.argv[2], 'utf8'));
++const out = process.argv[3]; mkdirSync(out, { recursive: true });
++const UI = `http://127.0.0.1:${stack.vite_port}`, PW = 'Accept-Test-1234';
++let failures = 0;
++const check = (name, ok, extra = '') => { if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${extra !== '' ? '  -> ' + String(extra).replace(/\s+/g, ' ').slice(0, 260) : ''}`); };
++const browser = await chromium.launch({ headless: true });
++
++async function login(user) {
++  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
++  await ctx.addInitScript(() => localStorage.setItem('language', 'en'));
++  const p = await ctx.newPage();
++  await p.goto(UI + '/login'); await p.fill('#email', user); await p.fill('#password', PW); await p.click('button[type=submit]');
++  await p.waitForURL(u => !u.pathname.startsWith('/login'), { timeout: 15000 });
++  await p.goto(UI + '/audit'); await p.waitForSelector("table:not([class*='matrixTable']) tbody tr", { timeout: 15000 }); await p.waitForTimeout(800);
++  return p;
++}
++const api = (p, path) => p.evaluate(async path => { const r = await fetch(path, { credentials: 'include' }); let b = null; try { b = await r.json(); } catch (_) {} return { status: r.status, body: b }; }, path);
++// the Audit List data table only (the schedule matrix is a table too, and its cells carry audit numbers)
++const listTable = "table:not([class*='matrixTable'])";
++const rows = p => p.evaluate(sel => [...document.querySelectorAll(`${sel} tbody tr`)].map(r => r.innerText.replace(/\s+/g, ' ').trim()), listTable);
++const rowNos = async p => (await rows(p)).map(t => (t.match(/AHB-[A-Z]+-\d+/) || [])[0]).filter(Boolean).sort();  // seeded audits only
++async function pickProject(p, name) {
++  await p.locator('[class*="trigger"]').first().click();
++  await p.getByText(name, { exact: true }).last().click();
++  await p.waitForTimeout(1200);
++}
++async function openAudit(p, no) {
++  await p.locator(`${listTable} tbody tr`, { hasText: no }).first().locator('td').nth(2).click();
++  await p.waitForSelector('input[name=auditDocNo]', { timeout: 10000 });
++}
++const wizardState = p => p.evaluate(() => ({
++  docNo: document.querySelector('input[name=auditDocNo]')?.value,
++  project: document.querySelector('select[name=projectId]')?.value,
++  statusOptions: [...(document.querySelector('select[name=status]')?.options || [])].map(o => o.value),
++  locked: [...document.querySelectorAll('form fieldset')].every(f => f.disabled),
++  saveVisible: [...document.querySelectorAll('button')].some(b => /Save Draft/.test(b.innerText)),
++  notice: document.querySelector('.bg-amber-50')?.innerText || '',
++  error: document.querySelector('.bg-red-50')?.innerText || '',
++}));
++const closeWizard = async p => { await p.locator('.fixed button:has(svg.lucide-x)').first().click(); await p.waitForTimeout(500); };
++const contractorSelect = p => p.locator('select').filter({ has: p.locator('option', { hasText: 'Select Contractor' }) }).first();
++const saveDraft = async p => { await p.locator('button', { hasText: 'Save Draft' }).first().click(); await p.waitForTimeout(1500); };
++
++// ── audit_full: view/create/update/delete, unscoped, NO contractors:view:all ──────────────────────────────────────────
++{
++  const p = await login('audit_full');
++  check('A1 list shows every seeded audit', JSON.stringify(await rowNos(p)) === JSON.stringify(['AHB-CLOSED-1', 'AHB-DRAFT-1', 'AHB-LEGACY-1', 'AHB-RETIRED-1', 'AHB-VOID-1', 'AHB-VOIDONLY-1']), JSON.stringify(await rowNos(p)));
++  const contractorsApi = (await api(p, '/api/contractors/')).status;
++  const panel = await p.evaluate(() => Object.fromEntries([...document.querySelectorAll('[class*="vendorItem"]')].map(el => [el.innerText.split('\n')[0].trim(), /pastUnfinished/.test(el.className)])));
++  check('A2 contractor panel filled without contractors permission', contractorsApi === 403 && 'Review Vendor' in panel && 'Void Only Co' in panel, `contractorsApi=${contractorsApi} ${JSON.stringify(panel)}`);
++  check('A3 overdue flag: past Draft yes, Void-only no', panel['Review Vendor'] === true && panel['Void Only Co'] === false, JSON.stringify(panel));
++  const scheduleRows = await p.locator('[class*="matrixRow"]').count();
++  check('A4 schedule has contractor rows', scheduleRows >= 1, `rows=${scheduleRows}`);
++
++  await pickProject(p, 'Audit Review P1');
++  const p1 = await rowNos(p);
++  await pickProject(p, 'Audit Review P2');
++  const p2 = await rowNos(p);
++  check('A5 project switch re-fetches the list', JSON.stringify(p1) === JSON.stringify(['AHB-DRAFT-1', 'AHB-RETIRED-1', 'AHB-VOID-1', 'AHB-VOIDONLY-1']) && JSON.stringify(p2) === JSON.stringify(['AHB-CLOSED-1']), `P1=${p1} P2=${p2}`);
++
++  // create in P1 with a contractor
++  await pickProject(p, 'Audit Review P1');
++  await p.locator('button', { hasText: 'Add Audit' }).first().click();
++  await p.waitForSelector('input[name=auditTitle]');
++  let w = await wizardState(p);
++  check('A6 new audit: header project preselected, create statuses only', w.project === 'AHB-P1' && JSON.stringify(w.statusOptions) === JSON.stringify(['Draft', 'Planned', 'In Progress', 'Completed']), JSON.stringify(w));
++  const pickerTexts = await contractorSelect(p).locator('option').allInnerTexts();
++  check('A7 wizard contractor picker lists active contractors (not the inactive one)', pickerTexts.includes('Review Vendor') && !pickerTexts.includes('Retired Co'), JSON.stringify(pickerTexts));
++  await p.fill('input[name=auditTitle]', 'smoke create');
++  await contractorSelect(p).selectOption({ label: 'Review Vendor' });
++  await p.fill('input[name=auditStartDate]', '2026-10-20');
++  await saveDraft(p);
++  w = await wizardState(p);
++  const firstNo = w.docNo;
++  check('A8 first Save Draft fills Audit No with the contractor prefix', /^QTS-RV-AUDIT-\d{6}$/.test(firstNo || '') && JSON.stringify(w.statusOptions) === JSON.stringify(['Draft', 'Planned', 'Void']), JSON.stringify(w));
++  // set the status while still on step 1 (on the last step the earlier steps show a check icon instead of their number)
++  await p.locator('select[name=status]').selectOption('Planned');
++  // Enter in the last step's search must not save/close
++  await p.locator('button', { hasText: /^4$/ }).first().click();  // last step
++  const search = p.locator('input[placeholder*="Search items"]');
++  const writes = [];
++  const onReq = r => { if (r.method() !== 'GET' && r.url().includes('/api/audit')) writes.push(`${r.method()} ${r.url()}`); };
++  p.on('request', onReq);
++  await search.fill('x'); await search.press('Enter'); await p.waitForTimeout(1000);
++  p.off('request', onReq);
++  check('A9 Enter in the last-step search: wizard stays open, nothing saved', await search.count() === 1 && writes.length === 0, JSON.stringify(writes));
++  await search.fill('');
++  await p.locator('button[type=submit]').first().click();
++  await p.waitForTimeout(1500);
++  const created = (await api(p, '/api/audit/')).body.find(a => a.title === 'smoke create');
++  check('A10 submit keeps the number, saves project + status', created && created.auditNo === firstNo && created.project_id === 'AHB-P1' && created.status === 'Planned' && created.vendor_id === 'ahb-vendor', JSON.stringify(created));
++
++  // Void lock + delete only Void
++  await pickProject(p, 'All Projects');
++  const del = await p.evaluate(sel => Object.fromEntries([...document.querySelectorAll(`${sel} tbody tr`)].map(r => [((r.innerText.match(/AHB-[A-Z]+-\d+/) || [])[0]), r.querySelector('button')?.disabled])), listTable);
++  check('A11 delete enabled only for Void audits', del['AHB-VOID-1'] === false && del['AHB-VOIDONLY-1'] === false && del['AHB-DRAFT-1'] === true && del['AHB-CLOSED-1'] === true, JSON.stringify(del));
++  await openAudit(p, 'AHB-VOID-1'); w = await wizardState(p); await closeWizard(p);
++  check('A12 Void audit is read-only', w.locked && !w.saveVisible && JSON.stringify(w.statusOptions) === '["Void"]', JSON.stringify(w));
++  await openAudit(p, 'AHB-CLOSED-1'); w = await wizardState(p); await closeWizard(p);
++  check('A13 Closed audit is read-only', w.locked && !w.saveVisible, JSON.stringify(w));
++  await openAudit(p, 'AHB-DRAFT-1');
++  await p.locator('select[name=status]').selectOption('Void'); await saveDraft(p);
++  w = await wizardState(p); await closeWizard(p);
++  check('A14 saving Draft as Void locks it immediately', w.locked && !w.saveVisible && (await api(p, '/api/audit/ahb-ahb-draft-1')).body.status === 'Void', JSON.stringify(w));
++  await p.locator(`${listTable} tbody tr`, { hasText: 'AHB-VOID-1' }).first().locator('button').first().click();
++  await p.waitForTimeout(600);
++  const wizardOpenedByTrash = await p.locator('input[name=auditDocNo]').count();
++  await p.getByRole('button', { name: 'Delete', exact: true }).last().click();
++  await p.waitForTimeout(1200);
++  check('A15 trash opens only the confirm dialog; delete removes the Void audit', wizardOpenedByTrash === 0 && (await api(p, '/api/audit/ahb-ahb-void-1')).status === 404 && !(await rowNos(p)).includes('AHB-VOID-1'));
++
++  // legacy project link
++  await openAudit(p, 'AHB-LEGACY-1'); w = await wizardState(p);
++  await saveDraft(p); await closeWizard(p);
++  const legacy = (await api(p, '/api/audit/ahb-ahb-legacy-1')).body;
++  check('A16 legacy name-only audit shows + links its project on save', w.project === 'AHB-P1' && legacy.project_id === 'AHB-P1' && legacy.auditNo === 'AHB-LEGACY-1', `${w.project} ${JSON.stringify({ project_id: legacy.project_id, auditNo: legacy.auditNo })}`);
++
++  // inactive contractor kept + refused save shows the reason
++  await openAudit(p, 'AHB-RETIRED-1');
++  const sel = await contractorSelect(p).evaluate(s => ({ value: s.value, text: s.options[s.selectedIndex]?.text }));
++  await p.fill('input[name=auditEndDate]', '2026-08-01'); await saveDraft(p);
++  w = await wizardState(p); await closeWizard(p);
++  check('A17 inactive contractor stays selected in its own audit', sel.value === 'retired' && sel.text === 'Retired Co', JSON.stringify(sel));
++  check('A18 refused save shows the backend reason', /Could not save: .*end_date/.test(w.error), w.error);
++
++  // deep link
++  await p.goto(`${UI}/audit?openId=AHB-CLOSED-1`);
++  await p.waitForSelector('input[name=auditDocNo]', { timeout: 10000 });
++  check('A19 ?openId= opens the audit and drops the parameter', (await p.inputValue('input[name=auditDocNo]')) === 'AHB-CLOSED-1' && !new URL(p.url()).search.includes('openId'), p.url());
++  await p.screenshot({ path: `${out}/audit-full-deeplink.png` });
++  await p.context().close();
++}
++
++// ── audit_viewer: view + create only ─────────────────────────────────────────────────────────────────────────────────
++{
++  const p = await login('audit_viewer');
++  const titles = await p.evaluate(sel => [...document.querySelectorAll(`${sel} tbody tr button`)].map(b => `${b.disabled}|${b.title}`), listTable);
++  check('B1 no delete permission: every trash disabled with the reason', titles.length > 0 && titles.every(t => t === 'true|You do not have permission to delete audits'), JSON.stringify([...new Set(titles)]));
++  await openAudit(p, 'AHB-RETIRED-1'); let w = await wizardState(p); await closeWizard(p);
++  check('B2 no update permission: existing audit read-only', w.locked && !w.saveVisible, JSON.stringify(w));
++  await p.locator('button', { hasText: 'Add Audit' }).first().click();
++  await p.waitForSelector('input[name=auditTitle]');
++  await p.fill('input[name=auditTitle]', 'viewer create'); await saveDraft(p);
++  w = await wizardState(p);
++  check('B3 create-only user: created, then read-only with a notice', !!w.docNo && w.locked && !w.saveVisible && /read-only/.test(w.notice), JSON.stringify(w));
++  await p.context().close();
++}
++
++// ── audit_multi: scoped to both projects ─────────────────────────────────────────────────────────────────────────────
++{
++  const p = await login('audit_multi');
++  await pickProject(p, 'Audit Review P2');
++  await p.locator('button', { hasText: 'Add Audit' }).first().click();
++  await p.waitForSelector('input[name=auditTitle]');
++  await p.fill('input[name=auditTitle]', 'multi create'); await saveDraft(p);
++  const w = await wizardState(p);
++  const rec = (await api(p, '/api/audit/')).body.find(a => a.title === 'multi create');
++  check('C1 multi-project user can create (project sent)', !!w.docNo && !w.error && rec?.project_id === 'AHB-P2', JSON.stringify({ docNo: w.docNo, error: w.error, project: rec?.project_id }));
++  await p.context().close();
++}
++
++await browser.close();
++console.log(failures === 0 ? 'ALL PASS' : `${failures} FAILED`);
++process.exit(failures === 0 ? 0 : 1);

@@ -1,0 +1,9 @@
+== 1. live frontend
+index now: 0ee33607b35312af7025449b3317c57558ec73e4e097269f7ef27e3f84a2da48
+OK live = AUDIT-POLISH index
+== 2. backup
+files before: 376
+== 3. staging
+OK upload
+OK frontend staging (106 files)
+PREP DONE

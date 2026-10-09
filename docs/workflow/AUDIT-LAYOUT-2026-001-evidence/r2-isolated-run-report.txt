@@ -1,0 +1,60 @@
+# R2 2026-10-09T17:13:55Z isolated stack 3320/8320 from the HEAD export + this round's AuditWizard.tsx/LanguageContext.tsx (same bytes as the working tree); fresh DB; layout check runs first (unmodified data)
+## layout
+PASS desktop 1440: step 1 has 3 column(s)  -> {"cols":3,"tops":[302,302,302]}
+PASS desktop 1440: no horizontal overflow (wizard overlay and page)  -> overlay=0px page=0px
+PASS desktop 1440: every visible progress label inside the viewport  -> [{"text":"Project Info","left":299,"right":365},{"text":"Personnel & Scope","left":537,"right":644},{"text":"Checklist Setup","left":804,"right":894},{"text":"Execution & Review","left":1052,"right":1164}]
+PASS progress bar has 4 steps  -> ["1","2","3","4"]
+PASS desktop 1440: step 2 holds personnel + scope fields and the print-plan button  -> {"personnel":true,"scope":true,"printPlan":true}
+PASS laptop 1024: step 1 has 2 column(s)  -> {"cols":2,"tops":[302,302,400]}
+PASS laptop 1024: no horizontal overflow (wizard overlay and page)  -> overlay=0px page=0px
+PASS laptop 1024: every visible progress label inside the viewport  -> [{"text":"Project Info","left":91,"right":157},{"text":"Personnel & Scope","left":329,"right":436},{"text":"Checklist Setup","left":596,"right":686},{"text":"Execution & Review","left":844,"right":956}]
+PASS laptop 1024: step 2 holds personnel + scope fields and the print-plan button  -> {"personnel":true,"scope":true,"printPlan":true}
+PASS phone 390: step 1 has 1 column(s)  -> {"cols":1,"tops":[294,392,490]}
+PASS phone 390: no horizontal overflow (wizard overlay and page)  -> overlay=0px page=0px
+PASS phone 390: every visible progress label inside the viewport  -> labels hidden at this width (numbers only)
+PASS phone 390: step 2 holds personnel + scope fields and the print-plan button  -> {"personnel":true,"scope":true,"printPlan":true}
+ALL PASS
+## polish
+PASS void-only contractor not flagged overdue  -> {"全部":false,"Review Vendor":true,"Void Only Co":false}
+PASS contractor with a past Draft still flagged  -> {"全部":false,"Review Vendor":true,"Void Only Co":false}
+PASS zh vendor hint  -> 選擇承包商以篩選稽核
+PASS zh month label  -> 2026年10月
+PASS title placeholder translated (no raw key)  -> 輸入稽核主旨
+PASS inactive contractor kept in its audit picker  -> {"value":"retired","text":"Retired Co","options":["-- �
+PASS save error shows the reason  -> 無法儲存：end_date: Start date must be before or equal to end date
+PASS create-only user: created then read-only with notice  -> {"docNo":"QTS-NA-AUDIT-000001","notice":"稽核�
+PASS last-step search ignores case  -> rows=1
+## ime
+PASS Safari IME confirm (keyCode 229, isComposing false) adds nothing, text kept
+PASS Chrome IME confirm (isComposing true) adds nothing
+PASS plain Enter adds the item and clears the field (items=1)
+## print (steps 2/3/4)
+DEEPLINK opened AHB-DRAFT-1 url (openId removed)
+step2 pages=1 items=0/60 list-rows-behind=0 findings(joined)=0/30 planTitle=1
+step3 pages=9 items=60/60 list-rows-behind=0 findings(joined)=0/30 planTitle=0
+step4 pages=11 items=60/60 list-rows-behind=0 findings(joined)=30/30 planTitle=0
+## smoke-all
+PASS A1 list shows every seeded audit  -> ["AHB-CLOSED-1","AHB-DRAFT-1","AHB-LEGACY-1","AHB-RETIRED-1","AHB-VO
+PASS A2 contractor panel filled without contractors permission  -> contractorsApi=403 {"All":false,"Review Ven
+PASS A3 overdue flag: past Draft yes, Void-only no  -> {"All":false,"Review Vendor":true,"Void Only Co":false}
+PASS A4 schedule has contractor rows  -> rows=2
+PASS A5 project switch re-fetches the list  -> P1=AHB-DRAFT-1,AHB-RETIRED-1,AHB-VOID-1,AHB-VOIDONLY-1 P2=AHB-C
+PASS A6 new audit: header project preselected, create statuses only  -> {"docNo":"","project":"AHB-P1","status
+PASS A7 wizard contractor picker lists active contractors (not the inactive one)  -> ["-- Select Contractor --
+PASS A8 first Save Draft fills Audit No with the contractor prefix  -> {"docNo":"QTS-RV-AUDIT-000001","project
+PASS A9 Enter in the last-step search: wizard stays open, nothing saved  -> []
+PASS A10 submit keeps the number, saves project + status  -> {"project_id":"AHB-P1","auditNo":"QTS-RV-AUDIT-00
+PASS A11 delete enabled only for Void audits  -> {"AHB-DRAFT-1":true,"AHB-VOID-1":false,"AHB-CLOSED-1":true,"A
+PASS A12 Void audit is read-only  -> {"docNo":"AHB-VOID-1","project":"AHB-P1","statusOptions":["Void"],"locked
+PASS A13 Closed audit is read-only  -> {"docNo":"AHB-CLOSED-1","project":"AHB-P2","statusOptions":["Closed"],"
+PASS A14 saving Draft as Void locks it immediately  -> {"docNo":"AHB-DRAFT-1","project":"AHB-P1","statusOption
+PASS A15 trash opens only the confirm dialog; delete removes the Void audit
+PASS A16 legacy name-only audit shows + links its project on save  -> AHB-P1 {"project_id":"AHB-P1","auditNo":
+PASS A17 inactive contractor stays selected in its own audit  -> {"value":"retired","text":"Retired Co"}
+PASS A18 refused save shows the backend reason  -> Could not save: end_date: Start date must be before or equa
+PASS A19 ?openId= opens the audit and drops the parameter  -> http://127.0.0.1:3320/audit
+PASS B1 no delete permission: every trash disabled with the reason  -> ["true|You do not have permission to de
+PASS B2 no update permission: existing audit read-only  -> {"docNo":"AHB-RETIRED-1","project":"AHB-P1","status
+PASS B3 create-only user: created, then read-only with a notice  -> {"docNo":"QTS-NA-AUDIT-000002","project":"
+PASS C1 multi-project user can create (project sent)  -> {"docNo":"QTS-NA-AUDIT-000003","error":"","project":"
+ALL PASS
