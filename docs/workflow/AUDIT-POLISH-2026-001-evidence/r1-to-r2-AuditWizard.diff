@@ -1,0 +1,44 @@
+--- R1/AuditWizard.tsx
++++ R2/AuditWizard.tsx
+@@ -19,6 +19,11 @@
+   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+ };
+ 
++// Enter that is NOT confirming an IME candidate (Zhuyin / Pinyin). Chrome reports the confirming keydown with
++// isComposing = true; Safari fires compositionend first and then a keydown with isComposing = false but keyCode 229,
++// so both have to be checked (the old onKeyPress never fired for 229 — this keeps that behaviour).
++const isPlainEnter = (e: React.KeyboardEvent) => e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229;
++
+ const ALL_CATEGORY = '__ALL__';
+ const UNCATEGORIZED = '__UNCATEGORIZED__';
+ 
+@@ -768,7 +773,7 @@
+                       <input type="text" name="clause" value={newItem.clause} onChange={handleNewItemChange} placeholder="ISO 9001:2015 Clause 內容..." className="flex-1 p-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all text-sm font-medium text-slate-800" />
+                     </div>
+                     <div className="flex gap-2">
+-                      <input type="text" name="task" value={newItem.task} onChange={handleNewItemChange} onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); addCustomItem(); } }} placeholder="輸入稽核查檢重點 (Audit Question)..." className="flex-1 p-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all text-sm font-medium text-slate-800" />
++                      <input type="text" name="task" value={newItem.task} onChange={handleNewItemChange} onKeyDown={(e) => { if (isPlainEnter(e)) { e.preventDefault(); addCustomItem(); } }} placeholder="輸入稽核查檢重點 (Audit Question)..." className="flex-1 p-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all text-sm font-medium text-slate-800" />
+                       <button className={actionStyles.icon} type="button" onClick={addCustomItem}><Plus size={20} /></button>
+                     </div>
+                   </div>
+@@ -793,9 +798,9 @@
+                                   <option value="custom">✎ {t('audit.wizard.customClause')}</option>
+                                 </select>
+                               )}
+-                              <input type="text" name="clause" value={editFormData.clause} onChange={handleEditChange} onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) e.preventDefault(); }} placeholder="ISO 9001:2015 Clause 內容..." className="flex-1 p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm" />
++                              <input type="text" name="clause" value={editFormData.clause} onChange={handleEditChange} onKeyDown={(e) => { if (isPlainEnter(e)) e.preventDefault(); }} placeholder="ISO 9001:2015 Clause 內容..." className="flex-1 p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm" />
+                             </div>
+-                            <input type="text" name="task" value={editFormData.task} onChange={handleEditChange} onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); saveEdit(); } }} placeholder="輸入稽核查檢重點 (Audit Question)..." className="w-full p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm" />
++                            <input type="text" name="task" value={editFormData.task} onChange={handleEditChange} onKeyDown={(e) => { if (isPlainEnter(e)) { e.preventDefault(); saveEdit(); } }} placeholder="輸入稽核查檢重點 (Audit Question)..." className="w-full p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm" />
+                             <div className="flex justify-end gap-2 mt-1">
+                               <button className={actionStyles.secondary} type="button" onClick={cancelEdit}><X size={16} /> {t('common.cancel')}</button>
+                               <button className={actionStyles.primary} type="button" onClick={saveEdit}><Check size={16} /> {t('common.save')}</button>
+@@ -919,7 +924,7 @@
+                         onChange={(e) => setSearchTerm(e.target.value)}
+                         // The only text input on step 5, inside the form that has the submit button:
+                         // Enter would otherwise submit (save and close) the whole audit.
+-                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) e.preventDefault(); }}
++                        onKeyDown={(e) => { if (isPlainEnter(e)) e.preventDefault(); }}
+                         className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-slate-50"
+                       />
+                     </div>

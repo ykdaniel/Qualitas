@@ -1,0 +1,10 @@
+# 2026-10-09T15:17:17Z node tests-browser/audit-polish-check.mjs (isolated stack 3320/8320; seeds: seed_audit_hardening_b_review.py + scratch seed: 'Void Only Co' with only a past Void audit, inactive 'Retired Co' with a Draft audit; AHB-DRAFT-1 with 60 items)
+PASS void-only contractor not flagged overdue  -> {"全部":false,"Review Vendor":true,"Void Only Co":false}
+PASS contractor with a past Draft still flagged  -> {"全部":false,"Review Vendor":true,"Void Only Co":false}
+PASS zh vendor hint  -> 選擇承包商以篩選稽核
+PASS zh month label  -> 2026年10月
+PASS title placeholder translated (no raw key)  -> 輸入稽核主旨
+PASS inactive contractor kept in its audit picker  -> {"value":"retired","text":"Retired Co","options":["-- 請選擇受稽核廠商 --","Review Vendor","Void Only Co","廠商A","廠商B","廠商C","Retired Co"]}
+PASS save error shows the reason  -> 無法儲存：end_date: Start date must be before or equal to end date
+PASS create-only user: created then read-only with notice  -> {"docNo":"QTS-NA-AUDIT-000003","notice":"稽核已建立。您沒有「更新稽核」權限，所以現在改為唯讀；後續修改請由具更新權限的人處理。","disabled":true,"saveVisible":false}
+PASS step-5 search ignores case  -> rows=1

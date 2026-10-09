@@ -1,0 +1,980 @@
+diff --git a/backend/core/strict_dates.py b/backend/core/strict_dates.py
+index 4b9601eb..1b0c0c9d 100644
+--- a/backend/core/strict_dates.py
++++ b/backend/core/strict_dates.py
+@@ -8,7 +8,7 @@ WRITES accept only a complete, calendar-valid ``YYYY-MM-DD``: no time stamp, no
+ whitespace, no non-existent day; nothing is truncated or normalised. NULL / '' are governed by each field's own
+ required-ness (NOI's issueDate / inspectionDate are required and may not be set to NULL; every other date field here is
+ optional). On UPDATE the rule is applied to a field only when its value actually CHANGES — re-sending a historical value
+-unchanged is not a new write — and the cross-field order rules (NCR only; NOI and OBS have none) are checked on the merged
++unchanged is not a new write — and the cross-field order rules (NCR and Audit; NOI and OBS have none) are checked on the merged
+ final content, and only for relations that involve a changed field, so an unrelated edit is never blocked by an old
+ inconsistency.
+ 
+diff --git a/backend/services/audit_service.py b/backend/services/audit_service.py
+index cf27ddde..39f4c0a6 100755
+--- a/backend/services/audit_service.py
++++ b/backend/services/audit_service.py
+@@ -139,6 +139,13 @@ class AuditService:
+         # (forces vendor_id for contractor users; validates project_id).
+         enforce_create_scope(audit_data, scope)
+ 
++        # A contractor-scoped caller's audit is forced onto ITS contractor (vendor_id above); make the contractor
++        # name — and so the number prefix generated from it — match, instead of whatever name the client sent.
++        if scope is not None and scope.vendor_id is not None:
++            own = self.repo.db.query(models.Contractor).filter(models.Contractor.id == scope.vendor_id).first()
++            if own is not None:
++                audit_data["contractor"] = own.name
++
+         db = self.repo.db
+         try:
+             # From here on everything is written in ONE transaction: take the write lock before the
+@@ -146,7 +153,7 @@ class AuditService:
+             begin_write_transaction(db)
+ 
+             # Always auto-generate auditNo server-side (ignore any value from frontend)
+-            audit_data["auditNo"] = generate_reference_no(db, audit.contractor or '', 'audit')
++            audit_data["auditNo"] = generate_reference_no(db, audit_data.get("contractor") or '', 'audit')
+ 
+             db_audit = self.repo.create(audit_data)
+ 
+diff --git a/backend/tests/test_audit_contractor_options_http.py b/backend/tests/test_audit_contractor_options_http.py
+index ef261d17..a4762a33 100644
+--- a/backend/tests/test_audit_contractor_options_http.py
++++ b/backend/tests/test_audit_contractor_options_http.py
+@@ -37,7 +37,9 @@ def add_contractors(env):
+ 
+ def test_audit_only_role_gets_names_without_contractors_permission(env):
+     add_contractors(env)
+-    assert env.client.get('/api/contractors/').status_code in (403, 404)  # the fixture role has no contractors:view:all
++    with env.Session() as db:  # the fixture's role really lacks contractors:view:all
++        codes = {p.code for p in db.query(models.User).filter_by(username='auditor').one().role.permissions_rel}
++    assert 'contractors:view:all' not in codes and 'audit:view:all' in codes
+     response = env.client.get('/api/audit/contractors')
+     assert response.status_code == 200, response.text
+     rows = response.json()
+@@ -67,3 +69,16 @@ def test_get_by_id_route_still_works(env):
+     assert response.status_code == 200, response.text
+     assert response.json()['auditNo'] == created['auditNo']
+     assert env.client.get('/api/audit/does-not-exist').status_code == 404
++
++
++def test_contractor_scoped_create_uses_its_own_contractor_for_name_and_number(env):
++    add_contractors(env)
++    add_user(env, 'alpha-writer', ['audit:view:all', 'audit:create:all'], vendor_id='alpha')
++    login(env, 'alpha-writer')
++    response = create(env, contractor='Audit vendor')  # another contractor's name in the request
++    assert response.status_code == 200, response.text
++    body = response.json()
++    assert (body['vendor_id'], body['contractor']) == ('alpha', 'Alpha Build')
++    assert body['auditNo'].split('-')[1] == 'AB'  # Alpha Build's abbreviation, not the vendor named in the request
++    with env.Session() as db:
++        assert db.query(models.ReferenceSequence).filter_by(vendor='AV').count() == 0  # no number drawn from the other sequence
+diff --git a/backend/tests/test_audit_hardening_http.py b/backend/tests/test_audit_hardening_http.py
+index 122acbce..06622883 100644
+--- a/backend/tests/test_audit_hardening_http.py
++++ b/backend/tests/test_audit_hardening_http.py
+@@ -290,11 +290,14 @@ def test_audit_log_failure_rolls_everything_back(env, monkeypatch, op):
+     audit_id = create(env).json()['id'] if op == 'update' else None
+     before = snapshot(env)
+     rollbacks = []
+-    event.listen(env.Session.class_, 'after_rollback', lambda s: rollbacks.append(1))
++
++    def rolled_back(session):
++        rollbacks.append(1)
+ 
+     def fail_audit_flush(session, *args):
+         if any(isinstance(r, models.AuditLog) for r in session.new):
+             raise RuntimeError('injected audit-log failure')
++    event.listen(env.Session.class_, 'after_rollback', rolled_back)
+     event.listen(env.Session.class_, 'before_flush', fail_audit_flush)
+     try:
+         if op == 'create':
+@@ -304,5 +307,6 @@ def test_audit_log_failure_rolls_everything_back(env, monkeypatch, op):
+         assert response.status_code == 500
+     finally:
+         event.remove(env.Session.class_, 'before_flush', fail_audit_flush)
++        event.remove(env.Session.class_, 'after_rollback', rolled_back)
+     assert rollbacks
+     assert snapshot(env) == before
+diff --git a/react-app/src/components/Audit/Audit.tsx b/react-app/src/components/Audit/Audit.tsx
+index 27e8f086..3ff1db55 100755
+--- a/react-app/src/components/Audit/Audit.tsx
++++ b/react-app/src/components/Audit/Audit.tsx
+@@ -1,4 +1,5 @@
+-import React, { useState, useMemo, useDeferredValue, useEffect, useCallback } from 'react';
++import React, { useState, useMemo, useDeferredValue, useEffect, useCallback, useRef } from 'react';
++import { useNavigate, useSearchParams } from 'react-router-dom';
+ import { useLanguage } from '../../context/LanguageContext';
+ import { useAuth } from '../../context/AuthContext';
+ import { useAuditStore, AuditItem } from '../../store/auditStore';
+@@ -13,8 +14,21 @@ import VendorStatsPanel from './VendorStatsPanel';
+ import ScheduleMatrix from './ScheduleMatrix';
+ import { Search, Plus, AlertCircle, X } from 'lucide-react';
+ 
++// Rows shown in the schedule (all of them when a vendor is selected).
++const SCHEDULE_VENDOR_LIMIT = 5;
++// Statuses that need no further work: a past-dated audit in any OTHER status flags its contractor
++// as overdue. Void (cancelled) is settled too — it is never going to be carried out.
++const SETTLED_STATUSES = new Set(['Completed', 'Closed', 'Void']);
++
++// 'YYYY-MM-DD' as a LOCAL date (new Date('YYYY-MM-DD') is UTC midnight: the previous day west of UTC).
++const parseLocalDate = (value: string): Date | null => {
++    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
++    return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
++};
++
+ const Audit: React.FC = () => {
+-    const { t } = useLanguage();
++    const { t, language } = useLanguage();
++    const locale = language === 'zh' ? 'zh-TW' : 'en-US';
+     const { hasPermission } = useAuth();
+     const { auditList, deleteAudit, error, clearError, loading } = useAuditStore();
+     const [searchQuery, setSearchQuery] = useState<string>('');
+@@ -115,48 +129,47 @@ const Audit: React.FC = () => {
+                 date,
+                 isToday: date.toDateString() === today.toDateString(),
+                 isWeekend: date.getDay() === 0 || date.getDay() === 6,
+-                dayLabel: date.toLocaleDateString('en-US', { weekday: 'short' }),
++                dayLabel: date.toLocaleDateString(locale, { weekday: 'short' }),
+                 dateLabel: `${date.getDate()}`,
+             };
+         });
+-    }, [viewDate]);
++    }, [viewDate, locale]);
+ 
+     const getAuditForMatrix = useCallback((vendorName: string, date: Date) => {
+         const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+         return auditList.find(a => a.contractor === vendorName && a.date === dateStr);
+     }, [auditList]);
+ 
+-    // Vendors to show as rows: only Active contractors that have at least one audit.
+-    // Sorted ascending by earliest audit date. Each vendor is also flagged
+-    // pastUnfinished=true if any of its audits is past-due AND not Completed/Closed,
+-    // so the matrix can highlight that row.
+-    const SCHEDULE_VENDOR_LIMIT = 5;
+-    const FINISHED_STATUSES = new Set(['Completed', 'Closed']);
+-    const scheduleVendors = useMemo(() => {
++    // Contractors with a past-dated audit that is not settled (see SETTLED_STATUSES). Computed over
++    // ALL contractors: the stats panel highlights every one of them, not only the schedule's first rows.
++    const pastUnfinishedVendors = useMemo(() => {
+         const today = new Date();
+         today.setHours(0, 0, 0, 0);
+-        const todayMs = today.getTime();
++        const names = new Set<string>();
++        auditList.forEach(a => {
++            const d = parseLocalDate(a.date);
++            if (a.contractor && d && d < today && !SETTLED_STATUSES.has(a.status)) names.add(a.contractor);
++        });
++        return names;
++    }, [auditList]);
++
++    // Vendors to show as rows: only Active contractors that have at least one audit,
++    // sorted ascending by earliest audit date and flagged pastUnfinished for highlighting.
++    const scheduleVendors = useMemo(() => {
+         const base = activeContractors.filter(v => (vendorStats[v.name] || 0) > 0);
+         const earliestDateMs = (vendorName: string) => {
+             const dates = auditList
+-                .filter(a => a.contractor === vendorName && a.date)
+-                .map(a => new Date(a.date).getTime())
+-                .filter(t => !isNaN(t));
++                .filter(a => a.contractor === vendorName)
++                .map(a => parseLocalDate(a.date)?.getTime())
++                .filter((ms): ms is number => ms !== undefined);
+             return dates.length === 0 ? Number.POSITIVE_INFINITY : Math.min(...dates);
+         };
+-        const hasPastUnfinished = (vendorName: string) =>
+-            auditList.some(a =>
+-                a.contractor === vendorName &&
+-                a.date &&
+-                new Date(a.date).getTime() < todayMs &&
+-                !FINISHED_STATUSES.has(a.status)
+-            );
+         const sorted = [...base]
+-            .map(v => ({ ...v, pastUnfinished: hasPastUnfinished(v.name) }))
++            .map(v => ({ ...v, pastUnfinished: pastUnfinishedVendors.has(v.name) }))
+             .sort((a, b) => earliestDateMs(a.name) - earliestDateMs(b.name));
+         if (selectedVendorFilter) return sorted.filter(v => v.name === selectedVendorFilter);
+         return sorted.slice(0, SCHEDULE_VENDOR_LIMIT);
+-    }, [vendorStats, selectedVendorFilter, activeContractors, auditList]);
++    }, [vendorStats, selectedVendorFilter, activeContractors, auditList, pastUnfinishedVendors]);
+ 
+     // Actions
+     const handleAddNew = useCallback(() => {
+@@ -169,6 +182,35 @@ const Audit: React.FC = () => {
+         setIsEditModalOpen(true);
+     }, []);
+ 
++    // ?openId=<id or auditNo> (e.g. from Follow Up Issues) opens that audit once the list has it —
++    // same pattern as NOI/NCR/ITR. Closing a deep-linked audit goes back to where the user came from.
++    const [searchParams, setSearchParams] = useSearchParams();
++    const navigate = useNavigate();
++    const deepLinkAppliedRef = useRef(false);
++    const openedViaDeepLinkRef = useRef(false);
++    useEffect(() => {
++        if (deepLinkAppliedRef.current) return;
++        const openId = searchParams.get('openId');
++        if (!openId || auditList.length === 0) return;
++        const match = auditList.find(item => item.id === openId || item.auditNo === openId);
++        if (!match) return;
++        handleEdit(match.id);
++        openedViaDeepLinkRef.current = true;
++        deepLinkAppliedRef.current = true;
++        const next = new URLSearchParams(searchParams);
++        next.delete('openId');
++        setSearchParams(next, { replace: true });
++    }, [searchParams, auditList, handleEdit, setSearchParams]);
++
++    const closeWizard = () => {
++        setIsEditModalOpen(false);
++        setCurrentAuditId(null);
++        if (openedViaDeepLinkRef.current) {
++            openedViaDeepLinkRef.current = false;
++            navigate(-1);
++        }
++    };
++
+     // handleReport removed — report generation not yet implemented
+ 
+     const handleDeleteClick = useCallback((id: string) => {
+@@ -186,11 +228,14 @@ const Audit: React.FC = () => {
+         }
+     };
+ 
++    // While the wizard is open, printing must show only the wizard (it is an overlay ON this page).
++    const hideWhenPrintingWizard = isEditModalOpen ? ' no-print' : '';
++
+     return (
+         <div className={shellStyles.container}>
+             {/* Error Notification Toast */}
+             {error && (
+-                <div className={shellStyles.errorBanner}>
++                <div className={shellStyles.errorBanner + hideWhenPrintingWizard}>
+                     <div className={styles.errorContent}>
+                         <AlertCircle size={18} />
+                         <span>{error}</span>
+@@ -201,7 +246,7 @@ const Audit: React.FC = () => {
+                 </div>
+             )}
+ 
+-            <div className={shellStyles.toolbar}>
++            <div className={shellStyles.toolbar + hideWhenPrintingWizard}>
+                 <div className={shellStyles.toolbarRight}>
+                     <div className={shellStyles.searchWrap}>
+                         <Search size={15} className={shellStyles.searchIcon} strokeWidth={2} />
+@@ -223,7 +268,7 @@ const Audit: React.FC = () => {
+             </div>
+ 
+             {/* Premium Top Section: Interactive Panels */}
+-            <div className={styles.topSection}>
++            <div className={styles.topSection + hideWhenPrintingWizard}>
+                 <VendorStatsPanel
+                     stats={vendorStats}
+                     maxAudits={maxAudits}
+@@ -231,7 +276,7 @@ const Audit: React.FC = () => {
+                     selectedVendorFilter={selectedVendorFilter}
+                     onSelectVendor={setSelectedVendorFilter}
+                     totalAudits={auditList.length}
+-                    pastUnfinishedVendors={new Set(scheduleVendors.filter(v => v.pastUnfinished).map(v => v.name))}
++                    pastUnfinishedVendors={pastUnfinishedVendors}
+                     t={t}
+                 />
+ 
+@@ -245,12 +290,13 @@ const Audit: React.FC = () => {
+                     onSetToday={setToday}
+                     onEditAudit={handleEdit}
+                     loading={loading}
++                    locale={locale}
+                     t={t}
+                 />
+             </div>
+ 
+             {/* Audit Data Table Area */}
+-            <div className={shellStyles.content}>
++            <div className={shellStyles.content + hideWhenPrintingWizard}>
+                 <DataTable
+                     title={t('audit.listTitle')}
+                     columns={createColumns(handleEdit, handleDeleteClick, t, activeContractors, hasPermission('audit:delete:all'))}
+@@ -264,7 +310,6 @@ const Audit: React.FC = () => {
+             {/* Edit / Detail Wizard Modal */}
+             {isEditModalOpen && (
+                 <AuditWizard
+-                    auditId={currentAuditId}
+                     existingItem={currentAuditId ? auditList.find(item => item.id === currentAuditId) : undefined}
+                     // Closed / Void are true dead ends (WorkflowEngine's "Closed": [] /
+                     // "Void": []) — the wizard locks those itself from the record's
+@@ -272,14 +317,9 @@ const Audit: React.FC = () => {
+                     // existing record is also read-only for anyone without
+                     // audit:update:all (the backend refuses their save anyway).
+                     readOnly={currentAuditId ? !hasPermission('audit:update:all') : false}
+-                    onClose={() => {
+-                        setIsEditModalOpen(false);
+-                        setCurrentAuditId(null);
+-                    }}
+-                    onSaveSuccess={() => {
+-                        setIsEditModalOpen(false);
+-                        setCurrentAuditId(null);
+-                    }}
++                    canUpdate={hasPermission('audit:update:all')}
++                    onClose={closeWizard}
++                    onSaveSuccess={closeWizard}
+                 />
+             )}
+ 
+diff --git a/react-app/src/components/Audit/AuditWizard.tsx b/react-app/src/components/Audit/AuditWizard.tsx
+index 6d249ed9..f2e95da5 100755
+--- a/react-app/src/components/Audit/AuditWizard.tsx
++++ b/react-app/src/components/Audit/AuditWizard.tsx
+@@ -13,6 +13,12 @@ import { useProjectStore } from '../../store/projectStore';
+ import { useLanguage } from '../../context/LanguageContext';
+ import { checkDateOrder } from '../../utils/dateValidation';
+ 
++// Today as YYYY-MM-DD in the browser's time zone (toISOString() is UTC: the previous day before 08:00 in Taiwan).
++const localToday = () => {
++  const d = new Date();
++  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
++};
++
+ const ALL_CATEGORY = '__ALL__';
+ const UNCATEGORIZED = '__UNCATEGORIZED__';
+ 
+@@ -66,14 +72,16 @@ const ISO_CLAUSES = [
+ ];
+ 
+ interface AuditWizardProps {
+-  auditId: string | null;
+   existingItem?: AuditItem;
+   readOnly?: boolean;
++  // audit:update:all. Without it a user can create an audit (one save) but every later save is
++  // refused by the backend, so the wizard turns read-only right after the first create.
++  canUpdate?: boolean;
+   onClose: () => void;
+   onSaveSuccess: () => void;
+ }
+ 
+-export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly: readOnlyProp = false, onClose, onSaveSuccess }) => {
++export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly: readOnlyProp = false, canUpdate = true, onClose, onSaveSuccess }) => {
+   const { t } = useLanguage();
+   const { addAudit, updateAudit, loading } = useAuditStore();
+   // Same source as the Audit page (GET /audit/contractors, audit:view is enough); Audit.tsx fetches it.
+@@ -110,13 +118,20 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+     vendorId: existingItem?.vendor_id || '',
+     status: existingItem?.status || 'Draft',
+   });
++  // Active contractors, plus the record's own contractor when it has since been deactivated
++  // (otherwise an existing audit showed an empty picker).
++  const pickerContractors = useMemo(() => {
++    if (!formData.vendorId || activeContractors.some(c => c.id === formData.vendorId)) return activeContractors;
++    const own = contractorOptions.find(c => c.id === formData.vendorId)
++      || { id: formData.vendorId, name: formData.contractor || formData.vendorId };
++    return [...activeContractors, own];
++  }, [activeContractors, contractorOptions, formData.vendorId, formData.contractor]);
+   // Server-assigned and never edited, so kept out of formData (and out of the leave guard): after
+   // the first Save Draft of a new record it is filled in from the create response.
+   const [auditNo, setAuditNo] = useState(existingItem?.auditNo || '');
+   // Status of the last successful save (undefined = not saved yet). Drives the status options and
+   // the lock, so a record saved as Void mid-session locks without reopening the wizard.
+   const [savedStatus, setSavedStatus] = useState<string | undefined>(existingItem?.status);
+-  const readOnly = readOnlyProp || (savedStatus !== undefined && AUDIT_LOCKED_STATUSES.has(savedStatus));
+   const statusOptions = savedStatus === undefined
+     ? AUDIT_CREATE_STATUSES
+     : [savedStatus, ...(AUDIT_STATUS_TRANSITIONS[savedStatus] || [])];
+@@ -128,7 +143,6 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+ 
+   const [newItem, setNewItem] = useState({ no: '', clause: '', task: '' });
+   const [isCustomNew, setIsCustomNew] = useState(false);
+-  const [isSubmitted, setIsSubmitted] = useState(false);
+   // Audit.tsx never promotes its own currentAuditId after a mid-session "Save Draft" (Save
+   // Draft deliberately keeps the wizard open without calling onSaveSuccess, so the parent
+   // never learns the new id) — existingItem stays undefined for the rest of this wizard's
+@@ -138,7 +152,14 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+   // Add in between produced two separate audit rows, the second one holding the added item
+   // and the first one permanently stuck with an empty custom_check_items).
+   const [createdId, setCreatedId] = useState<string | null>(null);
+-  const recordId = existingItem?.id ?? createdId;
++  // The id is fixed when the wizard opens: existingItem is re-looked-up from the list on every
++  // parent render, so a list re-fetch that (briefly) lacks this record would otherwise turn the
++  // next save into a create of a duplicate.
++  const [openedId] = useState<string | null>(existingItem?.id ?? null);
++  const recordId = openedId ?? createdId;
++  const createdWithoutUpdate = createdId !== null && !canUpdate;
++  const readOnly = readOnlyProp || createdWithoutUpdate
++    || (savedStatus !== undefined && AUDIT_LOCKED_STATUSES.has(savedStatus));
+   const [editingItemId, setEditingItemId] = useState<number | null>(null);
+   const [editFormData, setEditFormData] = useState({ no: '', clause: '', task: '' });
+   const [isCustomEdit, setIsCustomEdit] = useState(false);
+@@ -193,7 +214,8 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+ 
+   const filteredItems = useMemo(() => {
+     return formData.customCheckItems.filter((item: any) => {
+-      const matchesSearch = (item.clause || '').includes(searchTerm) || (item.task || '').includes(searchTerm);
++      const query = searchTerm.trim().toLowerCase();
++      const matchesSearch = !query || (item.clause || '').toLowerCase().includes(query) || (item.task || '').toLowerCase().includes(query);
+       const matchesCategory = activeCategory === ALL_CATEGORY || (item.no || UNCATEGORIZED) === activeCategory;
+       return matchesSearch && matchesCategory;
+     });
+@@ -203,7 +225,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+     setFormData(prev => ({
+       ...prev,
+       customCheckItems: prev.customCheckItems.map((item: any) => 
+-        item.id === id ? { ...item, status: newStatus, updatedAt: new Date().toISOString().split('T')[0] } : item
++        item.id === id ? { ...item, status: newStatus, updatedAt: localToday() } : item
+       )
+     }));
+   };
+@@ -212,7 +234,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+     setFormData(prev => ({
+       ...prev,
+       customCheckItems: prev.customCheckItems.map((item: any) => 
+-        item.id === id ? { ...item, note: newNote, updatedAt: new Date().toISOString().split('T')[0] } : item
++        item.id === id ? { ...item, note: newNote, updatedAt: localToday() } : item
+       )
+     }));
+   };
+@@ -241,14 +263,13 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+ 
+   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+     const { name, value } = e.target;
+-    setFormData(prev => {
+-      const updated = { ...prev, [name]: value };
+-      if (name === 'auditStartDate' || name === 'auditEndDate') {
+-        const check = checkDateOrder(updated.auditStartDate, updated.auditEndDate, 'Audit Start Date', 'Audit End Date');
+-        if (!check.valid) toast.warning(check.message);
+-      }
+-      return updated;
+-    });
++    setFormData(prev => ({ ...prev, [name]: value }));
++    // Outside the state updater (StrictMode runs updaters twice, which showed the toast twice).
++    if (name === 'auditStartDate' || name === 'auditEndDate') {
++      const next = { ...formData, [name]: value };
++      const check = checkDateOrder(next.auditStartDate, next.auditEndDate, t('audit.wizard.startDateLabel'), t('audit.wizard.endDateLabel'));
++      if (!check.valid) toast.warning(check.message);
++    }
+   };
+ 
+   const handleProjectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+@@ -259,7 +280,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+ 
+   const handleContractorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+     const vendorId = e.target.value;
+-    const selectedVendor = activeContractors.find((v: any) => v.id === vendorId);
++    const selectedVendor = pickerContractors.find(v => v.id === vendorId);
+     setFormData(prev => ({
+       ...prev,
+       vendorId: vendorId,
+@@ -329,11 +350,11 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+   const hasUnconfirmedNewItem = () => newItem.no.trim() || newItem.clause.trim() || newItem.task.trim();
+   const blockSaveForUnconfirmedNewItem = () => {
+     if (editingItemId !== null) {
+-      toast.error('您正在編輯既有查檢項目但尚未按「儲存」套用這筆編輯。請先儲存，或按「取消」放棄後再保存整份表單。');
++      toast.error(t('audit.wizard.unconfirmedEditItem'));
+       return true;
+     }
+     if (!hasUnconfirmedNewItem()) return false;
+-    toast.error('您在自訂查檢項目輸入了內容但尚未按「新增」。請先按「新增」加入，或清空欄位後再保存。');
++    toast.error(t('audit.wizard.unconfirmedNewItem'));
+     return true;
+   };
+ 
+@@ -345,7 +366,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+     setDraftMessage('');
+ 
+     try {
+-      const updates = prepareAuditData(formData.status || 'Draft');
++      const updates = prepareAuditData(formData.status);
+       if (recordId) {
+         await updateAudit(recordId, updates);
+         setSavedStatus(updates.status);
+@@ -362,8 +383,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+       setTimeout(() => setDraftMessage(''), 4000);
+       // Don't call onSaveSuccess() here — draft save should keep the wizard open
+     } catch (err: any) {
++      // auditStore rethrows getErrorMessage(): the backend's reason for a refusal, a friendly line for a server error.
+       console.error("草稿儲存失敗: ", err);
+-      setSaveError(t('audit.wizard.saveError'));
++      setSaveError(`${t('audit.wizard.saveFailedPrefix')}${err?.message || ''}`);
+     } finally {
+       setIsDraftSaving(false);
+     }
+@@ -377,7 +399,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+     setSaveError('');
+ 
+     try {
+-      const updates = prepareAuditData(formData.status || 'Planned');
++      const updates = prepareAuditData(formData.status);
+       if (recordId) {
+         await updateAudit(recordId, updates);
+       } else {
+@@ -387,11 +409,10 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+       }
+ 
+       leaveGuard.release();
+-      setIsSubmitted(true);
+       onSaveSuccess();
+     } catch (err: any) {
+       console.error("資料庫寫入失敗: ", err);
+-      setSaveError(t('audit.wizard.submitError'));
++      setSaveError(`${t('audit.wizard.saveFailedPrefix')}${err?.message || ''}`);
+     } finally {
+       setIsSaving(false);
+     }
+@@ -427,44 +448,10 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+     </div>
+   );
+ 
+-  if (isSubmitted) {
+-    return (
+-      <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-6 overflow-y-auto no-print">
+-        <div className="bg-white p-10 rounded-3xl shadow-2xl text-center max-w-2xl w-full border border-teal-100">
+-          <div className="w-24 h-24 bg-teal-50 text-teal-600 rounded-full flex items-center justify-center mx-auto mb-6">
+-            <CheckCircle size={56} />
+-          </div>
+-          <h2 className="text-3xl font-black text-slate-800 mb-2">{t('audit.wizard.successTitle')}</h2>
+-          <p className="text-slate-500 mb-8">{t('audit.wizard.successSubtitle')}{auditNo || t('audit.wizard.successSubtitleAuto')}</p>
+-
+-          <div className="grid grid-cols-2 gap-4 text-left bg-slate-50 p-6 rounded-2xl mb-8 border border-slate-100">
+-            <div className="col-span-2">
+-              <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">{t('audit.wizard.projectNameLabel')}</p>
+-              <p className="font-semibold text-slate-700">{formData.projectName}</p>
+-            </div>
+-            <div>
+-              <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">{t('audit.wizard.leadAuditorLabel')}</p>
+-              <p className="font-semibold text-slate-700">{formData.leadAuditor}</p>
+-            </div>
+-            <div>
+-              <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">{t('audit.wizard.checkItemCountLabel')}</p>
+-              <p className="font-semibold text-slate-700">{formData.customCheckItems.length} {t('audit.wizard.customItemsSuffix')}</p>
+-            </div>
+-          </div>
+-
+-          <button
+-            onClick={requestClose}
+-            className="w-full py-4 bg-teal-600 text-white rounded-2xl font-bold text-lg hover:bg-teal-700 hover:shadow-lg transition-all active:scale-[0.98]"
+-          >
+-            {t('audit.wizard.backToList')}
+-          </button>
+-        </div>
+-      </div>
+-    );
+-  }
+-
+   return (
+-    <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto py-12 px-4 flex justify-center items-start pt-16">
++    // print: the wizard is a fixed, internally scrolling overlay — printed as is, only the first screenful came out (one
++    // page, the rest cut off). In print it becomes normal flow so the browser paginates it; Audit.tsx hides the page behind.
++    <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto py-12 px-4 flex justify-center items-start pt-16 print:static print:overflow-visible print:block print:p-0 print:bg-white">
+       <div className="w-full max-w-5xl">
+         <div className="flex justify-between items-center mb-6 no-print">
+             <div className="text-left flex items-center gap-4">
+@@ -485,6 +472,11 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+           {renderProgressBar()}
+         </div>
+ 
++        {createdWithoutUpdate && (
++          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-center font-medium shadow-sm no-print">
++            {t('audit.wizard.createdNoUpdateNotice')}
++          </div>
++        )}
+         {saveError && (
+           <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-center font-medium shadow-sm no-print">
+             {saveError}
+@@ -515,7 +507,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                        <span className="text-sm font-bold text-slate-800">{t('audit.auditTitle') || 'Audit Title'}</span>
+                        <span className="text-xs font-medium text-slate-400">(稽核標題)</span>
+                     </label>
+-                    <input type="text" name="auditTitle" value={formData.auditTitle} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" placeholder={t('audit.auditTitlePlaceholder') || 'Enter audit title'} />
++                    <input type="text" name="auditTitle" value={formData.auditTitle} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" placeholder={t('audit.auditTitlePlaceholder')} />
+                   </div>
+                   <div className="col-span-full">
+                     <label className="flex items-baseline gap-2 mb-2">
+@@ -541,7 +533,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                     </label>
+                     <select value={formData.vendorId} onChange={handleContractorChange} className="w-full md:w-1/2 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none">
+                         <option value="">{t('audit.wizard.selectContractor')}</option>
+-                        {activeContractors.map((vendor: any) => (
++                        {pickerContractors.map(vendor => (
+                             <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
+                         ))}
+                     </select>
+@@ -776,7 +768,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                       <input type="text" name="clause" value={newItem.clause} onChange={handleNewItemChange} placeholder="ISO 9001:2015 Clause 內容..." className="flex-1 p-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all text-sm font-medium text-slate-800" />
+                     </div>
+                     <div className="flex gap-2">
+-                      <input type="text" name="task" value={newItem.task} onChange={handleNewItemChange} onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addCustomItem())} placeholder="輸入稽核查檢重點 (Audit Question)..." className="flex-1 p-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all text-sm font-medium text-slate-800" />
++                      <input type="text" name="task" value={newItem.task} onChange={handleNewItemChange} onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); addCustomItem(); } }} placeholder="輸入稽核查檢重點 (Audit Question)..." className="flex-1 p-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all text-sm font-medium text-slate-800" />
+                       <button className={actionStyles.icon} type="button" onClick={addCustomItem}><Plus size={20} /></button>
+                     </div>
+                   </div>
+@@ -801,9 +793,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                                   <option value="custom">✎ {t('audit.wizard.customClause')}</option>
+                                 </select>
+                               )}
+-                              <input type="text" name="clause" value={editFormData.clause} onChange={handleEditChange} onKeyPress={(e) => { if (e.key === 'Enter') e.preventDefault(); }} placeholder="ISO 9001:2015 Clause 內容..." className="flex-1 p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm" />
++                              <input type="text" name="clause" value={editFormData.clause} onChange={handleEditChange} onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) e.preventDefault(); }} placeholder="ISO 9001:2015 Clause 內容..." className="flex-1 p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm" />
+                             </div>
+-                            <input type="text" name="task" value={editFormData.task} onChange={handleEditChange} onKeyPress={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveEdit(); } }} placeholder="輸入稽核查檢重點 (Audit Question)..." className="w-full p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm" />
++                            <input type="text" name="task" value={editFormData.task} onChange={handleEditChange} onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); saveEdit(); } }} placeholder="輸入稽核查檢重點 (Audit Question)..." className="w-full p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm" />
+                             <div className="flex justify-end gap-2 mt-1">
+                               <button className={actionStyles.secondary} type="button" onClick={cancelEdit}><X size={16} /> {t('common.cancel')}</button>
+                               <button className={actionStyles.primary} type="button" onClick={saveEdit}><Check size={16} /> {t('common.save')}</button>
+@@ -927,7 +919,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                         onChange={(e) => setSearchTerm(e.target.value)}
+                         // The only text input on step 5, inside the form that has the submit button:
+                         // Enter would otherwise submit (save and close) the whole audit.
+-                        onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
++                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) e.preventDefault(); }}
+                         className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-slate-50"
+                       />
+                     </div>
+@@ -998,8 +990,10 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                                   onChange={(e) => updateItemNote(item.id, e.target.value)}
+                                   placeholder={t('common.clickToEnter') || 'Click to enter...'}
+                                   rows={2}
+-                                  className="w-full text-sm bg-transparent border border-transparent hover:border-slate-200 focus:border-indigo-400 focus:outline-none p-2 rounded-lg transition-all text-slate-700 resize-y min-h-[40px]"
++                                  className="w-full text-sm bg-transparent border border-transparent hover:border-slate-200 focus:border-indigo-400 focus:outline-none p-2 rounded-lg transition-all text-slate-700 resize-y min-h-[40px] print:hidden"
+                                 />
++                                {/* A textarea prints only its visible rows; print the whole note as text instead. */}
++                                <p className="hidden print:block w-full text-sm text-slate-700 whitespace-pre-wrap break-words">{item.note || '-'}</p>
+                               </div>
+                             </td>
+                             <td className="px-6 py-4 text-right">
+@@ -1063,9 +1057,11 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                     onChange={handleInputChange}
+                     rows={5}
+                     disabled={readOnly}
+-                    className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium resize-y"
+-                    placeholder={t('audit.findingsPlaceholder') || 'Enter audit findings and summary...'}
++                    className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium resize-y print:hidden"
++                    placeholder={t('audit.findingsPlaceholder')}
+                   />
++                  {/* A textarea prints only its visible rows; print the full findings as text instead. */}
++                  <p className="hidden print:block text-slate-800 whitespace-pre-wrap break-words">{formData.findings || '-'}</p>
+                 </div>
+               </div>
+             )}
+diff --git a/react-app/src/components/Audit/ScheduleMatrix.tsx b/react-app/src/components/Audit/ScheduleMatrix.tsx
+index e0864a32..88511d96 100644
+--- a/react-app/src/components/Audit/ScheduleMatrix.tsx
++++ b/react-app/src/components/Audit/ScheduleMatrix.tsx
+@@ -19,6 +19,7 @@ interface Contractor {
+ interface ScheduleMatrixProps {
+   matrixDates: MatrixDate[];
+   vendors: Contractor[];
++  locale: string;
+   getAuditForMatrix: (vendorName: string, date: Date) => any;
+   viewDate: Date;
+   onChangeMonth: (offset: number) => void;
+@@ -37,6 +38,7 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
+   onSetToday,
+   onEditAudit,
+   loading,
++  locale,
+   t
+ }) => {
+   return (
+@@ -55,7 +57,7 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
+           </div>
+         </div>
+         <div className={styles.monthDisplay}>
+-          {viewDate.toLocaleString('en-US', { month: 'long', year: 'numeric' })}
++          {viewDate.toLocaleString(locale, { month: 'long', year: 'numeric' })}
+         </div>
+       </div>
+ 
+@@ -66,7 +68,7 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
+             <div className={styles.skeletonPulse} />
+             <div className={styles.skeletonPulse} />
+           </div>
+-        ) : matrixDates.length === 0 ? (
++        ) : vendors.length === 0 ? (
+           <div className={styles.emptyState}>
+             <svg className={styles.emptyIcon} width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+               <rect width="18" height="18" x="3" y="4" rx="2" ry="2"/>
+@@ -75,8 +77,8 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
+               <line x1="3" x2="21" y1="10" y2="10"/>
+               <path d="m9 16 2 2 4-4"/>
+             </svg>
+-            <h3>No Scheduled Audits</h3>
+-            <p>Select a different month or clear filters.</p>
++            <h3>{t('audit.scheduleEmptyTitle')}</h3>
++            <p>{t('audit.scheduleEmptyHint')}</p>
+           </div>
+         ) : (
+           <div className={styles.matrixScroll}>
+diff --git a/react-app/src/components/Audit/VendorStatsPanel.tsx b/react-app/src/components/Audit/VendorStatsPanel.tsx
+index 2af0bd7c..60402245 100644
+--- a/react-app/src/components/Audit/VendorStatsPanel.tsx
++++ b/react-app/src/components/Audit/VendorStatsPanel.tsx
+@@ -41,7 +41,7 @@ const VendorStatsPanel: React.FC<VendorStatsPanelProps> = ({
+           <h2 className={styles.panelTitle}>{t('common.contractor') || 'Vendors'}</h2>
+           <span className={styles.badge}>{totalAudits} {t('audit.total')}</span>
+         </div>
+-        <p className={styles.panelSubtitle}>Filter audits by selecting a vendor</p>
++        <p className={styles.panelSubtitle}>{t('audit.vendorFilterHint')}</p>
+       </div>
+ 
+       <div className={styles.vendorList}>
+diff --git a/react-app/src/components/FollowUpIssue/columns.tsx b/react-app/src/components/FollowUpIssue/columns.tsx
+index e69affde..c3079780 100755
+--- a/react-app/src/components/FollowUpIssue/columns.tsx
++++ b/react-app/src/components/FollowUpIssue/columns.tsx
+@@ -31,6 +31,7 @@ const getModulePath = (module?: string): string | null => {
+         case 'ITP': return '/itp';
+         case 'PQP': return '/pqp';
+         case 'MEETING': return '/meeting-minutes';
++        case 'AUDIT': return '/audit';
+         default: return null;
+     }
+ };
+@@ -61,6 +62,7 @@ const getDeepLinkPath = (issue: FollowUpIssueItem): string | null => {
+         case 'NOI':
+         case 'ITP':
+         case 'PQP':
++        case 'AUDIT':
+             return issue.sourceReferenceNo
+                 ? `${modulePath}?openId=${encodeURIComponent(issue.sourceReferenceNo)}`
+                 : modulePath;
+diff --git a/react-app/src/context/LanguageContext.tsx b/react-app/src/context/LanguageContext.tsx
+index 4bce06fb..5eb1a284 100755
+--- a/react-app/src/context/LanguageContext.tsx
++++ b/react-app/src/context/LanguageContext.tsx
+@@ -851,6 +851,17 @@ const translations: Record<Language, Record<string, string>> = {
+     'audit.confirmDelete': 'Are you sure you want to delete this audit?',
+     'audit.deleteVoidOnlyHint': 'Void this audit first, then delete',
+     'audit.deleteNoPermissionHint': 'You do not have permission to delete audits',
++    'audit.auditTitlePlaceholder': 'Enter audit subject',
++    'audit.findingsPlaceholder': 'Enter audit findings and summary...',
++    'audit.vendorFilterHint': 'Filter audits by selecting a vendor',
++    'audit.scheduleEmptyTitle': 'No audits to show',
++    'audit.scheduleEmptyHint': 'Active contractors that have audits appear here.',
++    'audit.wizard.startDateLabel': 'Audit Start Date',
++    'audit.wizard.endDateLabel': 'Audit End Date',
++    'audit.wizard.unconfirmedEditItem': 'You are editing a check item but have not applied it. Click "Save" on that row (or "Cancel" to discard it) before saving the form.',
++    'audit.wizard.unconfirmedNewItem': 'You typed a custom check item but did not click "Add". Click "Add" or clear those fields before saving.',
++    'audit.wizard.saveFailedPrefix': 'Could not save: ',
++    'audit.wizard.createdNoUpdateNotice': 'The audit has been created. You do not have permission to update audits, so it is now read-only; ask someone with update permission to make further changes.',
+     'audit.sectionQuality': 'Quality Assessment',
+     'audit.wizard.title': 'Audit Plan System',
+     'audit.wizard.step1': 'Project Info',
+@@ -2309,6 +2320,17 @@ const translations: Record<Language, Record<string, string>> = {
+     'audit.confirmDelete': '您確定要刪除此稽核嗎？',
+     'audit.deleteVoidOnlyHint': '請先將此稽核作廢，才能刪除',
+     'audit.deleteNoPermissionHint': '您沒有刪除稽核的權限',
++    'audit.auditTitlePlaceholder': '輸入稽核主旨',
++    'audit.findingsPlaceholder': '輸入稽核發現與總結…',
++    'audit.vendorFilterHint': '選擇承包商以篩選稽核',
++    'audit.scheduleEmptyTitle': '目前沒有可顯示的稽核',
++    'audit.scheduleEmptyHint': '有稽核紀錄的啟用中承包商會顯示在這裡。',
++    'audit.wizard.startDateLabel': '稽核開始日',
++    'audit.wizard.endDateLabel': '稽核結束日',
++    'audit.wizard.unconfirmedEditItem': '您正在編輯既有查檢項目但尚未按「儲存」套用這筆編輯。請先儲存，或按「取消」放棄後再保存整份表單。',
++    'audit.wizard.unconfirmedNewItem': '您在自訂查檢項目輸入了內容但尚未按「新增」。請先按「新增」加入，或清空欄位後再保存。',
++    'audit.wizard.saveFailedPrefix': '無法儲存：',
++    'audit.wizard.createdNoUpdateNotice': '稽核已建立。您沒有「更新稽核」權限，所以現在改為唯讀；後續修改請由具更新權限的人處理。',
+     'audit.sectionQuality': '品質評估',
+     'audit.wizard.title': '稽核計畫主檔系統',
+     'audit.wizard.step1': '專案資訊',
+diff --git a/react-app/src/store/auditStore.ts b/react-app/src/store/auditStore.ts
+index 67e05d16..d4369eb7 100755
+--- a/react-app/src/store/auditStore.ts
++++ b/react-app/src/store/auditStore.ts
+@@ -108,8 +108,9 @@ export const useAuditStore = create<AuditState>((set, get) => ({
+             }));
+             return newAudit;
+         } catch (err: any) {
++            // Not put in the page banner: the wizard (covering the page) shows it, and a banner left
++            // behind it would still be there, stale, after the wizard closes.
+             const errorMessage = getErrorMessage(err, 'Failed to create audit');
+-            set({ error: errorMessage });
+             console.error('Failed to create audit:', err);
+             throw new Error(errorMessage);
+         }
+@@ -123,8 +124,8 @@ export const useAuditStore = create<AuditState>((set, get) => ({
+                 auditList: state.auditList.map(a => (a.id === id ? response.data : a))
+             }));
+         } catch (err: any) {
++            // Shown by the wizard, not the page banner (see addAudit).
+             const errorMessage = getErrorMessage(err, 'Failed to update audit');
+-            set({ error: errorMessage });
+             console.error('Failed to update audit:', err);
+             throw new Error(errorMessage);
+         }
+diff --git a/backend/scripts/verification/seed_audit_polish_review.py b/backend/scripts/verification/seed_audit_polish_review.py
+new file mode 100644
+index 00000000..1ad5bcc3
+--- /dev/null
++++ b/backend/scripts/verification/seed_audit_polish_review.py
+@@ -0,0 +1,36 @@
++"""Extra seed for AUDIT-POLISH-2026-001 browser checks (isolated stack only — never run against a real DB).
++Run AFTER seed_audit_hardening_b_review.py:
++
++    python scripts/verification/isolated_stack.py seed --root <root> --script scripts/verification/seed_audit_polish_review.py
++    node ../react-app/tests-browser/audit-print-check.mjs  <stack.json> <outDir> AHB-DRAFT-1
++    node ../react-app/tests-browser/audit-polish-check.mjs <stack.json> <outDir>
++
++Adds: 60 check items + long findings on AHB-DRAFT-1 (several print pages); an active contractor whose only past audit is Void
++("Void Only Co" — must not be flagged overdue); an inactive contractor with a Draft audit ("Retired Co" — must stay in its
++audit's contractor picker).
++"""
++import json
++import os
++import sys
++
++BACKEND = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
++sys.path.insert(0, BACKEND)
++import database, models  # noqa: E402
++
++d = database.SessionLocal()
++a = d.query(models.Audit).filter_by(auditNo="AHB-DRAFT-1").one()
++a.custom_check_items = json.dumps([{"id": i, "no": f"{4 + i % 7}.{i % 5 + 1}", "clause": f"Clause {i} — Resources and competence",
++                                    "task": f"PRINT-ITEM-{i:02d} Check that requirement {i} is met with records",
++                                    "status": ["pass", "fail", ""][i % 3], "note": f"note {i}"} for i in range(1, 61)])
++a.findings = "PRINT-FINDINGS " + "Observed several gaps in document control. " * 30
++a.scope_description = "PRINT-SCOPE site-wide quality system audit"
++d.add(models.Contractor(id="void-only", name="Void Only Co", abbreviation="VO", status="active"))
++d.add(models.Contractor(id="retired", name="Retired Co", abbreviation="RC", status="inactive"))
++d.flush()
++for no, status, cid, cname in (("AHB-VOIDONLY-1", "Void", "void-only", "Void Only Co"), ("AHB-RETIRED-1", "Draft", "retired", "Retired Co")):
++    d.add(models.Audit(id=f"ahb-{no.lower()}", auditNo=no, title=no, date="2026-09-01", end_date="2026-09-02", status=status,
++                       project_id="AHB-P1", project_name="Audit Review P1", contractor=cname, vendor_id=cid,
++                       selected_templates="[]", custom_check_items="[]"))
++d.commit()
++d.close()
++print("SEED " + json.dumps({"ok": True}))
+diff --git a/react-app/tests-browser/audit-print-check.mjs b/react-app/tests-browser/audit-print-check.mjs
+new file mode 100644
+index 00000000..47890d33
+--- /dev/null
++++ b/react-app/tests-browser/audit-print-check.mjs
+@@ -0,0 +1,29 @@
++// AUDIT-POLISH-2026-001: what the wizard's three print buttons actually print (isolated stack only).
++// Opens an audit through ?openId= (also exercises the deep link), goes to steps 3 / 4 / 5 (the steps with a print button),
++// renders each with print media into a PDF (page.pdf = the browser's print pipeline) and reports pages + text markers.
++// Usage: node audit-print-check.mjs <stack.json> <outDir> <auditNo>
++import { chromium } from '/Users/nook/Documents/Qualitas/react-app/node_modules/playwright/index.mjs';
++import { readFileSync, mkdirSync } from 'node:fs';
++const stack = JSON.parse(readFileSync(process.argv[2], 'utf8'));
++const out = process.argv[3]; mkdirSync(out, { recursive: true });
++const auditNo = process.argv[4];
++const UI = `http://127.0.0.1:${stack.vite_port}`, PW = 'Accept-Test-1234';
++const browser = await chromium.launch({ headless: true });
++const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
++await ctx.addInitScript(() => localStorage.setItem('language', 'zh'));
++const p = await ctx.newPage();
++await p.goto(UI + '/login'); await p.fill('#email', 'audit_full'); await p.fill('#password', PW); await p.click('button[type=submit]');
++await p.waitForURL(u => !u.pathname.startsWith('/login'), { timeout: 15000 });
++await p.goto(`${UI}/audit?openId=${encodeURIComponent(auditNo)}`);
++await p.waitForSelector('input[name=auditDocNo]', { timeout: 15000 });
++console.log('DEEPLINK opened', await p.inputValue('input[name=auditDocNo]'), 'url', new URL(p.url()).search || '(openId removed)');
++for (const step of [3, 4, 5]) {
++  await p.locator('button', { hasText: new RegExp(`^${step}$`) }).first().click();
++  await p.waitForTimeout(600);
++  const hasPrintButton = await p.locator('button', { hasText: /列印|Print/ }).count();
++  await p.emulateMedia({ media: 'print' });
++  await p.pdf({ path: `${out}/step${step}.pdf`, format: 'A4', printBackground: true });
++  await p.emulateMedia({ media: 'screen' });
++  console.log(`STEP ${step} printButtons=${hasPrintButton} pdf=${out}/step${step}.pdf`);
++}
++await browser.close();
+diff --git a/react-app/tests-browser/audit-polish-check.mjs b/react-app/tests-browser/audit-polish-check.mjs
+new file mode 100644
+index 00000000..6ff1ed9d
+--- /dev/null
++++ b/react-app/tests-browser/audit-polish-check.mjs
+@@ -0,0 +1,96 @@
++// AUDIT-POLISH-2026-001 browser checks (isolated stack only; seeds: seed_audit_hardening_b_review.py + the round's extra seed).
++// Usage: node audit-polish-check.mjs <stack.json> <outDir>
++import { chromium } from '/Users/nook/Documents/Qualitas/react-app/node_modules/playwright/index.mjs';
++import { readFileSync, mkdirSync } from 'node:fs';
++const stack = JSON.parse(readFileSync(process.argv[2], 'utf8'));
++const out = process.argv[3]; mkdirSync(out, { recursive: true });
++const UI = `http://127.0.0.1:${stack.vite_port}`, PW = 'Accept-Test-1234';
++const result = (name, ok, extra = '') => console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${extra ? '  -> ' + String(extra).replace(/\s+/g, ' ').slice(0, 300) : ''}`);
++const browser = await chromium.launch({ headless: true });
++
++async function login(user, language = 'zh') {
++  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
++  await ctx.addInitScript(lang => localStorage.setItem('language', lang), language);
++  const p = await ctx.newPage();
++  await p.goto(UI + '/login'); await p.fill('#email', user); await p.fill('#password', PW); await p.click('button[type=submit]');
++  await p.waitForURL(u => !u.pathname.startsWith('/login'), { timeout: 15000 });
++  await p.goto(UI + '/audit');
++  await p.waitForSelector('table tbody tr', { timeout: 15000 });
++  await p.waitForTimeout(800);
++  return p;
++}
++const openAudit = async (p, no) => {
++  const row = p.locator('table tbody tr', { hasText: no }).first();
++  await row.locator('td').nth(2).click();
++  await p.waitForSelector('input[name=auditDocNo]', { timeout: 10000 }).catch(async e => { await p.screenshot({ path: `${out}/open-${no}-failed.png` }); throw e; });
++};
++const closeWizard = async p => { await p.locator('.fixed button:has(svg.lucide-x)').first().click(); await p.waitForTimeout(400); };
++
++// 1. Void-only contractor is not flagged overdue; Review Vendor (past Draft) still is. Both in the stats panel.
++{
++  const p = await login('audit_full');
++  const flagged = await p.evaluate(() => Object.fromEntries([...document.querySelectorAll('[class*="vendorItem"]')]
++    .map(el => [el.innerText.split('\n')[0].trim(), /pastUnfinished/.test(el.className)])));
++  result('void-only contractor not flagged overdue', flagged['Void Only Co'] === false, JSON.stringify(flagged));
++  result('contractor with a past Draft still flagged', flagged['Review Vendor'] === true, JSON.stringify(flagged));
++
++  // 2. zh texts: panel hint, month label, placeholders
++  const hint = await p.locator('[class*="panelSubtitle"]').first().innerText();
++  const month = await p.locator('[class*="monthDisplay"]').first().innerText();
++  result('zh vendor hint', hint === '選擇承包商以篩選稽核', hint);
++  result('zh month label', /月/.test(month) && !/[A-Za-z]/.test(month), month);
++  await p.locator('button', { hasText: /新增|Add/ }).first().click();
++  await p.waitForSelector('input[name=auditTitle]');
++  const ph = await p.getAttribute('input[name=auditTitle]', 'placeholder');
++  result('title placeholder translated (no raw key)', ph === '輸入稽核主旨', ph);
++  await closeWizard(p);
++
++  // 3. deactivated contractor still shown in the picker of its own audit
++  await openAudit(p, 'AHB-RETIRED-1');
++  const picker = await p.evaluate(() => {
++    const s = [...document.querySelectorAll('select')].find(x => [...x.options].some(o => /Contractor|承包商|廠商/.test(o.text) && o.value === ''));
++    return { value: s.value, text: s.options[s.selectedIndex]?.text, options: [...s.options].map(o => o.text) };
++  });
++  result('inactive contractor kept in its audit picker', picker.value === 'retired' && picker.text === 'Retired Co', JSON.stringify(picker));
++
++  // 4. a refused save shows the backend's reason (end date before start date -> 422)
++  await p.fill('input[name=auditEndDate]', '2026-08-01');
++  await p.locator('button', { hasText: /儲存草稿|Save Draft/ }).first().click();
++  await p.waitForTimeout(1200);
++  const err = await p.locator('.bg-red-50').first().innerText().catch(() => '');
++  result('save error shows the reason', /無法儲存/.test(err) && /date/i.test(err), err);
++  await p.screenshot({ path: `${out}/save-error-reason.png` });
++  await p.context().close();
++}
++
++// 5. create-only user: after the first Save Draft the wizard is read-only with a notice
++{
++  const p = await login('audit_viewer');
++  await p.locator('button', { hasText: /新增|Add/ }).first().click();
++  await p.waitForSelector('input[name=auditTitle]');
++  await p.fill('input[name=auditTitle]', 'create-only check');
++  await p.locator('button', { hasText: /儲存草稿|Save Draft/ }).first().click();
++  await p.waitForTimeout(1500);
++  const state = await p.evaluate(() => ({
++    docNo: document.querySelector('input[name=auditDocNo]')?.value,
++    notice: document.querySelector('.bg-amber-50')?.innerText || '',
++    disabled: [...document.querySelectorAll('form fieldset')].every(f => f.disabled),
++    saveVisible: [...document.querySelectorAll('button')].some(b => /儲存草稿|Save Draft/.test(b.innerText)),
++  }));
++  result('create-only user: created then read-only with notice', !!state.docNo && /唯讀/.test(state.notice) && state.disabled && !state.saveVisible, JSON.stringify(state));
++  await p.screenshot({ path: `${out}/create-only-read-only.png` });
++  await p.context().close();
++}
++
++// 6. step-5 search is case-insensitive
++{
++  const p = await login('audit_full');
++  await openAudit(p, 'AHB-DRAFT-1');
++  await p.locator('button', { hasText: /^5$/ }).first().click();
++  await p.fill('input[placeholder*="Search items"], input[placeholder*="搜尋"]', 'print-item-07');
++  await p.waitForTimeout(400);
++  const rows = await p.locator('tbody tr', { hasText: 'PRINT-ITEM-07' }).count();
++  result('step-5 search ignores case', rows >= 1, `rows=${rows}`);
++  await p.context().close();
++}
++await browser.close();

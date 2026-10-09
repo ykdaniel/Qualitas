@@ -1,0 +1,19 @@
+# run(UTC): 2026-10-09T15:18:20Z  node v25.8.0
+74b03d2ad4e1630d4847546894639683edd3f3d3c08946fb1b906aaba319ebe9  ../react-app/src/components/Audit/Audit.tsx
+b14ee3a856c2f918e45ab340c73ac9e8ef4dd4596d5f874be643186f904cdc3a  ../react-app/src/components/Audit/AuditWizard.tsx
+b8518169959ec122d2c0615f8cb04f851c94030291a4b2a42695a3a9ef3fa80f  ../react-app/src/components/Audit/ScheduleMatrix.tsx
+4ad0829f57af8ef048c5b0d69fd7026927be6270e6f6159850996c6406302f82  ../react-app/src/components/Audit/VendorStatsPanel.tsx
+b62962a05d5a1eab3bef0e7f16cbe675d217b56c978cc946dbdc22fdae361c2b  ../react-app/src/store/auditStore.ts
+b322a2c2333ded99337dcc7b107d6ceff0467a56e62ce7916445aa3dff44a9e1  ../react-app/src/context/LanguageContext.tsx
+cd541f8c81ec01a0f8d9cb6884081594d98055ade58cc22f0625c465e36270ef  ../react-app/src/components/FollowUpIssue/columns.tsx
+## tsc
+tsc exit=0
+## npm test
+ℹ tests 144
+ℹ pass 144
+ℹ fail 0
+## eslint (Audit module + auditStore)
+eslint exit=0 (0 problems; the HEAD FINISHED_STATUSES warning is gone — constants moved to module scope)
+## eslint FollowUpIssue/columns.tsx: 1 error, pre-existing at HEAD (line 249 there, 251 now; untouched)
+## vite build (outDir $TMPDIR)
+✓ built in 4.08s

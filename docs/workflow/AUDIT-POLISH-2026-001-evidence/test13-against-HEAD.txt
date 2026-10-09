@@ -1,0 +1,3 @@
+# HEAD 6be70c12 product code + this round's test_audit_contractor_options_http.py only
+FAILED tests/test_audit_contractor_options_http.py::test_contractor_scoped_create_uses_its_own_contractor_for_name_and_number
+1 failed, 4 passed in 3.45s
