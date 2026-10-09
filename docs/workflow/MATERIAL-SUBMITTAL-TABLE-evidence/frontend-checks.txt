@@ -1,0 +1,15 @@
+MATERIAL-SUBMITTAL-TABLE frontend checks (2026-10-09 00:40 CST); EXIT = the command's own exit code
+$ npm test
+✔ no response (network error / timeout) is UNKNOWN, never "not saved" (1.24125ms)
+✔ network failure, server error and unknown errors: friendly fixed lines, the response body is never shown (0.080916ms)
+ℹ tests 168
+ℹ pass 168
+ℹ fail 0
+EXIT 0
+$ npx tsc --noEmit -p .
+EXIT 0
+$ npx eslint --max-warnings 0 src/components/MaterialSubmittal/MaterialSubmittal.tsx src/components/MaterialSubmittal/columns.tsx src/components/MaterialSubmittal/materialText.ts src/components/Shared/AppLayout.tsx
+EXIT 0
+$ npx vite build --outDir /tmp/claude-501/table-build --emptyOutDir
+✓ built in 4.20s
+EXIT 0

@@ -1,0 +1,47 @@
+MATERIAL-SUBMITTAL M6 frontend checks, FINAL (register + clean-up round) (2026-10-09 02:32 CST); EXIT = the command's own exit code
+$ npm test
+✔ no response (network error / timeout) is UNKNOWN, never "not saved" (2.443542ms)
+✔ network failure, server error and unknown errors: friendly fixed lines, the response body is never shown (0.23425ms)
+ℹ tests 139
+ℹ pass 139
+ℹ fail 0
+EXIT 0
+$ npx tsc --noEmit -p .
+EXIT 0
+$ npx eslint --max-warnings 0 src/components/MaterialSubmittal src/components/Dashboard/Dashboard.tsx src/components/Dashboard/MaterialStatsTile.tsx src/services/materialApi.ts src/utils/materialSubmittal.ts src/App.tsx src/components/Shared/AppLayout.tsx src/components/DocumentNamingRules/DocumentNamingRules.tsx tests-unit/materialSubmittal.test.ts
+EXIT 0
+$ npx vite build --outDir /tmp/claude-501/m6-build --emptyOutDir
+✓ built in 4.35s
+EXIT 0
+
+=== R2 (2026-10-09) ===
+# 2026-10-09 03:18:19 node v25.8.0 — R2 frontend checks
+## npm test
+ℹ tests 143
+ℹ pass 143
+ℹ fail 0
+EXIT=0
+## tsc --noEmit
+EXIT=0
+## eslint (changed files): src/components/MaterialSubmittal src/components/Dashboard/MaterialStatsTile.tsx src/components/Dashboard/Dashboard.tsx src/utils/materialSubmittal.ts src/services/materialApi.ts src/components/Shared/DataTable/DataTable.tsx tests-unit/materialSubmittal.test.ts
+EXIT=0
+## vite build
+../../../../../tmp/claude-501/r2-build-out/assets/index-BlJC2WPt.js                    461.63 kB │ gzip: 151.64 kB
+../../../../../tmp/claude-501/r2-build-out/assets/mammoth.browser-kstTjmXW.js          499.39 kB │ gzip: 124.65 kB
+✓ built in 4.01s
+EXIT=0
+
+=== R2 — after the shelf view ===
+# 2026-10-09 13:05:51 node v25.8.0 — R2 frontend checks after the shelf view (user request, folded into R2)
+## npm test
+ℹ tests 144
+ℹ pass 144
+ℹ fail 0
+EXIT=0
+## tsc --noEmit
+EXIT=0
+## eslint (changed files): src/components/MaterialSubmittal src/components/Dashboard/MaterialStatsTile.tsx src/components/Dashboard/Dashboard.tsx src/utils/materialSubmittal.ts src/services/materialApi.ts src/components/Shared/DataTable/DataTable.tsx tests-unit/materialSubmittal.test.ts
+EXIT=0
+## vite build
+✓ built in 5.73s
+EXIT=0

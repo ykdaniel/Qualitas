@@ -1,0 +1,5 @@
+MATERIAL-SUBMITTAL-TABLE — sha256 of the files changed in this round (2026-10-09 00:41 CST)
+3c453d4898c9020ede46021578736fb29bff36e0d005a3448aa913b27fb9c4df  react-app/src/components/MaterialSubmittal/columns.tsx
+7a164a8d0e3eba761b6babae7c379930d79b91b3c9ef88e69340f14b5f4fc0a7  react-app/src/components/MaterialSubmittal/MaterialSubmittal.tsx
+b3e0505c8786995c0426f1d6d24e36a13d07252dd22220bee0cfed925c093a28  react-app/src/components/MaterialSubmittal/materialText.ts
+ab0c59d2992641fde1fadcf139afd1af2de1da7ec23293bfdb4999783faf0fed  react-app/src/components/Shared/AppLayout.tsx

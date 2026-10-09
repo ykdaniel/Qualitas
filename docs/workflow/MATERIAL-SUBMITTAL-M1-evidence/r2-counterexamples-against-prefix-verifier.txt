@@ -1,0 +1,314 @@
+F...FFFF.FFF                                                             [100%]
+=================================== FAILURES ===================================
+_ test_one_open_index_with_any_other_condition_aborts_and_keeps_data[status IN ('draft','submitted')] _
+
+run_dir = PosixPath('/private/tmp/claude-501/qualitas-material-mig-3_qcmz3c')
+where = "status IN ('draft','submitted')"
+
+    @pytest.mark.parametrize("where", ["status IN ('draft','submitted')",        # literal case changed (review's probe)
+                                       "status IN ('Submitted','Draft')",        # equivalent order — not provable here, so refused
+                                       "status IN ('Draft')",                    # literal content changed
+                                       "\"status\" IN ('Draft','Submitted')"])   # other quoting — refused (conservative)
+    def test_one_open_index_with_any_other_condition_aborts_and_keeps_data(run_dir, where):
+        db = run_dir / "bad-where.db"
+        boot(db)
+        _replace_one_open(db, where)
+        _revision(db, "keep-1", 0, "Approved")
+>       _expect_abort(db, "index ux_msr_one_open condition is")
+
+tests/test_material_schema_migration.py:285: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db = PosixPath('/private/tmp/claude-501/qualitas-material-mig-3_qcmz3c/bad-where.db')
+needle = 'index ux_msr_one_open condition is'
+
+    def _expect_abort(db, needle):
+        rc, out = boot(db, check=False)
+>       assert rc != 0, out[-2000:]
+E       AssertionError: 2026-10-08 20:51:21,246 - main - INFO - 日誌系統已啟動 - 級別: INFO, 目錄: /private/tmp/claude-501/qualitas-material-mig-3_qcmz3c/logs
+E         2026-10-08 20:51:21,248 - db_migrations - INFO - Running database migrations...
+E         2026-10-08 20:51:21,331 - db_migrations - INFO - Migrations completed.
+E         2026-10-08 20:51:21,332 - db_seeder - INFO - Running database seeding...
+E         2026-10-08 20:51:21,334 - db_seeder - INFO - Seeding permissions...
+E         2026-10-08 20:51:21,344 - db_seeder - INFO - Synced admin role permissions (73 perms).
+E         2026-10-08 20:51:21,580 - db_seeder - INFO - Rebar ITP already exists, skipping seed: QTS-RKS-HL-ITP-000001
+E         2026-10-08 20:51:21,580 - db_seeder - INFO - Rebar ITP seeded successfully.
+E         2026-10-08 20:51:21,580 - db_seeder - INFO - Formwork ITP already exists, skipping seed: QTS-RKS-HL-ITP-000002
+E         2026-10-08 20:51:21,580 - db_seeder - INFO - Seeding completed.
+E         
+E       assert 0 != 0
+
+tests/test_material_schema_migration.py:195: AssertionError
+_______ test_text_column_with_wrong_type_aborts_and_keeps_data[NUMERIC] ________
+
+old_backend = PosixPath('/private/tmp/claude-501/pytest-of-nook/pytest-20/old-code0/backend')
+run_dir = PosixPath('/private/tmp/claude-501/qualitas-material-mig-btnufutw')
+bad_type = 'NUMERIC'
+
+    @pytest.mark.parametrize("bad_type", ["NUMERIC", "REAL", "BLOB", "", "INT", "NVARCHAR"])
+    def test_text_column_with_wrong_type_aborts_and_keeps_data(old_backend, run_dir, bad_type):
+        db = old_database(old_backend, run_dir)
+        ddl = _MATERIAL_DDL[0].replace("name VARCHAR NOT NULL", f"name {bad_type} NOT NULL".replace("  ", " "))
+        assert ddl != _MATERIAL_DDL[0]
+        sql(db, ddl)
+        sql(db, "INSERT INTO materials (id, project_id, name) VALUES ('keep-me', 'old-p', '00123')")
+        before = sql(db, "SELECT id, name, typeof(name) FROM materials")
+>       _expect_abort(db, "materials.name type")
+
+tests/test_material_schema_migration.py:323: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db = PosixPath('/private/tmp/claude-501/qualitas-material-mig-btnufutw/old.db')
+needle = 'materials.name type'
+
+    def _expect_abort(db, needle):
+        rc, out = boot(db, check=False)
+>       assert rc != 0, out[-2000:]
+E       AssertionError: 2026-10-08 20:51:27,763 - main - INFO - 日誌系統已啟動 - 級別: INFO, 目錄: /private/tmp/claude-501/qualitas-material-mig-btnufutw/logs
+E         2026-10-08 20:51:27,765 - db_migrations - INFO - Running database migrations...
+E         2026-10-08 20:51:27,835 - db_migrations - INFO - Migrations completed.
+E         2026-10-08 20:51:27,836 - db_seeder - INFO - Running database seeding...
+E         2026-10-08 20:51:27,838 - db_seeder - INFO - Seeding permissions...
+E         2026-10-08 20:51:27,848 - db_seeder - INFO - Synced admin role permissions (73 perms).
+E         2026-10-08 20:51:28,043 - db_seeder - INFO - Rebar ITP already exists, skipping seed: QTS-RKS-HL-ITP-000001
+E         2026-10-08 20:51:28,043 - db_seeder - INFO - Rebar ITP seeded successfully.
+E         2026-10-08 20:51:28,043 - db_seeder - INFO - Formwork ITP already exists, skipping seed: QTS-RKS-HL-ITP-000002
+E         2026-10-08 20:51:28,043 - db_seeder - INFO - Seeding completed.
+E         
+E       assert 0 != 0
+
+tests/test_material_schema_migration.py:195: AssertionError
+_________ test_text_column_with_wrong_type_aborts_and_keeps_data[REAL] _________
+
+old_backend = PosixPath('/private/tmp/claude-501/pytest-of-nook/pytest-20/old-code0/backend')
+run_dir = PosixPath('/private/tmp/claude-501/qualitas-material-mig-z48ew_ht')
+bad_type = 'REAL'
+
+    @pytest.mark.parametrize("bad_type", ["NUMERIC", "REAL", "BLOB", "", "INT", "NVARCHAR"])
+    def test_text_column_with_wrong_type_aborts_and_keeps_data(old_backend, run_dir, bad_type):
+        db = old_database(old_backend, run_dir)
+        ddl = _MATERIAL_DDL[0].replace("name VARCHAR NOT NULL", f"name {bad_type} NOT NULL".replace("  ", " "))
+        assert ddl != _MATERIAL_DDL[0]
+        sql(db, ddl)
+        sql(db, "INSERT INTO materials (id, project_id, name) VALUES ('keep-me', 'old-p', '00123')")
+        before = sql(db, "SELECT id, name, typeof(name) FROM materials")
+>       _expect_abort(db, "materials.name type")
+
+tests/test_material_schema_migration.py:323: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db = PosixPath('/private/tmp/claude-501/qualitas-material-mig-z48ew_ht/old.db')
+needle = 'materials.name type'
+
+    def _expect_abort(db, needle):
+        rc, out = boot(db, check=False)
+>       assert rc != 0, out[-2000:]
+E       AssertionError: 2026-10-08 20:51:29,563 - main - INFO - 日誌系統已啟動 - 級別: INFO, 目錄: /private/tmp/claude-501/qualitas-material-mig-z48ew_ht/logs
+E         2026-10-08 20:51:29,565 - db_migrations - INFO - Running database migrations...
+E         2026-10-08 20:51:29,633 - db_migrations - INFO - Migrations completed.
+E         2026-10-08 20:51:29,633 - db_seeder - INFO - Running database seeding...
+E         2026-10-08 20:51:29,635 - db_seeder - INFO - Seeding permissions...
+E         2026-10-08 20:51:29,645 - db_seeder - INFO - Synced admin role permissions (73 perms).
+E         2026-10-08 20:51:29,836 - db_seeder - INFO - Rebar ITP already exists, skipping seed: QTS-RKS-HL-ITP-000001
+E         2026-10-08 20:51:29,837 - db_seeder - INFO - Rebar ITP seeded successfully.
+E         2026-10-08 20:51:29,837 - db_seeder - INFO - Formwork ITP already exists, skipping seed: QTS-RKS-HL-ITP-000002
+E         2026-10-08 20:51:29,837 - db_seeder - INFO - Seeding completed.
+E         
+E       assert 0 != 0
+
+tests/test_material_schema_migration.py:195: AssertionError
+_________ test_text_column_with_wrong_type_aborts_and_keeps_data[BLOB] _________
+
+old_backend = PosixPath('/private/tmp/claude-501/pytest-of-nook/pytest-20/old-code0/backend')
+run_dir = PosixPath('/private/tmp/claude-501/qualitas-material-mig-5b9d30tp')
+bad_type = 'BLOB'
+
+    @pytest.mark.parametrize("bad_type", ["NUMERIC", "REAL", "BLOB", "", "INT", "NVARCHAR"])
+    def test_text_column_with_wrong_type_aborts_and_keeps_data(old_backend, run_dir, bad_type):
+        db = old_database(old_backend, run_dir)
+        ddl = _MATERIAL_DDL[0].replace("name VARCHAR NOT NULL", f"name {bad_type} NOT NULL".replace("  ", " "))
+        assert ddl != _MATERIAL_DDL[0]
+        sql(db, ddl)
+        sql(db, "INSERT INTO materials (id, project_id, name) VALUES ('keep-me', 'old-p', '00123')")
+        before = sql(db, "SELECT id, name, typeof(name) FROM materials")
+>       _expect_abort(db, "materials.name type")
+
+tests/test_material_schema_migration.py:323: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db = PosixPath('/private/tmp/claude-501/qualitas-material-mig-5b9d30tp/old.db')
+needle = 'materials.name type'
+
+    def _expect_abort(db, needle):
+        rc, out = boot(db, check=False)
+>       assert rc != 0, out[-2000:]
+E       AssertionError: 2026-10-08 20:51:31,359 - main - INFO - 日誌系統已啟動 - 級別: INFO, 目錄: /private/tmp/claude-501/qualitas-material-mig-5b9d30tp/logs
+E         2026-10-08 20:51:31,361 - db_migrations - INFO - Running database migrations...
+E         2026-10-08 20:51:31,428 - db_migrations - INFO - Migrations completed.
+E         2026-10-08 20:51:31,429 - db_seeder - INFO - Running database seeding...
+E         2026-10-08 20:51:31,431 - db_seeder - INFO - Seeding permissions...
+E         2026-10-08 20:51:31,440 - db_seeder - INFO - Synced admin role permissions (73 perms).
+E         2026-10-08 20:51:31,631 - db_seeder - INFO - Rebar ITP already exists, skipping seed: QTS-RKS-HL-ITP-000001
+E         2026-10-08 20:51:31,631 - db_seeder - INFO - Rebar ITP seeded successfully.
+E         2026-10-08 20:51:31,631 - db_seeder - INFO - Formwork ITP already exists, skipping seed: QTS-RKS-HL-ITP-000002
+E         2026-10-08 20:51:31,631 - db_seeder - INFO - Seeding completed.
+E         
+E       assert 0 != 0
+
+tests/test_material_schema_migration.py:195: AssertionError
+___________ test_text_column_with_wrong_type_aborts_and_keeps_data[] ___________
+
+old_backend = PosixPath('/private/tmp/claude-501/pytest-of-nook/pytest-20/old-code0/backend')
+run_dir = PosixPath('/private/tmp/claude-501/qualitas-material-mig-mamrpwrq')
+bad_type = ''
+
+    @pytest.mark.parametrize("bad_type", ["NUMERIC", "REAL", "BLOB", "", "INT", "NVARCHAR"])
+    def test_text_column_with_wrong_type_aborts_and_keeps_data(old_backend, run_dir, bad_type):
+        db = old_database(old_backend, run_dir)
+        ddl = _MATERIAL_DDL[0].replace("name VARCHAR NOT NULL", f"name {bad_type} NOT NULL".replace("  ", " "))
+        assert ddl != _MATERIAL_DDL[0]
+        sql(db, ddl)
+        sql(db, "INSERT INTO materials (id, project_id, name) VALUES ('keep-me', 'old-p', '00123')")
+        before = sql(db, "SELECT id, name, typeof(name) FROM materials")
+>       _expect_abort(db, "materials.name type")
+
+tests/test_material_schema_migration.py:323: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db = PosixPath('/private/tmp/claude-501/qualitas-material-mig-mamrpwrq/old.db')
+needle = 'materials.name type'
+
+    def _expect_abort(db, needle):
+        rc, out = boot(db, check=False)
+>       assert rc != 0, out[-2000:]
+E       AssertionError: 2026-10-08 20:51:33,172 - main - INFO - 日誌系統已啟動 - 級別: INFO, 目錄: /private/tmp/claude-501/qualitas-material-mig-mamrpwrq/logs
+E         2026-10-08 20:51:33,174 - db_migrations - INFO - Running database migrations...
+E         2026-10-08 20:51:33,242 - db_migrations - INFO - Migrations completed.
+E         2026-10-08 20:51:33,242 - db_seeder - INFO - Running database seeding...
+E         2026-10-08 20:51:33,244 - db_seeder - INFO - Seeding permissions...
+E         2026-10-08 20:51:33,255 - db_seeder - INFO - Synced admin role permissions (73 perms).
+E         2026-10-08 20:51:33,449 - db_seeder - INFO - Rebar ITP already exists, skipping seed: QTS-RKS-HL-ITP-000001
+E         2026-10-08 20:51:33,449 - db_seeder - INFO - Rebar ITP seeded successfully.
+E         2026-10-08 20:51:33,449 - db_seeder - INFO - Formwork ITP already exists, skipping seed: QTS-RKS-HL-ITP-000002
+E         2026-10-08 20:51:33,450 - db_seeder - INFO - Seeding completed.
+E         
+E       assert 0 != 0
+
+tests/test_material_schema_migration.py:195: AssertionError
+_______ test_text_column_with_wrong_type_aborts_and_keeps_data[NVARCHAR] _______
+
+old_backend = PosixPath('/private/tmp/claude-501/pytest-of-nook/pytest-20/old-code0/backend')
+run_dir = PosixPath('/private/tmp/claude-501/qualitas-material-mig-k74pmv16')
+bad_type = 'NVARCHAR'
+
+    @pytest.mark.parametrize("bad_type", ["NUMERIC", "REAL", "BLOB", "", "INT", "NVARCHAR"])
+    def test_text_column_with_wrong_type_aborts_and_keeps_data(old_backend, run_dir, bad_type):
+        db = old_database(old_backend, run_dir)
+        ddl = _MATERIAL_DDL[0].replace("name VARCHAR NOT NULL", f"name {bad_type} NOT NULL".replace("  ", " "))
+        assert ddl != _MATERIAL_DDL[0]
+        sql(db, ddl)
+        sql(db, "INSERT INTO materials (id, project_id, name) VALUES ('keep-me', 'old-p', '00123')")
+        before = sql(db, "SELECT id, name, typeof(name) FROM materials")
+>       _expect_abort(db, "materials.name type")
+
+tests/test_material_schema_migration.py:323: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db = PosixPath('/private/tmp/claude-501/qualitas-material-mig-k74pmv16/old.db')
+needle = 'materials.name type'
+
+    def _expect_abort(db, needle):
+        rc, out = boot(db, check=False)
+>       assert rc != 0, out[-2000:]
+E       AssertionError: 2026-10-08 20:51:36,439 - main - INFO - 日誌系統已啟動 - 級別: INFO, 目錄: /private/tmp/claude-501/qualitas-material-mig-k74pmv16/logs
+E         2026-10-08 20:51:36,441 - db_migrations - INFO - Running database migrations...
+E         2026-10-08 20:51:36,509 - db_migrations - INFO - Migrations completed.
+E         2026-10-08 20:51:36,509 - db_seeder - INFO - Running database seeding...
+E         2026-10-08 20:51:36,511 - db_seeder - INFO - Seeding permissions...
+E         2026-10-08 20:51:36,521 - db_seeder - INFO - Synced admin role permissions (73 perms).
+E         2026-10-08 20:51:36,712 - db_seeder - INFO - Rebar ITP already exists, skipping seed: QTS-RKS-HL-ITP-000001
+E         2026-10-08 20:51:36,712 - db_seeder - INFO - Rebar ITP seeded successfully.
+E         2026-10-08 20:51:36,712 - db_seeder - INFO - Formwork ITP already exists, skipping seed: QTS-RKS-HL-ITP-000002
+E         2026-10-08 20:51:36,712 - db_seeder - INFO - Seeding completed.
+E         
+E       assert 0 != 0
+
+tests/test_material_schema_migration.py:195: AssertionError
+_______________ test_integer_primary_key_must_be_exactly_integer _______________
+
+old_backend = PosixPath('/private/tmp/claude-501/pytest-of-nook/pytest-20/old-code0/backend')
+run_dir = PosixPath('/private/tmp/claude-501/qualitas-material-mig-z_mor04v')
+
+    def test_integer_primary_key_must_be_exactly_integer(old_backend, run_dir):
+        db = old_database(old_backend, run_dir)
+        ddl = _MATERIAL_DDL[3].replace("id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT", "id INT NOT NULL PRIMARY KEY")
+        assert ddl != _MATERIAL_DDL[3]
+        sql(db, ddl)
+>       _expect_abort(db, "material_submittal_result_entries.id type INT does not match INTEGER")
+
+tests/test_material_schema_migration.py:332: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db = PosixPath('/private/tmp/claude-501/qualitas-material-mig-z_mor04v/old.db')
+needle = 'material_submittal_result_entries.id type INT does not match INTEGER'
+
+    def _expect_abort(db, needle):
+        rc, out = boot(db, check=False)
+>       assert rc != 0, out[-2000:]
+E       AssertionError: 2026-10-08 20:51:38,233 - main - INFO - 日誌系統已啟動 - 級別: INFO, 目錄: /private/tmp/claude-501/qualitas-material-mig-z_mor04v/logs
+E         2026-10-08 20:51:38,235 - db_migrations - INFO - Running database migrations...
+E         2026-10-08 20:51:38,303 - db_migrations - INFO - Migrations completed.
+E         2026-10-08 20:51:38,304 - db_seeder - INFO - Running database seeding...
+E         2026-10-08 20:51:38,306 - db_seeder - INFO - Seeding permissions...
+E         2026-10-08 20:51:38,316 - db_seeder - INFO - Synced admin role permissions (73 perms).
+E         2026-10-08 20:51:38,508 - db_seeder - INFO - Rebar ITP already exists, skipping seed: QTS-RKS-HL-ITP-000001
+E         2026-10-08 20:51:38,508 - db_seeder - INFO - Rebar ITP seeded successfully.
+E         2026-10-08 20:51:38,509 - db_seeder - INFO - Formwork ITP already exists, skipping seed: QTS-RKS-HL-ITP-000002
+E         2026-10-08 20:51:38,509 - db_seeder - INFO - Seeding completed.
+E         
+E       assert 0 != 0
+
+tests/test_material_schema_migration.py:195: AssertionError
+____________ test_reply_days_column_with_other_integer_type_aborts _____________
+
+old_backend = PosixPath('/private/tmp/claude-501/pytest-of-nook/pytest-20/old-code0/backend')
+run_dir = PosixPath('/private/tmp/claude-501/qualitas-material-mig-2bqqeak0')
+
+    def test_reply_days_column_with_other_integer_type_aborts(old_backend, run_dir):
+        db = old_database(old_backend, run_dir)
+        sql(db, "ALTER TABLE projects ADD COLUMN material_reply_days BIGINT")
+>       _expect_abort(db, "projects.material_reply_days must be a nullable INTEGER (found BIGINT")
+
+tests/test_material_schema_migration.py:338: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db = PosixPath('/private/tmp/claude-501/qualitas-material-mig-2bqqeak0/old.db')
+needle = 'projects.material_reply_days must be a nullable INTEGER (found BIGINT'
+
+    def _expect_abort(db, needle):
+        rc, out = boot(db, check=False)
+>       assert rc != 0, out[-2000:]
+E       AssertionError: 2026-10-08 20:51:40,040 - main - INFO - 日誌系統已啟動 - 級別: INFO, 目錄: /private/tmp/claude-501/qualitas-material-mig-2bqqeak0/logs
+E         2026-10-08 20:51:40,042 - db_migrations - INFO - Running database migrations...
+E         2026-10-08 20:51:40,109 - db_migrations - INFO - Migrations completed.
+E         2026-10-08 20:51:40,109 - db_seeder - INFO - Running database seeding...
+E         2026-10-08 20:51:40,111 - db_seeder - INFO - Seeding permissions...
+E         2026-10-08 20:51:40,121 - db_seeder - INFO - Synced admin role permissions (73 perms).
+E         2026-10-08 20:51:40,313 - db_seeder - INFO - Rebar ITP already exists, skipping seed: QTS-RKS-HL-ITP-000001
+E         2026-10-08 20:51:40,313 - db_seeder - INFO - Rebar ITP seeded successfully.
+E         2026-10-08 20:51:40,313 - db_seeder - INFO - Formwork ITP already exists, skipping seed: QTS-RKS-HL-ITP-000002
+E         2026-10-08 20:51:40,313 - db_seeder - INFO - Seeding completed.
+E         
+E       assert 0 != 0
+
+tests/test_material_schema_migration.py:195: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_material_schema_migration.py::test_one_open_index_with_any_other_condition_aborts_and_keeps_data[status IN ('draft','submitted')]
+FAILED tests/test_material_schema_migration.py::test_text_column_with_wrong_type_aborts_and_keeps_data[NUMERIC]
+FAILED tests/test_material_schema_migration.py::test_text_column_with_wrong_type_aborts_and_keeps_data[REAL]
+FAILED tests/test_material_schema_migration.py::test_text_column_with_wrong_type_aborts_and_keeps_data[BLOB]
+FAILED tests/test_material_schema_migration.py::test_text_column_with_wrong_type_aborts_and_keeps_data[]
+FAILED tests/test_material_schema_migration.py::test_text_column_with_wrong_type_aborts_and_keeps_data[NVARCHAR]
+FAILED tests/test_material_schema_migration.py::test_integer_primary_key_must_be_exactly_integer
+FAILED tests/test_material_schema_migration.py::test_reply_days_column_with_other_integer_type_aborts
+8 failed, 4 passed, 13 deselected in 20.71s

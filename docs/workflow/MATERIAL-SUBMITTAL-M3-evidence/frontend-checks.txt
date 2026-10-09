@@ -1,0 +1,305 @@
+M3 frontend checks — 2026-10-08T15:07:30Z, node v25.8.0
+$ npm test
+
+> qualitas-react-app@0.0.0 test
+> node scripts/run-unit-tests.mjs
+
+✔ formatUtc: stored server time, always labelled UTC; garbage is returned as-is, never replaced (3.075625ms)
+✔ formatLocalWithZone includes the zone name; unparseable input gives null (nothing invented) (12.506875ms)
+✔ actorOf: as recorded; blank or missing parts stay missing (1.383ms)
+✔ revokedTarget: known, unknown (pre-event approval), or not applicable (0.174584ms)
+✔ pageWindow arithmetic (0.26975ms)
+✔ snapshotItems: only object items, verbatim; missing list is empty, not invented (0.290708ms)
+✔ classifyDeleteResults: all succeed -> every id is deleted, no errors (1.922875ms)
+✔ classifyDeleteResults: one succeeds, one fails -> only the failed id stays out of deletedIds (0.183958ms)
+✔ classifyDeleteResults: a 404 is NOT counted as deleted (never silently treated as success) (0.063416ms)
+✔ classifyDeleteResults: a 404 and a network failure produce DIFFERENT wording (two distinct unknowns) (0.065ms)
+✔ classifyDeleteResults: a generic 4xx/5xx surfaces the backend detail, not a generic label (0.048541ms)
+✔ classifyDeleteResults: order of ids and results must line up positionally (0.067375ms)
+✔ isUnchangedSincePriorWrite: first write (no prior key) is never skipped (0.054875ms)
+✔ isUnchangedSincePriorWrite: identical payload to the last written one is skipped (0.04625ms)
+✔ isUnchangedSincePriorWrite: a changed field (mid-retry edit) is NOT skipped, even if almost everything else matches (0.047334ms)
+✔ isUnchangedSincePriorWrite: key order in the object does not matter for JSON.stringify only when keys are inserted the same way — this documents that constraint (0.077959ms)
+✔ ITP combined key: main payload AND detail both unchanged -> skip (both were written together last time) (0.054917ms)
+✔ ITP combined key: main payload unchanged but DETAIL changed -> NOT skipped (detail work still owed) (0.042542ms)
+✔ ITP combined key: a prior attempt where the DETAIL write failed never reaches this comparison with a matching key in the first place — simulated here by the caller simply never having recorded a prior key, which must not skip (0.036834ms)
+✔ classify: four states + legacy/unknown (0.655916ms)
+✔ summary: N/A is judged but not pass; unknown and unfilled are not judged (0.634ms)
+✔ counts follow O / X only (0.060916ms)
+✔ status derivation: the unified rule (0.091083ms)
+✔ pass/fail counts stay O / X only; N/A is judged but never counted as a pass (0.065458ms)
+✔ display helpers: one description of an Ongoing checklist (0.1025ms)
+✔ approval-limiting note applies to any N/A (mixed or all) (0.043375ms)
+✔ N/A reason: required for a new N/A, exempt for an untouched historical one (0.108125ms)
+✔ withResult drops the reason when leaving N/A; other items untouched (0.072083ms)
+✔ itemsForSave never normalises legacy values (0.116333ms)
+(node:32050) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ loading: always "loading", regardless of any other input (0.61525ms)
+✔ first load for a scope, not yet observed loading and not yet confirmed: "loading" even if not currently loading (the scope-switch race) (0.057375ms)
+✔ failed, nothing usable for this scope (never confirmed, or confirmed for a DIFFERENT scope): "error-empty" (0.043958ms)
+✔ failed, but a previous successful load for THIS SAME scope is still held: "error-stale" (keep showing the data, flag it) (0.036375ms)
+✔ failed with confirmedThisScope=true but hasData=false: still "error-empty" (nothing to keep showing) (0.041167ms)
+✔ no error, sawLoadingThisScope or confirmedThisScope true: "ok" — list.length may legitimately be 0 (a real "no records") (0.03425ms)
+✔ pagination with 0 records at index 0 (8.461334ms)
+✔ pagination with 1 records at index 0 (4.995792ms)
+✔ pagination with 21 records at index 1 (1.914625ms)
+✔ issuesOf / fieldIssues tolerate rows without the field (older API, normal rows) (1.135ms)
+✔ formatStrictDate never rolls a non-existent day over and never shifts by the time zone (2.659125ms)
+✔ dateCell shows the stored value as-is when it has an issue, formats only clean values, dash only for blanks (0.168375ms)
+✔ preserveHistoricalDates: a blank form value cannot silently erase an invalid stored date; real edits are kept (0.110375ms)
+✔ issueMessageKey maps every stable code and falls back for unknown ones (0.061708ms)
+✔ getErrorMessage: a 500 never shows the server stack; a date 422 names the field; other messages are unchanged (0.196416ms)
+✔ getEntityFiles asks for the exact backend route — no trailing slash, so no 307 redirect is needed (1.809458ms)
+✔ getEntityFiles without a category sends no category parameter (0.181084ms)
+✔ IAM preserves distinct login names when users share the same display name (5.030417ms)
+✔ combined IAM reload and create/update responses retain login names (3.948791ms)
+✔ English only, Chinese only, or both count as filled (0.649584ms)
+✔ empty, missing and whitespace-only values do not count (0.164792ms)
+✔ a legacy plain-string Standard is judged by its own text (0.1045ms)
+✔ Activity and Standard are each required independently (1.547417ms)
+✔ preferEnglishText: English first, Chinese only when English is blank after trim (0.159125ms)
+✔ preferEnglishText returns the original string untouched (no trimming, no copying) (0.133833ms)
+✔ preferEnglishText keeps the previous output when neither language has content (0.089167ms)
+(node:32057) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ addITP passes detail_data through UNCHANGED, matching the phase-split shape its one real caller (ITP.tsx) sends (2.068083ms)
+✔ addITP with no detail_data at all (a plain new record) sends detail_data as null/undefined, not an empty array or throwing (0.226625ms)
+✔ addITP preserves the explicitly selected project in its POST (0.145583ms)
+✔ empty editor initialization does not mark a new draft dirty (0.685875ms)
+✔ actual content and metadata edits remain dirty (0.07175ms)
+✔ editor snapshot preserves only the selected article and its own chapters (1.464833ms)
+✔ failed and missing article loads reject instead of presenting an empty editable chapter (0.309167ms)
+✔ KM denied load hides prior articles and recovery clears access denial (1.26325ms)
+✔ KM network failure is not classified as missing permission or empty success (0.084167ms)
+✔ confirmed create survives a later chapter failure; retry updates same main with latest content/version (1.309959ms)
+✔ main rejection does not advance saved id/version; confirmed updates carry fresh version into retry (0.114834ms)
+✔ KM delete action is absent by default and without delete permission (0.709333ms)
+✔ KM authorized delete action targets its own article without triggering the row (0.317292ms)
+✔ no response (network error / timeout) is UNKNOWN, never "not saved" (4.693791ms)
+✔ a 5xx is UNKNOWN: the server may have committed before failing (0.441792ms)
+✔ a 4xx is a definite refusal and keeps the server detail (0.077041ms)
+✔ reconcileResult: the re-read shows our result -> saved (0.144292ms)
+✔ reconcileResult: still Submitted with no entry -> notSaved (only then is a retry safe) (0.052709ms)
+✔ reconcileResult: someone stored a DIFFERENT result -> savedDifferent, never a blind retry (0.05375ms)
+✔ reconcileResult: re-read failed or revision missing -> unconfirmed (0.038834ms)
+✔ reconcileCorrection: current entry unchanged -> notSaved; our correction on top -> saved; another -> savedDifferent (0.100833ms)
+✔ versionSummary keeps the latest revision and the current approved one apart (0.321958ms)
+✔ addCalendarDays: calendar days, weekends included, no rollover; invalid -> null (2.207625ms)
+✔ allowedActions: correction only on the latest revision with a result and no later revision (0.319708ms)
+✔ NCR: standard 5-state data — opening folds Open+In Progress+Resolved, closed/void stay exact (5.596875ms)
+✔ NCR: a non-standard status value counts toward opening, not silently dropped (0.325542ms)
+✔ NCR: opening + closed + void always equals total, for any mix (0.145583ms)
+✔ OBS: standard 5-state data — opening folds Open+In Progress+Resolved (0.26225ms)
+✔ OBS: a blank status now counts toward opening (previous bug: fell through every bucket) (0.13725ms)
+✔ OBS: opening + closed + void always equals total, for any mix (0.131166ms)
+✔ dayNumber: strict calendar days only — nothing rolls over and no time zone is involved (3.582542ms)
+✔ lateClosureDays: positive only when the close-out date is after the due date (0.099916ms)
+✔ ncrOverdueState keeps "open and overdue" apart from "closed late" — a late closure is Closed, not overdue (0.085083ms)
+✔ the closed-late fact is never also "open-overdue" (the states are exclusive, so no count can double-count a closed NCR) (0.083584ms)
+✔ a refused change of the due date of a closed NCR reads as "<field>：<reason>", not as an unknown problem (0.143917ms)
+✔ clean success: write, deletes, uploads, reload — and the outcome says saved (3.138125ms)
+✔ record write fails: nothing else is attempted and the outcome is failed with the described message (0.174ms)
+✔ an upload failing after the record was written is NOT reported as "not saved": incomplete, id kept, only the failed group remains (0.172958ms)
+✔ a failed delete stays in the retry list; the ones that worked do not (0.090292ms)
+✔ retry with reuseId: the record is not written again and only the leftover files are processed (no duplicate upload, no repeat delete) (0.082875ms)
+✔ only the reload fails: everything is stored, nothing to retry — saved-reload-failed (a throw counts too) (0.111291ms)
+✔ file failure AND reload failure: incomplete, with reloadFailed set (0.810959ms)
+✔ onRecordSaved fires as soon as the id is known — also for reuseId — and before any follow-up (0.236625ms)
+✔ a record without a usable id never uploads to a made-up id: the groups stay pending (0.133209ms)
+✔ groups without files are skipped (0.101209ms)
+✔ sameWrite: only an identical payload for the same record id counts as already written (0.282125ms)
+✔ a date 422 becomes "<field label>：<reason>", one line per distinct problem, no Pydantic text or loc path (0.369416ms)
+✔ an unknown field name is shown as sent, a plain-text detail (403/409/400) as written (0.135792ms)
+✔ network failure, server error and unknown errors: friendly fixed lines, the response body is never shown (0.138167ms)
+✔ presentOutcome: incomplete saves use the banner only; other outcomes keep their toast (0.189125ms)
+✔ followUpOf: only an incomplete save leaves work; categories are de-duplicated; `created` is carried through (0.182167ms)
+✔ isClosedStatus: only "Closed" (case/whitespace-insensitive) is closed (0.611625ms)
+✔ isVoidStatus: only "Void" (case/whitespace-insensitive) is void (0.053416ms)
+✔ isOutstandingStatus: Open, In Progress, Resolved and any non-standard value are all outstanding — Closed and Void are not (0.047916ms)
+✔ isOutstandingStatus is the exact complement of isClosedStatus||isVoidStatus for all five real statuses (0.0485ms)
+✔ buildParetoCumulative: denominator excludes Void — a contractor with a Void record still reaches 100% cumulative once open+closed rows are exhausted (0.073791ms)
+✔ buildParetoCumulative: running total across multiple contractors, denominator is the grand total of open+closed only (0.047666ms)
+✔ buildParetoCumulative: no rows or all-zero open/closed -> 0%, not NaN or a divide-by-zero crash (0.536625ms)
+✔ buildParetoCumulative: preserves every input field (does not drop open/closed/contractor) and only adds cumulativePercent (0.046084ms)
+✔ reproduction: the old window loses the current month in zones ahead of UTC (2.801208ms)
+✔ [Asia/Taipei] window = local current month + previous five, oldest first (0.434417ms)
+✔ [Asia/Taipei] known counts per month, current month included (0.496333ms)
+✔ [Asia/Taipei] outside the window is not counted (before the first month, after the current month) (0.364ms)
+✔ [Asia/Taipei] a window that crosses the year (0.344041ms)
+✔ [Asia/Taipei] plain dates belong to the month written in them (no zone shift at month end / start) (0.296833ms)
+✔ [Asia/Taipei] the current month follows the LOCAL clock at a month boundary (0.405042ms)
+✔ [Asia/Taipei] timestamps: zone-less as written, zone-qualified converted to the user's local month (1.076334ms)
+✔ [UTC] window = local current month + previous five, oldest first (0.398417ms)
+✔ [UTC] known counts per month, current month included (0.369709ms)
+✔ [UTC] outside the window is not counted (before the first month, after the current month) (0.272458ms)
+✔ [UTC] a window that crosses the year (0.261625ms)
+✔ [UTC] plain dates belong to the month written in them (no zone shift at month end / start) (0.249708ms)
+✔ [UTC] the current month follows the LOCAL clock at a month boundary (0.266291ms)
+✔ [UTC] timestamps: zone-less as written, zone-qualified converted to the user's local month (0.264458ms)
+✔ [America/Los_Angeles] window = local current month + previous five, oldest first (0.317166ms)
+✔ [America/Los_Angeles] known counts per month, current month included (0.293959ms)
+✔ [America/Los_Angeles] outside the window is not counted (before the first month, after the current month) (0.3295ms)
+✔ [America/Los_Angeles] a window that crosses the year (0.302917ms)
+✔ [America/Los_Angeles] plain dates belong to the month written in them (no zone shift at month end / start) (0.294791ms)
+✔ [America/Los_Angeles] the current month follows the LOCAL clock at a month boundary (0.279667ms)
+✔ [America/Los_Angeles] timestamps: zone-less as written, zone-qualified converted to the user's local month (0.297458ms)
+✔ missing, non-string and invalid dates are never counted (never treated as the current month) (0.887458ms)
+✔ calendar rules: 29 February is valid only in a leap year (0.026875ms)
+✔ the vendor filter is unchanged: a named vendor keeps only its own rows, "all" keeps everything (0.277709ms)
+✔ each card keeps its own date source (NCR/OBS raiseDate, NOI issueDate, ITP submissionDate, Checklist date, PQP updatedAt then dueDate) (0.2995ms)
+✔ a blocked improvement cell says why (one message per reason), an old server answer without the new fields says nothing (1.160625ms)
+✔ verified and unverified counts are reported separately, with the underlying reasons for the unverified ones (0.098ms)
+✔ the percentage note appears only when something passed without verification, and never claims verification (0.098292ms)
+✔ the wording itself: zh and en both keep "not verified" and never say "verified" for the Closed-status pass (3.190292ms)
+✔ workflow list retrieves beyond 200 and keeps selected project on every page (1.70925ms)
+✔ later workflow page failure rejects instead of reporting a partial list as complete (0.555791ms)
+✔ workflow stats and attention send the same explicit project filter (0.229416ms)
+ℹ tests 147
+ℹ suites 0
+ℹ pass 147
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 355.254041
+npm notice
+npm notice New minor version of npm available! 11.11.0 -> 11.21.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.21.0
+npm notice To update run: npm install -g npm@11.21.0
+npm notice
+EXIT CODE: 0
+
+$ npx tsc --noEmit -p .
+npm notice
+npm notice New minor version of npm available! 11.11.0 -> 11.21.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.21.0
+npm notice To update run: npm install -g npm@11.21.0
+npm notice
+EXIT CODE: 0
+
+$ npx eslint src/components/MaterialSubmittal src/services/materialApi.ts src/utils/materialSubmittal.ts src/components/Shared/AppLayout.tsx src/App.tsx src/components/DocumentNamingRules/DocumentNamingRules.tsx tests-unit/materialSubmittal.test.ts --ext ts,tsx --report-unused-disable-directives --max-warnings 0
+npm notice
+npm notice New minor version of npm available! 11.11.0 -> 11.21.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.21.0
+npm notice To update run: npm install -g npm@11.21.0
+npm notice
+EXIT CODE: 0
+
+$ npx vite build --outDir /tmp/claude-501/m3-build --emptyOutDir
+vite v5.4.21 building for production...
+transforming...
+✓ 3092 modules transformed.
+rendering chunks...
+computing gzip size...
+../../../../../tmp/claude-501/m3-build/index.html                                    0.52 kB │ gzip:   0.32 kB
+../../../../../tmp/claude-501/m3-build/assets/OwnerPerformance-cHT7M3fV.css          0.24 kB │ gzip:   0.19 kB
+../../../../../tmp/claude-501/m3-build/assets/ITPDetail-uVXEdI_g.css                 0.84 kB │ gzip:   0.37 kB
+../../../../../tmp/claude-501/m3-build/assets/StatusBadge-BlM2oXDr.css               0.88 kB │ gzip:   0.43 kB
+../../../../../tmp/claude-501/m3-build/assets/ITP-BVefYkJ7.css                       1.08 kB │ gzip:   0.50 kB
+../../../../../tmp/claude-501/m3-build/assets/DocumentNamingRules-10EraVHd.css       1.22 kB │ gzip:   0.55 kB
+../../../../../tmp/claude-501/m3-build/assets/Home-hanbAqvl.css                      1.76 kB │ gzip:   0.72 kB
+../../../../../tmp/claude-501/m3-build/assets/KPI-CEHCcU_e.css                       2.03 kB │ gzip:   0.77 kB
+../../../../../tmp/claude-501/m3-build/assets/RelatedDocuments-Cs8EDcJZ.css          2.51 kB │ gzip:   0.90 kB
+../../../../../tmp/claude-501/m3-build/assets/Login-CH_MYU_E.css                     2.85 kB │ gzip:   1.07 kB
+../../../../../tmp/claude-501/m3-build/assets/MeetingMinutes-DPtfgJi_.css            4.17 kB │ gzip:   1.25 kB
+../../../../../tmp/claude-501/m3-build/assets/ModuleShell-C6YfhypF.css               4.18 kB │ gzip:   1.29 kB
+../../../../../tmp/claude-501/m3-build/assets/OBS-D0ZhL82t.css                       4.42 kB │ gzip:   1.33 kB
+../../../../../tmp/claude-501/m3-build/assets/OSD-CzwreGAc.css                       4.49 kB │ gzip:   1.33 kB
+../../../../../tmp/claude-501/m3-build/assets/PQP-Be6vBOec.css                       5.19 kB │ gzip:   1.65 kB
+../../../../../tmp/claude-501/m3-build/assets/Workflow-B2FQP5UI.css                  5.29 kB │ gzip:   1.49 kB
+../../../../../tmp/claude-501/m3-build/assets/ITR-BvLiiOU4.css                       5.77 kB │ gzip:   1.53 kB
+../../../../../tmp/claude-501/m3-build/assets/FAT-TLuSNY2l.css                       6.16 kB │ gzip:   1.81 kB
+../../../../../tmp/claude-501/m3-build/assets/NCR-Dld6BS49.css                       7.19 kB │ gzip:   2.01 kB
+../../../../../tmp/claude-501/m3-build/assets/FormShell-B6QrKzCD.css                 7.94 kB │ gzip:   2.18 kB
+../../../../../tmp/claude-501/m3-build/assets/NOI-Cr-393VZ.css                       8.85 kB │ gzip:   2.21 kB
+../../../../../tmp/claude-501/m3-build/assets/Checklist-B7SJk8ua.css                10.47 kB │ gzip:   2.58 kB
+../../../../../tmp/claude-501/m3-build/assets/Audit-D9yFl-Y8.css                    11.08 kB │ gzip:   2.68 kB
+../../../../../tmp/claude-501/m3-build/assets/Contractors-kLYgIlw7.css              11.36 kB │ gzip:   2.43 kB
+../../../../../tmp/claude-501/m3-build/assets/Dashboard-BrS4tO7C.css                15.56 kB │ gzip:   3.42 kB
+../../../../../tmp/claude-501/m3-build/assets/IAM-Hl4Pwl9z.css                      15.85 kB │ gzip:   3.32 kB
+../../../../../tmp/claude-501/m3-build/assets/KM-DVv4x-49.css                       45.53 kB │ gzip:   8.38 kB
+../../../../../tmp/claude-501/m3-build/assets/index-ClR4Gxrz.css                    76.48 kB │ gzip:  15.19 kB
+../../../../../tmp/claude-501/m3-build/assets/useDebounce-C2b1n_sp.js                0.19 kB │ gzip:   0.17 kB
+../../../../../tmp/claude-501/m3-build/assets/dateValidation-Bxi_ns38.js             0.23 kB │ gzip:   0.17 kB
+../../../../../tmp/claude-501/m3-build/assets/revision-Ccufz_-Y.js                   0.24 kB │ gzip:   0.20 kB
+../../../../../tmp/claude-501/m3-build/assets/statusBuckets-B_a05HwV.js              0.32 kB │ gzip:   0.24 kB
+../../../../../tmp/claude-501/m3-build/assets/plus-Bi5AtN-m.js                       0.33 kB │ gzip:   0.26 kB
+../../../../../tmp/claude-501/m3-build/assets/x-Dwcr6aI4.js                          0.33 kB │ gzip:   0.26 kB
+../../../../../tmp/claude-501/m3-build/assets/clock-DfQagxPL.js                      0.34 kB │ gzip:   0.27 kB
+../../../../../tmp/claude-501/m3-build/assets/circle-check-E18yZ930.js               0.35 kB │ gzip:   0.27 kB
+../../../../../tmp/claude-501/m3-build/assets/ban-DlMz3gRe.js                        0.35 kB │ gzip:   0.28 kB
+../../../../../tmp/claude-501/m3-build/assets/user-DaO4zXyK.js                       0.37 kB │ gzip:   0.29 kB
+../../../../../tmp/claude-501/m3-build/assets/clsx-B-dksMZM.js                       0.37 kB │ gzip:   0.24 kB
+../../../../../tmp/claude-501/m3-build/assets/lock-Ba3tDKMf.js                       0.38 kB │ gzip:   0.30 kB
+../../../../../tmp/claude-501/m3-build/assets/circle-x-DwpxGyqS.js                   0.38 kB │ gzip:   0.28 kB
+../../../../../tmp/claude-501/m3-build/assets/activity-BRw-kgfb.js                   0.41 kB │ gzip:   0.31 kB
+../../../../../tmp/claude-501/m3-build/assets/circle-alert-BHer2dmT.js               0.42 kB │ gzip:   0.29 kB
+../../../../../tmp/claude-501/m3-build/assets/chart-column-lyBXbGdC.js               0.42 kB │ gzip:   0.30 kB
+../../../../../tmp/claude-501/m3-build/assets/map-pin-Dr-AprXe.js                    0.43 kB │ gzip:   0.33 kB
+../../../../../tmp/claude-501/m3-build/assets/OwnerPerformance-BlRuf222.js           0.49 kB │ gzip:   0.29 kB
+../../../../../tmp/claude-501/m3-build/assets/printer-CQgudTCK.js                    0.49 kB │ gzip:   0.34 kB
+../../../../../tmp/claude-501/m3-build/assets/shield-check-NIJBPOmH.js               0.49 kB │ gzip:   0.35 kB
+../../../../../tmp/claude-501/m3-build/assets/save-CCTHA8Qq.js                       0.50 kB │ gzip:   0.33 kB
+../../../../../tmp/claude-501/m3-build/assets/trash-2-CVo221sz.js                    0.50 kB │ gzip:   0.32 kB
+../../../../../tmp/claude-501/m3-build/assets/attachmentOutcome-Dbx9a4Dw.js          0.65 kB │ gzip:   0.65 kB
+../../../../../tmp/claude-501/m3-build/assets/formatters-CR8HXx_Z.js                 0.71 kB │ gzip:   0.43 kB
+../../../../../tmp/claude-501/m3-build/assets/circle-question-mark-DXskC95E.js       0.74 kB │ gzip:   0.39 kB
+../../../../../tmp/claude-501/m3-build/assets/PrintPrimitives-CF1PKFnn.js            0.87 kB │ gzip:   0.49 kB
+../../../../../tmp/claude-501/m3-build/assets/BackButton-8Bmfv1J2.js                 0.95 kB │ gzip:   0.63 kB
+../../../../../tmp/claude-501/m3-build/assets/ModuleShell.module-BB-C7AX0.js         0.95 kB │ gzip:   0.43 kB
+../../../../../tmp/claude-501/m3-build/assets/StatusBadge-BA98IXN_.js                1.02 kB │ gzip:   0.57 kB
+../../../../../tmp/claude-501/m3-build/assets/auditStore-BxjQ9KHM.js                 1.33 kB │ gzip:   0.53 kB
+../../../../../tmp/claude-501/m3-build/assets/CreationProjectField-BB1Q4egt.js       1.54 kB │ gzip:   1.05 kB
+../../../../../tmp/claude-501/m3-build/assets/saveFlow-cOngHXXp.js                   1.55 kB │ gzip:   0.84 kB
+../../../../../tmp/claude-501/m3-build/assets/FormShell.module-MMYFQYjo.js           1.60 kB │ gzip:   0.63 kB
+../../../../../tmp/claude-501/m3-build/assets/fatStore-B50TxugZ.js                   1.69 kB │ gzip:   0.75 kB
+../../../../../tmp/claude-501/m3-build/assets/cascadeDelete-CSlg8Ooz.js              2.00 kB │ gzip:   0.85 kB
+../../../../../tmp/claude-501/m3-build/assets/Home-Ke-x7_ib.js                       2.17 kB │ gzip:   0.82 kB
+../../../../../tmp/claude-501/m3-build/assets/saveErrors-B5VssVTR.js                 2.59 kB │ gzip:   1.24 kB
+../../../../../tmp/claude-501/m3-build/assets/ImagePreviewOverlay-Cb0kOQmj.js        2.97 kB │ gzip:   1.50 kB
+../../../../../tmp/claude-501/m3-build/assets/SaveFollowUpBanner-Duc31ZKf.js         3.17 kB │ gzip:   1.21 kB
+../../../../../tmp/claude-501/m3-build/assets/Login-3KITVlbu.js                      3.30 kB │ gzip:   1.41 kB
+../../../../../tmp/claude-501/m3-build/assets/RelatedDocuments-B23Bh1SK.js           3.51 kB │ gzip:   1.39 kB
+../../../../../tmp/claude-501/m3-build/assets/ChecklistResultControls-1b2_Ddd0.js    4.08 kB │ gzip:   1.68 kB
+../../../../../tmp/claude-501/m3-build/assets/SecuritySettings-BvQUG7FV.js           4.68 kB │ gzip:   1.70 kB
+../../../../../tmp/claude-501/m3-build/assets/itpParser-CTMFHDl3.js                  4.99 kB │ gzip:   2.09 kB
+../../../../../tmp/claude-501/m3-build/assets/FileAttachment-CaIBMUHB.js             6.42 kB │ gzip:   2.45 kB
+../../../../../tmp/claude-501/m3-build/assets/statusValidation-CdCqobZ7.js           6.64 kB │ gzip:   2.59 kB
+../../../../../tmp/claude-501/m3-build/assets/DocumentNamingRules-j1Q7q2XB.js        7.40 kB │ gzip:   2.73 kB
+../../../../../tmp/claude-501/m3-build/assets/DataTableColumnHeader-CyGnYMGE.js      9.35 kB │ gzip:   3.45 kB
+../../../../../tmp/claude-501/m3-build/assets/Workflow-C8Bjwatk.js                  10.00 kB │ gzip:   3.43 kB
+../../../../../tmp/claude-501/m3-build/assets/KPI-DAZAaSEd.js                       11.37 kB │ gzip:   4.12 kB
+../../../../../tmp/claude-501/m3-build/assets/Contractors-P3xfrx2a.js               17.17 kB │ gzip:   4.30 kB
+../../../../../tmp/claude-501/m3-build/assets/FollowUpIssue-DPOekDjX.js             22.01 kB │ gzip:   6.14 kB
+../../../../../tmp/claude-501/m3-build/assets/PQP-D6Cgd825.js                       23.10 kB │ gzip:   7.40 kB
+../../../../../tmp/claude-501/m3-build/assets/zod-C6oPJrhp.js                       29.07 kB │ gzip:  10.68 kB
+../../../../../tmp/claude-501/m3-build/assets/button-BtIw35W3.js                    29.21 kB │ gzip:   9.62 kB
+../../../../../tmp/claude-501/m3-build/assets/FAT-DH0fUuIv.js                       29.27 kB │ gzip:   7.20 kB
+../../../../../tmp/claude-501/m3-build/assets/Checklist-D0J43aCH.js                 30.12 kB │ gzip:   8.52 kB
+../../../../../tmp/claude-501/m3-build/assets/OSD-CIlfKSHQ.js                       30.19 kB │ gzip:   8.83 kB
+../../../../../tmp/claude-501/m3-build/assets/ITPDetail-BOp4c9ls.js                 33.08 kB │ gzip:   6.79 kB
+../../../../../tmp/claude-501/m3-build/assets/OBS-BlBsvzpm.js                       34.63 kB │ gzip:  10.13 kB
+../../../../../tmp/claude-501/m3-build/assets/IAM-BfXZTxnQ.js                       35.67 kB │ gzip:   9.84 kB
+../../../../../tmp/claude-501/m3-build/assets/MeetingMinutes-Bq37qF5m.js            36.73 kB │ gzip:   9.86 kB
+../../../../../tmp/claude-501/m3-build/assets/NOI-BdE0d5l3.js                       38.83 kB │ gzip:  10.54 kB
+../../../../../tmp/claude-501/m3-build/assets/MaterialSubmittal-Cmy60r3_.js         39.14 kB │ gzip:  10.61 kB
+../../../../../tmp/claude-501/m3-build/assets/Dashboard-zH7qHK2I.js                 59.28 kB │ gzip:  16.94 kB
+../../../../../tmp/claude-501/m3-build/assets/Audit-BP3SJdiN.js                     62.09 kB │ gzip:  14.90 kB
+../../../../../tmp/claude-501/m3-build/assets/ITP-DcqIVBMG.js                       62.28 kB │ gzip:  16.48 kB
+../../../../../tmp/claude-501/m3-build/assets/schemas-3edHhHNv.js                   64.91 kB │ gzip:  17.59 kB
+../../../../../tmp/claude-501/m3-build/assets/ITR-C7o7grJp.js                       73.30 kB │ gzip:  19.59 kB
+../../../../../tmp/claude-501/m3-build/assets/NCR-fIF-Mh4_.js                       76.25 kB │ gzip:  19.50 kB
+../../../../../tmp/claude-501/m3-build/assets/DataTable-DZYQTRGM.js                177.07 kB │ gzip:  52.87 kB
+../../../../../tmp/claude-501/m3-build/assets/CartesianChart-CgdIhAB-.js           351.98 kB │ gzip: 104.48 kB
+../../../../../tmp/claude-501/m3-build/assets/KM-DMKE2DhN.js                       362.59 kB │ gzip: 104.15 kB
+../../../../../tmp/claude-501/m3-build/assets/index-bI0x4PNL.js                    463.73 kB │ gzip: 152.54 kB
+../../../../../tmp/claude-501/m3-build/assets/mammoth.browser-BPSoNlMN.js          499.39 kB │ gzip: 124.65 kB
+✓ built in 3.80s
+npm notice
+npm notice New minor version of npm available! 11.11.0 -> 11.21.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.21.0
+npm notice To update run: npm install -g npm@11.21.0
+npm notice
+EXIT CODE: 0
+

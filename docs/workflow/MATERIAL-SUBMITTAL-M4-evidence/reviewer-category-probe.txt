@@ -1,0 +1,21 @@
+Actual helper + transpiled board render with React element stub, not browser.
+{
+  "categoryInputs": [
+    "Draft",
+    "Approved",
+    "__uncategorised__",
+    null
+  ],
+  "keys": [
+    "__uncategorised__",
+    "Approved",
+    "Draft",
+    "__uncategorised__"
+  ],
+  "renderedHeadings": [
+    "TRANSLATED:uncategorised",
+    "TRANSLATED:boardApproved",
+    "TRANSLATED:status.Draft",
+    "TRANSLATED:uncategorised"
+  ]
+}

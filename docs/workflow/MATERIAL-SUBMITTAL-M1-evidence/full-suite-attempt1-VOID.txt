@@ -1,0 +1,5 @@
+VOID — full backend suite, attempt 1 (started 2026-10-08 ~16:39 local, background task)
+Reason: overlapped in time with the "WHERE removed from list+model" mutation re-check, which temporarily modified
+backend/db_migrations.py and backend/models.py (both restored, sha256 verified). Subprocess boots in the suite import
+files from disk, so this run may have seen mutated files. It was stopped before finishing at 2026-10-08T09:06:38Z;
+it produced no output (output was piped through tail and the run never completed). Not used as evidence.

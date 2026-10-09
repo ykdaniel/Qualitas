@@ -1,0 +1,28 @@
+M1 file hashes before the clean full-suite run (2026-10-08T09:06:44Z); base commit 056c245ca3ff630f74bfc7af86233e7cbc7dc51b
+(attempt 1 of this file failed: zsh did not split an unquoted variable; regenerated with an array)
+6f6e71753cfbbb47489d47ba3888d704fbcc856ef45bea5a7bf541e0456e5954  backend/models.py
+ba08f8ab413b6452ed27882842de8ccf899f4b595501a334064eb08c71474a3d  backend/db_migrations.py
+46db933a5979ffecff310a0525ae8029841c4e99b4ade499f41a82ce96a01996  backend/schemas.py
+e232bceec748db10177287e115675bb3254ecab449ce66fbf6524535a45e5ed9  backend/main.py
+605887fcd9287fa778b50609c597609f7b9632a880185b8135669e8ece53bf39  backend/core/perms.py
+c5000f84381be526231afd067d70846bc8904c5338dce6f65d6c2599fcb0e026  backend/core/validators.py
+4edc6a0126f5e1189074c52acb3657602375b8a17bfd10b351bec3abd3e23b71  backend/routers/materials.py
+ce1b02a2606f4b764095fb178b2cf26441213f1506d149741cb098aff59ace12  backend/services/material_service.py
+c5c5a3c88603fac1e964b1aa6bf79a9fbb4a976b235e2d6030aaf8921d675d94  backend/repositories/material_repository.py
+a08c68f83b980dcbb9a51e08352c1ea5ba7f4052e6b24483b65495284930b592  backend/tests/test_materials_http.py
+4c8be68303bc8dc825466362bbc9eb1e1ac53ed43185e9ddbfcf8615fce07ea2  backend/tests/test_material_schema_migration.py
+
+CRLF check (files that are CRLF at HEAD must stay fully CRLF):
+backend/core/perms.py lines=210 crlf=210
+backend/core/validators.py lines=395 crlf=395
+backend/db_migrations.py lines=1653 crlf=1653
+
+git diff --stat -- backend (docx_builder.py is the separate, already-reviewed DOCX-PATH-GUARD change, not M1):
+ backend/core/docx_builder.py |   7 +-
+ backend/core/perms.py        |   8 ++
+ backend/core/validators.py   |   2 +
+ backend/db_migrations.py     | 185 +++++++++++++++++++++++++++++++++++++++++++
+ backend/main.py              |   4 +-
+ backend/models.py            | 127 ++++++++++++++++++++++++++++-
+ backend/schemas.py           |  92 ++++++++++++++++++++-
+ 7 files changed, 420 insertions(+), 5 deletions(-)

@@ -1,0 +1,7 @@
+NON_IMAGE fake.png HTTP 200
+NON_IMAGE audio.webp HTTP 200
+.PROJECTS default= 200 remaining= 3 visible= 203
+.
+2 passed in 5.11s
+
+PYTEST_EXIT=0

@@ -1,0 +1,8 @@
+isolated_stack down — 2026-10-08T15:22:19Z
+{"ok": true, "removed": "/private/var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/qualitas-manual-radtgnki"}
+EXIT CODE: 0
+listening on 8310/3310 afterwards:
+(none)
+user preview 8240/3240 still listening:
+Python 127.0.0.1:8240
+node 127.0.0.1:3240

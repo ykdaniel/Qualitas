@@ -1,0 +1,12 @@
+MATERIAL-SUBMITTAL M4 R2 — sha256 after the review-R1 fix, 2026-10-09 00:07 CST. Changed vs file-hashes.txt (R1): first 3 + new test; rest unchanged (control).
+426e20297cd29b4c124e6277cc2579a261e81349d10c098f1784684e159fcb50  react-app/src/utils/materialSubmittal.ts
+0e9ed194fe27faea895e24c07b52cf25dac7895b3c87b27b71d77726cb35d05f  react-app/src/components/MaterialSubmittal/SubmittalBoard.tsx
+01977d19dc4ed0d7c58fa728287555cb739c482ccbfaca0a7ed9ac3193e82897  react-app/tests-unit/materialBoard.test.ts
+410aad75ffec2dcedda455baad19495fe333e10ab20dc9eb9ae08372e70a9542  react-app/tests-unit/materialBoardCategoryNames.test.ts
+ccfcde36c50cf3d1e5d644724037ba49ff0ad731fab8ae9459141b2bb235e40d  react-app/src/components/MaterialSubmittal/MaterialSubmittal.tsx
+aeb358581c70fc5cd940e0fe1b3269b4c0ba245205e186747a81744737ff5ffa  react-app/src/components/MaterialSubmittal/materialText.ts
+72929ada1e75f6926def86d02e552c4fdf6a097cd6311ee550c7ec32af137f27  react-app/src/services/api.ts
+4589130214b025fc944ba94155f14f950a7a228916f25887ab87ef116a78c18e  react-app/src/store/projectStore.ts
+26d0f5a00ee1246bb688d615530e935ac2e31275e70a71fec49dc96e0487e166  react-app/src/components/Contractors/ProjectModal.tsx
+4767ad4c02d7af5c59eb5b1125f2b8becd38421c4a6eb4588eeaa8fb2d252f16  backend/scripts/verification/seed_material_m4_review.py
+eeca6b2d8ca0c4da9c90b748a759b8bcdd482288802774b4cfe965e140e579d1  react-app/src/context/LanguageContext.tsx

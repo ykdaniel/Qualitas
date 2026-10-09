@@ -1,0 +1,26 @@
+<stdin>:21: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+MATERIAL-SUBMITTAL M2 — mutation checks, 2026-10-08T13:11:53.445345Z python3 Python 3.14.6
+Each safeguard removed in place; the -k selected tests of tests/test_material_submittals_http.py run; file restored from a byte copy (sha256 verified).
+
+CAUGHT  routers/file_router.py :: if entity_type == "material_rev": -> ['1 failed, 125 deselected in 3.18s']
+MISSED  routers/file_router.py :: if attachment.entity_type == "material_rev": -> ['1 passed, 125 deselected in 2.86s']
+CAUGHT  core/attachment_access.py :: CATEGORY_UPDATE_PERMISSIONS.get(etype, {}).get(category, pair[1]) -> ['6 failed, 6 passed, 114 deselected in 30.51s']
+CAUGHT  core/attachment_access.py :: if etype in VENDOR_REFUSED_ENTITY_TYPES and getattr(user, "vendor_id", -> ['1 failed, 125 deselected in 2.93s']
+CAUGHT  core/attachment_access.py :: ("material_rev", "Draft"): {"replyDocument"}, -> ['2 failed, 2 passed, 122 deselected in 10.28s']
+CAUGHT  services/material_submittal_service.py :: models.MaterialSubmittalRevision.submittal_id == sub.id).first() -> ['3 failed, 123 deselected in 7.92s']
+CAUGHT  services/material_submittal_service.py :: if rev.project_id != sub.project_id or rev.vendor_id != sub.vendor_id: -> ['1 failed, 125 deselected in 2.92s']
+CAUGHT  services/material_submittal_service.py :: if later is not None or rev.rev_no != sub.latest_rev_no: -> ['1 failed, 125 deselected in 2.89s']
+CAUGHT  services/material_submittal_service.py :: if current.id != body.expected_current_entry_id: -> ['1 failed, 125 deselected in 2.88s']
+CAUGHT  services/material_submittal_service.py :: self._recompute_current_approved(sub) -> ['3 failed, 123 deselected in 8.10s']
+CAUGHT  services/material_submittal_service.py :: if material.project_id != body.project_id: -> ['1 failed, 6 passed, 119 deselected in 17.83s']
+MISSED  services/material_submittal_service.py :: if prev is None or prev.status in OPEN: -> ['1 passed, 125 deselected in 3.00s']
+CAUGHT  services/material_submittal_service.py :: if expected is None: -> ['1 failed, 125 deselected in 3.02s']
+
+all files restored and sha256-verified
+
+Re-check after strengthening the tests (2 MISSED above; new test test_state_cannot_change_between_the_locked_check_and_the_write;
+test_state_rules now asserts the service-rule message, not only the index-backed 409):
+CAUGHT  routers/file_router.py :: if attachment.entity_type == "material_rev": -> ['1 failed, 127 deselected in 2.91s']
+CAUGHT  routers/file_router.py :: if entity_type == "material_rev": -> ['1 failed, 127 deselected in 2.86s']
+CAUGHT  services/material_submittal_service.py :: if prev is None or prev.status in OPEN: -> ['1 failed, 127 deselected in 2.91s']
+restored and sha256-verified

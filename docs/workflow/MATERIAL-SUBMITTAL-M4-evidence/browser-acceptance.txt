@@ -1,0 +1,74 @@
+MATERIAL-SUBMITTAL M4 — browser acceptance (2026-10-08, local, ISOLATED stack)
+
+Environment
+- New isolated stack for this batch: backend 8310 / vite 3310 (run dir .../qualitas-manual-vjv5txie, own stack.db + logs);
+  never 8240/3240 or 8198/3198; torn down afterwards (teardown.txt).
+- Seeds (isolated only): seed_material_m3_review.py, then seed_material_m4_review.py, which adds MSA-000003 (Submitted 2026-09-01,
+  reply due 2026-09-15 → overdue), MSA-000004 (ApprovedWithComments), MSA-000005 (Rejected), MSA-000006 (ReviseAndResubmit, no
+  category) and 200 bulk drafts → project M3-P1 has 206 submittals. Random per-run passwords read from the run dir, never written here.
+- Accounts: m3_full (material view/manage/record_result, M3-P1 + M3-P2) for the board; the per-run admin only for the project form.
+- UI language 中文. Viewport 1366x900 for AC-M4-1..4, 1280x800 for AC-M4-5/6 and the reply-days checks.
+- Values below were read back from the DOM, the browser network log, or API responses.
+
+AC-M4-1 (spec r2: card count = loaded rows; displayed total = API total) — same filters for board and list
+- Board, page 1: 200 cards, header 「已載入 200／共 206 筆」, API total 206. 「載入更多」 shown.
+- After 載入更多: 206 cards = 206 loaded, the button disappears.
+- Filter 外部審查中: board 2 cards = list 2 rows = API total 2.
+- Category grouping (page 1, 200 loaded): Bulk 194 + Electrical 1 + Fire 2 + Pipe 2 + 未分類 1 = 200 → every loaded card exactly once
+  (MSA-000006 with no category lands in 未分類). Screenshot board-category-1280.jpg.
+
+AC-M4-2 (one card per submittal; latest vs current approved)
+- MSA-000001 (Rev 0 R&R, Rev 1 Approved, Rev 2 Submitted): exactly ONE card, in column 外部審查中, showing
+  「最新 Rev 2 外部審查中」 and 「現行核准 Rev 1 核准」. MSA-000004 sits in the shared 已核准 column with its own 附意見核准 badge.
+
+AC-M4-3 (overdue on card AND list)
+- Board: card MSA-000003 shows 「預計回覆日 2026-09-15 · 逾期」, red border, data-overdue=true.
+- List: the same row shows 「2026-09-15 · 逾期」 in red (rgb(180,35,24)), bold 700, data-overdue=true.
+- 「只看逾期」 filter: list = 1 row (MSA-000003), board = 1 card (card-QTS-MV-MSA-000003).
+
+AC-M4-4 (cards cannot be dragged)
+- Every card is a <button draggable=false> with no drag handlers.
+- Real mouse drag (left_click_drag) of MSA-000001 from 外部審查中 onto 拒絕: card stays in column-Submitted, no dialog opens,
+  API afterwards latestStatus=Submitted, current approved still Rev 1 Approved.
+
+AC-M4-5 (≥1280, no overlap, board scrolls sideways) — viewport 1280x800
+- Column rects: Draft 279–539, Submitted 551–811, R&R 823–1083, Rejected 1095–1355, Approved 1367–1627 → 0 overlaps.
+- Board container scrollWidth 1348 > clientWidth 939 → horizontal scroll inside the board; page itself: no horizontal overflow.
+- Toolbar items: no overlapping rects.
+- Fixed during this check: the 列表/看板 toggle reuses the shared .tabsContainer (overflow-x:auto, margin-bottom 20px); its content
+  was 1px taller than the box, so a tiny scrollbar showed next to the toggle. Local inline override in MaterialSubmittal.tsx
+  (marginBottom 0, overflow visible) — the shared CSS is untouched. After the fix: overflow visible/visible, no scrollbar.
+  Screenshot board-status-1280.jpg.
+
+AC-M4-6 (full flow, seed + UI) — Rev 0 修正後再送 → Rev 1 核准 → Rev 2 審查中 come from the seed; the last step is done in the UI
+- Board → click card MSA-000001 → detail opens (Rev 2 tab) → 登錄外部結果 → 審查結果 附意見核准, 外部回覆日期 2026-10-08,
+  外部決定者 typed → 儲存.
+- Network (XHR log in the page):
+    GET  /api/files/by-entity?entity_type=material_rev&entity_id=b962db38…&category=replyDocument → 200
+    POST /api/material-submittals/580341c8…/revisions/b962db38…/result → 200
+         body {"resultCode":"ApprovedWithComments","externalDecisionMaker":"…","externalReplyDate":"2026-10-08"}
+    GET  /api/files/by-entity?entity_type=material_rev&entity_id=b962db38… → 200
+    GET  /api/material-submittals/?projectId=M3-P1&limit=200&offset=0 → 200 (board refresh)
+- Detail after save: 登錄 #1 附意見核准 (現行); 歷程 Rev 0 修正後再送 / Rev 1 核准 / Rev 2 附意見核准. Screenshot ac6-detail-after-result.jpg.
+- Board after closing: MSA-000001 moved to column 已核准 (Submitted count 2 → 1, Approved 1 → 2), card
+  「最新 Rev 2 附意見核准 / 現行核准 Rev 2 附意見核准». Screenshot ac6-board-after-result.jpg.
+- API list response (same request as the refresh): latestRevNo 2, latestStatus ApprovedWithComments, currentApprovedRevNo 2,
+  currentApprovedResult ApprovedWithComments.
+- Input note (test data only, not a product defect): the decision-maker text was typed twice by the test driver (the first typing
+  landed late), so the stored name is a garbled "M4 External Rev…" string. It is isolated test data; the stack was torn down.
+
+Project material reply days (spec §3.3; ProjectModal on 承包商列表 → Projects, as the per-run admin)
+- M3 Project Two (not set): field empty, hint 「日曆天，含週末假日…」.
+- Typed -1: field aria-invalid=true, message 「請填 0 以上的整數，或留空」, Save Changes DISABLED (nothing sent).
+- Typed 10 → Save: PUT /api/projects/M3-P2 body {...,"materialReplyDays":10} → 200, response materialReplyDays 10; reopened form shows 10.
+- Cleared → Save: PUT body {...,"materialReplyDays":null} → 200, response null; reopened form shows empty.
+- Set back to 10 and saved. M3 Project One (seeded 14) opens with 14 (closed without saving).
+- As m3_full in M3-P2: created draft MSA-000207 (material m3-mat-p2) → 送交業主／顧問: 送件日 2026-10-08, 預計回覆日 pre-filled
+  2026-10-18 with 「依專案天數自動計算：2026-10-18」. Screenshot reply-days-submit-dialog-p2.jpg.
+  Confirmed: POST …/revisions/5e0680f0…/submit → 200; list API: submittedDate 2026-10-08, expectedReplyDate 2026-10-18; board card in
+  外部審查中 shows 「預計回覆日 2026-10-18」.
+  Screenshot of the -1 rejection: reply-days-invalid-minus1.jpg.
+
+Not verified here
+- Mobile widths (out of scope). Dark mode not checked. Board with >1 page in category mode was checked only on page 1 (+ status mode
+  after load-more). Python 3.11 / backend full suite: unchanged limitation (no backend code changed in M4).

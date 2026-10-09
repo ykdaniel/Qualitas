@@ -1,0 +1,7 @@
+partial photo failure: creates after first save = 1
+partial failure + changed form + retry: creates = 2 updates = 0 (expected creates 1, update original)
+unknown record outcome: Save disabled = false
+unknown outcome + retry: POST calls = 2 (expected no blind repeat)
+two clicks during async duplicate check: POST calls = 2 (expected 1)
+
+NODE_EXIT=0 (defect reproductions, not product acceptance)

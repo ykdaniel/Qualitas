@@ -1,0 +1,19 @@
+MATERIAL-SUBMITTAL M1 — mutation checks (2026-10-08, local, python3 3.14.6)
+Each safeguard was removed in place, the named tests were run, and the file was restored from a byte copy
+(sha256 verified equal to the pre-mutation file). "CAUGHT" = the tests failed with the safeguard removed.
+
+CAUGHT db_migrations.py :: ux_msr_one_open WHERE removed from MATERIAL_INDEXES      -> 1 failed, 1 passed (CORRECTED: test_model_indexes_match_the_migration_list fails — model still declares WHERE; the fresh-database test passed because it compared against the same mutated list. Gap closed afterwards: the fresh-database test now also asserts the four unique indexes literally from spec §9.1; re-check below)
+CAUGHT db_migrations.py :: index uniqueness check disabled                           -> 1 failed (test_unique_index_made_non_unique_aborts)
+CAUGHT db_migrations.py :: index column check disabled                               -> 1 failed (test_same_named_index_on_wrong_columns_aborts)
+CAUGHT db_migrations.py :: NOT NULL check disabled                                   -> 1 failed (test_existing_column_without_required_not_null_aborts)
+CAUGHT routers/materials.py :: vendor-scope refusal disabled                         -> 1 failed (test_vendor_scoped_account_is_refused_even_with_material_permissions)
+CAUGHT services/material_service.py :: project scope check in project_visible off   -> 2 failed, 1 passed
+CAUGHT services/material_service.py :: record_in_scope on single material removed   -> 1 failed (test_scoped_user_sees_only_own_project)
+CAUGHT core/validators.py :: Material removed from check_project_references          -> 1 failed (test_project_with_materials_cannot_be_deleted)
+CAUGHT schemas.py :: materialReplyDays strict non-negative int loosened              -> 4 failed (test_project_reply_days_rejects_invalid)
+all restored
+
+Re-check after closing the gap (2026-10-08):
+CAUGHT db_migrations.py + models.py :: ux_msr_one_open WHERE removed from BOTH the list and the model -> 2 failed, 9 passed
+       (test_fresh_database_gets_full_schema, test_one_open_index_without_where_aborts); both files restored, sha256 verified.
+Note: this re-check overlapped in time with a background full-suite run; that full-suite run is therefore not used as evidence and is repeated.

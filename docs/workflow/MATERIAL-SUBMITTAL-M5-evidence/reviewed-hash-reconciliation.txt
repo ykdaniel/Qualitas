@@ -1,0 +1,64 @@
+MATERIAL-SUBMITTAL M5 — deploy overlay vs the LAST reviewed hash of each file (sources, in review order):
+  - docs/workflow/MATERIAL-SUBMITTAL-M1-evidence/file-hashes.txt
+  - docs/workflow/MATERIAL-SUBMITTAL-M1-evidence/r2-file-hashes.txt
+  - docs/workflow/MATERIAL-SUBMITTAL-M2-evidence/file-hashes.txt
+  - docs/workflow/MATERIAL-SUBMITTAL-M3-evidence/file-hashes.txt
+  - docs/workflow/MATERIAL-SUBMITTAL-M3-evidence/r2-file-hashes.txt
+  - docs/workflow/MATERIAL-SUBMITTAL-M4-evidence/file-hashes.txt
+  - docs/workflow/MATERIAL-SUBMITTAL-M4-evidence/r2-file-hashes.txt
+  - docs/workflow/DEPLOY-SCOPE-INVENTORY-2026-001-evidence/candidate-source-files-sha256.txt
+MATCH    backend/core/docx_builder.py  (now 0e43664f4e60, reviewed 0e43664f4e60 in DEPLOY-SCOPE-INVENTORY-2026-001-evidence/candidate-source-files-sha256.txt)
+NO-RECORD backend/tests/test_docx_path_guard.py  (now 4222b14bdc40)
+NO-RECORD backend/tests/test_docx_path_guard_http.py  (now 8251ca31b871)
+MATCH    backend/core/attachment_access.py  (now aca2d0fd5a3c, reviewed aca2d0fd5a3c in MATERIAL-SUBMITTAL-M2-evidence/file-hashes.txt)
+MATCH    backend/core/material_access.py  (now d4c409706352, reviewed d4c409706352 in MATERIAL-SUBMITTAL-M2-evidence/file-hashes.txt)
+MATCH    backend/core/perms.py  (now 605887fcd928, reviewed 605887fcd928 in MATERIAL-SUBMITTAL-M2-evidence/file-hashes.txt)
+MATCH    backend/core/scope.py  (now c591d92dbf60, reviewed c591d92dbf60 in MATERIAL-SUBMITTAL-M2-evidence/file-hashes.txt)
+MATCH    backend/core/utils.py  (now 0f978bdd5d3e, reviewed 0f978bdd5d3e in MATERIAL-SUBMITTAL-M2-evidence/file-hashes.txt)
+MATCH    backend/core/validators.py  (now c5000f84381b, reviewed c5000f84381b in MATERIAL-SUBMITTAL-M2-evidence/file-hashes.txt)
+MATCH    backend/db_migrations.py  (now a0f2c9df982c, reviewed a0f2c9df982c in MATERIAL-SUBMITTAL-M2-evidence/file-hashes.txt)
+MATCH    backend/main.py  (now 7cabd8e82c37, reviewed 7cabd8e82c37 in MATERIAL-SUBMITTAL-M2-evidence/file-hashes.txt)
+MATCH    backend/models.py  (now 61f03bdab444, reviewed 61f03bdab444 in MATERIAL-SUBMITTAL-M2-evidence/file-hashes.txt)
+MATCH    backend/schemas.py  (now db3a33999fbd, reviewed db3a33999fbd in MATERIAL-SUBMITTAL-M2-evidence/file-hashes.txt)
+MATCH    backend/repositories/material_repository.py  (now c5c5a3c88603, reviewed c5c5a3c88603 in MATERIAL-SUBMITTAL-M2-evidence/file-hashes.txt)
+MATCH    backend/routers/file_router.py  (now 71034c8e9216, reviewed 71034c8e9216 in MATERIAL-SUBMITTAL-M2-evidence/file-hashes.txt)
+MATCH    backend/routers/material_submittals.py  (now 278b9e82886c, reviewed 278b9e82886c in MATERIAL-SUBMITTAL-M2-evidence/file-hashes.txt)
+MATCH    backend/routers/materials.py  (now 5a0c29192bd6, reviewed 5a0c29192bd6 in MATERIAL-SUBMITTAL-M2-evidence/file-hashes.txt)
+MATCH    backend/routers/settings.py  (now 8684e15fd9ea, reviewed 8684e15fd9ea in MATERIAL-SUBMITTAL-M2-evidence/file-hashes.txt)
+MATCH    backend/services/material_service.py  (now 113e9c2a4d74, reviewed 113e9c2a4d74 in MATERIAL-SUBMITTAL-M2-evidence/file-hashes.txt)
+MATCH    backend/services/material_submittal_service.py  (now 379ceffda3f0, reviewed 379ceffda3f0 in MATERIAL-SUBMITTAL-M2-evidence/file-hashes.txt)
+MATCH    backend/tests/test_attachment_authorization_http.py  (now d37d5a8d8c67, reviewed d37d5a8d8c67 in MATERIAL-SUBMITTAL-M2-evidence/file-hashes.txt)
+MATCH    backend/tests/test_material_schema_migration.py  (now 047e2dfa6cfb, reviewed 047e2dfa6cfb in MATERIAL-SUBMITTAL-M2-evidence/file-hashes.txt)
+MATCH    backend/tests/test_material_submittals_http.py  (now 6039cf8f0b70, reviewed 6039cf8f0b70 in MATERIAL-SUBMITTAL-M2-evidence/file-hashes.txt)
+MATCH    backend/tests/test_materials_http.py  (now a08c68f83b98, reviewed a08c68f83b98 in MATERIAL-SUBMITTAL-M2-evidence/file-hashes.txt)
+MATCH    react-app/src/App.tsx  (now 969c48e79e6b, reviewed 969c48e79e6b in MATERIAL-SUBMITTAL-M3-evidence/r2-file-hashes.txt)
+MATCH    react-app/src/components/Contractors/ProjectModal.tsx  (now 26d0f5a00ee1, reviewed 26d0f5a00ee1 in MATERIAL-SUBMITTAL-M4-evidence/r2-file-hashes.txt)
+MATCH    react-app/src/components/DocumentNamingRules/DocumentNamingRules.tsx  (now a4a55db22835, reviewed a4a55db22835 in MATERIAL-SUBMITTAL-M3-evidence/r2-file-hashes.txt)
+MATCH    react-app/src/components/ITP/ITP.module.css  (now 945e50ee318f, reviewed 945e50ee318f in DEPLOY-SCOPE-INVENTORY-2026-001-evidence/candidate-source-files-sha256.txt)
+MATCH    react-app/src/components/ITP/ITPAdvancedEditor.tsx  (now 88c2e931a597, reviewed 88c2e931a597 in DEPLOY-SCOPE-INVENTORY-2026-001-evidence/candidate-source-files-sha256.txt)
+MATCH    react-app/src/components/ITP/ITPDetail.tsx  (now 44ac3c092207, reviewed 44ac3c092207 in DEPLOY-SCOPE-INVENTORY-2026-001-evidence/candidate-source-files-sha256.txt)
+MATCH    react-app/src/components/ITP/ITPModals.tsx  (now 51c74352bfcd, reviewed 51c74352bfcd in DEPLOY-SCOPE-INVENTORY-2026-001-evidence/candidate-source-files-sha256.txt)
+MATCH    react-app/src/components/MaterialSubmittal/Dialogs.tsx  (now f488efe05f0c, reviewed f488efe05f0c in MATERIAL-SUBMITTAL-M3-evidence/r2-file-hashes.txt)
+MATCH    react-app/src/components/MaterialSubmittal/MaterialSubmittal.tsx  (now ccfcde36c50c, reviewed ccfcde36c50c in MATERIAL-SUBMITTAL-M4-evidence/r2-file-hashes.txt)
+MATCH    react-app/src/components/MaterialSubmittal/ResultDialogs.tsx  (now 46f5bcfba5f5, reviewed 46f5bcfba5f5 in MATERIAL-SUBMITTAL-M3-evidence/r2-file-hashes.txt)
+MATCH    react-app/src/components/MaterialSubmittal/RevisionFiles.tsx  (now d6dbd9a2ec81, reviewed d6dbd9a2ec81 in MATERIAL-SUBMITTAL-M3-evidence/r2-file-hashes.txt)
+MATCH    react-app/src/components/MaterialSubmittal/SubmittalBoard.tsx  (now 0e9ed194fe27, reviewed 0e9ed194fe27 in MATERIAL-SUBMITTAL-M4-evidence/r2-file-hashes.txt)
+MATCH    react-app/src/components/MaterialSubmittal/SubmittalDetailModal.tsx  (now 8b3d7b58991f, reviewed 8b3d7b58991f in MATERIAL-SUBMITTAL-M3-evidence/r2-file-hashes.txt)
+MATCH    react-app/src/components/MaterialSubmittal/materialText.ts  (now aeb358581c70, reviewed aeb358581c70 in MATERIAL-SUBMITTAL-M4-evidence/r2-file-hashes.txt)
+MATCH    react-app/src/components/MaterialSubmittal/parts.tsx  (now 915e27b07aa8, reviewed 915e27b07aa8 in MATERIAL-SUBMITTAL-M3-evidence/r2-file-hashes.txt)
+MATCH    react-app/src/components/Shared/AppLayout.tsx  (now c071732652e7, reviewed c071732652e7 in MATERIAL-SUBMITTAL-M3-evidence/r2-file-hashes.txt)
+MATCH    react-app/src/components/Shared/FormShell.module.css  (now 3e9aa40c7d6c, reviewed 3e9aa40c7d6c in DEPLOY-SCOPE-INVENTORY-2026-001-evidence/candidate-source-files-sha256.txt)
+MATCH    react-app/src/context/LanguageContext.tsx  (now eeca6b2d8ca0, reviewed eeca6b2d8ca0 in DEPLOY-SCOPE-INVENTORY-2026-001-evidence/candidate-source-files-sha256.txt)
+MATCH    react-app/src/services/api.ts  (now 72929ada1e75, reviewed 72929ada1e75 in MATERIAL-SUBMITTAL-M4-evidence/r2-file-hashes.txt)
+MATCH    react-app/src/services/materialApi.ts  (now 414c3ba7387a, reviewed 414c3ba7387a in MATERIAL-SUBMITTAL-M3-evidence/r2-file-hashes.txt)
+MATCH    react-app/src/store/projectStore.ts  (now 4589130214b0, reviewed 4589130214b0 in MATERIAL-SUBMITTAL-M4-evidence/r2-file-hashes.txt)
+MATCH    react-app/src/utils/itpItemValidation.ts  (now fba64764d8b4, reviewed fba64764d8b4 in DEPLOY-SCOPE-INVENTORY-2026-001-evidence/candidate-source-files-sha256.txt)
+MATCH    react-app/src/utils/materialAttachmentState.ts  (now 4e0d2dabe7de, reviewed 4e0d2dabe7de in MATERIAL-SUBMITTAL-M3-evidence/r2-file-hashes.txt)
+MATCH    react-app/src/utils/materialSubmittal.ts  (now 426e20297cd2, reviewed 426e20297cd2 in MATERIAL-SUBMITTAL-M4-evidence/r2-file-hashes.txt)
+
+summary: 2 file(s) not matching a reviewed hash
+
+Follow-up for the 2 NO-RECORD files (DOCX tests): their reviewed hashes are in DEPLOY-EXEC-2026-001-evidence/py311-pytest-output.txt (header lines):
+MATCH    backend/tests/test_docx_path_guard.py  (4222b14bdc40)
+MATCH    backend/tests/test_docx_path_guard_http.py  (8251ca31b871)
+=> all 48 overlay files equal a reviewed hash.

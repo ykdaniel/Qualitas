@@ -1,0 +1,13 @@
+MATERIAL-SUBMITTAL M4 isolated stack teardown, 2026-10-08 23:41 CST
+$ isolated_stack.py down --root <run dir qualitas-manual-vjv5txie>
+{"ok": true, "removed": "/private/var/folders/l3/76bnxp9x47159snm4w96_r6w0000gn/T/qualitas-manual-vjv5txie"}
+EXIT 0  <- CORRECTION: this line is the exit code of `tail`, not of the tool (piped). The tool's own result is the JSON line above
+        (ok:true, removed); afterwards `ls` of the run dir returns "No such file or directory".
+--- listeners after teardown (8310/3310 must be gone; 8240/3240 and 8198/3198 untouched) ---
+8310 not listening
+3310 not listening
+8240 LISTEN
+3240 LISTEN
+8198 not listening
+3198 not listening
+(8198/3198 were not started or touched by this session; they were simply not running. 8240/3240 = user preview, still up.)

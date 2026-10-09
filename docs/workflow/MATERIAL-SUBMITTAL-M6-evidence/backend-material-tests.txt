@@ -1,0 +1,36 @@
+# MATERIAL-SUBMITTAL M6 backend tests (register version), local Python 3.14.6, 2026-10-09 01:25 CST
+# history: first run (approved list only) 456 passed / 1 failed — the new test expected the attachment API's vendor-refusal text; test fixed, product code unchanged. That run is superseded by this one (register endpoints + photo lock change added since).
+$ python3 -m pytest -q -p no:cacheprovider -W ignore tests/test_attachment_authorization_http.py tests/test_material_submittals_http.py tests/test_materials_http.py tests/test_material_schema_migration.py
+464 passed in 1064.36s (0:17:44)
+EXIT 0
+
+# re-run after adding the approved-list result filter (chips), 2026-10-09 01:55 CST
+$ python3 -m pytest -q -p no:cacheprovider -W ignore tests/test_attachment_authorization_http.py tests/test_material_submittals_http.py tests/test_materials_http.py tests/test_material_schema_migration.py
+465 passed in 1060.90s (0:17:40)
+EXIT 0
+
+# ===== FINAL ROUND (old submittal API removed, permissions trimmed, register-only tests), local Python 3.14.6, 2026-10-09 02:35 CST
+# earlier lines in this file are history (workflow-era test files, since replaced)
+$ python3 -m pytest -q -p no:cacheprovider -W ignore tests/test_attachment_authorization_http.py tests/test_material_schema_migration.py   (started before the registeredFrom filter was added; no attachment / migration code changed after)
+291 passed in 653.60s (0:10:53)
+EXIT 0
+$ python3 -m pytest -q -p no:cacheprovider -W ignore tests/test_material_submittals_http.py tests/test_materials_http.py
+51 passed in 97.19s (0:01:37)
+EXIT 0
+
+=== R2 (2026-10-09) ===
+# 2026-10-09 03:18:18 python3 3.14.6 — R2 targeted backend tests
+## material_submittals + materials
+...........................................................              [100%]
+59 passed in 127.31s (0:02:07)
+EXIT=0
+## attachment authorization (whole file: file_router changed) + material schema migration (whole file: step 21/22 changed)
+......                                                                   [100%]
+294 passed in 650.30s (0:10:50)
+EXIT=0
+
+=== R2 — after the shelf view (2026-10-09 13:06:42, python3 3.14.6) ===
+## material_submittals + materials (service / schema changed for the photo summary)
+60 passed in 135.72s (0:02:15)
+EXIT=0
+(attachment authorization + migration not re-run: file_router / db_migrations / models unchanged since the 294-passed run; hashes in file-hashes.txt)

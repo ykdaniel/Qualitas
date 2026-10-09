@@ -1,0 +1,4 @@
+PASS R1 actual component: separate keyed instances, loading controls hidden, late A ignored by B, same-revision stale reload ignored.
+PASS R2 actual callbacks: upload rejected/unknown and delete rejected remain after successful GET; dismiss clears.
+PASS R3 actual save/retry callbacks: upload A, rejected result, select B, upload B then result; A not resent; pending cleared.
+PASS unknown result: picker and save disabled, recheck available.

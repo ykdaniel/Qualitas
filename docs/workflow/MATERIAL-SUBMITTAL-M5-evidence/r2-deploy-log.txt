@@ -1,0 +1,6 @@
+APPLIED: live backend source == overlay manifest (21 files)
+assets-added=69
+all-candidate-assets-present
+4f71ef9fe332390e8951fb55c2d51302cdd366f42170faf4bbcf5a8aad0f3a5e  /volume1/docker/Qualitas/react-app/dist/index.html
+dist-inode 376368 376368
+238

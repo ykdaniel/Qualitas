@@ -1,0 +1,7 @@
+# reviewer's R1 probe (reviewer-r1-form-probe.mjs) re-run UNCHANGED against the R2 code, 2026-10-09 03:11:34
+# Expected: its API adapter has no registerMaterialOnce / findDuplicateMaterials (new in R2), so the bundle step fails. Its scenarios are covered by r2-form-probe.mjs (1/3/4) with an adapter for the new calls.
+✘ [ERROR] No matching export in "review:adapter" for import "findDuplicateMaterials"
+✘ [ERROR] No matching export in "review:adapter" for import "registerMaterialOnce"
+react-app/src/components/MaterialSubmittal/RegisterDialog.tsx:32:37: ERROR: No matching export in "review:adapter" for import "findDuplicateMaterials"
+react-app/src/components/MaterialSubmittal/RegisterDialog.tsx:32:61: ERROR: No matching export in "review:adapter" for import "registerMaterialOnce"
+NODE_EXIT=1

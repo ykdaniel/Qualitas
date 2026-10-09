@@ -1,0 +1,43 @@
+MATERIAL-SUBMITTAL M3 R2 — browser verification of the review fixes R1–R3 (2026-10-08, local, ISOLATED stack)
+
+Environment
+- A NEW isolated stack: backend 8310 / vite 3310 (run dir /private/var/folders/.../qualitas-manual-radtgnki, own stack.db + logs);
+  never 8240/3240 or 8198/3198; torn down afterwards (see r2-teardown.txt).
+- Seed: seed_material_m3_review.py (now also adds ONE test attachment row per MSA-1 revision: rev0/1/2-catalogue.pdf) — random
+  password from the run dir, never printed here. UI language 中文, viewport 1366x900.
+- A test-only XHR interceptor in the page: delays GET /files/by-entity for one chosen revision id; drops the response of an upload
+  after the server handled it; drops a result POST before sending; drop-after / drop-all for result & correction regression.
+  Every value below was read back from the DOM / API.
+
+R1 — late answers and revision switch (RevisionFiles: one instance per revision via key + load gate)
+- Rev 0 list delayed 2.5 s; clicked Rev 0, after 0.1 s Rev 1. After the late Rev 0 answer arrived:
+  panel revision id = Rev 1 (83074e38…), files = ["rev1-catalogue.pdf"]  (never "rev0-catalogue.pdf").
+  Back to Rev 0 (no delay): revision id = Rev 0 (073675a2…), files = ["rev0-catalogue.pdf"].
+- Rev 1 list delayed 2 s while on Rev 0: during the load the panel is Rev 1 with "載入中…" and NO files (Rev 0's file is not shown);
+  after the answer: ["rev1-catalogue.pdf"].
+  (Rev 0's GET appears twice in the log: React StrictMode runs effects twice in development.)
+
+R2 — a successful re-read keeps the write outcome (MSA-2 Rev 0, Draft)
+- Upload REJECTED (tool.exe, application/x-msdownload): list re-read OK (empty) and the notice stays
+  「上傳失敗：File type 'application/x-msdownload' is not allowed」 (files-notice-rejected).
+- Upload outcome UNKNOWN (server stored it, response dropped; log "upload sent-then-dropped"): list re-read shows maybe-landed.pdf and
+  the notice stays 「無法確認上傳是否完成（連線中斷或逾時）。下方清單為重新讀取的伺服器資料，請確認檔案是否已在清單中。」 —
+  it is NOT turned into a definite failure.
+- Delete REJECTED (the revision was submitted through the API meanwhile; the stale delete button was pressed): notice stays
+  「刪除失敗：Cannot change catalogue files of a Submitted MATERIAL_REV: that evidence is locked.」, the file is still listed.
+  Pressing 「知道了」 removes the notice; the list is unchanged.
+
+R3 — retry with a newly picked reply document (MSA-2 Rev 0, now Submitted)
+- First save with reply-A.pdf while the result POST is dropped before sending: log ["upload sent", "result dropped-before"];
+  states notSaved + reply-uploaded; server list ["reply-A.pdf"]; file input cleared and still enabled.
+- Picked reply-B.pdf: notice 「已選 1 個新文件：按下按鈕時會先上傳這些新文件，再送出結果；已上傳的文件不會重傳。」.
+- Retry: log ["upload sent", "result sent"] — B uploaded first, then the result; dialog closed.
+  Server: revision Approved, 1 result entry, reply documents ["reply-A.pdf", "reply-B.pdf"] — A once, B not skipped.
+
+Regression of the four save situations (affected code only)
+- drop-all (result + detail re-read): state unconfirmed; buttons [recheck, save-result(disabled)]; file picker DISABLED; log shows ONE
+  result POST (no automatic re-send).
+- recheck with the interceptor off: notSaved; button retry-result; picker enabled.
+- another user records first, then Retry: rejected 「未儲存：A result can only be recorded for the latest revision while it is Submitted.」.
+- correction with the response dropped after the server stored it: saved; save button hidden; behind it #1 superseded, #2 current;
+  current approved revision Rev 1 (derived).

@@ -1,0 +1,32 @@
+MATERIAL-SUBMITTAL-TABLE — browser acceptance (2026-10-09, local, ISOLATED stack 8310/3310, Chrome "Browser 1", user m3_full,
+M3+M4 seed data: M3-P1 has 206 submittals). Vite dev server serves the working tree (HMR); values read back from the DOM.
+
+Submittal list (shared DataTable)
+- Header: #, Submittal No., Material, Category, Brand, Contractor, Latest revision / Current approved, Submitted, Expected reply,
+  Updated — dark header, sort/hide menu on each column except # and the two-value version column; View button present.
+- Default page size 10: 10 rows shown, "Rows per page 10 · Page 1 of 20" over the 200 loaded rows; "0 of 200 row(s) selected"
+  (same pagination footer as the other modules). "Loaded 200 of 206" + Load more kept.
+- Load more → "Loaded 206 of 206", "Page 1 of 21", Load more gone.
+- Sort: Submittal No. menu → Sort Desc → first rows MSA-000200, 000199, 000198 (sorts the loaded rows, like other modules).
+- Row click → detail modal opens for that row (detail title QTS-MV-MSA-000200 …).
+- Overdue: MSA-000003 shows "2026-09-15 · Overdue" in red bold (data-overdue=true) — screenshot submittal-table-en.jpg.
+- Board toggle still works with the same rows: 5 columns; back to List → table again.
+
+Materials tab
+- Header: #, Material, Category, Brand, Model, Specification, Manufacturer, Supplier, Updated; 10 rows, Page 1 of 20.
+- Row click (m3_full has material:manage) → material edit dialog opens (material-save present).
+
+Sidebar label (user request in chat: "改為material")
+- English sidebar item and breadcrumb now "Material" (screenshot sidebar-material-en.png); page heading stays "Material Submittal";
+  Chinese label unchanged 「材料送審」.
+
+Chinese UI (language zh): headers 送審編號／材料名稱／分類／廠牌／承包商／最新送審版／現行核准版／送件日／預計回覆日／最後更新,
+「已載入 200 / 共 206 筆」, overdue 「2026-09-15 · 逾期」 — screenshot submittal-table-zh.jpg. Language set back to en afterwards.
+
+1280 width (Chrome window resized to 1280x850, then restored to 1920x1050)
+- Page itself: no horizontal overflow. The table scrolls horizontally inside its frame (scrollWidth 1478 > clientWidth 937);
+  board: 5 columns, scrolls inside (1348 > 939). Screenshot submittal-table-1280.jpg.
+
+Observed, NOT changed (outside this round): at 1280 the toolbar wraps the "New submittal" button to a second line; the page-header
+Submittals/Materials tabs show a small scrollbar (same shared .tabsContainer overflow seen in M4); in Chinese the 「專案」 label
+next to the title wraps onto two lines. All pre-existing.
