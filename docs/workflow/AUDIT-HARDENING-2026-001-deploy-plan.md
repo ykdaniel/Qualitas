@@ -37,5 +37,14 @@
 - 後端，快：`sudo docker tag qualitas-backend:pre-audit-hardening-20261009T122621Z qualitas-backend:latest && sudo docker-compose up -d backend`（compose 會用這個 tag 起容器）。或者，穩：`sh rollback-backend-code.sh <TS>` 之後由使用者重建。
 - 資料庫：不需要（沒有結構變更）。只有證實資料損毀時才考慮還原 `qualitas-pre-audit-hardening.db`，而且會遺失切換後的所有寫入，必須由使用者決定。
 
-## 6. 執行紀錄
+## 6. 合併 AUDIT-CONTRACTORS-2026-001（2026-10-09 追加）
+- 使用者在預覽時發現 Audit 頁沒有承包商資料，因此新增了 C 批 `AUDIT-CONTRACTORS-2026-001`（獨立審查 PASS）。決定 A＋B＋C 合併成一次部署，只重建一次後端。原本第 4 節第 2 步的 sudo 指令沒有執行，作廢。
+- 截至此時，NAS 後端目錄已套用 A＋B 的 5 個檔案（`apply-backend-output.txt`，13:51Z），但後端還沒重建。C 批的後端在這個基礎上只再換 3 個檔案（`schemas.py`、`services/audit_service.py`、`routers/audit.py`）。
+- C 批的工作目錄是 `~/deploy-audit-c-20261009T143025Z`，產物在本機 `~/Documents/Qualitas-deploy-artifacts/AUDIT-CONTRACTORS-2026-001/`：
+  - 後端覆蓋包 `backend-overlay.tgz`，SHA-256 `69e66df5…0d25`；
+  - 前端候選（HEAD＋C 的 3 個前端檔，106 個檔案，index `31e8d95f…c1e045`，CSS 與正式站相同）`frontend-candidate.tgz`，SHA-256 `e403a0f0…c3eec1`；
+  - 準備輸出：線上 3 個檔案 = A＋B；原始的部署前 5 個檔案仍保存在第一個工作目錄；前端仍是部署前的入口；新的資料庫備份 integrity ok，雜湊與第一次備份相同（這段時間沒有寫入）；暫存區逐檔 OK。
+- 回退：`rollback-backend-code.sh` 直接還原成部署前的原始 5 個檔案（A、B、C 都不留）後重建，或改用 pre-audit 映像；前端用 `rollback-frontend.sh`。
+
+## 7. 執行紀錄
 （部署時填寫）

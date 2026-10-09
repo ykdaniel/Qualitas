@@ -1,0 +1,12 @@
+== 1. live state
+OK live = A+B for the 3 files
+OK pre-deploy originals kept in /var/services/homes/ykdaniel/deploy-audit-hardening-20261009T122621Z/backend-old (5 files)
+OK frontend still the pre-deploy index
+== 2. fresh DB backup
+integrity: ok
+ca67e5f417103281d48d93b7ef6cd97a135baf338937bcd824acecdb83bf874f  qualitas-pre-audit-abc.db
+== 3. staging
+OK uploads
+OK backend staging (3 files)
+OK frontend staging (106 files)
+PREP DONE

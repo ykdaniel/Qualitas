@@ -1,0 +1,248 @@
+--- a/backend/schemas.py
++++ b/backend/schemas.py
+@@ -1409,6 +1409,16 @@
+     model_config = ConfigDict(from_attributes=True)
+ 
+ 
++class AuditContractorOption(BaseModel):
++    """A contractor as the Audit page / wizard needs it (GET /audit/contractors): names only, no contact details, so it can be
++    served to anyone with audit:view without contractors:view:all."""
++    id: str
++    name: str
++    status: str | None = None
++
++    model_config = ConfigDict(from_attributes=True)
++
++
+ # --- KPI & Performance Schemas ---
+ class KPIWeightBase(BaseModel):
+     pqp_weight: int = 25
+diff --git a/backend/routers/audit.py b/backend/routers/audit.py
+index 3186d2b4..4f176997 100755
+--- a/backend/routers/audit.py
++++ b/backend/routers/audit.py
+@@ -25,6 +25,15 @@ def read_audits(
+     """Get list of audits with pagination"""
+     return service.get_audits(skip=skip, limit=limit, project_id=project_id, scope=scope)
+ 
++@router.get("/contractors", response_model=list[schemas.AuditContractorOption])
++def read_audit_contractor_options(
++    service: AuditService = Depends(get_audit_service),
++    scope: Scope = Depends(get_scope),
++    current_user: schemas.User = Depends(RoleChecker(AUDIT_VIEW))
++):
++    """Contractor names for the Audit page / wizard (needs audit:view only). Declared before /{audit_id}."""
++    return service.get_contractor_options(scope=scope)
++
+ @router.get("/{audit_id}", response_model=schemas.Audit)
+ def read_audit(
+     audit_id: str,
+diff --git a/backend/services/audit_service.py b/backend/services/audit_service.py
+index d599cfe9..cf27ddde 100755
+--- a/backend/services/audit_service.py
++++ b/backend/services/audit_service.py
+@@ -67,6 +67,19 @@ class AuditService:
+         """
+         return self.repo.get_all(skip, limit, project_id=project_id, scope=scope)
+ 
++    def get_contractor_options(self, scope=None) -> List[models.Contractor]:
++        """
++        Contractors for the Audit page and wizard (vendor statistics, schedule rows, contractor picker).
++
++        Only needs audit:view — the full /contractors list (contact details) needs contractors:view:all, which
++        audit-only roles don't have, so their Audit page used to show no contractors at all. A contractor-scoped
++        caller only gets its own contractor (the same one enforce_create_scope forces on its new audits).
++        """
++        query = self.repo.db.query(models.Contractor)
++        if scope is not None and scope.vendor_id is not None:
++            query = query.filter(models.Contractor.id == scope.vendor_id)
++        return query.order_by(models.Contractor.name).all()
++
+     def get_audit(self, audit_id: str, scope=None) -> Optional[models.Audit]:
+         """
+         Get a single Audit by ID
+diff --git a/react-app/src/components/Audit/Audit.tsx b/react-app/src/components/Audit/Audit.tsx
+index 10679469..27e8f086 100755
+--- a/react-app/src/components/Audit/Audit.tsx
++++ b/react-app/src/components/Audit/Audit.tsx
+@@ -1,7 +1,6 @@
+ import React, { useState, useMemo, useDeferredValue, useEffect, useCallback } from 'react';
+ import { useLanguage } from '../../context/LanguageContext';
+ import { useAuth } from '../../context/AuthContext';
+-import { useContractorsStore } from '../../store/contractorsStore';
+ import { useAuditStore, AuditItem } from '../../store/auditStore';
+ import { useProjectStore } from '../../store/projectStore';
+ import ConfirmModal from '../Shared/ConfirmModal';
+@@ -24,7 +23,9 @@ const Audit: React.FC = () => {
+ 
+     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+     const [currentAuditId, setCurrentAuditId] = useState<string | null>(null);
+-    const contractors = useContractorsStore(state => state.contractors);
++    // Contractor names from GET /audit/contractors (audit:view is enough), not the contractors store —
++    // that one needs contractors:view:all, so audit-only roles used to get an empty vendor panel/schedule.
++    const contractors = useAuditStore(state => state.contractorOptions);
+     const [selectedVendorFilter, setSelectedVendorFilter] = useState<string | null>(null);
+ 
+     // Get active contractors — depend on the contractors array itself so memo
+@@ -35,7 +36,7 @@ const Audit: React.FC = () => {
+     );
+ 
+     useEffect(() => {
+-        useContractorsStore.getState().fetchContractors();
++        useAuditStore.getState().fetchContractorOptions();
+     }, []);
+ 
+     // Audits are not part of AppProviders' preloadProjectScopedData, so this page re-fetches its
+diff --git a/react-app/src/components/Audit/AuditWizard.tsx b/react-app/src/components/Audit/AuditWizard.tsx
+index b32eba00..6d249ed9 100755
+--- a/react-app/src/components/Audit/AuditWizard.tsx
++++ b/react-app/src/components/Audit/AuditWizard.tsx
+@@ -9,7 +9,6 @@ import {
+   AlertCircle, Search, ShieldCheck, Printer
+ } from 'lucide-react';
+ import { useAuditStore, AuditItem } from '../../store/auditStore';
+-import { useContractorsStore } from '../../store/contractorsStore';
+ import { useProjectStore } from '../../store/projectStore';
+ import { useLanguage } from '../../context/LanguageContext';
+ import { checkDateOrder } from '../../utils/dateValidation';
+@@ -77,8 +76,9 @@ interface AuditWizardProps {
+ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly: readOnlyProp = false, onClose, onSaveSuccess }) => {
+   const { t } = useLanguage();
+   const { addAudit, updateAudit, loading } = useAuditStore();
+-  const { getActiveContractors } = useContractorsStore();
+-  const activeContractors = useMemo(() => getActiveContractors(), [getActiveContractors]);
++  // Same source as the Audit page (GET /audit/contractors, audit:view is enough); Audit.tsx fetches it.
++  const contractorOptions = useAuditStore(state => state.contractorOptions);
++  const activeContractors = useMemo(() => contractorOptions.filter(c => c.status === 'active'), [contractorOptions]);
+   const { projectList, fetchProjects, currentProject } = useProjectStore();
+   React.useEffect(() => { fetchProjects(); }, [fetchProjects]);
+ 
+diff --git a/react-app/src/store/auditStore.ts b/react-app/src/store/auditStore.ts
+index 53ea0a2b..67e05d16 100755
+--- a/react-app/src/store/auditStore.ts
++++ b/react-app/src/store/auditStore.ts
+@@ -26,13 +26,23 @@ export interface AuditItem {
+     custom_check_items?: any[];
+ }
+ 
++// GET /audit/contractors: names only, served with audit:view (the full /contractors list needs
++// contractors:view:all, which audit-only roles don't have).
++export interface AuditContractorOption {
++    id: string;
++    name: string;
++    status?: string | null;
++}
++
+ interface AuditState {
+     auditList: AuditItem[];
+     loading: boolean;
+     error: string | null;
++    contractorOptions: AuditContractorOption[];
+ 
+     // Actions
+     fetchAudits: () => Promise<void>;
++    fetchContractorOptions: () => Promise<void>;
+     refetch: () => Promise<void>;
+     addAudit: (audit: Omit<AuditItem, 'id'>) => Promise<AuditItem>;
+     updateAudit: (id: string, audit: Partial<AuditItem>) => Promise<void>;
+@@ -48,6 +58,7 @@ export const useAuditStore = create<AuditState>((set, get) => ({
+     auditList: [],
+     loading: false,
+     error: null,
++    contractorOptions: [],
+ 
+     clearError: () => set({ error: null }),
+     setError: (error: string | null) => set({ error }),
+@@ -76,6 +87,17 @@ export const useAuditStore = create<AuditState>((set, get) => ({
+         await get().fetchAudits();
+     },
+ 
++    fetchContractorOptions: async () => {
++        try {
++            const response = await api.get('/audit/contractors');
++            set({ contractorOptions: response.data || [] });
++        } catch (err: any) {
++            // Not shown in the page banner: the audit list itself still works; only the contractor
++            // panel / schedule rows / picker stay empty.
++            console.error('Failed to fetch audit contractor options:', err);
++        }
++    },
++
+     addAudit: async (audit) => {
+         try {
+             set({ error: null });
+diff --git a/backend/tests/test_audit_contractor_options_http.py b/backend/tests/test_audit_contractor_options_http.py
+new file mode 100644
+index 00000000..ef261d17
+--- /dev/null
++++ b/backend/tests/test_audit_contractor_options_http.py
+@@ -0,0 +1,69 @@
++"""GET /api/audit/contractors (AUDIT-CONTRACTORS-2026-001): contractor names for the Audit page with audit:view only.
++
++Real login/routes on a disposable file DB (fixture shared with test_audit_hardening_http); no main import, no development
++database access.
++"""
++import models
++from core.security import get_password_hash
++from test_audit_hardening_http import create, env  # noqa: F401  (env is a fixture)
++
++PW = 'Options-Test-1234'  # isolated, test-only
++
++
++def add_user(env, username, codes, vendor_id=None):
++    with env.Session() as db:
++        role = models.Role(name=f'role-{username}')
++        role.permissions_rel = [db.query(models.Permission).filter_by(code=c).first() or models.Permission(code=c, description=c)
++                                for c in codes]
++        db.add(role)
++        db.flush()
++        db.add(models.User(username=username, email=f'{username}@example.com', is_active=True, role_id=role.id,
++                           vendor_id=vendor_id, hashed_password=get_password_hash(PW)))
++        db.commit()
++
++
++def login(env, username):
++    response = env.client.post('/api/auth/login', data={'username': username, 'password': PW})
++    assert response.status_code == 200, response.text
++
++
++def add_contractors(env):
++    with env.Session() as db:
++        db.add_all([models.Contractor(id='zeta', name='Zeta Works', abbreviation='ZW', status='inactive',
++                                      contactPerson='Secret Person', phone='0900-000-000'),
++                    models.Contractor(id='alpha', name='Alpha Build', abbreviation='AB', status='active')])
++        db.commit()
++
++
++def test_audit_only_role_gets_names_without_contractors_permission(env):
++    add_contractors(env)
++    assert env.client.get('/api/contractors/').status_code in (403, 404)  # the fixture role has no contractors:view:all
++    response = env.client.get('/api/audit/contractors')
++    assert response.status_code == 200, response.text
++    rows = response.json()
++    assert [r['name'] for r in rows] == ['Alpha Build', 'Audit vendor', 'Zeta Works']  # every contractor, by name
++    assert {r['id']: r['status'] for r in rows}['zeta'] == 'inactive'  # the page filters active ones itself
++    assert all(set(r) == {'id', 'name', 'status'} for r in rows)  # no contact details
++
++
++def test_needs_audit_view(env):
++    add_user(env, 'no-audit', ['ncr:view:all'])
++    login(env, 'no-audit')
++    assert env.client.get('/api/audit/contractors').status_code == 403
++
++
++def test_contractor_scoped_user_sees_only_its_own_contractor(env):
++    add_contractors(env)
++    add_user(env, 'alpha-user', ['audit:view:all'], vendor_id='alpha')
++    login(env, 'alpha-user')
++    response = env.client.get('/api/audit/contractors')
++    assert response.status_code == 200, response.text
++    assert [r['id'] for r in response.json()] == ['alpha']
++
++
++def test_get_by_id_route_still_works(env):
++    created = create(env).json()
++    response = env.client.get(f"/api/audit/{created['id']}")
++    assert response.status_code == 200, response.text
++    assert response.json()['auditNo'] == created['auditNo']
++    assert env.client.get('/api/audit/does-not-exist').status_code == 404
