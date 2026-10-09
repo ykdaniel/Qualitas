@@ -55,3 +55,16 @@ AuditWizard.tsx 與 LanguageContext.tsx 維持 CRLF。
 ## 未做／限制
 - 沒有改後端，所以不需要重建、不需要 sudo，也不需要 Python 3.11 檢查。
 - 第 3、4 步的內部排版沒有重新設計。
+
+## 上線紀錄（2026-10-10 台北時間凌晨，依 DECISIONS 的 PASS 後部署授權；只有前端）
+- 提交與推送：`a1cf975f`（程式與檢查腳本）、`62e44419`（文件、證據、隔離測試報告），推送到 `ui/sidebar-shell-preview`。另一工作階段的材料改動沒有被提交。
+- NAS 工作目錄：`~/deploy-audit-layout-20261009T170800Z`。切換前備份了舊入口 `frontend-index-pre-audit-layout.html`（`0ee33607…`）與完整檔案清單（376 個檔）。暫存區先放 R1 候選，R2 時換成新候選並重新核對（`nas-prep-output-r2.txt`）。
+- 切換：新增 67 個資產（38 個原本就有，只核對沒有覆寫），之後原子替換 `index.html`。dist inode 不變，106 個候選檔案全部在線上（`apply-frontend-output.txt`）。
+- 對外核對（`post-deploy-http-check.txt`）：
+  - `/` 和 `/index.html` 都是 `4599d221…`；
+  - 主 bundle、CSS、Audit 都是 200 且雜湊相符；
+  - 上一版的 Audit 資產仍是 200；
+  - `/api/user/profile` 未登入回 401。
+- 後端沒有變動，不需要重建。
+- 回退：在 NAS 工作目錄執行 `sh rollback-frontend.sh <TS>`，換回 `0ee33607…` 的入口（舊資產一直保留）。
+- 未完成：登入後的唯讀冒煙由使用者執行。
