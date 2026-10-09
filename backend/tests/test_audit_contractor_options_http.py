@@ -37,7 +37,9 @@ def add_contractors(env):
 
 def test_audit_only_role_gets_names_without_contractors_permission(env):
     add_contractors(env)
-    assert env.client.get('/api/contractors/').status_code in (403, 404)  # the fixture role has no contractors:view:all
+    with env.Session() as db:  # the fixture's role really lacks contractors:view:all
+        codes = {p.code for p in db.query(models.User).filter_by(username='auditor').one().role.permissions_rel}
+    assert 'contractors:view:all' not in codes and 'audit:view:all' in codes
     response = env.client.get('/api/audit/contractors')
     assert response.status_code == 200, response.text
     rows = response.json()
@@ -67,3 +69,16 @@ def test_get_by_id_route_still_works(env):
     assert response.status_code == 200, response.text
     assert response.json()['auditNo'] == created['auditNo']
     assert env.client.get('/api/audit/does-not-exist').status_code == 404
+
+
+def test_contractor_scoped_create_uses_its_own_contractor_for_name_and_number(env):
+    add_contractors(env)
+    add_user(env, 'alpha-writer', ['audit:view:all', 'audit:create:all'], vendor_id='alpha')
+    login(env, 'alpha-writer')
+    response = create(env, contractor='Audit vendor')  # another contractor's name in the request
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert (body['vendor_id'], body['contractor']) == ('alpha', 'Alpha Build')
+    assert body['auditNo'].split('-')[1] == 'AB'  # Alpha Build's abbreviation, not the vendor named in the request
+    with env.Session() as db:
+        assert db.query(models.ReferenceSequence).filter_by(vendor='AV').count() == 0  # no number drawn from the other sequence

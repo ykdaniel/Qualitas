@@ -8,7 +8,7 @@ WRITES accept only a complete, calendar-valid ``YYYY-MM-DD``: no time stamp, no 
 whitespace, no non-existent day; nothing is truncated or normalised. NULL / '' are governed by each field's own
 required-ness (NOI's issueDate / inspectionDate are required and may not be set to NULL; every other date field here is
 optional). On UPDATE the rule is applied to a field only when its value actually CHANGES — re-sending a historical value
-unchanged is not a new write — and the cross-field order rules (NCR only; NOI and OBS have none) are checked on the merged
+unchanged is not a new write — and the cross-field order rules (NCR and Audit; NOI and OBS have none) are checked on the merged
 final content, and only for relations that involve a changed field, so an unrelated edit is never blocked by an old
 inconsistency.
 

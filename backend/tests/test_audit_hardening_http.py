@@ -290,11 +290,14 @@ def test_audit_log_failure_rolls_everything_back(env, monkeypatch, op):
     audit_id = create(env).json()['id'] if op == 'update' else None
     before = snapshot(env)
     rollbacks = []
-    event.listen(env.Session.class_, 'after_rollback', lambda s: rollbacks.append(1))
+
+    def rolled_back(session):
+        rollbacks.append(1)
 
     def fail_audit_flush(session, *args):
         if any(isinstance(r, models.AuditLog) for r in session.new):
             raise RuntimeError('injected audit-log failure')
+    event.listen(env.Session.class_, 'after_rollback', rolled_back)
     event.listen(env.Session.class_, 'before_flush', fail_audit_flush)
     try:
         if op == 'create':
@@ -304,5 +307,6 @@ def test_audit_log_failure_rolls_everything_back(env, monkeypatch, op):
         assert response.status_code == 500
     finally:
         event.remove(env.Session.class_, 'before_flush', fail_audit_flush)
+        event.remove(env.Session.class_, 'after_rollback', rolled_back)
     assert rollbacks
     assert snapshot(env) == before

@@ -108,8 +108,9 @@ export const useAuditStore = create<AuditState>((set, get) => ({
             }));
             return newAudit;
         } catch (err: any) {
+            // Not put in the page banner: the wizard (covering the page) shows it, and a banner left
+            // behind it would still be there, stale, after the wizard closes.
             const errorMessage = getErrorMessage(err, 'Failed to create audit');
-            set({ error: errorMessage });
             console.error('Failed to create audit:', err);
             throw new Error(errorMessage);
         }
@@ -123,8 +124,8 @@ export const useAuditStore = create<AuditState>((set, get) => ({
                 auditList: state.auditList.map(a => (a.id === id ? response.data : a))
             }));
         } catch (err: any) {
+            // Shown by the wizard, not the page banner (see addAudit).
             const errorMessage = getErrorMessage(err, 'Failed to update audit');
-            set({ error: errorMessage });
             console.error('Failed to update audit:', err);
             throw new Error(errorMessage);
         }

@@ -41,7 +41,7 @@ const VendorStatsPanel: React.FC<VendorStatsPanelProps> = ({
           <h2 className={styles.panelTitle}>{t('common.contractor') || 'Vendors'}</h2>
           <span className={styles.badge}>{totalAudits} {t('audit.total')}</span>
         </div>
-        <p className={styles.panelSubtitle}>Filter audits by selecting a vendor</p>
+        <p className={styles.panelSubtitle}>{t('audit.vendorFilterHint')}</p>
       </div>
 
       <div className={styles.vendorList}>

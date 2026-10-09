@@ -139,6 +139,13 @@ class AuditService:
         # (forces vendor_id for contractor users; validates project_id).
         enforce_create_scope(audit_data, scope)
 
+        # A contractor-scoped caller's audit is forced onto ITS contractor (vendor_id above); make the contractor
+        # name — and so the number prefix generated from it — match, instead of whatever name the client sent.
+        if scope is not None and scope.vendor_id is not None:
+            own = self.repo.db.query(models.Contractor).filter(models.Contractor.id == scope.vendor_id).first()
+            if own is not None:
+                audit_data["contractor"] = own.name
+
         db = self.repo.db
         try:
             # From here on everything is written in ONE transaction: take the write lock before the
@@ -146,7 +153,7 @@ class AuditService:
             begin_write_transaction(db)
 
             # Always auto-generate auditNo server-side (ignore any value from frontend)
-            audit_data["auditNo"] = generate_reference_no(db, audit.contractor or '', 'audit')
+            audit_data["auditNo"] = generate_reference_no(db, audit_data.get("contractor") or '', 'audit')
 
             db_audit = self.repo.create(audit_data)
 
