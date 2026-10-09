@@ -47,4 +47,18 @@
 - 回退：`rollback-backend-code.sh` 直接還原成部署前的原始 5 個檔案（A、B、C 都不留）後重建，或改用 pre-audit 映像；前端用 `rollback-frontend.sh`。
 
 ## 7. 執行紀錄
-（部署時填寫）
+**2026-10-09：A＋B＋C 已上線。**
+- 提交與推送：`4271dc08`、`98b4971d`（A＋B），`38e33275`、`e2f5b164`（C），推送到 `ui/sidebar-shell-preview`。`schemas.py` 只用補丁加入暫存區，所以另一個工作階段尚未提交的材料改動沒有被帶進來。
+- 後端：
+  - 13:51Z 套用 A＋B 的 5 個檔案，14:51:48Z 再套用 C 的 3 個檔案（`apply-backend-output.txt`），兩次都先核對線上舊雜湊。
+  - 使用者以 sudo 執行重建。重建前容器內的 `docx_builder.py` 是 `0e43664f…`（DOCX 已由另一個工作階段在 12:14Z 上線），`audit_service.py` 是 `a21eef9e…`（舊版）。
+  - 回退映像：`qualitas-backend:pre-audit-20261009T143025Z`。新映像：`sha256:0849dc7d…`。
+  - 新容器 14:57:55Z 啟動：啟動時自動備份 `qualitas_20261009_145755.db`、migration 完成、權限同步 72 項、排程啟動，日誌裡沒有 ERROR、Traceback 或 ABORTED。
+  - 三個容器都是 Up。
+- 前端：14:58Z 新增 66 個資產（39 個原本就有，只核對沒有覆寫），之後原子替換 `index.html`。dist inode 仍是 376368，106 個候選檔案全部在線上，雜湊相符（`apply-frontend-output.txt`）。
+- 對外核對（`post-deploy-http-check.txt`）：
+  - `/` 和 `/index.html` 都是 `31e8d95f…`；
+  - 主 bundle、CSS、Audit、auditStore 都是 200 且雜湊相符；
+  - 舊的 Audit 資產仍是 200；
+  - `/api/user/profile` 未登入回 401。
+- 未完成：登入後的冒煙由使用者執行（Claude 不輸入正式站密碼），只做唯讀檢查，不新增業務資料。
