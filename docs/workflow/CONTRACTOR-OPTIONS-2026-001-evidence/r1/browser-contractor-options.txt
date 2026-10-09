@@ -1,0 +1,13 @@
+# 2026-10-09T17:33:12Z isolated stack from the candidate tree (HEAD + this round only); fresh DB; seeds b_review + polish_review + contractor_options_review
+## contractor-options-check
+PASS module user: full contractor list still forbidden
+PASS module user: /ncr add form lists contractors (incl. 'Active', excl. inactive)  -> ["Select Contractor","Caps Active Co","Review Vendor","Void Only Co","廠商A","廠商B","廠商C"]
+PASS module user: /obs add form lists contractors (incl. 'Active', excl. inactive)  -> ["Select Contractor","Caps Active Co","Review Vendor","Void Only Co","廠商A","廠商B","廠商C"]
+PASS module user: /pqp add form lists contractors (incl. 'Active', excl. inactive)  -> ["Please select a contractor","Caps Active Co","Review Vendor","Void Only Co","廠商A","廠商B","廠商C"]
+PASS audit wizard picker includes the contractor stored as 'Active'  -> ["-- Select Contractor --","Caps Active Co","Review Vendor","Void Only Co","廠商A","廠商B","廠商C"]
+PASS noi writer: full contractor list still forbidden
+PASS NOI: default contractor (first active, by name) and its contact details pre-filled  -> {"contractor":"Caps Active Co","contact":"Cathy Caps","phone":"02-1111-2222","email":"cathy@caps.example.com"}
+PASS NOI: changing contractor re-fills system-filled contact fields  -> {"contractor":"Review Vendor","contact":"Rex Review","phone":"03-3333-4444","email":"rex@review.example.com"}
+PASS NOI: a contact field the user edited is kept on contractor change; the others follow  -> {"contractor":"Caps Active Co","contact":"Cathy Caps","phone":"09-9999-9999","email":"cathy@caps.example.com"}
+PASS Contractors page lists full records (contact details visible)
+ALL PASS

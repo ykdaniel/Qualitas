@@ -1,0 +1,15 @@
+# 2026-10-09T17:33:53Z Audit regression on the candidate tree; fresh DB; seeds b_review + polish_review
+## layout
+ALL PASS
+## polish
+9
+## ime
+PASS Safari IME confirm (keyCode 229, isComposing false) add
+PASS Chrome IME confirm (isComposing true) adds nothing
+PASS plain Enter adds the item and clears the field (items=1
+## print
+step2 pages=1 items=0/60
+step3 pages=9 items=60/60
+step4 pages=11 items=60/60
+## smoke-all
+ALL PASS
