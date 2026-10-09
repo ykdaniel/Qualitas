@@ -1,0 +1,7 @@
+# DOCX deploy r1 — Python 3.11, NCR / NOI / ITR (users of docx_builder) + DOCX tests on the DOCX candidate; 2026-10-09T11:45:37Z
+# files: tests/test_docx_path_guard.py tests/test_docx_path_guard_http.py tests/test_itr_approval_authority_http.py tests/test_itr_approval_events_http.py tests/test_itr_approval_events_migration.py tests/test_itr_approval_history_api_http.py tests/test_itr_checklist_http_e2e.py tests/test_itr_history_preservation_http.py tests/test_itr_revoke_approval_acceptance.py tests/test_itr_revoke_approval_evidence_integrity.py tests/test_itr_service.py tests/test_itr_state_protection_http.py tests/test_itr_write_paths_atomic_http.py tests/test_ncr_audit_atomic_http.py tests/test_ncr_close_permission_http.py tests/test_ncr_closed_creation_http.py tests/test_ncr_closure_photos_http.py tests/test_ncr_field_improvements.py tests/test_ncr_late_closure_http.py tests/test_ncr_photo_evidence.py tests/test_ncr_router.py tests/test_ncr_service.py tests/test_ncr_tbc_na_status_migration.py tests/test_noi_create_atomic_http.py tests/test_noi_legacy_itp_read_http.py tests/test_noi_qworkflow_backfill_rule_http.py tests/test_noi_service.py 
+Python 3.11.17
+........................................................................ [ 84%]
+................................................................         [100%]
+424 passed in 475.87s (0:07:55)
+EXIT 0
