@@ -1409,6 +1409,16 @@ class Audit(AuditBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AuditContractorOption(BaseModel):
+    """A contractor as the Audit page / wizard needs it (GET /audit/contractors): names only, no contact details, so it can be
+    served to anyone with audit:view without contractors:view:all."""
+    id: str
+    name: str
+    status: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # --- KPI & Performance Schemas ---
 class KPIWeightBase(BaseModel):
     pqp_weight: int = 25

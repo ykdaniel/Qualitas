@@ -9,7 +9,6 @@ import {
   AlertCircle, Search, ShieldCheck, Printer
 } from 'lucide-react';
 import { useAuditStore, AuditItem } from '../../store/auditStore';
-import { useContractorsStore } from '../../store/contractorsStore';
 import { useProjectStore } from '../../store/projectStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { checkDateOrder } from '../../utils/dateValidation';
@@ -77,8 +76,9 @@ interface AuditWizardProps {
 export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly: readOnlyProp = false, onClose, onSaveSuccess }) => {
   const { t } = useLanguage();
   const { addAudit, updateAudit, loading } = useAuditStore();
-  const { getActiveContractors } = useContractorsStore();
-  const activeContractors = useMemo(() => getActiveContractors(), [getActiveContractors]);
+  // Same source as the Audit page (GET /audit/contractors, audit:view is enough); Audit.tsx fetches it.
+  const contractorOptions = useAuditStore(state => state.contractorOptions);
+  const activeContractors = useMemo(() => contractorOptions.filter(c => c.status === 'active'), [contractorOptions]);
   const { projectList, fetchProjects, currentProject } = useProjectStore();
   React.useEffect(() => { fetchProjects(); }, [fetchProjects]);
 

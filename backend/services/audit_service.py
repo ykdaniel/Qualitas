@@ -67,6 +67,19 @@ class AuditService:
         """
         return self.repo.get_all(skip, limit, project_id=project_id, scope=scope)
 
+    def get_contractor_options(self, scope=None) -> List[models.Contractor]:
+        """
+        Contractors for the Audit page and wizard (vendor statistics, schedule rows, contractor picker).
+
+        Only needs audit:view — the full /contractors list (contact details) needs contractors:view:all, which
+        audit-only roles don't have, so their Audit page used to show no contractors at all. A contractor-scoped
+        caller only gets its own contractor (the same one enforce_create_scope forces on its new audits).
+        """
+        query = self.repo.db.query(models.Contractor)
+        if scope is not None and scope.vendor_id is not None:
+            query = query.filter(models.Contractor.id == scope.vendor_id)
+        return query.order_by(models.Contractor.name).all()
+
     def get_audit(self, audit_id: str, scope=None) -> Optional[models.Audit]:
         """
         Get a single Audit by ID

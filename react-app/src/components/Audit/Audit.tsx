@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useDeferredValue, useEffect, useCallback } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
-import { useContractorsStore } from '../../store/contractorsStore';
 import { useAuditStore, AuditItem } from '../../store/auditStore';
 import { useProjectStore } from '../../store/projectStore';
 import ConfirmModal from '../Shared/ConfirmModal';
@@ -24,7 +23,9 @@ const Audit: React.FC = () => {
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [currentAuditId, setCurrentAuditId] = useState<string | null>(null);
-    const contractors = useContractorsStore(state => state.contractors);
+    // Contractor names from GET /audit/contractors (audit:view is enough), not the contractors store —
+    // that one needs contractors:view:all, so audit-only roles used to get an empty vendor panel/schedule.
+    const contractors = useAuditStore(state => state.contractorOptions);
     const [selectedVendorFilter, setSelectedVendorFilter] = useState<string | null>(null);
 
     // Get active contractors — depend on the contractors array itself so memo
@@ -35,7 +36,7 @@ const Audit: React.FC = () => {
     );
 
     useEffect(() => {
-        useContractorsStore.getState().fetchContractors();
+        useAuditStore.getState().fetchContractorOptions();
     }, []);
 
     // Audits are not part of AppProviders' preloadProjectScopedData, so this page re-fetches its
