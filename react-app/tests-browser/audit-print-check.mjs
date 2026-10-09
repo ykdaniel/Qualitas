@@ -1,5 +1,6 @@
 // AUDIT-POLISH-2026-001: what the wizard's three print buttons actually print (isolated stack only).
-// Opens an audit through ?openId= (also exercises the deep link), goes to steps 3 / 4 / 5 (the steps with a print button),
+// Opens an audit through ?openId= (also exercises the deep link), goes to steps 2 / 3 / 4 (the steps with a print button;
+// before AUDIT-LAYOUT-2026-001 merged Personnel into Scope & Location they were 3 / 4 / 5),
 // renders each with print media into a PDF (page.pdf = the browser's print pipeline) and reports pages + text markers.
 // Usage: node audit-print-check.mjs <stack.json> <outDir> <auditNo>
 import { chromium } from '/Users/nook/Documents/Qualitas/react-app/node_modules/playwright/index.mjs';
@@ -17,7 +18,7 @@ await p.waitForURL(u => !u.pathname.startsWith('/login'), { timeout: 15000 });
 await p.goto(`${UI}/audit?openId=${encodeURIComponent(auditNo)}`);
 await p.waitForSelector('input[name=auditDocNo]', { timeout: 15000 });
 console.log('DEEPLINK opened', await p.inputValue('input[name=auditDocNo]'), 'url', new URL(p.url()).search || '(openId removed)');
-for (const step of [3, 4, 5]) {
+for (const step of [2, 3, 4]) {
   await p.locator('button', { hasText: new RegExp(`^${step}$`) }).first().click();
   await p.waitForTimeout(600);
   const hasPrintButton = await p.locator('button', { hasText: /列印|Print/ }).count();

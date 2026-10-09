@@ -24,6 +24,11 @@ const localToday = () => {
 // so both have to be checked (the old onKeyPress never fired for 229 — this keeps that behaviour).
 const isPlainEnter = (e: React.KeyboardEvent) => e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229;
 
+// Wizard steps (label keys). Personnel and Scope & Location share one step (AUDIT-LAYOUT-2026-001): both are plan data,
+// a handful of fields each, and "Print Audit Plan" prints them together with step 1 anyway.
+const WIZARD_STEPS = ['audit.wizard.step1', 'audit.wizard.stepPersonnelScope', 'audit.wizard.step4', 'audit.wizard.step5'];
+const LAST_STEP = WIZARD_STEPS.length;
+
 const ALL_CATEGORY = '__ALL__';
 const UNCATEGORIZED = '__UNCATEGORIZED__';
 
@@ -316,7 +321,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     }));
   };
 
-  const nextStep = () => setStep(prev => Math.min(prev + 1, 5));
+  const nextStep = () => setStep(prev => Math.min(prev + 1, LAST_STEP));
   const prevStep = () => setStep(prev => Math.max(prev - 1, 1));
 
   const prepareAuditData = (status: string): Omit<AuditItem, 'id'> => {
@@ -424,8 +429,10 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
   };
 
   const renderProgressBar = () => (
-    <div className="flex items-center justify-between mb-12 w-full max-w-4xl mx-auto">
-      {[1, 2, 3, 4, 5].map((i) => (
+    // px-10: each label is centred under its circle and wider than it, so the first and last labels hang ~36px past the
+    // circles — the padding keeps them inside the wizard at every width (AUDIT-LAYOUT R2).
+    <div className="flex items-center justify-between mb-8 w-full max-w-4xl mx-auto px-10">
+      {WIZARD_STEPS.map((labelKey, index) => { const i = index + 1; return (
         <React.Fragment key={i}>
           <div className="flex flex-col items-center relative">
             <button
@@ -437,33 +444,34 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
             >
               {step > i ? <CheckCircle size={20} /> : i}
             </button>
-            <span className={`absolute -bottom-8 text-xs font-bold whitespace-nowrap ${
+            {/* Below 640px four labels cannot fit side by side (they overlapped even with five steps before): numbers only. */}
+            <span className={`absolute -bottom-8 text-xs font-bold whitespace-nowrap hidden sm:block ${
               step >= i ? 'text-teal-700' : 'text-slate-400'
             }`}>
-              {i === 1 ? t('audit.wizard.step1') : i === 2 ? t('audit.wizard.step2') : i === 3 ? t('audit.wizard.step3') : i === 4 ? t('audit.wizard.step4') : t('audit.wizard.step5')}
+              {t(labelKey)}
             </span>
           </div>
-          {i < 5 && (
+          {i < LAST_STEP && (
             <div className={`flex-1 h-1 mx-2 rounded-full transition-colors duration-300 drop-shadow-sm ${
               step > i ? 'bg-teal-500' : 'bg-slate-600/50'
             }`} />
           )}
         </React.Fragment>
-      ))}
+      ); })}
     </div>
   );
 
   return (
     // print: the wizard is a fixed, internally scrolling overlay — printed as is, only the first screenful came out (one
     // page, the rest cut off). In print it becomes normal flow so the browser paginates it; Audit.tsx hides the page behind.
-    <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto py-12 px-4 flex justify-center items-start pt-16 print:static print:overflow-visible print:block print:p-0 print:bg-white">
-      <div className="w-full max-w-5xl">
+    <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto py-8 px-4 md:px-8 flex justify-center items-start pt-10 print:static print:overflow-visible print:block print:p-0 print:bg-white">
+      <div className="w-full max-w-[1400px]">
         <div className="flex justify-between items-center mb-6 no-print">
             <div className="text-left flex items-center gap-4">
-                <div className="inline-flex items-center justify-center p-3.5 bg-emerald-50 text-teal-700 rounded-2xl">
-                    <ClipboardList size={28} />
+                <div className="inline-flex items-center justify-center p-2.5 bg-emerald-50 text-teal-700 rounded-2xl">
+                    <ClipboardList size={24} />
                 </div>
-                <h1 className="text-3xl font-black text-slate-800 tracking-tight">{t('audit.wizard.title')}</h1>
+                <h1 className="text-2xl font-black text-slate-800 tracking-tight">{t('audit.wizard.title')}</h1>
             </div>
             <button 
                 onClick={requestClose}
@@ -493,28 +501,21 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
             
             {/* Step 1: Project Info */}
             {step === 1 && (
-              <div className="p-8 md:p-12 space-y-8 animate-in fade-in slide-in-from-bottom-4">
-                <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-6">
-                  <FileText className="text-teal-600" size={28} />
-                  <h2 className="text-2xl font-bold text-slate-800">{t('audit.wizard.step1')}</h2>
+              <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                <div className="flex items-center gap-3 border-b border-slate-100 pb-3 mb-4">
+                  <FileText className="text-teal-600" size={24} />
+                  <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.step1')}</h2>
                 </div>
                 
-                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="col-span-full">
+                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-5">
+                  <div>
                     <label className="flex items-baseline gap-2 mb-2">
                        <span className="text-sm font-bold text-slate-800">Audit Doc No</span>
                        <span className="text-xs font-medium text-slate-400">(稽核文件編號)</span>
                     </label>
-                    <input type="text" name="auditDocNo" value={auditNo} className="w-full md:w-1/2 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl outline-none text-slate-400 font-medium cursor-not-allowed" placeholder="系統自動產生" readOnly style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }} />
+                    <input type="text" name="auditDocNo" value={auditNo} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl outline-none text-slate-400 font-medium cursor-not-allowed" placeholder="系統自動產生" readOnly style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }} />
                   </div>
-                  <div className="col-span-full">
-                    <label className="flex items-baseline gap-2 mb-2">
-                       <span className="text-sm font-bold text-slate-800">{t('audit.auditTitle') || 'Audit Title'}</span>
-                       <span className="text-xs font-medium text-slate-400">(稽核標題)</span>
-                    </label>
-                    <input type="text" name="auditTitle" value={formData.auditTitle} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" placeholder={t('audit.auditTitlePlaceholder')} />
-                  </div>
-                  <div className="col-span-full">
+                  <div>
                     <label className="flex items-baseline gap-2 mb-2">
                        <span className="text-sm font-bold text-slate-800">Project No / Name</span>
                        <span className="text-xs font-medium text-slate-400">(專案名稱)</span>
@@ -523,7 +524,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                       name="projectId"
                       value={selectedProjectId}
                       onChange={handleProjectChange}
-                      className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none"
+                      className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none"
                     >
                       <option value="">{t('audit.wizard.selectProject')}</option>
                       {projectList.map(p => (
@@ -531,36 +532,43 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                       ))}
                     </select>
                   </div>
-                  <div className="col-span-full">
+                  <div>
                     <label className="flex items-baseline gap-2 mb-2">
                        <span className="text-sm font-bold text-slate-800">Contractor</span>
                        <span className="text-xs font-medium text-slate-400">(受稽核廠商)</span>
                     </label>
-                    <select value={formData.vendorId} onChange={handleContractorChange} className="w-full md:w-1/2 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none">
+                    <select value={formData.vendorId} onChange={handleContractorChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none">
                         <option value="">{t('audit.wizard.selectContractor')}</option>
                         {pickerContractors.map(vendor => (
                             <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
                         ))}
                     </select>
                   </div>
-                  <div className="col-span-1">
+                  <div className="col-span-full">
+                    <label className="flex items-baseline gap-2 mb-2">
+                       <span className="text-sm font-bold text-slate-800">{t('audit.auditTitle') || 'Audit Title'}</span>
+                       <span className="text-xs font-medium text-slate-400">(稽核標題)</span>
+                    </label>
+                    <input type="text" name="auditTitle" value={formData.auditTitle} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" placeholder={t('audit.auditTitlePlaceholder')} />
+                  </div>
+                  <div>
                     <label className="flex items-baseline gap-2 mb-2">
                        <span className="text-sm font-bold text-slate-800">Audit Start Date</span>
                     </label>
-                    <input type="date" name="auditStartDate" value={formData.auditStartDate} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                    <input type="date" name="auditStartDate" value={formData.auditStartDate} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
                   </div>
-                  <div className="col-span-1">
+                  <div>
                     <label className="flex items-baseline gap-2 mb-2">
                        <span className="text-sm font-bold text-slate-800">Audit End Date</span>
                     </label>
-                    <input type="date" name="auditEndDate" value={formData.auditEndDate} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                    <input type="date" name="auditEndDate" value={formData.auditEndDate} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
                   </div>
-                  <div className="col-span-full">
+                  <div>
                     <label className="flex items-baseline gap-2 mb-2">
                        <span className="text-sm font-bold text-slate-800">Status</span>
                        <span className="text-xs font-medium text-slate-400">(稽核狀態)</span>
                     </label>
-                    <select name="status" value={formData.status} onChange={handleInputChange} className="w-full md:w-1/3 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none">
+                    <select name="status" value={formData.status} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none">
                       {/* Only what the workflow allows from the last saved status (the backend refuses anything else). */}
                       {statusOptions.map(status => (
                         <option key={status} value={status}>{AUDIT_STATUS_LABELS[status] || status}</option>
@@ -571,80 +579,77 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
               </div>
             )}
 
-            {/* Step 2: Personnel */}
+            {/* Step 2: Personnel + Scope & Location (merged, AUDIT-LAYOUT-2026-001) */}
             {step === 2 && (
-              <div className="p-8 md:p-12 space-y-8 animate-in fade-in slide-in-from-bottom-4">
-                <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-6">
-                  <Users className="text-teal-600" size={28} />
-                  <h2 className="text-2xl font-bold text-slate-800">{t('audit.wizard.step2')} (Carried Out By)</h2>
-                </div>
-                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div>
-                    <label className="flex items-baseline gap-2 mb-2">
-                       <span className="text-sm font-bold text-slate-800">Project Director</span>
-                    </label>
-                    <input type="text" name="projectDirector" value={formData.projectDirector} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
-                  </div>
-                  <div>
-                    <label className="flex items-baseline gap-2 mb-2">
-                       <span className="text-sm font-bold text-slate-800">Package or Tech. Lead</span>
-                    </label>
-                    <input type="text" name="techLead" value={formData.techLead} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
-                  </div>
-                  <div>
-                    <label className="flex items-baseline gap-2 mb-2">
-                       <span className="text-sm font-bold text-slate-800">Lead Auditor</span>
-                    </label>
-                    <input type="text" name="leadAuditor" value={formData.leadAuditor} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
-                  </div>
-                  <div>
-                    <label className="flex items-baseline gap-2 mb-2">
-                       <span className="text-sm font-bold text-slate-800">Support Auditor</span>
-                    </label>
-                    <input type="text" name="supportAuditors" value={formData.supportAuditors} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
-                  </div>
-                </fieldset>
-              </div>
-            )}
-
-            {/* Step 3: Location */}
-            {step === 3 && (
-              <div className="p-8 md:p-12 space-y-8 animate-in fade-in slide-in-from-bottom-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
+              <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
                   <div className="flex items-center gap-3">
-                    <MapPin className="text-teal-600" size={28} />
-                    <h2 className="text-2xl font-bold text-slate-800">{t('audit.wizard.step3')}</h2>
+                    <Users className="text-teal-600" size={24} />
+                    <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.stepPersonnelScope')}</h2>
                   </div>
                   <button className={actionStyles.secondary} type="button" onClick={() => window.print()}>
                     <Printer className="w-4 h-4" /> {t('audit.wizard.printPlan')}
                   </button>
                 </div>
-                
-                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="space-y-8 no-print">
+
+                <h3 className="flex items-center gap-2 text-sm font-bold text-slate-500 uppercase tracking-wide no-print">
+                  <Users size={16} /> {t('audit.wizard.step2')} (Carried Out By)
+                </h3>
+                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-5 no-print">
+                  <div>
+                    <label className="flex items-baseline gap-2 mb-2">
+                       <span className="text-sm font-bold text-slate-800">Project Director</span>
+                    </label>
+                    <input type="text" name="projectDirector" value={formData.projectDirector} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                  </div>
+                  <div>
+                    <label className="flex items-baseline gap-2 mb-2">
+                       <span className="text-sm font-bold text-slate-800">Package or Tech. Lead</span>
+                    </label>
+                    <input type="text" name="techLead" value={formData.techLead} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                  </div>
+                  <div>
+                    <label className="flex items-baseline gap-2 mb-2">
+                       <span className="text-sm font-bold text-slate-800">Lead Auditor</span>
+                    </label>
+                    <input type="text" name="leadAuditor" value={formData.leadAuditor} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                  </div>
+                  <div className="col-span-full">
+                    <label className="flex items-baseline gap-2 mb-2">
+                       <span className="text-sm font-bold text-slate-800">Support Auditor</span>
+                    </label>
+                    <input type="text" name="supportAuditors" value={formData.supportAuditors} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                  </div>
+                </fieldset>
+
+                <h3 className="flex items-center gap-2 text-sm font-bold text-slate-500 uppercase tracking-wide pt-2 no-print">
+                  <MapPin size={16} /> {t('audit.wizard.step3')}
+                </h3>
+                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-5 no-print">
                 <div>
                   <label className="flex items-baseline gap-2 mb-2">
                        <span className="text-sm font-bold text-slate-800">Location</span>
                        <span className="text-xs font-medium text-slate-400">(稽核地點)</span>
                   </label>
-                  <input type="text" name="location" value={formData.location} onChange={handleInputChange} className="w-full md:w-1/2 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                  <input type="text" name="location" value={formData.location} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
                 </div>
-                <div>
+                <div className="md:col-span-1 xl:col-span-2">
                   <label className="flex items-baseline gap-2 mb-2">
                        <span className="text-sm font-bold text-slate-800">Audit Criteria</span>
                        <span className="text-xs font-medium text-slate-400">(稽核準則)</span>
                   </label>
-                  <input type="text" name="auditCriteria" value={formData.auditCriteria} onChange={handleInputChange} placeholder="例如: 專案合約、ISO 9001、施工規範..." className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                  <input type="text" name="auditCriteria" value={formData.auditCriteria} onChange={handleInputChange} placeholder="例如: 專案合約、ISO 9001、施工規範..." className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
                 </div>
-                <div>
+                <div className="col-span-full">
                   <label className="flex items-baseline gap-2 mb-2">
                        <span className="text-sm font-bold text-slate-800">Audit Scope</span>
                        <span className="text-xs font-medium text-slate-400">(範圍描述)</span>
                   </label>
-                  <textarea name="scopeDescription" value={formData.scopeDescription} onChange={handleInputChange} rows={5} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none resize-none transition-all text-slate-800 font-medium"></textarea>
+                  <textarea name="scopeDescription" value={formData.scopeDescription} onChange={handleInputChange} rows={5} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none resize-none transition-all text-slate-800 font-medium"></textarea>
                 </div>
                 </fieldset>
 
-                {/* Print Only Summary for Steps 1-3 */}
+                {/* Print Only Summary for the plan (steps 1-2) */}
                 <div className="hidden print:block space-y-4">
                   <div className="text-center mb-6 border-b-2 border-slate-800 pb-3">
                     <h1 className="text-2xl font-bold text-slate-900 mb-1">Internal Quality Audit Plan</h1>
@@ -652,7 +657,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                   </div>
 
                   <div className="grid grid-cols-2 gap-y-3 gap-x-6 text-sm border border-slate-300 p-5 rounded-lg">
-                    {/* Step 1 Info */}
+                    {/* Project info (step 1) */}
                     <div className="col-span-1 border-b border-slate-100 pb-2">
                       <span className="font-bold text-slate-500 block mb-0.5 text-xs">Audit No. (稽核編號)</span>
                       <p className="font-semibold text-slate-800 text-sm">{auditNo || 'TBD'}</p>
@@ -671,7 +676,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                       <p className="font-semibold text-slate-800 text-sm">{formData.auditStartDate} {formData.auditEndDate ? `~ ${formData.auditEndDate}` : ''}</p>
                     </div>
 
-                    {/* Step 2 Info */}
+                    {/* Personnel (step 2) */}
                     <div className="col-span-1 border-b border-slate-100 pb-2">
                       <span className="font-bold text-slate-500 block mb-0.5 text-xs">Project Director (專案主管)</span>
                       <p className="font-semibold text-slate-800 text-sm">{formData.projectDirector || '-'}</p>
@@ -689,7 +694,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                       <p className="font-semibold text-slate-800 text-sm">{formData.supportAuditors || '-'}</p>
                     </div>
 
-                    {/* Step 3 Info */}
+                    {/* Scope & location (step 2) */}
                     <div className="col-span-1 border-b border-slate-100 pb-2">
                       <span className="font-bold text-slate-500 block mb-0.5 text-xs">Location (稽核地點)</span>
                       <p className="font-semibold text-slate-800 text-sm">{formData.location || '-'}</p>
@@ -708,13 +713,13 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
               </div>
             )}
 
-            {/* Step 4: Checklist Configuration */}
-            {step === 4 && (
-              <div className="p-8 md:p-12 space-y-8 animate-in fade-in slide-in-from-bottom-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
+            {/* Step 3: Checklist Configuration */}
+            {step === 3 && (
+              <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
                   <div className="flex items-center gap-3">
-                    <CheckSquare className="text-teal-600" size={28} />
-                    <h2 className="text-2xl font-bold text-slate-800">{t('audit.wizard.step4')} Checklist</h2>
+                    <CheckSquare className="text-teal-600" size={24} />
+                    <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.step4')} Checklist</h2>
                   </div>
                   <button className={actionStyles.secondary} type="button" onClick={() => window.print()}>
                     <Printer className="w-4 h-4" /> {t('audit.wizard.printChecklist')}
@@ -840,9 +845,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
               </div>
             )}
 
-            {/* Step 5: Execution & Evaluation */}
-            {step === 5 && (
-              <div className="p-8 md:p-12 space-y-6 animate-in fade-in slide-in-from-bottom-4 bg-slate-50 min-h-[500px]">
+            {/* Step 4: Execution & Evaluation */}
+            {step === 4 && (
+              <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 bg-slate-50 min-h-[500px]">
                 
                 {/* Header Section */}
                 <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -922,7 +927,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                         placeholder={t('audit.wizard.searchPlaceholder')}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        // The only text input on step 5, inside the form that has the submit button:
+                        // The only text input on the last step, inside the form that has the submit button:
                         // Enter would otherwise submit (save and close) the whole audit.
                         onKeyDown={(e) => { if (isPlainEnter(e)) e.preventDefault(); }}
                         className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-slate-50"
@@ -1062,7 +1067,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                     onChange={handleInputChange}
                     rows={5}
                     disabled={readOnly}
-                    className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium resize-y print:hidden"
+                    className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium resize-y print:hidden"
                     placeholder={t('audit.findingsPlaceholder')}
                   />
                   {/* A textarea prints only its visible rows; print the full findings as text instead. */}
@@ -1095,7 +1100,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                               <span className="text-sm font-medium text-slate-500 animate-in fade-in hidden sm:block whitespace-nowrap absolute right-8 bottom-24">
                                   {draftMessage}
                               </span>
-                          )}</>} primary={<>{step < 5 ? (
+                          )}</>} primary={<>{step < LAST_STEP ? (
                               <button className={actionStyles.primary} key="btn-next" type="button" onClick={(e) => { e.preventDefault(); nextStep(); }}>
                                   {t('audit.wizard.nextStep')} <ChevronRight size={20} />
                               </button>

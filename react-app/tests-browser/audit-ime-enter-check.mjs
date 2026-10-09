@@ -11,7 +11,7 @@ await p.goto(UI + '/login'); await p.fill('#email', 'audit_full'); await p.fill(
 await p.waitForURL(u => !u.pathname.startsWith('/login'), { timeout: 15000 });
 await p.goto(UI + '/audit?openId=AHB-RETIRED-1');
 await p.waitForSelector('input[name=auditDocNo]');
-await p.locator('button', { hasText: /^4$/ }).first().click();
+await p.locator('button', { hasText: /^3$/ }).first().click();  // Checklist Setup
 await p.waitForSelector('input[name=task]');
 const count = () => p.evaluate(() => document.querySelectorAll('[class*="rounded-2xl"] input[name=no], li, .group').length);
 const items = () => p.evaluate(() => [...document.querySelectorAll('*')].filter(e => e.children.length === 0 && /^IME-/.test(e.textContent || '')).length);

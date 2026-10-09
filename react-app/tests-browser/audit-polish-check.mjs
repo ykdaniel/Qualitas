@@ -82,15 +82,15 @@ const closeWizard = async p => { await p.locator('.fixed button:has(svg.lucide-x
   await p.context().close();
 }
 
-// 6. step-5 search is case-insensitive
+// 6. last-step (Execution & Review) search is case-insensitive
 {
   const p = await login('audit_full');
   await openAudit(p, 'AHB-DRAFT-1');
-  await p.locator('button', { hasText: /^5$/ }).first().click();
+  await p.locator('button', { hasText: /^4$/ }).first().click();  // last step (Execution & Review)
   await p.fill('input[placeholder*="Search items"], input[placeholder*="搜尋"]', 'print-item-07');
   await p.waitForTimeout(400);
   const rows = await p.locator('tbody tr', { hasText: 'PRINT-ITEM-07' }).count();
-  result('step-5 search ignores case', rows >= 1, `rows=${rows}`);
+  result('last-step search ignores case', rows >= 1, `rows=${rows}`);
   await p.context().close();
 }
 await browser.close();
