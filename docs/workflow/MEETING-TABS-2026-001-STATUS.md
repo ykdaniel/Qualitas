@@ -1,6 +1,6 @@
-# MEETING-TABS-2026-001 — STATUS（R6，獨立審查 PASS）
+# MEETING-TABS-2026-001 — STATUS（R7，獨立審查 PASS）
 
-TASK_ID: MEETING-TABS-2026-001 · ROUND: R6 · R1/R2：ff8c6481／0d6a09bc；R3：577813bd／7eb7dd2f；R4–R5：9ec8cf6a／dbb11d66；R6 接其後本地提交，未推送、未部署。基準：MEETING-FIX 提交後的 HEAD。
+TASK_ID: MEETING-TABS-2026-001 · ROUND: R6 · R1/R2：ff8c6481／0d6a09bc；R3：577813bd／7eb7dd2f；R4–R5：9ec8cf6a／dbb11d66；R6：96c81b56／f83ba745；R7 接其後本地提交，未推送、未部署。基準：MEETING-FIX 提交後的 HEAD。
 
 ## 修改
 | 檔案 | 內容 |
@@ -66,6 +66,28 @@ TASK_ID: MEETING-TABS-2026-001 · ROUND: R6 · R1/R2：ff8c6481／0d6a09bc；R3�
 - 編號行為：✕ 不佔號（下次同號）；沒有帶入列時，刪除後重新連號（例：刪 1.2，原 1.3 變 1.2）；有帶入列時編號一律不動，刪除留下空號，下一個是最大號＋1，不重用空號（例：刪 2.2，2.3 不變，下一個 2.4）。
 - 測試環境：本工作階段的 vite 啟動器改用獨立依賴快取 `node_modules/.vite-meeting-review`——與協調中心 3360 預覽共用 `node_modules/.vite` 時，互相重新最佳化造成「504 Outdated Optimize Dep」，頁面載入失敗（第一次重跑兩次都卡在這裡）。
 - 驗證：tsc 乾淨；隔離環境：分頁 **102/102**（含上列編號行為）、列印 8/8、MEETING-FIX 39/39。獨立審查 R6 PASS。
+
+## R7（使用者：「會議記錄內的每件事項都是要追蹤的，Action by 就是指定人員」→ 選「拿掉，以討論事項為準」，經協調中心轉達）
+- 表單拿掉「行動項目」分頁（剩 4 個）：移除 Follow-up 草稿／即時建立／查詢已開 Follow-up 的程式；存檔流程不再建立 Follow-up（延後狀態只剩「有待上傳附件」一種情況）。
+- 舊資料：已由會議記錄開出的 Follow-up（sourceModule=MEETING）不刪不改，在 Follow Up 模組照常可看可追蹤，點來源仍可開回會議（Follow Up 既有的 ?openId= 深連結）。**正式站筆數：本工作階段連不到 NAS（沙箱擋 SSH），未查；已請協調中心以唯讀查詢回報。**
+- 後端 `POST /followup/bulk/` 與 `validate_followup_source_reference` 的 MEETING 分支：**保留不動**。理由：不影響使用；舊 Follow-up 的來源驗證仍需要 MEETING 分支（編輯舊 Follow-up 時會再驗）；bulk 端點移除屬 API 變更，需另案核對呼叫端與測試。前端已無任何呼叫 bulk 的地方。
+- 清單頁新增「未結事項」檢視，與「已結案項目」並列（會議清單／未結事項／已結案項目）：
+  - 未結：每個系列只取最新一次（rev 最大，同 rev 取較晚更新），作廢會議不算；已結：所有非作廢會議（結案事項不會再被帶入，所以只出現一次）。
+  - 欄位：#、事項（上方灰字為大類／子類）、Action by、起始日期、目標日期、狀態、來源會議（編號＋版次＋標題）。
+  - 篩選：Action by 下拉（自由文字值去重）、「只看逾期」；搜尋框也作用於事項。
+  - 逾期（目標日期早於今天且未結）：紅字＋「逾期」標籤，排序在前，其次依目標日期。
+  - 點列開啟該會議。
+- Action by 維持自由文字（可填外部公司）。
+- DECISIONS.md 新增「會議記錄：以討論事項追蹤，不再從會議開 Follow-up」，註明取代先前任務文件中的「Action by 與 Follow Up 分開」。
+- 翻譯：新增 viewOpenItems、noOpenItems、overdue、overdueOnly、allOwners、colSourceMeeting；移除已不用的 actionItemsSection、actionTitle、actionItemsHint、noActionItems、actionItemPending、stepActionItems、closedItemsTopic、closedItemsMeeting、itemOwner、topicDiscussion（中英各 10）。
+- 測試：`discussionLog.ts` 新增 `latestPerSeries`／`collectRegisterItems`＋2 項單元測試；`meeting-tabs-review.mjs` 新增 1b（6 筆未結、逾期在前且紅字、依 Action by 篩 3 筆、只看逾期 1 筆、已結 3 筆、點列開會議）、分頁改 4 個；`meeting-fix-review.mjs` 移除行動項目情境（原 2 的行動項目斷言、整個情境 3、情境 5 的行動項目），情境 4 改用 API 建立草稿。
+- 驗證：tsc 乾淨；`npm test` 158 passed／0；隔離環境：分頁 **110/110**、列印 **8/8**、MEETING-FIX 回歸 **28/28**（較前少，因行動項目情境已移除）。
+- R7 審查 REVISE 後修正：
+  - 【必改】事項檢視原本建立在已被後端搜尋（只比對會議編號／標題）篩過的清單上：標題搜尋可能只剩舊版次而把已結事項列為未結，搜尋事項內文則永遠為空。改為事項檢視不送搜尋給後端、載入完整清單，搜尋只在前端比對事項（內文、Action by、大類、會議編號）。原「已結案項目」檢視也有同樣問題，一併修正。
+  - 【建議】舊程式建立的下次會議討論紀錄是空的（當時不帶入；正式站那筆週期性會議即是），未結總覽改為取每個系列「最新且有討論紀錄」的一次（`registerSourcePerSeries`），避免前一次的未結事項消失。限制：若使用者刻意把最新一次清空，總覽會顯示前一次的未結事項。
+  - 【建議】切換未結／已結檢視時清空 Action by 與「只看逾期」篩選。
+- 使用者再補充（協調中心轉達）：「第一筆內容沒有縮排」→ 有起始日期的事項，內容在起始日期下方，與進度更新同樣縮排（畫面 12px、列印沿用 .update-text）；沒有起始日期的舊事項不縮排。
+- 驗證（最終）：tsc 乾淨；`npm test` 159 passed／0；隔離環境：分頁 **113/113**（新增：搜尋事項內文可找到、內容與進度縮排一致、列印縮排）、列印 **8/8**、MEETING-FIX 回歸 **28/28**。
 
 ## 舊資料會不會被改寫
 讀取時一律在前端轉成新格式（不改資料庫）。舊格式**草稿**開啟後按儲存，會以新格式寫回（內容、狀態、負責人不變，已實測）；已發布／作廢紀錄鎖定、不會被改寫（實測儲存按鈕不存在、資料庫內容不變）。後端帶入也讀舊格式。
