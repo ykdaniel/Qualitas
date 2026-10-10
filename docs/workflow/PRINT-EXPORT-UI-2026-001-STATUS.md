@@ -34,5 +34,22 @@ TASK_ID: PRINT-EXPORT-UI-2026-001 · ROUND: R1 · 2026-10-10（ITR 部分 2026-1
 用 Python 文字模式改檔時，`NOIDetailModal.tsx` 與 `LanguageContext.tsx` 的 CRLF 被轉成 LF（diff 一度膨脹到數千行）。已確認 HEAD 兩檔皆 100% CRLF，轉回後 diff 只剩實際修改（21 行／8 行），ITR 工作階段的 4 行原樣保留。
 
 ## 待辦
-- 獨立審查。
-- 未提交、未推送、未部署。協調中心（「登入測試」工作階段）要求：提交只做本地 commit 並回報 hash；部署前先找協調中心排隊（ITR 尚未部署，本批不可先部署）。
+- ~~獨立審查~~：R1 Claude 審查 PASS，已於 97bf3723 本地提交（未推送）。部署由協調中心排程。
+
+---
+
+## R2（2026-10-11）：儲存中也停用 Word 匯出
+來源：R1 審查的 NON-BLOCKING #1。使用者指示「儲存中也停用 Word 匯出，順便一起修」。修改前已通知協調中心並獲同意；基準是 HEAD ef8fef13（含 ITR 的 db9d2991、fcc83c62）。
+
+### 修改（各 2 處，+2／−2）
+- `components/ITR/ITRModals.tsx`（LF）：`handleExportDocx` 的防呆加上 `|| saving`；Word 按鈕改為 `disabled={saving || exportingDocx}`。
+- `components/NOI/modals/NOIDetailModal.tsx`（CRLF，以二進位方式修改）：同上。改完 661／661 行仍是 CRLF。
+- 寫法和 NCR 的 `disabled={saving || exportingDocx}` 一致。沒有新增翻譯鍵。
+
+### 證據
+- **實測**：`npx tsc --noEmit` exit 0；`npm test` 144 pass／0 fail。
+- **實測（隔離環境 8291／3291，同一種子，已 `down`）**：在頁面內把非 GET 的 `/itr`、`/noi` 請求延遲 5 秒再送出。
+  - ITR QTS-NDR1-ITR-000001：按 Save 之前 Export Word `disabled=false`；按下後 1 秒，Save 顯示「Saving...」，Export Word `disabled=true`（截圖中為灰色）；PUT 200。
+  - NOI QTS-NDR1-NOI-000001：結果相同，PUT 200。
+  - console 錯誤只有登入前的 401，以及已知的種子 `/api/ncr/` 500。
+- 工作樹裡其他未提交的後端／文件修改（CHECKLIST-TEMPLATE-CLEAN、NOI 刪除參照等）屬於其他工作階段，不屬本輪。

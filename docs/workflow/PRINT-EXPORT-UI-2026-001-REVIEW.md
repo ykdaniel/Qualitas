@@ -33,3 +33,26 @@ TASK_ID: PRINT-EXPORT-UI-2026-001 · ROUND: R1 · 2026-10-11
 
 ## 結論
 PASS。可以照協調中心規則做本地 commit 並回報 hash；部署要排在 ITR 之後，部署前先找協調中心和使用者確認。
+
+---
+
+# R2 REVIEW（2026-10-11）：儲存中也停用 Word 匯出
+審查者：**獨立 Claude 審查代理**（唯讀，非實作者）。
+
+## VERDICT
+**PASS**
+
+## EVIDENCE_CHECK
+- diff 只有兩個檔案，各 +2／−2：`handleExportDocx` 的防呆加上 `|| saving`，以及 `disabled={saving || exportingDocx}`。沒有其他改動。
+- 換行：NOIDetailModal.tsx 661／661 行都是 CRLF，和 HEAD 相同；ITRModals.tsx 是 LF，也和 HEAD 相同。
+- 代理自己重跑 `npx tsc --noEmit`，exit 0。`npm test` 和瀏覽器實測沒有重跑，以 STATUS R2 的紀錄為準。
+
+## FINDINGS
+沒有 high 或 medium 等級的問題。
+- 宣告順序：ITR 的 `saving` 在第 386 行宣告，handler 在第 681 行，都在提前 return（第 693 行）之前。NOI 的 `saving` 在第 251 行，handler 在第 265 行。沒有 TDZ 問題。
+- `saving` 的範圍：ITR 是 handleSave＋doPublish，NOI 是 handleSave＋retryFiles。每個 `setSaving(true)` 都有 `finally { setSaving(false) }`，按鈕不會卡在停用狀態。ITR 發行時也禁止匯出，這是合理的。
+- 和 NCR 的按鈕寫法一致（NCRModals.tsx:1310）。handler 防呆比 NCR 多擋 `saving`，比 NCR 更嚴，沒有壞處。
+
+## NON-BLOCKING NOTES
+1. ITR 在 Revoke（`revoking`）、Raise NCR／Re-inspect（`spawning`）進行中，Word 仍然可以按。這不在範圍內，NCR 也沒有這種防護。
+2. R1 的 #2（ITR 有 `panelDirty` 時仍可匯出）和 #3（catch 沒有用 logger 記錄）仍然沒處理。

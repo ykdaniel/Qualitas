@@ -263,7 +263,7 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
     // Word export: show a message when it fails, and block repeat clicks while the file is being built.
     const [exportingDocx, setExportingDocx] = useState(false);
     const handleExportDocx = async () => {
-        if (!existingItem?.id || exportingDocx) return;
+        if (!existingItem?.id || exportingDocx || saving) return;
         setExportingDocx(true);
         try {
             await exportNoiDocx(existingItem.id, formData.referenceNo || 'NOI');
@@ -627,7 +627,7 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
                         {existingItem?.id && (
                             <button className={actionStyles.secondary}
                                 onClick={handleExportDocx}
-                                disabled={exportingDocx}
+                                disabled={saving || exportingDocx}
                             >
                                 <FileText size={16} /> {exportingDocx ? (t('common.exporting') || 'Exporting...') : (t('itr.exportWord') || 'Export Word')}
                             </button>
