@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
     compareNo, normalizeDiscussionLog, nextNo, addEntry, removeEntry, removeEntryWithMap, renumber, displayNo, canRemove,
     addUpdate, removeUpdate, openItemCount, headingsOf, currentUpdateIndex, setCurrentUpdate, formatMinutesDate,
+    latestPerSeries, collectRegisterItems, registerSourcePerSeries,
 } from '../src/components/MeetingMinutes/discussionLog.ts';
 
 test('compareNo is tree order', () => {
@@ -139,4 +140,41 @@ test('formatMinutesDate gives the company format; anything else is returned as-i
     assert.equal(formatMinutesDate(undefined), '');
     assert.equal(formatMinutesDate('2026-13-01'), '2026-13-01');
     assert.equal(formatMinutesDate('next week'), 'next week');
+});
+
+test('latestPerSeries: the newest occurrence of each series (highest rev, later update on a tie), Void left out', () => {
+    const m = (id: string, doc: string, rev: string, status = 'Published', updatedAt = '') => ({ id, documentNumber: doc, rev, status, updatedAt });
+    const out = latestPerSeries([m('a1', 'A', '1.0'), m('a2', 'A', '2.0'), m('a10', 'A', '10.0'), m('b1', 'B', '1.0'),
+        m('b2', 'B', '2.0', 'Void'), m('c1', 'C', '1.0', 'Draft', '2026-10-01'), m('c1b', 'C', '1.0', 'Draft', '2026-10-02')]);
+    assert.deepEqual(out.map(x => x.id).sort(), ['a10', 'b1', 'c1b']);
+});
+
+test('collectRegisterItems: open items from the newest occurrence only, overdue first; closed items from every non-Void meeting', () => {
+    const item = (no: string, status: string, targetDate = '', owner = '') => ({ no, kind: 'item' as const, content: `item ${no}`, status, targetDate, owner });
+    const meetings = [
+        { id: 'a1', documentNumber: 'A', rev: '1.0', title: 'Weekly', status: 'Published', meetingDate: '2026-07-21',
+          discussionLog: [{ no: '1', kind: 'category' as const, content: 'Tech' }, item('1.1', 'Open', '2026-08-01'), item('1.2', 'Closed')] },
+        { id: 'a2', documentNumber: 'A', rev: '2.0', title: 'Weekly', status: 'Draft', meetingDate: '2026-07-28',
+          discussionLog: [{ no: '1', kind: 'category' as const, content: 'Tech', carried: true }, item('1.1', 'Closed'), item('1.3', 'Open', '2026-07-01', 'TECO'), item('1.4', 'Open', '2026-12-01')] },
+        { id: 'v', documentNumber: 'V', rev: '1.0', status: 'Void', discussionLog: [item('1', 'Open'), item('2', 'Closed')] },
+    ];
+    const open = collectRegisterItems(meetings, 'open', '2026-10-11');
+    assert.deepEqual(open.map(r => [r.meetingId, r.itemNo, r.overdue]), [['a2', '1.3', true], ['a2', '1.4', false]]);
+    assert.equal(open[0].topicTitle, 'Tech');
+    assert.equal(open[0].owner, 'TECO');
+    const closed = collectRegisterItems(meetings, 'closed', '2026-10-11');
+    assert.deepEqual(closed.map(r => [r.meetingId, r.itemNo]), [['a2', '1.1'], ['a1', '1.2']]);   // newest meeting first, Void ignored
+    assert.ok(closed.every(r => !r.overdue));
+});
+
+test('an occurrence created before open items were carried forward (empty register) does not hide the earlier open items', () => {
+    const item = (no: string, status: string) => ({ no, kind: 'item' as const, content: `item ${no}`, status });
+    const meetings = [
+        { id: 'r1', documentNumber: 'S', rev: '1.0', status: 'Published', discussionLog: [item('1', 'Open'), item('2', 'Closed')] },
+        { id: 'r2', documentNumber: 'S', rev: '2.0', status: 'Draft', discussionLog: null },
+        { id: 't1', documentNumber: 'T', rev: '1.0', status: 'Published', discussionLog: [item('1', 'Closed')] },
+        { id: 't2', documentNumber: 'T', rev: '2.0', status: 'Draft', discussionLog: [item('1', 'Open')] },
+    ];
+    assert.deepEqual(registerSourcePerSeries(meetings).map(m => m.id).sort(), ['r1', 't2']);
+    assert.deepEqual(collectRegisterItems(meetings, 'open', '2026-10-11').map(r => `${r.meetingId}#${r.itemNo}`).sort(), ['r1#1', 't2#1']);
 });

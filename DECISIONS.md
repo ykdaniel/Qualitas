@@ -245,6 +245,12 @@ Result 的既有操作方式比拆開成縱向區塊更直覺）。
 影響範圍：正式站 roles／role_permissions 資料（由使用者在 UI 指派，寫入稽核）與 users.is_active（john_doe）。不改程式與 seeder；新資料庫不會自動帶入這個矩陣。
 依據：使用者 2026-10-11 於 IAM 工作階段確認（john_doe「選 A」、矩陣「照建議」、#21 子項 3「延後」）。
 
+### 會議記錄：以討論事項追蹤，不再從會議開 Follow-up（2026-10-11，取代「Action by 與 Follow Up 分開」）
+日期：2026-10-11
+決策：會議記錄的每一件討論事項都要追蹤，由事項本身的「Action by」（指定人員或公司，自由文字，可填外部公司）、目標日期與狀態追蹤，不再另開 Follow-up。會議記錄表單拿掉「行動項目」分頁，前端不再從會議記錄建立 Follow-up；會議清單頁提供「未結事項」總覽（各會議最新一次的未結事項，可依 Action by、逾期篩選，逾期醒目標示）與「已結案項目」。已由會議記錄開出、存在 Follow Up Issues 的 Follow-up（sourceModule=MEETING）全部保留不刪不改，照常在 Follow Up 模組追蹤；後端 `/followup/bulk/` 與 MEETING 來源驗證保留不動。
+理由：使用者（2026-10-11）：「會議記錄內的每件事項都是要追蹤的，Action by 就是指定人員」，並選擇「拿掉，以討論事項為準」。同一件事分在討論事項與 Follow-up 兩處追蹤會不一致。本條取代 MEETING-TABS-2026-001 先前記在任務文件的決定「Action by 與行動項目（Follow Up）分開、維持現狀」。
+影響範圍：`react-app/src/components/MeetingMinutes/`（MeetingMinutesModals.tsx、MeetingMinutes.tsx、columns.tsx、discussionLog.ts）；Follow Up 模組與後端 followup 端點不變。
+
 ## 尚未決策（不得當成已核准規則）
 
 - ITR 核准是否須額外檢查 Inspection Result。

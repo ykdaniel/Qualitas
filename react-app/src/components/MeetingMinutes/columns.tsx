@@ -3,69 +3,81 @@ import { MeetingMinutesItem } from "../../store/meetingMinutesStore";
 import { DataTableColumnHeader } from "@/components/Shared/DataTable/DataTableColumnHeader";
 import { Button } from "@/components/ui/button";
 import { Trash2, Ban } from "lucide-react";
-import { formatMinutesDate } from "./discussionLog";
+import { formatMinutesDate, type RegisterItemRow } from "./discussionLog";
 
-// One row per closed discussion sub-item, aggregated across every
-// currently-loaded meeting — see MeetingMinutes.tsx's "已結案項目" view.
-export interface ClosedItemRow {
-    meetingId: string;
-    documentNumber: string;
-    meetingTitle: string;
-    meetingDate: string;
-    itemNo: string;
-    content: string;
-    owner: string;
-    topicTitle: string;
-}
-
-export const createClosedItemsColumns = (
+// One row per open or closed discussion item across meetings — see MeetingMinutes.tsx's item views and
+// discussionLog.ts's collectRegisterItems (open: newest occurrence of each meeting; closed: every meeting but Void).
+export const createItemColumns = (
     t: (key: string) => string,
-): ColumnDef<ClosedItemRow>[] => [
+    which: 'open' | 'closed',
+): ColumnDef<RegisterItemRow>[] => [
         {
-            accessorKey: "topicTitle",
-            header: ({ column }) => (
-                <DataTableColumnHeader column={column} title={t('meetingMinutes.closedItemsTopic')} />
-            ),
-            cell: ({ row }) => <div>{row.getValue("topicTitle") || '-'}</div>,
+            accessorKey: "itemNo",
+            header: '#',
+            cell: ({ row }) => <div style={{ fontWeight: 600 }}>{row.original.itemNo}</div>,
+            size: 60,
         },
         {
             accessorKey: "content",
             header: ({ column }) => (
-                <DataTableColumnHeader column={column} title={t('meetingMinutes.topicDiscussion')} />
+                <DataTableColumnHeader column={column} title={t('meetingMinutes.colDiscussion')} />
             ),
             cell: ({ row }) => (
-                <div style={{ whiteSpace: 'pre-wrap' }}>
-                    <span style={{ fontWeight: 600, marginRight: 6 }}>{row.original.itemNo}</span>
-                    {row.getValue("content") || '-'}
+                <div style={{ whiteSpace: 'pre-wrap', textAlign: 'left', minWidth: 360 }}>
+                    {row.original.topicTitle && <div style={{ color: '#64748b', fontSize: 12 }}>{row.original.topicTitle}</div>}
+                    {row.original.content || '-'}
                 </div>
             ),
         },
         {
             accessorKey: "owner",
             header: ({ column }) => (
-                <DataTableColumnHeader column={column} title={t('meetingMinutes.itemOwner')} />
+                <DataTableColumnHeader column={column} title={t('meetingMinutes.colActionBy')} />
             ),
-            cell: ({ row }) => <div className="text-center">{row.getValue("owner") || '-'}</div>,
+            cell: ({ row }) => <div className="text-center">{row.original.owner || '-'}</div>,
+            size: 130,
+        },
+        {
+            accessorKey: "raisedDate",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title={t('meetingMinutes.raisedDate')} />
+            ),
+            cell: ({ row }) => <div className="text-center">{formatMinutesDate(row.original.raisedDate) || '-'}</div>,
+            size: 110,
+        },
+        {
+            accessorKey: "targetDate",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title={t('meetingMinutes.targetDate')} />
+            ),
+            cell: ({ row }) => (
+                <div className="text-center" data-overdue={row.original.overdue ? '' : undefined}
+                    style={row.original.overdue ? { color: '#b91c1c', fontWeight: 700 } : undefined}>
+                    {formatMinutesDate(row.original.targetDate) || '-'}
+                    {row.original.overdue && (
+                        <div><span style={{ display: 'inline-block', marginTop: 2, padding: '0 6px', borderRadius: 4, background: '#fee2e2', color: '#b91c1c', fontSize: 11 }}>{t('meetingMinutes.overdue')}</span></div>
+                    )}
+                </div>
+            ),
             size: 120,
         },
         {
+            accessorKey: "status",
+            header: t('meetingMinutes.itemStatus'),
+            cell: ({ row }) => <div className="text-center">{row.original.status === 'Closed' ? t('meetingMinutes.itemStatusClosed') : t('meetingMinutes.itemStatusOpen')}</div>,
+            size: 80,
+        },
+        {
             id: "meeting",
-            header: t('meetingMinutes.closedItemsMeeting'),
+            header: t('meetingMinutes.colSourceMeeting'),
             cell: ({ row }) => (
                 <div>
-                    <div>{row.original.documentNumber}</div>
+                    <div>{row.original.documentNumber}{row.original.rev ? ` (${row.original.rev})` : ''}</div>
                     <div style={{ color: '#64748b', fontSize: 12 }}>{row.original.meetingTitle}</div>
+                    {which === 'closed' && <div style={{ color: '#64748b', fontSize: 12 }}>{formatMinutesDate(row.original.meetingDate)}</div>}
                 </div>
             ),
             size: 200,
-        },
-        {
-            accessorKey: "meetingDate",
-            header: ({ column }) => (
-                <DataTableColumnHeader column={column} title={t('meetingMinutes.meetingDate')} />
-            ),
-            cell: ({ row }) => <div className="text-center">{formatMinutesDate(row.getValue("meetingDate")) || '-'}</div>,
-            size: 110,
         },
     ];
 

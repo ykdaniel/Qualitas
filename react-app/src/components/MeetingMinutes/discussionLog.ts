@@ -197,3 +197,95 @@ export function formatMinutesDate(value: string | null | undefined): string {
     if (!m || Number(m[2]) < 1 || Number(m[2]) > 12) return value || '';
     return `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]} ${m[1]}`;
 }
+
+// ── open / closed items across meetings (the list page's item views, MEETING-TABS-2026-001 R7) ──
+
+/** The fields of a meeting the item views need. */
+export interface MeetingForItems {
+    id: string;
+    documentNumber: string;
+    rev?: string;
+    title?: string;
+    meetingDate?: string;
+    status?: string;
+    updatedAt?: string;
+    discussionLog?: DiscussionLogEntry[] | null;
+}
+
+export interface RegisterItemRow {
+    meetingId: string;
+    documentNumber: string;
+    rev: string;
+    meetingTitle: string;
+    meetingDate: string;
+    itemNo: string;
+    content: string;
+    owner: string;
+    raisedDate: string;
+    targetDate: string;
+    status: string;
+    /** category / sub-category titles above the item */
+    topicTitle: string;
+    /** open with a target date before today */
+    overdue: boolean;
+}
+
+const revNumber = (rev?: string) => Number.parseFloat(rev || '') || 0;
+
+/**
+ * The newest occurrence of every recurring meeting (highest rev; the later update on a tie), Void meetings left out.
+ * Open items are carried from one occurrence to the next, so only the newest one says what is still open.
+ */
+const newerFirst = (a: MeetingForItems, b: MeetingForItems) =>
+    revNumber(b.rev) - revNumber(a.rev) || (b.updatedAt || '').localeCompare(a.updatedAt || '');
+
+function seriesNewestFirst<T extends MeetingForItems>(meetings: T[]): T[][] {
+    const series = new Map<string, T[]>();
+    for (const m of meetings) {
+        if (m.status === 'Void') continue;
+        const key = m.documentNumber || m.id;
+        series.set(key, [...(series.get(key) || []), m]);
+    }
+    return [...series.values()].map(list => list.sort(newerFirst));
+}
+
+export function latestPerSeries<T extends MeetingForItems>(meetings: T[]): T[] {
+    return seriesNewestFirst(meetings).map(list => list[0]);
+}
+
+/**
+ * The occurrence of each series whose register says what is open: the newest one — unless its register is empty,
+ * as with an occurrence created before open items were carried forward (MEETING-TABS-2026-001); then the newest one
+ * that has a register.
+ */
+export function registerSourcePerSeries<T extends MeetingForItems>(meetings: T[]): T[] {
+    return seriesNewestFirst(meetings)
+        .map(list => list.find(m => normalizeDiscussionLog(m.discussionLog).length > 0))
+        .filter((m): m is T => !!m);
+}
+
+/**
+ * Open items: from the newest occurrence of each meeting that has a register (registerSourcePerSeries), overdue first, then by target date. Closed items: from every
+ * meeting that is not Void (a closed item is never carried on, so it appears once — in the meeting that closed it).
+ */
+export function collectRegisterItems(meetings: MeetingForItems[], which: 'open' | 'closed', today: string): RegisterItemRow[] {
+    const source = which === 'open' ? registerSourcePerSeries(meetings) : meetings.filter(m => m.status !== 'Void');
+    const rows: RegisterItemRow[] = [];
+    for (const m of source) {
+        const log = normalizeDiscussionLog(m.discussionLog);
+        for (const e of log) {
+            if (!isItem(e) || (which === 'open') === (e.status === 'Closed')) continue;
+            rows.push({
+                meetingId: m.id, documentNumber: m.documentNumber, rev: m.rev || '', meetingTitle: m.title || '',
+                meetingDate: m.meetingDate || '', itemNo: e.no, content: e.content || '', owner: e.owner || '',
+                raisedDate: e.raisedDate || '', targetDate: e.targetDate || '', status: e.status || 'Open',
+                topicTitle: headingsOf(log, e.no).join(' / '),
+                overdue: which === 'open' && !!e.targetDate && e.targetDate < today,
+            });
+        }
+    }
+    return rows.sort(which === 'open'
+        ? (a, b) => Number(b.overdue) - Number(a.overdue) || (a.targetDate || '9999').localeCompare(b.targetDate || '9999')
+            || a.documentNumber.localeCompare(b.documentNumber) || compareNo(a.itemNo, b.itemNo)
+        : (a, b) => b.meetingDate.localeCompare(a.meetingDate) || a.documentNumber.localeCompare(b.documentNumber) || compareNo(a.itemNo, b.itemNo));
+}

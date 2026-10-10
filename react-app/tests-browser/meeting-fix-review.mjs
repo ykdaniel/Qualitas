@@ -2,12 +2,12 @@
 // Usage: MTG_FIX_REVIEW_PASSWORD=... MTG_FIX_EVIDENCE_DIR=... node tests-browser/meeting-fix-review.mjs
 //   1. Void from inside the form of a Published meeting (with a contractor + an attachment) works and sends the status alone;
 //      the old full-form payload is shown to be refused by the backend (that was the bug).
-//   2. A new meeting saved as Published with an attachment + 2 action items, whose upload fails once: ONE meeting is created
-//      (as Draft), the action items are created, the modal stays open; Save again uploads, publishes, closes — still one meeting.
-//   3. An action item that fails once: only the remaining one is sent again; no duplicate meeting, no duplicate action item.
+//   2. A new meeting saved as Published with an attachment, whose upload fails once: ONE meeting is created (as Draft),
+//      the modal stays open; Save again uploads, publishes, closes — still one meeting.
+//   (3. was "an action item that fails once" — Action Items were removed from the form, MEETING-TABS-2026-001 R7.)
 //   4. Rev: an edited rev is saved; a rev another occurrence of the series already uses is a friendly 400, the modal stays open.
-//   5. A create-only account (no meeting update) saving a new Published meeting with an action item: one create carrying
-//      Published (no deferred status it could not set), the action item created, the modal closed.
+//   5. A create-only account (no meeting update) saving a new Published meeting: one create carrying Published (no
+//      deferred status it could not set), the modal closed.
 import { mkdirSync } from 'node:fs';
 import { chromium } from 'playwright';
 
@@ -53,7 +53,6 @@ const api = (method, path, body) => page.evaluate(async ({ method, path, body })
 }, { method, path, body });
 const meetings = async () => (await api('GET', '/api/meeting-minutes/')).body;
 const byTitle = async (title) => (await meetings()).filter(m => m.title === title);
-const actionItems = async (docNo) => (await api('GET', `/api/followup/?sourceModule=MEETING&sourceReferenceNo=${encodeURIComponent(docNo)}`)).body;
 const files = async (id) => (await api('GET', `/api/files/by-entity?entity_type=meeting&entity_id=${id}&category=attachment`)).body;
 
 const modal = () => page.locator('[class*="modalContent"]').first();
@@ -61,24 +60,16 @@ const field = (label) => modal().locator(`xpath=.//label[normalize-space()="${la
 const saveBtn = () => modal().getByRole('button', { name: /^Save$/ });
 const openList = async () => { await page.goto(`${BASE}/meeting-minutes`); await page.waitForTimeout(700); };
 const openNew = async () => { await openList(); await page.getByRole('button', { name: /Add New Meeting/i }).click(); await modal().waitFor(); };
-const addActionItem = async (title) => {
-    // MEETING-TABS-2026-001: action items live on their own tab
-    await modal().getByRole('tab', { name: /^Action Items/ }).click();
-    await modal().getByPlaceholder('Action Item').first().fill(title);
-    await modal().getByPlaceholder('Action Item').first().locator('xpath=..').locator('button').last().click();
-};
 const openRow = async (text) => { await openList(); await page.locator('tr', { hasText: text }).first().click(); await modal().waitFor(); await page.waitForTimeout(500); };
 const toastText = async () => (await page.locator('[data-sonner-toast]').allTextContents()).join(' | ');
 
 // ═══ 2. upload fails once on a new meeting saved as Published ═══
-log('=== 2. new Published meeting, attachment + 2 action items, first upload fails ===');
+log('=== 2. new Published meeting with an attachment, first upload fails ===');
 const T2 = 'MFX upload-fails-once';
 await openNew();
 await field('Subject').fill(T2);
 await field('Status').selectOption('Published');
 await field('Contractor').selectOption('Hailong Construction');
-await addActionItem('MFX action A');
-await addActionItem('MFX action B');
 await page.setInputFiles('#attachment-upload-meeting-attachments', { name: 'evidence.png', mimeType: 'image/png', buffer: PNG });
 let failUploads = 1;
 await page.route('**/api/files/upload**', async (route) => {
@@ -94,7 +85,6 @@ check(rows.length === 1, `2a: exactly one meeting created (got ${rows.length})`)
 check(rows[0].status === 'Draft', `2a: written as Draft while its attachment is unfinished (got ${rows[0].status})`);
 check(callsTo('POST', /\/api\/meeting-minutes\/?$/).length === 1, '2a: one create request');
 check(JSON.parse(callsTo('POST', /\/api\/meeting-minutes\/?$/)[0].body).status === 'Draft', '2a: create request carried status Draft');
-check((await actionItems(rows[0].documentNumber)).length === 2, '2a: both action items created');
 check(await modal().isVisible(), '2a: modal stays open');
 check((await modal().locator('[role=alert]').innerText()).includes(rows[0].documentNumber), '2a: notice names the saved meeting number');
 check(await saveBtn().isVisible(), '2a: Save is still available to finish');
@@ -105,10 +95,9 @@ await page.screenshot({ path: `${OUT}/02b-retry-done.png` });
 rows = await byTitle(T2);
 check(rows.length === 1, `2b: still exactly one meeting (got ${rows.length})`);
 check(callsTo('POST', /\/api\/meeting-minutes\/?$/).length === 0, '2b: retry sent no create request');
-check(callsTo('POST', /\/api\/followup/).length === 0, '2b: retry created no action item again');
+check(callsTo('POST', /\/api\/followup/).length === 0, '2b: no Follow-up is created from a meeting any more');
 check(rows[0].status === 'Published', `2b: published after the upload went through (got ${rows[0].status})`);
 check((await files(rows[0].id)).length === 1, '2b: exactly one attachment stored');
-check((await actionItems(rows[0].documentNumber)).length === 2, '2b: still exactly two action items');
 check(!(await modal().isVisible().catch(() => false)), '2b: modal closed');
 await page.unroute('**/api/files/upload**');
 
@@ -129,43 +118,11 @@ check(voidPuts.length === 1 && JSON.stringify(JSON.parse(voidPuts[0].body)) === 
 check((await byTitle(T2))[0].status === 'Void', '1b: meeting is Void');
 check(!(await modal().isVisible().catch(() => false)), '1b: modal closed');
 
-// ═══ 3. one action item fails once ═══
-log('=== 3. new Draft meeting, 2 action items, the second fails once ===');
-const T3 = 'MFX action-fails-once';
-await openNew();
-await field('Subject').fill(T3);
-await addActionItem('MFX first ok');
-await addActionItem('MFX second fails once');
-let followupPosts = 0;
-await page.route('**/api/followup/', async (route) => {
-    if (route.request().method() === 'POST' && ++followupPosts === 2) {
-        return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'Injected action item failure' }) });
-    }
-    return route.continue();
-});
-calls.length = 0;
-await saveBtn().click();
-await page.waitForTimeout(2000);
-await page.screenshot({ path: `${OUT}/03a-action-item-failed.png` });
-rows = await byTitle(T3);
-check(rows.length === 1, '3a: one meeting');
-check((await actionItems(rows[0].documentNumber)).map(a => a.title).join(',') === 'MFX first ok', '3a: only the first action item exists');
-check(await modal().getByText('MFX second fails once').isVisible(), '3a: the unsent action item is still shown');
-check(await modal().getByText('Not created yet').isVisible(), '3a: and marked as not created yet');
-calls.length = 0;
-await saveBtn().click();
-await page.waitForTimeout(2000);
-await page.screenshot({ path: `${OUT}/03b-retry-done.png` });
-rows = await byTitle(T3);
-check(rows.length === 1, '3b: still one meeting');
-check(callsTo('POST', /\/api\/meeting-minutes\/?$/).length === 0, '3b: retry sent no create request');
-check(callsTo('POST', /\/api\/followup/).length === 1, '3b: retry sent only the remaining action item');
-check((await actionItems(rows[0].documentNumber)).map(a => a.title).sort().join(',') === 'MFX first ok,MFX second fails once', '3b: both action items, once each');
-check(!(await modal().isVisible().catch(() => false)), '3b: modal closed');
-await page.unroute('**/api/followup/');
-
 // ═══ 4. rev ═══
 log('=== 4. rev is saved; a rev the series already uses is a friendly 400 ===');
+const T3 = 'MFX rev draft';
+check((await api('POST', '/api/meeting-minutes/', { status: 'Draft', title: T3, vendor: 'Hailong Construction' })).status === 200, '4: a Draft meeting to edit');
+rows = await byTitle(T3);
 const draft = rows[0];
 await openRow(draft.documentNumber);
 await field('Rev').fill('1.1');
@@ -189,7 +146,7 @@ check(await modal().isVisible(), '4b: modal stays open');
 check((await meetings()).find(m => m.id === occ.body.id).rev === occ.body.rev, '4b: the occurrence keeps its rev');
 
 // ═══ 5. create-only account ═══
-log('=== 5. create-only account: new Published meeting with one action item ===');
+log('=== 5. create-only account: new Published meeting ===');
 await page.context().clearCookies();
 await page.goto(`${BASE}/login`);
 await page.fill('#email', 'mtg_creator');
@@ -201,7 +158,6 @@ const T5 = 'MFX create-only publish';
 await openNew();
 await field('Subject').fill(T5);
 await field('Status').selectOption('Published');
-await addActionItem('MFX creator action');
 calls.length = 0;
 await saveBtn().click();
 await page.waitForTimeout(2000);
@@ -210,7 +166,6 @@ rows = await byTitle(T5);
 check(rows.length === 1 && rows[0].status === 'Published', `5: one meeting, Published (got ${rows.map(r => r.status).join(',')})`);
 check(callsTo('POST', /\/api\/meeting-minutes\/?$/).length === 1 && JSON.parse(callsTo('POST', /\/api\/meeting-minutes\/?$/)[0].body).status === 'Published', '5: one create request carrying Published');
 check(callsTo('PUT', /\/api\/meeting-minutes\//).length === 0, '5: no update request (it would be refused without update permission)');
-check((await actionItems(rows[0].documentNumber)).length === 1, '5: the action item was created');
 check(!(await modal().isVisible().catch(() => false)), '5: modal closed');
 
 await browser.close();

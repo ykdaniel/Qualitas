@@ -122,7 +122,7 @@ const MeetingMinutesPrintTemplate: React.FC<MeetingMinutesPrintTemplateProps> = 
                                                 <td>{e.no}</td>
                                                 <td>
                                                     {e.raisedDate && <div className="raised-date">{formatMinutesDate(e.raisedDate)}</div>}
-                                                    <div style={{ whiteSpace: 'pre-wrap' }}>{val(e.content)}</div>
+                                                    <div className={e.raisedDate ? 'update-text' : undefined} style={{ whiteSpace: 'pre-wrap' }}>{val(e.content)}</div>
                                                     {(e.updates || []).map((u, i) => (
                                                         <div key={i} className={u.carried ? 'update carried' : 'update'}>
                                                             {u.date && <div className="update-date">{formatMinutesDate(u.date)}</div>}

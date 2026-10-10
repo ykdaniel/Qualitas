@@ -66,12 +66,54 @@ await page.getByRole('button', { name: /Add New Meeting/i }).click();
 await modal().waitFor();
 const box = await modal().boundingBox();
 check(box.width >= 1400, `1: full-screen form (width ${Math.round(box.width)})`);
-check((await modal().getByRole('tab').allTextContents()).map(s => s.replace(/\s*\(\d+\)$/, '')).join('|') === 'General Info|Attendees|Discussions|Action Items|Attachments', '1: five tabs in order');
+check((await modal().getByRole('tab').allTextContents()).map(s => s.replace(/\s*\(\d+\)$/, '')).join('|') === 'General Info|Attendees|Discussions|Attachments', '1: four tabs in order (no Action Items)');
 check(await modal().getByRole('button', { name: /Back/ }).isVisible(), '1: back button');
 const typeFirst = await field('Meeting Type').locator('option').first().textContent();
 check(typeFirst.trim() === '-- Please select --', `1: Meeting Type placeholder translated (${typeFirst.trim()})`);
 for (const label of ['Subject', 'Start Time', 'End Time', 'Venue', 'Recorded By']) check(await field(label).isVisible(), `1: General tab has "${label}"`);
 await page.screenshot({ path: `${OUT}/01-general-tab.png` });
+
+// ═══ 1b. list page: Open Items / Closed Items across meetings (fresh seed) ═══
+log('=== 1b. item views ===');
+await modal().getByRole('button', { name: /Back/ }).click();
+await page.waitForTimeout(500);
+await page.getByRole('button', { name: /^Open Items/ }).click();
+await page.waitForTimeout(500);
+const itemTable = () => page.locator('table').first();
+const itemNos = async () => (await itemTable().locator('tbody tr').evaluateAll(trs => trs.map(tr => `${tr.cells[tr.cells.length - 1]?.innerText.split('\n')[0]}#${tr.cells[0]?.innerText.trim()}`)));
+let rowsNow = await itemNos();
+check(rowsNow.length === 6, `1b: six open items from the three meetings (${rowsNow.join(', ')})`);
+check(rowsNow[0].startsWith('MOM-DEMO-002') && rowsNow[1].startsWith('MOM-DEMO-002'), '1b: overdue items first');
+check(await itemTable().locator('[data-overdue]').count() === 2, '1b: the two past-target items marked overdue');
+check(await itemTable().locator('[data-overdue]').first().evaluate(el => getComputedStyle(el).color) === 'rgb(185, 28, 28)', '1b: overdue shown in red');
+await page.getByLabel('Action by').selectOption('TECO');
+await page.waitForTimeout(300);
+check((await itemNos()).length === 3, '1b: filtered by Action by (TECO: 3)');
+await page.getByLabel('Overdue only').check();
+await page.waitForTimeout(300);
+check((await itemNos()).join(',') === 'MOM-DEMO-002 (1.0)#1.1.1', `1b: overdue only (${(await itemNos()).join(',')})`);
+await page.screenshot({ path: `${OUT}/01b-open-items.png` });
+await page.getByLabel('Overdue only').uncheck();
+await page.getByLabel('Action by').selectOption('');
+// the search box searches the items themselves (not only meeting number / title), on every meeting
+await page.getByPlaceholder(/Search Meeting Minutes/).fill('lifeline');
+await page.waitForTimeout(900);
+check((await itemNos()).join(',') === 'MOM-DEMO-002 (1.0)#1.1.1', `1b: searching item text finds it (${(await itemNos()).join(',')})`);
+await page.getByPlaceholder(/Search Meeting Minutes/).fill('');
+await page.waitForTimeout(900);
+await page.getByRole('button', { name: /^Closed Items/ }).click();
+await page.waitForTimeout(400);
+check((await itemNos()).length === 3, `1b: three closed items (${(await itemNos()).join(', ')})`);
+await page.getByRole('button', { name: /^Open Items/ }).click();
+await page.waitForTimeout(300);
+await itemTable().locator('tbody tr').first().click();
+await modal().waitFor();
+check((await modal().getByRole('textbox').first().inputValue()) === 'MOM-DEMO-002', '1b: clicking an item opens its meeting');
+await modal().getByRole('button', { name: /Back/ }).click();
+await page.waitForTimeout(300);
+await page.getByRole('button', { name: /^Meeting List/ }).click();
+await page.getByRole('button', { name: /Add New Meeting/i }).click();
+await modal().waitFor();
 
 // ═══ 2. a new meeting: register with 3 levels, update, attendees, end time; tabs keep input ═══
 log('=== 2. build a register on a new meeting ===');
@@ -227,6 +269,9 @@ await tab('Discussions').click();
 const carriedRow = modal().locator('[data-row="1.1.1"]');
 check(await carriedRow.getByText('Carried').isVisible(), '5: carried item marked');
 check(await carriedRow.locator('[data-raised]').textContent() === '14 Jul 2026', '5: raised date kept on the carried item');
+const indent = async (sel) => carriedRow.locator(sel).first().evaluate(el => el.getBoundingClientRect().left + parseFloat(getComputedStyle(el).paddingLeft));   // where the text starts
+check(Math.abs(await indent('[data-item-text]') - await indent('[data-update] div:nth-child(2)')) < 1
+    && await indent('[data-item-text]') > await indent('[data-raised]') + 8, '5: item text indented under its raised date, like the progress updates');
 check(await carriedRow.getByRole('button', { name: 'Delete' }).count() === 0, '5: carried item has no 🗑');
 // with carried rows the numbers never move: a deleted new row leaves a gap, the next number is max + 1
 const addUnder2 = async (text) => {
@@ -327,6 +372,7 @@ await page.evaluate(() => { window.print = () => {}; });
 await modal().getByRole('button', { name: /Print/ }).click();
 await page.waitForTimeout(800);
 const printText = await page.locator('.mom-print-root').innerText().catch(() => '');
+check(await page.locator('.mom-print-root .register .raised-date + .update-text').count() >= 2, '6: print: item text indented under its raised date');
 for (const s of ['SUBJECT', 'VENUE & TIME', 'RECORDED BY', 'DISCUSSIONS / ACTIONS', 'Action by', '15:00 ~ 17:15', '1.0', '1.1.1', '21 Jul 2026', '14 Jul 2026', '15 Aug 2026', '4 Aug 2026']) {
     check(printText.includes(s), `6: print contains "${s}"`);
 }
@@ -338,7 +384,7 @@ await page.emulateMedia({ media: 'screen' });
 log('=== 7. zh labels ===');
 await login('zh');
 await openRow('MOM-DEMO-002', 'Meeting Minutes - 111');
-check((await modal().getByRole('tab').allTextContents()).map(s => s.replace(/\s*\(\d+\)$/, '')).join('|') === '基本資訊|與會人員|討論事項|行動項目|附件', '7: zh tab names');
+check((await modal().getByRole('tab').allTextContents()).map(s => s.replace(/\s*\(\d+\)$/, '')).join('|') === '基本資訊|與會人員|討論事項|附件', '7: zh tab names');
 const zhType = await field('會議類型').locator('option').first().textContent();
 check(zhType.trim() === '-- 請選擇 --', `7: zh placeholder (${zhType.trim()})`);
 check(await field('記錄人').isVisible() && await field('結束時間').isVisible(), '7: zh 記錄人 / 結束時間');

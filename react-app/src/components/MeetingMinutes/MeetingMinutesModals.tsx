@@ -9,11 +9,9 @@ import { Plus, Trash2, Printer } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
-import { useFollowUpStore } from '../../store/followUpStore';
 import { useMeetingMinutesStore } from '../../store/meetingMinutesStore';
 import { describeSaveError } from '../../utils/saveErrors';
-import { getUsers, formatUserLabel, getEntityFiles, getAuthenticatedFileUrl, createMeetingMinutesOccurrence, type User as ApiUser } from '../../services/api';
-import api from '../../services/api';
+import { getUsers, getEntityFiles, getAuthenticatedFileUrl, createMeetingMinutesOccurrence, type User as ApiUser } from '../../services/api';
 import type { MeetingMinutesItem, Attendee, DiscussionLogEntry } from '../../store/meetingMinutesStore';
 import FileAttachment from '../Shared/FileAttachment';
 import { BackButton } from '../ui/BackButton';
@@ -23,15 +21,6 @@ import ImagePreviewOverlay from '../Shared/ImagePreviewOverlay';
 import MeetingMinutesPrintTemplate from './MeetingMinutesPrintTemplate';
 import formStyles from '../Shared/FormShell.module.css';
 import './MeetingMinutes.print.css';
-
-export interface ActionItemDraft {
-    title: string;
-    description?: string;
-    assignedTo?: string;
-    assignedToUserId?: number | null;
-    dueDate?: string;
-    priority?: string;
-}
 
 export interface MeetingMinutesDetailData {
     rev: string;
@@ -50,9 +39,9 @@ export interface MeetingMinutesDetailData {
 }
 
 /**
- * What a save of the meeting form achieved (MeetingMinutes.tsx's handleSaveMeetingDetails). A save is up to four
- * steps — write the meeting, upload attachments, create action items, then set a Published/Void status (deferred
- * until the others are done, since those statuses lock the record). Once the meeting is written it is never created
+ * What a save of the meeting form achieved (MeetingMinutes.tsx's handleSaveMeetingDetails). A save is up to three
+ * steps — write the meeting, upload attachments, then set a Published/Void status (deferred until the attachments
+ * are in, since those statuses lock the record). Once the meeting is written it is never created
  * again: a later step that fails leaves the modal open with only the unfinished work, and Save finishes it.
  */
 export type MeetingSaveResult =
@@ -64,30 +53,22 @@ export type MeetingSaveResult =
         unfinished: string[];
         /** the pending files reached the server — drop them so a retry does not upload them twice */
         attachmentsUploaded: boolean;
-        remainingActionItems: ActionItemDraft[];
     }
     | { status: 'failed'; message: string };
 
-type MeetingTab = 'general' | 'attendees' | 'discussion' | 'actions' | 'attachments';
+// Four tabs: Action Items was removed (MEETING-TABS-2026-001 R7, user decision 2026-10-11) — every discussion item is
+// tracked in the register itself and "Action by" names who acts; Follow-ups opened from meetings before stay in Follow Up.
+type MeetingTab = 'general' | 'attendees' | 'discussion' | 'attachments';
 const todayStr = () => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-interface LinkedActionItem {
-    id: string;
-    issueNo: string;
-    title: string;
-    assignedTo?: string;
-    dueDate?: string;
-    status: string;
-}
-
 export interface MeetingMinutesDetailModalProps {
     meetingId: string | null;
     existingItem?: MeetingMinutesItem;
     readOnly?: boolean;
-    onSave: (details: MeetingMinutesDetailData, pendingFiles: File[], actionItemsDraft: ActionItemDraft[]) => Promise<MeetingSaveResult>;
+    onSave: (details: MeetingMinutesDetailData, pendingFiles: File[]) => Promise<MeetingSaveResult>;
     /** Voids the (Published) record: sends the status change alone — the record is locked, so resending its fields is refused. */
     onVoid?: () => Promise<void>;
     onClose: () => void;
@@ -101,7 +82,6 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
     const { t, language } = useLanguage();
     const { hasPermission } = useAuth();
     const { getActiveContractors } = useContractorsStore();
-    const { addFollowUp } = useFollowUpStore();
     const navigate = useNavigate();
     const [spawningOccurrence, setSpawningOccurrence] = useState(false);
     // Attachment preview (BACKLOG #23, 2026-10-05): FileAttachment's thumbnail click only fires
@@ -133,34 +113,12 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
     const [registerEdit, setRegisterEdit] = useState<RegisterEdit | null>(null);
     const [activeTab, setActiveTab] = useState<MeetingTab>('general');
 
-    // Action items: a brand-new meeting has no documentNumber yet, so drafts
-    // are held locally and bulk-submitted right after the meeting itself is
-    // created (see MeetingMinutes.tsx's handleSaveMeetingDetails). An
-    // existing meeting already has real FollowUp rows — those are fetched
-    // and shown read-only; adding one more posts immediately instead of
-    // waiting for the meeting's own Save button.
-    const [actionItemsDraft, setActionItemsDraft] = useState<ActionItemDraft[]>([]);
-    const [linkedActionItems, setLinkedActionItems] = useState<LinkedActionItem[]>([]);
-    const [loadingActionItems, setLoadingActionItems] = useState(false);
-    const [newAction, setNewAction] = useState<ActionItemDraft>({ title: '', description: '', assignedTo: '', assignedToUserId: null, dueDate: '', priority: '' });
-
     const [users, setUsers] = useState<ApiUser[]>([]);
     useEffect(() => {
         let alive = true;
         getUsers().then(u => { if (alive) setUsers(u); }).catch(() => {/* non-fatal */});
         return () => { alive = false; };
     }, []);
-
-    useEffect(() => {
-        if (!existingItem?.documentNumber) return;
-        let alive = true;
-        setLoadingActionItems(true);
-        api.get('/followup/', { params: { sourceModule: 'MEETING', sourceReferenceNo: existingItem.documentNumber } })
-            .then(res => { if (alive) setLinkedActionItems(res.data || []); })
-            .catch(() => {/* non-fatal */})
-            .finally(() => { if (alive) setLoadingActionItems(false); });
-        return () => { alive = false; };
-    }, [existingItem?.documentNumber]);
 
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
     // Bumped once the pending files reached the server, so FileAttachment drops them (see its syncToken prop).
@@ -171,7 +129,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
     // A register row being edited in place (✏️) or added counts as unsaved input only when it holds a change (same rule as
     // the Save check below). This week's updates are written straight into discussionLog, so they are covered by it.
     const registerEditDirty = isEditDirty(registerEdit, discussionLog);
-    const leaveGuard = useDraftGuard({ formData, attendees, newAttendee, discussionLog, registerEditDirty, actionItemsDraft, newAction, pendingFiles }, saving || spawningOccurrence, !readOnly);
+    const leaveGuard = useDraftGuard({ formData, attendees, newAttendee, discussionLog, registerEditDirty, pendingFiles }, saving || spawningOccurrence, !readOnly);
     const requestClose = () => leaveGuard.requestClose(onClose);
 
     const handleFieldChange = (field: keyof typeof formData, value: string) => {
@@ -187,41 +145,8 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
         setAttendees(prev => prev.filter((_, i) => i !== idx));
     };
 
-    const handleActionAssigneeChange = (userId: string) => {
-        if (!userId) {
-            setNewAction(prev => ({ ...prev, assignedToUserId: null }));
-            return;
-        }
-        const picked = users.find(u => u.id === Number(userId));
-        setNewAction(prev => ({
-            ...prev,
-            assignedToUserId: Number(userId),
-            assignedTo: picked ? (formatUserLabel(picked).split(' / ')[0]) : prev.assignedTo,
-        }));
-    };
-
-    const addActionItemDraft = () => {
-        if (!newAction.title.trim()) return;
-        setActionItemsDraft(prev => [...prev, newAction]);
-        setNewAction({ title: '', description: '', assignedTo: '', assignedToUserId: null, dueDate: '', priority: '' });
-    };
-    const removeActionItemDraft = (idx: number) => {
-        setActionItemsDraft(prev => prev.filter((_, i) => i !== idx));
-    };
-
-    const addActionItemNow = async () => {
-        if (!newAction.title.trim() || !existingItem?.documentNumber) return;
-        try {
-            const created = await addFollowUp(toActionItemPayload(newAction, existingItem.documentNumber, formData.contractor) as any);
-            setLinkedActionItems(prev => [...prev, created as unknown as LinkedActionItem]);
-            setNewAction({ title: '', description: '', assignedTo: '', assignedToUserId: null, dueDate: '', priority: '' });
-        } catch (err: any) {
-            toast.error(err?.response?.data?.detail || (err as Error)?.message || t('common.saveFailed'));
-        }
-    };
-
-    // Any sub-editor (attendee, discussion topic/sub-item, action item) that has content
-    // typed but was never Added is not part of formData/attendees/discussionLog/actionItemsDraft
+    // Any sub-editor (attendee, a register row being edited) that has content
+    // typed but was never Added / applied is not part of formData/attendees/discussionLog
     // — saving now would silently discard it. Block and guide the user instead.
     // Must compare EVERY editable field against its own initial value, not just the
     // "primary" one (title/name) — a user can type only a company, an owner, an
@@ -232,13 +157,9 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
     const isAttendeeDraftDirty = () =>
         !!(newAttendee.name.trim() || newAttendee.company.trim() || newAttendee.role.trim());
     const isRegisterDraftDirty = () => registerEditDirty;
-    const isActionDraftDirty = () =>
-        !!(newAction.title.trim() || newAction.description.trim() || newAction.assignedTo.trim() ||
-            newAction.assignedToUserId != null || newAction.dueDate.trim() || newAction.priority.trim());
     const unconfirmedSubDraft = (): { label: string; tab: MeetingTab } | null => {
         if (isAttendeeDraftDirty()) return { label: t('meetingMinutes.attendeesSection'), tab: 'attendees' };
         if (isRegisterDraftDirty()) return { label: t('meetingMinutes.tabDiscussion'), tab: 'discussion' };
-        if (isActionDraftDirty()) return { label: t('meetingMinutes.actionItemsSection'), tab: 'actions' };
         return null;
     };
     const blockSaveForUnconfirmedDraft = () => {
@@ -257,7 +178,6 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
             const result = await onSave(
                 { ...formData, attendees, discussionLog, attachments: [] },
                 pendingFiles,
-                actionItemsDraft,
             );
             if (result.status === 'failed') {
                 toast.error(t('saveFlow.failedKeep', { message: result.message }), { duration: 10000 });
@@ -267,7 +187,6 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                     setPendingFiles([]);
                     setAttachmentSync(n => n + 1);
                 }
-                setActionItemsDraft(result.remainingActionItems);
                 const notice = t('meetingMinutes.saveIncomplete', { docNo: result.documentNumber, details: result.unfinished.join(language === 'zh' ? '；' : '; ') });
                 setIncompleteNotice(notice);
                 toast.warning(notice, { duration: 10000 });
@@ -360,21 +279,8 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
         { key: 'general', label: t('meetingMinutes.tabGeneral') },
         { key: 'attendees', label: t('meetingMinutes.attendeesSection'), count: attendees.length },
         { key: 'discussion', label: t('meetingMinutes.tabDiscussion'), count: openItemCount(discussionLog) },
-        { key: 'actions', label: t('meetingMinutes.actionItemsSection'), count: existingItem ? linkedActionItems.length + actionItemsDraft.length : actionItemsDraft.length },
         { key: 'attachments', label: t('common.attachments') },
     ];
-    const actionItemInputs = (onAdd: () => void) => (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-            <input className={formStyles.formInput} placeholder={t('meetingMinutes.actionTitle')} value={newAction.title} onChange={(e) => setNewAction(prev => ({ ...prev, title: e.target.value }))} style={{ flex: 2 }} />
-            <input className={formStyles.formInput} placeholder={t('followup.assignedTo')} value={newAction.assignedTo} onChange={(e) => setNewAction(prev => ({ ...prev, assignedTo: e.target.value }))} style={{ flex: 1 }} />
-            <select className={formStyles.formSelect} value={newAction.assignedToUserId ?? ''} onChange={(e) => handleActionAssigneeChange(e.target.value)} style={{ flex: 1 }}>
-                <option value="">{t('common.selectPlaceholder') || 'Select user...'}</option>
-                {users.map(u => (<option key={u.id} value={u.id}>{formatUserLabel(u)}</option>))}
-            </select>
-            <input type="date" className={formStyles.formInput} value={newAction.dueDate} onChange={(e) => setNewAction(prev => ({ ...prev, dueDate: e.target.value }))} style={{ flex: 1 }} />
-            <button type="button" onClick={onAdd} className={formStyles.printButton} aria-label={t('common.add')}><Plus size={16} /></button>
-        </div>
-    );
     const field = (label: string, control: React.ReactNode, full = false) => (
         <div className={full ? formStyles.formGroupFull : formStyles.formGroup}>
             <label>{label}</label>
@@ -496,41 +402,6 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                             </div>
                         </div>
 
-                        <div className={formStyles.formSections} hidden={activeTab !== 'actions'}>
-                            <div className={formStyles.formSection}>
-                                <h3 className={formStyles.sectionTitle}>{t('meetingMinutes.actionItemsSection')}</h3>
-                                {existingItem && (loadingActionItems ? (
-                                    <p>{t('common.loading')}</p>
-                                ) : linkedActionItems.length === 0 && actionItemsDraft.length === 0 ? (
-                                    <p style={{ color: '#94a3b8' }}>{t('meetingMinutes.noActionItems')}</p>
-                                ) : (
-                                    linkedActionItems.map((a) => (
-                                        <div key={a.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
-                                            <span style={{ flex: 1, fontFamily: 'monospace', fontSize: 12 }}>{a.issueNo}</span>
-                                            <span style={{ flex: 2 }}>{a.title}</span>
-                                            <span style={{ flex: 1, color: '#64748b' }}>{a.assignedTo || '-'}</span>
-                                            <span style={{ flex: 1, color: '#64748b' }}>{a.status}</span>
-                                        </div>
-                                    ))
-                                ))}
-                                {/* New meeting: drafts sent when it is saved. Existing meeting: drafts left over from a save that
-                                    created the meeting but not all of its action items — Save sends them. */}
-                                {actionItemsDraft.map((a, idx) => (
-                                    <div key={`draft-${idx}`} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
-                                        {existingItem && <span style={{ flex: 1, fontSize: 12, color: '#b45309' }}>{t('meetingMinutes.actionItemPending')}</span>}
-                                        <span style={{ flex: 2 }}>{a.title}</span>
-                                        <span style={{ flex: 1, color: '#64748b' }}>{a.assignedTo || '-'}</span>
-                                        <span style={{ flex: 1, color: '#64748b' }}>{a.dueDate || '-'}</span>
-                                        {!readOnly && (
-                                            <button className={actionStyles.iconDanger} type="button" aria-label={t('common.delete')} onClick={() => removeActionItemDraft(idx)}><Trash2 size={16} /></button>
-                                        )}
-                                    </div>
-                                ))}
-                                {!readOnly && actionItemInputs(existingItem ? addActionItemNow : addActionItemDraft)}
-                                {!existingItem && <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>{t('meetingMinutes.actionItemsHint')}</p>}
-                            </div>
-                        </div>
-
                         <div className={formStyles.formSections} hidden={activeTab !== 'attachments'}>
                             <div className={formStyles.formSection}>
                                 <h3 className={formStyles.sectionTitle}>{t('common.attachments')}</h3>
@@ -631,23 +502,4 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
             )}
         </div>
     );
-};
-
-/** The Follow Up row an action item of this meeting becomes. */
-export const toActionItemPayload = (d: ActionItemDraft, documentNumber: string, vendor?: string): Record<string, unknown> => {
-    const now = new Date().toISOString();
-    return {
-        title: d.title,
-        description: d.description || '',
-        status: 'Open',
-        priority: d.priority || undefined,
-        assignedTo: d.assignedTo || undefined,
-        assignedToUserId: d.assignedToUserId ?? undefined,
-        vendor: vendor || undefined,
-        dueDate: d.dueDate || undefined,
-        createdAt: now,
-        updatedAt: now,
-        sourceModule: 'MEETING',
-        sourceReferenceNo: documentNumber,
-    };
 };

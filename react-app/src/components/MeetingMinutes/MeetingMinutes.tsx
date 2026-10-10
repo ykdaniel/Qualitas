@@ -6,16 +6,15 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useMeetingMinutesStore } from '../../store/meetingMinutesStore';
-import { useFollowUpStore } from '../../store/followUpStore';
 import type { MeetingMinutesItem as ContextMeetingMinutesItem } from '../../store/meetingMinutesStore';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import ConfirmModal from '../Shared/ConfirmModal';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
-import { createColumns, createClosedItemsColumns, type ClosedItemRow } from './columns';
-import { MeetingMinutesDetailModal, MeetingMinutesDetailData, ActionItemDraft, MeetingSaveResult, toActionItemPayload } from './MeetingMinutesModals';
+import { createColumns, createItemColumns } from './columns';
+import { MeetingMinutesDetailModal, MeetingMinutesDetailData, MeetingSaveResult } from './MeetingMinutesModals';
 import { useDebounce } from '../../hooks/useDebounce';
-import { headingsOf, isItem, normalizeDiscussionLog } from './discussionLog';
-import api, { uploadFiles } from '../../services/api';
+import { collectRegisterItems } from './discussionLog';
+import { uploadFiles } from '../../services/api';
 import { getErrorMessage } from '../../utils/errorUtils';
 import { describeSaveError } from '../../utils/saveErrors';
 import { runSaveFlow, sameWrite } from '../../utils/saveFlow';
@@ -34,11 +33,18 @@ const MeetingMinutes: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebounce(searchQuery, 500);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [view, setView] = useState<'meetings' | 'closedItems'>('meetings');
+  const [view, setView] = useState<'meetings' | 'openItems' | 'closedItems'>('meetings');
+  // item views: filter by Action by, and (open items) overdue only
+  const [ownerFilter, setOwnerFilter] = useState('');
+  const [overdueOnly, setOverdueOnly] = useState(false);
 
+  // The server-side search matches a meeting's number / title only. The item views need every meeting (the newest
+  // occurrence of a series decides what is open; an item's text is not in the title), so they load the unfiltered
+  // list and search on the items themselves.
+  const listSearch = view === 'meetings' ? debouncedSearch : '';
   React.useEffect(() => {
-    refetch({ search: debouncedSearch });
-  }, [debouncedSearch, refetch]);
+    refetch({ search: listSearch });
+  }, [listSearch, refetch]);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [currentMeetingId, setCurrentMeetingId] = useState<string | null>(null);
@@ -67,38 +73,28 @@ const MeetingMinutes: React.FC = () => {
     return meetingList.filter((item) => (item.status || '').toLowerCase() === statusFilter);
   }, [meetingList, statusFilter]);
 
-  // Closed discussion sub-items aggregated across every currently-loaded
-  // meeting (client-side only — the data is already in `meetingList`, no
-  // backend change needed). Mirrors the level/status filter used in
-  // MeetingMinutesModals.tsx's Closed tab and the print report.
-  const closedItems = useMemo<ClosedItemRow[]>(() => {
-    const rows: ClosedItemRow[] = [];
-    for (const meeting of meetingList) {
-      // any stored shape (legacy two-level or the current register) — see discussionLog.ts
-      const log = normalizeDiscussionLog(meeting.discussionLog);
-      for (const item of log.filter(e => isItem(e) && e.status === 'Closed')) {
-        rows.push({
-          meetingId: meeting.id,
-          documentNumber: meeting.documentNumber,
-          meetingTitle: meeting.title || '',
-          meetingDate: meeting.meetingDate || '',
-          itemNo: item.no,
-          content: item.content || '',
-          owner: item.owner || '',
-          topicTitle: headingsOf(log, item.no).join(' / '),
-        });
-      }
-    }
-    if (!debouncedSearch.trim()) return rows;
+  // Discussion items across the loaded meetings (client-side only — the data is already in `meetingList`):
+  // open ones from the newest occurrence of each meeting, closed ones from every meeting but Void. This is where
+  // every item is followed up (Action Items were removed, MEETING-TABS-2026-001 R7).
+  const itemWhich = view === 'closedItems' ? 'closed' : 'open';
+  const allItems = useMemo(() => {
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return collectRegisterItems(meetingList, itemWhich, today);
+  }, [meetingList, itemWhich]);
+  const owners = useMemo(() => Array.from(new Set(allItems.map(r => r.owner).filter(Boolean))).sort(), [allItems]);
+  const itemRows = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
-    return rows.filter(r =>
-      r.content.toLowerCase().includes(q) ||
-      r.owner.toLowerCase().includes(q) ||
-      r.topicTitle.toLowerCase().includes(q)
-    );
-  }, [meetingList, debouncedSearch]);
+    return allItems.filter(r =>
+      (!ownerFilter || r.owner === ownerFilter)
+      && (itemWhich === 'closed' || !overdueOnly || r.overdue)
+      && (!q || r.content.toLowerCase().includes(q) || r.owner.toLowerCase().includes(q) || r.topicTitle.toLowerCase().includes(q)
+        || r.documentNumber.toLowerCase().includes(q)));
+  }, [allItems, ownerFilter, overdueOnly, itemWhich, debouncedSearch]);
+  const openItemTotal = useMemo(() => collectRegisterItems(meetingList, 'open', '9999-12-31').length, [meetingList]);
+  const closedItemTotal = useMemo(() => collectRegisterItems(meetingList, 'closed', '9999-12-31').length, [meetingList]);
 
-  const closedItemsColumns = useMemo(() => createClosedItemsColumns(t), [t]);
+  const itemColumns = useMemo(() => createItemColumns(t, itemWhich), [t, itemWhich]);
 
   const handleEdit = React.useCallback((id: string) => {
     // No save state to reset: every way the modal closes runs resetSaveState.
@@ -134,23 +130,19 @@ const MeetingMinutes: React.FC = () => {
     setIsEditModalOpen(true);
   };
 
-  // Write the meeting, upload its attachments, create its action items, then set a Published/Void status — see
+  // Write the meeting, upload its attachments, then set a Published/Void status — see
   // MeetingSaveResult. Built on the shared runSaveFlow contract (utils/saveFlow.ts, as NCR/OBS/NOI/OSD): once the
   // meeting is written its id replaces 'new' at once, so pressing Save again after a later step failed updates it
   // (or, unchanged, does not write it at all) and never creates a second meeting. It used to stay 'new', and every
   // retry created another meeting with a new number (MEETING-FIX-2026-001).
-  const handleSaveMeetingDetails = async (details: MeetingMinutesDetailData, pendingFiles: File[], actionItemsDraft: ActionItemDraft[]): Promise<MeetingSaveResult> => {
+  const handleSaveMeetingDetails = async (details: MeetingMinutesDetailData, pendingFiles: File[]): Promise<MeetingSaveResult> => {
     if (!currentMeetingId) return { status: 'failed', message: t('common.saveFailed') };
     const isNew = currentMeetingId === 'new';
     const targetStatus = details.status || 'Draft';
     // Published / Void lock the meeting: attachments would be refused and the form could no longer be saved to
-    // finish anything. With attachments or action items still to send, write it as Draft and set the target status
-    // only once they went through. Setting it afterwards needs update permission: an account that may only create
-    // keeps the old one-step create for action items (they are not refused on a locked meeting), so it is never
-    // left with a Draft it cannot publish. Its attachments need update permission anyway.
-    const canUpdate = hasPermission('meeting:update:all');
-    const deferStatus = LOCKING_STATUSES.includes(targetStatus)
-      && (pendingFiles.length > 0 || (canUpdate && actionItemsDraft.length > 0));
+    // finish anything. With attachments still to upload, write it as Draft and set the target status only once they
+    // went through (uploading needs update permission, which setting the status afterwards needs too).
+    const deferStatus = LOCKING_STATUSES.includes(targetStatus) && pendingFiles.length > 0;
     // documentNumber 由後端自動產生，新建時不送
     const payload: Record<string, unknown> = {
       vendor: details.contractor || undefined,
@@ -203,34 +195,12 @@ const MeetingMinutes: React.FC = () => {
     if (!documentNumber) {
       documentNumber = useMeetingMinutesStore.getState().meetingList.find(m => m.id === id)?.documentNumber || '';
     }
-    if (!documentNumber && actionItemsDraft.length > 0) {
-      // the list may have been replaced by another fetch meanwhile — ask for the record itself
-      try {
-        documentNumber = (await api.get(`/meeting-minutes/${id}`)).data?.documentNumber || '';
-      } catch { /* reported below as an unfinished step */ }
-    }
     const unfinished: string[] = [];
     let attachmentsUploaded = true;
     if (outcome.status === 'saved-incomplete') {
       attachmentsUploaded = outcome.uploadedCategories.includes('attachment');
       for (const f of outcome.failures) {
         unfinished.push(t('saveFlow.step.upload', { what: t('saveFlow.category.attachment'), message: f.message }));
-      }
-    }
-
-    // One by one, in order: the ones already created are dropped, so a retry never creates an action item twice.
-    let remainingActionItems = actionItemsDraft;
-    if (remainingActionItems.length > 0 && !documentNumber) {
-      // never create a Follow Up that points at no meeting
-      unfinished.push(t('meetingMinutes.stepActionItems', { n: remainingActionItems.length, message: t('common.saveFailed') }));
-    }
-    while (remainingActionItems.length > 0 && documentNumber) {
-      try {
-        await useFollowUpStore.getState().addFollowUp(toActionItemPayload(remainingActionItems[0], documentNumber, details.contractor) as any);
-        remainingActionItems = remainingActionItems.slice(1);
-      } catch (e) {
-        unfinished.push(t('meetingMinutes.stepActionItems', { n: remainingActionItems.length, message: describe(e) }));
-        break;
       }
     }
 
@@ -246,14 +216,12 @@ const MeetingMinutes: React.FC = () => {
     }
 
     if (unfinished.length > 0) {
-      return { status: 'saved-incomplete', documentNumber, unfinished, attachmentsUploaded, remainingActionItems };
+      return { status: 'saved-incomplete', documentNumber, unfinished, attachmentsUploaded };
     }
     setIsEditModalOpen(false);
     setCurrentMeetingId(null);
     resetSaveState();
-    // Refresh so the newly-created meeting's documentNumber is available
-    // if the user reopens it to add more action items.
-    refetch({ search: debouncedSearch });
+    refetch({ search: listSearch });
     return { status: 'saved' };
   };
 
@@ -264,7 +232,7 @@ const MeetingMinutes: React.FC = () => {
     setIsEditModalOpen(false);
     setCurrentMeetingId(null);
     resetSaveState();
-    refetch({ search: debouncedSearch });
+    refetch({ search: listSearch });
   };
 
   const confirmDelete = React.useCallback((id: string) => {
@@ -327,21 +295,37 @@ const MeetingMinutes: React.FC = () => {
       )}
 
       <div className={shellStyles.chipGroup} style={{ marginBottom: 8 }}>
-        {(['meetings', 'closedItems'] as const).map((v) => (
+        {(['meetings', 'openItems', 'closedItems'] as const).map((v) => (
           <button
             key={v}
             type="button"
             className={`${shellStyles.chip} ${view === v ? shellStyles.chipActive : ''}`}
-            onClick={() => setView(v)}
+            onClick={() => { setView(v); setOwnerFilter(''); setOverdueOnly(false); }}
           >
-            {v === 'meetings' ? t('meetingMinutes.viewMeetings') : t('meetingMinutes.viewClosedItems')}
-            {v === 'closedItems' && <span className={shellStyles.chipCount}>{closedItems.length}</span>}
+            {v === 'meetings' ? t('meetingMinutes.viewMeetings') : v === 'openItems' ? t('meetingMinutes.viewOpenItems') : t('meetingMinutes.viewClosedItems')}
+            {v === 'openItems' && <span className={shellStyles.chipCount}>{openItemTotal}</span>}
+            {v === 'closedItems' && <span className={shellStyles.chipCount}>{closedItemTotal}</span>}
           </button>
         ))}
       </div>
 
       <div className={shellStyles.toolbar}>
         <div className={shellStyles.chipGroup}>
+          {view !== 'meetings' && (
+            <>
+              <select className={shellStyles.searchInput} style={{ width: 'auto', paddingLeft: 10 }} value={ownerFilter}
+                aria-label={t('meetingMinutes.colActionBy')} onChange={(e) => setOwnerFilter(e.target.value)}>
+                <option value="">{t('meetingMinutes.allOwners')}</option>
+                {owners.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+              {view === 'openItems' && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#475569', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={overdueOnly} onChange={(e) => setOverdueOnly(e.target.checked)} />
+                  {t('meetingMinutes.overdueOnly')}
+                </label>
+              )}
+            </>
+          )}
           {view === 'meetings' && chips.map((chip) => (
             <button
               key={chip.id}
@@ -388,12 +372,13 @@ const MeetingMinutes: React.FC = () => {
             }
             onRowClick={(row) => handleEdit(row.id)}
           />
-        ) : closedItems.length === 0 ? (
-          <div className={shellStyles.loadingNote}>{t('meetingMinutes.noClosedItems')}</div>
+        ) : itemRows.length === 0 ? (
+          <div className={shellStyles.loadingNote}>{t(view === 'openItems' ? 'meetingMinutes.noOpenItems' : 'meetingMinutes.noClosedItems')}</div>
         ) : (
           <DataTable
-            columns={closedItemsColumns}
-            data={closedItems}
+            key={view}
+            columns={itemColumns}
+            data={itemRows}
             searchKey=""
             onRowClick={(row) => handleEdit(row.meetingId)}
           />

@@ -212,7 +212,8 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
                     {editing && !e.carried
                         ? <AutoText value={editing.content} aria-label={e.no}
                             onChange={ev => setEdit({ ...editing, content: ev.target.value })} />
-                        : <div style={{ whiteSpace: 'pre-wrap' }}>{e.content}</div>}
+                        // under its raised date, indented like every progress update below it: one "date / text" list
+                        : <div data-item-text style={{ whiteSpace: 'pre-wrap', paddingLeft: e.raisedDate ? 12 : 0 }}>{e.content}</div>}
                     {updateList(e, weekField)}
                     {weekField && (
                         <div data-this-week style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginTop: 8 }}>
