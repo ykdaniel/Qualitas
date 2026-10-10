@@ -165,6 +165,10 @@ def run_migrations():
     # view + manage. Removes that one permission and its role assignments; nothing else. Best effort, like steps 1–19.
     _retire_material_record_result_permission()
 
+    # 23. Clean the bare Checklist templates that still hold inspection results (CHECKLIST-TEMPLATE-CLEAN-2026-001,
+    # BACKLOG #22, user's decision 2026-10-10). Runs once (migration_flags); best effort.
+    _clean_legacy_bare_template_results()
+
     logger.info("Migrations completed.")
 
 class MigrationError(RuntimeError):
@@ -464,6 +468,68 @@ def _create_material_submittal_schema():
             "Some objects may already exist (every statement is IF NOT EXISTS / add-if-missing); no table, index or row "
             "was dropped or rewritten. Fix the cause and start again."
         ) from e
+
+
+CHECKLIST_TEMPLATE_CLEANUP_FLAG = "checklist_bare_template_results_cleanup_v1"
+
+
+def _clean_legacy_bare_template_results():
+    """Step 23 (CHECKLIST-TEMPLATE-CLEAN-2026-001, BACKLOG #22). A bare template (itrId and template_id both empty) must
+    never hold inspection results; the service has refused new ones since the §17 hardening (2026-09-19), but rows
+    written before that still do (on production: QTS-RKS-HL-CHK-000001 "Stakeout" and QTS-RKS-RKS-CHK-000006, both
+    status Pass). The user chose to clean them and keep them as templates.
+
+    * Only bare templates that CARRY results are touched: status Pass / Fail, passCount / failCount > 0, an item with
+      a result or observation, or an itrNumber pointing at an ITR. Linked instances and clean templates are never read
+      for writing.
+    * Each such row becomes a clean template: status 'Ongoing' (what the form saves for a template), counts 0,
+      itrNumber NULL, detail_data via checklist_service.blank_inspection_detail_data (item structure kept, results,
+      signatures, dates and ITR / NOI references cleared). No row is deleted; instances already made from these
+      templates (e.g. CHK-000002) are not touched.
+    * Every change writes an audit_logs row (action CLEANUP_TEMPLATE_RESULTS) with the old and new values, in the same
+      transaction as the update.
+    * Runs exactly once, tracked in migration_flags (the flag is written in the same transaction). Best effort: a
+      failure is logged, nothing is half-written, and the next start tries again.
+    """
+    import json
+    from datetime import datetime, timezone
+    try:
+        from services.checklist_service import _touched_fields_carry_results, blank_inspection_detail_data
+        with engine.connect() as conn:
+            if conn.execute(text("SELECT 1 FROM migration_flags WHERE flag_name = :f"),
+                            {"f": CHECKLIST_TEMPLATE_CLEANUP_FLAG}).first():
+                return
+            rows = conn.execute(text(
+                "SELECT id, recordsNo, status, passCount, failCount, itrNumber, detail_data FROM checklist "
+                "WHERE COALESCE(itrId, '') = '' AND COALESCE(template_id, '') = ''")).fetchall()
+            now = datetime.now(timezone.utc).isoformat()
+            cleaned = []
+            for rid, recno, status, passes, fails, itr_number, detail in rows:
+                dirty = (_touched_fields_carry_results({"status": status, "passCount": passes, "failCount": fails,
+                                                        "detail_data": detail})
+                         or bool((itr_number or "").strip()))
+                if not dirty:
+                    continue
+                new_detail = blank_inspection_detail_data(detail)
+                conn.execute(text("UPDATE checklist SET status = 'Ongoing', passCount = 0, failCount = 0, "
+                                  "itrNumber = NULL, detail_data = :d WHERE id = :i"), {"d": new_detail, "i": rid})
+                conn.execute(text(
+                    "INSERT INTO audit_logs (timestamp, user_id, username, action, entity_type, entity_id, entity_name, "
+                    "old_value, new_value, reason) VALUES (:ts, NULL, 'system-migration', 'CLEANUP_TEMPLATE_RESULTS', "
+                    "'Checklist', :i, :n, :old, :new, :reason)"),
+                    {"ts": now, "i": rid, "n": recno,
+                     "old": json.dumps({"status": status, "passCount": passes, "failCount": fails, "itrNumber": itr_number,
+                                        "detail_data": detail}, ensure_ascii=False),
+                     "new": json.dumps({"status": "Ongoing", "passCount": 0, "failCount": 0, "itrNumber": None,
+                                        "detail_data": new_detail}, ensure_ascii=False),
+                     "reason": "Bare template must not hold inspection results (BACKLOG #22, CHECKLIST-TEMPLATE-CLEAN-2026-001)"})
+                cleaned.append(recno)
+            conn.execute(text("INSERT INTO migration_flags (flag_name, completed_at) VALUES (:f, :ts)"),
+                         {"f": CHECKLIST_TEMPLATE_CLEANUP_FLAG, "ts": now})
+            conn.commit()
+            logger.info("Cleaned %d bare Checklist template(s) holding results: %s", len(cleaned), ", ".join(cleaned) or "none")
+    except Exception as e:
+        logger.error("Could not clean bare Checklist templates holding results: %s", e)
 
 
 RETIRED_MATERIAL_PERMISSION = "material:record_result:all"

@@ -1,0 +1,29 @@
+# rehearsal on a copy of the production DB (taken 2026-10-09 05:50Z, sha256 8c926896…; the container works on its own copy); candidate = 127d187e + 4 files; 2026-10-10T15:59:48Z
+Python 3.11.17
+== before (production copy): integrity=ok flag=0 cleanup_audits=[]
+   QTS-RKS-HL-CHK-000001: status=Pass pass=1 fail=0 itrId=- itrNumber=- template=- items=0 header={'inspectionDate': '2024-03-20', 'itrNumber': 'QTS-RKS-HL-ITR-000002', 'agreementChecked': False, 'passCount': 2}
+   QTS-RKS-HL-CHK-000002: status=Pass pass=2 fail=0 itrId=set itrNumber=QTS-RKS-HL-ITR-000002 template=set items=0 header={}
+   QTS-RKS-RKS-CHK-000006: status=Pass pass=0 fail=0 itrId=- itrNumber=QTS-RKS-HL-ITR-000001 template=- items=0 header={'inspectionDate': '2026-02-13', 'itrNumber': 'QTS-RKS-HL-ITR-000001', 'agreementChecked': True, 'passCount': 1}
+   start exit 0 | Cleaned 2 bare Checklist template(s) holding results: QTS-RKS-HL-CHK-000001, QTS-RKS-RKS-CHK-000006
+== after first start: integrity=ok flag=1 cleanup_audits=[('QTS-RKS-HL-CHK-000001', 'system-migration', 1, 1), ('QTS-RKS-RKS-CHK-000006', 'system-migration', 1, 1)]
+   QTS-RKS-HL-CHK-000001: status=Ongoing pass=0 fail=0 itrId=- itrNumber=- template=- items=0 header={'inspectionDate': '', 'agreementChecked': True, 'passCount': 0}
+   QTS-RKS-HL-CHK-000002: status=Pass pass=2 fail=0 itrId=set itrNumber=QTS-RKS-HL-ITR-000002 template=set items=0 header={}
+   QTS-RKS-RKS-CHK-000006: status=Ongoing pass=0 fail=0 itrId=- itrNumber=- template=- items=0 header={'inspectionDate': '', 'agreementChecked': True, 'passCount': 0}
+   start exit 0 | 
+== after second start: integrity=ok flag=1 cleanup_audits=[('QTS-RKS-HL-CHK-000001', 'system-migration', 1, 1), ('QTS-RKS-RKS-CHK-000006', 'system-migration', 1, 1)]
+   QTS-RKS-HL-CHK-000001: status=Ongoing pass=0 fail=0 itrId=- itrNumber=- template=- items=0 header={'inspectionDate': '', 'agreementChecked': True, 'passCount': 0}
+   QTS-RKS-HL-CHK-000002: status=Pass pass=2 fail=0 itrId=set itrNumber=QTS-RKS-HL-ITR-000002 template=set items=0 header={}
+   QTS-RKS-RKS-CHK-000006: status=Ongoing pass=0 fail=0 itrId=- itrNumber=- template=- items=0 header={'inspectionDate': '', 'agreementChecked': True, 'passCount': 0}
+second start changed nothing: True
+rows other than the two templates unchanged: True
+EXIT 0
+
+=== RE-RUN with the updated candidate (127d187e + 5 files incl. db_seeder.py); 2026-10-10T16:21:43Z
+== before (production copy): integrity=ok flag=0 cleanup_audits=[]
+   start exit 0 | Cleaned 2 bare Checklist template(s) holding results: QTS-RKS-HL-CHK-000001, QTS-RKS-RKS-CHK-000006
+== after first start: integrity=ok flag=1 cleanup_audits=[('QTS-RKS-HL-CHK-000001', 'system-migration', 1, 1), ('QTS-RKS-RKS-CHK-000006', 'system-migration', 1, 1)]
+   start exit 0 | 
+== after second start: integrity=ok flag=1 cleanup_audits=[('QTS-RKS-HL-CHK-000001', 'system-migration', 1, 1), ('QTS-RKS-RKS-CHK-000006', 'system-migration', 1, 1)]
+second start changed nothing: True
+rows other than the two templates unchanged: True
+EXIT 0

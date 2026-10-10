@@ -82,6 +82,16 @@ Result 的既有操作方式比拆開成縱向區塊更直覺）。
 影響範圍：Qualitas 已 PASS 前後端批次；取代先前「未經要求不得提交推送部署」中需要逐批重新取得授權的部分。當前部署盤點 REVISE 仍須補正，不因授權自動轉為 PASS。
 依據：使用者本日先授權定期推送部署，再明確選定每批 PASS 後執行。
 
+### Checklist 空白範本：清除舊結果、連結時重設檢驗欄位、複檢不限範本（2026-10-10）
+日期：2026-10-10
+決策：
+1. 正式站仍帶著檢驗結果的空白範本（QTS-RKS-HL-CHK-000001「Stakeout」、QTS-RKS-RKS-CHK-000006「TESTTTT」）清掉舊結果、留作範本：狀態 Ongoing、計數 0、移除 ITR 參照，`detail_data` 只留項目結構與說明。以一次性 migration 執行並寫稽核；不刪資料，已由範本產生的檢查單不動。
+2. 由範本產生檢查單時，檢驗日期、簽名、NCR 編號、複檢日期、合格勾選、計數與逐項結果一律從空白開始，不沿用範本或舊檢驗的值。
+3. 複檢時新的檢查單不限定要連結原本不合格那張的同一個範本（維持現狀）。
+理由：BACKLOG #22。後端早已拒絕在空白範本寫入結果（§17 hardening），但舊資料仍在，且連結時會把範本頁首的舊檢驗值（例如 2024 的檢驗日期）帶進新檢查單。
+影響範圍：backend/services/checklist_service.py（blank_inspection_detail_data）、services/itr_service.py（link_checklist：detail_data 與 date）、db_migrations.py 第 23 步、db_seeder.py（新資料庫的預設範本改為乾淨範本）。不改前端。
+依據：使用者 2026-10-10 於對話中選定；任務 CHECKLIST-TEMPLATE-CLEAN-2026-001。
+
 ### 材料主檔 API 只留查詢（2026-10-09）
 日期：2026-10-09
 決策：`/api/materials` 移除新增（POST）與修改（PUT），只保留列表與單筆查詢。材料主檔只由核准材料登錄簿（`/material-submittals/register`）建立與修改。資料表與既有資料不動，不提供刪除。

@@ -234,6 +234,9 @@ def seed_initial_data():
                 pass
 
         # 4. Create Seed Checklist Records if none exists
+        # The seed is a BARE TEMPLATE (no itrId / template_id), so it must not carry inspection results: status
+        # 'Ongoing' and no inspection date (CHECKLIST-TEMPLATE-CLEAN-2026-001, BACKLOG #22). It used to be seeded as
+        # 'Pass' with a 2024 inspection date — that is how production's QTS-RKS-HL-CHK-000001 got its results.
         if db.query(models.Checklist).count() == 0:
             seed_data = {
                 "recordsNo": "QTS-RKS-HL-CHK-000001",
@@ -241,13 +244,12 @@ def seed_initial_data():
                 "activity": "Stakeout 放樣",
                 "itpIndex": 0,
                 "date": "2024-03-20",
-                "status": "Pass",
+                "status": "Ongoing",
                 "location": "基礎區",
                 "detail_data": json.dumps({
                     "projectTitle": "Hai Long Offshore Wind Farm Project",
-                    "recordsNo": "QTS-RKS-HL-CHK-000001",
                     "packageName": "RKS",
-                    "inspectionDate": "2024-03-20",
+                    "inspectionDate": "",
                     "location": "基礎區",
                     "stage": "Before",
                     "items": [

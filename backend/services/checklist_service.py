@@ -28,6 +28,39 @@ from core import validators
 
 logger = logging.getLogger(__name__)
 
+# Per-inspection fields that Checklist.tsx keeps in detail_data next to the item structure (CHECKLIST-TEMPLATE-CLEAN-2026-001,
+# BACKLOG #22): they describe ONE inspection, never the reusable template. A fresh instance must not inherit them from its
+# template (the form only overrides recordsNo / itr / counts from the row's own columns, so e.g. a 2024 inspectionDate would
+# show up on a new checklist), and a bare template must not keep them as if it had been inspected.
+_PER_INSPECTION_RESET = {"inspectionDate": "", "ncrNo": "", "reInspectionDate": "", "agreementChecked": True,
+                         "passCount": 0, "failCount": 0}
+_PER_INSPECTION_DROP = ("itrId", "itrNumber", "recordsNo", "noiNumber")   # the row's own columns are authoritative
+
+
+def blank_inspection_detail_data(raw):
+    """detail_data with every per-inspection value cleared: the item structure (id / item / criteria) and the template's
+    descriptive fields (activity, location, stage, remarks, ...) are kept; each item's situation / result, the signatures,
+    the inspection / re-inspection dates, NCR no., agreement flag and counts are reset; ITR / NOI / record references are
+    dropped. Unparseable or non-object values are returned unchanged (never guessed at)."""
+    if not raw:
+        return raw
+    try:
+        data = json.loads(raw) if isinstance(raw, str) else dict(raw)
+    except (TypeError, ValueError):
+        return raw
+    if not isinstance(data, dict):
+        return raw
+    out = {k: v for k, v in data.items() if k not in _PER_INSPECTION_DROP}
+    for key, value in _PER_INSPECTION_RESET.items():
+        if key in out:
+            out[key] = value
+    if isinstance(out.get("signatures"), dict):
+        out["signatures"] = {k: "" for k in out["signatures"]}
+    if isinstance(out.get("items"), list):
+        out["items"] = [{**it, "situation": "", "result": ""} if isinstance(it, dict) else it for it in out["items"]]
+    return json.dumps(out, ensure_ascii=False)
+
+
 # A filled-in inspection item result is one of these three markers (see
 # Checklist.tsx's item.result cycle: '' -> 'O' -> 'X' -> '/' -> 'O' ...).
 # An empty/unset item has result == '' (or the key absent entirely).

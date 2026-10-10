@@ -1,0 +1,30 @@
+# CHECKLIST-TEMPLATE-CLEAN-2026-001 — isolated stack acceptance (2026-10-11, backend 8330 / vite 3330; working-tree code)
+Seed: seed_checklist_template_clean_review.py — project CTC-P1, contractor Hailong, user chk_reviewer (checklist + ITR view /
+update), ITR QTS-CTC1-HL-ITR-000001 (In Progress), template "Stakeout (legacy)" (status Pass, passCount 1, items with results,
+2024 date, signatures, old ITR ref) and template "Rebar spacing" (normal template; header date 2025-01-15, signature names).
+The stack's own start ran step 23 on an empty DB (flag set, nothing cleaned); the seed clears the flag and calls the same step
+function, as the first start after deployment would on production.
+
+Findings during the run (fixed in this round):
+1. db_seeder created its default template "QTS-RKS-HL-CHK-000001 Stakeout 放樣" with status Pass and a 2024 inspection date —
+   the origin of production's CHK-000001 — AFTER migrations, so on a fresh DB step 23 had already set its flag. First run:
+   cleanup audits = 2 (the seeder's row + the legacy one). Fixed db_seeder (Ongoing, no date, no recordsNo in detail) +
+   test_seeded_checklist_is_a_clean_template. Second run (re-created stack): cleanup audits = 1 (only the legacy template);
+   the seeder's template is born clean.
+2. link_checklist still copied the template's `date` column, shown as "INSPECTION DATE 2025-01-15" on the ITR's linked-checklist
+   card (and used as the inspection date by ChecklistSnapshotModal). Fixed: date="" on the new instance; test asserts it.
+3. (Seed data only, not product) the seeded ITR lacked description / rev / submit → GET /api/itr/ 500 (response validation);
+   fixed in the seed and in the running test DB.
+
+Checks (Chrome via Claude in Chrome, then the Claude desktop built-in browser at the user's request):
+- Checklist Template Library: 3 templates; "Stakeout (legacy)" opens as a normal "Editing Template" (item + criteria only, no
+  result columns / historical-anomaly view); its 2 items kept (browser-cleaned-legacy-template.jpg).
+- ITR → "+ Checklist" → Rebar spacing: new instance QTS-HL-CHECKLIST-000001, NOT FILLED; card INSPECTION DATE blank
+  (browser-linked-card-no-template-date.jpg).
+- Snapshot editor, General Information: status Ongoing, Inspection Date empty, Location "Grid A–C" and Remark kept from the
+  template (browser-instance-general-info-blank.jpg). Checklist Items: 2 items with criteria, Situation empty, Result "Not
+  filled", Judged 0/2 (browser-instance-items-blank.jpg).
+- DB (read-only): instance status Ongoing, date '', detail inspectionDate '', ncrNo '', reInspectionDate '', agreementChecked
+  true, signatures all '', no itrId / itrNumber / recordsNo / noiNumber keys; template "Rebar spacing" unchanged (2025-01-15,
+  signature names kept).
+No production data used for this part; nothing created outside the isolated DB.

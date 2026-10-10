@@ -26,7 +26,7 @@ from core.utils import (
     WorkflowEngine
 )
 from core.perms import ITR_APPROVE
-from services.checklist_service import _instance_has_historical_evidence, pass_support_problems
+from services.checklist_service import _instance_has_historical_evidence, blank_inspection_detail_data, pass_support_problems
 
 
 def _blanked_item_results(detail_data) -> str:
@@ -1063,14 +1063,16 @@ class ITRService:
                 id=str(uuid.uuid4()),
                 recordsNo=generate_reference_no(self.repo.db, itr_vendor, 'CHECKLIST'),
                 activity=template.activity,
-                date=template.date,
+                date="",                          # the inspection date is entered on the instance (BACKLOG #22)
                 status='Ongoing',                 # fresh — not yet inspected
                 packageName=template.packageName,
                 location=template.location,
                 itpIndex=template.itpIndex,
                 itpId=template.itpId,
                 itpVersion=template.itpVersion,
-                detail_data=template.detail_data,  # blank item structure (copied)
+                # item structure + the template's descriptive fields only — never one inspection's date,
+                # signatures, NCR / re-inspection values or ITR refs (CHECKLIST-TEMPLATE-CLEAN-2026-001, BACKLOG #22)
+                detail_data=blank_inspection_detail_data(template.detail_data),
                 passCount=0,
                 failCount=0,
                 project_id=db_itr.project_id,
