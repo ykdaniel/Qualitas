@@ -1,0 +1,4 @@
+# 2026-10-10T17:47:28Z R2 candidate = git archive HEAD fcc83c62 + G.patch
+tsc --noEmit -p . exit=0
+eslint --max-warnings 0 (4 files) exit=0
+npm run build exit=0

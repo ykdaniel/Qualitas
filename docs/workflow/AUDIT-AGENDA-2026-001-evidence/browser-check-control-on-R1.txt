@@ -1,0 +1,5 @@
+# 2026-10-10T17:45:13Z CONTROL: the R2 agenda check run against the R1 candidate (git archive ff19c25b + G-R1.patch) — the new in-flight-edit check must fail there
+FAIL edit during an in-flight save: still on screen, not in the database, flagged unsaved  -> {"onScreen":"EDITED-DURING-SAVE","storedLocation":"","firstRow":"事前文件審查","unsavedFlag":false}
+PASS control: saving again stores the edit and clears the unsaved flag  -> {"storedLocation":"EDITED-DURING-SAVE"}
+1 FAILED
+exit=1

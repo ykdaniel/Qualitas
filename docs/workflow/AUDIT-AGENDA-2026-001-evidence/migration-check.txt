@@ -1,0 +1,8 @@
+# 2026-10-10T17:26:36Z migration check on a throwaway SQLite (candidate HEAD ff19c25b + G.patch): an existing audits table without the column gets it, existing rows read as an empty agenda, and a second run is a no-op
+使用預設 SECRET_KEY，僅適用於開發環境。
+before: False
+after first run: True type: ['TEXT']
+after second run (no-op, still one column): 1
+existing row agenda value: None
+read schema agenda for the old row: []
+exit=0
