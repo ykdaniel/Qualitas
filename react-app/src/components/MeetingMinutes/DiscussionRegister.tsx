@@ -123,18 +123,17 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
     const startNew = (parent: string | null, kind: EntryKind) =>
         setEdit({ no: null, parent, kind, content: '', owner: '', targetDate: '', raisedDate: meetingDate });
     const categories = log.filter(e => e.kind === 'category');
-    const headings = log.filter(e => !isItem(e));
     /** The heading a row belongs to: itself for a heading, its parent for an item. */
     const headingOf = (no: string) => (isItem(log.find(e => e.no === no) || { no, kind: 'item' }) ? parentOf(no) : no);
-    // default parent: the heading of the last row clicked (a sub-category needs its category), else the last category
-    const parentChoices = (kind: EntryKind) => (kind === 'subcategory' ? categories : headings);
-    const defaultParent = (kind: 'subcategory' | 'item') => {
-        const ctx = contextNo && log.some(e => e.no === contextNo) ? contextNo : null;
-        const wanted = ctx ? (kind === 'subcategory' ? ctx.split('.')[0] : ctx)
-            : categories.length ? categories[categories.length - 1].no : null;
-        // must be one the "Under" list offers (e.g. not a sub-category whose category is missing)
-        const choices = parentChoices(kind);
-        return choices.some(h => h.no === wanted) ? wanted : (choices[0]?.no ?? null);
+    // Two levels only (user, 2026-10-11): new items go straight under a category (x.0 → x.y). Sub-categories of older
+    // meetings stay as they are — shown, their title editable, their x.y.z items editable and carried — but nothing
+    // new is added under them; an item for that topic goes under its category.
+    const parentChoices = (_kind: EntryKind) => categories;
+    // default parent: the category of the row last clicked (or of the row just added), else the last category
+    const defaultParent = () => {
+        const ctx = contextNo && log.some(e => e.no === contextNo) ? contextNo.split('.')[0] : null;
+        const wanted = ctx ?? (categories.length ? categories[categories.length - 1].no : null);
+        return categories.some(h => h.no === wanted) ? wanted : (categories[0]?.no ?? null);
     };
     const apply = () => {
         if (!edit || !edit.content.trim()) return;
@@ -327,7 +326,7 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
                 {isHeading ? (
                     <td style={cell} colSpan={3}>
                         <AutoText style={{ fontWeight: 600 }} value={edit.content} autoFocus
-                            placeholder={t(edit.kind === 'category' ? 'meetingMinutes.categoryPlaceholder' : 'meetingMinutes.subcategoryPlaceholder')}
+                            placeholder={t('meetingMinutes.categoryPlaceholder')}
                             onChange={ev => setEdit({ ...edit, content: ev.target.value })} />
                     </td>
                 ) : (
@@ -368,9 +367,7 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
                 {editable && !edit && (
                     <div data-register-toolbar style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         {addButton(t('meetingMinutes.addCategory'), () => startNew(null, 'category'))}
-                        {addButton(t('meetingMinutes.addSubcategory'), () => startNew(defaultParent('subcategory'), 'subcategory'),
-                            categories.length === 0 ? t('meetingMinutes.needCategoryFirst') : undefined)}
-                        {addButton(t('meetingMinutes.addItem'), () => startNew(defaultParent('item'), 'item'),
+                        {addButton(t('meetingMinutes.addItem'), () => startNew(defaultParent(), 'item'),
                             categories.length === 0 ? t('meetingMinutes.needCategoryFirst') : undefined)}
                     </div>
                 )}

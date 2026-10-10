@@ -82,13 +82,13 @@ await page.waitForTimeout(500);
 const itemTable = () => page.locator('table').first();
 const itemNos = async () => (await itemTable().locator('tbody tr').evaluateAll(trs => trs.map(tr => `${tr.cells[tr.cells.length - 1]?.innerText.split('\n')[0]}#${tr.cells[0]?.innerText.trim()}`)));
 let rowsNow = await itemNos();
-check(rowsNow.length === 6, `1b: six open items from the three meetings (${rowsNow.join(', ')})`);
+check(rowsNow.length === 9, `1b: nine open items from the four meetings (${rowsNow.join(', ')})`);
 check(rowsNow[0].startsWith('MOM-DEMO-002') && rowsNow[1].startsWith('MOM-DEMO-002'), '1b: overdue items first');
 check(await itemTable().locator('[data-overdue]').count() === 2, '1b: the two past-target items marked overdue');
 check(await itemTable().locator('[data-overdue]').first().evaluate(el => getComputedStyle(el).color) === 'rgb(185, 28, 28)', '1b: overdue shown in red');
 await page.getByLabel('Action by').selectOption('TECO');
 await page.waitForTimeout(300);
-check((await itemNos()).length === 3, '1b: filtered by Action by (TECO: 3)');
+check((await itemNos()).length === 4, '1b: filtered by Action by (TECO: 4)');
 await page.getByLabel('Overdue only').check();
 await page.waitForTimeout(300);
 check((await itemNos()).join(',') === 'MOM-DEMO-002 (1.0)#1.1.1', `1b: overdue only (${(await itemNos()).join(',')})`);
@@ -136,8 +136,8 @@ const apply = () => modal().getByRole('button', { name: 'Apply' });
 check(await modal().getByRole('tab', { name: 'Weekly Update' }).count() === 0, '2: one screen, no mode switch');
 check(await modal().getByLabel('Show closed items').isChecked() === false, '2: "Show closed items" unchecked by default');
 const toolbar = () => modal().locator('[data-register-toolbar]');
-// all three add buttons in the toolbar (user: "第一張圖應該放到第二張圖一起"); Sub-category / Item need a category first
-check((await toolbar().getByRole('button').allTextContents()).map(x => x.trim()).join('|') === 'Add Category|Add Sub-category|Add Item', '2: toolbar: Add Category | Add Sub-category | Add Item');
+// two add buttons in the toolbar (user: no sub-categories — category x.0 → item x.y); Add Item needs a category first
+check((await toolbar().getByRole('button').allTextContents()).map(x => x.trim()).join('|') === 'Add Category|Add Item', '2: toolbar: Add Category | Add Item (no Add Sub-category)');
 check(await toolbar().getByRole('button', { name: 'Add Item' }).getAttribute('aria-disabled') === 'true' && await toolbar().getByRole('button', { name: 'Add Item' }).getAttribute('title') === 'Add a category first', '2: with no category, Add Item is disabled and says why');
 // aria-disabled keeps it focusable: from the keyboard it still says why (Playwright refuses to click aria-disabled)
 await toolbar().getByRole('button', { name: 'Add Item' }).focus();
@@ -154,13 +154,9 @@ check(await pendingNo() === '1.0', '2: a new category shows the number it will g
 check(await newRow().locator('textarea').evaluate(el => el === document.activeElement), '2: the new row opens focused');
 await newRow().locator('textarea').fill('Technical Issues');
 await apply().click();
-await toolbar().getByRole('button', { name: 'Add Sub-category' }).click();
-check(await newRow().getByLabel('Under').inputValue() === '1', '2: after adding category 1.0, the next add goes under it by default');
-check(await pendingNo() === '1.1', '2: a new sub-category shows 1.1');
-await newRow().locator('textarea').fill('Civil OB');
-await apply().click();
-await addUnder('1.1', 'Add Item');
-check(await pendingNo() === '1.1.1', '2: a new item under 1.1 shows 1.1.1');
+await toolbar().getByRole('button', { name: 'Add Item' }).click();
+check(await newRow().getByLabel('Under').inputValue() === '1', '2: after adding category 1.0, the next item goes under it by default');
+check(await pendingNo() === '1.1', '2: a new item under 1.0 shows 1.1');
 check(await newRow().isVisible() && await newRow().locator('textarea').count() === 1, '2: a new item opens straight in edit');
 await newRow().locator('textarea').fill('Safety lifeline lacks certificates');
 check(await newRow().locator('input[type=date]').first().inputValue() === '2026-08-11', '2: a new item is raised on the meeting date by default');
@@ -168,27 +164,35 @@ await newRow().getByPlaceholder('Action by').fill('TECO');
 await newRow().getByLabel('Target Date').fill('2026-08-25');
 await apply().click();
 await addUnder('1', 'Add Item');
-check(await pendingNo() === '1.2', '2: a new item directly under 1.0 shows 1.2');
+check(await pendingNo() === '1.2', '2: the next item under 1.0 shows 1.2');
 await newRow().locator('textarea').fill('Direct item under the category');
 await apply().click();
-check((await rowNos()).join(',') === '1,1.1,1.1.1,1.2', `2: register numbered 1 / 1.1 / 1.1.1 / 1.2 (${(await rowNos()).join(',')})`);
-check(await modal().locator('[data-register] tbody').getByRole('button', { name: /^Add / }).count() === 0, '2: no add buttons on the category rows any more');
-await modal().locator('[data-row="1.1.1"] td').first().click();
+check((await rowNos()).join(',') === '1,1.1,1.2', `2: register numbered 1 / 1.1 / 1.2 — two levels (${(await rowNos()).join(',')})`);
+check(await modal().locator('[data-register] tbody').getByRole('button', { name: /^Add / }).count() === 0, '2: no add buttons on the category rows');
+// "Under" lists categories only; the default is the category of the row last clicked
+await modal().getByRole('button', { name: 'Add Category' }).click();
+await newRow().locator('textarea').fill('Safety');
+await apply().click();
+await modal().locator('[data-row="1.1"] td').first().click();
 await toolbar().getByRole('button', { name: 'Add Item' }).click();
-check(await newRow().getByLabel('Under').inputValue() === '1.1' && (await newRow().locator('[data-pending-no]').textContent()).trim() === '1.1.2', '2: Add Item goes under the heading of the row last clicked (1.1 → 1.1.2)');
-await newRow().getByLabel('Under').selectOption('1');
-check((await newRow().locator('[data-pending-no]').textContent()).trim() === '1.3', '2: changing "Under" renumbers the pending row (1 → 1.3)');
+check((await newRow().getByLabel('Under').locator('option').evaluateAll(os => os.map(o => o.value))).join(',') === '1,2', '2: "Under" lists the categories only');
+check(await newRow().getByLabel('Under').inputValue() === '1' && await pendingNo() === '1.3', '2: Add Item goes under the category of the row last clicked (1.1 → 1.3)');
+await newRow().getByLabel('Under').selectOption('2');
+check(await pendingNo() === '2.1', '2: changing "Under" renumbers the pending row (2 → 2.1)');
 await newRow().getByRole('button', { name: 'Cancel' }).click();
+await modal().locator('[data-row="2"]').hover();
+await modal().locator('[data-row="2"]').getByRole('button', { name: 'Delete' }).click();
+check((await rowNos()).join(',') === '1,1.1,1.2', '2: (category 2.0 removed again)');
 check((await modal().locator('[data-row="1"] td').first().textContent()).trim() === '1.0', '2: category shown as 1.0');
 // items read as text; raised date above; one this-week field each; ✏️ / 🗑 per row; status dropdown
-check(await modal().locator('[data-row="1.1.1"] [data-raised]').textContent() === '11 Aug 2026', '2: raised date shown above the item (11 Aug 2026)');
-check(await modal().locator('[data-row="1.1.1"] td').nth(1).locator('textarea').count() === 1, '2: only the this-week field is an input in a resting item');
-check(await modal().locator('[data-row="1.1.1"]').getByRole('button', { name: 'Edit' }).isVisible(), '2: ✏️ on the item');
-check(await modal().locator('[data-row="1.1.1"] [data-this-week]').textContent() === '' && await modal().locator('[data-row="1.1.1"] [data-this-week] textarea').getAttribute('placeholder') === 'Add progress…', '2: no "This week" label; the field says "Add progress…"');
+check(await modal().locator('[data-row="1.1"] [data-raised]').textContent() === '11 Aug 2026', '2: raised date shown above the item (11 Aug 2026)');
+check(await modal().locator('[data-row="1.1"] td').nth(1).locator('textarea').count() === 1, '2: only the this-week field is an input in a resting item');
+check(await modal().locator('[data-row="1.1"]').getByRole('button', { name: 'Edit' }).isVisible(), '2: ✏️ on the item');
+check(await modal().locator('[data-row="1.1"] [data-this-week]').textContent() === '' && await modal().locator('[data-row="1.1"] [data-this-week] textarea').getAttribute('placeholder') === 'Add progress…', '2: no "This week" label; the field says "Add progress…"');
 // ✏️ edits one row in place; ✕ cancels without changing it; ✓ applies
 await modal().locator('[data-row="1.2"]').getByRole('button', { name: 'Edit' }).click();
 check(await modal().locator('[data-register] [data-editing]').count() === 1, '2: only that row is in edit');
-check(await modal().locator('[data-row="1.1.1"]').getByRole('button', { name: 'Edit' }).count() === 0, '2: other rows have no ✏️ while one is open');
+check(await modal().locator('[data-row="1.1"]').getByRole('button', { name: 'Edit' }).count() === 0, '2: other rows have no ✏️ while one is open');
 await modal().locator('[data-row="1.2"] textarea[aria-label="1.2"]').fill('changed then cancelled');
 await modal().locator('[data-row="1.2"]').getByRole('button', { name: 'Cancel' }).click();
 check(await modal().locator('[data-row="1.2"] td').nth(1).textContent().then(t => t.includes('Direct item under the category')), '2: ✕ leaves the row unchanged');
@@ -216,7 +220,7 @@ await modal().locator('[data-row="1.2"]').getByRole('button', { name: 'Edit' }).
 await modal().locator('[data-row="1.2"]').getByLabel('Action by').fill('HL');
 await apply().click();
 check(await modal().locator('[data-row="1.2"] td').nth(2).textContent() === 'HL', '2: ✓ applies the change');
-await modal().locator('[data-row="1.1.1"] [data-this-week] textarea').fill('Drawing 08119 supplemented');
+await modal().locator('[data-row="1.1"] [data-this-week] textarea').fill('Drawing 08119 supplemented');
 // a date picked before any text is kept for the update typed afterwards; spaces alone store nothing
 await modal().locator('[data-row="1.2"] [data-this-week] input[type=date]').fill('2026-08-12');
 check(await modal().locator('[data-row="1.2"] [data-this-week] input[type=date]').inputValue() === '2026-08-12', '2: date picked before typing stays in the field');
@@ -233,7 +237,7 @@ check(calls.length === 0, '2: Save blocked while a new item is typed but not app
 check(await tab('Discussions').getAttribute('aria-selected') === 'true', '2: the form switched to the Discussions tab');
 check(await pendingNo() === '1.3', '2: the next new item shows 1.3');
 await newRow().getByRole('button', { name: 'Cancel' }).click();
-check(await newRow().count() === 0 && (await rowNos()).join(',') === '1,1.1,1.1.1,1.2', '2: ✕ on a new row adds nothing');
+check(await newRow().count() === 0 && (await rowNos()).join(',') === '1,1.1,1.2', '2: ✕ on a new row adds nothing');
 await addUnder('1', 'Add Item');
 check(await pendingNo() === '1.3', '2: after ✕ the same number is offered again (nothing consumed)');
 await newRow().getByRole('button', { name: 'Cancel' }).click();
@@ -245,7 +249,7 @@ const dialogs = [];
 page.once('dialog', d => dialogs.push(d.message()));
 await modal().locator('[data-row="1.2"]').getByRole('button', { name: 'Delete' }).click();
 check(dialogs[0] === 'Delete 1.2?', `2: deleting an item asks about that item only (${dialogs[0]})`);
-check((await rowNos()).join(',') === '1,1.1,1.1.1', '2: 🗑 (confirmed) removes the row');
+check((await rowNos()).join(',') === '1,1.1', '2: 🗑 (confirmed) removes the row');
 await modal().getByRole('button', { name: 'Add Category' }).click();
 check(await pendingNo() === '2.0', '2: after deleting, the next category is 2.0 (no gap)');
 await newRow().getByRole('button', { name: 'Cancel' }).click();
@@ -258,10 +262,41 @@ let m2 = (await meetings()).find(m => m.title === T2);
 check(!!m2, '2: meeting saved');
 check(m2.meetingEndTime === '17:15' && m2.meetingTime === '15:00', '2: start and end time stored');
 check(m2.attendees[0].company === 'TECO' && m2.attendees[0].role === 'QAQC Manager', '2: attendee by Company / Name / Position');
-check(m2.discussionLog.map(e => `${e.no}:${e.kind}`).join(',') === '1:category,1.1:subcategory,1.1.1:item', '2: stored register shape');
-const it = m2.discussionLog.find(e => e.no === '1.1.1');
+check(m2.discussionLog.map(e => `${e.no}:${e.kind}`).join(',') === '1:category,1.1:item', '2: stored register shape');
+const it = m2.discussionLog.find(e => e.no === '1.1');
 check(it.owner === 'TECO' && it.targetDate === '2026-08-25' && it.raisedDate === '2026-08-11' && it.updates.length === 1 && it.updates[0].content === 'Drawing 08119 supplemented' && it.updates[0].date === '2026-08-11', '2: item fields, raised date and this week\'s update dated with the meeting date');
 check(!JSON.stringify(m2.discussionLog).includes('typed, not applied'), '2: the cancelled new row was not stored');
+
+// ═══ 2b. an older three-level Draft (sub-category 1.1 → 1.1.1): shown and editable as is, nothing new under the sub-category ═══
+log('=== 2b. three-level Draft ===');
+const three = await api('POST', '/api/meeting-minutes/', { status: 'Draft', title: 'MTB three-level', vendor: 'Hailong Construction', discussionLog: [
+    { no: '1', kind: 'category', level: 0, content: 'Tech' }, { no: '1.1', kind: 'subcategory', level: 1, content: 'Civil OB' },
+    { no: '1.1.1', kind: 'item', level: 2, content: 'old item', status: 'Open', owner: 'TECO' }] });
+check(three.status === 200, '2b: a three-level Draft');
+await openRow('MTB three-level');
+await tab('Discussions').click();
+check((await rowNos()).join(',') === '1,1.1,1.1.1', '2b: the sub-category and its item are shown');
+await modal().locator('[data-row="1.1"]').hover();
+await modal().locator('[data-row="1.1"]').getByRole('button', { name: 'Edit' }).click();
+await modal().locator('textarea[aria-label="1.1"]').fill('Civil OB (renamed)');
+await modal().getByRole('button', { name: 'Apply' }).click();
+await modal().locator('[data-row="1.1.1"] [data-this-week] textarea').fill('progress on the old item');
+await modal().locator('[data-row="1.1.1"] td').first().click();
+await modal().locator('[data-register-toolbar]').getByRole('button', { name: 'Add Item' }).click();
+check((await modal().locator('[data-row="new"]').getByLabel('Under').locator('option').evaluateAll(os => os.map(o => o.value))).join(',') === '1'
+    && (await modal().locator('[data-row="new"] [data-pending-no]').textContent()).trim() === '1.2', '2b: a new item goes under the category (1.2), not under the old sub-category');
+await modal().locator('[data-row="new"] textarea').fill('new two-level item');
+await modal().getByRole('button', { name: 'Apply' }).click();
+await saveBtn().click();
+await page.waitForTimeout(1500);
+const threeSaved = (await meetings()).find(m => m.title === 'MTB three-level').discussionLog;
+check(threeSaved.map(e => `${e.no}:${e.kind}`).join(',') === '1:category,1.1:subcategory,1.1.1:item,1.2:item'
+    && threeSaved[1].content === 'Civil OB (renamed)' && threeSaved[2].updates[0].content === 'progress on the old item', '2b: stored as is plus the new item; the old title and item stay editable');
+
+// New Occurrence of the two-level demo carries its open items as two levels
+const demo4 = (await meetings()).find(m => m.documentNumber === 'MOM-DEMO-004');
+const occ4 = await api('POST', `/api/meeting-minutes/${demo4.id}/new-occurrence`);
+check(occ4.status === 200 && occ4.body.discussionLog.map(e => `${e.no}:${e.kind}`).join(',') === '1:category,1.1:item,1.2:item,2:category,2.1:item', '2b: New Occurrence of a two-level meeting carries x.0 / x.y');
 
 // ═══ 3. legacy two-level Draft: reads as categories + items; Save writes it back in the new shape ═══
 log('=== 3. legacy format Draft ===');

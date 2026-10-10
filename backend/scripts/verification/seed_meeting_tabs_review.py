@@ -13,6 +13,8 @@ the user can look at in the new tabbed form:
     2.0 Safety > 2.1 item (Open), attendees by Company / Name / Position, venue, 15:00 ~ 17:15, recorded by.
     "New Occurrence" on it shows the carry-forward of unfinished items.
   * MOM-DEMO-003 rev 1.0 "Monthly (legacy, published)" — Published, old two-level shape: how locked legacy records read.
+  * MOM-DEMO-004 rev 1.0 "Meeting Minutes - 112 (two levels)" — Draft in the current two-level format (category x.0 →
+    item x.y, no sub-categories; user decision 2026-10-11), with raised dates, a progress update and Action by.
 """
 import os
 from core.startup_guard import guard_if_required
@@ -86,6 +88,17 @@ REGISTER = [
     {"no": "2.1", "kind": "item", "level": 1, "owner": "HL - Breeze", "targetDate": "2026-08-08", "status": "Open", "raisedDate": "2026-07-28",
      "content": "高架作業平台每日點檢紀錄缺漏，請補齊。", "updates": []},
 ]
+TWO_LEVEL = [
+    {"no": "1", "kind": "category", "level": 0, "content": "技術議題 Technical Issues"},
+    {"no": "1.1", "kind": "item", "level": 1, "raisedDate": "2026-08-04", "owner": "TECO", "targetDate": "2026-11-15", "status": "Open",
+     "content": "CVL-00212 屋頂女兒牆防水收頭需補施作詳圖。\nTECO to submit the parapet waterproofing termination detail.",
+     "updates": [{"date": "2026-08-11", "content": "TECO 已提送詳圖初稿，待業主確認。\nDraft detail submitted; awaiting the Employer's comments."}]},
+    {"no": "1.2", "kind": "item", "level": 1, "raisedDate": "2026-08-11", "owner": "HL - Dennis", "targetDate": "2026-11-20", "status": "Open",
+     "content": "機電管線穿樑開孔位置需與結構圖核對。", "updates": []},
+    {"no": "2", "kind": "category", "level": 0, "content": "安全議題 Safety"},
+    {"no": "2.1", "kind": "item", "level": 1, "raisedDate": "2026-08-11", "owner": "HL - Breeze", "targetDate": "2026-11-30", "status": "Open",
+     "content": "外架護欄缺口，請於下週前補齊。", "updates": []},
+]
 now = datetime.now().isoformat()
 
 
@@ -104,6 +117,8 @@ meeting("MOM-DEMO-002", "Meeting Minutes - 111", "Published", REGISTER, meetingT
         location="HL Office Meeting Room", organizer="Daniel Huang", attendees=ATTENDEES)
 meeting("MOM-DEMO-003", "Monthly (legacy, published)", "Published", LEGACY, meetingType="月會", meetingDate="2026-07-01",
         location="Site Office", organizer="Daniel Huang", attendees=ATTENDEES[3:])
+meeting("MOM-DEMO-004", "Meeting Minutes - 112 (two levels)", "Draft", TWO_LEVEL, meetingDate="2026-08-11", meetingTime="15:00",
+        meetingEndTime="16:30", location="HL Office Meeting Room", organizer="Daniel Huang", attendees=ATTENDEES)
 d.commit()
 print("seeded: mtg_reviewer, contractor Hailong Construction, MOM-DEMO-001 (legacy Draft), MOM-DEMO-002 (Published register), "
-      "MOM-DEMO-003 (legacy Published)")
+      "MOM-DEMO-003 (legacy Published), MOM-DEMO-004 (two-level Draft)")
