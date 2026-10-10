@@ -1,6 +1,6 @@
-# MEETING-TABS-2026-001 — STATUS（R2，獨立審查 PASS）
+# MEETING-TABS-2026-001 — STATUS（R3，獨立審查 PASS）
 
-TASK_ID: MEETING-TABS-2026-001 · ROUND: R2 · 本地提交，未推送、未部署。基準：MEETING-FIX 提交後的 HEAD。
+TASK_ID: MEETING-TABS-2026-001 · ROUND: R3 · 本地提交（R1/R2：ff8c6481／0d6a09bc；R3 接其後），未推送、未部署。基準：MEETING-FIX 提交後的 HEAD。
 
 ## 修改
 | 檔案 | 內容 |
@@ -30,6 +30,20 @@ TASK_ID: MEETING-TABS-2026-001 · ROUND: R2 · 本地提交，未推送、未部
 - 驗證：後端 46 passed；`npm test` 154 passed／0（新增 3 項邊界）；tsc 乾淨；隔離環境 `meeting-print-orientation-check.mjs` **8/8**（先載入 ITP 的橫式 @page 再列印：PDF 3 頁＝直、橫、橫，5 張照片依上傳順序且全部載入，`print-a4-with-photos.pdf`）、`meeting-tabs-review.mjs` **49/49**、MEETING-FIX 回歸 **39/39**。
 
 - R2 審查 PASS 後：照片頁高度依建議 186mm → 184mm，列印檢查重跑 8/8。
+
+## R3（使用者在隔離環境 3360 試用後，經協調中心轉達，2026-10-11）
+- 使用者原話：「我會議記錄例 會有起始日期 每週的日期記錄更新內容」；看編輯畫面後覺得「太混亂」，選定「本週更新／編輯結構」兩種模式。本工作階段向使用者確認：起始日期放事項本文上方；日期格式「21 Jul 2026」。會議記錄沒有 Word 匯出（只有列印），本輪只改列印。
+- 事項加 `raisedDate`（存在 discussionLog JSON，不改 schema）：新事項預設本次會議日期，舊資料空白；下次會議帶入時保留（後端 carry_forward 加 raisedDate）。
+- `DiscussionRegister.tsx` 改兩種模式：
+  - 本週更新（預設）：只列開啟表單時的未結事項（本週改成已結的仍留在畫面上直到關閉）；事項本文唯讀，上方起始日期；以前的更新「日期＋內容」灰字；每項一個「本週」欄（日期預設會議日、可改），直接寫入本次會議那一筆更新，清空即移除，存檔才寫入；狀態下拉。
+  - 編輯結構：新增／刪除大類、子類、事項，修改內容、Action by、目標日期、起始日期、狀態；進行中／已結案／全部篩選；新增列。帶入列內文唯讀、不可刪。
+  - 已發布／作廢：兩種模式都唯讀（模式與篩選鈕可切換）。
+  - 原本的「新增進度」按鈕與 updateDrafts 機制移除（本週更新直接存在 discussionLog，離開提醒自然涵蓋）。
+- `discussionLog.ts`：`currentUpdateIndex`／`setCurrentUpdate`（本次會議那一筆，不動帶入的）、`formatMinutesDate`（YYYY-MM-DD → 21 Jul 2026，其他原樣）。
+- 列印：起始日期在事項本文上方；會議日期、起始日期、進度日期、目標日期、簽核日期改「21 Jul 2026」；列表的會議日期欄同樣格式。
+- 新鍵（中英）：modeWeekly、modeStructure、thisWeek、raisedDate、weeklyEmpty。LanguageContext 工作樹另有 Audit 未提交的 2 行（audit.wizard.stepAgenda），提交時只 stage 本輪的 10 行。
+- R3 審查 PASS 後依建議再修 4 點：本週欄先選日期再打字時保留所選日期；只有空白不建立／清成空白即移除；在編輯結構刪除重編號時，本週模式的「開啟時未結」清單與暫存日期跟著改編號；有輸入的新增列切回本週模式前先確認（新鍵 discardNewRow 中英）。同一事項多筆本次（非帶入）更新只會出現在 R2 版存的資料，R2 版未上線正式站，不處理。
+- 驗證（最終）：後端 46 passed（帶入保留 raisedDate）；`npm test` 156 passed／0；tsc 乾淨；隔離環境 8344／3344：分頁 **64/64**（含兩種模式、起始日期預設、本週欄、先選日期再打字、只有空白不存、帶入後結構模式唯讀）、列印方向 **8/8**、MEETING-FIX 回歸 **39/39**，皆已 down。
 
 ## 舊資料會不會被改寫
 讀取時一律在前端轉成新格式（不改資料庫）。舊格式**草稿**開啟後按儲存，會以新格式寫回（內容、狀態、負責人不變，已實測）；已發布／作廢紀錄鎖定、不會被改寫（實測儲存按鈕不存在、資料庫內容不變）。後端帶入也讀舊格式。
