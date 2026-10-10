@@ -1,0 +1,25 @@
+# 2026-10-10T18:56:52Z AGENDA final candidate: backend = copy of the hub's CHECKLIST-TEMPLATE-CLEAN final-after-audit-print/backend + agenda backend hunks; frontend = copy of AUDIT-PRINT cand-final-4bdc49ec/react-app (live index a9ddbeff) + agenda frontend hunks; G.patch 9d3a1c56
+## backend files differing from the hub base
+Files HUB/db_migrations.py and FINAL/backend/db_migrations.py differ
+Files HUB/models.py and FINAL/backend/models.py differ
+Files HUB/schemas.py and FINAL/backend/schemas.py differ
+Only in FINAL/backend/scripts/verification: seed_audit_agenda_review.py
+Files HUB/services/audit_service.py and FINAL/backend/services/audit_service.py differ
+Only in FINAL/backend/tests: test_audit_agenda_http.py
+## db_migrations.py diff vs hub base (expect the one agenda line)
+688a689
+>             _add_column_if_missing(conn, "audits", "agenda", "TEXT")  # AUDIT-AGENDA-2026-001
+## frontend files differing from the AUDIT-PRINT live candidate
+Files PRINT/react-app/src/components/Audit/Audit.print.css and FINAL/react-app/src/components/Audit/Audit.print.css differ
+Only in FINAL/react-app/src/components/Audit: AuditAgendaEditor.tsx
+Files PRINT/react-app/src/components/Audit/AuditPrintTemplate.tsx and FINAL/react-app/src/components/Audit/AuditPrintTemplate.tsx differ
+Files PRINT/react-app/src/components/Audit/AuditWizard.tsx and FINAL/react-app/src/components/Audit/AuditWizard.tsx differ
+Files PRINT/react-app/src/context/LanguageContext.tsx and FINAL/react-app/src/context/LanguageContext.tsx differ
+Files PRINT/react-app/src/store/auditStore.ts and FINAL/react-app/src/store/auditStore.ts differ
+Only in FINAL/react-app/tests-browser: audit-agenda-check.mjs
+Files PRINT/react-app/tests-browser/audit-export-docx-check.mjs and FINAL/react-app/tests-browser/audit-export-docx-check.mjs differ
+Files PRINT/react-app/tests-browser/audit-ime-enter-check.mjs and FINAL/react-app/tests-browser/audit-ime-enter-check.mjs differ
+Files PRINT/react-app/tests-browser/audit-layout-check.mjs and FINAL/react-app/tests-browser/audit-layout-check.mjs differ
+Files PRINT/react-app/tests-browser/audit-polish-check.mjs and FINAL/react-app/tests-browser/audit-polish-check.mjs differ
+Files PRINT/react-app/tests-browser/audit-print-template-check.mjs and FINAL/react-app/tests-browser/audit-print-template-check.mjs differ
+Files PRINT/react-app/tests-browser/audit-smoke-all.mjs and FINAL/react-app/tests-browser/audit-smoke-all.mjs differ

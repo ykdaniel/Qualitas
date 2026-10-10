@@ -70,3 +70,40 @@ ROUND: R2（R1 審查 REVISE，原文留存於 `AUDIT-AGENDA-2026-001-R1-REVISE-
 ## 未做／限制
 - Python 3.11 完整測試還沒跑：AUDIT-PRINT 的 3.11 正在跑，同時跑兩個會互相拖慢。會在最終候選上執行，而且必須全數通過才能部署。
 - 部署需要 migration 和後端重建（sudo），也要切換前端。排在協調中心佇列第 4。
+
+## 上線紀錄（2026-10-10）
+- **授權**：審查 R2 PASS，最終候選的 3.11 全數通過，符合「PASS 後部署」的常設授權。協調中心「登入測試」把本輪排到佇列第 1，並確認可以套用。
+- **提交**：本地提交 `dfaa5700`（程式）、`8681c648`（文件）。部署紀錄另作一個提交。推送由協調中心處理。
+- **最終候選**（`final-candidate-composition.txt`）：
+  - 後端：取協調中心 CHECKLIST-TEMPLATE-CLEAN 上線後的版本（4bdc49ec、AUDIT-PRINT 的 audit_service、CHECKLIST 的 4 個檔），加上 AGENDA 的後端修改。`db_migrations.py` 只比協調中心的 `b9d9699f` 多 1 行。
+  - 前端：取 AUDIT-PRINT 上線的版本（index `a9ddbeff`），加上 AGENDA 的前端修改。其他工作階段尚未上線的 ITR 前端修改不在其中。
+  - G.patch（`9d3a1c56`）能乾淨套用。
+  - 檢查結果：tsc、build 正常；相關後端測試 103 passed；7 支瀏覽器腳本都在全新 stack 上通過（`browser-check-final-candidate.txt`）。
+  - **Python 3.11：2425 passed、16 skipped、0 failed**，exit 0，時間 20:31–21:22Z，同時段沒有其他 3.11 在跑（`py311-full-suite-final.txt`）。
+- **NAS** `~/deploy-audit-agenda-20261010T212322Z`：
+  - prep 確認：線上 4 個後端檔等於 CHECKLIST 上線後的版本，線上 index 是 `a9ddbeff`。
+  - 資料庫線上備份 integrity 為 ok（`d7e25596…`），當時 `audits.agenda` 欄位不存在。
+  - 已保存 `backend-old/`（4 個檔）與舊 index。暫存檔逐一核對通過（`nas-prep-output.txt`）。
+  - 第 165 次啟動（20:44:30Z）是使用者把 CHECKLIST 的重建指令多跑了一次，協調中心已確認，不影響本輪。
+- **後端**：
+  - apply-backend：`APPLIED: live backend source == audit-agenda overlay (4 files)`。
+  - 第一次「跑完了」其實沒有重建（啟動次數仍是 165，欄位仍為 0），所以沒有切換前端。協調中心改從它的終端機分頁送出指令，由使用者本人輸入 sudo，這次成功。
+  - 回退映像：`qualitas-backend:pre-audit-agenda-20261010T212322Z`。
+  - 第 166 次啟動在 2026-10-10 21:33:37Z：已自動備份 `qualitas_20261010_213337.db`、migration 完成、權限同步 72 項、scheduler 啟動，沒有 ERROR／Traceback／ABORTED。
+  - `audits.agenda` 欄位已建立。既有的 3 筆稽核 agenda 都是 NULL，讀取時為空行程（`backend-startup-check.txt`）。
+- **前端**：21:34Z 先新增 68 個資產（另有 37 個已存在），再原子替換 `index.html`。dist 的 inode 沒變，106 個候選檔全部上線（`apply-frontend-output.txt`）。
+- **對外核對**（`post-deploy-http-check.txt`）：
+  - `/`、`/index.html` 回 200，雜湊 `d81c22c6…`，等於候選。
+  - 主 bundle 回 200，含 14 個 `audit.agenda.*` 字串。
+  - Audit chunk js 回 200，含 `data-agenda-table`、`audit.wizard.stepAgenda`、`agenda-items`；Audit css 回 200，含 `agenda-items`。
+  - AUDIT-PRINT 那一版的主 bundle 仍是 200。
+  - 未登入時，`/api/user/profile` 和 `/api/audit/<id>/export-docx` 都回 401。
+- **回退方式**：
+  - 前端：`rollback-frontend.sh`，換回 `a9ddbeff` 的 index。
+  - 後端：`rollback-backend-code.sh` 後重建，或改用 pre-audit-agenda 映像。
+  - 新增的 `audits.agenda` 欄位會留著，舊版程式不會讀取。
+- **未完成**：登入後的冒煙測試由使用者執行。精靈應為 5 步，第 3 步是「稽核行程」：
+  1. 新增 2 列並儲存，確認依時間排序。
+  2. 按「列印稽核計畫」，確認第 4 段是行程。
+  3. 匯出 Word，確認也有行程。
+  這些步驟會在正式資料上建立行程；也可以只開啟測試稽核 QTS-RKS-NA-AUD-000001 檢查。

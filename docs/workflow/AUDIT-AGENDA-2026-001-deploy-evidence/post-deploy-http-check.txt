@@ -1,0 +1,10 @@
+# 2026-10-10T21:34:06Z external checks
+/ 200
+/index.html 200
+/api/user/profile 401
+/api/audit/x/export-docx 401
+index d81c22c66b13a6b279d0c1db457f5662b1a71b45dc147f45179722b1823a211f (candidate d81c22c6…)
+main bundle assets/index-yj1aaKSQ.js 200; i18n audit.agenda keys in it: 14
+assets/Audit-BJInULx9.js 200 data-agenda-table:1 stepAgenda:1 agenda-items:1
+assets/Audit-BVWdTWa1.css 200 data-agenda-table:0 stepAgenda:0 agenda-items:1
+previous (AUDIT-PRINT) main bundle still served: 200
