@@ -17,7 +17,7 @@ import api from '../../services/api';
 import type { MeetingMinutesItem, Attendee, DiscussionLogEntry } from '../../store/meetingMinutesStore';
 import FileAttachment from '../Shared/FileAttachment';
 import { BackButton } from '../ui/BackButton';
-import DiscussionRegister, { type RegisterAdder, type UpdateDrafts } from './DiscussionRegister';
+import DiscussionRegister, { type RegisterAdder } from './DiscussionRegister';
 import { normalizeDiscussionLog, openItemCount } from './discussionLog';
 import ImagePreviewOverlay from '../Shared/ImagePreviewOverlay';
 import MeetingMinutesPrintTemplate from './MeetingMinutesPrintTemplate';
@@ -131,7 +131,6 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
     // Read in the current register shape whatever was stored (legacy two-level rows included — see discussionLog.ts).
     const [discussionLog, setDiscussionLog] = useState<DiscussionLogEntry[]>(() => normalizeDiscussionLog(existingItem?.discussionLog));
     const [registerAdder, setRegisterAdder] = useState<RegisterAdder | null>(null);
-    const [updateDrafts, setUpdateDrafts] = useState<UpdateDrafts>({});
     const [activeTab, setActiveTab] = useState<MeetingTab>('general');
 
     // Action items: a brand-new meeting has no documentNumber yet, so drafts
@@ -169,10 +168,10 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
     // Set while a save stored the meeting but left steps unfinished; cleared by the next save.
     const [incompleteNotice, setIncompleteNotice] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
-    // An add-row or progress update opened but left blank is not unsaved input (same rule as the Save check below).
+    // An add-row opened but left blank is not unsaved input (same rule as the Save check below). This week's updates
+    // are written straight into discussionLog, so they are covered by it.
     const typedAdder = registerAdder && (registerAdder.content.trim() || registerAdder.owner.trim() || registerAdder.targetDate || registerAdder.status !== 'Open') ? registerAdder : null;
-    const typedUpdates = Object.fromEntries(Object.entries(updateDrafts).filter(([, d]) => d.content.trim()));
-    const leaveGuard = useDraftGuard({ formData, attendees, newAttendee, discussionLog, typedAdder, typedUpdates, actionItemsDraft, newAction, pendingFiles }, saving || spawningOccurrence, !readOnly);
+    const leaveGuard = useDraftGuard({ formData, attendees, newAttendee, discussionLog, typedAdder, actionItemsDraft, newAction, pendingFiles }, saving || spawningOccurrence, !readOnly);
     const requestClose = () => leaveGuard.requestClose(onClose);
 
     const handleFieldChange = (field: keyof typeof formData, value: string) => {
@@ -232,7 +231,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
     // count as unconfirmed input — only an explicit change away from it does.
     const isAttendeeDraftDirty = () =>
         !!(newAttendee.name.trim() || newAttendee.company.trim() || newAttendee.role.trim());
-    const isRegisterDraftDirty = () => !!typedAdder || Object.keys(typedUpdates).length > 0;
+    const isRegisterDraftDirty = () => !!typedAdder;
     const isActionDraftDirty = () =>
         !!(newAction.title.trim() || newAction.description.trim() || newAction.assignedTo.trim() ||
             newAction.assignedToUserId != null || newAction.dueDate.trim() || newAction.priority.trim());
@@ -558,11 +557,9 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                                     log={discussionLog}
                                     onChange={setDiscussionLog}
                                     readOnly={readOnly}
-                                    defaultUpdateDate={formData.meetingDate || todayStr()}
+                                    meetingDate={formData.meetingDate || todayStr()}
                                     adder={registerAdder}
                                     setAdder={setRegisterAdder}
-                                    updateDrafts={updateDrafts}
-                                    setUpdateDrafts={setUpdateDrafts}
                                     peopleListId="meeting-attendee-people"
                                 />
                             </div>

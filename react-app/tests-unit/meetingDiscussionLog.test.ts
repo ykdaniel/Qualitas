@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
     compareNo, normalizeDiscussionLog, nextNo, addEntry, removeEntry, removeEntryWithMap, renumber, displayNo, canRemove,
-    addUpdate, removeUpdate, openItemCount, headingsOf,
+    addUpdate, removeUpdate, openItemCount, headingsOf, currentUpdateIndex, setCurrentUpdate, formatMinutesDate,
 } from '../src/components/MeetingMinutes/discussionLog.ts';
 
 test('compareNo is tree order', () => {
@@ -113,4 +113,30 @@ test('a register with an orphan row or a duplicate number is not renumbered (not
         { no: '4', kind: 'category', content: 'x' }, { no: '4', kind: 'category', content: 'y' }, { no: '4.1', kind: 'item', content: 'z' },
     ]);
     assert.equal(renumber(dup).length, 3);
+});
+
+test("this week's update: created on first text, edited in place, removed when emptied; carried updates untouched", () => {
+    const base = normalizeDiscussionLog([{ no: '1.1', kind: 'item', content: 'x', raisedDate: '2026-07-14',
+        updates: [{ date: '2026-07-21', content: 'old', carried: true }] }]);
+    assert.equal(base[0].raisedDate, '2026-07-14');
+    assert.equal(currentUpdateIndex(base[0]), -1);
+    assert.deepEqual(setCurrentUpdate(base, '1.1', { date: '2026-07-30' }, '2026-07-28')[0].updates?.length, 1);   // a date alone creates nothing
+    let log = setCurrentUpdate(base, '1.1', { content: 'n' }, '2026-07-28');
+    assert.deepEqual(log[0].updates?.[1], { date: '2026-07-28', content: 'n' });                               // dated with the meeting
+    log = setCurrentUpdate(log, '1.1', { content: 'new text', date: '2026-07-29' }, '2026-07-28');
+    assert.deepEqual(log[0].updates?.map(u => u.content), ['old', 'new text']);
+    assert.equal(log[0].updates?.[1].date, '2026-07-29');
+    assert.equal(setCurrentUpdate(base, '1.1', { content: '  ' }, '2026-07-28')[0].updates?.length, 1);        // spaces only: nothing created
+    assert.equal(setCurrentUpdate(log, '1.1', { content: '   ' }, '2026-07-28')[0].updates?.length, 1);        // emptied to spaces: removed
+    log = setCurrentUpdate(log, '1.1', { content: '' }, '2026-07-28');
+    assert.deepEqual(log[0].updates, [{ date: '2026-07-21', content: 'old', carried: true }]);
+});
+
+test('formatMinutesDate gives the company format; anything else is returned as-is', () => {
+    assert.equal(formatMinutesDate('2026-07-21'), '21 Jul 2026');
+    assert.equal(formatMinutesDate('2026-12-01'), '1 Dec 2026');
+    assert.equal(formatMinutesDate(''), '');
+    assert.equal(formatMinutesDate(undefined), '');
+    assert.equal(formatMinutesDate('2026-13-01'), '2026-13-01');
+    assert.equal(formatMinutesDate('next week'), 'next week');
 });

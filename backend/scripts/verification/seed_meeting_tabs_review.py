@@ -9,7 +9,7 @@ the user can look at in the new tabbed form:
     `kind`, level 0 topics / level 1 sub-items, one Closed), as meetings saved before this task are stored. Opening
     and saving it writes it back in the new shape.
   * MOM-DEMO-002 rev 1.0 "Meeting Minutes - 111" — Published, laid out like the company's minutes: 1.0 Technical
-    Issues > 1.1 Civil OB > 1.1.1 safety-lifeline item (Open, with a dated progress update) and 1.1.2 (Closed),
+    Issues > 1.1 Civil OB > 1.1.1 safety-lifeline item (raised 14 Jul, Open, with a dated progress update) and 1.1.2 (Closed),
     2.0 Safety > 2.1 item (Open), attendees by Company / Name / Position, venue, 15:00 ~ 17:15, recorded by.
     "New Occurrence" on it shows the carry-forward of unfinished items.
   * MOM-DEMO-003 rev 1.0 "Monthly (legacy, published)" — Published, old two-level shape: how locked legacy records read.
@@ -73,7 +73,7 @@ LEGACY = [
 REGISTER = [
     {"no": "1", "kind": "category", "level": 0, "content": "技術議題 Technical Issues"},
     {"no": "1.1", "kind": "subcategory", "level": 1, "content": "土木觀察事項 Civil OB"},
-    {"no": "1.1.1", "kind": "item", "level": 2, "owner": "TECO", "targetDate": "2026-08-15", "status": "Open",
+    {"no": "1.1.1", "kind": "item", "level": 2, "owner": "TECO", "targetDate": "2026-08-15", "status": "Open", "raisedDate": "2026-07-14",
      "content": "CVL-00209_ONS 屋頂之安全母索缺少相關設計文件及合格／認證證明。業主要求 TECO 提供安全母索相關材料證明文件 (Hailong - Voon)\n"
                 "The safety lifeline on the ONS roof lacks the relevant design documentation and qualification/certification proof. "
                 "The Employer requested that TECO provide material certification documents for the safety lifeline. (Raised by Hailong - Voon)",
@@ -83,7 +83,7 @@ REGISTER = [
     {"no": "1.1.2", "kind": "item", "level": 2, "owner": "HL", "targetDate": "2026-07-31", "status": "Closed",
      "content": "CVL-00205 模板支撐間距已改善並複驗合格。", "updates": []},
     {"no": "2", "kind": "category", "level": 0, "content": "安全議題 Safety"},
-    {"no": "2.1", "kind": "item", "level": 1, "owner": "HL - Breeze", "targetDate": "2026-08-08", "status": "Open",
+    {"no": "2.1", "kind": "item", "level": 1, "owner": "HL - Breeze", "targetDate": "2026-08-08", "status": "Open", "raisedDate": "2026-07-28",
      "content": "高架作業平台每日點檢紀錄缺漏，請補齊。", "updates": []},
 ]
 now = datetime.now().isoformat()

@@ -1,7 +1,7 @@
 import React from 'react';
 import { val, SignCell } from '../Shared/PrintPrimitives';
 import type { Attendee, DiscussionLogEntry } from '../../store/meetingMinutesStore';
-import { displayNo, isItem, normalizeDiscussionLog } from './discussionLog';
+import { displayNo, formatMinutesDate, isItem, normalizeDiscussionLog } from './discussionLog';
 
 /**
  * Meeting Minutes print report — bilingual, lightweight sibling of the
@@ -74,7 +74,7 @@ const MeetingMinutesPrintTemplate: React.FC<MeetingMinutesPrintTemplateProps> = 
                                     </tr>
                                     <tr>
                                         <td className="lbl">日期／類型<small>DATE / TYPE</small></td>
-                                        <td className="val center" colSpan={2}>{val([data.meetingDate, data.meetingType].filter(Boolean).join('　'))}</td>
+                                        <td className="val center" colSpan={2}>{val([formatMinutesDate(data.meetingDate), data.meetingType].filter(Boolean).join('　'))}</td>
                                         <td className="lbl">廠商<small>CONTRACTOR</small></td>
                                         <td className="val center">{val(data.vendor)}</td>
                                     </tr>
@@ -121,17 +121,18 @@ const MeetingMinutesPrintTemplate: React.FC<MeetingMinutesPrintTemplateProps> = 
                                             <tr key={e.no}>
                                                 <td>{e.no}</td>
                                                 <td>
+                                                    {e.raisedDate && <div className="raised-date">{formatMinutesDate(e.raisedDate)}</div>}
                                                     <div style={{ whiteSpace: 'pre-wrap' }}>{val(e.content)}</div>
                                                     {(e.updates || []).map((u, i) => (
                                                         <div key={i} className={u.carried ? 'update carried' : 'update'}>
-                                                            {u.date && <div className="update-date">{u.date}</div>}
+                                                            {u.date && <div className="update-date">{formatMinutesDate(u.date)}</div>}
                                                             <div className="update-text">{u.content}</div>
                                                         </div>
                                                     ))}
                                                 </td>
                                                 <td>{val(e.owner)}</td>
                                                 <td>
-                                                    {e.targetDate && <div>{e.targetDate}</div>}
+                                                    {e.targetDate && <div>{formatMinutesDate(e.targetDate)}</div>}
                                                     <div>{e.status === 'Closed' ? 'Closed' : 'Open'}</div>
                                                 </td>
                                             </tr>
@@ -169,7 +170,7 @@ const MeetingMinutesPrintTemplate: React.FC<MeetingMinutesPrintTemplateProps> = 
                             {/* ===== 4 簽核 ===== */}
                             <div className="sec-head">4. 簽核 <span className="en">Sign-off</span></div>
                             <div className="sign-grid">
-                                <SignCell num="4.1" zh="記錄人" en="Recorded By" name={data.organizer} date={data.meetingDate} />
+                                <SignCell num="4.1" zh="記錄人" en="Recorded By" name={data.organizer} date={formatMinutesDate(data.meetingDate)} />
                                 <SignCell num="4.2" zh="廠商代表" en="Contractor Rep." name={data.vendor} />
                             </div>
 

@@ -81,6 +81,7 @@ def carry_forward_discussion_log(raw) -> Optional[str]:
         row = {'no': no, 'kind': kind, 'level': no.count('.'), 'content': content, 'carried': True}
         if kind == 'item':
             row.update({
+                'raisedDate': e.get('raisedDate') or '',
                 'owner': e.get('owner') or '',
                 'targetDate': e.get('targetDate') or '',
                 'status': 'Open',

@@ -34,7 +34,7 @@ def _occurrence(c, meeting_id):
 THREE_LEVEL = [
     {"no": "1", "kind": "category", "level": 0, "content": "Technical Issues"},
     {"no": "1.1", "kind": "subcategory", "level": 1, "content": "Civil OB"},
-    {"no": "1.1.1", "kind": "item", "level": 2, "content": "Safety lifeline lacks certificates", "owner": "TECO",
+    {"no": "1.1.1", "kind": "item", "level": 2, "content": "Safety lifeline lacks certificates", "owner": "TECO", "raisedDate": "2026-07-14",
      "targetDate": "2026-08-01", "status": "Open",
      "updates": [{"date": "2026-07-21", "content": "Drawing HL-ONS-08119 supplemented"}]},
     {"no": "1.1.2", "kind": "item", "level": 2, "content": "Closed one", "owner": "HL", "status": "Closed", "updates": []},
@@ -51,6 +51,7 @@ def test_the_next_occurrence_carries_only_unfinished_items_with_their_structure_
     assert all(e["carried"] is True for e in log)
     item = log[2]
     assert (item["kind"], item["owner"], item["targetDate"], item["status"]) == ("item", "TECO", "2026-08-01", "Open")
+    assert item["raisedDate"] == "2026-07-14"                            # the date it was first raised is kept
     assert item["updates"] == [{"date": "2026-07-21", "content": "Drawing HL-ONS-08119 supplemented", "carried": True}]
     # a copy: the earlier meeting keeps its own record unchanged
     again = c.get(f"/api/meeting-minutes/{first['id']}").json()["discussionLog"]

@@ -3,6 +3,7 @@ import { MeetingMinutesItem } from "../../store/meetingMinutesStore";
 import { DataTableColumnHeader } from "@/components/Shared/DataTable/DataTableColumnHeader";
 import { Button } from "@/components/ui/button";
 import { Trash2, Ban } from "lucide-react";
+import { formatMinutesDate } from "./discussionLog";
 
 // One row per closed discussion sub-item, aggregated across every
 // currently-loaded meeting — see MeetingMinutes.tsx's "已結案項目" view.
@@ -63,7 +64,7 @@ export const createClosedItemsColumns = (
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title={t('meetingMinutes.meetingDate')} />
             ),
-            cell: ({ row }) => <div className="text-center">{row.getValue("meetingDate") || '-'}</div>,
+            cell: ({ row }) => <div className="text-center">{formatMinutesDate(row.getValue("meetingDate")) || '-'}</div>,
             size: 110,
         },
     ];
@@ -127,7 +128,7 @@ export const createColumns = (
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title={t('meetingMinutes.meetingDate')} />
             ),
-            cell: ({ row }) => <div className="text-center">{row.getValue("meetingDate") || '-'}</div>,
+            cell: ({ row }) => <div className="text-center">{formatMinutesDate(row.getValue("meetingDate")) || '-'}</div>,
         },
         {
             accessorKey: "location",

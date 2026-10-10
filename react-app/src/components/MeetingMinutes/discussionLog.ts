@@ -55,6 +55,7 @@ export function normalizeDiscussionLog(raw: DiscussionLogEntry[] | null | undefi
             const out: DiscussionLogEntry = { no: e.no.trim(), kind, level: depthOf(e.no.trim()) as 0 | 1 | 2, content: legacyContent(e) };
             if (e.carried) out.carried = true;
             if (kind === 'item') {
+                out.raisedDate = e.raisedDate || '';
                 out.owner = e.owner || '';
                 out.targetDate = e.targetDate || '';
                 out.status = e.status === 'Closed' ? 'Closed' : 'Open';
@@ -75,10 +76,11 @@ export function nextNo(log: DiscussionLogEntry[], parentNo: string | null): stri
 }
 
 export function addEntry(log: DiscussionLogEntry[], parentNo: string | null, kind: EntryKind, content: string,
-    item?: { owner?: string; targetDate?: string; status?: string }): DiscussionLogEntry[] {
+    item?: { owner?: string; targetDate?: string; status?: string; raisedDate?: string }): DiscussionLogEntry[] {
     const no = nextNo(log, parentNo);
     const entry: DiscussionLogEntry = { no, kind, level: depthOf(no) as 0 | 1 | 2, content };
     if (kind === 'item') {
+        entry.raisedDate = item?.raisedDate || '';
         entry.owner = item?.owner || '';
         entry.targetDate = item?.targetDate || '';
         entry.status = item?.status === 'Closed' ? 'Closed' : 'Open';
@@ -158,4 +160,40 @@ export function headingsOf(log: DiscussionLogEntry[], no: string): string[] {
         if (parent && !isItem(parent)) titles.unshift(parent.content || '');
     }
     return titles;
+}
+
+/** Index of this meeting's own progress update on an item (the last one not carried from an earlier meeting), or -1. */
+export function currentUpdateIndex(e: DiscussionLogEntry): number {
+    const ups = e.updates || [];
+    for (let i = ups.length - 1; i >= 0; i--) if (!ups[i].carried) return i;
+    return -1;
+}
+
+/**
+ * The weekly update of an item in this meeting ("this week: …"): created when text is first typed, changed in place
+ * afterwards, removed again when emptied. Carried (earlier) updates are never touched.
+ */
+export function setCurrentUpdate(log: DiscussionLogEntry[], no: string, patch: { date?: string; content?: string }, defaultDate: string): DiscussionLogEntry[] {
+    return log.map(e => {
+        if (e.no !== no) return e;
+        const ups = [...(e.updates || [])];
+        const i = currentUpdateIndex(e);
+        if (i === -1) {
+            if (!patch.content?.trim()) return e;               // nothing (or only spaces) typed: no empty update is created
+            ups.push({ date: patch.date ?? defaultDate, content: patch.content });
+        } else {
+            const next = { ...ups[i], ...patch };
+            if (!next.content.trim()) ups.splice(i, 1);
+            else ups[i] = next;
+        }
+        return { ...e, updates: ups };
+    });
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** "2026-07-21" → "21 Jul 2026", the company minutes' date format (user decision 2026-10-11); anything else as-is. */
+export function formatMinutesDate(value: string | null | undefined): string {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
+    if (!m || Number(m[2]) < 1 || Number(m[2]) > 12) return value || '';
+    return `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]} ${m[1]}`;
 }

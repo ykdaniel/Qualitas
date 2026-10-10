@@ -37,6 +37,7 @@ export interface DiscussionLogEntry {
     topic?: string;
     discussion?: string;
     decision?: string;
+    raisedDate?: string;     // items only — YYYY-MM-DD the item was first raised
     owner?: string;          // items only — "Action by"
     targetDate?: string;     // items only — YYYY-MM-DD
     status?: string;         // items only — 'Open' | 'Closed'

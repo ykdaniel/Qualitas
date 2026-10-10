@@ -90,6 +90,9 @@ await tab('Attachments').click();
 await page.setInputFiles('#attachment-upload-meeting-attachments', { name: 'agenda.png', mimeType: 'image/png', buffer: PNG });
 await tab('Discussions').click();
 const adder = () => modal().locator('[data-register-adder]');
+const mode = (name) => modal().locator('[data-register]').locator('xpath=../..').getByRole('tab', { name });
+check(await modal().locator('[data-register]').getAttribute('data-mode') === 'weekly', '2: the register opens in Weekly Update mode');
+await mode('Edit Structure').click();
 await modal().getByRole('button', { name: 'Add Category' }).click();
 await adder().locator('input').first().fill('Technical Issues');
 await adder().getByRole('button', { name: 'Add' }).click();
@@ -98,28 +101,38 @@ await adder().locator('input').first().fill('Civil OB');
 await adder().getByRole('button', { name: 'Add' }).click();
 await modal().locator('[data-row="1.1"]').getByRole('button', { name: 'Add Item' }).click();
 await adder().locator('textarea').fill('Safety lifeline lacks certificates');
+check(await adder().locator('input[type=date]').first().inputValue() === '2026-08-11', '2: a new item is raised on the meeting date by default');
 await adder().getByPlaceholder('Action by').fill('TECO');
-await adder().locator('input[type=date]').fill('2026-08-25');
+await adder().getByLabel('Target Date').fill('2026-08-25');
 await adder().getByRole('button', { name: 'Add' }).click();
 await modal().locator('[data-row="1"]').getByRole('button', { name: 'Add Item' }).click();
 await adder().locator('textarea').fill('Direct item under the category');
 await adder().getByRole('button', { name: 'Add' }).click();
-await modal().locator('[data-row="1.1.1"]').getByRole('button', { name: 'Add progress update' }).click();
-await modal().locator('[data-row="1.1.1"]').getByPlaceholder('Progress update').fill('Drawing 08119 supplemented');
-await modal().locator('[data-row="1.1.1"]').getByRole('button', { name: 'Add' }).click();
 check((await rowNos()).join(',') === '1,1.1,1.1.1,1.2', `2: register numbered 1 / 1.1 / 1.1.1 / 1.2 (${(await rowNos()).join(',')})`);
 check((await modal().locator('[data-row="1"] td').first().textContent()).trim() === '1.0', '2: category shown as 1.0');
-await page.screenshot({ path: `${OUT}/02-register-new.png` });
-// unconfirmed input on the Discussions tab blocks Save from another tab and brings the user back to it
-await modal().locator('[data-row="1.2"]').getByRole('button', { name: 'Add progress update' }).click();
-await modal().locator('[data-row="1.2"]').getByPlaceholder('Progress update').fill('typed, not added');
+await page.screenshot({ path: `${OUT}/02a-edit-structure.png` });
+// weekly mode: item text read-only, raised date shown as "11 Aug 2026", one "this week" field per open item
+await mode('Weekly Update').click();
+check(await modal().locator('[data-row="1.1.1"] [data-raised]').textContent() === '11 Aug 2026', '2: raised date shown above the item (11 Aug 2026)');
+check(await modal().locator('[data-row="1.1.1"] td').nth(1).locator('textarea').count() === 1, '2: weekly mode has only the this-week field in the item cell');
+check(await modal().locator('[data-register] [aria-label="Delete"]').count() === 0, '2: weekly mode has no structure controls');
+await modal().locator('[data-row="1.1.1"] [data-this-week] textarea').fill('Drawing 08119 supplemented');
+// a date picked before any text is kept for the update typed afterwards; spaces alone store nothing
+await modal().locator('[data-row="1.2"] [data-this-week] input[type=date]').fill('2026-08-12');
+check(await modal().locator('[data-row="1.2"] [data-this-week] input[type=date]').inputValue() === '2026-08-12', '2: date picked before typing stays in the field');
+await modal().locator('[data-row="1.2"] [data-this-week] textarea').fill('   ');
+await page.screenshot({ path: `${OUT}/02b-weekly-update.png` });
+// an add-row typed but not added (Edit Structure) blocks Save from another tab and brings the user back to it
+await mode('Edit Structure').click();
+await modal().locator('[data-row="1"]').getByRole('button', { name: 'Add Item' }).click();
+await adder().locator('textarea').fill('typed, not added');
 await tab('General Info').click();
 calls.length = 0;
 await saveBtn().click();
 await page.waitForTimeout(800);
-check(calls.length === 0, '2: Save blocked while a progress update is typed but not added');
+check(calls.length === 0, '2: Save blocked while a new item is typed but not added');
 check(await tab('Discussions').getAttribute('aria-selected') === 'true', '2: the form switched to the Discussions tab');
-await modal().locator('[data-row="1.2"]').getByRole('button', { name: 'Cancel' }).click();
+await adder().getByRole('button', { name: 'Cancel' }).click();
 await tab('Attachments').click();
 check(await modal().getByText('agenda.png').count() > 0 || await modal().locator('img[src^="blob:"]').count() > 0, '2: queued file kept across tab switches');
 calls.length = 0;
@@ -131,13 +144,17 @@ check(m2.meetingEndTime === '17:15' && m2.meetingTime === '15:00', '2: start and
 check(m2.attendees[0].company === 'TECO' && m2.attendees[0].role === 'QAQC Manager', '2: attendee by Company / Name / Position');
 check(m2.discussionLog.map(e => `${e.no}:${e.kind}`).join(',') === '1:category,1.1:subcategory,1.1.1:item,1.2:item', '2: stored register shape');
 const it = m2.discussionLog.find(e => e.no === '1.1.1');
-check(it.owner === 'TECO' && it.targetDate === '2026-08-25' && it.updates.length === 1 && it.updates[0].content === 'Drawing 08119 supplemented' && it.updates[0].date === '2026-08-11', '2: item fields and dated update (date defaults to the meeting date)');
+check(it.owner === 'TECO' && it.targetDate === '2026-08-25' && it.raisedDate === '2026-08-11' && it.updates.length === 1 && it.updates[0].content === 'Drawing 08119 supplemented' && it.updates[0].date === '2026-08-11', '2: item fields, raised date and this week\'s update dated with the meeting date');
+check(m2.discussionLog.find(e => e.no === '1.2').updates.length === 0, '2: spaces only in this week\'s field store no update');
 
 // ═══ 3. legacy two-level Draft: reads as categories + items; Save writes it back in the new shape ═══
 log('=== 3. legacy format Draft ===');
 await openRow('MOM-DEMO-001');
 await tab('Discussions').click();
 check((await rowNos()).join(',') === '1,1.1,2,2.1', `3: legacy open rows (${(await rowNos()).join(',')})`);
+await modal().locator('[data-row="2.1"] [data-this-week] input[type=date]').fill('2026-07-30');
+await modal().locator('[data-row="2.1"] [data-this-week] textarea').fill('Checklist completed');
+await modal().getByRole('tab', { name: 'Edit Structure' }).click();
 await modal().getByRole('button', { name: /^Closed$/ }).click();
 check((await rowNos()).join(',') === '1,1.2', '3: legacy Closed sub-item under its topic in the Closed filter');
 await page.screenshot({ path: `${OUT}/03-legacy-draft.png` });
@@ -148,6 +165,7 @@ const put = calls.find(c => c.method === 'PUT');
 check(!!put && JSON.parse(put.body).discussionLog.every(e => e.kind), '3: saving a legacy Draft writes the new shape');
 const legacySaved = (await byDoc('MOM-DEMO-001'))[0].discussionLog;
 check(legacySaved.map(e => `${e.no}:${e.kind}:${e.status || ''}`).join(',') === '1:category:,1.1:item:Open,1.2:item:Closed,2:category:,2.1:item:Open', '3: content and statuses preserved');
+check(JSON.stringify(legacySaved.find(e => e.no === '2.1').updates) === JSON.stringify([{ date: '2026-07-30', content: 'Checklist completed' }]), '3: this week\'s update stored with the date picked before typing');
 
 // ═══ 4. legacy Published reads (locked, not rewritten) ═══
 log('=== 4. legacy Published ===');
@@ -174,16 +192,18 @@ check(occ.discussionLog.map(e => e.no).join(',') === '1,1.1,1.1.1,2,2.1' && occ.
 await tab('Discussions').click();
 const carriedRow = modal().locator('[data-row="1.1.1"]');
 check(await carriedRow.getByText('Carried').isVisible(), '5: carried item marked');
-check(await carriedRow.locator('td').nth(1).locator('textarea').count() === 0, '5: carried item text not editable');
+check(await carriedRow.locator('td').nth(1).locator('textarea').count() - await carriedRow.locator('[data-this-week] textarea').count() === 0, '5: weekly mode: carried item text not editable (only the this-week field)');
+await modal().getByRole('tab', { name: 'Edit Structure' }).click();
+check(await modal().locator('textarea[aria-label="1.1.1"]').count() === 0 && await modal().locator('[data-row="1.1.1"] [aria-label="Delete"]').count() === 0, '5: structure mode: carried item text read-only and not removable');
+check(await modal().locator('[data-row="1.1.1"] input[type=date]').first().inputValue() === '2026-07-14', '5: raised date kept on the carried item');
+await modal().getByRole('tab', { name: 'Weekly Update' }).click();
 check(await carriedRow.locator('[data-update="1.1.1#0"] textarea').count() === 0, '5: carried update read-only');
 check(await modal().locator('[data-row="1.1.1"] [aria-label="Delete"]').count() === 0, '5: carried item cannot be deleted');
-await carriedRow.getByRole('button', { name: 'Add progress update' }).click();
-await carriedRow.getByPlaceholder('Progress update').fill('Employer accepted the certificates');
-await carriedRow.getByRole('button', { name: 'Add' }).click();
-await carriedRow.getByLabel('Item status').selectOption('Closed').catch(async () => {
-    await carriedRow.locator('select').selectOption('Closed');
-});
-await page.screenshot({ path: `${OUT}/05b-occurrence-carried.png` });
+check(await carriedRow.locator('[data-update="1.1.1#0"]').textContent().then(t => t.startsWith('21 Jul 2026')), '5: earlier update shown as "21 Jul 2026" + text');
+await carriedRow.locator('[data-this-week] textarea').fill('Employer accepted the certificates');
+await carriedRow.locator('select').selectOption('Closed');
+check(await carriedRow.isVisible(), '5: an item closed this week stays on the weekly list until the form closes');
+await page.screenshot({ path: `${OUT}/05b-occurrence-weekly.png` });
 await saveBtn().click();
 await page.waitForTimeout(1500);
 const occSaved = (await byDoc('MOM-DEMO-002')).find(m => m.rev === '2.0').discussionLog.find(e => e.no === '1.1.1');
@@ -198,7 +218,7 @@ await page.evaluate(() => { window.print = () => {}; });
 await modal().getByRole('button', { name: /Print/ }).click();
 await page.waitForTimeout(800);
 const printText = await page.locator('.mom-print-root').innerText().catch(() => '');
-for (const s of ['SUBJECT', 'VENUE & TIME', 'RECORDED BY', 'DISCUSSIONS / ACTIONS', 'Action by', '15:00 ~ 17:15', '1.0', '1.1.1', '2026-07-21']) {
+for (const s of ['SUBJECT', 'VENUE & TIME', 'RECORDED BY', 'DISCUSSIONS / ACTIONS', 'Action by', '15:00 ~ 17:15', '1.0', '1.1.1', '21 Jul 2026', '14 Jul 2026', '15 Aug 2026', '4 Aug 2026']) {
     check(printText.includes(s), `6: print contains "${s}"`);
 }
 await page.emulateMedia({ media: 'print' });

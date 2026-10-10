@@ -759,6 +759,12 @@ const translations: Record<Language, Record<string, string>> = {
     'meetingMinutes.carriedHint': 'Brought forward from the previous meeting; its text and earlier updates stay as recorded there.',
     'meetingMinutes.emptyRegister': 'No discussion items.',
     'meetingMinutes.unconfirmedDraft': 'You typed in "{label}" but did not add it. Add it, or clear the fields, before saving.',
+    'meetingMinutes.modeWeekly': 'Weekly Update',
+    'meetingMinutes.modeStructure': 'Edit Structure',
+    'meetingMinutes.thisWeek': 'This week',
+    'meetingMinutes.raisedDate': 'Raised',
+    'meetingMinutes.weeklyEmpty': 'No open items. Use Edit Structure to add one.',
+    'meetingMinutes.discardNewRow': 'Discard the row you are adding?',
 
     // OBS
     'obs.title': 'OBS List',
@@ -2281,6 +2287,12 @@ const translations: Record<Language, Record<string, string>> = {
     'meetingMinutes.carriedHint': '由上次會議帶入；內容與先前的進度維持當時的紀錄。',
     'meetingMinutes.emptyRegister': '尚無討論事項。',
     'meetingMinutes.unconfirmedDraft': '您在「{label}」輸入了內容但尚未按新增。請先新增，或清空欄位後再保存。',
+    'meetingMinutes.modeWeekly': '本週更新',
+    'meetingMinutes.modeStructure': '編輯結構',
+    'meetingMinutes.thisWeek': '本週',
+    'meetingMinutes.raisedDate': '起始日期',
+    'meetingMinutes.weeklyEmpty': '沒有未結事項。要新增請切到「編輯結構」。',
+    'meetingMinutes.discardNewRow': '要放棄正在新增的這一列嗎？',
 
     // OBS
     'obs.title': 'OBS 列表',
