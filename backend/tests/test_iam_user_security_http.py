@@ -354,7 +354,11 @@ def test_two_concurrent_requests_cannot_remove_both_admins(tmp_path):
     import core.security as security_module   # binds SessionLocal at import: swap it too (token blacklist)
     engine = create_engine(f"sqlite:///{tmp_path / 'race.db'}", connect_args={"check_same_thread": False, "timeout": 15})
     e, orig = _build(engine, "admin")
-    _add_user(e, "admin2", "admin")
+    try:
+        _add_user(e, "admin2", "admin")
+    except BaseException:                       # _build already swapped the globals: put them back before failing
+        database_module.engine, database_module.SessionLocal, security_module.SessionLocal = orig
+        raise
     delayed = {"n": 0}
 
     @event.listens_for(engine, "after_cursor_execute")
