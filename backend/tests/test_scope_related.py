@@ -30,7 +30,7 @@ class _RelatedStub:
     def __init__(self):
         self.called = False
 
-    def get_related(self, entity_type, entity_id, max_depth=2):
+    def get_related(self, entity_type, entity_id, max_depth=2, scope=None):   # routers pass the caller's scope (2026-10-10)
         self.called = True
         return {"nodes": [], "edges": []}
 

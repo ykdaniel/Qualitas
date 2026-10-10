@@ -80,6 +80,15 @@ logger = logging.getLogger(__name__)
 # a string (stable across renames; who they were at the time is in the event row).
 _APPROVAL_IDENTITY_FIELDS = ("approvedBy", "approvedAt")
 
+# Re-inspection lineage, with the value an ordinary ITR has. Written ONLY by create_reinspection(); a client can
+# neither set nor rewrite it (2026-10-10): a hand-made "re-inspection" skipped create_reinspection's Approved/Void
+# guards and counted as a real one in Q-Workflow, and the delete chain protection could be added or removed at will.
+_REINSPECTION_LINEAGE_DEFAULTS = {"isReInspection": False, "originalItrId": None, "reInspectionCount": 0}
+
+# Statuses an ITR may be created in. Approved is refused separately with its own explanation; anything else
+# (including "") would put the record outside the workflow, where no transition out of it is ever valid.
+_ITR_CREATE_STATUSES = ("In Progress", "Reject", "Void")
+
 
 class ApprovalAuthorityError(ValueError):
     """The caller may not approve (routers map this to 403)."""
@@ -142,6 +151,26 @@ class ITRService:
         """
         return self.repo.get_with_checklists(itr_id)
 
+    def _check_reference_links(self, data: dict, scope, current: Optional[models.ITR] = None) -> None:
+        """noiNumber / ncrNumber must name a record the caller can see — out of scope answers exactly like
+        "not found", so the reply cannot be used to probe other projects' numbers — and a NOI that is Closed or
+        Void takes no new ITR (a Closed NOI can never reopen, so that ITR could never be cleared). On update
+        (`current` given) only a value that actually changes is checked: the UI resends both on every save, and
+        an ITR whose NOI has since been closed must stay saveable (2026-10-10)."""
+        noi_no = data.get('noiNumber')
+        if noi_no and (current is None or noi_no != current.noiNumber):
+            noi = self.repo.db.query(models.NOI).filter(models.NOI.referenceNo == noi_no).first()
+            if not noi or not record_in_scope(noi, scope):
+                raise ValueError(f"NOI with reference number '{noi_no}' not found")
+            if noi.status in ('Closed', 'Void'):
+                raise ValueError(f"NOI '{noi_no}' is {noi.status}; a new ITR cannot be filed under it.")
+
+        ncr_no = data.get('ncrNumber')
+        if ncr_no and (current is None or ncr_no != current.ncrNumber):
+            ncr = self.repo.db.query(models.NCR).filter(models.NCR.documentNumber == ncr_no).first()
+            if not ncr or not record_in_scope(ncr, scope):
+                raise ValueError(f"NCR with document number '{ncr_no}' not found")
+
     def create_itr(self, itr_create: schemas.ITRCreate,
                    user_id: int = None, username: str = None, scope=None) -> models.ITR:
         """
@@ -200,22 +229,22 @@ class ITRService:
                     "Cannot create an ITR as Approved directly — create it in another "
                     "status, link at least one passing Checklist, then approve via update."
                 )
+            if data.get('status') not in _ITR_CREATE_STATUSES:
+                raise ValueError(
+                    f"Invalid ITR status '{data.get('status')}' — an ITR is created as one of: "
+                    f"{', '.join(_ITR_CREATE_STATUSES)}."
+                )
+
+            for _f, _default in _REINSPECTION_LINEAGE_DEFAULTS.items():
+                if data.get(_f, _default) != _default:
+                    raise ValueError(
+                        f"'{_f}' is set by the system when a re-inspection is raised from an ITR "
+                        f"and cannot be supplied when creating an ITR."
+                    )
 
             # Validate foreign keys BEFORE allocating a reference number,
             # so failed creates don't leave gaps in the ITR sequence.
-            if data.get('noiNumber'):
-                noi = self.repo.db.query(models.NOI).filter(
-                    models.NOI.referenceNo == data['noiNumber']
-                ).first()
-                if not noi:
-                    raise ValueError(f"NOI with reference number '{data['noiNumber']}' not found")
-
-            if data.get('ncrNumber'):
-                ncr = self.repo.db.query(models.NCR).filter(
-                    models.NCR.documentNumber == data['ncrNumber']
-                ).first()
-                if not ncr:
-                    raise ValueError(f"NCR with document number '{data['ncrNumber']}' not found")
+            self._check_reference_links(data, scope)
 
             # Generate Reference No automatically if not provided
             if not data.get('documentNumber'):
@@ -371,6 +400,21 @@ class ITRService:
                             f"'{_f}' is recorded by the system when an ITR is approved and cannot be set, changed or cleared."
                         )
                     d.pop(_f)
+            # Re-inspection lineage likewise: an unchanged echo is ignored, any change is refused.
+            for _f, _default in _REINSPECTION_LINEAGE_DEFAULTS.items():
+                if _f in d:
+                    stored = getattr(db_itr, _f)
+                    if d[_f] != (_default if stored is None else stored):
+                        raise ValueError(
+                            f"'{_f}' is set by the system when a re-inspection is raised and cannot be changed."
+                        )
+                    d.pop(_f)
+
+            # An empty status skipped the transition check below and was stored, taking the record out of the
+            # workflow for good — a Void ITR could leave Void that way (2026-10-10).
+            if 'status' in d and not d['status']:
+                raise ValueError("ITR status cannot be empty.")
+
             existing_detail = self._get_detail_data_dict(db_itr)
             db_version = existing_detail.get("_version", 0)
 
@@ -399,6 +443,14 @@ class ITRService:
             ):
                 raise ValueError(
                     f"Invalid status transition from {db_itr.status} to {itr_update.status}"
+                )
+
+            # A Void ITR is cancelled for good (Void has no way out in the workflow — any status change was already
+            # refused just above) and is treated as locked everywhere else: delete, link/unlink, Raise NCR, its
+            # checklists and attachments. Its own fields were still writable here (2026-10-10).
+            if db_itr.status == 'Void':
+                raise ValueError(
+                    f"Cannot modify ITR '{db_itr.documentNumber}': it is Void (a locked record)."
                 )
 
             # --- Approval validation: require passing checklists ---
@@ -466,21 +518,7 @@ class ITRService:
 
             enforce_update_scope(d, scope)
 
-            # Validate noiNumber exists if being updated
-            if 'noiNumber' in d and d['noiNumber']:
-                noi = self.repo.db.query(models.NOI).filter(
-                    models.NOI.referenceNo == d['noiNumber']
-                ).first()
-                if not noi:
-                    raise ValueError(f"NOI with reference number '{d['noiNumber']}' not found")
-
-            # Validate ncrNumber exists if being updated
-            if 'ncrNumber' in d and d['ncrNumber']:
-                ncr = self.repo.db.query(models.NCR).filter(
-                    models.NCR.documentNumber == d['ncrNumber']
-                ).first()
-                if not ncr:
-                    raise ValueError(f"NCR with document number '{d['ncrNumber']}' not found")
+            self._check_reference_links(d, scope, current=db_itr)
 
             # --- Auto-set closeoutDate on approval ---
             if d.get('status') == 'Approved' and not d.get('closeoutDate') and not db_itr.closeoutDate:
@@ -868,6 +906,22 @@ class ITRService:
                         f"Please remove the re-inspection reference from those NCRs first."
                     )
 
+                # NCRs raised from this ITR (create_ncr_from_itr sets NCR.itrNumber) and Observations that cite it
+                # keep its number as their origin; deleting it left that origin pointing at nothing and broke
+                # Q-Workflow's re-inspection lookup, which resolves NCR.itrNumber (2026-10-10).
+                # itrNumber is free text on NCR / OBS, so a citer may sit outside the caller's scope: those are
+                # counted, never named.
+                citers = self.repo.db.query(models.NCR).filter(models.NCR.itrNumber == db_itr.documentNumber).all() \
+                    + self.repo.db.query(models.OBS).filter(models.OBS.itrNumber == db_itr.documentNumber).all()
+                if citers:
+                    visible = [str(c.documentNumber) for c in citers if record_in_scope(c, scope)]
+                    hidden = len(citers) - len(visible)
+                    parts = visible + ([f"{hidden} record(s) outside your access"] if hidden else [])
+                    raise ValueError(
+                        f"Cannot delete ITR '{db_itr.documentNumber}': it is cited as the source ITR by "
+                        f"{', '.join(parts)}. Void the ITR instead of deleting it."
+                    )
+
             # (b) A re-inspection points at its original by originalItrId. Deleting the original would cut the
             #     first-inspection -> re-inspection chain (the old code cleared the pointer to let the delete
             #     succeed); the original is now kept while anything refers to it.
@@ -1186,6 +1240,25 @@ class ITRService:
                     f"(current inspectionResult='{db_itr.inspectionResult}', status='{db_itr.status}')"
                 )
 
+            # One live NCR per ITR from this action (2026-10-10): a second click used to raise another NCR and
+            # overwrite ITR.ncrNumber, leaving the first NCR pointing at an ITR that no longer pointed back (and
+            # without its delete protection). Allowed again only when no live (non-Void) NCR is tied to this ITR.
+            # Decided on the NCRs themselves — the one ITR.ncrNumber names AND every NCR whose itrNumber cites this
+            # ITR — not on ITR.ncrNumber alone, which an ordinary ITR save can clear (independent review, 2026-10-10).
+            tied = []
+            if db_itr.ncrNumber:
+                tied += self.repo.db.query(models.NCR).filter(models.NCR.documentNumber == db_itr.ncrNumber).all()
+            if db_itr.documentNumber:
+                tied += self.repo.db.query(models.NCR).filter(models.NCR.itrNumber == db_itr.documentNumber).all()
+            live = [n for n in tied if n.status != 'Void']
+            if live:
+                visible = sorted({n.documentNumber for n in live if record_in_scope(n, scope)})
+                named = f"NCR {', '.join(visible)}" if visible else "an NCR"
+                raise ValueError(
+                    f"ITR '{db_itr.documentNumber}' already has {named} raised from it. "
+                    f"Continue with that NCR, or void it before raising a new one."
+                )
+
             # Resolve vendor name for the NCR
             vendor_name = db_itr.vendor  # uses the @property
 
@@ -1310,6 +1383,17 @@ class ITRService:
                     f"inspectionResult must be 'Fail' or status must be 'Reject' "
                     f"(current inspectionResult='{db_itr.inspectionResult}', status='{db_itr.status}')"
                 )
+
+            # The re-inspection is a new ITR filed under the same NOI, so the same rule as any new ITR applies: a
+            # Closed or Void NOI takes no new ITR (independent review, 2026-10-10 — an NOI can be voided while an ITR
+            # under it is still Reject).
+            if db_itr.noiNumber:
+                noi = self.repo.db.query(models.NOI).filter(models.NOI.referenceNo == db_itr.noiNumber).first()
+                if noi and noi.status in ('Closed', 'Void'):
+                    raise ValueError(
+                        f"Cannot create a re-inspection from ITR '{db_itr.documentNumber}': its NOI "
+                        f"'{db_itr.noiNumber}' is {noi.status}, and a new ITR cannot be filed under it."
+                    )
 
             vendor_name = db_itr.vendor  # uses the @property
 

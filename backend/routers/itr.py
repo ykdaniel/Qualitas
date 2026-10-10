@@ -326,7 +326,7 @@ def read_itr_related(
     # Only expose the relation graph for an ITR the caller may actually see.
     if itr_service.get_itr(itr_id=itr_id, scope=scope) is None:
         raise HTTPException(status_code=404, detail="ITR not found")
-    return related_service.get_related("itr", itr_id, max_depth=max_depth)
+    return related_service.get_related("itr", itr_id, max_depth=max_depth, scope=scope)
 
 # New endpoint: Link Checklist to ITR
 @router.post("/{itr_id}/link-checklist", response_model=schemas.ITR)

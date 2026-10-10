@@ -131,8 +131,11 @@ def test_unlocked_itrs_can_still_be_deleted_and_can_still_raise_an_ncr(env, full
     rejected, _ = _itr_with_instances(env, n=1)
     _set(env, rejected, status="Reject")                             # 'Reject' is the other allowed source state
     assert full.post(f"/api/itr/{rejected}/create-ncr").status_code == 200
-    assert full.delete(f"/api/itr/{itr_id}").status_code == 200
-    assert itr_id not in _world(env)["itr"]
+    # An ITR that an NCR was raised from is now kept as that NCR's source (2026-10-10); deletion is shown on an
+    # unlocked ITR with nothing citing it.
+    plain, _ = _itr_with_instances(env, n=1)
+    assert full.delete(f"/api/itr/{plain}").status_code == 200
+    assert plain not in _world(env)["itr"]
 
 
 def test_reinspection_eligibility_and_the_approved_void_boundary_never_modify_the_original(env, full):

@@ -173,4 +173,4 @@ def read_noi_related(
     # Only expose the relation graph for an NOI the caller may actually see.
     if noi_service.get_noi(noi_id=noi_id, scope=scope) is None:
         raise HTTPException(status_code=404, detail="NOI not found")
-    return related_service.get_related("noi", noi_id, max_depth=max_depth)
+    return related_service.get_related("noi", noi_id, max_depth=max_depth, scope=scope)
