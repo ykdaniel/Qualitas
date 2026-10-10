@@ -89,50 +89,70 @@ await modal().getByRole('button', { name: 'Add' }).first().click();
 await tab('Attachments').click();
 await page.setInputFiles('#attachment-upload-meeting-attachments', { name: 'agenda.png', mimeType: 'image/png', buffer: PNG });
 await tab('Discussions').click();
-const adder = () => modal().locator('[data-register-adder]');
-const mode = (name) => modal().locator('[data-register]').locator('xpath=../..').getByRole('tab', { name });
-check(await modal().locator('[data-register]').getAttribute('data-mode') === 'weekly', '2: the register opens in Weekly Update mode');
-await mode('Edit Structure').click();
+const newRow = () => modal().locator('[data-row="new"]');
+const apply = () => modal().getByRole('button', { name: 'Apply' });
+check(await modal().getByRole('tab', { name: 'Weekly Update' }).count() === 0, '2: one screen, no mode switch');
+check(await modal().getByLabel('Show closed items').isChecked() === false, '2: "Show closed items" unchecked by default');
 await modal().getByRole('button', { name: 'Add Category' }).click();
-await adder().locator('input').first().fill('Technical Issues');
-await adder().getByRole('button', { name: 'Add' }).click();
+await newRow().locator('textarea').fill('Technical Issues');
+await apply().click();
 await modal().locator('[data-row="1"]').getByRole('button', { name: 'Add Sub-category' }).click();
-await adder().locator('input').first().fill('Civil OB');
-await adder().getByRole('button', { name: 'Add' }).click();
+await newRow().locator('textarea').fill('Civil OB');
+await apply().click();
 await modal().locator('[data-row="1.1"]').getByRole('button', { name: 'Add Item' }).click();
-await adder().locator('textarea').fill('Safety lifeline lacks certificates');
-check(await adder().locator('input[type=date]').first().inputValue() === '2026-08-11', '2: a new item is raised on the meeting date by default');
-await adder().getByPlaceholder('Action by').fill('TECO');
-await adder().getByLabel('Target Date').fill('2026-08-25');
-await adder().getByRole('button', { name: 'Add' }).click();
+check(await newRow().isVisible() && await newRow().locator('textarea').evaluate(el => el === document.activeElement), '2: a new item opens straight in edit, focused');
+await newRow().locator('textarea').fill('Safety lifeline lacks certificates');
+check(await newRow().locator('input[type=date]').first().inputValue() === '2026-08-11', '2: a new item is raised on the meeting date by default');
+await newRow().getByPlaceholder('Action by').fill('TECO');
+await newRow().getByLabel('Target Date').fill('2026-08-25');
+await apply().click();
 await modal().locator('[data-row="1"]').getByRole('button', { name: 'Add Item' }).click();
-await adder().locator('textarea').fill('Direct item under the category');
-await adder().getByRole('button', { name: 'Add' }).click();
+await newRow().locator('textarea').fill('Direct item under the category');
+await apply().click();
 check((await rowNos()).join(',') === '1,1.1,1.1.1,1.2', `2: register numbered 1 / 1.1 / 1.1.1 / 1.2 (${(await rowNos()).join(',')})`);
 check((await modal().locator('[data-row="1"] td').first().textContent()).trim() === '1.0', '2: category shown as 1.0');
-await page.screenshot({ path: `${OUT}/02a-edit-structure.png` });
-// weekly mode: item text read-only, raised date shown as "11 Aug 2026", one "this week" field per open item
-await mode('Weekly Update').click();
+// items read as text; raised date above; one this-week field each; ✏️ / 🗑 per row; status dropdown
 check(await modal().locator('[data-row="1.1.1"] [data-raised]').textContent() === '11 Aug 2026', '2: raised date shown above the item (11 Aug 2026)');
-check(await modal().locator('[data-row="1.1.1"] td').nth(1).locator('textarea').count() === 1, '2: weekly mode has only the this-week field in the item cell');
-check(await modal().locator('[data-register] [aria-label="Delete"]').count() === 0, '2: weekly mode has no structure controls');
+check(await modal().locator('[data-row="1.1.1"] td').nth(1).locator('textarea').count() === 1, '2: only the this-week field is an input in a resting item');
+check(await modal().locator('[data-row="1.1.1"]').getByRole('button', { name: 'Edit' }).isVisible(), '2: ✏️ on the item');
+check(await modal().locator('[data-row="1.1.1"] [data-this-week]').textContent() === '' && await modal().locator('[data-row="1.1.1"] [data-this-week] textarea').getAttribute('placeholder') === 'Add progress…', '2: no "This week" label; the field says "Add progress…"');
+// ✏️ edits one row in place; ✕ cancels without changing it; ✓ applies
+await modal().locator('[data-row="1.2"]').getByRole('button', { name: 'Edit' }).click();
+check(await modal().locator('[data-register] [data-editing]').count() === 1, '2: only that row is in edit');
+check(await modal().locator('[data-row="1.1.1"]').getByRole('button', { name: 'Edit' }).count() === 0, '2: other rows have no ✏️ while one is open');
+await modal().locator('[data-row="1.2"] textarea[aria-label="1.2"]').fill('changed then cancelled');
+await modal().locator('[data-row="1.2"]').getByRole('button', { name: 'Cancel' }).click();
+check(await modal().locator('[data-row="1.2"] td').nth(1).textContent().then(t => t.includes('Direct item under the category')), '2: ✕ leaves the row unchanged');
+await modal().locator('[data-row="1.2"]').getByRole('button', { name: 'Edit' }).click();
+await modal().locator('[data-row="1.2"]').getByLabel('Action by').fill('HL');
+await apply().click();
+check(await modal().locator('[data-row="1.2"] td').nth(2).textContent() === 'HL', '2: ✓ applies the change');
 await modal().locator('[data-row="1.1.1"] [data-this-week] textarea').fill('Drawing 08119 supplemented');
 // a date picked before any text is kept for the update typed afterwards; spaces alone store nothing
 await modal().locator('[data-row="1.2"] [data-this-week] input[type=date]').fill('2026-08-12');
 check(await modal().locator('[data-row="1.2"] [data-this-week] input[type=date]').inputValue() === '2026-08-12', '2: date picked before typing stays in the field');
 await modal().locator('[data-row="1.2"] [data-this-week] textarea').fill('   ');
-await page.screenshot({ path: `${OUT}/02b-weekly-update.png` });
-// an add-row typed but not added (Edit Structure) blocks Save from another tab and brings the user back to it
-await mode('Edit Structure').click();
+await page.screenshot({ path: `${OUT}/02-register-inline.png` });
+// a row being edited with a change blocks Save from another tab and brings the user back to it
 await modal().locator('[data-row="1"]').getByRole('button', { name: 'Add Item' }).click();
-await adder().locator('textarea').fill('typed, not added');
+await newRow().locator('textarea').fill('typed, not applied');
 await tab('General Info').click();
 calls.length = 0;
 await saveBtn().click();
 await page.waitForTimeout(800);
-check(calls.length === 0, '2: Save blocked while a new item is typed but not added');
+check(calls.length === 0, '2: Save blocked while a new item is typed but not applied');
 check(await tab('Discussions').getAttribute('aria-selected') === 'true', '2: the form switched to the Discussions tab');
-await adder().getByRole('button', { name: 'Cancel' }).click();
+await newRow().getByRole('button', { name: 'Cancel' }).click();
+check(await newRow().count() === 0 && (await rowNos()).join(',') === '1,1.1,1.1.1,1.2', '2: ✕ on a new row adds nothing');
+// delete asks first (the dialog handler accepts): remove 1.2, numbering closes up
+// a new item closed in the same session stays on screen (it counts as open this meeting)
+await modal().locator('[data-row="1.2"] select').selectOption('Closed');
+check(await modal().locator('[data-row="1.2"]').isVisible(), '2: an item added and closed this session stays on screen');
+const dialogs = [];
+page.once('dialog', d => dialogs.push(d.message()));
+await modal().locator('[data-row="1.2"]').getByRole('button', { name: 'Delete' }).click();
+check(dialogs[0] === 'Delete 1.2?', `2: deleting an item asks about that item only (${dialogs[0]})`);
+check((await rowNos()).join(',') === '1,1.1,1.1.1', '2: 🗑 (confirmed) removes the row');
 await tab('Attachments').click();
 check(await modal().getByText('agenda.png').count() > 0 || await modal().locator('img[src^="blob:"]').count() > 0, '2: queued file kept across tab switches');
 calls.length = 0;
@@ -142,10 +162,10 @@ let m2 = (await meetings()).find(m => m.title === T2);
 check(!!m2, '2: meeting saved');
 check(m2.meetingEndTime === '17:15' && m2.meetingTime === '15:00', '2: start and end time stored');
 check(m2.attendees[0].company === 'TECO' && m2.attendees[0].role === 'QAQC Manager', '2: attendee by Company / Name / Position');
-check(m2.discussionLog.map(e => `${e.no}:${e.kind}`).join(',') === '1:category,1.1:subcategory,1.1.1:item,1.2:item', '2: stored register shape');
+check(m2.discussionLog.map(e => `${e.no}:${e.kind}`).join(',') === '1:category,1.1:subcategory,1.1.1:item', '2: stored register shape');
 const it = m2.discussionLog.find(e => e.no === '1.1.1');
 check(it.owner === 'TECO' && it.targetDate === '2026-08-25' && it.raisedDate === '2026-08-11' && it.updates.length === 1 && it.updates[0].content === 'Drawing 08119 supplemented' && it.updates[0].date === '2026-08-11', '2: item fields, raised date and this week\'s update dated with the meeting date');
-check(m2.discussionLog.find(e => e.no === '1.2').updates.length === 0, '2: spaces only in this week\'s field store no update');
+check(!JSON.stringify(m2.discussionLog).includes('typed, not applied'), '2: the cancelled new row was not stored');
 
 // ═══ 3. legacy two-level Draft: reads as categories + items; Save writes it back in the new shape ═══
 log('=== 3. legacy format Draft ===');
@@ -154,9 +174,9 @@ await tab('Discussions').click();
 check((await rowNos()).join(',') === '1,1.1,2,2.1', `3: legacy open rows (${(await rowNos()).join(',')})`);
 await modal().locator('[data-row="2.1"] [data-this-week] input[type=date]').fill('2026-07-30');
 await modal().locator('[data-row="2.1"] [data-this-week] textarea').fill('Checklist completed');
-await modal().getByRole('tab', { name: 'Edit Structure' }).click();
-await modal().getByRole('button', { name: /^Closed$/ }).click();
-check((await rowNos()).join(',') === '1,1.2', '3: legacy Closed sub-item under its topic in the Closed filter');
+await modal().getByLabel('Show closed items').check();
+check((await rowNos()).join(',') === '1,1.1,1.2,2,2.1', '3: "Show closed items" adds the legacy Closed sub-item under its topic');
+check(await modal().locator('[data-row="1.2"] [data-this-week]').count() === 0, '3: a closed item has no this-week field');
 await page.screenshot({ path: `${OUT}/03-legacy-draft.png` });
 calls.length = 0;
 await saveBtn().click();
@@ -175,6 +195,8 @@ await tab('Discussions').click();
 check((await rowNos()).join(',') === '1,1.1,2,2.1', '4: legacy published register readable');
 check(await saveBtn().count() === 0, '4: read-only (no Save)');
 check(await modal().locator('[data-register] textarea, [data-register] input').count() === 0, '4: no editable register fields');
+check(await modal().getByRole('button', { name: /^(Edit|Delete|Add Category|Add Item|Add Sub-category)$/ }).count() === 0, '4: no ✏️ / 🗑 / add buttons on a published record');
+check(await modal().locator('[data-this-week]').count() === 0, '4: no this-week field on a published record');
 check(JSON.stringify((await byDoc('MOM-DEMO-003'))[0].discussionLog) === before3, '4: stored log untouched');
 
 // ═══ 5. New Occurrence carries unfinished items ═══
@@ -192,24 +214,82 @@ check(occ.discussionLog.map(e => e.no).join(',') === '1,1.1,1.1.1,2,2.1' && occ.
 await tab('Discussions').click();
 const carriedRow = modal().locator('[data-row="1.1.1"]');
 check(await carriedRow.getByText('Carried').isVisible(), '5: carried item marked');
-check(await carriedRow.locator('td').nth(1).locator('textarea').count() - await carriedRow.locator('[data-this-week] textarea').count() === 0, '5: weekly mode: carried item text not editable (only the this-week field)');
-await modal().getByRole('tab', { name: 'Edit Structure' }).click();
-check(await modal().locator('textarea[aria-label="1.1.1"]').count() === 0 && await modal().locator('[data-row="1.1.1"] [aria-label="Delete"]').count() === 0, '5: structure mode: carried item text read-only and not removable');
-check(await modal().locator('[data-row="1.1.1"] input[type=date]').first().inputValue() === '2026-07-14', '5: raised date kept on the carried item');
-await modal().getByRole('tab', { name: 'Weekly Update' }).click();
+check(await carriedRow.locator('[data-raised]').textContent() === '14 Jul 2026', '5: raised date kept on the carried item');
+check(await carriedRow.getByRole('button', { name: 'Delete' }).count() === 0, '5: carried item has no 🗑');
+await carriedRow.getByRole('button', { name: 'Edit' }).click();
+check(await modal().locator('textarea[aria-label="1.1.1"]').count() === 0 && await carriedRow.getByLabel('Action by').isVisible(), '5: ✏️ on a carried item: text stays read-only, Action by editable');
+await carriedRow.getByRole('button', { name: 'Cancel' }).click();
 check(await carriedRow.locator('[data-update="1.1.1#0"] textarea').count() === 0, '5: carried update read-only');
 check(await modal().locator('[data-row="1.1.1"] [aria-label="Delete"]').count() === 0, '5: carried item cannot be deleted');
 check(await carriedRow.locator('[data-update="1.1.1#0"]').textContent().then(t => t.startsWith('21 Jul 2026')), '5: earlier update shown as "21 Jul 2026" + text');
 await carriedRow.locator('[data-this-week] textarea').fill('Employer accepted the certificates');
 await carriedRow.locator('select').selectOption('Closed');
-check(await carriedRow.isVisible(), '5: an item closed this week stays on the weekly list until the form closes');
-await page.screenshot({ path: `${OUT}/05b-occurrence-weekly.png` });
+check(await carriedRow.isVisible() && await carriedRow.locator('[data-this-week]').count() === 1, '5: an item closed this week stays, with its this-week field, until the form closes');
+await page.screenshot({ path: `${OUT}/05b-occurrence-inline.png` });
 await saveBtn().click();
 await page.waitForTimeout(1500);
 const occSaved = (await byDoc('MOM-DEMO-002')).find(m => m.rev === '2.0').discussionLog.find(e => e.no === '1.1.1');
 check(occSaved.status === 'Closed' && occSaved.updates.length === 2 && occSaved.updates[0].carried && !occSaved.updates[1].carried, '5: new update added after the carried one, item closed');
 const origItem = (await byDoc('MOM-DEMO-002')).find(m => m.rev === '1.0').discussionLog.find(e => e.no === '1.1.1');
 check(origItem.status === 'Open' && origItem.updates.length === 1, '5: the earlier meeting keeps its own record (a copy, not a reference)');
+
+// ═══ 5a. ✏️ / 🗑 small and faint, shown on row hover / focus; text boxes grow with their content ═══
+log('=== 5a. hover icons, auto-height text ===');
+await openRow('MOM-DEMO-001');
+await tab('Discussions').click();
+await page.mouse.move(5, 5);
+const actions = modal().locator('[data-row="2.1"] [data-row-actions]');
+check(await actions.evaluate(el => getComputedStyle(el).opacity) === '0', '5a: row icons hidden until hover');
+await modal().locator('[data-row="2.1"]').hover();
+await page.waitForTimeout(250);
+check(await actions.evaluate(el => getComputedStyle(el).opacity) === '1', '5a: row icons shown on hover');
+const pencil = await actions.getByRole('button', { name: 'Edit' }).boundingBox();
+check(pencil.width <= 22 && pencil.height <= 22, `5a: ✏️ is a small icon (${Math.round(pencil.width)}x${Math.round(pencil.height)})`);
+await page.mouse.move(5, 5);
+await actions.getByRole('button', { name: 'Edit' }).focus();
+check(await actions.evaluate(el => getComputedStyle(el).opacity) === '1', '5a: row icons shown on keyboard focus');
+const upd = modal().locator('[data-row="2.1"] [data-this-week] textarea');
+const h1 = (await upd.boundingBox()).height;
+check(h1 <= 40, `5a: empty update box is one line high (${Math.round(h1)}px)`);
+await upd.fill('line one\nline two\nline three\nline four');
+const h4 = (await upd.boundingBox()).height;
+check(h4 > h1 + 40 && await upd.evaluate(el => el.scrollHeight <= el.clientHeight + 1), `5a: the box grows with its text, no scrollbar (${Math.round(h1)} -> ${Math.round(h4)}px)`);
+await upd.fill('');
+check(Math.abs((await upd.boundingBox()).height - h1) <= 1, '5a: and shrinks back to one line when emptied');
+await modal().locator('[data-row="2.1"]').getByRole('button', { name: 'Edit' }).click();
+const ed = modal().locator('textarea[aria-label="2.1"]');
+check(await ed.evaluate(el => el.scrollHeight <= el.clientHeight + 1 && el.clientHeight < 60), '5a: edit box sized to its one-line content');
+await modal().locator('[data-row="2.1"]').getByRole('button', { name: 'Cancel' }).click();
+
+// ═══ 5b. compact controls stay inside their cells at 800 and 1400 px (user: "太大 要符合欄寬") ═══
+log('=== 5b. control sizes ===');
+await openRow('MOM-DEMO-002', '2.0');
+await tab('Discussions').click();
+await modal().getByLabel('Show closed items').check();
+for (const width of [800, 1400]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.waitForTimeout(400);
+    const report = await modal().locator('[data-register]').evaluate(table => {
+        const bad = [];
+        let buttons = 0, tallest = 0;
+        for (const td of table.querySelectorAll('tbody td')) {
+            if (td.scrollWidth > td.clientWidth + 1) bad.push(`cell overflow ${td.closest('tr').dataset.row}`);
+            const r = td.getBoundingClientRect();
+            for (const b of td.querySelectorAll('button')) {
+                buttons++;
+                const br = b.getBoundingClientRect();
+                tallest = Math.max(tallest, br.height);
+                if (br.left < r.left - 0.5 || br.right > r.right + 0.5) bad.push(`button outside cell: ${b.textContent || b.getAttribute('aria-label')} (${td.closest('tr').dataset.row})`);
+            }
+        }
+        return { bad, buttons, tallest: Math.round(tallest) };
+    });
+    check(report.buttons >= 6, `5b@${width}: register buttons present (${report.buttons})`);
+    check(report.bad.length === 0, `5b@${width}: every button inside its cell, no cell overflow (${report.bad.join('; ')})`);
+    check(report.tallest <= 26, `5b@${width}: buttons stay one compact line (tallest ${report.tallest}px)`);
+    await page.screenshot({ path: `${OUT}/05c-controls-${width}.png` });
+}
+await page.setViewportSize({ width: 1440, height: 1000 });
 
 // ═══ 6. print layout ═══
 log('=== 6. print ===');
