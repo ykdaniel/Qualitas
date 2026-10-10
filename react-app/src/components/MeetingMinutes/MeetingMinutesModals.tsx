@@ -11,7 +11,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useFollowUpStore } from '../../store/followUpStore';
 import { useMeetingMinutesStore } from '../../store/meetingMinutesStore';
-import { getUsers, formatUserLabel, bulkCreateFollowUps, getEntityFiles, getAuthenticatedFileUrl, createMeetingMinutesOccurrence, type User as ApiUser } from '../../services/api';
+import { describeSaveError } from '../../utils/saveErrors';
+import { getUsers, formatUserLabel, getEntityFiles, getAuthenticatedFileUrl, createMeetingMinutesOccurrence, type User as ApiUser } from '../../services/api';
 import api from '../../services/api';
 import type { MeetingMinutesItem, Attendee, DiscussionLogEntry } from '../../store/meetingMinutesStore';
 import FileAttachment from '../Shared/FileAttachment';
@@ -44,6 +45,25 @@ export interface MeetingMinutesDetailData {
     attachments: string[];
 }
 
+/**
+ * What a save of the meeting form achieved (MeetingMinutes.tsx's handleSaveMeetingDetails). A save is up to four
+ * steps — write the meeting, upload attachments, create action items, then set a Published/Void status (deferred
+ * until the others are done, since those statuses lock the record). Once the meeting is written it is never created
+ * again: a later step that fails leaves the modal open with only the unfinished work, and Save finishes it.
+ */
+export type MeetingSaveResult =
+    | { status: 'saved' }
+    | {
+        status: 'saved-incomplete';
+        documentNumber: string;
+        /** already user-friendly, one line per unfinished step */
+        unfinished: string[];
+        /** the pending files reached the server — drop them so a retry does not upload them twice */
+        attachmentsUploaded: boolean;
+        remainingActionItems: ActionItemDraft[];
+    }
+    | { status: 'failed'; message: string };
+
 interface LinkedActionItem {
     id: string;
     issueNo: string;
@@ -57,7 +77,9 @@ export interface MeetingMinutesDetailModalProps {
     meetingId: string | null;
     existingItem?: MeetingMinutesItem;
     readOnly?: boolean;
-    onSave: (details: MeetingMinutesDetailData, pendingFiles: File[], actionItemsDraft: ActionItemDraft[]) => void | Promise<void>;
+    onSave: (details: MeetingMinutesDetailData, pendingFiles: File[], actionItemsDraft: ActionItemDraft[]) => Promise<MeetingSaveResult>;
+    /** Voids the (Published) record: sends the status change alone — the record is locked, so resending its fields is refused. */
+    onVoid?: () => Promise<void>;
     onClose: () => void;
     /** Plain close, skipping onClose's deep-link navigate(-1) — used after
      * spawning a new occurrence so that navigate() to the new record isn't
@@ -65,8 +87,8 @@ export interface MeetingMinutesDetailModalProps {
     onDismiss?: () => void;
 }
 
-export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps> = ({ existingItem, readOnly = false, onSave, onClose, onDismiss }) => {
-    const { t } = useLanguage();
+export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps> = ({ existingItem, readOnly = false, onSave, onVoid, onClose, onDismiss }) => {
+    const { t, language } = useLanguage();
     const { hasPermission } = useAuth();
     const { getActiveContractors } = useContractorsStore();
     const { addFollowUp } = useFollowUpStore();
@@ -134,6 +156,10 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
     }, [existingItem?.documentNumber]);
 
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+    // Bumped once the pending files reached the server, so FileAttachment drops them (see its syncToken prop).
+    const [attachmentSync, setAttachmentSync] = useState(0);
+    // Set while a save stored the meeting but left steps unfinished; cleared by the next save.
+    const [incompleteNotice, setIncompleteNotice] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const leaveGuard = useDraftGuard({ formData, attendees, newAttendee, discussionLog, newTopicTitle, subItemDrafts, actionItemsDraft, newAction, pendingFiles }, saving || spawningOccurrence, !readOnly);
     const requestClose = () => leaveGuard.requestClose(onClose);
@@ -219,21 +245,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
     const addActionItemNow = async () => {
         if (!newAction.title.trim() || !existingItem?.documentNumber) return;
         try {
-            const now = new Date().toISOString();
-            const created = await addFollowUp({
-                title: newAction.title,
-                description: newAction.description || '',
-                status: 'Open',
-                priority: newAction.priority || undefined,
-                assignedTo: newAction.assignedTo || undefined,
-                assignedToUserId: newAction.assignedToUserId ?? undefined,
-                vendor: formData.contractor || undefined,
-                dueDate: newAction.dueDate || undefined,
-                createdAt: now,
-                updatedAt: now,
-                sourceModule: 'MEETING',
-                sourceReferenceNo: existingItem.documentNumber,
-            } as any);
+            const created = await addFollowUp(toActionItemPayload(newAction, existingItem.documentNumber, formData.contractor) as any);
             setLinkedActionItems(prev => [...prev, created as unknown as LinkedActionItem]);
             setNewAction({ title: '', description: '', assignedTo: '', assignedToUserId: null, dueDate: '', priority: '' });
         } catch (err: any) {
@@ -275,14 +287,29 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
     const handleSave = async () => {
         if (blockSaveForUnconfirmedDraft()) return;
         setSaving(true);
+        setIncompleteNotice(null);
         try {
-            await onSave(
+            const result = await onSave(
                 { ...formData, attendees, discussionLog, attachments: [] },
                 pendingFiles,
                 actionItemsDraft,
             );
-        } catch (err: any) {
-            toast.error(err?.response?.data?.detail || (err as Error)?.message || t('common.saveFailed'));
+            if (result.status === 'failed') {
+                toast.error(t('saveFlow.failedKeep', { message: result.message }), { duration: 10000 });
+            } else if (result.status === 'saved-incomplete') {
+                // The meeting exists now: keep only what is left, so Save finishes it without redoing anything.
+                if (result.attachmentsUploaded) {
+                    setPendingFiles([]);
+                    setAttachmentSync(n => n + 1);
+                }
+                setActionItemsDraft(result.remainingActionItems);
+                const notice = t('meetingMinutes.saveIncomplete', { docNo: result.documentNumber, details: result.unfinished.join(language === 'zh' ? '；' : '; ') });
+                setIncompleteNotice(notice);
+                toast.warning(notice, { duration: 10000 });
+            }
+            // 'saved': the page closes the modal.
+        } catch (err) {
+            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
         } finally {
             setSaving(false);
         }
@@ -290,23 +317,19 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
 
     // Voiding a Published record is the one change its otherwise-locked
     // fieldset can't reach (the whole form is disabled once Published —
-    // see the readOnly prop passed in from MeetingMinutes.tsx). This sends
-    // the same unchanged formData as a normal save, just with status
-    // flipped to Void — the backend's diff-check (meeting_minutes_service.py
-    // update_meeting_minutes) only allows exactly this one field to change
-    // on a Published record, so nothing else can sneak through even though
-    // formData is sent in full.
+    // see the readOnly prop passed in from MeetingMinutes.tsx). Only the
+    // status is sent, like the list row's quick-void: resending the full
+    // form was refused by the backend's Published lock whenever the form's
+    // shape differed from the stored row (contractor name vs vendor_id,
+    // attachments, an empty discussion log — MEETING-FIX-2026-001).
     const handleVoidClick = async () => {
+        if (!onVoid) return;
         if (!window.confirm(t('meetingMinutes.confirmVoid') || 'Void this meeting minute? This cannot be undone.')) return;
         setSaving(true);
         try {
-            await onSave(
-                { ...formData, status: 'Void', attendees, discussionLog, attachments: [] },
-                [],
-                [],
-            );
-        } catch (err: any) {
-            toast.error(err?.response?.data?.detail || (err as Error)?.message || t('common.saveFailed'));
+            await onVoid();
+        } catch (err) {
+            toast.error(describeSaveError(err, t));
         } finally {
             setSaving(false);
         }
@@ -362,6 +385,11 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                     <button type="button" className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={requestClose}>×</button>
                 </div>
                 <div className={formStyles.modalBody}>
+                    {incompleteNotice && (
+                        <div role="alert" style={{ margin: '0 0 12px', padding: '10px 14px', borderRadius: 8, border: '1px solid #f59e0b', background: '#fffbeb', color: '#92400e', fontSize: 13 }}>
+                            {incompleteNotice}
+                        </div>
+                    )}
                     <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
                         <div className={formStyles.formSections}>
                             {/* 基本資料 */}
@@ -562,6 +590,18 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                                                 </div>
                                             ))
                                         )}
+                                        {/* Drafts left over from a save that created the meeting but not all of its action items: Save sends them. */}
+                                        {actionItemsDraft.map((a, idx) => (
+                                            <div key={`draft-${idx}`} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                                                <span style={{ flex: 1, fontSize: 12, color: '#b45309' }}>{t('meetingMinutes.actionItemPending')}</span>
+                                                <span style={{ flex: 2 }}>{a.title}</span>
+                                                <span style={{ flex: 1, color: '#64748b' }}>{a.assignedTo || '-'}</span>
+                                                <span style={{ flex: 1, color: '#64748b' }}>{a.dueDate || '-'}</span>
+                                                {!readOnly && (
+                                                    <button className={actionStyles.iconDanger} type="button" onClick={() => removeActionItemDraft(idx)}><Trash2 size={16} /></button>
+                                                )}
+                                            </div>
+                                        ))}
                                         {!readOnly && (
                                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
                                                 <input className={formStyles.formInput} placeholder={t('meetingMinutes.actionTitle')} value={newAction.title} onChange={(e) => setNewAction(prev => ({ ...prev, title: e.target.value }))} style={{ flex: 2 }} />
@@ -587,6 +627,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                                     entityId={existingItem?.id}
                                     category="attachment"
                                     onPendingFilesChange={setPendingFiles}
+                                    syncToken={attachmentSync}
                                     readOnly={readOnly}
                                     hideTitle
                                     onPreview={handlePreview}
@@ -614,7 +655,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                         )}
                     </>}
                     secondary={<>
-                        {readOnly && existingItem?.status === 'Published' && hasPermission('meeting:update:all') && (
+                        {readOnly && onVoid && existingItem?.status === 'Published' && hasPermission('meeting:update:all') && (
                             <button className={actionStyles.danger} type="button" onClick={handleVoidClick} disabled={saving} title={t('meetingMinutes.voidAction') || 'Void'}>
                                 {t('meetingMinutes.voidAction') || 'Void'}
                             </button>
@@ -661,10 +702,10 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
     );
 };
 
-export const submitActionItemsDraft = async (drafts: ActionItemDraft[], documentNumber: string, vendor?: string): Promise<void> => {
-    if (drafts.length === 0) return;
+/** The Follow Up row an action item of this meeting becomes. */
+export const toActionItemPayload = (d: ActionItemDraft, documentNumber: string, vendor?: string): Record<string, unknown> => {
     const now = new Date().toISOString();
-    await bulkCreateFollowUps(drafts.map(d => ({
+    return {
         title: d.title,
         description: d.description || '',
         status: 'Open',
@@ -677,5 +718,5 @@ export const submitActionItemsDraft = async (drafts: ActionItemDraft[], document
         updatedAt: now,
         sourceModule: 'MEETING',
         sourceReferenceNo: documentNumber,
-    })));
+    };
 };

@@ -730,6 +730,11 @@ const translations: Record<Language, Record<string, string>> = {
     'meetingMinutes.actionTitle': 'Action Item',
     'meetingMinutes.actionItemsHint': 'Action items are created as Follow Up Issues once this meeting is saved.',
     'meetingMinutes.noActionItems': 'No action items yet.',
+    'meetingMinutes.actionItemPending': 'Not created yet',
+    'meetingMinutes.saveIncomplete': 'Meeting minutes {docNo} are saved, but these steps did not finish: {details}. What is left is kept here — press Save to finish it; the meeting will not be created again.',
+    'meetingMinutes.stepActionItems': '{n} action item(s) not created ({message})',
+    'meetingMinutes.stepStatus': 'status not yet set to {status} ({message})',
+    'meetingMinutes.stepStatusWaiting': 'it is set once the steps above are done',
 
     // OBS
     'obs.title': 'OBS List',
@@ -2223,6 +2228,11 @@ const translations: Record<Language, Record<string, string>> = {
     'meetingMinutes.actionTitle': '行動項目',
     'meetingMinutes.actionItemsHint': '存檔後，行動項目會建立為 Follow Up 待辦事項。',
     'meetingMinutes.noActionItems': '尚無行動項目。',
+    'meetingMinutes.actionItemPending': '尚未建立',
+    'meetingMinutes.saveIncomplete': '會議記錄 {docNo} 已保存，但以下步驟尚未完成：{details}。未完成的內容已保留，請按「儲存」完成，不會重複建立會議。',
+    'meetingMinutes.stepActionItems': '{n} 個行動項目尚未建立（{message}）',
+    'meetingMinutes.stepStatus': '狀態尚未設為 {status}（{message}）',
+    'meetingMinutes.stepStatusWaiting': '待上述步驟完成後才會設定',
 
     // OBS
     'obs.title': 'OBS 列表',

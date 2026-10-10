@@ -232,7 +232,20 @@ class MeetingMinutesService:
 
             enforce_update_scope(d, scope)
 
-            updated = self.repo.update(db_meeting, d)
+            # rev is user-editable, and (documentNumber, rev) is unique: a rev
+            # already used by another occurrence of this series is a 400 for
+            # the user to fix, not a 500.
+            try:
+                updated = self.repo.update(db_meeting, d)
+            except IntegrityError:
+                self.repo.db.rollback()
+                # only a rev that actually changed can collide; anything else keeps its own error
+                if 'rev' not in d or d['rev'] == old_val.get('rev'):
+                    raise
+                raise ValueError(
+                    f"Rev '{d.get('rev')}' already exists for meeting minute "
+                    f"'{db_meeting.documentNumber}' — choose another rev."
+                )
 
             log_audit(
                 self.repo.db, "UPDATE", "MeetingMinutes", meeting_id, updated.documentNumber,
