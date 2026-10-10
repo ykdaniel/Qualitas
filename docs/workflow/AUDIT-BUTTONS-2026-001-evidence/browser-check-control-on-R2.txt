@@ -1,0 +1,5 @@
+# 2026-10-10T23:32:08Z CONTROL: the R3 audit-buttons-check run against the R2 candidate (git archive 86932e29 + G-R2.patch) — the direct-click checks (7c) must fail there
+FAIL typed a new day, then one click on Save Draft: saved on the first click (with the lunch row)  -> {"footerAtBottom":false,"writes":0,"savedLunch":1,"docNo":null}
+FAIL typed a new day (table grows by its lunch), then one click on Add row: the row is added  -> {"sessionsBefore":2,"sessionsAfter":2,"lunchDays":["2026-10-01","2026-10-05"]}
+3 FAILED
+exit=1

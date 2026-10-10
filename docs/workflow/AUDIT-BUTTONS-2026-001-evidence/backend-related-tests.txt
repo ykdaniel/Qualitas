@@ -1,0 +1,5 @@
+# 2026-10-10T23:33:28Z R3 candidate = git archive HEAD 35e64cfa + G.patch, local Python 3.14.6, throwaway DATABASE_URL
+# files: tests/test_audit_agenda_http.py tests/test_audit_export_docx_http.py tests/test_audit_hardening_http.py tests/test_audit_contractor_scope_http.py tests/test_docx_path_guard_http.py tests/test_docx_path_guard.py tests/test_contractor_options_http.py tests/test_integrity_fixes.py
+.....................................                                    [100%]
+109 passed in 45.29s
+pytest_exit=0

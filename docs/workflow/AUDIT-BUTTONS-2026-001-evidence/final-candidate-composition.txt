@@ -1,0 +1,18 @@
+# 2026-10-10T23:38:40Z AUDIT-BUTTONS final candidate = copy of the hub's NOI-BATCH final-live-agenda (live AGENDA + NOI) + G.patch cc027440
+## backend files differing from the hub base
+Files HUB/backend/routers/audit.py and FINAL/backend/routers/audit.py differ
+Files HUB/backend/schemas.py and FINAL/backend/schemas.py differ
+Files HUB/backend/services/audit_service.py and FINAL/backend/services/audit_service.py differ
+Files HUB/backend/tests/test_audit_agenda_http.py and FINAL/backend/tests/test_audit_agenda_http.py differ
+Files HUB/backend/tests/test_audit_export_docx_http.py and FINAL/backend/tests/test_audit_export_docx_http.py differ
+## frontend files differing from the hub base
+Files HUB/react-app/src/components/Audit/Audit.print.css and FINAL/react-app/src/components/Audit/Audit.print.css differ
+Files HUB/react-app/src/components/Audit/AuditAgendaEditor.tsx and FINAL/react-app/src/components/Audit/AuditAgendaEditor.tsx differ
+Files HUB/react-app/src/components/Audit/AuditPrintTemplate.tsx and FINAL/react-app/src/components/Audit/AuditPrintTemplate.tsx differ
+Files HUB/react-app/src/components/Audit/AuditWizard.tsx and FINAL/react-app/src/components/Audit/AuditWizard.tsx differ
+Files HUB/react-app/src/context/LanguageContext.tsx and FINAL/react-app/src/context/LanguageContext.tsx differ
+Files HUB/react-app/src/services/api.ts and FINAL/react-app/src/services/api.ts differ
+Files HUB/react-app/src/store/auditStore.ts and FINAL/react-app/src/store/auditStore.ts differ
+Files HUB/react-app/tests-browser/audit-agenda-check.mjs and FINAL/react-app/tests-browser/audit-agenda-check.mjs differ
+Only in FINAL/react-app/tests-browser: audit-buttons-check.mjs
+Files HUB/react-app/tests-browser/audit-export-docx-check.mjs and FINAL/react-app/tests-browser/audit-export-docx-check.mjs differ
