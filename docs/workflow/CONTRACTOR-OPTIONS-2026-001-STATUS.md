@@ -80,3 +80,22 @@ CRLF 檔案（contractor_service.py、dependencies.py、routers/contractors.py�
 ## 未做／限制
 - `/api/audit/contractors` 後端保留未刪（前端已不用，理由見 TASK）。
 - 沒有逐一在瀏覽器點開每個模組的表單：只實測了 NCR、OBS、PQP、Audit、NOI、承包商管理頁。其他模組（OSD、ITP、ITR、FAT、Checklist、會議紀錄、Follow Up、儀表板、KPI、IAM、材料）都是透過同一個 `getActiveContractors()`，以讀碼和 `tsc` 確認。
+
+## 上線紀錄（2026-10-10，依 DECISIONS 的 PASS 後部署授權）
+- 提交與推送：`f1e5560c`（程式）、`4c3c7778`（文件），推送到 `ui/sidebar-shell-preview`。`schemas.py` 只用補丁把本輪那一段加入暫存區，另一工作階段的材料改動仍留在工作樹。
+- NAS 工作目錄：`~/deploy-contractor-options-20261009T182514Z`。
+  - 準備：線上 5 個後端檔 = HEAD `c8bba156`；前端 = AUDIT-LAYOUT 入口 `4599d221…`。
+  - 備份：資料庫線上備份 integrity ok（`fd3aa04c…`）、`backend-old/`、前端舊入口。
+  - 暫存區逐檔 OK。
+- 後端：
+  - 2026-10-09 18:25Z 之後套用 5 個檔案（`apply-backend-output.txt`）。
+  - 使用者以 sudo 重建：第一次請求後一直沒有執行，2026-10-10 由 Claude 在終端機面板代為輸入指令，使用者輸入密碼。回退映像：`qualitas-backend:pre-contractor-options-20261009T182514Z`。
+  - 新容器 `7b42dbc19913` 在 2026-10-10 02:36:55Z 啟動：啟動時自動備份 `qualitas_20261010_023655.db`、migration 完成、權限同步 72 項、排程啟動，日誌裡沒有 ERROR、Traceback 或 ABORTED（`backend-startup-check.txt`）。三個容器都是 Up。
+- 前端：02:38Z 新增 66 個資產（39 個原本就有），之後原子替換 `index.html`。dist inode 不變，106 個候選檔案全部在線上（`apply-frontend-output.txt`）。
+- 對外核對（`post-deploy-http-check.txt`）：
+  - `/` 和 `/index.html` 都是 `93b7672a…`；
+  - 主 bundle、CSS、Audit、NOI 都是 200 且雜湊相符；
+  - 上一版的 Audit 資產仍是 200；
+  - 未登入時 `/api/user/profile` 與 `/api/contractors/options` 都回 401。
+- 回退：前端用 `rollback-frontend.sh`；後端用 `rollback-backend-code.sh` 加重建，或改用 pre-contractor-options 映像。沒有資料庫結構變更。
+- 未完成：登入後的唯讀冒煙由使用者執行。建議檢查兩件事：Audit 頁的承包商統計是否出現原本消失的 2 家 `Active` 承包商；只有模組權限的角色，承包商下拉是否有資料。

@@ -1,0 +1,13 @@
+== 1. live state
+OK live backend = HEAD c8bba156 for the 5 files
+frontend index now: 4599d221b108c9cbdea0b608b13f426e04fee83103b00bae51cb4e9853cdf728
+OK live frontend = AUDIT-LAYOUT index
+== 2. backups
+integrity: ok
+fd3aa04c6ec716f393ab9d21f6eae21fc337e9b96ed2f9bd766d194369aea5df  qualitas-pre-contractor-options.db
+OK backend-old copy
+== 3. staging
+OK uploads
+OK backend staging (5 files)
+OK frontend staging (106 files)
+PREP DONE
