@@ -597,6 +597,18 @@ export const exportNoiDocx = async (noiId: string, filename: string): Promise<vo
   URL.revokeObjectURL(url);
 };
 
+// Formal .docx export of the whole Audit report (AUDIT-EXPORT-DOCX-2026-001) — mirrors
+// exportNcrDocx's blob-download pattern.
+export const exportAuditDocx = async (auditId: string, filename: string): Promise<void> => {
+  const response = await api.get(`/audit/${auditId}/export-docx`, { responseType: 'blob' });
+  const url = URL.createObjectURL(new Blob([response.data]));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filename}.docx`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 // --- File Management API ---
 
 export interface AttachmentInfo {

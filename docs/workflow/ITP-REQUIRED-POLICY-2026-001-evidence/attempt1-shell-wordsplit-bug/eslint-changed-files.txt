@@ -1,0 +1,16 @@
+# npx eslint (changed files only)  run(UTC): 2026-10-07T14:55:01Z  HEAD=056c245c
+# sha256 
+
+Oops! Something went wrong! :(
+
+ESLint: 8.57.1
+
+No files matching the pattern "src/components/ITP/ITPDetail.tsx src/components/ITP/ITPAdvancedEditor.tsx src/utils/itpItemValidation.ts tests-unit/itpItemValidation.test.ts src/context/LanguageContext.tsx" were found.
+Please check for typing mistakes in the pattern.
+
+npm notice
+npm notice New minor version of npm available! 11.11.0 -> 11.21.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.21.0
+npm notice To update run: npm install -g npm@11.21.0
+npm notice
+# exit=2

@@ -1,0 +1,10 @@
+# 2026-10-10T05:18:10Z isolated stack from the R2 candidate cand3 (HEAD 37d71b03 + G.patch R2), ports 8320/3320, fresh DB, seeds: seed_audit_hardening_b_review.py + seed_audit_export_docx_review.py
+PASS export button only on step 4, next to Print Report  -> 0 | 列印報告 匯出 Word
+PASS download is AHB-EXPORT-1.docx (a real docx/zip)  -> {"file":"AHB-EXPORT-1.docx","size":39226,"zip":true}
+PASS unsaved changes: asks to save first, no download  -> 有尚未儲存的修改。請先按「儲存草稿」再匯出，Word 檔的內容是已儲存的資料。
+PASS new audit: no button before saving, exports after Save Draft  -> 0 | QTS-NA-AUDIT-000001 | {"file":"QTS-NA-AUDIT-000001.docx","size":38411,"zip":true}
+PASS view-only user can export  -> {"file":"AHB-EXPORT-1.docx","size":39226,"zip":true}
+PASS locked Void record can export  -> {"file":"AHB-VOID-1.docx","size":38616,"zip":true}
+PASS English label, hidden when printing  -> Export Word | visible in print: false
+ALL PASS
+exit=0

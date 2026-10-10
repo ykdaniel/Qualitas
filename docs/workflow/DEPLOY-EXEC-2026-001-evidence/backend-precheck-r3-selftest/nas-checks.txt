@@ -1,0 +1,8 @@
+NAS checks for qualitas-backend-precheck-r3.sh, 2026-10-07T16:53Z
+sha256 on NAS: 7f51580e787206a551cfde53d485800e12ad5e418608301c55a25a3a1b179218 (mode 600)
+bash 4.4.23 bash -n: ok
+probe_r4.py (same 37 cases, script path rewritten to a local copy) run on NAS Python 3.8.15:
+  analyzer run with python 3.8.15 / TOTAL cases=37 mismatches=0 / probe_rc=0
+  unique dir ~/precheck-r3-probe-20261007T165324Z (700), TMPDIR and PYTHONDONTWRITEBYTECODE set to keep shared /tmp untouched; dir removed
+  note: only the summary lines above were captured; the full NAS probe.out was removed with the unique dir before being copied (local py3.14 full output is probe-local-py314.txt)
+previous copies: qualitas-backend-precheck-r2.sh renamed to qualitas-backend-precheck-r2.sh.REVISED-do-not-run (600), never executed; r1 copy unchanged (do-not-run)

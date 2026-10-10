@@ -1,0 +1,6 @@
+# 2026-10-10T05:18:06Z R2 candidate cand3 (HEAD 37d71b03 + G.patch R2), local Python 3.14.6, throwaway DATABASE_URL
+# files: tests/test_audit_export_docx_http.py tests/test_audit_hardening_http.py tests/test_audit_contractor_scope_http.py tests/test_docx_path_guard_http.py tests/test_docx_path_guard.py tests/test_contractor_options_http.py
+..............                                                           [100%]
+86 passed in 40.62s
+pytest_exit=0
+# frontend on the same candidate: tsc=0 eslint=0 (tsc --noEmit -p .; eslint --max-warnings 0 on AuditWizard.tsx, LeaveGuard.tsx, api.ts, LanguageContext.tsx)

@@ -1,0 +1,20 @@
+script: docs/workflow/DEPLOY-EXEC-2026-001-backend-precheck.sh sha256=6d92caeff95811cc86b16a68cd06fb897dc4c54bb40c27d69fa8b41eee562fe9
+run: 2026-10-07T16:24:35Z local Colima mock (docker 29.2.1), host bash 3.2.57(1)-release, python 3.14.6
+secret markers scanned (stdout + report file per case): SECRETCMD111 ENTSECRET222 ENVSECRET333 BUILDARGSECRET444 CTXSECRET555 ERRSECRET666 INLINESECRET777 IMGENVSECRET888 CHANGEDSECRET999
+
+A-pass                 exit=0 expected=0 secret_hits=0 OK
+L-tee-fail             exit=20 expected=20 secret_hits=0 OK
+B-docker-unreachable   exit=1 expected=1 secret_hits=0 OK
+C-helper-hotfix        exit=1 expected=1 secret_hits=0 OK
+D-diff-untruncated     exit=1 expected=1 secret_hits=0 OK
+E-code-mount           exit=1 expected=1 secret_hits=0 OK
+F1-stage-errors        exit=1 expected=1 secret_hits=0 OK
+F2-build-secrets       exit=1 expected=1 secret_hits=0 OK
+G-runtime-mismatch     exit=1 expected=1 secret_hits=0 OK
+H-inherited-env        exit=1 expected=1 secret_hits=0 OK
+I1-no-service          exit=1 expected=1 secret_hits=0 OK
+I2-no-labels           exit=1 expected=1 secret_hits=0 OK
+J-sqlite-sidecar       exit=1 expected=1 secret_hits=0 OK
+K-internal-error       exit=3 expected=3 secret_hits=0 OK
+M-unsupported-key      exit=1 expected=1 secret_hits=0 OK
+cleanup done (container/network/image qbr2-selftest/qbr2-selftest_net/qbr2test-backend)

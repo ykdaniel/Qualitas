@@ -2319,7 +2319,14 @@ item?」，兩個入口點行為统一。
 
 ---
 
-## 36. ITP: a new inspection-plan item can be saved with every field blank · NOT STARTED, deliberately deferred · 【優先度：已決議延後】
+## 36. ITP: a new inspection-plan item can be saved with every field blank · **2026-10-07 使用者決策：Activity／Standard 各自中英擇一必填（取代先前延後）** · 實作中 `ITP-REQUIRED-POLICY-2026-001`
+
+> **2026-10-07 決策（取代下方「NOT STARTED, deliberately deferred · 已決議延後」狀態；以下歷史原文保留不改）**
+> - 使用者確認：**Activity** 與 **Standard** 各自「英文或中文至少填一個，另一個選填」；以去除前後空白後的內容判斷，只有空白字元不算已填。
+> - 不要求翻譯、不自動複製到另一語言、不擴大其他欄位的必填要求；歷史資料不批次回填、不清洗。
+> - **取代目前程式中的英文必填限制**：2026-10-07 前在 `ITPDetail.tsx`／`ITPAdvancedEditor.tsx` 加入的「Activity(EN) 與 Standard(EN) 必填」是 Claude 自行延伸、未經決策的規則（見 `docs/workflow/unrecorded-work-reconciliation-2026-10-07.md` R1），由本決策取代。
+> - 決策記錄：`DECISIONS.md`「ITP 檢驗項目 Activity／Standard 中英擇一必填」。實作與驗收：`ITP-REQUIRED-POLICY-2026-001`。
+> - **2026-10-10 狀態**：已實作（ITP-REQUIRED-POLICY-2026-001 PASS），前端 2026-10-07 隨 DEPLOY-EXEC-2026-001 上線；程式 `2e98d0dd`／`cc8b83fb`，已合併進 main。
 
 **Where:** `react-app/src/components/ITP/ITPAdvancedEditor.tsx`'s "Add New Item" → item edit panel → Apply.
 
@@ -2849,3 +2856,10 @@ Construction Engineer 核准欄位都還是 Pending——跟 `obsFormSchema.ts::
 **影響：** 匯出只列檔名、不讀內容，且舊版附件欄位需有該模組寫入權限才能塞值，所以最多洩漏「某檔案存在及其檔名」，嚴重度低。
 
 **建議做法：** 改用 `os.path.commonpath([root, full]) == root`，並補一個含同前綴兄弟目錄的負向測試。需另案處理，不夾帶進 NOI 匯出任務。
+
+**2026-10-07 更正（DOCX-PATH-GUARD-2026-001）：上方「影響」一段的風險判斷錯誤，原文保留於上。**
+- 「匯出只列檔名、不讀內容」只對 **NOI** 成立（`noi_service.export_docx` → `add_file_list`）。
+- **ITR**（`defectPhotos`、`improvementPhotos`）與 **NCR**（`defectPhotos`、`progressPhotos`、`improvementPhotos`）匯出把同一 helper 的結果交給 `add_photo_section` → `run.add_picture()`，**圖片內容會被嵌入 Word**。這些舊欄位可由具更新權限的帳號經一般更新 API 寫入任意字串。
+- 本地已重現：同前綴兄弟目錄（`..` 或根目錄內 symlink）被放行，且內容嵌入 .docx（`docs/workflow/unrecorded-work-reconciliation-2026-10-07-evidence/`）。未在正式站重現，不代表已發生洩漏。
+- 嚴重度由「低」上調為**應優先修復**；修復與回歸測試見 `DOCX-PATH-GUARD-2026-001`（目前為工作樹變更，未提交、未部署，待獨立審查）。
+- **2026-10-10 狀態**：已修復並上線——DOCX-PATH-GUARD-2026-001 PASS，後端 2026-10-09 12:14:09Z 部署（`DEPLOY-EXEC-2026-001-docx-deploy-record.md`），程式 `52986ac2` 已合併進 main。NOI 匯出另案 NOI-EXPORT-DOCX-2026-001 仍未結。

@@ -1,0 +1,7 @@
+script sha256=6d92caeff95811cc86b16a68cd06fb897dc4c54bb40c27d69fa8b41eee562fe9
+baseline: exit=0 OVERALL = PASS
+missing-HostConfig: exit=0 OVERALL = PASS
+missing-Env-both: exit=0 OVERALL = PASS
+redacted-workingdir-mismatch: exit=0 OVERALL = PASS
+undeclared-resource-limit: exit=0 OVERALL = PASS
+restart-retry-mismatch: exit=0 OVERALL = PASS

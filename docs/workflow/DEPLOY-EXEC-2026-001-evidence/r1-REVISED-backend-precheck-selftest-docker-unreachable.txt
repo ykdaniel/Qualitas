@@ -1,0 +1,76 @@
+需要 sudo 密碼（只在本機終端機輸入，不會寫入報告）：
+== DEPLOY-EXEC-2026-001 backend read-only precheck ==
+utc=20261007T161235Z host=NookdeMac-mini.local user=nook
+compose_cmd=/private/tmp/claude-501/-Users-nook-Documents-Qualitas/453911c4-4f3e-4459-8150-ad84eb992c42/scratchpad/precheck-selftest/bin/fake-compose -p  --project-directory   config --format json
+
+-- 3.1 container / image identity --
+container_id = None
+name = None  image_id = None  config_image = None
+status = None  restarting = None  restart_count = None  started = None
+image: id = None  tags = None  digests = None  created = None
+image  config: user=None workdir=None cmd=null entrypoint=null ports=[]
+contnr config: user=None workdir=None cmd=null entrypoint=null ports=[]
+image env keys = []
+container env keys = []
+container-only env keys = []
+
+-- mounts / networks (running) --
+networks = []  restart_policy = None
+
+-- 3.2 docker diff under /app (excluding __pycache__/.pyc) --
+  (none)
+
+-- 3.3 helper docx_builder.py --
+container : failed to connect to the docker API at unix:///nonexistent.sock; check if the path is correct and if the daemon is running: dial unix /nonexistent.sock: connect: no such file or directory|
+image     : failed to connect to the docker API at unix:///nonexistent.sock; check if the path is correct and if the daemon is running: dial unix /nonexistent.sock: connect: no such file or directory|
+host      : 95208d8af5c231f4f3de22b4fc74f7e0e5d604d79bac191ceceb80f768e78e6d
+
+-- 3.4 API probe baseline --
+GET /api/user/profile (no auth) -> 401
+
+-- G1/G2 compose labels / executor --
+  com.docker.compose.project = (missing)
+  com.docker.compose.config_files = (missing)
+  com.docker.compose.working_dir = (missing)
+  com.docker.compose.environment_file = (missing)
+  com.docker.compose.service = (missing)
+  com.docker.compose.version = (missing)
+  executor /usr/local/bin/docker-compose version = 2.20.1
+
+-- G4 effective compose config (structure only) --
+  services = ['backend']
+  volume bind /private/tmp/claude-501/-Users-nook-Documents-Qualitas/453911c4-4f3e-4459-8150-ad84eb992c42/scratchpad/precheck-selftest/proj/backend/uploads -> /app/uploads read_only=False
+  build = {'context': '/private/tmp/claude-501/-Users-nook-Documents-Qualitas/453911c4-4f3e-4459-8150-ad84eb992c42/scratchpad/precheck-selftest/proj/backend', 'dockerfile': 'Dockerfile'}  build_arg_keys = ['TOKEN']
+  container_name = qb-selftest  image = None  restart = unless-stopped
+  command = null  entrypoint = null
+  networks (resolved) = ['qb-selftest_net']  ports = None
+  environment keys = ['ALGORITHM', 'SECRET_KEY']
+
+-- checks --
+[FAIL] container inspect readable :: IndexError
+[FAIL] image inspect readable :: IndexError
+[FAIL] container running, not restarting
+[FAIL] container image id == inspected image id
+[FAIL] docker diff ran :: rc=1
+[FAIL] no code-file changes under /app in writable layer
+[FAIL] helper container sha == image sha
+[FAIL] helper image sha == pre-fix base 95208d8a…
+[FAIL] helper file mode is 644
+[INFO] host helper sha == base :: True
+[PASS] probe baseline is 401 (not 5xx/timeout)
+[FAIL] G1 labels present (project/config_files/working_dir/service/version)
+[FAIL] G1 service label is backend
+[FAIL] G2 executor version == label version :: 2.20.1 vs 
+[FAIL] G3 env-file determined from label :: label missing
+[FAIL] G4 container_name matches
+[FAIL] G4 volumes == running mounts :: cfg-only=[('/private/tmp/claude-501/-Users-nook-Documents-Qualitas/453911c4-4f3e-4459-8150-ad84eb992c42/scratchpad/precheck-selftest/proj/backend/uploads', '/app/uploads', True)] run-only=[]
+[FAIL] G4 networks == running networks :: ['qb-selftest_net'] vs []
+[FAIL] G4 restart policy matches
+[FAIL] G4 compose env keys present in container :: missing=['ALGORITHM', 'SECRET_KEY']
+[FAIL] G4 compose env values equal running (compared, not printed) :: differ_keys=[]
+[FAIL] G4 container env keys explained by image+compose :: unexplained=[]
+[FAIL] G4 running Cmd == image Cmd (no compose override)
+
+OVERALL = FAIL (21)
+
+報告已存：/private/tmp/claude-501/-Users-nook-Documents-Qualitas/453911c4-4f3e-4459-8150-ad84eb992c42/scratchpad/precheck-selftest/home/qualitas-backend-precheck-20261007T161235Z.txt（不含環境變數值）

@@ -1,0 +1,67 @@
+## host=HOME-DS423PLUS date=2026-10-07T15:59:49Z user=uid=1026(ykdaniel) gid=100(users) groups=100(users),101(administrators),1023(http)
+## sudo -n:
+sudo: a password is required
+SUDO_NEEDS_PASSWORD
+## dist dir:
+drwxrwxrwx ykdaniel:users 4669 /volume1/docker/Qualitas/react-app
+drwxr-xr-x ykdaniel:users 376368 /volume1/docker/Qualitas/react-app/dist
+## dist file count: 104
+## non-644 files / non-755 dirs:
+## compose frontend+backend (excerpt):
+services:
+  backend:
+    build: ./backend
+    container_name: qualitas-backend
+    restart: unless-stopped
+    volumes:
+      - ./backend/qualitas.db:/app/qualitas.db
+      - ./backend/uploads:/app/uploads
+      - ./backend/backups:/app/backups
+      - ./backend/logs:/app/logs
+    env_file:
+      - ./backend/.env
+    networks:
+      - qualitas-net
+
+  frontend:
+    image: nginx:alpine
+    container_name: qualitas-frontend
+    restart: unless-stopped
+    volumes:
+      - ./react-app/dist:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+    networks:
+      - qualitas-net
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: qualitas-tunnel
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - frontend
+    networks:
+      - qualitas-net
+
+networks:
+  qualitas-net:
+    driver: bridge
+## other compose/override files:
+-rwxrwxrwx+ 1 ykdaniel users    209 Apr  2  2026 .env.tunnel
+-rwxrwxrwx+ 1 ykdaniel users    962 Apr  2  2026 docker-compose.yml
+## nginx.conf sha256 + cache lines:
+d0bd9e36a5e43ef8e114d618b93466176c19d143e8bd64cd8ef070088e56be39  /volume1/docker/Qualitas/nginx.conf
+5:    root /usr/share/nginx/html;
+14:    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+23:    location = /index.html {
+24:        add_header Cache-Control "no-cache, no-store, must-revalidate";
+30:    location / {
+31:        try_files $uri $uri/ /index.html;
+35:    location /assets/ {
+36:        expires 1y;
+37:        add_header Cache-Control "public, immutable";
+41:    location /api/ {

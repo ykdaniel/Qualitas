@@ -1,0 +1,33 @@
+# npx eslint (changed files only)  run(UTC): 2026-10-07T15:05:25Z  HEAD=056c245c
+# sha256 fba64764d8b4ce1390decf59d418396f99b56a8bbe7437f5a9c1c44ab07a40c7  src/utils/itpItemValidation.ts
+# sha256 2c78294ebc150803f1b41641eaa116106fb8e17ca676ab4ac4339abc7edebeb6  tests-unit/itpItemValidation.test.ts
+# sha256 cf77881c13e87d08e43c37d9663c330ed01007c9a5a7f59648d4aab8f92ccfca  src/components/ITP/ITPModals.tsx
+# sha256 44ac3c092207c92c6962cbed348daa957009a308d9e83379f55955799c0160c1  src/components/ITP/ITPDetail.tsx
+# sha256 88c2e931a597a82c0907c4b0dccb5123b1b49964146b8d7a2270b1d45b9cb2cc  src/components/ITP/ITPAdvancedEditor.tsx
+
+/Users/nook/Documents/Qualitas/react-app/src/components/ITP/ITPAdvancedEditor.tsx
+  5:27  warning  'ArrowDown' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/nook/Documents/Qualitas/react-app/src/components/ITP/ITPDetail.tsx
+  12:22   warning  'Filter' is defined but never used        @typescript-eslint/no-unused-vars
+  12:55   warning  'Layers' is defined but never used        @typescript-eslint/no-unused-vars
+  12:72   warning  'AlertCircle' is defined but never used   @typescript-eslint/no-unused-vars
+  13:3    warning  'CheckCircle2' is defined but never used  @typescript-eslint/no-unused-vars
+  13:17   warning  'ChevronDown' is defined but never used   @typescript-eslint/no-unused-vars
+  13:30   warning  'Calendar' is defined but never used      @typescript-eslint/no-unused-vars
+  13:40   warning  'Hash' is defined but never used          @typescript-eslint/no-unused-vars
+  13:46   warning  'Tag' is defined but never used           @typescript-eslint/no-unused-vars
+  13:51   warning  'FileCheck' is defined but never used     @typescript-eslint/no-unused-vars
+  13:109  warning  'ArrowDown' is defined but never used     @typescript-eslint/no-unused-vars
+
+/Users/nook/Documents/Qualitas/react-app/src/components/ITP/ITPModals.tsx
+  18:8  warning  'styles' is defined but never used  @typescript-eslint/no-unused-vars
+
+✖ 12 problems (0 errors, 12 warnings)
+
+npm notice
+npm notice New minor version of npm available! 11.11.0 -> 11.21.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.21.0
+npm notice To update run: npm install -g npm@11.21.0
+npm notice
+# exit=0

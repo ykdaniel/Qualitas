@@ -6,6 +6,7 @@ Business logic layer for Audit module
 
 import json
 import logging
+import re
 import uuid
 from typing import List, Optional
 
@@ -27,6 +28,19 @@ _JSON_FIELDS = ("selected_templates", "custom_check_items")
 _CREATE_STATUSES = tuple(s for s, nxt in WorkflowEngine.TRANSITIONS["Audit"].items() if nxt)
 # ...and those same dead ends are read-only (AUDIT-HARDENING-B: Void locked like Closed, user decision 2026-10-09).
 _LOCKED_STATUSES = tuple(s for s, nxt in WorkflowEngine.TRANSITIONS["Audit"].items() if not nxt)
+
+
+# Word export (AUDIT-EXPORT-DOCX-2026-001): bilingual labels for the status and for a checklist item's result. An item
+# without a status counts as pending, as in the wizard.
+_STATUS_TEXT = {
+    'Draft': '草稿 Draft', 'Planned': '計畫中 Planned', 'In Progress': '進行中 In Progress',
+    'Completed': '已完成 Completed', 'Closed': '已關閉 Closed', 'Void': '作廢 Void',
+}
+_RESULT_TEXT = {'pass': '符合 Pass', 'fail': '不符合 Fail', 'pending': '注意／待改善 Attention'}
+# Checklist detail table: #, clause no., clause & question, result, remarks, updated — 17.4 cm = A4 minus the margins.
+_ITEM_COLUMN_WIDTHS_CM = (0.9, 1.7, 6.2, 2.3, 4.3, 2.0)
+# Characters an XML 1.0 document cannot contain (python-docx raises ValueError on them).
+_XML_UNSAFE = re.compile('[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]')
 
 
 class AuditConflict(Exception):
@@ -335,6 +349,138 @@ class AuditService:
         success = self.repo.delete(audit_id)
         self.repo.db.commit()
         return success
+
+    def export_docx(self, audit_id: str, scope=None):
+        """
+        Formal .docx report for one Audit (AUDIT-EXPORT-DOCX-2026-001): the whole audit in one file — plan (information,
+        team, scope & criteria), checklist results, findings, sign-off — in the NCR report layout, built with the shared
+        core/docx_builder.py primitives.
+
+        Returns a StreamingResponse, or None when the audit does not exist or is outside the caller's scope (→ 404).
+        """
+        from docx.shared import Cm
+        from core import docx_builder as db
+
+        audit = self.get_audit(audit_id, scope=scope)
+        if audit is None:
+            return None
+
+        def txt(value):
+            # Stored free text may hold characters an XML document cannot carry (control characters, lone surrogates from
+            # JSON "\\ud800" escapes); python-docx refuses those with a ValueError, so drop them instead of failing the export.
+            if value is None:
+                return None
+            text = _XML_UNSAFE.sub('', str(value))
+            return text if text.strip() else None
+
+        def json_list(raw):
+            if isinstance(raw, list):
+                return raw
+            try:
+                parsed = json.loads(raw) if raw else []
+            except (TypeError, ValueError):
+                return []
+            return parsed if isinstance(parsed, list) else []
+
+        def status_key(item):
+            # custom_check_items is free JSON (schemas: Any): a status that is a list / object is not hashable and must
+            # not break the lookup — anything that is not a string counts as pending, as in the wizard.
+            status = item.get('status')
+            return status if isinstance(status, str) else None
+
+        project = None
+        if audit.project_id:
+            project = self.repo.db.query(models.Project).filter(models.Project.id == audit.project_id).first()
+        if project is not None:
+            project_label = f"[{project.code}] {project.name}" if project.code else project.name
+        else:
+            project_label = audit.project_name
+        contractor = audit.contractor or (audit.vendor_ref.name if audit.vendor_ref else None)
+        templates = [t for t in json_list(audit.selected_templates) if isinstance(t, str) and t.strip()]
+        items = [i for i in json_list(audit.custom_check_items) if isinstance(i, dict)]
+
+        # Same counting as the wizard's statistics cards: anything that is not pass / fail (incl. no status) is pending.
+        total = len(items)
+        passed = sum(1 for i in items if i.get('status') == 'pass')
+        failed = sum(1 for i in items if i.get('status') == 'fail')
+        pending = total - passed - failed
+        progress = 0 if total == 0 else round((total - pending) / total * 100)
+
+        doc = db.new_document()
+        db.add_masthead(doc, "內部稽核報告", "INTERNAL AUDIT REPORT", doc_no=txt(audit.auditNo), status=txt(audit.status))
+
+        # 1. Audit information
+        db.add_section_heading(doc, "1", "稽核資訊", "Audit Information")
+        db.add_field_grid(doc, [
+            [("稽核編號", "Audit No.", txt(audit.auditNo)),
+             ("狀態", "Status", _STATUS_TEXT.get(audit.status) or txt(audit.status))],
+            [("稽核標題", "Audit Title", txt(audit.title))],
+            [("專案", "Project", txt(project_label)), ("受稽核廠商", "Auditee / Contractor", txt(contractor))],
+            [("開始日期", "Start Date", txt(audit.date)), ("結束日期", "End Date", txt(audit.end_date))],
+            [("稽核地點", "Location", txt(audit.location))],
+        ])
+
+        # 2. Audit team
+        db.add_section_heading(doc, "2", "稽核團隊", "Audit Team")
+        db.add_field_grid(doc, [
+            [("專案經理", "Project Director", txt(audit.project_director)),
+             ("工作包／技術負責人", "Package / Tech. Lead", txt(audit.tech_lead))],
+            [("主任稽核員", "Lead Auditor", txt(audit.auditor)),
+             ("協同稽核員", "Support Auditor(s)", txt(audit.support_auditors))],
+        ])
+
+        # 3. Scope & criteria
+        db.add_section_heading(doc, "3", "稽核範圍與準則", "Scope & Criteria")
+        db.add_field_grid(doc, [
+            [("稽核準則", "Audit Criteria", txt(audit.audit_criteria))],
+            [("選用模板", "Templates", txt("、".join(templates)))],
+        ])
+        db.add_subsection_heading(doc, "3.1 範圍描述", "Audit Scope")
+        db.add_field_box(doc, txt(audit.scope_description), guide="說明本次稽核涵蓋之部門、流程、作業與地點")
+
+        # 4. Checklist results
+        db.add_section_heading(doc, "4", "查檢結果", "Checklist Results")
+        db.add_field_grid(doc, [
+            [("查檢項目數", "Total Items", str(total)), ("完成率", "Progress", f"{progress}%")],
+            [("符合", "Pass", str(passed)), ("不符合", "Fail", str(failed))],
+            [("注意／待改善", "Attention / Pending", str(pending))],
+        ])
+        db.add_subsection_heading(doc, "4.1 查檢明細", "Audit Items")
+        if items:
+            rows = []
+            for n, item in enumerate(items, start=1):
+                content = "\n".join(filter(None, [txt(item.get('clause')), txt(item.get('task'))]))
+                rows.append([
+                    str(n),
+                    txt(item.get('no')) or db.DASH,
+                    content or db.DASH,
+                    _RESULT_TEXT.get(status_key(item), _RESULT_TEXT['pending']),
+                    txt(item.get('note')) or db.DASH,
+                    txt(item.get('updatedAt')) or db.DASH,
+                ])
+            table = db.add_data_table(doc, ["#", "條文編號\nClause No.", "條文與查檢重點\nClause & Audit Question",
+                                            "結果\nResult", "備註\nRemarks", "更新日期\nUpdated"], rows)
+            # Word gives every column the same width by default: a narrow "#", most of the room for the question.
+            table.autofit = False
+            for row in table.rows:
+                for cell, width in zip(row.cells, _ITEM_COLUMN_WIDTHS_CM):
+                    cell.width = Cm(width)
+        else:
+            db.add_paragraph(doc, "（尚無查檢項目 No audit items）", size=9, italic=True)
+
+        # 5. Findings & summary
+        db.add_section_heading(doc, "5", "稽核發現與總結", "Findings & Summary")
+        db.add_field_box(doc, txt(audit.findings), guide="記錄稽核發現、不符合事項與總結", tall=True)
+
+        # 6. Sign-off
+        db.add_section_heading(doc, "6", "簽核", "Sign-off")
+        db.add_sign_off_grid(doc, [
+            {"num": "6.1", "zh": "主任稽核員", "en": "Lead Auditor", "name": txt(audit.auditor)},
+            {"num": "6.2", "zh": "受稽核方代表", "en": "Auditee Representative"},
+            {"num": "6.3", "zh": "專案經理", "en": "Project Director", "name": txt(audit.project_director)},
+        ])
+
+        return db.finalize_response(doc, txt(audit.auditNo) or "Audit")
 
     def _resolve_vendor_id(self, vendor_name: Optional[str]) -> Optional[str]:
         """

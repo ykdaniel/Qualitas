@@ -1,0 +1,368 @@
+# Candidate frontend overlay on HEAD 056c245c — reviewed files only. Generated 2026-10-07T15:47:36Z. Read-only export; nothing applied.
+diff --git a/react-app/src/components/ITP/ITP.module.css b/react-app/src/components/ITP/ITP.module.css
+index 048abe1a..705f74d5 100755
+--- a/react-app/src/components/ITP/ITP.module.css
++++ b/react-app/src/components/ITP/ITP.module.css
+@@ -69,4 +69,12 @@
+     box-shadow: none !important;
+     border: none !important;
+   }
+-}
+\ No newline at end of file
++}
++
++/* ITP General Information only (ITP-SUBJECT-WIDTH-2026-001 R2): opt-in for the Version field. When the shared form grid drops to
++   two columns (<=1024px), Version takes the whole last row instead of leaving an empty half-row. The 3-column layout is untouched. */
++@media (max-width: 1024px) {
++  .versionFullRowWhenTwoColumns {
++    grid-column: 1 / -1;
++  }
++}
+diff --git a/react-app/src/components/ITP/ITPAdvancedEditor.tsx b/react-app/src/components/ITP/ITPAdvancedEditor.tsx
+index a26fdad2..f2482626 100755
+--- a/react-app/src/components/ITP/ITPAdvancedEditor.tsx
++++ b/react-app/src/components/ITP/ITPAdvancedEditor.tsx
+@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
+ import VPBadge from './VPBadge';
+ import { resolveItpRecordLink } from '../../utils/itpRecordLink';
+ import { useLanguage } from '../../context/LanguageContext';
++import { missingRequiredItemFields, preferEnglishText } from '../../utils/itpItemValidation';
+ // Define Props
+ interface ITPAdvancedEditorProps {
+     items: InspectionItem[];
+@@ -134,12 +135,10 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
+     const handleSaveItem = () => {
+         if (!editingItem) return;
+ 
+-        // Minimum-content guard (BACKLOG #35 follow-up, #36, 2026-10-07): previously let "Apply"
+-        // through with every field blank — see ITPDetail.tsx's identical guard for the full note.
+-        const activityEn = (editingItem.activity?.en || '').trim();
+-        const standardEn = (typeof editingItem.standard === 'string' ? editingItem.standard : editingItem.standard?.en || '').trim();
+-        if (!activityEn || !standardEn) {
+-            toast.warning('Please fill in Activity (EN) and Standard (EN) before applying.');
++        // Activity and Standard each need English OR Chinese (DECISIONS.md 2026-10-07, BACKLOG #36); trimmed, other fields optional.
++        // Returning early keeps the panel open with everything the user typed.
++        if (missingRequiredItemFields(editingItem).length > 0) {
++            toast.warning(t('itp.itemPanel.eitherLanguageRequiredToast') || 'Activity and Standard each need English or Chinese (at least one) before applying.');
+             return;
+         }
+ 
+@@ -496,7 +495,7 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
+                                 {/* Event No. box removed (2026-10-07, "這有必要嗎"): read-only and already in the
+                                     modal title. Phase stays (only way to move an item between phases);
+                                     Insert After shares its row for new items. */}
+-                                <div className={`grid grid-cols-1 gap-6 ${editingItem.isNew ? 'sm:grid-cols-2' : ''}`}>
++                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                     <div>
+                                         <div className="flex items-center gap-3 mb-2">
+                                             <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.phase') || 'Phase'}</span>
+@@ -521,7 +520,7 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
+                                                 <option value="end">At the End (最後面)</option>
+                                                 {items.filter(i => i.phase === editingItem.phase).map(item => (
+                                                     <option key={item.id} value={item.id}>
+-                                                        {item.id} - {item.activity.en}
++                                                        {item.id} - {preferEnglishText(item.activity)}
+                                                     </option>
+                                                 ))}
+                                             </select>
+@@ -538,7 +537,8 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
+                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                         <div>
+                                             <div className="flex items-center gap-3 mb-2">
+-                                                <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.activityLabel') || 'Activity (EN/CH)'} <span style={{ color: '#b91c1c' }}>*</span></span>
++                                                <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.activityLabel') || 'Activity (EN/CH)'}</span>
++                                                <span className="text-[11px] font-semibold text-[#b91c1c] whitespace-nowrap">{t('itp.itemPanel.eitherLanguageRequired') || 'English or Chinese — at least one'}</span>
+                                                 <span className="flex-1 border-t-2 border-slate-400"></span>
+                                             </div>
+                                             <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
+@@ -549,7 +549,8 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
+ 
+                                         <div>
+                                             <div className="flex items-center gap-3 mb-2">
+-                                                <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.standardLabel') || 'Standard (EN/CH)'} <span style={{ color: '#b91c1c' }}>*</span></span>
++                                                <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.standardLabel') || 'Standard (EN/CH)'}</span>
++                                                <span className="text-[11px] font-semibold text-[#b91c1c] whitespace-nowrap">{t('itp.itemPanel.eitherLanguageRequired') || 'English or Chinese — at least one'}</span>
+                                                 <span className="flex-1 border-t-2 border-slate-400"></span>
+                                             </div>
+                                             <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
+@@ -573,15 +574,20 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
+                                             <span className="flex-1 border-t-2 border-slate-400"></span>
+                                         </div>
+                                         {normalizeCriteria(editingItem.criteria).map((c, idx) => (
+-                                            <div key={idx} className="flex items-start gap-2 mb-2">
++                                            <div key={idx} data-criteria-row={idx} className="flex items-start gap-2 mb-3 p-2 rounded-lg border border-slate-200 bg-slate-50/60">
+                                                 {normalizeCriteria(editingItem.criteria).length > 1 && (
+                                                     <span className="shrink-0 w-6 h-6 mt-0.5 rounded-full bg-slate-700 text-white text-xs font-bold flex items-center justify-center">{idx + 1}</span>
+                                                 )}
+-                                                <div className="flex-1">
+-                                                    <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
+-                                                    <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm resize-y mb-2" value={c.en} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'en')} />
+-                                                    <span className="inline-block text-[11px] font-bold text-[#8a6a3a] bg-[#faf7f1] border border-[#b8945a]/40 rounded px-1.5 py-0.5 mb-1">中文</span>
+-                                                    <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={c.ch} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'ch')} />
++                                                {/* One criterion = one framed row: EN left, 中文 right on desktop (stacked below sm). */}
++                                                <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-3">
++                                                    <div className="min-w-0">
++                                                        <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
++                                                        <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm resize-y" value={c.en} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'en')} />
++                                                    </div>
++                                                    <div className="min-w-0">
++                                                        <span className="inline-block text-[11px] font-bold text-[#8a6a3a] bg-[#faf7f1] border border-[#b8945a]/40 rounded px-1.5 py-0.5 mb-1">中文</span>
++                                                        <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={c.ch} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'ch')} />
++                                                    </div>
+                                                 </div>
+                                                 <button className={actionStyles.iconDanger} type="button" onClick={() => handleCriteriaRemove(idx)}>✕</button>
+                                             </div>
+diff --git a/react-app/src/components/ITP/ITPDetail.tsx b/react-app/src/components/ITP/ITPDetail.tsx
+index 7981c170..48bb8bae 100755
+--- a/react-app/src/components/ITP/ITPDetail.tsx
++++ b/react-app/src/components/ITP/ITPDetail.tsx
+@@ -21,6 +21,7 @@ import { getNextRevision } from '../../utils/revision';
+ import VPBadge from './VPBadge';
+ import { resolveItpRecordLink } from '../../utils/itpRecordLink';
+ import { parseInspectionItems } from '../../utils/itpParser';
++import { missingRequiredItemFields, preferEnglishText } from '../../utils/itpItemValidation';
+ import './ITPDetail.print.css';
+ import './itp-print-global.css';
+ 
+@@ -217,14 +218,10 @@ const ITPDetail: React.FC = () => {
+ 
+   // 儲存修改
+   const handleSave = () => {
+-    // Minimum-content guard (BACKLOG #35 follow-up, #36, 2026-10-07): this panel previously let
+-    // "Apply" through with every field blank — a row with only an auto-assigned Event No. and no
+-    // actual inspection content. Activity (EN) and Standard (EN) are the two fields an inspection
+-    // item cannot meaningfully exist without; everything else stays optional.
+-    const activityEn = (editingItem.activity?.en || '').trim();
+-    const standardEn = (typeof editingItem.standard === 'string' ? editingItem.standard : editingItem.standard?.en || '').trim();
+-    if (!activityEn || !standardEn) {
+-      toast.warning('Please fill in Activity (EN) and Standard (EN) before applying.');
++    // Activity and Standard each need English OR Chinese (DECISIONS.md 2026-10-07, BACKLOG #36); trimmed, other fields optional.
++    // Returning early keeps the panel open with everything the user typed.
++    if (missingRequiredItemFields(editingItem).length > 0) {
++      toast.warning(t('itp.itemPanel.eitherLanguageRequiredToast') || 'Activity and Standard each need English or Chinese (at least one) before applying.');
+       return;
+     }
+     if (editingItem.isNew) {
+@@ -379,7 +376,7 @@ const ITPDetail: React.FC = () => {
+               {/* Event No. box removed (2026-10-07, "這有必要嗎"): read-only and already in the
+                   modal title. Phase stays (handleAddNew defaults to 'A', and it is the only way
+                   to move an item between phases); Insert After shares its row for new items. */}
+-              <div className={`grid grid-cols-1 gap-6 ${editingItem.isNew ? 'sm:grid-cols-2' : ''}`}>
++              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                 <div>
+                   <div className="flex items-center gap-3 mb-2">
+                     <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.phase') || 'Phase'}</span>
+@@ -404,7 +401,7 @@ const ITPDetail: React.FC = () => {
+                       <option value="end">{t('itp.detail.atTheEnd') || 'At the End'}</option>
+                       {items.filter(i => i.phase === editingItem.phase).map(item => (
+                         <option key={item.id} value={item.id}>
+-                          {item.id} - {item.activity.en}
++                          {item.id} - {preferEnglishText(item.activity)}
+                         </option>
+                       ))}
+                     </select>
+@@ -421,7 +418,8 @@ const ITPDetail: React.FC = () => {
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                   <div>
+                     <div className="flex items-center gap-3 mb-2">
+-                      <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.activityLabel') || 'Activity (EN/CH)'} <span style={{ color: '#b91c1c' }}>*</span></span>
++                      <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.activityLabel') || 'Activity (EN/CH)'}</span>
++                      <span className="text-[11px] font-semibold text-[#b91c1c] whitespace-nowrap">{t('itp.itemPanel.eitherLanguageRequired') || 'English or Chinese — at least one'}</span>
+                       <span className="flex-1 border-t-2 border-slate-400"></span>
+                     </div>
+                     <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
+@@ -432,7 +430,8 @@ const ITPDetail: React.FC = () => {
+ 
+                   <div>
+                     <div className="flex items-center gap-3 mb-2">
+-                      <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.standardLabel') || 'Standard (EN/CH)'} <span style={{ color: '#b91c1c' }}>*</span></span>
++                      <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.standardLabel') || 'Standard (EN/CH)'}</span>
++                      <span className="text-[11px] font-semibold text-[#b91c1c] whitespace-nowrap">{t('itp.itemPanel.eitherLanguageRequired') || 'English or Chinese — at least one'}</span>
+                       <span className="flex-1 border-t-2 border-slate-400"></span>
+                     </div>
+                     <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
+@@ -455,17 +454,22 @@ const ITPDetail: React.FC = () => {
+                     <span className="flex-1 border-t-2 border-slate-400"></span>
+                   </div>
+                   {normalizeCriteria(editingItem.criteria).map((c, idx) => (
+-                    <div key={idx} className="flex items-start gap-2 mb-2">
+-                      {normalizeCriteria(editingItem.criteria).length > 1 && (
+-                        <span className="shrink-0 w-6 h-6 mt-0.5 rounded-full bg-slate-700 text-white text-xs font-bold flex items-center justify-center">{idx + 1}</span>
+-                      )}
+-                      <div className="flex-1">
+-                        <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
+-                        <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm resize-y mb-2" value={c.en} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'en')} />
+-                        <span className="inline-block text-[11px] font-bold text-[#8a6a3a] bg-[#faf7f1] border border-[#b8945a]/40 rounded px-1.5 py-0.5 mb-1">中文</span>
+-                        <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={c.ch} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'ch')} />
+-                      </div>
+-                      <button className={actionStyles.iconDanger} type="button" onClick={() => handleCriteriaRemove(idx)}>✕</button>
++                    <div key={idx} data-criteria-row={idx} className="flex items-start gap-2 mb-3 p-2 rounded-lg border border-slate-200 bg-slate-50/60">
++                        {normalizeCriteria(editingItem.criteria).length > 1 && (
++                            <span className="shrink-0 w-6 h-6 mt-0.5 rounded-full bg-slate-700 text-white text-xs font-bold flex items-center justify-center">{idx + 1}</span>
++                        )}
++                        {/* One criterion = one framed row: EN left, 中文 right on desktop (stacked below sm). */}
++                        <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-3">
++                            <div className="min-w-0">
++                                <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
++                                <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm resize-y" value={c.en} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'en')} />
++                            </div>
++                            <div className="min-w-0">
++                                <span className="inline-block text-[11px] font-bold text-[#8a6a3a] bg-[#faf7f1] border border-[#b8945a]/40 rounded px-1.5 py-0.5 mb-1">中文</span>
++                                <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={c.ch} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'ch')} />
++                            </div>
++                        </div>
++                        <button className={actionStyles.iconDanger} type="button" onClick={() => handleCriteriaRemove(idx)}>✕</button>
+                     </div>
+                   ))}
+                   <button className={actionStyles.compact} type="button" onClick={handleCriteriaAdd}>{t('itp.itemPanel.addCriteria') || '+ Add Criteria'}</button>
+diff --git a/react-app/src/components/ITP/ITPModals.tsx b/react-app/src/components/ITP/ITPModals.tsx
+index 8739d2b3..114061ca 100755
+--- a/react-app/src/components/ITP/ITPModals.tsx
++++ b/react-app/src/components/ITP/ITPModals.tsx
+@@ -26,6 +26,7 @@ import { Printer, ShieldCheck, Save, LayoutTemplate, Plus, ClipboardList } from
+ import { toast } from 'sonner';
+ import { getErrorMessage, getErrorStatusCode } from '../../utils/errorUtils';
+ import { isUnchangedSincePriorWrite } from '../../utils/attachmentOutcome';
++import { preferEnglishText } from '../../utils/itpItemValidation';
+ import api from '../../services/api';
+ 
+ // Mirrors backend/core/utils.py::WorkflowEngine.TRANSITIONS["ITP"] exactly — the ONLY source of
+@@ -457,9 +458,9 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
+         }
+ 
+         const checklistItems = advancedItems.map((item, idx) => {
+-            const activityText = typeof item.activity === 'string' ? item.activity : (item.activity.en || '');
++            const activityText = preferEnglishText(item.activity);
+             const criteriaText = Array.isArray(item.criteria)
+-                ? item.criteria.map((c: any) => typeof c === 'string' ? c : c.en || '').filter(Boolean).join('; ')
++                ? item.criteria.map((c: any) => typeof c === 'string' ? c : preferEnglishText(c)).filter(Boolean).join('; ')
+                 : typeof item.criteria === 'string' ? item.criteria : '';
+ 
+             return {
+@@ -658,16 +659,8 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
+                                             style={{ backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: formData.referenceNo ? '#000000' : '#666666' }}
+                                         />
+                                     </div>
+-                                    <div className={formStyles.formGroup}>
+-                                        <label>{t('itp.description')}</label>
+-                                        <input
+-                                            type="text"
+-                                            className={formStyles.formInput}
+-                                            value={formData.description || ''}
+-                                            onChange={(e) => handleFieldChange('description', e.target.value)}
+-                                        />
+-                                    </div>
+-                                    <div className={formStyles.formGroup}>
++                                    {/* Contractor spans two columns on desktop so Reference no. + Contractor fill row 1 with no empty cell. */}
++                                    <div className={`${formStyles.formGroup} ${formStyles.formGroupSpan2}`}>
+                                         <label className={formStyles.requiredLabel}>{t('itp.vendor')}</label>
+                                         <select
+                                             className={`${formStyles.formSelect} ${errors.vendor ? formStyles.errorInput : ''}`}
+@@ -683,6 +676,16 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
+                                         </select>
+                                         {errors.vendor && <span className={formStyles.errorMessage}>{errors.vendor}</span>}
+                                     </div>
++                                    {/* Subject gets its own full row (ITP-SUBJECT-WIDTH-2026-001): same single-line input and data behaviour, just wider. */}
++                                    <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>
++                                        <label>{t('itp.description')}</label>
++                                        <input
++                                            type="text"
++                                            className={formStyles.formInput}
++                                            value={formData.description || ''}
++                                            onChange={(e) => handleFieldChange('description', e.target.value)}
++                                        />
++                                    </div>
+                                     <div className={formStyles.formGroup}>
+                                         <label>{t('itp.submissionDate')}</label>
+                                         <input
+@@ -708,7 +711,7 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
+                                             onChange={(e) => handleFieldChange('dueDate' as any, e.target.value)}
+                                         />
+                                     </div>
+-                                    <div className={formStyles.formGroup}>
++                                    <div className={`${formStyles.formGroup} ${styles.versionFullRowWhenTwoColumns}`}>
+                                         <label>{t('itp.rev')}</label>
+                                         {revMode === 'select' && (
+                                             <select
+diff --git a/react-app/src/components/Shared/FormShell.module.css b/react-app/src/components/Shared/FormShell.module.css
+index 6e1c67bf..be24ce3f 100644
+--- a/react-app/src/components/Shared/FormShell.module.css
++++ b/react-app/src/components/Shared/FormShell.module.css
+@@ -172,6 +172,17 @@
+   flex-direction: column;
+ }
+ 
++/* Spans two columns of the 3-column desktop grid; falls back to one column where the grid has fewer columns. */
++.formGroupSpan2 {
++  grid-column: span 2;
++}
++
++@media (max-width: 1024px) {
++  .formGroupSpan2 {
++    grid-column: auto;
++  }
++}
++
+ .formGroup label,
+ .formGroupFull label {
+   font-size: 13px;
+diff --git a/react-app/src/context/LanguageContext.tsx b/react-app/src/context/LanguageContext.tsx
+index 62dbb4a1..42305373 100755
+--- a/react-app/src/context/LanguageContext.tsx
++++ b/react-app/src/context/LanguageContext.tsx
+@@ -1164,6 +1164,8 @@ const translations: Record<Language, Record<string, string>> = {
+     'itp.itemPanel.phase': 'Phase',
+     'itp.itemPanel.activityLabel': 'Activity (EN/CH)',
+     'itp.itemPanel.standardLabel': 'Standard (EN/CH)',
++    'itp.itemPanel.eitherLanguageRequired': 'English or Chinese — at least one',
++    'itp.itemPanel.eitherLanguageRequiredToast': 'Activity and Standard each need English or Chinese (at least one) before applying.',
+     'itp.itemPanel.criteriaLabel': 'Criteria',
+     'itp.itemPanel.addCriteria': '+ Add Criteria',
+     'itp.itemPanel.checkTimeLabel': 'Check Time (EN/CH)',
+@@ -2564,6 +2566,8 @@ const translations: Record<Language, Record<string, string>> = {
+     'itp.itemPanel.phase': '階段',
+     'itp.itemPanel.activityLabel': '檢驗活動（中／英）',
+     'itp.itemPanel.standardLabel': '標準（中／英）',
++    'itp.itemPanel.eitherLanguageRequired': '英文或中文至少填一項',
++    'itp.itemPanel.eitherLanguageRequiredToast': '檢驗活動與標準各自需填寫英文或中文至少一項，才能套用。',
+     'itp.itemPanel.criteriaLabel': '準則',
+     'itp.itemPanel.addCriteria': '＋新增準則',
+     'itp.itemPanel.checkTimeLabel': '檢查時機（中／英）',
+diff --git a/react-app/src/utils/itpItemValidation.ts b/react-app/src/utils/itpItemValidation.ts
+new file mode 100644
+index 00000000..6948374d
+--- /dev/null
++++ b/react-app/src/utils/itpItemValidation.ts
+@@ -0,0 +1,32 @@
++// ITP inspection-item required fields (DECISIONS.md, 2026-10-07): Activity and Standard each need English OR Chinese
++// filled in — the other language is optional. Judged after trim(), so whitespace-only text does not count.
++
++export type BilingualValue = { en?: string | null; ch?: string | null } | string | null | undefined;
++
++export const hasEitherLanguage = (value: BilingualValue): boolean => {
++    if (typeof value === 'string') return value.trim() !== '';
++    if (!value) return false;
++    return (value.en ?? '').trim() !== '' || (value.ch ?? '').trim() !== '';
++};
++
++// Display / Generate-Checklist text (ITP-LANG-FALLBACK-2026-001): English first; Chinese only when English is blank after trim().
++// trim() only decides whether a language has content — the ORIGINAL string is returned, nothing is translated or copied back.
++// With no content in either language the English value is returned unchanged, so existing output stays as it was.
++export const preferEnglishText = (value: BilingualValue): string => {
++    if (typeof value === 'string') return value;
++    if (!value) return '';
++    const en = value.en ?? '';
++    if (en.trim() !== '') return en;
++    const ch = value.ch ?? '';
++    if (ch.trim() !== '') return ch;
++    return en;
++};
++
++export type RequiredItemField = 'activity' | 'standard';
++
++export const missingRequiredItemFields = (item: { activity?: BilingualValue; standard?: BilingualValue }): RequiredItemField[] => {
++    const missing: RequiredItemField[] = [];
++    if (!hasEitherLanguage(item.activity)) missing.push('activity');
++    if (!hasEitherLanguage(item.standard)) missing.push('standard');
++    return missing;
++};

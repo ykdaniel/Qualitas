@@ -1,45 +1,36 @@
 # REVIEW.md — 獨立審查
 
-TASK_ID: NOI-EXPORT-DOCX-2026-001
-SOURCE_TASK_ID: ITR-EXPORT-DOCX-2026-001
-審查日期：2026-10-07
-審查者：Claude（**非獨立審查**：本任務的執行者也是 Claude，見 STATUS.md 標題「Claude 執行結果」。已用重讀程式碼與重新解析證據檔彌補，但仍可能漏掉執行者自己的盲點；建議再由 GPT 複審一次。）
+TASK_ID: DEPLOY-EXEC-2026-001
+審查日期：2026-10-08
+範圍：前端切換方案；不是部署完成驗收。
 
 ## EVIDENCE_CHECK
-- **重新解析證據檔（讀碼之外的獨立查證）**：用 python-docx 讀 `noi1-export.docx`／`noi2-export-no-attachments.docx`：
-  - NOI1：含 `Attachments` 區塊，列出 `seed-noi-attachment.png`，Reference No、`QTS-NDX1-ITP-000001` 皆在；`word/media/` 為空（確實是列檔名、非內嵌圖片）。
-  - NOI2：無 `Attachments` 區塊（沒有附件時不印空殼），符合驗收 3。
-- 證據目錄完整：三份 log、三份 .docx 皆存在。STATUS 的數字（6/6、4/4、3/3 PASS）與 docx 內容吻合。
-- **未能重驗**：lint 基線「13 errors / 21 warnings 不變」只有執行者自述，本次未重跑；完整 pytest 當時沒跑（STATUS 已據實說明）。
+已讀 TASK、前端切換計畫、Python 3.11 輸出與映像紀錄。32 passed/4 warnings、exit 0，映像為 arm64，證明該環境 Python 3.11 相容，不等於正式容器所有依賴與架構完全一致。
+候選 manifest 的根目錄檔僅 index.html，其餘在 assets，資產先置入、入口最後切換方案適用。實際容器 mount 尚未 inspect；NAS 檔案與對外首頁/三資產相符是抽樣服務證據，不是完整服務拓撲證明。正式部署後須對外核對候選內容，若未生效立即停止，不能另找未知目錄操作。
 
 ## SCOPE_CHECK
-- 實作位置與 TASK 的 ALLOWED_PATHS 一致：`services/noi_service.py`（`export_docx`）、`routers/noi.py`（`GET /{noi_id}/export-docx`）、`api.ts`（`exportNoiDocx`）、`NOIDetailModal.tsx`（按鈕）。
-- 資料範圍與權限正確：端點為 `RoleChecker(NOI_VIEW)`，服務層走 `get_noi(noi_id, scope=scope)`，不存在或範圍外一律 `ValueError` → 404。
-- 設計決定與 PRECHECK 一致：Related ITP 直接讀 `noi.itpNo`；不加 Checklist 表格；附件用 `add_file_list`。
-- **FORBIDDEN_PATHS 事後無法逐檔證明未動**：工作樹已按層分批提交，無法用 diff 區分本輪與其他輪的變更。僅能採信 STATUS 自述（`itr_service`／`ncr_service`／`km_service`／`ITRModals.tsx` 未修改）。
-- 簽名欄沿用 ITR 的「製表／複核／核准」，TASK 明確允許；NOI 無版次欄位，masthead 會印出「版次 Rev：—」，屬外觀小瑕疵。
+前端可與後端分開；不重啟容器、不換 dist 目錄、不刪舊資產。後端門檻 G 尚未完成，禁止以此 PASS 執行後端部署。
 
 ## DECISIONS_CHECK
-- 「附件沿用 update 權限」：匯出屬唯讀（view 權限），只列檔名，不涉及上傳授權，未牴觸。
-- 其餘 DECISIONS 項目（ITP 核准、ITR 複驗、ITR Checklist 窄螢幕排版）與本任務無關。
-- 翻譯鍵重用 `itr.exportWord`：不違反任何決策，但 NOI 與 ITR 之間產生隱性依賴（日後若把該鍵改名，NOI 按鈕會退回預設文字）。
+持續部署授權有效，無需再次詢問。正式冒煙不得新增/修改業務資料。前端候選部署不要求推送 122 個未全面審查提交。
 
 ## VERDICT
-- [ ] PASS
-- [x] REVISE
+- [x] PASS
+- [ ] REVISE
 - [ ] HUMAN_REQUIRED
 
-功能面符合全部驗收條件；判 REVISE 是因為下列兩項違反 AGENTS.md 的規範或留下回歸風險，修正量小。
-
 ## REQUIRED_FIXES
-1. **前端按鈕沒有錯誤處理（違反 AGENTS.md「API 呼叫一律 try/catch、使用者看得到友善訊息」）**：`NOIDetailModal.tsx:563` 是 `onClick={() => exportNoiDocx(...)}`，匯出失敗（403／404／500、網路中斷）時是未處理的 promise rejection，使用者看不到任何回饋，只會覺得按鈕壞了。需包 try/catch 並以既有 toast 顯示友善訊息。（ITR 的按鈕若為同一寫法，可一併檢查，但不在本任務範圍。）
-2. **缺少自動化回歸測試與負向案例**：本任務只有驗收腳本，且只有成功案例。`backend/tests/` 沒有任何 `export-docx` 測試。至少補：無 `NOI_VIEW` → 403、範圍外／不存在 → 404、有／無附件的內容斷言。
-
-## 建議（不阻擋）
-- **共用 helper 的路徑防護有前綴比對弱點**：`core/docx_builder.py::resolve_local_upload_path` 用 `full.startswith(root)`，未補路徑分隔符，`/uploads_evil/...` 這類同前綴的兄弟目錄會通過。此處只會洩漏檔名（不讀內容），且舊版附件欄位需有 NOI 寫入權限才能塞值，故嚴重度低；屬 ITR／NCR 共用的既有程式，應另案修（`os.path.commonpath` 或補 `os.sep`）。
-- NOI 無版次時，masthead 可不顯示「版次 Rev：—」。
-- 翻譯鍵長期可整理成 `common.exportWord`。
+無需重開補正輪。執行時必須落實以下收尾條件並記錄：
+1. 切換前就將回退包放到 NAS、核對完整雜湊、解壓並確認可讀的舊 index/資產；不要等故障後才上傳回退包。
+2. 將 TS、完整絕對 dist/staging/rollback 路徑固定為本次唯一值，建立目的目錄，採 fail-fast；不可把文件角括號示意行直接當命令。臨時入口使用唯一檔名，避免覆寫他人暫存。
+3. 對既有同名資產只驗證，不覆寫；候選資產全數落地核對後才替換入口。新舊資產均保留，不執行計畫 D 的清理刪除選項。
+4. 修正「正式站完整版本已證實」為 NAS 全量比對＋對外抽樣相符，保留 mount 未直接確認之限制。回退恢復舊入口供新載入頁面使用，不保證已開啟新版本的分頁瞬間回舊版。
 
 ## NEXT_STEP
-1. 修 REQUIRED_FIXES 1、2（小，約一個任務單位）；修完更新 STATUS，再請 GPT 做獨立複審，因為本次審查非獨立。
-2. 「路徑防護前綴比對」另開 BACKLOG 項目，不夾帶進本任務。
+可依已授權直接執行前端部署，以上條件為執行前置，不需另問使用者。更新 STATUS 記錄實際時間、包雜湊、切換/回退路徑及逐项檢查；部署失敗按方案回退並回報。登入若無可用 session，回報登入後冒煙未完成，不宣稱全部驗收通過。
+後端維持 blocked：由使用者在自己的終端機完成需要 sudo 的唯讀預檢，或提供其他已授權方式；不索取/保存密碼、不新增免密 sudo 或 docker 權限。保留使用者預覽環境。
+
+## 結案備註（2026-10-10，Claude；不是新的審查結論）
+- 上方 PASS 只涵蓋前端切換方案，已於 2026-10-07 執行。
+- 後端 DOCX 路徑防護於 2026-10-09 部署：程式本身為 DOCX-PATH-GUARD-2026-001 獨立審查 PASS；預檢 r3 因正式站已改變而未執行，改用唯讀核對（見 STATUS 結案摘要與 `DEPLOY-EXEC-2026-001-docx-deploy-record.md`）。這個替代做法與部署執行**未經獨立審查**。
+- 依使用者 2026-10-10 指示結案。

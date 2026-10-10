@@ -1,0 +1,78 @@
+需要 sudo 密碼（只在本機終端機輸入，不會寫入報告）：
+== DEPLOY-EXEC-2026-001 backend read-only precheck ==
+utc=20261007T161248Z host=NookdeMac-mini.local user=nook
+compose_cmd=/private/tmp/claude-501/-Users-nook-Documents-Qualitas/453911c4-4f3e-4459-8150-ad84eb992c42/scratchpad/precheck-selftest/bin/fake-compose -p qbtest --project-directory /private/tmp/claude-501/-Users-nook-Documents-Qualitas/453911c4-4f3e-4459-8150-ad84eb992c42/scratchpad/precheck-selftest/proj -f /private/tmp/claude-501/-Users-nook-Documents-Qualitas/453911c4-4f3e-4459-8150-ad84eb992c42/scratchpad/precheck-selftest/proj/docker-compose.yml --env-file /private/tmp/claude-501/-Users-nook-Documents-Qualitas/453911c4-4f3e-4459-8150-ad84eb992c42/scratchpad/precheck-selftest/proj/.env.tunnel config --format json
+
+-- 3.1 container / image identity --
+container_id = af80884781aa11b9f52035eace592917b8c0b4cb279e9fe67f76191a0bad1ed1
+name = /qb-selftest  image_id = sha256:036fc503415054da168e5fe972414cb8357ca3bb9ca3d6d50cf1086f4b74f9a7  config_image = precheck-selftest:1
+status = running  restarting = False  restart_count = 0  started = 2026-10-07T16:11:45.072948182Z
+image: id = sha256:036fc503415054da168e5fe972414cb8357ca3bb9ca3d6d50cf1086f4b74f9a7  tags = ['precheck-selftest:1']  digests = ['precheck-selftest@sha256:036fc503415054da168e5fe972414cb8357ca3bb9ca3d6d50cf1086f4b74f9a7']  created = 2026-10-08T00:11:44.916272867+08:00
+image  config: user='10001' workdir='/app' cmd=["sleep", "infinity"] entrypoint=null ports=[]
+contnr config: user='10001' workdir='/app' cmd=["sleep", "infinity"] entrypoint=null ports=[]
+image env keys = ['GPG_KEY', 'IMGKEY', 'LANG', 'PATH', 'PYTHON_SHA256', 'PYTHON_VERSION']
+container env keys = ['ALGORITHM', 'GPG_KEY', 'IMGKEY', 'LANG', 'PATH', 'PYTHON_SHA256', 'PYTHON_VERSION', 'SECRET_KEY']
+container-only env keys = ['ALGORITHM', 'SECRET_KEY']
+
+-- mounts / networks (running) --
+  bind /private/tmp/claude-501/-Users-nook-Documents-Qualitas/453911c4-4f3e-4459-8150-ad84eb992c42/scratchpad/precheck-selftest/proj/backend/uploads -> /app/uploads rw=True
+networks = ['qb-selftest_net']  restart_policy = unless-stopped
+
+-- 3.2 docker diff under /app (excluding __pycache__/.pyc) --
+  C /app
+  A /app/uploads
+  C /app/core
+  C /app/core/docx_builder.py
+
+-- 3.3 helper docx_builder.py --
+container : d14543490beb75b658ba6bda03c24bbd85b1f81fb76a5a915fbc00e7c50b8b0f|644 10001:10001 15426|
+image     : 95208d8af5c231f4f3de22b4fc74f7e0e5d604d79bac191ceceb80f768e78e6d|644 10001:10001 15417|Python 3.11.17|
+host      : 95208d8af5c231f4f3de22b4fc74f7e0e5d604d79bac191ceceb80f768e78e6d
+
+-- 3.4 API probe baseline --
+GET /api/user/profile (no auth) -> 401
+
+-- G1/G2 compose labels / executor --
+  com.docker.compose.project = qbtest
+  com.docker.compose.config_files = /private/tmp/claude-501/-Users-nook-Documents-Qualitas/453911c4-4f3e-4459-8150-ad84eb992c42/scratchpad/precheck-selftest/proj/docker-compose.yml
+  com.docker.compose.working_dir = /private/tmp/claude-501/-Users-nook-Documents-Qualitas/453911c4-4f3e-4459-8150-ad84eb992c42/scratchpad/precheck-selftest/proj
+  com.docker.compose.environment_file = /private/tmp/claude-501/-Users-nook-Documents-Qualitas/453911c4-4f3e-4459-8150-ad84eb992c42/scratchpad/precheck-selftest/proj/.env.tunnel
+  com.docker.compose.service = backend
+  com.docker.compose.version = 2.20.1
+  executor /usr/local/bin/docker-compose version = 2.20.1
+
+-- G4 effective compose config (structure only) --
+  services = ['backend']
+  volume bind /private/tmp/claude-501/-Users-nook-Documents-Qualitas/453911c4-4f3e-4459-8150-ad84eb992c42/scratchpad/precheck-selftest/proj/backend/uploads -> /app/uploads read_only=False
+  build = {'context': '/private/tmp/claude-501/-Users-nook-Documents-Qualitas/453911c4-4f3e-4459-8150-ad84eb992c42/scratchpad/precheck-selftest/proj/backend', 'dockerfile': 'Dockerfile'}  build_arg_keys = ['TOKEN']
+  container_name = qb-selftest  image = None  restart = unless-stopped
+  command = null  entrypoint = null
+  networks (resolved) = ['qb-selftest_net']  ports = None
+  environment keys = ['ALGORITHM', 'SECRET_KEY']
+
+-- checks --
+[PASS] container running, not restarting
+[PASS] container image id == inspected image id
+[PASS] docker diff ran
+[FAIL] no code-file changes under /app in writable layer :: C /app/core/docx_builder.py
+[FAIL] helper container sha == image sha
+[PASS] helper image sha == pre-fix base 95208d8a…
+[PASS] helper file mode is 644
+[INFO] host helper sha == base :: True
+[PASS] probe baseline is 401 (not 5xx/timeout)
+[PASS] G1 labels present (project/config_files/working_dir/service/version)
+[PASS] G1 service label is backend
+[PASS] G2 executor version == label version
+[PASS] G3 env-file determined from label
+[PASS] G4 container_name matches
+[PASS] G4 volumes == running mounts
+[PASS] G4 networks == running networks
+[PASS] G4 restart policy matches
+[PASS] G4 compose env keys present in container
+[FAIL] G4 compose env values equal running (compared, not printed) :: differ_keys=['SECRET_KEY']
+[PASS] G4 container env keys explained by image+compose
+[PASS] G4 running Cmd == image Cmd (no compose override)
+
+OVERALL = FAIL (3)
+
+報告已存：/private/tmp/claude-501/-Users-nook-Documents-Qualitas/453911c4-4f3e-4459-8150-ad84eb992c42/scratchpad/precheck-selftest/home/qualitas-backend-precheck-20261007T161248Z.txt（不含環境變數值）

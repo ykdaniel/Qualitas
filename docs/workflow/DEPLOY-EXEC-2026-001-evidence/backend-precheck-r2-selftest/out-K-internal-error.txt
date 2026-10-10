@@ -1,0 +1,71 @@
+需要 sudo 密碼（只在本機終端機輸入，不會寫入報告）：
+== DEPLOY-EXEC-2026-001 backend diagnostic precheck r2 ==
+utc=20261007T162420Z host=NookdeMac-mini.local user=nook
+
+-- collection stages --
+stage container-inspect rc=0
+stage image-inspect     rc=0
+stage compose-config    rc=0
+stage docker-diff       rc=0
+stage helper-container  rc=0
+stage helper-image      rc=0
+temp container name = qualitas-precheck-20261007T162420Z
+
+-- 3.1 container / image identity --
+container_id = 5f5a10e3e769a9c1ed4104584139de2949fd4f66f4053567db248c1b76a55f63
+name = /qbr2-selftest  image_id = sha256:04b2aa3a192b2e81509be6962b756490c65e7d8c1f6ef06d248c185d8179a64c  config_image = qbr2test-backend
+status = running  restarting = False  restart_count = 0  started = 2026-10-07T16:24:19.252185056Z
+image_id = sha256:04b2aa3a192b2e81509be6962b756490c65e7d8c1f6ef06d248c185d8179a64c  tags = ['qbr2test-backend:latest']  created = 2026-10-08T00:21:40.596378508+08:00
+
+-- mounts (running) --
+  bind <scratch>/proj/backend/uploads -> /app/uploads rw=True
+  approved data mounts = ['/app/backups', '/app/logs', '/app/qualitas.db', '/app/uploads']
+networks = ['qbr2-selftest_net']
+
+-- 3.2 docker diff (full, no truncation) --
+total entries = 5  unparsable lines = 0
+  [cache] 2
+    A /app/core/__pycache__
+    A /app/core/__pycache__/docx_builder.cpython-311.pyc
+  [tmp] 0
+  [mountpoint] 2
+    C /app
+    A /app/uploads
+  [parent-dir] 1
+    C /app/core
+  [sqlite-sidecar] 0
+  [UNEXPLAINED] 0
+
+-- 3.3 helper /app/core/docx_builder.py --
+container: sha=95208d8af5c231f4f3de22b4fc74f7e0e5d604d79bac191ceceb80f768e78e6d mode=644 10001:10001 15417
+image    : sha=95208d8af5c231f4f3de22b4fc74f7e0e5d604d79bac191ceceb80f768e78e6d mode=644 10001:10001 15417 Python 3.11.17
+host     : sha=95208d8af5c231f4f3de22b4fc74f7e0e5d604d79bac191ceceb80f768e78e6d
+
+-- 3.4 API probe baseline --
+GET /api/user/profile (no auth) -> 401
+
+-- G1/G2/G3 compose labels / executor --
+  com.docker.compose.project = qbr2test
+  com.docker.compose.config_files = <scratch>/proj/docker-compose.yml
+  com.docker.compose.working_dir = <scratch>/proj
+  com.docker.compose.environment_file = <scratch>/proj/.env.tunnel
+  com.docker.compose.service = backend
+  com.docker.compose.version = 2.20.1
+  executor docker-compose version = 2.20.1
+
+-- G4 effective config vs running (values compared in memory only) --
+  compose name = qbr2test  services = ['backend']  top-level keys = ['name', 'networks', 'services']
+  service keys = ['build', 'command', 'container_name', 'entrypoint', 'environment', 'networks', 'restart', 'volumes']
+  build keys = ['args', 'context', 'dockerfile']  context = <scratch>/proj/backend  dockerfile = Dockerfile  arg keys = ['TOKEN']
+  entrypoint argc expected/running = 4/4
+  command argc expected/running = 3/3
+  user expected=10001 running=10001; working_dir expected=/app running=/app
+  port bindings expected = {}  running = {}
+  exposed expected = ['8000/tcp']  running = ['8000/tcp']
+  networks expected = ['qbr2-selftest_net']  running = ['qbr2-selftest_net']
+
+INTERNAL ERROR AttributeError at line 312 (details suppressed)
+OVERALL = ERROR
+
+報告：<scratch>/home-K-internal-error/qualitas-backend-precheck-20261007T162420Z.txt（不含環境變數值）
+PRECHECK_EXIT=3

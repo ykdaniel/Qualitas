@@ -1,0 +1,264 @@
+# phase: BEFORE fix, attempt 2 (ITR seed now has description/rev/submit; attempt 1 kept as pytest-before-fix-attempt1-itr-fixture-bug.txt)
+# run(UTC): 2026-10-07T14:06:46Z  HEAD=056c245c
+# sha256 95208d8af5c231f4f3de22b4fc74f7e0e5d604d79bac191ceceb80f768e78e6d  core/docx_builder.py
+# sha256 4222b14bdc40aea5e7ac23dedf7663e6c27e8e1b67922386614db1ca151ad348  tests/test_docx_path_guard.py
+# sha256 8251ca31b871a542ce7f1e23b9cb4adf4bb12a3a9bd72196f5672d7efccc984f  tests/test_docx_path_guard_http.py
+# python=Python 3.14.6  cmd: DATABASE_URL=sqlite:///:memory: python3 -m pytest tests/test_docx_path_guard.py tests/test_docx_path_guard_http.py -v -p no:cacheprovider
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-9.0.2, pluggy-1.6.0 -- /opt/homebrew/opt/python@3.14/bin/python3.14
+rootdir: /Users/nook/Documents/Qualitas/backend
+configfile: pytest.ini
+plugins: anyio-4.13.0
+collecting ... collected 32 items
+
+tests/test_docx_path_guard.py::test_files_inside_the_root_still_resolve[itr/ok.png] PASSED [  3%]
+tests/test_docx_path_guard.py::test_files_inside_the_root_still_resolve[/itr/ok.png] PASSED [  6%]
+tests/test_docx_path_guard.py::test_files_inside_the_root_still_resolve[https://host/api/files/download/itr/ok.png] PASSED [  9%]
+tests/test_docx_path_guard.py::test_files_inside_the_root_still_resolve[/api/files/download/itr/ok.png?token=abc&v=2] PASSED [ 12%]
+tests/test_docx_path_guard.py::test_files_inside_the_root_still_resolve[/uploads/itr/ok.png] PASSED [ 15%]
+tests/test_docx_path_guard.py::test_files_inside_the_root_still_resolve[http://host/uploads/itr/ok.png?x=1] PASSED [ 18%]
+tests/test_docx_path_guard.py::test_files_inside_the_root_still_resolve[itr/../itr/ok.png] PASSED [ 21%]
+tests/test_docx_path_guard.py::test_files_inside_the_root_still_resolve[itr/link_inside.png] PASSED [ 25%]
+tests/test_docx_path_guard.py::test_same_prefix_sibling_is_rejected[../uploads_evil/secret.png] FAILED [ 28%]
+tests/test_docx_path_guard.py::test_same_prefix_sibling_is_rejected[/uploads/../uploads_evil/secret.png] FAILED [ 31%]
+tests/test_docx_path_guard.py::test_same_prefix_sibling_is_rejected[https://host/api/files/download/../uploads_evil/secret.png] FAILED [ 34%]
+tests/test_docx_path_guard.py::test_same_prefix_sibling_is_rejected[itr/../../uploads_evil/secret.png] FAILED [ 37%]
+tests/test_docx_path_guard.py::test_same_prefix_sibling_is_rejected[link_to_sibling.png] FAILED [ 40%]
+tests/test_docx_path_guard.py::test_same_prefix_sibling_is_rejected[link_dir_sibling/secret.png] FAILED [ 43%]
+tests/test_docx_path_guard.py::test_paths_outside_the_root_are_rejected[../outside/secret.png] PASSED [ 46%]
+tests/test_docx_path_guard.py::test_paths_outside_the_root_are_rejected[a/b/../../../outside/secret.png] PASSED [ 50%]
+tests/test_docx_path_guard.py::test_paths_outside_the_root_are_rejected[link_to_outside.png] PASSED [ 53%]
+tests/test_docx_path_guard.py::test_absolute_path_is_treated_as_relative_to_the_root PASSED [ 56%]
+tests/test_docx_path_guard.py::test_empty_values_resolve_to_nothing[None] PASSED [ 59%]
+tests/test_docx_path_guard.py::test_empty_values_resolve_to_nothing[] PASSED [ 62%]
+tests/test_docx_path_guard.py::test_empty_values_resolve_to_nothing[?token=abc] PASSED [ 65%]
+tests/test_docx_path_guard.py::test_missing_files_resolve_to_nothing[itr/missing.png] PASSED [ 68%]
+tests/test_docx_path_guard.py::test_missing_files_resolve_to_nothing[/uploads/nope.png] PASSED [ 71%]
+tests/test_docx_path_guard.py::test_missing_files_resolve_to_nothing[https://host/api/files/download/none.png] PASSED [ 75%]
+tests/test_docx_path_guard.py::test_directories_resolve_to_nothing[subdir] PASSED [ 78%]
+tests/test_docx_path_guard.py::test_directories_resolve_to_nothing[itr] PASSED [ 81%]
+tests/test_docx_path_guard.py::test_directories_resolve_to_nothing[/uploads/subdir] PASSED [ 84%]
+tests/test_docx_path_guard.py::test_directories_resolve_to_nothing[.] PASSED [ 87%]
+tests/test_docx_path_guard.py::test_directories_resolve_to_nothing[/] PASSED [ 90%]
+tests/test_docx_path_guard.py::test_legal_image_is_embedded_and_out_of_root_images_are_not FAILED [ 93%]
+tests/test_docx_path_guard_http.py::test_itr_update_then_export_embeds_only_the_in_root_photo FAILED [ 96%]
+tests/test_docx_path_guard_http.py::test_ncr_update_then_export_embeds_only_the_in_root_photo FAILED [100%]
+
+=================================== FAILURES ===================================
+_______ test_same_prefix_sibling_is_rejected[../uploads_evil/secret.png] _______
+
+tree = {'far': '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re0/outside/secret.png', 'leak': ...uploads/itr/ok.png', 'root': '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re0/uploads'}
+value = '../uploads_evil/secret.png'
+
+    @pytest.mark.parametrize("value", [
+        "../uploads_evil/secret.png",
+        "/uploads/../uploads_evil/secret.png",
+        "https://host/api/files/download/../uploads_evil/secret.png",
+        "itr/../../uploads_evil/secret.png",
+        "link_to_sibling.png",                                    # symlink inside the root -> same-prefix sibling file
+        "link_dir_sibling/secret.png",                            # symlinked directory inside the root -> same-prefix sibling
+    ])
+    def test_same_prefix_sibling_is_rejected(tree, value):
+>       assert db.resolve_local_upload_path(value, tree["root"]) is None
+E       AssertionError: assert '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re0/uploads_evil/secret.png' is None
+E        +  where '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re0/uploads_evil/secret.png' = <function resolve_local_upload_path at 0x1095bd640>('../uploads_evil/secret.png', '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re0/uploads')
+E        +    where <function resolve_local_upload_path at 0x1095bd640> = db.resolve_local_upload_path
+
+tests/test_docx_path_guard.py:72: AssertionError
+__ test_same_prefix_sibling_is_rejected[/uploads/../uploads_evil/secret.png] ___
+
+tree = {'far': '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re1/outside/secret.png', 'leak': ...uploads/itr/ok.png', 'root': '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re1/uploads'}
+value = '/uploads/../uploads_evil/secret.png'
+
+    @pytest.mark.parametrize("value", [
+        "../uploads_evil/secret.png",
+        "/uploads/../uploads_evil/secret.png",
+        "https://host/api/files/download/../uploads_evil/secret.png",
+        "itr/../../uploads_evil/secret.png",
+        "link_to_sibling.png",                                    # symlink inside the root -> same-prefix sibling file
+        "link_dir_sibling/secret.png",                            # symlinked directory inside the root -> same-prefix sibling
+    ])
+    def test_same_prefix_sibling_is_rejected(tree, value):
+>       assert db.resolve_local_upload_path(value, tree["root"]) is None
+E       AssertionError: assert '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re1/uploads_evil/secret.png' is None
+E        +  where '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re1/uploads_evil/secret.png' = <function resolve_local_upload_path at 0x1095bd640>('/uploads/../uploads_evil/secret.png', '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re1/uploads')
+E        +    where <function resolve_local_upload_path at 0x1095bd640> = db.resolve_local_upload_path
+
+tests/test_docx_path_guard.py:72: AssertionError
+_ test_same_prefix_sibling_is_rejected[https://host/api/files/download/../uploads_evil/secret.png] _
+
+tree = {'far': '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re2/outside/secret.png', 'leak': ...uploads/itr/ok.png', 'root': '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re2/uploads'}
+value = 'https://host/api/files/download/../uploads_evil/secret.png'
+
+    @pytest.mark.parametrize("value", [
+        "../uploads_evil/secret.png",
+        "/uploads/../uploads_evil/secret.png",
+        "https://host/api/files/download/../uploads_evil/secret.png",
+        "itr/../../uploads_evil/secret.png",
+        "link_to_sibling.png",                                    # symlink inside the root -> same-prefix sibling file
+        "link_dir_sibling/secret.png",                            # symlinked directory inside the root -> same-prefix sibling
+    ])
+    def test_same_prefix_sibling_is_rejected(tree, value):
+>       assert db.resolve_local_upload_path(value, tree["root"]) is None
+E       AssertionError: assert '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re2/uploads_evil/secret.png' is None
+E        +  where '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re2/uploads_evil/secret.png' = <function resolve_local_upload_path at 0x1095bd640>('https://host/api/files/download/../uploads_evil/secret.png', '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re2/uploads')
+E        +    where <function resolve_local_upload_path at 0x1095bd640> = db.resolve_local_upload_path
+
+tests/test_docx_path_guard.py:72: AssertionError
+___ test_same_prefix_sibling_is_rejected[itr/../../uploads_evil/secret.png] ____
+
+tree = {'far': '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re3/outside/secret.png', 'leak': ...uploads/itr/ok.png', 'root': '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re3/uploads'}
+value = 'itr/../../uploads_evil/secret.png'
+
+    @pytest.mark.parametrize("value", [
+        "../uploads_evil/secret.png",
+        "/uploads/../uploads_evil/secret.png",
+        "https://host/api/files/download/../uploads_evil/secret.png",
+        "itr/../../uploads_evil/secret.png",
+        "link_to_sibling.png",                                    # symlink inside the root -> same-prefix sibling file
+        "link_dir_sibling/secret.png",                            # symlinked directory inside the root -> same-prefix sibling
+    ])
+    def test_same_prefix_sibling_is_rejected(tree, value):
+>       assert db.resolve_local_upload_path(value, tree["root"]) is None
+E       AssertionError: assert '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re3/uploads_evil/secret.png' is None
+E        +  where '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re3/uploads_evil/secret.png' = <function resolve_local_upload_path at 0x1095bd640>('itr/../../uploads_evil/secret.png', '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re3/uploads')
+E        +    where <function resolve_local_upload_path at 0x1095bd640> = db.resolve_local_upload_path
+
+tests/test_docx_path_guard.py:72: AssertionError
+__________ test_same_prefix_sibling_is_rejected[link_to_sibling.png] ___________
+
+tree = {'far': '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re4/outside/secret.png', 'leak': ...uploads/itr/ok.png', 'root': '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re4/uploads'}
+value = 'link_to_sibling.png'
+
+    @pytest.mark.parametrize("value", [
+        "../uploads_evil/secret.png",
+        "/uploads/../uploads_evil/secret.png",
+        "https://host/api/files/download/../uploads_evil/secret.png",
+        "itr/../../uploads_evil/secret.png",
+        "link_to_sibling.png",                                    # symlink inside the root -> same-prefix sibling file
+        "link_dir_sibling/secret.png",                            # symlinked directory inside the root -> same-prefix sibling
+    ])
+    def test_same_prefix_sibling_is_rejected(tree, value):
+>       assert db.resolve_local_upload_path(value, tree["root"]) is None
+E       AssertionError: assert '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re4/uploads_evil/secret.png' is None
+E        +  where '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re4/uploads_evil/secret.png' = <function resolve_local_upload_path at 0x1095bd640>('link_to_sibling.png', '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re4/uploads')
+E        +    where <function resolve_local_upload_path at 0x1095bd640> = db.resolve_local_upload_path
+
+tests/test_docx_path_guard.py:72: AssertionError
+______ test_same_prefix_sibling_is_rejected[link_dir_sibling/secret.png] _______
+
+tree = {'far': '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re5/outside/secret.png', 'leak': ...uploads/itr/ok.png', 'root': '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re5/uploads'}
+value = 'link_dir_sibling/secret.png'
+
+    @pytest.mark.parametrize("value", [
+        "../uploads_evil/secret.png",
+        "/uploads/../uploads_evil/secret.png",
+        "https://host/api/files/download/../uploads_evil/secret.png",
+        "itr/../../uploads_evil/secret.png",
+        "link_to_sibling.png",                                    # symlink inside the root -> same-prefix sibling file
+        "link_dir_sibling/secret.png",                            # symlinked directory inside the root -> same-prefix sibling
+    ])
+    def test_same_prefix_sibling_is_rejected(tree, value):
+>       assert db.resolve_local_upload_path(value, tree["root"]) is None
+E       AssertionError: assert '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re5/uploads_evil/secret.png' is None
+E        +  where '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re5/uploads_evil/secret.png' = <function resolve_local_upload_path at 0x1095bd640>('link_dir_sibling/secret.png', '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_same_prefix_sibling_is_re5/uploads')
+E        +    where <function resolve_local_upload_path at 0x1095bd640> = db.resolve_local_upload_path
+
+tests/test_docx_path_guard.py:72: AssertionError
+_________ test_legal_image_is_embedded_and_out_of_root_images_are_not __________
+
+tree = {'far': '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_legal_image_is_embedded_a0/outside/secret.png', 'leak': ...uploads/itr/ok.png', 'root': '/private/tmp/claude-501/pytest-of-nook/pytest-2/test_legal_image_is_embedded_a0/uploads'}
+
+    def test_legal_image_is_embedded_and_out_of_root_images_are_not(tree):
+        """Same chain the ITR/NCR exports use: resolve every stored string, keep the hits, hand them to add_photo_section."""
+        stored = ["/api/files/download/itr/ok.png", "/uploads/../uploads_evil/secret.png", "link_to_sibling.png", "../outside/secret.png"]
+        resolved = [p for p in (db.resolve_local_upload_path(u, tree["root"]) for u in stored) if p]
+        doc = db.new_document()
+        db.add_photo_section(doc, "probe", resolved)
+        media = _media_hashes(doc)
+        assert _sha(tree["ok"]) in media
+>       assert _sha(tree["leak"]) not in media
+E       AssertionError: assert '408c94f4e4ad190fbb1dd92e339038ada6b89a22fd2827edfa266faad283e27a' not in {'0a8ebdd70bd2f482c2ba8e51dd594ff3e2e348b0023d9c44e5c7530700628b4a', '408c94f4e4ad190fbb1dd92e339038ada6b89a22fd2827edfa266faad283e27a'}
+E        +  where '408c94f4e4ad190fbb1dd92e339038ada6b89a22fd2827edfa266faad283e27a' = _sha('/private/tmp/claude-501/pytest-of-nook/pytest-2/test_legal_image_is_embedded_a0/uploads_evil/secret.png')
+
+tests/test_docx_path_guard.py:123: AssertionError
+__________ test_itr_update_then_export_embeds_only_the_in_root_photo ___________
+
+henv = <test_itr_revoke_approval_acceptance.Env object at 0x10a761fd0>
+
+    def test_itr_update_then_export_embeds_only_the_in_root_photo(henv):
+        c = henv.login("editor")
+        r = c.put("/api/itr/itr-1", json={"defectPhotos": STORED, "improvementPhotos": STORED})
+        assert r.status_code == 200, r.text
+        r = c.get("/api/itr/itr-1/export-docx")
+        assert r.status_code == 200, r.text
+        media = _media(r)
+        assert henv.ok_sha in media
+>       assert henv.leak_sha not in media
+E       AssertionError: assert '408c94f4e4ad190fbb1dd92e339038ada6b89a22fd2827edfa266faad283e27a' not in {'0a8ebdd70bd2f482c2ba8e51dd594ff3e2e348b0023d9c44e5c7530700628b4a', '408c94f4e4ad190fbb1dd92e339038ada6b89a22fd2827edfa266faad283e27a'}
+E        +  where '408c94f4e4ad190fbb1dd92e339038ada6b89a22fd2827edfa266faad283e27a' = <test_itr_revoke_approval_acceptance.Env object at 0x10a761fd0>.leak_sha
+
+tests/test_docx_path_guard_http.py:103: AssertionError
+__________ test_ncr_update_then_export_embeds_only_the_in_root_photo ___________
+
+henv = <test_itr_revoke_approval_acceptance.Env object at 0x10a7d0f50>
+
+    def test_ncr_update_then_export_embeds_only_the_in_root_photo(henv):
+        c = henv.login("editor")
+        r = c.put("/api/ncr/ncr-1/", json={"defectPhotos": STORED, "progressPhotos": STORED, "improvementPhotos": STORED})
+        assert r.status_code == 200, r.text
+        r = c.get("/api/ncr/ncr-1/export-docx")
+        assert r.status_code == 200, r.text
+        media = _media(r)
+        assert henv.ok_sha in media
+>       assert henv.leak_sha not in media
+E       AssertionError: assert '408c94f4e4ad190fbb1dd92e339038ada6b89a22fd2827edfa266faad283e27a' not in {'0a8ebdd70bd2f482c2ba8e51dd594ff3e2e348b0023d9c44e5c7530700628b4a', '408c94f4e4ad190fbb1dd92e339038ada6b89a22fd2827edfa266faad283e27a'}
+E        +  where '408c94f4e4ad190fbb1dd92e339038ada6b89a22fd2827edfa266faad283e27a' = <test_itr_revoke_approval_acceptance.Env object at 0x10a7d0f50>.leak_sha
+
+tests/test_docx_path_guard_http.py:114: AssertionError
+=============================== warnings summary ===============================
+tests/test_docx_path_guard_http.py: 87 warnings
+  /opt/homebrew/lib/python3.14/site-packages/fastapi/routing.py:211: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    is_coroutine = asyncio.iscoroutinefunction(dependant.call)
+
+tests/test_docx_path_guard_http.py::test_itr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_itr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_itr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_itr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_ncr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_ncr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_ncr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_ncr_update_then_export_embeds_only_the_in_root_photo
+  /opt/homebrew/lib/python3.14/site-packages/starlette/_utils.py:40: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    return asyncio.iscoroutinefunction(obj) or (
+
+tests/test_docx_path_guard_http.py::test_itr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_ncr_update_then_export_embeds_only_the_in_root_photo
+  /opt/homebrew/lib/python3.14/site-packages/starlette/_utils.py:41: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    callable(obj) and asyncio.iscoroutinefunction(obj.__call__)
+
+tests/test_docx_path_guard_http.py::test_itr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_ncr_update_then_export_embeds_only_the_in_root_photo
+  /Users/nook/Library/Python/3.14/lib/python/site-packages/httpx/_client.py:690: DeprecationWarning: The 'app' shortcut is now deprecated. Use the explicit style 'transport=WSGITransport(app=...)' instead.
+    warnings.warn(message, DeprecationWarning)
+
+tests/test_docx_path_guard_http.py::test_itr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_itr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_ncr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_ncr_update_then_export_embeds_only_the_in_root_photo
+  /opt/homebrew/lib/python3.14/site-packages/jose/jwt.py:311: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    now = timegm(datetime.utcnow().utctimetuple())
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_docx_path_guard.py::test_same_prefix_sibling_is_rejected[../uploads_evil/secret.png]
+FAILED tests/test_docx_path_guard.py::test_same_prefix_sibling_is_rejected[/uploads/../uploads_evil/secret.png]
+FAILED tests/test_docx_path_guard.py::test_same_prefix_sibling_is_rejected[https://host/api/files/download/../uploads_evil/secret.png]
+FAILED tests/test_docx_path_guard.py::test_same_prefix_sibling_is_rejected[itr/../../uploads_evil/secret.png]
+FAILED tests/test_docx_path_guard.py::test_same_prefix_sibling_is_rejected[link_to_sibling.png]
+FAILED tests/test_docx_path_guard.py::test_same_prefix_sibling_is_rejected[link_dir_sibling/secret.png]
+FAILED tests/test_docx_path_guard.py::test_legal_image_is_embedded_and_out_of_root_images_are_not
+FAILED tests/test_docx_path_guard_http.py::test_itr_update_then_export_embeds_only_the_in_root_photo
+FAILED tests/test_docx_path_guard_http.py::test_ncr_update_then_export_embeds_only_the_in_root_photo
+================== 9 failed, 23 passed, 103 warnings in 1.28s ==================
+# exit=1
