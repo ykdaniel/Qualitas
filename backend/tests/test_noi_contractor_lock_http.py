@@ -123,3 +123,71 @@ def test_an_noi_with_nothing_under_it_is_still_renumbered_to_the_new_abbreviatio
     assert r.status_code == 200, r.text
     row = _noi_row(env, noi["id"])
     assert row["referenceNo"] != noi["referenceNo"] and "-ACX-" in row["referenceNo"]
+
+
+# ── independent review follow-ups (decisions 2026-10-10) ──────────────────
+
+def _followup(env, ref, module="NOI"):
+    db = env.Session()
+    try:
+        db.add(models.FollowUp(id=uuid.uuid4().hex, issueNo=f"FU-{uuid.uuid4().hex[:6]}", sourceModule=module,
+                               sourceReferenceNo=ref, description="d", status="Open"))
+        db.commit()
+    finally:
+        db.close()
+
+
+@pytest.mark.parametrize("module", ["NOI", " noi "])
+def test_a_follow_up_citing_the_noi_counts_as_a_document_under_it(noi_env, module):
+    env, _ = noi_env
+    c, noi = _new_noi(env)
+    _followup(env, noi["referenceNo"], module)
+    r = c.put(f"/api/noi/{noi['id']}", json={"contractor": "Beta Co"})
+    assert r.status_code == 400 and "Follow-up" in r.text
+    assert _noi_row(env, noi["id"])["vendor_id"] == "ACC-V1"
+
+
+def test_a_follow_up_of_another_module_with_the_same_text_does_not_count(noi_env):
+    env, _ = noi_env
+    c, noi = _new_noi(env)
+    _followup(env, noi["referenceNo"], module="NCR")
+    assert c.put(f"/api/noi/{noi['id']}", json={"contractor": "Beta Co"}).status_code == 200
+
+
+def _clear_contractor(env, noi_id):
+    db = env.Session()
+    try:
+        db.get(models.NOI, noi_id).vendor_id = None
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_filling_in_a_missing_contractor_is_allowed_and_keeps_the_number_when_documents_exist(noi_env):
+    env, _ = noi_env
+    c, noi = _new_noi(env)
+    _cite(env, "itr", noi["referenceNo"])
+    _clear_contractor(env, noi["id"])                                            # legacy NOI without a contractor
+    r = c.put(f"/api/noi/{noi['id']}", json={"contractor": "Beta Co"})
+    assert r.status_code == 200, r.text
+    row = _noi_row(env, noi["id"])
+    assert row["vendor_id"] == "ACC-V2" and row["referenceNo"] == noi["referenceNo"]
+
+
+def test_filling_in_a_missing_contractor_with_nothing_under_it_renumbers_as_before(noi_env):
+    env, _ = noi_env
+    c, noi = _new_noi(env)
+    _clear_contractor(env, noi["id"])
+    r = c.put(f"/api/noi/{noi['id']}", json={"contractor": "Beta Co"})
+    assert r.status_code == 200, r.text
+    row = _noi_row(env, noi["id"])
+    assert row["vendor_id"] == "ACC-V2" and row["referenceNo"] != noi["referenceNo"]
+
+
+def test_a_refused_change_releases_the_write_lock(noi_env):
+    env, _ = noi_env
+    c, noi = _new_noi(env)
+    _cite(env, "itr", noi["referenceNo"])
+    assert c.put(f"/api/noi/{noi['id']}", json={"contractor": "Beta Co"}).status_code == 400
+    r = c.put(f"/api/noi/{noi['id']}", json={"package": "after a refusal"})       # the next write is not blocked
+    assert r.status_code == 200, r.text

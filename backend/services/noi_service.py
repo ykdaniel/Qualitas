@@ -8,6 +8,8 @@ import uuid
 import logging
 from typing import List, Optional
 
+from sqlalchemy import func
+
 import models
 import schemas
 from repositories.noi_repository import NOIRepository
@@ -20,6 +22,7 @@ from core.utils import (
     begin_write_transaction,
     generate_reference_no,
     log_audit,
+    reload_locked,
     WorkflowEngine
 )
 from core import error_messages
@@ -190,6 +193,14 @@ class NOIService:
             n = self.repo.db.query(model.id).filter(model.noiNumber == reference_no).count()
             if n:
                 cited.append(f"{n} {label}(s)")
+        # A Follow-up names its source as module + number, and every later save of it re-checks that the number
+        # exists (validators.validate_followup_source_reference) — so it is cut loose by a renumber just the same.
+        n = self.repo.db.query(models.FollowUp.id).filter(
+            func.upper(func.trim(models.FollowUp.sourceModule)) == "NOI",
+            models.FollowUp.sourceReferenceNo == reference_no,
+        ).count()
+        if n:
+            cited.append(f"{n} Follow-up(s)")
         return cited
 
     def update_noi(self, noi_id: str, noi_update: schemas.NOIUpdate,
@@ -247,16 +258,27 @@ class NOIService:
 
             # Handle contractor name -> vendor_id mapping
             if 'contractor' in d:
+                # Take the write lock BEFORE counting the documents filed under this NOI, then re-read it, so a
+                # document saved a moment ago is counted and the number decided on is the one renumbered from.
+                begin_write_transaction(self.repo.db)
+                if not reload_locked(self.repo.db, db_noi):
+                    self.repo.db.rollback()
+                    return None                    # deleted by a request that held the lock first
+
                 vendor_name = d.pop('contractor')
                 new_vendor_id = _resolve_vendor_id(self.repo.db, vendor_name)
 
                 # Business decision 2026-10-10: once documents are filed under this NOI, its contractor is fixed.
-                # Changing it renumbers the NOI below, and ITR / NCR / OBS / Checklist cite the NOI by that number
-                # with nothing to carry the change over — they were cut loose (the ITR could not be saved again,
-                # the NOI close check and Q-Workflow stopped seeing it).
+                # Changing it renumbers the NOI below, and ITR / NCR / OBS / Checklist / Follow-up cite the NOI by
+                # that number with nothing to carry the change over — they were cut loose (the ITR could not be
+                # saved again, the NOI close check and Q-Workflow stopped seeing it). Filling in a contractor that
+                # was never set (legacy data) is allowed, but the number is then kept (decision, same day).
+                keep_number = False
                 if new_vendor_id != db_noi.vendor_id and db_noi.referenceNo:
                     cited = self._documents_citing(db_noi.referenceNo)
-                    if cited:
+                    if cited and db_noi.vendor_id is None and new_vendor_id is not None:
+                        keep_number = True
+                    elif cited:
                         raise ValueError(
                             f"Cannot change the contractor of NOI '{db_noi.referenceNo}': "
                             f"{', '.join(cited)} already filed under it. Changing the contractor would renumber the NOI "
@@ -265,7 +287,9 @@ class NOIService:
 
                 # Determine if reference number needs regeneration
                 regenerate = False
-                if new_vendor_id and new_vendor_id != db_noi.vendor_id:
+                if keep_number:
+                    pass
+                elif new_vendor_id and new_vendor_id != db_noi.vendor_id:
                     regenerate = True
                 elif new_vendor_id and db_noi.referenceNo:
                     # Check if vendor abbreviation changed (e.g., vendor was renamed but ID remains the same)
@@ -364,8 +388,10 @@ class NOIService:
 
             return updated
         except ValueError as e:
+            self.repo.db.rollback()            # releases the write lock taken for a contractor change
             raise e
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error updating NOI {noi_id}: {e}", exc_info=True)
             raise e
 
