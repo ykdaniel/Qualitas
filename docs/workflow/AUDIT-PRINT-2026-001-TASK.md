@@ -1,0 +1,45 @@
+# AUDIT-PRINT-2026-001 — TASK（Audit 三份列印改為正式格式）
+
+TASK_ID: AUDIT-PRINT-2026-001
+ROUND: R4（R1–R3 審查 REVISE 後修正；R2 起使用者選擇完成率統一四捨五入，後端 Word 一併修改）
+SOURCE：2026-10-10 使用者回報「列印的資料跟 word 不一樣」。核對後，原本三個列印按鈕都只是把當下那一步的畫面印出來。使用者選擇方案 A：「列印報告」要和 Word 相同；第 2、3 步保留原本用途，不要印出按鈕和圖示。
+
+實作過程中發現一個既有 bug：NCR、OSD、OBS、PQP、FAT、材料、會議紀錄的列印 CSS 會在列印時無條件隱藏 `#root`。所以在同一個分頁裡先開過這些模組、再回 Audit 列印，會印出整頁空白。使用者同意：「好，三份都改成正式格式」。
+
+基準：正式站目前跑的是 `688d87b3`（AUDIT-EXPORT-DOCX 上線版本），部署候選以它為基準。HEAD `3665860e` 多了另一個工作階段尚未部署的 ITR 修正，不能一起上線。
+
+## 範圍（R1 原為只動前端；R2 起另含後端完成率公式，見「R2 追加範圍」）
+1. 新增 `AuditPrintTemplate.tsx`（report / plan / checklist）和 `Audit.print.css`，比照 NCR、OSD 的 portal 列印模式。
+   - **report**：章節、欄位名稱、數值、結果文字、統計算法、簽核欄，都和 Word 匯出（`audit_service.export_docx`）一致。
+   - **plan**：第 1～3 段，加上計畫簽核（主任稽核員、專案經理）。
+   - **checklist**：稽核基本資料，加上題目表。結果欄印「☐ 符合／☐ 不符合／☐ 注意」，備註欄留白，供現場手寫；另附簽核欄。
+   - 列印 CSS 只在 Audit 列印內容掛載時隱藏 `#root`（`body:has(> .audit-print-root)`），不會讓其他頁面的瀏覽器列印變成空白頁。
+2. `AuditWizard.tsx`：三個列印按鈕改成先掛載對應的列印內容再呼叫 `window.print()`，`afterprint` 之後卸載。列印內容取自目前畫面上的表單；有未儲存的修改時，抬頭會標示「含未儲存的修改」。
+3. 瀏覽器檢查腳本 `audit-print-template-check.mjs`。
+
+## R2 追加範圍（R1 審查 REVISE）
+4. 完成率統一為「四捨五入、整數運算」：`(200×完成 + 總數) // (2×總數)`。
+   - 後端 Word（`audit_service.py`）原本用 Python `round()`，遇到 .5 會取偶數。
+   - 精靈統計卡和列印原本用 `Math.round(浮點)`，例如 23/40 會算成 57.4999…。
+   - 三處改成同一個公式。使用者 2026-10-10 選擇「統一四捨五入（13%）」。
+   - 因為動到後端，本輪需要跑 Python 3.11 並重建後端。
+5. 只有條文、沒有查檢重點的題目，不再多印一行「—」（和 Word 一致）。
+6. 審查的非阻擋建議一併處理：
+   - 頁面設定改用專屬的 `@page audit`，不和其他模組互相影響。
+   - 每次按列印都視為新的工作，避免沒收到 `afterprint` 時按鈕失效。
+   - 舊紀錄只有廠商 ID 時，用 ID 找出廠商名稱，和 Word 一致。
+   - 抬頭的副標和版次行改成和 Word 相同。
+
+## R3 追加範圍（R2 審查 REVISE）
+7. 列印時隱藏 body 底下 Audit 列印內容以外的所有元素（`body:has(> .audit-print-root) > :not(.audit-print-root)`），不只是 `#root`。原本 `index.html` 裡固定的空 `#itr-single-print-root` 在具名頁面下會自己佔一頁，造成第 1 頁空白。
+8. `@page audit` 的 size 和 margin 加上 `!important`，避免已載入的 ITP、Checklist 不具名 `@page` 蓋掉 Audit 的頁面大小。
+9. 瀏覽器檢查改成檢查實際輸出的 PDF：頁數、每一頁都有文字、全部是 A4 直向。檢查前先載入 NCR、ITP、Checklist。
+
+## R4 追加範圍（R3 審查 REVISE）
+10. `ITR.module.css` 用 ID 選擇器強制顯示常駐的 `#itr-single-print-root`，權重高於第 7 項的通用規則。另外加一條 ID 規則把它隱藏，否則開過 ITR 之後第 1 頁又會變成空白。
+11. 瀏覽器檢查在列印前，先依序開過所有有列印 CSS 的模組：NCR、OSD、OBS、PQP、FAT、材料、會議紀錄、NOI、ITR、ITP、Checklist、KM。
+
+## 不在本輪
+- 新增 Agenda 步驟：使用者 2026-10-10 已交辦，選定的做法是另開一輪（需要 migration）。
+- 其他模組會無條件隱藏 `#root` 的列印 CSS：本輪不改，只確保 Audit 不受影響。
+- 除了 R2 的完成率公式之外，後端與 Word 匯出的內容不變。
