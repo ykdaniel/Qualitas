@@ -1,0 +1,3 @@
+# run(UTC): 2026-10-09T15:18:31Z  Python 3.14.6  working tree (includes another session's uncommitted material changes; this round touches audit only)
+....................                                                     [100%]
+236 passed in 253.40s (0:04:13)

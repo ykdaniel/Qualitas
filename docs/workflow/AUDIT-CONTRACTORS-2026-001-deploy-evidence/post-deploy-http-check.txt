@@ -1,0 +1,10 @@
+# 2026-10-09T14:59:02Z external checks https://qualitas.rokusumi.net
+index expected 31e8d95f99d2d1de6dea8037d8b45843f4a238114d920c7d4030a1fc94c1e045
+/ 31e8d95f99d2d1de6dea8037d8b45843f4a238114d920c7d4030a1fc94c1e045
+/index.html 31e8d95f99d2d1de6dea8037d8b45843f4a238114d920c7d4030a1fc94c1e045
+assets/index-BhrAZCBT.js 200 MATCH
+assets/index-D0YnVE8K.css 200 MATCH
+assets/Audit-7hkpabgs.js 200 MATCH
+assets/auditStore-PkDQPVOd.js 200 MATCH
+old asset assets/Audit-CGZ2zaUG.js 200
+/api/user/profile 401

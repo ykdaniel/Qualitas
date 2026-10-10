@@ -1,0 +1,15 @@
+# 2026-10-09T17:13:30Z fixed audit-layout-check.mjs run against the R1 AuditWizard.tsx (expected to catch the clipped label)
+PASS desktop 1440: step 1 has 3 column(s)  -> {"cols":3,"tops":[302,302,302]}
+PASS desktop 1440: no horizontal overflow (wizard overlay and page)  -> overlay=0px page=0px
+PASS desktop 1440: every visible progress label inside the viewport  -> [{"text":"Project Info","left":195,"right":261},{"text":"Personnel & Scope","left":502,"right":610},{"text":"Checklist Setup","left":839,"right":929},{"text":"Execution & Review","left":11
+PASS progress bar has 4 steps  -> ["1","2","3","4"]
+PASS desktop 1440: step 2 holds personnel + scope fields and the print-plan button  -> {"personnel":true,"scope":true,"printPlan":true}
+PASS laptop 1024: step 1 has 2 column(s)  -> {"cols":2,"tops":[302,302,400]}
+FAIL laptop 1024: no horizontal overflow (wizard overlay and page)  -> overlay=4px page=0px
+FAIL laptop 1024: every visible progress label inside the viewport  -> [{"text":"Project Info","left":19,"right":85},{"text":"Personnel & Scope","left":305,"right":412},{"text":"Checklist Setup","left":620,"right":710},{"text":"Execution & Review","left":916,"
+PASS laptop 1024: step 2 holds personnel + scope fields and the print-plan button  -> {"personnel":true,"scope":true,"printPlan":true}
+PASS phone 390: step 1 has 1 column(s)  -> {"cols":1,"tops":[294,392,490]}
+FAIL phone 390: no horizontal overflow (wizard overlay and page)  -> overlay=20px page=0px
+FAIL phone 390: every visible progress label inside the viewport  -> [{"text":"Project Info","left":3,"right":69},{"text":"Personnel & Scope","left":88,"right":196},{"text":"Checklist Setup","left":203,"right":293},{"text":"Execution & Review","left":298,"righ
+PASS phone 390: step 2 holds personnel + scope fields and the print-plan button  -> {"personnel":true,"scope":true,"printPlan":true}
+4 FAILED

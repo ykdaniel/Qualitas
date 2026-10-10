@@ -1,0 +1,931 @@
+diff --git a/backend/services/contractor_service.py b/backend/services/contractor_service.py
+index 75ea74f9..b778c6ea 100755
+--- a/backend/services/contractor_service.py
++++ b/backend/services/contractor_service.py
+@@ -37,6 +37,28 @@ class ContractorService:
+         """
+         return self.repo.get_all(skip, limit)
+ 
++    def get_contractor_options(self, scope=None) -> List[models.Contractor]:
++        """
++        Contractors for every module's pickers, filters and lists (GET /contractors/options), ordered by name.
++
++        The full list (contact details) stays behind contractors:view:all; this one is for any signed-in user — before,
++        roles holding only module permissions got an empty contractor picker everywhere. A contractor-scoped caller only
++        gets its own contractor (the one enforce_create_scope forces on its records).
++        """
++        query = self.repo.db.query(models.Contractor)
++        if scope is not None and scope.vendor_id is not None:
++            query = query.filter(models.Contractor.id == scope.vendor_id)
++        return query.order_by(models.Contractor.name).all()
++
++    def get_contractor_contact(self, contractor_id: str, scope=None) -> Optional[models.Contractor]:
++        """
++        One contractor's contact details for the NOI form's auto-fill. None when it does not exist or is outside a
++        contractor-scoped caller's own contractor.
++        """
++        if scope is not None and scope.vendor_id is not None and contractor_id != scope.vendor_id:
++            return None
++        return self.repo.db.query(models.Contractor).filter(models.Contractor.id == contractor_id).first()
++
+     def get_contractor(self, contractor_id: str) -> Optional[models.Contractor]:
+         """
+         Get a single Contractor by ID
+diff --git a/backend/core/dependencies.py b/backend/core/dependencies.py
+index 90461267..4fecaa45 100755
+--- a/backend/core/dependencies.py
++++ b/backend/core/dependencies.py
+@@ -123,6 +123,25 @@ def get_workflow_service(db: Session = Depends(get_db)) -> WorkflowService:
+     # takes the session directly.
+     return WorkflowService(db)
+ 
++class AnyPermissionChecker:
++    """Like RoleChecker, but holding ANY one of the given permissions is enough."""
++    def __init__(self, *permissions: str):
++        self.permissions = permissions
++
++    def __call__(self, user: models.User = Depends(get_current_user)):
++        if not user.is_active:
++            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User is inactive")
++        if not user.role:
++            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User has no assigned role")
++        held = {p.code for p in user.role.permissions_rel}
++        if not held.intersection(self.permissions):
++            raise HTTPException(
++                status_code=status.HTTP_403_FORBIDDEN,
++                detail=f"Operation not permitted. Required one of: {', '.join(self.permissions)}"
++            )
++        return user
++
++
+ class RoleChecker:
+     def __init__(self, required_permission: str):
+         self.required_permission = required_permission
+diff --git a/backend/routers/contractors.py b/backend/routers/contractors.py
+index d885b876..2e242e33 100755
+--- a/backend/routers/contractors.py
++++ b/backend/routers/contractors.py
+@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException
+ import schemas
+ from core.dependencies import RoleChecker, get_contractor_service
+ from core.perms import CONTRACTOR_MANAGE, CONTRACTOR_VIEW
++from core.scope import Scope, get_scope
++from core.security import get_current_user
+ from services.contractor_service import ContractorService
+ 
+ router = APIRouter(
+@@ -21,6 +23,15 @@ def read_contractors(
+ ):
+     return service.get_contractors(skip=skip, limit=limit)
+ 
++@router.get("/options", response_model=list[schemas.ContractorOption])
++def read_contractor_options(
++    service: ContractorService = Depends(get_contractor_service),
++    scope: Scope = Depends(get_scope),
++    current_user: schemas.User = Depends(get_current_user)
++):
++    """Contractor names for every module's pickers (any signed-in user; no contact details). Declared before /{contractor_id}."""
++    return service.get_contractor_options(scope=scope)
++
+ @router.get("/{contractor_id}", response_model=schemas.Contractor)
+ def read_contractor(
+     contractor_id: str,
+diff --git a/backend/routers/noi.py b/backend/routers/noi.py
+index 229f9fd0..2302cac4 100755
+--- a/backend/routers/noi.py
++++ b/backend/routers/noi.py
+@@ -4,11 +4,12 @@ from fastapi.responses import StreamingResponse
+ from sqlalchemy.orm import Session
+ 
+ import schemas
+-from core.dependencies import RoleChecker, get_noi_service, get_related_service
++from core.dependencies import AnyPermissionChecker, RoleChecker, get_contractor_service, get_noi_service, get_related_service
+ from core.perms import NOI_CREATE, NOI_DELETE, NOI_UPDATE, NOI_VIEW
+ from core.scope import Scope, ScopeForbidden, get_scope
+ from core.strict_dates import DateValidationError
+ from database import get_db
++from services.contractor_service import ContractorService
+ from services.noi_service import NOIService
+ from services.related_service import RelatedService
+ 
+@@ -18,6 +19,20 @@ router = APIRouter(
+     responses={404: {"description": "Not found"}},
+ )
+ 
++@router.get("/contractor-contact/{contractor_id}", response_model=schemas.ContractorContact)
++def read_noi_contractor_contact(
++    contractor_id: str,
++    service: ContractorService = Depends(get_contractor_service),
++    scope: Scope = Depends(get_scope),
++    current_user: schemas.User = Depends(AnyPermissionChecker(NOI_CREATE, NOI_UPDATE))
++):
++    """One contractor's contact person / phone / email for the NOI form's auto-fill — only for users who can create or
++    edit NOIs (the full contractor list needs contractors:view:all). CONTRACTOR-OPTIONS-2026-001."""
++    contractor = service.get_contractor_contact(contractor_id, scope=scope)
++    if contractor is None:
++        raise HTTPException(status_code=404, detail="Contractor not found")
++    return contractor
++
+ # 讀取操作 - 無需認證
+ @router.get("/", response_model=list[schemas.NOI])
+ def read_nois(
+diff --git a/react-app/src/services/api.ts b/react-app/src/services/api.ts
+index d0d0cea1..4ae375e1 100755
+--- a/react-app/src/services/api.ts
++++ b/react-app/src/services/api.ts
+@@ -183,6 +183,33 @@ export const getContractors = async (): Promise<Contractor[]> => {
+   return response.data;
+ };
+ 
++// Picker fields only, for any signed-in user (GET /contractors/options; the full list above needs contractors:view:all).
++export interface ContractorOptionApi {
++  id: string;
++  name: string;
++  abbreviation?: string | null;
++  scope?: string | null;
++  status?: string | null;
++}
++
++export const getContractorOptions = async (): Promise<ContractorOptionApi[]> => {
++  const response = await api.get<ContractorOptionApi[]>('/contractors/options');
++  return response.data;
++};
++
++// One contractor's contact details for the NOI form's auto-fill (needs noi:create or noi:update).
++export interface ContractorContactApi {
++  id: string;
++  contactPerson?: string | null;
++  phone?: string | null;
++  email?: string | null;
++}
++
++export const getNoiContractorContact = async (contractorId: string): Promise<ContractorContactApi> => {
++  const response = await api.get<ContractorContactApi>(`/noi/contractor-contact/${encodeURIComponent(contractorId)}`);
++  return response.data;
++};
++
+ export const createContractor = async (
+   data: CreateContractorPayload
+ ): Promise<Contractor> => {
+diff --git a/react-app/src/store/contractorsStore.ts b/react-app/src/store/contractorsStore.ts
+index 926e846b..6aadc412 100755
+--- a/react-app/src/store/contractorsStore.ts
++++ b/react-app/src/store/contractorsStore.ts
+@@ -1,6 +1,7 @@
+ import { create } from 'zustand';
+ import {
+     getContractors,
++    getContractorOptions,
+     createContractor,
+     updateContractor as updateContractorApi,
+     deleteContractor as apiDeleteContractor,
+@@ -22,6 +23,28 @@ export interface Contractor {
+     status: 'active' | 'inactive';
+ }
+ 
++// What every module's pickers / filters / lists use (GET /contractors/options): no contact details, served to any
++// signed-in user. The full Contractor (above) is only loaded by the Contractors management page.
++export interface ContractorOption {
++    id: string;
++    name: string;
++    abbreviation: string;
++    scope: string;
++    status: 'active' | 'inactive';
++}
++
++// 'Active', 'active', 'ACTIVE' all exist in stored data — compare case-insensitively (a strict === 'active' hid
++// contractors created through the Contractors page, which saves 'Active').
++const isActiveStatus = (status?: string | null) => (status || '').trim().toLowerCase() === 'active';
++
++const mapOption = (data: { id: string; name: string; abbreviation?: string | null; scope?: string | null; status?: string | null }): ContractorOption => ({
++    id: data.id,
++    name: data.name,
++    abbreviation: data.abbreviation || '',
++    scope: data.scope || '',
++    status: isActiveStatus(data.status) ? 'active' : 'inactive',
++});
++
+ // NOTE: 將 API 回傳的結構規範化為前端 Contractor 介面
+ const mapApiToInternal = (data: ApiContractor): Contractor => ({
+     id: data.id,
+@@ -33,7 +56,7 @@ const mapApiToInternal = (data: ApiContractor): Contractor => ({
+     email: data.email,
+     phone: data.phone,
+     address: data.address,
+-    status: (data.status?.toLowerCase() === 'active' || data.status === 'active') ? 'active' : 'inactive',
++    status: isActiveStatus(data.status) ? 'active' : 'inactive',
+ });
+ 
+ // NOTE: 將前端 Contractor 介面轉換為 API payload 結構
+@@ -50,15 +73,19 @@ const mapInternalToApi = (data: Omit<Contractor, 'id'>): CreateContractorPayload
+ });
+ 
+ interface ContractorsState {
+-    contractors: Contractor[];
++    contractors: Contractor[];   // full records — Contractors management page only (contractors:view:all)
+     error: string | null;
++    options: ContractorOption[]; // every module's pickers / filters / lists
++    optionsLoaded: boolean;
++    optionsError: string | null;
+ 
+     // Actions
+     fetchContractors: () => Promise<void>;
++    fetchOptions: () => Promise<void>;
+     addContractor: (contractor: Omit<Contractor, 'id'>) => Promise<void>;
+     updateContractor: (id: string, contractor: Partial<Contractor>) => Promise<void>;
+     deleteContractor: (id: string) => Promise<void>;
+-    getActiveContractors: () => Contractor[];
++    getActiveContractors: () => ContractorOption[];
+     clearError: () => void;
+     setError: (err: string | null) => void;
+ }
+@@ -66,6 +93,9 @@ interface ContractorsState {
+ export const useContractorsStore = create<ContractorsState>((set, get) => ({
+     contractors: [],
+     error: null,
++    options: [],
++    optionsLoaded: false,
++    optionsError: null,
+ 
+     clearError: () => set({ error: null }),
+     setError: (error: string | null) => set({ error }),
+@@ -79,11 +109,22 @@ export const useContractorsStore = create<ContractorsState>((set, get) => ({
+         }
+     },
+ 
++    fetchOptions: async () => {
++        try {
++            const data = await getContractorOptions();
++            set({ options: data.map(mapOption), optionsLoaded: true, optionsError: null });
++        } catch (err: any) {
++            // keep any list already loaded; the pickers stay usable with it
++            set({ optionsError: getErrorMessage(err, 'Failed to fetch contractors') });
++        }
++    },
++
+     addContractor: async (contractor) => {
+         try {
+             const payload = mapInternalToApi(contractor);
+             const newContractor = await createContractor(payload);
+             set((state) => ({ contractors: [...state.contractors, mapApiToInternal(newContractor)] }));
++            void get().fetchOptions();  // keep every module's pickers in step with the management page
+         } catch (error: any) {
+             const msg = getErrorMessage(error, 'Failed to add contractor');
+             set({ error: msg });
+@@ -103,6 +144,7 @@ export const useContractorsStore = create<ContractorsState>((set, get) => ({
+             set((state) => ({
+                 contractors: state.contractors.map(c => (c.id === id ? mapApiToInternal(updated) : c)),
+             }));
++            void get().fetchOptions();
+         } catch (error: any) {
+             const msg = getErrorMessage(error, 'Failed to update contractor');
+             set({ error: msg });
+@@ -114,6 +156,7 @@ export const useContractorsStore = create<ContractorsState>((set, get) => ({
+         try {
+             await apiDeleteContractor(id);
+             set((state) => ({ contractors: state.contractors.filter(c => c.id !== id) }));
++            void get().fetchOptions();
+         } catch (error: any) {
+             const msg = getErrorMessage(error, 'Failed to delete contractor');
+             set({ error: msg });
+@@ -121,5 +164,5 @@ export const useContractorsStore = create<ContractorsState>((set, get) => ({
+         }
+     },
+ 
+-    getActiveContractors: () => get().contractors.filter(c => c.status === 'active'),
++    getActiveContractors: () => get().options.filter(c => c.status === 'active'),
+ }));
+diff --git a/react-app/src/components/Shared/AppProviders.tsx b/react-app/src/components/Shared/AppProviders.tsx
+index cb7a975b..e82a481d 100755
+--- a/react-app/src/components/Shared/AppProviders.tsx
++++ b/react-app/src/components/Shared/AppProviders.tsx
+@@ -38,7 +38,8 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
+     useEffect(() => {
+         const preload = async () => {
+             await Promise.allSettled([
+-                useContractorsStore.getState().fetchContractors(),
++                // picker list for every module (any signed-in user); the full list is loaded by the Contractors page
++                useContractorsStore.getState().fetchOptions(),
+                 useProjectStore.getState().fetchProjects(),
+             ]);
+             await preloadProjectScopedData();
+diff --git a/react-app/src/components/Contractors/Contractors.tsx b/react-app/src/components/Contractors/Contractors.tsx
+index 73f96606..cae7df69 100755
+--- a/react-app/src/components/Contractors/Contractors.tsx
++++ b/react-app/src/components/Contractors/Contractors.tsx
+@@ -68,6 +68,12 @@ const Contractors: React.FC = () => {
+         fetchProjects();
+     }, [fetchProjects]);
+ 
++    // The full contractor list (contact details) is no longer preloaded app-wide (AppProviders loads only the picker
++    // options), so this page loads it itself.
++    useEffect(() => {
++        void useContractorsStore.getState().fetchContractors();
++    }, []);
++
+     // ── Contractor handlers ──────────────────────────────────────────────────
+     const filteredContractors = React.useMemo(() => {
+         if (!deferredQuery.trim()) return contractors;
+diff --git a/react-app/src/components/Dashboard/MaterialStatsTile.tsx b/react-app/src/components/Dashboard/MaterialStatsTile.tsx
+index b7a81b2b..75f4b941 100644
+--- a/react-app/src/components/Dashboard/MaterialStatsTile.tsx
++++ b/react-app/src/components/Dashboard/MaterialStatsTile.tsx
+@@ -24,9 +24,9 @@ const MaterialStatsTile: React.FC<{ selectedVendor: string; onOpen: () => void;
+     = ({ selectedVendor, onOpen, loadingText, errorText, retryText }) => {
+     const mt = useMaterialText();
+     const projectId = useProjectStore((s) => s.currentProject?.id);
+-    const contractors = useContractorsStore((s) => s.contractors);
+-    const contractorsError = useContractorsStore((s) => s.error);
+-    const fetchContractors = useContractorsStore((s) => s.fetchContractors);
++    const contractors = useContractorsStore((s) => s.options);
++    const contractorsError = useContractorsStore((s) => s.optionsError);
++    const fetchContractors = useContractorsStore((s) => s.fetchOptions);
+     const [token, setToken] = useState(0);
+     /** the last answer, with the request it answers; any other request still shows "loading" */
+     const [answer, setAnswer] = useState<{ key: string; state: TileState } | null>(null);
+diff --git a/react-app/src/components/Dashboard/Dashboard.tsx b/react-app/src/components/Dashboard/Dashboard.tsx
+index b68c2c85..6a0292cc 100755
+--- a/react-app/src/components/Dashboard/Dashboard.tsx
++++ b/react-app/src/components/Dashboard/Dashboard.tsx
+@@ -1,5 +1,5 @@
+ import { useNavigate } from 'react-router-dom';
+-import { useContractorsStore, Contractor } from '../../store/contractorsStore';
++import { useContractorsStore, ContractorOption } from '../../store/contractorsStore';
+ import { useDashboardFilterStore } from '../../store/dashboardFilterStore';
+ import { useProjectStore } from '../../store/projectStore';
+ import { useDashboardStats } from '../../hooks/useDashboardStats';
+@@ -31,7 +31,7 @@ const Dashboard = () => {
+ 
+ const DashboardContent: React.FC<{
+   navigate: (path: string) => void;
+-  getActiveContractors: () => Contractor[];
++  getActiveContractors: () => ContractorOption[];
+ }> = ({ navigate, getActiveContractors }) => {
+   const { selectedVendor, setSelectedVendor } = useDashboardFilterStore();
+   const { statistics, t } = useDashboardStats(selectedVendor);
+diff --git a/react-app/src/components/MaterialSubmittal/MaterialSubmittal.tsx b/react-app/src/components/MaterialSubmittal/MaterialSubmittal.tsx
+index 62c1fd72..b08eac4e 100644
+--- a/react-app/src/components/MaterialSubmittal/MaterialSubmittal.tsx
++++ b/react-app/src/components/MaterialSubmittal/MaterialSubmittal.tsx
+@@ -41,9 +41,9 @@ const MaterialSubmittal: React.FC = () => {
+     // Same as the other modules: the project comes from the global selector at the top right. Approved materials are kept
+     // per project (DECISIONS), so "All projects" shows a prompt instead of a cross-project list.
+     const { currentProject } = useProjectStore();
+-    const { getActiveContractors, fetchContractors } = useContractorsStore();
++    const { getActiveContractors, fetchOptions } = useContractorsStore();
+ 
+-    useEffect(() => { void fetchContractors(); }, [fetchContractors]);
++    useEffect(() => { void fetchOptions(); }, [fetchOptions]);
+ 
+     if (!canView) return <div className={shellStyles.container}><Notice tone="error">{mt('noPermission')}</Notice></div>;
+ 
+diff --git a/react-app/src/components/Checklist/Checklist.tsx b/react-app/src/components/Checklist/Checklist.tsx
+index 64ec5436..fc935819 100755
+--- a/react-app/src/components/Checklist/Checklist.tsx
++++ b/react-app/src/components/Checklist/Checklist.tsx
+@@ -324,9 +324,8 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
+     const noiList = useNOIStore(state => state.noiList);
+     const itpList = useITPStore(state => state.itpList);
+     const itrList = useITRStore(state => state.itrList);
+-    const { contractors } = useContractorsStore();
++    const { getActiveContractors } = useContractorsStore();
+ 
+-    const getActiveContractors = () => contractors.filter(c => c.status === 'active');
+ 
+     // Same shared check the list badge and the outer readOnly computation
+     // use (isTemplateHistoricallyProtected) — recomputed here too so the
+diff --git a/react-app/src/components/NOI/modals/NOIDetailModal.tsx b/react-app/src/components/NOI/modals/NOIDetailModal.tsx
+index c8004c05..b7e4e6bb 100755
+--- a/react-app/src/components/NOI/modals/NOIDetailModal.tsx
++++ b/react-app/src/components/NOI/modals/NOIDetailModal.tsx
+@@ -1,7 +1,8 @@
+ import { useDraftGuard } from '../../Shared/LeaveGuard';
+ import FormActions from '../../Shared/FormActions';
+ import actionStyles from '../../Shared/FormActions.module.css';
+-import React, { useState, useMemo } from 'react';
++import React, { useState, useMemo, useRef, useEffect } from 'react';
++import { useAuth } from '../../../context/AuthContext';
+ import { useNavigate } from 'react-router-dom';
+ import { toast } from 'sonner';
+ import { useLanguage } from '../../../context/LanguageContext';
+@@ -14,7 +15,7 @@ import type { NOIItem } from '../../../store/noiStore';
+ import { validateStatusTransition, NOIStatusTransitions, NOIStatusTransitionList, validateRequiredFields, NOIValidationRules } from '../../../utils/statusValidation';
+ import { checkDateOrder } from '../../../utils/dateValidation';
+ import FileAttachment from '../../Shared/FileAttachment';
+-import { exportNoiDocx } from '../../../services/api';
++import { exportNoiDocx, getNoiContractorContact } from '../../../services/api';
+ import RelatedDocuments from '../../ui/RelatedDocuments';
+ import styles from '../NOI.module.css';
+ import formStyles from '../../Shared/FormShell.module.css';
+@@ -100,11 +101,12 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
+             type: '',
+             contractor: defaultContractorRecord?.name || '',
+             // Pre-selecting the first active contractor also pre-fills its contact
+-            // info in the same initialization — these three stay marked 'system'
+-            // below so a later contractor change can still safely overwrite them.
+-            contacts: defaultContractorRecord?.contactPerson || '',
+-            phone: defaultContractorRecord?.phone || '',
+-            email: defaultContractorRecord?.email || '',
++            // info — fetched right after mount (the picker list carries no contact
++            // details, CONTRACTOR-OPTIONS-2026-001); these three stay marked
++            // 'system' so a later contractor change can still safely overwrite them.
++            contacts: '',
++            phone: '',
++            email: '',
+             status: 'Open',
+             remark: '',
+             closeoutDate: '',
+@@ -124,6 +126,45 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
+ 
+     const [formData, setFormData] = useState<NOIDetailData>(getInitialData());
+     const [contactSource, setContactSource] = useState<ContactSource>(getInitialContactSource());
++    // The async contact fetch below must see the CURRENT sources (a field the user types into while the
++    // request is in flight becomes 'user' and must not be overwritten when the answer arrives).
++    const contactSourceRef = useRef(contactSource);
++    contactSourceRef.current = contactSource;
++    const contactRequestRef = useRef(0);
++    const { hasPermission } = useAuth();
++    const canReadContacts = hasPermission('noi:create:all') || hasPermission('noi:update:all');
++
++    // Fill the given system-sourced contact fields from the selected contractor's contact details
++    // (GET /noi/contractor-contact/{id}, needs NOI create or update). Only the latest request counts,
++    // only if the contractor is still the selected one, and only fields still 'system' at that moment.
++    const fillContactFromContractor = async (contractorName: string, fields: ContactField[]) => {
++        const seq = ++contactRequestRef.current;
++        const contractor = getActiveContractors().find(c => c.name === contractorName);
++        if (!contractor || fields.length === 0 || !canReadContacts) return;
++        try {
++            const contact = await getNoiContractorContact(contractor.id);
++            if (seq !== contactRequestRef.current) return;
++            setFormData(prev => {
++                if (prev.contractor !== contractorName) return prev;
++                const next = { ...prev };
++                fields.forEach(field => {
++                    if (contactSourceRef.current[field] !== 'system') return;
++                    next[field] = (field === 'contacts' ? contact.contactPerson : contact[field]) || '';
++                });
++                return next;
++            });
++        } catch (err) {
++            // No auto-fill (the fields stay as they are); the user can type the contact details.
++            console.error('Failed to load contractor contact for NOI:', err);
++        }
++    };
++
++    // A brand-new NOI pre-selects the first active contractor: fetch its contact details once.
++    useEffect(() => {
++        if (existingData || existingItem || readOnly || !formData.contractor) return;
++        void fillContactFromContractor(formData.contractor, ['contacts', 'phone', 'email']);
++        // eslint-disable-next-line react-hooks/exhaustive-deps
++    }, []);
+ 
+     const filteredITPList = useMemo(() => {
+         if (!formData.contractor) return [];
+@@ -327,10 +368,10 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
+                                                 // Clearing the contractor selection does not touch the
+                                                 // contact fields or their source status — those values
+                                                 // may already be user-confirmed for this inspection.
++                                                contactRequestRef.current++;  // an answer still in flight no longer applies
+                                                 setFormData(prev => ({ ...prev, contractor: '', itpNo: '' }));
+                                                 return;
+                                             }
+-                                            const selected = getActiveContractors().find(c => c.name === newContractorName);
+                                             // Computed from the current contactSource BEFORE calling setFormData:
+                                             // the functional updater passed below is not guaranteed to run
+                                             // synchronously, so any decision that depends on "what happened in
+@@ -341,11 +382,13 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
+                                                 const next = { ...prev, contractor: newContractorName, itpNo: '' };
+                                                 systemFields.forEach(field => {
+                                                     // System-sourced fields always follow the newly selected
+-                                                    // contractor, including when that contractor's own field is blank.
+-                                                    next[field] = (field === 'contacts' ? selected?.contactPerson : selected?.[field]) || '';
++                                                    // contractor, including when that contractor's own field is
++                                                    // blank: cleared now, filled when its contact details arrive.
++                                                    next[field] = '';
+                                                 });
+                                                 return next;
+                                             });
++                                            void fillContactFromContractor(newContractorName, systemFields);
+                                             if (keptFields.length > 0) {
+                                                 const fieldLabels = keptFields.map(f => t(CONTACT_FIELD_LABEL_KEY[f])).join('、');
+                                                 toast.info(t('noi.contactKeptOnContractorChange', { fields: fieldLabels }));
+diff --git a/react-app/src/components/Audit/Audit.tsx b/react-app/src/components/Audit/Audit.tsx
+index 3ff1db55..b8b61dad 100755
+--- a/react-app/src/components/Audit/Audit.tsx
++++ b/react-app/src/components/Audit/Audit.tsx
+@@ -4,6 +4,7 @@ import { useLanguage } from '../../context/LanguageContext';
+ import { useAuth } from '../../context/AuthContext';
+ import { useAuditStore, AuditItem } from '../../store/auditStore';
+ import { useProjectStore } from '../../store/projectStore';
++import { useContractorsStore } from '../../store/contractorsStore';
+ import ConfirmModal from '../Shared/ConfirmModal';
+ import styles from './Audit.module.css';
+ import shellStyles from '../Shared/ModuleShell.module.css';
+@@ -37,9 +38,9 @@ const Audit: React.FC = () => {
+ 
+     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+     const [currentAuditId, setCurrentAuditId] = useState<string | null>(null);
+-    // Contractor names from GET /audit/contractors (audit:view is enough), not the contractors store —
+-    // that one needs contractors:view:all, so audit-only roles used to get an empty vendor panel/schedule.
+-    const contractors = useAuditStore(state => state.contractorOptions);
++    // The shared contractor picker list (GET /contractors/options, any signed-in user; status normalised so
++    // 'Active' and 'active' both count) — CONTRACTOR-OPTIONS-2026-001 replaced the Audit-only list.
++    const contractors = useContractorsStore(state => state.options);
+     const [selectedVendorFilter, setSelectedVendorFilter] = useState<string | null>(null);
+ 
+     // Get active contractors — depend on the contractors array itself so memo
+@@ -50,7 +51,7 @@ const Audit: React.FC = () => {
+     );
+ 
+     useEffect(() => {
+-        useAuditStore.getState().fetchContractorOptions();
++        void useContractorsStore.getState().fetchOptions();
+     }, []);
+ 
+     // Audits are not part of AppProviders' preloadProjectScopedData, so this page re-fetches its
+diff --git a/react-app/src/components/Audit/AuditWizard.tsx b/react-app/src/components/Audit/AuditWizard.tsx
+index 9b1e7baf..a7815c5d 100755
+--- a/react-app/src/components/Audit/AuditWizard.tsx
++++ b/react-app/src/components/Audit/AuditWizard.tsx
+@@ -9,6 +9,7 @@ import {
+   AlertCircle, Search, ShieldCheck, Printer
+ } from 'lucide-react';
+ import { useAuditStore, AuditItem } from '../../store/auditStore';
++import { useContractorsStore } from '../../store/contractorsStore';
+ import { useProjectStore } from '../../store/projectStore';
+ import { useLanguage } from '../../context/LanguageContext';
+ import { checkDateOrder } from '../../utils/dateValidation';
+@@ -94,8 +95,8 @@ interface AuditWizardProps {
+ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly: readOnlyProp = false, canUpdate = true, onClose, onSaveSuccess }) => {
+   const { t } = useLanguage();
+   const { addAudit, updateAudit, loading } = useAuditStore();
+-  // Same source as the Audit page (GET /audit/contractors, audit:view is enough); Audit.tsx fetches it.
+-  const contractorOptions = useAuditStore(state => state.contractorOptions);
++  // Same source as the Audit page: the shared contractor picker list (status already normalised).
++  const contractorOptions = useContractorsStore(state => state.options);
+   const activeContractors = useMemo(() => contractorOptions.filter(c => c.status === 'active'), [contractorOptions]);
+   const { projectList, fetchProjects, currentProject } = useProjectStore();
+   React.useEffect(() => { fetchProjects(); }, [fetchProjects]);
+diff --git a/react-app/src/store/auditStore.ts b/react-app/src/store/auditStore.ts
+index d4369eb7..eb5b2103 100755
+--- a/react-app/src/store/auditStore.ts
++++ b/react-app/src/store/auditStore.ts
+@@ -26,23 +26,13 @@ export interface AuditItem {
+     custom_check_items?: any[];
+ }
+ 
+-// GET /audit/contractors: names only, served with audit:view (the full /contractors list needs
+-// contractors:view:all, which audit-only roles don't have).
+-export interface AuditContractorOption {
+-    id: string;
+-    name: string;
+-    status?: string | null;
+-}
+-
+ interface AuditState {
+     auditList: AuditItem[];
+     loading: boolean;
+     error: string | null;
+-    contractorOptions: AuditContractorOption[];
+ 
+     // Actions
+     fetchAudits: () => Promise<void>;
+-    fetchContractorOptions: () => Promise<void>;
+     refetch: () => Promise<void>;
+     addAudit: (audit: Omit<AuditItem, 'id'>) => Promise<AuditItem>;
+     updateAudit: (id: string, audit: Partial<AuditItem>) => Promise<void>;
+@@ -58,7 +48,6 @@ export const useAuditStore = create<AuditState>((set, get) => ({
+     auditList: [],
+     loading: false,
+     error: null,
+-    contractorOptions: [],
+ 
+     clearError: () => set({ error: null }),
+     setError: (error: string | null) => set({ error }),
+@@ -87,17 +76,6 @@ export const useAuditStore = create<AuditState>((set, get) => ({
+         await get().fetchAudits();
+     },
+ 
+-    fetchContractorOptions: async () => {
+-        try {
+-            const response = await api.get('/audit/contractors');
+-            set({ contractorOptions: response.data || [] });
+-        } catch (err: any) {
+-            // Not shown in the page banner: the audit list itself still works; only the contractor
+-            // panel / schedule rows / picker stay empty.
+-            console.error('Failed to fetch audit contractor options:', err);
+-        }
+-    },
+-
+     addAudit: async (audit) => {
+         try {
+             set({ error: null });
+--- a/backend/schemas.py
++++ b/backend/schemas.py
+@@ -1084,6 +1084,27 @@
+     model_config = ConfigDict(from_attributes=True)
+ 
+ 
++class ContractorOption(BaseModel):
++    """A contractor as every module's picker / filter / list needs it (GET /contractors/options): no contact details,
++    so it is served to any signed-in user (CONTRACTOR-OPTIONS-2026-001). `status` is returned as stored ('Active' /
++    'active' / 'Inactive' all exist); the client compares it case-insensitively."""
++    id: str
++    name: str
++    abbreviation: str | None = None
++    scope: str | None = None
++    status: str | None = None
++    model_config = ConfigDict(from_attributes=True)
++
++
++class ContractorContact(BaseModel):
++    """One contractor's contact details for the NOI form's auto-fill (GET /noi/contractor-contact/{id})."""
++    id: str
++    contactPerson: str | None = None
++    phone: str | None = None
++    email: str | None = None
++    model_config = ConfigDict(from_attributes=True)
++
++
+ # Project
+ # material_reply_days (MATERIAL-SUBMITTAL M1): calendar days for a material submittal's expected reply date. null = not set;
+ # there is no default. Strict non-negative integer — -1, 1.5, "14" and true are rejected. JSON name: materialReplyDays.
+diff --git a/backend/tests/test_contractor_options_http.py b/backend/tests/test_contractor_options_http.py
+new file mode 100644
+index 00000000..02d85aaa
+--- /dev/null
++++ b/backend/tests/test_contractor_options_http.py
+@@ -0,0 +1,117 @@
++"""GET /api/contractors/options and GET /api/noi/contractor-contact/{id} (CONTRACTOR-OPTIONS-2026-001).
++
++Real login/routes on a disposable file DB; no main import, no development database access.
++"""
++import importlib
++import secrets
++from types import SimpleNamespace
++
++import pytest
++from fastapi import FastAPI
++from fastapi.testclient import TestClient
++from sqlalchemy import create_engine
++from sqlalchemy.orm import sessionmaker
++
++import models
++from core.security import get_password_hash
++from database import Base, get_db
++
++
++@pytest.fixture
++def env(tmp_path, monkeypatch):
++    engine = create_engine(f"sqlite:///{tmp_path / 'options.db'}", connect_args={'check_same_thread': False})
++    Base.metadata.create_all(engine)
++    S = sessionmaker(bind=engine, autoflush=False)
++    import core.security as security
++    monkeypatch.setattr(security, 'SessionLocal', S)
++    password = secrets.token_urlsafe(24)
++    with S() as db:
++        db.add_all([
++            models.Contractor(id='zeta', name='Zeta Works', abbreviation='ZW', scope='Steel', status='Inactive',
++                              contactPerson='Zed', phone='0900-000-001', email='zed@zeta.example.com', address='Secret Rd 1'),
++            models.Contractor(id='alpha', name='Alpha Build', abbreviation='AB', scope='Civil', status='Active',
++                              contactPerson='Amy', phone='0900-000-002', email='amy@alpha.example.com'),
++            models.Contractor(id='beta', name='Beta MEP', abbreviation='BM', scope='MEP', status='active'),
++        ])
++        db.flush()
++
++        def user(name, codes, vendor_id=None):
++            role = models.Role(name=f'role-{name}')
++            role.permissions_rel = [db.query(models.Permission).filter_by(code=c).first() or models.Permission(code=c, description=c)
++                                    for c in codes]
++            db.add(role)
++            db.flush()
++            db.add(models.User(username=name, email=f'{name}@example.com', is_active=True, role_id=role.id, vendor_id=vendor_id,
++                               hashed_password=get_password_hash(password)))
++            db.flush()
++        user('ncr-only', ['ncr:view:all'])
++        user('noi-creator', ['noi:view:all', 'noi:create:all'])
++        user('noi-editor', ['noi:view:all', 'noi:update:all'])
++        user('noi-viewer', ['noi:view:all'])
++        user('alpha-user', ['noi:view:all', 'noi:create:all'], vendor_id='alpha')
++        user('no-perms', [])
++        db.commit()
++    app = FastAPI()
++    for name in ['auth', 'contractors', 'noi']:
++        app.include_router(importlib.import_module('routers.' + name).router, prefix='/api')
++
++    def session():
++        with S() as db:
++            yield db
++    app.dependency_overrides[get_db] = session
++    with TestClient(app, raise_server_exceptions=False) as client:
++        def login(name):
++            client.cookies.clear()
++            r = client.post('/api/auth/login', data={'username': name, 'password': password})
++            assert r.status_code == 200, r.text
++        yield SimpleNamespace(client=client, login=login)
++    engine.dispose()
++
++
++def test_any_signed_in_user_gets_picker_fields_only(env):
++    env.login('ncr-only')
++    r = env.client.get('/api/contractors/options')
++    assert r.status_code == 200, r.text
++    rows = r.json()
++    assert [c['name'] for c in rows] == ['Alpha Build', 'Beta MEP', 'Zeta Works']  # all, ordered by name, inactive included
++    assert all(set(c) == {'id', 'name', 'abbreviation', 'scope', 'status'} for c in rows)  # no contact details / address
++    assert {c['id']: c['status'] for c in rows} == {'alpha': 'Active', 'beta': 'active', 'zeta': 'Inactive'}  # as stored
++    assert env.client.get('/api/contractors/').status_code == 403  # the full list still needs contractors:view:all
++    assert env.client.get('/api/contractors/alpha').status_code == 403
++
++
++def test_a_user_with_no_permissions_still_gets_options(env):
++    env.login('no-perms')
++    assert env.client.get('/api/contractors/options').status_code == 200
++
++
++def test_options_need_a_login(env):
++    env.client.cookies.clear()
++    assert env.client.get('/api/contractors/options').status_code == 401
++
++
++def test_contractor_scoped_user_sees_only_its_own_contractor(env):
++    env.login('alpha-user')
++    assert [c['id'] for c in env.client.get('/api/contractors/options').json()] == ['alpha']
++
++
++@pytest.mark.parametrize('name', ['noi-creator', 'noi-editor'])
++def test_noi_writers_get_one_contractors_contact(env, name):
++    env.login(name)
++    r = env.client.get('/api/noi/contractor-contact/alpha')
++    assert r.status_code == 200, r.text
++    assert r.json() == {'id': 'alpha', 'contactPerson': 'Amy', 'phone': '0900-000-002', 'email': 'amy@alpha.example.com'}
++
++
++def test_noi_viewer_and_others_cannot_read_contacts(env):
++    for name in ('noi-viewer', 'ncr-only'):
++        env.login(name)
++        assert env.client.get('/api/noi/contractor-contact/alpha').status_code == 403
++
++
++def test_unknown_or_out_of_scope_contractor_is_404(env):
++    env.login('noi-creator')
++    assert env.client.get('/api/noi/contractor-contact/nope').status_code == 404
++    env.login('alpha-user')
++    assert env.client.get('/api/noi/contractor-contact/zeta').status_code == 404
++    assert env.client.get('/api/noi/contractor-contact/alpha').status_code == 200
+diff --git a/backend/scripts/verification/seed_contractor_options_review.py b/backend/scripts/verification/seed_contractor_options_review.py
+new file mode 100644
+index 00000000..e89175a9
+--- /dev/null
++++ b/backend/scripts/verification/seed_contractor_options_review.py
+@@ -0,0 +1,56 @@
++"""Extra seed for CONTRACTOR-OPTIONS-2026-001 browser checks (isolated stack only — never run against a real DB).
++Run AFTER seed_audit_hardening_b_review.py (+ optionally seed_audit_polish_review.py):
++
++    python scripts/verification/isolated_stack.py seed --root <root> --script scripts/verification/seed_contractor_options_review.py
++    node ../react-app/tests-browser/contractor-options-check.mjs <stack.json> <outDir>
++
++Password for every account: `Accept-Test-1234` (shared, isolated-only test constant, same convention as the other seeds).
++
++    module_user      ncr / obs / pqp view + create, NO contractors:view:all  -> pickers must still list contractors
++    noi_writer       noi view + create, NO contractors:view:all              -> NOI contact auto-fill via /noi/contractor-contact
++    contractor_admin contractors:view:all + contractors:manage:all           -> Contractors page still lists the full records
++
++Contractors added: "Caps Active Co" stored with status 'Active' (capital A — what the Contractors page saves; the Audit page
++used to treat it as inactive), with contact details; contact details for the existing "Review Vendor".
++"""
++import json
++import os
++import sys
++
++BACKEND = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
++sys.path.insert(0, BACKEND)
++import database, models  # noqa: E402
++from core.security import get_password_hash  # noqa: E402
++
++PW = "Accept-Test-1234"  # shared, isolated-only test constant used across this directory's seed scripts
++d = database.SessionLocal()
++
++
++def perm(code):
++    p = d.query(models.Permission).filter_by(code=code).first()
++    if not p:
++        p = models.Permission(code=code, description=code)
++        d.add(p)
++        d.flush()
++    return p
++
++
++def user(username, codes):
++    r = models.Role(name=f"CO-{username}")
++    r.permissions_rel = [perm(c) for c in codes]
++    d.add(r)
++    d.flush()
++    d.add(models.User(username=username, email=f"{username}@example.com", is_active=True, role_id=r.id,
++                      hashed_password=get_password_hash(PW), full_name=username))
++
++
++d.add(models.Contractor(id="caps-active", name="Caps Active Co", abbreviation="CA", scope="Civil works", status="Active",
++                        contactPerson="Cathy Caps", phone="02-1111-2222", email="cathy@caps.example.com"))
++rv = d.query(models.Contractor).filter_by(id="ahb-vendor").one()
++rv.contactPerson, rv.phone, rv.email = "Rex Review", "03-3333-4444", "rex@review.example.com"
++user("module_user", ["ncr:view:all", "ncr:create:all", "obs:view:all", "obs:create:all", "pqp:view:all", "pqp:create:all"])
++user("noi_writer", ["noi:view:all", "noi:create:all", "itp:view:all"])
++user("contractor_admin", ["contractors:view:all", "contractors:manage:all"])
++d.commit()
++d.close()
++print("SEED " + json.dumps({"ok": True}))
+diff --git a/react-app/tests-browser/contractor-options-check.mjs b/react-app/tests-browser/contractor-options-check.mjs
+new file mode 100644
+index 00000000..300a29bf
+--- /dev/null
++++ b/react-app/tests-browser/contractor-options-check.mjs
+@@ -0,0 +1,88 @@
++// CONTRACTOR-OPTIONS-2026-001 browser checks (isolated stack only). Seeds: seed_audit_hardening_b_review.py
++// (+ seed_audit_polish_review.py) + seed_contractor_options_review.py. English UI.
++// Usage: node contractor-options-check.mjs <stack.json> <outDir>
++import { chromium } from '/Users/nook/Documents/Qualitas/react-app/node_modules/playwright/index.mjs';
++import { readFileSync, mkdirSync } from 'node:fs';
++const stack = JSON.parse(readFileSync(process.argv[2], 'utf8'));
++const out = process.argv[3]; mkdirSync(out, { recursive: true });
++const UI = `http://127.0.0.1:${stack.vite_port}`, PW = 'Accept-Test-1234';
++let failures = 0;
++const check = (name, ok, extra = '') => { if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${extra !== '' ? '  -> ' + String(extra).replace(/\s+/g, ' ').slice(0, 260) : ''}`); };
++const browser = await chromium.launch({ headless: true });
++
++async function login(user, path) {
++  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
++  await ctx.addInitScript(() => localStorage.setItem('language', 'en'));
++  const p = await ctx.newPage();
++  await p.goto(UI + '/login'); await p.fill('#email', user); await p.fill('#password', PW); await p.click('button[type=submit]');
++  await p.waitForURL(u => !u.pathname.startsWith('/login'), { timeout: 15000 });
++  await p.goto(UI + path); await p.waitForTimeout(1500);
++  return p;
++}
++const api = (p, path) => p.evaluate(async path => { const r = await fetch(path, { credentials: 'include' }); return r.status; }, path);
++// options of every <select> that lists a seeded contractor
++const contractorSelectOptions = p => p.evaluate(() => [...document.querySelectorAll('select')]
++  .map(s => [...s.options].map(o => o.text.trim()))
++  .find(texts => texts.includes('Review Vendor') || texts.includes('Caps Active Co')) || []);
++
++// 1. module-only user: NCR / OBS / PQP add forms list the active contractors
++{
++  const p = await login('module_user', '/ncr');
++  check('module user: full contractor list still forbidden', (await api(p, '/api/contractors/')) === 403);
++  for (const [path, button] of [['/ncr', 'Add New NCR'], ['/obs', 'Add New OBS'], ['/pqp', 'Add New Quality Plan']]) {
++    await p.goto(UI + path); await p.waitForTimeout(1200);
++    await p.getByRole('button', { name: button }).first().click(); await p.waitForTimeout(800);
++    const opts = await contractorSelectOptions(p);
++    check(`module user: ${path} add form lists contractors (incl. 'Active', excl. inactive)`,
++      opts.includes('Caps Active Co') && opts.includes('Review Vendor') && !opts.includes('Retired Co'), JSON.stringify(opts));
++    await p.screenshot({ path: `${out}/module-user${path.replace('/', '-')}.png` });
++  }
++  await p.context().close();
++}
++
++// 2. audit_full: the Audit wizard picker and vendor panel now count 'Active' contractors as active
++{
++  const p = await login('audit_full', '/audit');
++  await p.locator('button', { hasText: 'Add Audit' }).first().click(); await p.waitForSelector('input[name=auditTitle]');
++  const opts = await contractorSelectOptions(p);
++  check("audit wizard picker includes the contractor stored as 'Active'", opts.includes('Caps Active Co') && !opts.includes('Retired Co'), JSON.stringify(opts));
++  await p.context().close();
++}
++
++// 3. noi_writer: contact auto-fill comes from /noi/contractor-contact
++{
++  const p = await login('noi_writer', '/noi');
++  check('noi writer: full contractor list still forbidden', (await api(p, '/api/contractors/')) === 403);
++  await p.getByRole('button', { name: 'Add New NOI' }).first().click(); await p.waitForTimeout(1500);
++  const contact = () => p.evaluate(() => {
++    const byLabel = text => { const l = [...document.querySelectorAll('label')].find(x => x.textContent.trim().startsWith(text)); return l?.parentElement?.querySelector('input')?.value; };
++    const contractor = [...document.querySelectorAll('select')].find(s => [...s.options].some(o => o.text === 'Review Vendor'));
++    return { contractor: contractor?.value, contact: byLabel('Contact Person'), phone: document.querySelector('input[type=tel]')?.value, email: document.querySelector('input[type=email]')?.value };
++  });
++  let c = await contact();
++  check('NOI: default contractor (first active, by name) and its contact details pre-filled',
++    c.contractor === 'Caps Active Co' && c.contact === 'Cathy Caps' && c.phone === '02-1111-2222' && c.email === 'cathy@caps.example.com', JSON.stringify(c));
++  const contractorSelect = p.locator('select').filter({ has: p.locator('option', { hasText: 'Review Vendor' }) }).first();
++  await contractorSelect.selectOption('Review Vendor'); await p.waitForTimeout(1200);
++  c = await contact();
++  check('NOI: changing contractor re-fills system-filled contact fields', c.contact === 'Rex Review' && c.phone === '03-3333-4444' && c.email === 'rex@review.example.com', JSON.stringify(c));
++  await p.fill('input[type=tel]', '09-9999-9999');
++  await contractorSelect.selectOption('Caps Active Co'); await p.waitForTimeout(1200);
++  c = await contact();
++  check('NOI: a contact field the user edited is kept on contractor change; the others follow', c.phone === '09-9999-9999' && c.contact === 'Cathy Caps' && c.email === 'cathy@caps.example.com', JSON.stringify(c));
++  await p.screenshot({ path: `${out}/noi-contact-autofill.png` });
++  await p.context().close();
++}
++
++// 4. contractor_admin: the Contractors page loads the full list itself (no longer preloaded app-wide)
++{
++  const p = await login('contractor_admin', '/contractors');
++  const text = await p.evaluate(() => document.body.innerText);
++  check('Contractors page lists full records (contact details visible)', text.includes('Caps Active Co') && text.includes('cathy@caps.example.com'), '');
++  await p.screenshot({ path: `${out}/contractors-page.png` });
++  await p.context().close();
++}
++
++await browser.close();
++console.log(failures === 0 ? 'ALL PASS' : `${failures} FAILED`);
++process.exit(failures ? 1 : 0);

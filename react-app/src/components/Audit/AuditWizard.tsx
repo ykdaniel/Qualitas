@@ -14,8 +14,49 @@ import { useProjectStore } from '../../store/projectStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { checkDateOrder } from '../../utils/dateValidation';
 
+// Today as YYYY-MM-DD in the browser's time zone (toISOString() is UTC: the previous day before 08:00 in Taiwan).
+const localToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+// Enter that is NOT confirming an IME candidate (Zhuyin / Pinyin). Chrome reports the confirming keydown with
+// isComposing = true; Safari fires compositionend first and then a keydown with isComposing = false but keyCode 229,
+// so both have to be checked (the old onKeyPress never fired for 229 — this keeps that behaviour).
+const isPlainEnter = (e: React.KeyboardEvent) => e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229;
+
+// Wizard steps (label keys). Personnel and Scope & Location share one step (AUDIT-LAYOUT-2026-001): both are plan data,
+// a handful of fields each, and "Print Audit Plan" prints them together with step 1 anyway.
+const WIZARD_STEPS = ['audit.wizard.step1', 'audit.wizard.stepPersonnelScope', 'audit.wizard.step4', 'audit.wizard.step5'];
+const LAST_STEP = WIZARD_STEPS.length;
+
 const ALL_CATEGORY = '__ALL__';
 const UNCATEGORIZED = '__UNCATEGORIZED__';
+
+// Mirrors backend/core/utils.py::WorkflowEngine.TRANSITIONS["Audit"] — the backend is the only
+// source of truth for which transitions it accepts (same approach as ITP_STATUS_TRANSITIONS in
+// ITPModals.tsx). Keep this in sync if the backend map ever changes.
+const AUDIT_STATUS_TRANSITIONS: Record<string, string[]> = {
+  'Draft': ['Planned', 'Void'],
+  'Planned': ['In Progress', 'Draft', 'Void'],
+  'In Progress': ['Completed', 'Void'],
+  'Completed': ['Closed', 'In Progress', 'Void'],
+  'Closed': [],
+  'Void': [],
+};
+// A new audit may start in any status that still has a way forward (audit_service.py refuses
+// Closed / Void on create: a record created in a dead end could never be edited or deleted).
+const AUDIT_CREATE_STATUSES = ['Draft', 'Planned', 'In Progress', 'Completed'];
+// Closed and Void are dead ends ("Closed": [] / "Void": []): read-only here and in the backend.
+const AUDIT_LOCKED_STATUSES = new Set(['Closed', 'Void']);
+const AUDIT_STATUS_LABELS: Record<string, string> = {
+  'Draft': '✏️ Draft（草稿）',
+  'Planned': '📅 Planned（計畫中）',
+  'In Progress': '👣 In Progress（進行中）',
+  'Completed': '✅ Completed（已完成）',
+  'Closed': '🔒 Closed（已關閉）',
+  'Void': '⛔ Void（作廢）',
+};
 
 // 內建 ISO 9001:2015 條文資料庫
 const ISO_CLAUSES = [
@@ -42,19 +83,22 @@ const ISO_CLAUSES = [
 ];
 
 interface AuditWizardProps {
-  auditId: string | null;
   existingItem?: AuditItem;
   readOnly?: boolean;
+  // audit:update:all. Without it a user can create an audit (one save) but every later save is
+  // refused by the backend, so the wizard turns read-only right after the first create.
+  canUpdate?: boolean;
   onClose: () => void;
   onSaveSuccess: () => void;
 }
 
-export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly = false, onClose, onSaveSuccess }) => {
+export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly: readOnlyProp = false, canUpdate = true, onClose, onSaveSuccess }) => {
   const { t } = useLanguage();
   const { addAudit, updateAudit, loading } = useAuditStore();
-  const { getActiveContractors } = useContractorsStore();
-  const activeContractors = useMemo(() => getActiveContractors(), [getActiveContractors]);
-  const { projectList, fetchProjects } = useProjectStore();
+  // Same source as the Audit page: the shared contractor picker list (status already normalised).
+  const contractorOptions = useContractorsStore(state => state.options);
+  const activeContractors = useMemo(() => contractorOptions.filter(c => c.status === 'active'), [contractorOptions]);
+  const { projectList, fetchProjects, currentProject } = useProjectStore();
   React.useEffect(() => { fetchProjects(); }, [fetchProjects]);
 
   const [isSaving, setIsSaving] = useState(false);
@@ -64,9 +108,11 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
 
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
-    auditDocNo: existingItem?.auditNo || '',
     auditTitle: existingItem?.title || '',
-    projectName: existingItem?.project_name || '',
+    // A new audit starts in the project currently selected in the header (blank under "All
+    // projects"), so it doesn't vanish from the list it was created from; always changeable.
+    projectId: existingItem ? (existingItem.project_id || '') : (currentProject?.id || ''),
+    projectName: existingItem ? (existingItem.project_name || '') : (currentProject?.name || ''),
     findings: existingItem?.findings || '',
     auditStartDate: existingItem?.date || '',
     auditEndDate: existingItem?.end_date || '',
@@ -83,10 +129,31 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     vendorId: existingItem?.vendor_id || '',
     status: existingItem?.status || 'Draft',
   });
+  // Active contractors, plus the record's own contractor when it has since been deactivated
+  // (otherwise an existing audit showed an empty picker).
+  const pickerContractors = useMemo(() => {
+    if (!formData.vendorId || activeContractors.some(c => c.id === formData.vendorId)) return activeContractors;
+    const own = contractorOptions.find(c => c.id === formData.vendorId)
+      || { id: formData.vendorId, name: formData.contractor || formData.vendorId };
+    return [...activeContractors, own];
+  }, [activeContractors, contractorOptions, formData.vendorId, formData.contractor]);
+  // Server-assigned and never edited, so kept out of formData (and out of the leave guard): after
+  // the first Save Draft of a new record it is filled in from the create response.
+  const [auditNo, setAuditNo] = useState(existingItem?.auditNo || '');
+  // Status of the last successful save (undefined = not saved yet). Drives the status options and
+  // the lock, so a record saved as Void mid-session locks without reopening the wizard.
+  const [savedStatus, setSavedStatus] = useState<string | undefined>(existingItem?.status);
+  const statusOptions = savedStatus === undefined
+    ? AUDIT_CREATE_STATUSES
+    : [savedStatus, ...(AUDIT_STATUS_TRANSITIONS[savedStatus] || [])];
+  // A legacy record may have only a project name (no project_id): show the project that name
+  // matches, and save that link the next time the record is saved.
+  const selectedProjectId = formData.projectId
+    || projectList.find(p => p.name === formData.projectName)?.id
+    || '';
 
   const [newItem, setNewItem] = useState({ no: '', clause: '', task: '' });
   const [isCustomNew, setIsCustomNew] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
   // Audit.tsx never promotes its own currentAuditId after a mid-session "Save Draft" (Save
   // Draft deliberately keeps the wizard open without calling onSaveSuccess, so the parent
   // never learns the new id) — existingItem stays undefined for the rest of this wizard's
@@ -96,7 +163,14 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
   // Add in between produced two separate audit rows, the second one holding the added item
   // and the first one permanently stuck with an empty custom_check_items).
   const [createdId, setCreatedId] = useState<string | null>(null);
-  const recordId = existingItem?.id ?? createdId;
+  // The id is fixed when the wizard opens: existingItem is re-looked-up from the list on every
+  // parent render, so a list re-fetch that (briefly) lacks this record would otherwise turn the
+  // next save into a create of a duplicate.
+  const [openedId] = useState<string | null>(existingItem?.id ?? null);
+  const recordId = openedId ?? createdId;
+  const createdWithoutUpdate = createdId !== null && !canUpdate;
+  const readOnly = readOnlyProp || createdWithoutUpdate
+    || (savedStatus !== undefined && AUDIT_LOCKED_STATUSES.has(savedStatus));
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const [editFormData, setEditFormData] = useState({ no: '', clause: '', task: '' });
   const [isCustomEdit, setIsCustomEdit] = useState(false);
@@ -151,7 +225,8 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
 
   const filteredItems = useMemo(() => {
     return formData.customCheckItems.filter((item: any) => {
-      const matchesSearch = (item.clause || '').includes(searchTerm) || (item.task || '').includes(searchTerm);
+      const query = searchTerm.trim().toLowerCase();
+      const matchesSearch = !query || (item.clause || '').toLowerCase().includes(query) || (item.task || '').toLowerCase().includes(query);
       const matchesCategory = activeCategory === ALL_CATEGORY || (item.no || UNCATEGORIZED) === activeCategory;
       return matchesSearch && matchesCategory;
     });
@@ -161,7 +236,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     setFormData(prev => ({
       ...prev,
       customCheckItems: prev.customCheckItems.map((item: any) => 
-        item.id === id ? { ...item, status: newStatus, updatedAt: new Date().toISOString().split('T')[0] } : item
+        item.id === id ? { ...item, status: newStatus, updatedAt: localToday() } : item
       )
     }));
   };
@@ -170,7 +245,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     setFormData(prev => ({
       ...prev,
       customCheckItems: prev.customCheckItems.map((item: any) => 
-        item.id === id ? { ...item, note: newNote, updatedAt: new Date().toISOString().split('T')[0] } : item
+        item.id === id ? { ...item, note: newNote, updatedAt: localToday() } : item
       )
     }));
   };
@@ -199,19 +274,24 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => {
-      const updated = { ...prev, [name]: value };
-      if (name === 'auditStartDate' || name === 'auditEndDate') {
-        const check = checkDateOrder(updated.auditStartDate, updated.auditEndDate, 'Audit Start Date', 'Audit End Date');
-        if (!check.valid) toast.warning(check.message);
-      }
-      return updated;
-    });
+    setFormData(prev => ({ ...prev, [name]: value }));
+    // Outside the state updater (StrictMode runs updaters twice, which showed the toast twice).
+    if (name === 'auditStartDate' || name === 'auditEndDate') {
+      const next = { ...formData, [name]: value };
+      const check = checkDateOrder(next.auditStartDate, next.auditEndDate, t('audit.wizard.startDateLabel'), t('audit.wizard.endDateLabel'));
+      if (!check.valid) toast.warning(check.message);
+    }
+  };
+
+  const handleProjectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const projectId = e.target.value;
+    const selected = projectList.find(p => p.id === projectId);
+    setFormData(prev => ({ ...prev, projectId, projectName: selected?.name || '' }));
   };
 
   const handleContractorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const vendorId = e.target.value;
-    const selectedVendor = activeContractors.find((v: any) => v.id === vendorId);
+    const selectedVendor = pickerContractors.find(v => v.id === vendorId);
     setFormData(prev => ({
       ...prev,
       vendorId: vendorId,
@@ -242,15 +322,18 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     }));
   };
 
-  const nextStep = () => setStep(prev => Math.min(prev + 1, 5));
+  const nextStep = () => setStep(prev => Math.min(prev + 1, LAST_STEP));
   const prevStep = () => setStep(prev => Math.max(prev - 1, 1));
 
   const prepareAuditData = (status: string): Omit<AuditItem, 'id'> => {
     return {
-      auditNo: formData.auditDocNo || '',
+      // The backend assigns auditNo on create and ignores it on update; sent only because the
+      // create schema still lists it.
+      auditNo: auditNo,
       title: formData.auditTitle || '',
       date: formData.auditStartDate || '',
       end_date: formData.auditEndDate || '',
+      project_id: selectedProjectId || null,
       project_name: formData.projectName || '',
       auditor: formData.leadAuditor || '',
       project_director: formData.projectDirector || '',
@@ -278,27 +361,31 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
   const hasUnconfirmedNewItem = () => newItem.no.trim() || newItem.clause.trim() || newItem.task.trim();
   const blockSaveForUnconfirmedNewItem = () => {
     if (editingItemId !== null) {
-      toast.error('您正在編輯既有查檢項目但尚未按「儲存」套用這筆編輯。請先儲存，或按「取消」放棄後再保存整份表單。');
+      toast.error(t('audit.wizard.unconfirmedEditItem'));
       return true;
     }
     if (!hasUnconfirmedNewItem()) return false;
-    toast.error('您在自訂查檢項目輸入了內容但尚未按「新增」。請先按「新增」加入，或清空欄位後再保存。');
+    toast.error(t('audit.wizard.unconfirmedNewItem'));
     return true;
   };
 
   const handleSaveDraft = async () => {
+    if (readOnly) return;
     if (blockSaveForUnconfirmedNewItem()) return;
     setIsDraftSaving(true);
     setSaveError('');
     setDraftMessage('');
 
     try {
-      const updates = prepareAuditData(formData.status || 'Draft');
+      const updates = prepareAuditData(formData.status);
       if (recordId) {
         await updateAudit(recordId, updates);
+        setSavedStatus(updates.status);
       } else {
         const created = await addAudit(updates);
         setCreatedId(created.id);
+        setAuditNo(created.auditNo);
+        setSavedStatus(created.status);
       }
 
       leaveGuard.markSaved();
@@ -307,8 +394,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
       setTimeout(() => setDraftMessage(''), 4000);
       // Don't call onSaveSuccess() here — draft save should keep the wizard open
     } catch (err: any) {
+      // auditStore rethrows getErrorMessage(): the backend's reason for a refusal, a friendly line for a server error.
       console.error("草稿儲存失敗: ", err);
-      setSaveError(t('audit.wizard.saveError'));
+      setSaveError(`${t('audit.wizard.saveFailedPrefix')}${err?.message || ''}`);
     } finally {
       setIsDraftSaving(false);
     }
@@ -316,33 +404,36 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (readOnly) return;
     if (blockSaveForUnconfirmedNewItem()) return;
     setIsSaving(true);
     setSaveError('');
 
     try {
-      const updates = prepareAuditData(formData.status || 'Planned');
+      const updates = prepareAuditData(formData.status);
       if (recordId) {
         await updateAudit(recordId, updates);
       } else {
         const created = await addAudit(updates);
         setCreatedId(created.id);
+        setAuditNo(created.auditNo);
       }
 
       leaveGuard.release();
-      setIsSubmitted(true);
       onSaveSuccess();
     } catch (err: any) {
       console.error("資料庫寫入失敗: ", err);
-      setSaveError(t('audit.wizard.submitError'));
+      setSaveError(`${t('audit.wizard.saveFailedPrefix')}${err?.message || ''}`);
     } finally {
       setIsSaving(false);
     }
   };
 
   const renderProgressBar = () => (
-    <div className="flex items-center justify-between mb-12 w-full max-w-4xl mx-auto">
-      {[1, 2, 3, 4, 5].map((i) => (
+    // px-10: each label is centred under its circle and wider than it, so the first and last labels hang ~36px past the
+    // circles — the padding keeps them inside the wizard at every width (AUDIT-LAYOUT R2).
+    <div className="flex items-center justify-between mb-8 w-full max-w-4xl mx-auto px-10">
+      {WIZARD_STEPS.map((labelKey, index) => { const i = index + 1; return (
         <React.Fragment key={i}>
           <div className="flex flex-col items-center relative">
             <button
@@ -354,67 +445,34 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
             >
               {step > i ? <CheckCircle size={20} /> : i}
             </button>
-            <span className={`absolute -bottom-8 text-xs font-bold whitespace-nowrap ${
+            {/* Below 640px four labels cannot fit side by side (they overlapped even with five steps before): numbers only. */}
+            <span className={`absolute -bottom-8 text-xs font-bold whitespace-nowrap hidden sm:block ${
               step >= i ? 'text-teal-700' : 'text-slate-400'
             }`}>
-              {i === 1 ? t('audit.wizard.step1') : i === 2 ? t('audit.wizard.step2') : i === 3 ? t('audit.wizard.step3') : i === 4 ? t('audit.wizard.step4') : t('audit.wizard.step5')}
+              {t(labelKey)}
             </span>
           </div>
-          {i < 5 && (
+          {i < LAST_STEP && (
             <div className={`flex-1 h-1 mx-2 rounded-full transition-colors duration-300 drop-shadow-sm ${
               step > i ? 'bg-teal-500' : 'bg-slate-600/50'
             }`} />
           )}
         </React.Fragment>
-      ))}
+      ); })}
     </div>
   );
 
-  if (isSubmitted) {
-    return (
-      <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-6 overflow-y-auto no-print">
-        <div className="bg-white p-10 rounded-3xl shadow-2xl text-center max-w-2xl w-full border border-teal-100">
-          <div className="w-24 h-24 bg-teal-50 text-teal-600 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle size={56} />
-          </div>
-          <h2 className="text-3xl font-black text-slate-800 mb-2">{t('audit.wizard.successTitle')}</h2>
-          <p className="text-slate-500 mb-8">{t('audit.wizard.successSubtitle')}{formData.auditDocNo || t('audit.wizard.successSubtitleAuto')}</p>
-
-          <div className="grid grid-cols-2 gap-4 text-left bg-slate-50 p-6 rounded-2xl mb-8 border border-slate-100">
-            <div className="col-span-2">
-              <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">{t('audit.wizard.projectNameLabel')}</p>
-              <p className="font-semibold text-slate-700">{formData.projectName}</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">{t('audit.wizard.leadAuditorLabel')}</p>
-              <p className="font-semibold text-slate-700">{formData.leadAuditor}</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">{t('audit.wizard.checkItemCountLabel')}</p>
-              <p className="font-semibold text-slate-700">{formData.customCheckItems.length} {t('audit.wizard.customItemsSuffix')}</p>
-            </div>
-          </div>
-
-          <button
-            onClick={requestClose}
-            className="w-full py-4 bg-teal-600 text-white rounded-2xl font-bold text-lg hover:bg-teal-700 hover:shadow-lg transition-all active:scale-[0.98]"
-          >
-            {t('audit.wizard.backToList')}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto py-12 px-4 flex justify-center items-start pt-16">
-      <div className="w-full max-w-5xl">
+    // print: the wizard is a fixed, internally scrolling overlay — printed as is, only the first screenful came out (one
+    // page, the rest cut off). In print it becomes normal flow so the browser paginates it; Audit.tsx hides the page behind.
+    <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto py-8 px-4 md:px-8 flex justify-center items-start pt-10 print:static print:overflow-visible print:block print:p-0 print:bg-white">
+      <div className="w-full max-w-[1400px]">
         <div className="flex justify-between items-center mb-6 no-print">
             <div className="text-left flex items-center gap-4">
-                <div className="inline-flex items-center justify-center p-3.5 bg-emerald-50 text-teal-700 rounded-2xl">
-                    <ClipboardList size={28} />
+                <div className="inline-flex items-center justify-center p-2.5 bg-emerald-50 text-teal-700 rounded-2xl">
+                    <ClipboardList size={24} />
                 </div>
-                <h1 className="text-3xl font-black text-slate-800 tracking-tight">{t('audit.wizard.title')}</h1>
+                <h1 className="text-2xl font-black text-slate-800 tracking-tight">{t('audit.wizard.title')}</h1>
             </div>
             <button 
                 onClick={requestClose}
@@ -428,6 +486,11 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
           {renderProgressBar()}
         </div>
 
+        {createdWithoutUpdate && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-center font-medium shadow-sm no-print">
+            {t('audit.wizard.createdNoUpdateNotice')}
+          </div>
+        )}
         {saveError && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-center font-medium shadow-sm no-print">
             {saveError}
@@ -439,159 +502,155 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
             
             {/* Step 1: Project Info */}
             {step === 1 && (
-              <div className="p-8 md:p-12 space-y-8 animate-in fade-in slide-in-from-bottom-4">
-                <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-6">
-                  <FileText className="text-teal-600" size={28} />
-                  <h2 className="text-2xl font-bold text-slate-800">{t('audit.wizard.step1')}</h2>
+              <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                <div className="flex items-center gap-3 border-b border-slate-100 pb-3 mb-4">
+                  <FileText className="text-teal-600" size={24} />
+                  <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.step1')}</h2>
                 </div>
                 
-                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="col-span-full">
+                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-5">
+                  <div>
                     <label className="flex items-baseline gap-2 mb-2">
                        <span className="text-sm font-bold text-slate-800">Audit Doc No</span>
                        <span className="text-xs font-medium text-slate-400">(稽核文件編號)</span>
                     </label>
-                    <input type="text" name="auditDocNo" value={formData.auditDocNo} className="w-full md:w-1/2 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl outline-none text-slate-400 font-medium cursor-not-allowed" placeholder="系統自動產生" readOnly style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }} />
+                    <input type="text" name="auditDocNo" value={auditNo} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl outline-none text-slate-400 font-medium cursor-not-allowed" placeholder="系統自動產生" readOnly style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }} />
+                  </div>
+                  <div>
+                    <label className="flex items-baseline gap-2 mb-2">
+                       <span className="text-sm font-bold text-slate-800">Project No / Name</span>
+                       <span className="text-xs font-medium text-slate-400">(專案名稱)</span>
+                    </label>
+                    <select
+                      name="projectId"
+                      value={selectedProjectId}
+                      onChange={handleProjectChange}
+                      className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none"
+                    >
+                      <option value="">{t('audit.wizard.selectProject')}</option>
+                      {projectList.map(p => (
+                        <option key={p.id} value={p.id}>{p.code ? `[${p.code}] ` : ''}{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="flex items-baseline gap-2 mb-2">
+                       <span className="text-sm font-bold text-slate-800">Contractor</span>
+                       <span className="text-xs font-medium text-slate-400">(受稽核廠商)</span>
+                    </label>
+                    <select value={formData.vendorId} onChange={handleContractorChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none">
+                        <option value="">{t('audit.wizard.selectContractor')}</option>
+                        {pickerContractors.map(vendor => (
+                            <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
+                        ))}
+                    </select>
                   </div>
                   <div className="col-span-full">
                     <label className="flex items-baseline gap-2 mb-2">
                        <span className="text-sm font-bold text-slate-800">{t('audit.auditTitle') || 'Audit Title'}</span>
                        <span className="text-xs font-medium text-slate-400">(稽核標題)</span>
                     </label>
-                    <input type="text" name="auditTitle" value={formData.auditTitle} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" placeholder={t('audit.auditTitlePlaceholder') || 'Enter audit title'} />
+                    <input type="text" name="auditTitle" value={formData.auditTitle} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" placeholder={t('audit.auditTitlePlaceholder')} />
                   </div>
-                  <div className="col-span-full">
-                    <label className="flex items-baseline gap-2 mb-2">
-                       <span className="text-sm font-bold text-slate-800">Project No / Name</span>
-                       <span className="text-xs font-medium text-slate-400">(專案名稱)</span>
-                    </label>
-                    <select
-                      name="projectName"
-                      value={formData.projectName}
-                      onChange={handleInputChange}
-                      className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none"
-                    >
-                      <option value="">{t('audit.wizard.selectProject')}</option>
-                      {projectList.map(p => (
-                        <option key={p.id} value={p.name}>{p.code ? `[${p.code}] ` : ''}{p.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-span-full">
-                    <label className="flex items-baseline gap-2 mb-2">
-                       <span className="text-sm font-bold text-slate-800">Contractor</span>
-                       <span className="text-xs font-medium text-slate-400">(受稽核廠商)</span>
-                    </label>
-                    <select value={formData.vendorId} onChange={handleContractorChange} className="w-full md:w-1/2 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none">
-                        <option value="">{t('audit.wizard.selectContractor')}</option>
-                        {activeContractors.map((vendor: any) => (
-                            <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
-                        ))}
-                    </select>
-                  </div>
-                  <div className="col-span-1">
+                  <div>
                     <label className="flex items-baseline gap-2 mb-2">
                        <span className="text-sm font-bold text-slate-800">Audit Start Date</span>
                     </label>
-                    <input type="date" name="auditStartDate" value={formData.auditStartDate} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                    <input type="date" name="auditStartDate" value={formData.auditStartDate} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
                   </div>
-                  <div className="col-span-1">
+                  <div>
                     <label className="flex items-baseline gap-2 mb-2">
                        <span className="text-sm font-bold text-slate-800">Audit End Date</span>
                     </label>
-                    <input type="date" name="auditEndDate" value={formData.auditEndDate} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                    <input type="date" name="auditEndDate" value={formData.auditEndDate} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
                   </div>
-                  <div className="col-span-full">
+                  <div>
                     <label className="flex items-baseline gap-2 mb-2">
                        <span className="text-sm font-bold text-slate-800">Status</span>
                        <span className="text-xs font-medium text-slate-400">(稽核狀態)</span>
                     </label>
-                    <select name="status" value={formData.status} onChange={handleInputChange} className="w-full md:w-1/3 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none">
-                      <option value="Draft">✏️ Draft（草稿）</option>
-                      <option value="Planned">📅 Planned（計畫中）</option>
-                      <option value="In Progress">👣 In Progress（進行中）</option>
-                      <option value="Completed">✅ Completed（已完成）</option>
-                      <option value="Closed">🔒 Closed（已關閉）</option>
+                    <select name="status" value={formData.status} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none">
+                      {/* Only what the workflow allows from the last saved status (the backend refuses anything else). */}
+                      {statusOptions.map(status => (
+                        <option key={status} value={status}>{AUDIT_STATUS_LABELS[status] || status}</option>
+                      ))}
                     </select>
                   </div>
                 </fieldset>
               </div>
             )}
 
-            {/* Step 2: Personnel */}
+            {/* Step 2: Personnel + Scope & Location (merged, AUDIT-LAYOUT-2026-001) */}
             {step === 2 && (
-              <div className="p-8 md:p-12 space-y-8 animate-in fade-in slide-in-from-bottom-4">
-                <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-6">
-                  <Users className="text-teal-600" size={28} />
-                  <h2 className="text-2xl font-bold text-slate-800">{t('audit.wizard.step2')} (Carried Out By)</h2>
-                </div>
-                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div>
-                    <label className="flex items-baseline gap-2 mb-2">
-                       <span className="text-sm font-bold text-slate-800">Project Director</span>
-                    </label>
-                    <input type="text" name="projectDirector" value={formData.projectDirector} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
-                  </div>
-                  <div>
-                    <label className="flex items-baseline gap-2 mb-2">
-                       <span className="text-sm font-bold text-slate-800">Package or Tech. Lead</span>
-                    </label>
-                    <input type="text" name="techLead" value={formData.techLead} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
-                  </div>
-                  <div>
-                    <label className="flex items-baseline gap-2 mb-2">
-                       <span className="text-sm font-bold text-slate-800">Lead Auditor</span>
-                    </label>
-                    <input type="text" name="leadAuditor" value={formData.leadAuditor} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
-                  </div>
-                  <div>
-                    <label className="flex items-baseline gap-2 mb-2">
-                       <span className="text-sm font-bold text-slate-800">Support Auditor</span>
-                    </label>
-                    <input type="text" name="supportAuditors" value={formData.supportAuditors} onChange={handleInputChange} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
-                  </div>
-                </fieldset>
-              </div>
-            )}
-
-            {/* Step 3: Location */}
-            {step === 3 && (
-              <div className="p-8 md:p-12 space-y-8 animate-in fade-in slide-in-from-bottom-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
+              <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
                   <div className="flex items-center gap-3">
-                    <MapPin className="text-teal-600" size={28} />
-                    <h2 className="text-2xl font-bold text-slate-800">{t('audit.wizard.step3')}</h2>
+                    <Users className="text-teal-600" size={24} />
+                    <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.stepPersonnelScope')}</h2>
                   </div>
                   <button className={actionStyles.secondary} type="button" onClick={() => window.print()}>
                     <Printer className="w-4 h-4" /> {t('audit.wizard.printPlan')}
                   </button>
                 </div>
-                
-                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="space-y-8 no-print">
+
+                <h3 className="flex items-center gap-2 text-sm font-bold text-slate-500 uppercase tracking-wide no-print">
+                  <Users size={16} /> {t('audit.wizard.step2')} (Carried Out By)
+                </h3>
+                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-5 no-print">
+                  <div>
+                    <label className="flex items-baseline gap-2 mb-2">
+                       <span className="text-sm font-bold text-slate-800">Project Director</span>
+                    </label>
+                    <input type="text" name="projectDirector" value={formData.projectDirector} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                  </div>
+                  <div>
+                    <label className="flex items-baseline gap-2 mb-2">
+                       <span className="text-sm font-bold text-slate-800">Package or Tech. Lead</span>
+                    </label>
+                    <input type="text" name="techLead" value={formData.techLead} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                  </div>
+                  <div>
+                    <label className="flex items-baseline gap-2 mb-2">
+                       <span className="text-sm font-bold text-slate-800">Lead Auditor</span>
+                    </label>
+                    <input type="text" name="leadAuditor" value={formData.leadAuditor} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                  </div>
+                  <div className="col-span-full">
+                    <label className="flex items-baseline gap-2 mb-2">
+                       <span className="text-sm font-bold text-slate-800">Support Auditor</span>
+                    </label>
+                    <input type="text" name="supportAuditors" value={formData.supportAuditors} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                  </div>
+                </fieldset>
+
+                <h3 className="flex items-center gap-2 text-sm font-bold text-slate-500 uppercase tracking-wide pt-2 no-print">
+                  <MapPin size={16} /> {t('audit.wizard.step3')}
+                </h3>
+                <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-5 no-print">
                 <div>
                   <label className="flex items-baseline gap-2 mb-2">
                        <span className="text-sm font-bold text-slate-800">Location</span>
                        <span className="text-xs font-medium text-slate-400">(稽核地點)</span>
                   </label>
-                  <input type="text" name="location" value={formData.location} onChange={handleInputChange} className="w-full md:w-1/2 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                  <input type="text" name="location" value={formData.location} onChange={handleInputChange} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
                 </div>
-                <div>
+                <div className="md:col-span-1 xl:col-span-2">
                   <label className="flex items-baseline gap-2 mb-2">
                        <span className="text-sm font-bold text-slate-800">Audit Criteria</span>
                        <span className="text-xs font-medium text-slate-400">(稽核準則)</span>
                   </label>
-                  <input type="text" name="auditCriteria" value={formData.auditCriteria} onChange={handleInputChange} placeholder="例如: 專案合約、ISO 9001、施工規範..." className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
+                  <input type="text" name="auditCriteria" value={formData.auditCriteria} onChange={handleInputChange} placeholder="例如: 專案合約、ISO 9001、施工規範..." className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium" />
                 </div>
-                <div>
+                <div className="col-span-full">
                   <label className="flex items-baseline gap-2 mb-2">
                        <span className="text-sm font-bold text-slate-800">Audit Scope</span>
                        <span className="text-xs font-medium text-slate-400">(範圍描述)</span>
                   </label>
-                  <textarea name="scopeDescription" value={formData.scopeDescription} onChange={handleInputChange} rows={5} className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none resize-none transition-all text-slate-800 font-medium"></textarea>
+                  <textarea name="scopeDescription" value={formData.scopeDescription} onChange={handleInputChange} rows={5} className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none resize-none transition-all text-slate-800 font-medium"></textarea>
                 </div>
                 </fieldset>
 
-                {/* Print Only Summary for Steps 1-3 */}
+                {/* Print Only Summary for the plan (steps 1-2) */}
                 <div className="hidden print:block space-y-4">
                   <div className="text-center mb-6 border-b-2 border-slate-800 pb-3">
                     <h1 className="text-2xl font-bold text-slate-900 mb-1">Internal Quality Audit Plan</h1>
@@ -599,10 +658,10 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                   </div>
 
                   <div className="grid grid-cols-2 gap-y-3 gap-x-6 text-sm border border-slate-300 p-5 rounded-lg">
-                    {/* Step 1 Info */}
+                    {/* Project info (step 1) */}
                     <div className="col-span-1 border-b border-slate-100 pb-2">
                       <span className="font-bold text-slate-500 block mb-0.5 text-xs">Audit No. (稽核編號)</span>
-                      <p className="font-semibold text-slate-800 text-sm">{formData.auditDocNo || 'TBD'}</p>
+                      <p className="font-semibold text-slate-800 text-sm">{auditNo || 'TBD'}</p>
                     </div>
                     <div className="col-span-1 border-b border-slate-100 pb-2">
                       <span className="font-bold text-slate-500 block mb-0.5 text-xs">Project Name (專案名稱)</span>
@@ -618,7 +677,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                       <p className="font-semibold text-slate-800 text-sm">{formData.auditStartDate} {formData.auditEndDate ? `~ ${formData.auditEndDate}` : ''}</p>
                     </div>
 
-                    {/* Step 2 Info */}
+                    {/* Personnel (step 2) */}
                     <div className="col-span-1 border-b border-slate-100 pb-2">
                       <span className="font-bold text-slate-500 block mb-0.5 text-xs">Project Director (專案主管)</span>
                       <p className="font-semibold text-slate-800 text-sm">{formData.projectDirector || '-'}</p>
@@ -636,7 +695,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                       <p className="font-semibold text-slate-800 text-sm">{formData.supportAuditors || '-'}</p>
                     </div>
 
-                    {/* Step 3 Info */}
+                    {/* Scope & location (step 2) */}
                     <div className="col-span-1 border-b border-slate-100 pb-2">
                       <span className="font-bold text-slate-500 block mb-0.5 text-xs">Location (稽核地點)</span>
                       <p className="font-semibold text-slate-800 text-sm">{formData.location || '-'}</p>
@@ -655,13 +714,13 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
               </div>
             )}
 
-            {/* Step 4: Checklist Configuration */}
-            {step === 4 && (
-              <div className="p-8 md:p-12 space-y-8 animate-in fade-in slide-in-from-bottom-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
+            {/* Step 3: Checklist Configuration */}
+            {step === 3 && (
+              <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
                   <div className="flex items-center gap-3">
-                    <CheckSquare className="text-teal-600" size={28} />
-                    <h2 className="text-2xl font-bold text-slate-800">{t('audit.wizard.step4')} Checklist</h2>
+                    <CheckSquare className="text-teal-600" size={24} />
+                    <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.step4')} Checklist</h2>
                   </div>
                   <button className={actionStyles.secondary} type="button" onClick={() => window.print()}>
                     <Printer className="w-4 h-4" /> {t('audit.wizard.printChecklist')}
@@ -720,7 +779,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                       <input type="text" name="clause" value={newItem.clause} onChange={handleNewItemChange} placeholder="ISO 9001:2015 Clause 內容..." className="flex-1 p-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all text-sm font-medium text-slate-800" />
                     </div>
                     <div className="flex gap-2">
-                      <input type="text" name="task" value={newItem.task} onChange={handleNewItemChange} onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addCustomItem())} placeholder="輸入稽核查檢重點 (Audit Question)..." className="flex-1 p-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all text-sm font-medium text-slate-800" />
+                      <input type="text" name="task" value={newItem.task} onChange={handleNewItemChange} onKeyDown={(e) => { if (isPlainEnter(e)) { e.preventDefault(); addCustomItem(); } }} placeholder="輸入稽核查檢重點 (Audit Question)..." className="flex-1 p-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all text-sm font-medium text-slate-800" />
                       <button className={actionStyles.icon} type="button" onClick={addCustomItem}><Plus size={20} /></button>
                     </div>
                   </div>
@@ -745,9 +804,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                                   <option value="custom">✎ {t('audit.wizard.customClause')}</option>
                                 </select>
                               )}
-                              <input type="text" name="clause" value={editFormData.clause} onChange={handleEditChange} onKeyPress={(e) => { if (e.key === 'Enter') e.preventDefault(); }} placeholder="ISO 9001:2015 Clause 內容..." className="flex-1 p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm" />
+                              <input type="text" name="clause" value={editFormData.clause} onChange={handleEditChange} onKeyDown={(e) => { if (isPlainEnter(e)) e.preventDefault(); }} placeholder="ISO 9001:2015 Clause 內容..." className="flex-1 p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm" />
                             </div>
-                            <input type="text" name="task" value={editFormData.task} onChange={handleEditChange} onKeyPress={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveEdit(); } }} placeholder="輸入稽核查檢重點 (Audit Question)..." className="w-full p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm" />
+                            <input type="text" name="task" value={editFormData.task} onChange={handleEditChange} onKeyDown={(e) => { if (isPlainEnter(e)) { e.preventDefault(); saveEdit(); } }} placeholder="輸入稽核查檢重點 (Audit Question)..." className="w-full p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm" />
                             <div className="flex justify-end gap-2 mt-1">
                               <button className={actionStyles.secondary} type="button" onClick={cancelEdit}><X size={16} /> {t('common.cancel')}</button>
                               <button className={actionStyles.primary} type="button" onClick={saveEdit}><Check size={16} /> {t('common.save')}</button>
@@ -787,9 +846,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
               </div>
             )}
 
-            {/* Step 5: Execution & Evaluation */}
-            {step === 5 && (
-              <div className="p-8 md:p-12 space-y-6 animate-in fade-in slide-in-from-bottom-4 bg-slate-50 min-h-[500px]">
+            {/* Step 4: Execution & Evaluation */}
+            {step === 4 && (
+              <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 bg-slate-50 min-h-[500px]">
                 
                 {/* Header Section */}
                 <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -869,6 +928,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                         placeholder={t('audit.wizard.searchPlaceholder')}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
+                        // The only text input on the last step, inside the form that has the submit button:
+                        // Enter would otherwise submit (save and close) the whole audit.
+                        onKeyDown={(e) => { if (isPlainEnter(e)) e.preventDefault(); }}
                         className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-slate-50"
                       />
                     </div>
@@ -939,8 +1001,10 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                                   onChange={(e) => updateItemNote(item.id, e.target.value)}
                                   placeholder={t('common.clickToEnter') || 'Click to enter...'}
                                   rows={2}
-                                  className="w-full text-sm bg-transparent border border-transparent hover:border-slate-200 focus:border-indigo-400 focus:outline-none p-2 rounded-lg transition-all text-slate-700 resize-y min-h-[40px]"
+                                  className="w-full text-sm bg-transparent border border-transparent hover:border-slate-200 focus:border-indigo-400 focus:outline-none p-2 rounded-lg transition-all text-slate-700 resize-y min-h-[40px] print:hidden"
                                 />
+                                {/* A textarea prints only its visible rows; print the whole note as text instead. */}
+                                <p className="hidden print:block w-full text-sm text-slate-700 whitespace-pre-wrap break-words">{item.note || '-'}</p>
                               </div>
                             </td>
                             <td className="px-6 py-4 text-right">
@@ -1004,9 +1068,11 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                     onChange={handleInputChange}
                     rows={5}
                     disabled={readOnly}
-                    className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium resize-y"
-                    placeholder={t('audit.findingsPlaceholder') || 'Enter audit findings and summary...'}
+                    className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium resize-y print:hidden"
+                    placeholder={t('audit.findingsPlaceholder')}
                   />
+                  {/* A textarea prints only its visible rows; print the full findings as text instead. */}
+                  <p className="hidden print:block text-slate-800 whitespace-pre-wrap break-words">{formData.findings || '-'}</p>
                 </div>
               </div>
             )}
@@ -1035,7 +1101,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                               <span className="text-sm font-medium text-slate-500 animate-in fade-in hidden sm:block whitespace-nowrap absolute right-8 bottom-24">
                                   {draftMessage}
                               </span>
-                          )}</>} primary={<>{step < 5 ? (
+                          )}</>} primary={<>{step < LAST_STEP ? (
                               <button className={actionStyles.primary} key="btn-next" type="button" onClick={(e) => { e.preventDefault(); nextStep(); }}>
                                   {t('audit.wizard.nextStep')} <ChevronRight size={20} />
                               </button>

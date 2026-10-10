@@ -1,0 +1,10 @@
+# MATERIAL-API-CLOSE-2026-001 — Python 3.11 (python:3.11-slim), working-tree backend + react-app; 2026-10-09T13:53:13Z
+# sha256 9e594c2a9b5168a2d4d2939b597722ff0b5c1bcb895d1a1a10196feb3cba09a6  backend/routers/materials.py
+# sha256 3d73c6239b75c5c4bd605f4391ff29145aad8722c0f11f59fbd223d8de7fc1d6  backend/services/material_service.py
+# sha256 4ca8ccee91b194bfa861eee700a771aaee574ea49a36a2d8b0b5716e1b1eb321  backend/schemas.py
+# sha256 4e8f8e2bbf84d2d181996ed35c93cdff5ba363c5b32e80eb8e44be45c69797d9  backend/tests/test_materials_http.py
+# sha256 a47273ecdf19db0d137bff2bc7778d4a0d33c692755832b17c1bac0a09d29ad7  backend/tests/test_material_submittals_http.py
+Python 3.11.17
+............................................                             [100%]
+44 passed in 115.29s (0:01:55)
+EXIT 0

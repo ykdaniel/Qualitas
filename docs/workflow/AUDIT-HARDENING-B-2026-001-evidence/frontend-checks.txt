@@ -1,0 +1,20 @@
+# run(UTC): 2026-10-09T11:50:32Z  node v25.8.0
+e3513e328c71d0e0b2da1c62b682154b537b34230057ac2c01cf8eb7b3828c10  src/components/Audit/AuditWizard.tsx
+36861a765ddb56a9d18d7f345f18d2d50f124527fadb8ccb8366a83b4a6d2c07  src/components/Audit/Audit.tsx
+50c8fd0d2617bb34dca248e6ab2a255f05dc31b5cfb7d9d7ddfef5f1716422c8  src/components/Audit/columns.tsx
+5ee1d565efd4bb06cb2ea8910548c9e698d71a843d04b46bdb8cb18697c62408  src/store/auditStore.ts
+ab509bc3c3bb89139227eb3747f9b5d0a019c8d61b74d197613d6c14a137f284  src/context/LanguageContext.tsx
+## tsc --noEmit -p .
+tsc exit=0
+## npm test
+ℹ tests 144
+ℹ pass 144
+ℹ fail 0
+## eslint (changed files)
+  158:8  warning  React Hook useMemo has a missing dependency: 'FINISHED_STATUSES'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+✖ 1 problem (0 errors, 1 warning)
+
+(the one warning — FINISHED_STATUSES in Audit.tsx useMemo — is pre-existing at HEAD; line untouched)
+## vite build (outDir in $TMPDIR, project dist untouched)
+✓ built in 4.43s

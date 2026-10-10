@@ -1,0 +1,20 @@
+--- R1/NOIDetailModal.tsx
++++ R2/NOIDetailModal.tsx
+@@ -248,7 +248,16 @@
+ 
+     const navigate = useNavigate();
+     const [saving, setSaving] = useState(false);
+-    const leaveGuard = useDraftGuard({ formData, pendingFiles, deletedFileIds }, saving, !readOnly);
++    // Contact fields still filled by the system (from the selected contractor) are compared as blank: they arrive
++    // asynchronously after the first render (CONTRACTOR-OPTIONS-2026-001), and an auto-fill is not a user change. A field
++    // the user edits becomes 'user' and is compared as usual; changing the contractor itself still counts.
++    const guardedFormData = {
++        ...formData,
++        contacts: contactSource.contacts === 'system' ? '' : formData.contacts,
++        phone: contactSource.phone === 'system' ? '' : formData.phone,
++        email: contactSource.email === 'system' ? '' : formData.email,
++    };
++    const leaveGuard = useDraftGuard({ formData: guardedFormData, pendingFiles, deletedFileIds }, saving, !readOnly);
+     const requestClose = () => leaveGuard.requestClose(onClose);
+     // Bumped once the pending files are stored on the server, so FileAttachment forgets them (a retry must not upload them twice).
+     const [syncToken, setSyncToken] = useState(0);

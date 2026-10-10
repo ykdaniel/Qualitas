@@ -1,0 +1,12 @@
+== 1. live state
+OK live backend = A+B+C for the 2 files
+frontend index now: 31e8d95f99d2d1de6dea8037d8b45843f4a238114d920c7d4030a1fc94c1e045
+== 2. backups
+integrity: ok
+fd3aa04c6ec716f393ab9d21f6eae21fc337e9b96ed2f9bd766d194369aea5df  qualitas-pre-audit-polish.db
+OK backend-old copy
+== 3. staging
+OK uploads
+OK backend staging (2 files)
+OK frontend staging (106 files)
+PREP DONE

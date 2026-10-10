@@ -1,0 +1,587 @@
+--- a/backend/services/audit_service.py
++++ b/backend/services/audit_service.py
+@@ -25,6 +25,8 @@
+ # A new Audit may start in any status that still has a way forward. Closed / Void are dead ends ("Closed": [] / "Void": [])
+ # and an unknown status has no transitions at all, so a record created in one of them could never be edited or deleted.
+ _CREATE_STATUSES = tuple(s for s, nxt in WorkflowEngine.TRANSITIONS["Audit"].items() if nxt)
++# ...and those same dead ends are read-only (AUDIT-HARDENING-B: Void locked like Closed, user decision 2026-10-09).
++_LOCKED_STATUSES = tuple(s for s, nxt in WorkflowEngine.TRANSITIONS["Audit"].items() if not nxt)
+ 
+ 
+ class AuditConflict(Exception):
+@@ -196,22 +198,23 @@
+         # Store old values for audit log
+         old_value = {c.name: getattr(db_audit, c.name) for c in db_audit.__table__.columns}
+ 
+-        # Guard: a Closed Audit is a true dead end — WorkflowEngine's Audit
+-        # transitions (core/utils.py) define "Closed": [], no reopen path
+-        # exists at all (same shape as NOI). Safe to lock unconditionally
+-        # (no permission escape hatch) since there's no legitimate
+-        # "reopen and edit" flow to accidentally break. Compare against the
++        # Guard: Closed and Void Audits are true dead ends — WorkflowEngine's
++        # Audit transitions (core/utils.py) define "Closed": [] and "Void": [],
++        # no reopen path exists at all (same shape as NOI). Safe to lock
++        # unconditionally (no permission escape hatch) since there's no
++        # legitimate "reopen and edit" flow to accidentally break; a Void
++        # audit can still be deleted (delete_audit). Compare against the
+         # DB's current values, not mere key-presence, since the frontend
+         # resends the whole record on every save.
+-        if db_audit.status == 'Closed':
++        if db_audit.status in _LOCKED_STATUSES:
+             changed_fields = {
+                 k for k, v in update_data.items()
+                 if _comparable(k, v) != _comparable(k, old_value.get(k))
+             }
+             if changed_fields:
+                 raise ValueError(
+-                    f"Cannot modify a closed Audit '{db_audit.auditNo}' — "
+-                    f"no fields can be changed once an audit is closed."
++                    f"Cannot modify Audit '{db_audit.auditNo}' with status '{db_audit.status}' — "
++                    f"no fields can be changed once an audit is closed or void."
+                 )
+             return db_audit  # an unchanged resave: nothing to write, no audit-log row
+ 
+diff --git a/react-app/src/components/Audit/Audit.tsx b/react-app/src/components/Audit/Audit.tsx
+index 46c1831b..10679469 100755
+--- a/react-app/src/components/Audit/Audit.tsx
++++ b/react-app/src/components/Audit/Audit.tsx
+@@ -3,6 +3,7 @@ import { useLanguage } from '../../context/LanguageContext';
+ import { useAuth } from '../../context/AuthContext';
+ import { useContractorsStore } from '../../store/contractorsStore';
+ import { useAuditStore, AuditItem } from '../../store/auditStore';
++import { useProjectStore } from '../../store/projectStore';
+ import ConfirmModal from '../Shared/ConfirmModal';
+ import styles from './Audit.module.css';
+ import shellStyles from '../Shared/ModuleShell.module.css';
+@@ -34,10 +35,17 @@ const Audit: React.FC = () => {
+     );
+ 
+     useEffect(() => {
+-        useAuditStore.getState().fetchAudits();
+         useContractorsStore.getState().fetchContractors();
+     }, []);
+ 
++    // Audits are not part of AppProviders' preloadProjectScopedData, so this page re-fetches its
++    // own list whenever the header's project changes (same as FollowUpIssue.tsx); auditStore's
++    // fetch sequence discards a superseded response.
++    const currentScopeId = useProjectStore(s => s.currentProject?.id ?? '__all__');
++    useEffect(() => {
++        useAuditStore.getState().fetchAudits();
++    }, [currentScopeId]);
++
+     // 1. Compute Vendor Statistics (Unaffected by SearchQuery to keep left panel stable)
+     const { vendorStats, maxAudits } = useMemo(() => {
+         const stats: Record<string, number> = {};
+@@ -167,8 +175,12 @@ const Audit: React.FC = () => {
+     }, [t]);
+ 
+     const handleDeleteConfirm = async () => {
+-        if (deleteModal.id) {
++        if (!deleteModal.id) return;
++        try {
+             await deleteAudit(deleteModal.id);
++        } catch {
++            // auditStore has already put the (friendly) reason in this page's error banner
++        } finally {
+             setDeleteModal({ isOpen: false, id: null, message: '' });
+         }
+     };
+@@ -240,7 +252,7 @@ const Audit: React.FC = () => {
+             <div className={shellStyles.content}>
+                 <DataTable
+                     title={t('audit.listTitle')}
+-                    columns={createColumns(handleEdit, handleDeleteClick, t, activeContractors)}
++                    columns={createColumns(handleEdit, handleDeleteClick, t, activeContractors, hasPermission('audit:delete:all'))}
+                     data={filteredData}
+                     searchKey=""
+                     getRowId={(row: AuditItem) => row.id}
+@@ -253,11 +265,12 @@ const Audit: React.FC = () => {
+                 <AuditWizard
+                     auditId={currentAuditId}
+                     existingItem={currentAuditId ? auditList.find(item => item.id === currentAuditId) : undefined}
+-                    // Closed is a true dead end (WorkflowEngine's "Closed": []
+-                    // for Audit, same shape as NOI) — unconditional lock, no
+-                    // permission escape hatch, matching audit_service.py's
+-                    // backend guard.
+-                    readOnly={currentAuditId ? auditList.find(item => item.id === currentAuditId)?.status === 'Closed' : false}
++                    // Closed / Void are true dead ends (WorkflowEngine's "Closed": [] /
++                    // "Void": []) — the wizard locks those itself from the record's
++                    // status, unconditionally, matching audit_service.py. Here: an
++                    // existing record is also read-only for anyone without
++                    // audit:update:all (the backend refuses their save anyway).
++                    readOnly={currentAuditId ? !hasPermission('audit:update:all') : false}
+                     onClose={() => {
+                         setIsEditModalOpen(false);
+                         setCurrentAuditId(null);
+diff --git a/react-app/src/components/Audit/AuditWizard.tsx b/react-app/src/components/Audit/AuditWizard.tsx
+index 02adf90d..b32eba00 100755
+--- a/react-app/src/components/Audit/AuditWizard.tsx
++++ b/react-app/src/components/Audit/AuditWizard.tsx
+@@ -17,6 +17,31 @@ import { checkDateOrder } from '../../utils/dateValidation';
+ const ALL_CATEGORY = '__ALL__';
+ const UNCATEGORIZED = '__UNCATEGORIZED__';
+ 
++// Mirrors backend/core/utils.py::WorkflowEngine.TRANSITIONS["Audit"] — the backend is the only
++// source of truth for which transitions it accepts (same approach as ITP_STATUS_TRANSITIONS in
++// ITPModals.tsx). Keep this in sync if the backend map ever changes.
++const AUDIT_STATUS_TRANSITIONS: Record<string, string[]> = {
++  'Draft': ['Planned', 'Void'],
++  'Planned': ['In Progress', 'Draft', 'Void'],
++  'In Progress': ['Completed', 'Void'],
++  'Completed': ['Closed', 'In Progress', 'Void'],
++  'Closed': [],
++  'Void': [],
++};
++// A new audit may start in any status that still has a way forward (audit_service.py refuses
++// Closed / Void on create: a record created in a dead end could never be edited or deleted).
++const AUDIT_CREATE_STATUSES = ['Draft', 'Planned', 'In Progress', 'Completed'];
++// Closed and Void are dead ends ("Closed": [] / "Void": []): read-only here and in the backend.
++const AUDIT_LOCKED_STATUSES = new Set(['Closed', 'Void']);
++const AUDIT_STATUS_LABELS: Record<string, string> = {
++  'Draft': '✏️ Draft（草稿）',
++  'Planned': '📅 Planned（計畫中）',
++  'In Progress': '👣 In Progress（進行中）',
++  'Completed': '✅ Completed（已完成）',
++  'Closed': '🔒 Closed（已關閉）',
++  'Void': '⛔ Void（作廢）',
++};
++
+ // 內建 ISO 9001:2015 條文資料庫
+ const ISO_CLAUSES = [
+   { no: '4.1', clause: 'Understanding the organization and its context', task: 'How has the organization determined external and internal issues relevant to its purpose and strategic direction?' },
+@@ -49,12 +74,12 @@ interface AuditWizardProps {
+   onSaveSuccess: () => void;
+ }
+ 
+-export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly = false, onClose, onSaveSuccess }) => {
++export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly: readOnlyProp = false, onClose, onSaveSuccess }) => {
+   const { t } = useLanguage();
+   const { addAudit, updateAudit, loading } = useAuditStore();
+   const { getActiveContractors } = useContractorsStore();
+   const activeContractors = useMemo(() => getActiveContractors(), [getActiveContractors]);
+-  const { projectList, fetchProjects } = useProjectStore();
++  const { projectList, fetchProjects, currentProject } = useProjectStore();
+   React.useEffect(() => { fetchProjects(); }, [fetchProjects]);
+ 
+   const [isSaving, setIsSaving] = useState(false);
+@@ -64,9 +89,11 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+ 
+   const [step, setStep] = useState(1);
+   const [formData, setFormData] = useState({
+-    auditDocNo: existingItem?.auditNo || '',
+     auditTitle: existingItem?.title || '',
+-    projectName: existingItem?.project_name || '',
++    // A new audit starts in the project currently selected in the header (blank under "All
++    // projects"), so it doesn't vanish from the list it was created from; always changeable.
++    projectId: existingItem ? (existingItem.project_id || '') : (currentProject?.id || ''),
++    projectName: existingItem ? (existingItem.project_name || '') : (currentProject?.name || ''),
+     findings: existingItem?.findings || '',
+     auditStartDate: existingItem?.date || '',
+     auditEndDate: existingItem?.end_date || '',
+@@ -83,6 +110,21 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+     vendorId: existingItem?.vendor_id || '',
+     status: existingItem?.status || 'Draft',
+   });
++  // Server-assigned and never edited, so kept out of formData (and out of the leave guard): after
++  // the first Save Draft of a new record it is filled in from the create response.
++  const [auditNo, setAuditNo] = useState(existingItem?.auditNo || '');
++  // Status of the last successful save (undefined = not saved yet). Drives the status options and
++  // the lock, so a record saved as Void mid-session locks without reopening the wizard.
++  const [savedStatus, setSavedStatus] = useState<string | undefined>(existingItem?.status);
++  const readOnly = readOnlyProp || (savedStatus !== undefined && AUDIT_LOCKED_STATUSES.has(savedStatus));
++  const statusOptions = savedStatus === undefined
++    ? AUDIT_CREATE_STATUSES
++    : [savedStatus, ...(AUDIT_STATUS_TRANSITIONS[savedStatus] || [])];
++  // A legacy record may have only a project name (no project_id): show the project that name
++  // matches, and save that link the next time the record is saved.
++  const selectedProjectId = formData.projectId
++    || projectList.find(p => p.name === formData.projectName)?.id
++    || '';
+ 
+   const [newItem, setNewItem] = useState({ no: '', clause: '', task: '' });
+   const [isCustomNew, setIsCustomNew] = useState(false);
+@@ -209,6 +251,12 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+     });
+   };
+ 
++  const handleProjectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
++    const projectId = e.target.value;
++    const selected = projectList.find(p => p.id === projectId);
++    setFormData(prev => ({ ...prev, projectId, projectName: selected?.name || '' }));
++  };
++
+   const handleContractorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+     const vendorId = e.target.value;
+     const selectedVendor = activeContractors.find((v: any) => v.id === vendorId);
+@@ -247,10 +295,13 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+ 
+   const prepareAuditData = (status: string): Omit<AuditItem, 'id'> => {
+     return {
+-      auditNo: formData.auditDocNo || '',
++      // The backend assigns auditNo on create and ignores it on update; sent only because the
++      // create schema still lists it.
++      auditNo: auditNo,
+       title: formData.auditTitle || '',
+       date: formData.auditStartDate || '',
+       end_date: formData.auditEndDate || '',
++      project_id: selectedProjectId || null,
+       project_name: formData.projectName || '',
+       auditor: formData.leadAuditor || '',
+       project_director: formData.projectDirector || '',
+@@ -287,6 +338,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+   };
+ 
+   const handleSaveDraft = async () => {
++    if (readOnly) return;
+     if (blockSaveForUnconfirmedNewItem()) return;
+     setIsDraftSaving(true);
+     setSaveError('');
+@@ -296,9 +348,12 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+       const updates = prepareAuditData(formData.status || 'Draft');
+       if (recordId) {
+         await updateAudit(recordId, updates);
++        setSavedStatus(updates.status);
+       } else {
+         const created = await addAudit(updates);
+         setCreatedId(created.id);
++        setAuditNo(created.auditNo);
++        setSavedStatus(created.status);
+       }
+ 
+       leaveGuard.markSaved();
+@@ -316,6 +371,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+ 
+   const handleSubmit = async (e: React.FormEvent) => {
+     e.preventDefault();
++    if (readOnly) return;
+     if (blockSaveForUnconfirmedNewItem()) return;
+     setIsSaving(true);
+     setSaveError('');
+@@ -327,6 +383,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+       } else {
+         const created = await addAudit(updates);
+         setCreatedId(created.id);
++        setAuditNo(created.auditNo);
+       }
+ 
+       leaveGuard.release();
+@@ -378,7 +435,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+             <CheckCircle size={56} />
+           </div>
+           <h2 className="text-3xl font-black text-slate-800 mb-2">{t('audit.wizard.successTitle')}</h2>
+-          <p className="text-slate-500 mb-8">{t('audit.wizard.successSubtitle')}{formData.auditDocNo || t('audit.wizard.successSubtitleAuto')}</p>
++          <p className="text-slate-500 mb-8">{t('audit.wizard.successSubtitle')}{auditNo || t('audit.wizard.successSubtitleAuto')}</p>
+ 
+           <div className="grid grid-cols-2 gap-4 text-left bg-slate-50 p-6 rounded-2xl mb-8 border border-slate-100">
+             <div className="col-span-2">
+@@ -451,7 +508,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                        <span className="text-sm font-bold text-slate-800">Audit Doc No</span>
+                        <span className="text-xs font-medium text-slate-400">(稽核文件編號)</span>
+                     </label>
+-                    <input type="text" name="auditDocNo" value={formData.auditDocNo} className="w-full md:w-1/2 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl outline-none text-slate-400 font-medium cursor-not-allowed" placeholder="系統自動產生" readOnly style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }} />
++                    <input type="text" name="auditDocNo" value={auditNo} className="w-full md:w-1/2 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl outline-none text-slate-400 font-medium cursor-not-allowed" placeholder="系統自動產生" readOnly style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }} />
+                   </div>
+                   <div className="col-span-full">
+                     <label className="flex items-baseline gap-2 mb-2">
+@@ -466,14 +523,14 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                        <span className="text-xs font-medium text-slate-400">(專案名稱)</span>
+                     </label>
+                     <select
+-                      name="projectName"
+-                      value={formData.projectName}
+-                      onChange={handleInputChange}
++                      name="projectId"
++                      value={selectedProjectId}
++                      onChange={handleProjectChange}
+                       className="w-full p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none"
+                     >
+                       <option value="">{t('audit.wizard.selectProject')}</option>
+                       {projectList.map(p => (
+-                        <option key={p.id} value={p.name}>{p.code ? `[${p.code}] ` : ''}{p.name}</option>
++                        <option key={p.id} value={p.id}>{p.code ? `[${p.code}] ` : ''}{p.name}</option>
+                       ))}
+                     </select>
+                   </div>
+@@ -507,11 +564,10 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                        <span className="text-xs font-medium text-slate-400">(稽核狀態)</span>
+                     </label>
+                     <select name="status" value={formData.status} onChange={handleInputChange} className="w-full md:w-1/3 p-4 bg-[#F5F7FA] border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none">
+-                      <option value="Draft">✏️ Draft（草稿）</option>
+-                      <option value="Planned">📅 Planned（計畫中）</option>
+-                      <option value="In Progress">👣 In Progress（進行中）</option>
+-                      <option value="Completed">✅ Completed（已完成）</option>
+-                      <option value="Closed">🔒 Closed（已關閉）</option>
++                      {/* Only what the workflow allows from the last saved status (the backend refuses anything else). */}
++                      {statusOptions.map(status => (
++                        <option key={status} value={status}>{AUDIT_STATUS_LABELS[status] || status}</option>
++                      ))}
+                     </select>
+                   </div>
+                 </fieldset>
+@@ -602,7 +658,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                     {/* Step 1 Info */}
+                     <div className="col-span-1 border-b border-slate-100 pb-2">
+                       <span className="font-bold text-slate-500 block mb-0.5 text-xs">Audit No. (稽核編號)</span>
+-                      <p className="font-semibold text-slate-800 text-sm">{formData.auditDocNo || 'TBD'}</p>
++                      <p className="font-semibold text-slate-800 text-sm">{auditNo || 'TBD'}</p>
+                     </div>
+                     <div className="col-span-1 border-b border-slate-100 pb-2">
+                       <span className="font-bold text-slate-500 block mb-0.5 text-xs">Project Name (專案名稱)</span>
+@@ -869,6 +925,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                         placeholder={t('audit.wizard.searchPlaceholder')}
+                         value={searchTerm}
+                         onChange={(e) => setSearchTerm(e.target.value)}
++                        // The only text input on step 5, inside the form that has the submit button:
++                        // Enter would otherwise submit (save and close) the whole audit.
++                        onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+                         className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-slate-50"
+                       />
+                     </div>
+diff --git a/react-app/src/components/Audit/columns.tsx b/react-app/src/components/Audit/columns.tsx
+index 9819b5cf..254c59f0 100755
+--- a/react-app/src/components/Audit/columns.tsx
++++ b/react-app/src/components/Audit/columns.tsx
+@@ -9,7 +9,8 @@ export const createColumns = (
+     handleEdit: (id: string) => void,
+     handleDelete: (id: string) => void,
+     t: (key: string) => string,
+-    activeContractors: { name: string }[]
++    activeContractors: { name: string }[],
++    canDeletePermission: boolean
+ ): ColumnDef<AuditItem>[] => [
+         {
+             id: "index",
+@@ -81,6 +82,7 @@ export const createColumns = (
+                         { label: 'In Progress', value: 'In Progress' },
+                         { label: 'Completed', value: 'Completed' },
+                         { label: 'Closed', value: 'Closed' },
++                        { label: 'Void', value: 'Void' },
+                     ]}
+                 />
+             ),
+@@ -111,8 +113,10 @@ export const createColumns = (
+                 const item = row.original;
+                 // Only Void audits can be deleted (mirrors NCR) — a Closed
+                 // audit especially is meant to be a permanent record, not
+-                // something a stray click can erase.
+-                const canDelete = item.status === 'Void';
++                // something a stray click can erase. And only by someone
++                // holding audit:delete:all (the backend checks it too).
++                const canDelete = canDeletePermission && item.status === 'Void';
++                const hint = !canDeletePermission ? t('audit.deleteNoPermissionHint') : t('audit.deleteVoidOnlyHint');
+                 return (
+                     <div className="flex items-center justify-center gap-2">
+                         <Button
+@@ -120,8 +124,9 @@ export const createColumns = (
+                             size="sm"
+                             disabled={!canDelete}
+                             className="h-8 w-8 p-0 text-red-500 hover:text-white hover:bg-red-500 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-red-500"
+-                            onClick={() => canDelete && handleDelete(item.id)}
+-                            title={canDelete ? t('common.delete') : (t('audit.deleteVoidOnlyHint') || 'Void this audit first, then delete')}
++                            // the row itself opens the record; a click here must not also open it
++                            onClick={(e) => { e.stopPropagation(); if (canDelete) handleDelete(item.id); }}
++                            title={canDelete ? t('common.delete') : hint}
+                         >
+                             <Trash2 className="h-4 w-4" />
+                         </Button>
+diff --git a/react-app/src/context/LanguageContext.tsx b/react-app/src/context/LanguageContext.tsx
+index 42305373..4bce06fb 100755
+--- a/react-app/src/context/LanguageContext.tsx
++++ b/react-app/src/context/LanguageContext.tsx
+@@ -850,6 +850,7 @@ const translations: Record<Language, Record<string, string>> = {
+     'audit.addTitle': 'New Audit',
+     'audit.confirmDelete': 'Are you sure you want to delete this audit?',
+     'audit.deleteVoidOnlyHint': 'Void this audit first, then delete',
++    'audit.deleteNoPermissionHint': 'You do not have permission to delete audits',
+     'audit.sectionQuality': 'Quality Assessment',
+     'audit.wizard.title': 'Audit Plan System',
+     'audit.wizard.step1': 'Project Info',
+@@ -2307,6 +2308,7 @@ const translations: Record<Language, Record<string, string>> = {
+     'audit.addTitle': '新增稽核',
+     'audit.confirmDelete': '您確定要刪除此稽核嗎？',
+     'audit.deleteVoidOnlyHint': '請先將此稽核作廢，才能刪除',
++    'audit.deleteNoPermissionHint': '您沒有刪除稽核的權限',
+     'audit.sectionQuality': '品質評估',
+     'audit.wizard.title': '稽核計畫主檔系統',
+     'audit.wizard.step1': '專案資訊',
+diff --git a/react-app/src/store/auditStore.ts b/react-app/src/store/auditStore.ts
+index d9e64163..53ea0a2b 100755
+--- a/react-app/src/store/auditStore.ts
++++ b/react-app/src/store/auditStore.ts
+@@ -5,6 +5,7 @@ import { getProjectFilterParams } from '../utils/projectFilter';
+ 
+ export interface AuditItem {
+     id: string;
++    project_id?: string | null;
+     auditNo: string;
+     title: string;
+     date: string;
+diff --git a/backend/tests/test_audit_void_lock_http.py b/backend/tests/test_audit_void_lock_http.py
+new file mode 100644
+index 00000000..7a1f4e1d
+--- /dev/null
++++ b/backend/tests/test_audit_void_lock_http.py
+@@ -0,0 +1,56 @@
++"""Internal Audit: Void is read-only like Closed (AUDIT-HARDENING-B-2026-001, user decision 2026-10-09).
++
++Real login/routes on a disposable file DB (fixture shared with test_audit_hardening_http); no main import, no development
++database access.
++"""
++from test_audit_hardening_http import body, create, env, insert_raw, snapshot, stored  # noqa: F401  (env is a fixture)
++
++
++def test_any_open_audit_can_be_voided_then_nothing_changes_it(env):
++    created = create(env, status='Planned').json()
++    voided = env.client.put(f"/api/audit/{created['id']}", json=body(status='Void'))
++    assert voided.status_code == 200, voided.text
++    before = snapshot(env)
++    for change in ({'title': 'edited after void'}, {'status': 'Draft'}, {'findings': 'late finding'}):
++        response = env.client.put(f"/api/audit/{created['id']}", json=change)
++        assert response.status_code == 400, response.text
++    assert snapshot(env) == before
++
++
++def test_void_wizard_resave_is_a_no_op(env):
++    created = create(env).json()
++    assert env.client.put(f"/api/audit/{created['id']}", json=body(status='Void')).status_code == 200
++    before = snapshot(env)
++    response = env.client.put(f"/api/audit/{created['id']}", json=body(status='Void'))
++    assert response.status_code == 200, response.text
++    assert snapshot(env) == before  # nothing rewritten, no audit-log row
++
++
++def test_void_audit_can_still_be_deleted(env):
++    audit_id = insert_raw(env, status='Void', auditNo='VOID-1')
++    response = env.client.delete(f'/api/audit/{audit_id}')
++    assert response.status_code == 200, response.text
++    with env.Session() as db:
++        import models
++        assert db.get(models.Audit, audit_id) is None
++
++
++def test_open_audit_still_editable(env):
++    created = create(env).json()
++    response = env.client.put(f"/api/audit/{created['id']}", json={'title': 'still a draft'})
++    assert response.status_code == 200, response.text
++    assert stored(env, created['id']).title == 'still a draft'
++
++
++def test_project_id_from_the_wizard_is_saved_on_create_and_update(env):
++    import models
++    with env.Session() as db:
++        db.add_all([models.Project(id='p1', name='Project One', code='P1'), models.Project(id='p2', name='Project Two', code='P2')])
++        db.commit()
++    created = create(env, project_id='p1', project_name='Project One').json()
++    assert created['project_id'] == 'p1'
++    assert [a['id'] for a in env.client.get('/api/audit/', params={'project_id': 'p1'}).json()] == [created['id']]
++    moved = env.client.put(f"/api/audit/{created['id']}", json=body(project_id='p2', project_name='Project Two'))
++    assert moved.status_code == 200, moved.text
++    assert stored(env, created['id']).project_id == 'p2'
++    assert env.client.get('/api/audit/', params={'project_id': 'p1'}).json() == []
+diff --git a/backend/scripts/verification/seed_audit_hardening_b_review.py b/backend/scripts/verification/seed_audit_hardening_b_review.py
+new file mode 100644
+index 00000000..99636c4f
+--- /dev/null
++++ b/backend/scripts/verification/seed_audit_hardening_b_review.py
+@@ -0,0 +1,86 @@
++"""Seed for AUDIT-HARDENING-B-2026-001 browser review (isolated stack only — never run against a real DB).
++
++    cd backend
++    python scripts/verification/isolated_stack.py up --port 8320 --vite-port 3320 \
++        --vite-script ../react-app/tests-browser/audit-hardening-b-vite-launcher.mjs > stack.json
++    python scripts/verification/isolated_stack.py seed --root <root> --script scripts/verification/seed_audit_hardening_b_review.py
++    python scripts/verification/isolated_stack.py down --root <root>
++
++Password for every account: `Accept-Test-1234` (shared, isolated-only test constant, same convention as the other
++seed scripts in this directory).
++
++    audit_viewer   audit:view + audit:create          — no update / delete (read-only wizard, delete disabled)
++    audit_full     view + create + update + delete    — unscoped
++    audit_multi    view + create + update             — scoped to BOTH projects (create used to be a 403: no project_id sent)
++
++Data: projects AHB-P1 / AHB-P2, contractor "Review Vendor", and audits:
++    one Draft in P1, one Void in P1, one Closed in P2, one legacy row in P1 with project_name only (no project_id).
++"""
++import json
++import os
++import sys
++
++BACKEND = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
++sys.path.insert(0, BACKEND)
++import database, models  # noqa: E402
++from core import perms  # noqa: E402
++from core.security import get_password_hash  # noqa: E402
++
++PW = "Accept-Test-1234"  # shared, isolated-only test constant used across this directory's seed scripts
++
++d = database.SessionLocal()
++
++
++def perm(code):
++    p = d.query(models.Permission).filter_by(code=code).first()
++    if not p:
++        p = models.Permission(code=code, description=code)
++        d.add(p)
++        d.flush()
++    return p
++
++
++def role(name, codes):
++    r = models.Role(name=name)
++    r.permissions_rel = [perm(c) for c in codes]
++    d.add(r)
++    d.flush()
++    return r
++
++
++def user(username, r):
++    u = models.User(username=username, email=f"{username}@example.com", is_active=True,
++                    hashed_password=get_password_hash(PW), role_id=r.id, full_name=username)
++    d.add(u)
++    d.flush()
++    return u
++
++
++d.add_all([models.Project(id="AHB-P1", name="Audit Review P1", code="AHB1"),
++           models.Project(id="AHB-P2", name="Audit Review P2", code="AHB2")])
++d.add(models.Contractor(id="ahb-vendor", name="Review Vendor", abbreviation="RV", status="active"))
++d.flush()
++
++viewer = role("AuditViewerB", [perms.AUDIT_VIEW, perms.AUDIT_CREATE])
++full = role("AuditFullB", [perms.AUDIT_VIEW, perms.AUDIT_CREATE, perms.AUDIT_UPDATE, perms.AUDIT_DELETE])
++multi = role("AuditMultiB", [perms.AUDIT_VIEW, perms.AUDIT_CREATE, perms.AUDIT_UPDATE])
++user("audit_viewer", viewer)
++user("audit_full", full)
++m = user("audit_multi", multi)
++d.add_all([models.UserProject(user_id=m.id, project_id="AHB-P1"), models.UserProject(user_id=m.id, project_id="AHB-P2")])
++
++
++def audit(no, status, project_id, project_name, title):
++    d.add(models.Audit(id=f"ahb-{no.lower()}", auditNo=no, title=title, date="2026-10-01", end_date="2026-10-02",
++                       status=status, project_id=project_id, project_name=project_name, contractor="Review Vendor",
++                       vendor_id="ahb-vendor", selected_templates="[]",
++                       custom_check_items=json.dumps([{"id": 1, "no": "7.1", "clause": "Resources", "task": "Check resources"}])))
++
++
++audit("AHB-DRAFT-1", "Draft", "AHB-P1", "Audit Review P1", "Draft in P1")
++audit("AHB-VOID-1", "Void", "AHB-P1", "Audit Review P1", "Void in P1")
++audit("AHB-CLOSED-1", "Closed", "AHB-P2", "Audit Review P2", "Closed in P2")
++audit("AHB-LEGACY-1", "Draft", None, "Audit Review P1", "Legacy name-only")
++d.commit()
++d.close()
++print("SEED " + json.dumps({"ok": True}))
+diff --git a/react-app/tests-browser/audit-hardening-b-vite-launcher.mjs b/react-app/tests-browser/audit-hardening-b-vite-launcher.mjs
+new file mode 100644
+index 00000000..5977b705
+--- /dev/null
++++ b/react-app/tests-browser/audit-hardening-b-vite-launcher.mjs
+@@ -0,0 +1,9 @@
++// Vite dev server for AUDIT-HARDENING-B-2026-001 browser review: port 3320 → isolated backend 8320 (never 3240/8240 or 3198/8198).
++import { createServer } from 'vite';
++import path from 'node:path';
++import { fileURLToPath } from 'node:url';
++const reactAppRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
++const server = await createServer({ root: reactAppRoot, server: { host: '127.0.0.1', port: 3320, strictPort: true,
++    proxy: { '/api': { target: 'http://127.0.0.1:8320' } } } });
++await server.listen();
++console.log('vite up');

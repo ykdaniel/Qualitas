@@ -1,0 +1,12 @@
+== 1. live backend files are the expected old versions
+OK old backend (5 files)
+== 2. backups
+integrity: ok
+ca67e5f417103281d48d93b7ef6cd97a135baf338937bcd824acecdb83bf874f  qualitas-pre-audit-hardening.db
+OK backend-old copy
+frontend files before: 243; index 4f71ef9fe332390e8951fb55c2d51302cdd366f42170faf4bbcf5a8aad0f3a5e
+== 3. staging
+OK uploads
+OK backend staging (5 files)
+OK frontend staging (106 files)
+PREP DONE

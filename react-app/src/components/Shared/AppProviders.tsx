@@ -38,7 +38,8 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
     useEffect(() => {
         const preload = async () => {
             await Promise.allSettled([
-                useContractorsStore.getState().fetchContractors(),
+                // picker list for every module (any signed-in user); the full list is loaded by the Contractors page
+                useContractorsStore.getState().fetchOptions(),
                 useProjectStore.getState().fetchProjects(),
             ]);
             await preloadProjectScopedData();

@@ -1,0 +1,7 @@
+OK live backend = HEAD 0798dbb9 for the 3 files
+integrity: ok
+fd3aa04c6ec716f393ab9d21f6eae21fc337e9b96ed2f9bd766d194369aea5df  qualitas-pre-endpoint-cleanup.db
+OK backend-old copy
+OK upload
+OK backend staging (3 files)
+PREP DONE

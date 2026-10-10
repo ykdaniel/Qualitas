@@ -1,8 +1,10 @@
-import React, { useState, useMemo, useDeferredValue, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useDeferredValue, useEffect, useCallback, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
-import { useContractorsStore } from '../../store/contractorsStore';
 import { useAuditStore, AuditItem } from '../../store/auditStore';
+import { useProjectStore } from '../../store/projectStore';
+import { useContractorsStore } from '../../store/contractorsStore';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './Audit.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
@@ -13,8 +15,21 @@ import VendorStatsPanel from './VendorStatsPanel';
 import ScheduleMatrix from './ScheduleMatrix';
 import { Search, Plus, AlertCircle, X } from 'lucide-react';
 
+// Rows shown in the schedule (all of them when a vendor is selected).
+const SCHEDULE_VENDOR_LIMIT = 5;
+// Statuses that need no further work: a past-dated audit in any OTHER status flags its contractor
+// as overdue. Void (cancelled) is settled too — it is never going to be carried out.
+const SETTLED_STATUSES = new Set(['Completed', 'Closed', 'Void']);
+
+// 'YYYY-MM-DD' as a LOCAL date (new Date('YYYY-MM-DD') is UTC midnight: the previous day west of UTC).
+const parseLocalDate = (value: string): Date | null => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
+    return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+};
+
 const Audit: React.FC = () => {
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
+    const locale = language === 'zh' ? 'zh-TW' : 'en-US';
     const { hasPermission } = useAuth();
     const { auditList, deleteAudit, error, clearError, loading } = useAuditStore();
     const [searchQuery, setSearchQuery] = useState<string>('');
@@ -23,7 +38,9 @@ const Audit: React.FC = () => {
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [currentAuditId, setCurrentAuditId] = useState<string | null>(null);
-    const contractors = useContractorsStore(state => state.contractors);
+    // The shared contractor picker list (GET /contractors/options, any signed-in user; status normalised so
+    // 'Active' and 'active' both count) — CONTRACTOR-OPTIONS-2026-001 replaced the Audit-only list.
+    const contractors = useContractorsStore(state => state.options);
     const [selectedVendorFilter, setSelectedVendorFilter] = useState<string | null>(null);
 
     // Get active contractors — depend on the contractors array itself so memo
@@ -34,9 +51,16 @@ const Audit: React.FC = () => {
     );
 
     useEffect(() => {
-        useAuditStore.getState().fetchAudits();
-        useContractorsStore.getState().fetchContractors();
+        void useContractorsStore.getState().fetchOptions();
     }, []);
+
+    // Audits are not part of AppProviders' preloadProjectScopedData, so this page re-fetches its
+    // own list whenever the header's project changes (same as FollowUpIssue.tsx); auditStore's
+    // fetch sequence discards a superseded response.
+    const currentScopeId = useProjectStore(s => s.currentProject?.id ?? '__all__');
+    useEffect(() => {
+        useAuditStore.getState().fetchAudits();
+    }, [currentScopeId]);
 
     // 1. Compute Vendor Statistics (Unaffected by SearchQuery to keep left panel stable)
     const { vendorStats, maxAudits } = useMemo(() => {
@@ -106,48 +130,47 @@ const Audit: React.FC = () => {
                 date,
                 isToday: date.toDateString() === today.toDateString(),
                 isWeekend: date.getDay() === 0 || date.getDay() === 6,
-                dayLabel: date.toLocaleDateString('en-US', { weekday: 'short' }),
+                dayLabel: date.toLocaleDateString(locale, { weekday: 'short' }),
                 dateLabel: `${date.getDate()}`,
             };
         });
-    }, [viewDate]);
+    }, [viewDate, locale]);
 
     const getAuditForMatrix = useCallback((vendorName: string, date: Date) => {
         const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
         return auditList.find(a => a.contractor === vendorName && a.date === dateStr);
     }, [auditList]);
 
-    // Vendors to show as rows: only Active contractors that have at least one audit.
-    // Sorted ascending by earliest audit date. Each vendor is also flagged
-    // pastUnfinished=true if any of its audits is past-due AND not Completed/Closed,
-    // so the matrix can highlight that row.
-    const SCHEDULE_VENDOR_LIMIT = 5;
-    const FINISHED_STATUSES = new Set(['Completed', 'Closed']);
-    const scheduleVendors = useMemo(() => {
+    // Contractors with a past-dated audit that is not settled (see SETTLED_STATUSES). Computed over
+    // ALL contractors: the stats panel highlights every one of them, not only the schedule's first rows.
+    const pastUnfinishedVendors = useMemo(() => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const todayMs = today.getTime();
+        const names = new Set<string>();
+        auditList.forEach(a => {
+            const d = parseLocalDate(a.date);
+            if (a.contractor && d && d < today && !SETTLED_STATUSES.has(a.status)) names.add(a.contractor);
+        });
+        return names;
+    }, [auditList]);
+
+    // Vendors to show as rows: only Active contractors that have at least one audit,
+    // sorted ascending by earliest audit date and flagged pastUnfinished for highlighting.
+    const scheduleVendors = useMemo(() => {
         const base = activeContractors.filter(v => (vendorStats[v.name] || 0) > 0);
         const earliestDateMs = (vendorName: string) => {
             const dates = auditList
-                .filter(a => a.contractor === vendorName && a.date)
-                .map(a => new Date(a.date).getTime())
-                .filter(t => !isNaN(t));
+                .filter(a => a.contractor === vendorName)
+                .map(a => parseLocalDate(a.date)?.getTime())
+                .filter((ms): ms is number => ms !== undefined);
             return dates.length === 0 ? Number.POSITIVE_INFINITY : Math.min(...dates);
         };
-        const hasPastUnfinished = (vendorName: string) =>
-            auditList.some(a =>
-                a.contractor === vendorName &&
-                a.date &&
-                new Date(a.date).getTime() < todayMs &&
-                !FINISHED_STATUSES.has(a.status)
-            );
         const sorted = [...base]
-            .map(v => ({ ...v, pastUnfinished: hasPastUnfinished(v.name) }))
+            .map(v => ({ ...v, pastUnfinished: pastUnfinishedVendors.has(v.name) }))
             .sort((a, b) => earliestDateMs(a.name) - earliestDateMs(b.name));
         if (selectedVendorFilter) return sorted.filter(v => v.name === selectedVendorFilter);
         return sorted.slice(0, SCHEDULE_VENDOR_LIMIT);
-    }, [vendorStats, selectedVendorFilter, activeContractors, auditList]);
+    }, [vendorStats, selectedVendorFilter, activeContractors, auditList, pastUnfinishedVendors]);
 
     // Actions
     const handleAddNew = useCallback(() => {
@@ -160,6 +183,35 @@ const Audit: React.FC = () => {
         setIsEditModalOpen(true);
     }, []);
 
+    // ?openId=<id or auditNo> (e.g. from Follow Up Issues) opens that audit once the list has it —
+    // same pattern as NOI/NCR/ITR. Closing a deep-linked audit goes back to where the user came from.
+    const [searchParams, setSearchParams] = useSearchParams();
+    const navigate = useNavigate();
+    const deepLinkAppliedRef = useRef(false);
+    const openedViaDeepLinkRef = useRef(false);
+    useEffect(() => {
+        if (deepLinkAppliedRef.current) return;
+        const openId = searchParams.get('openId');
+        if (!openId || auditList.length === 0) return;
+        const match = auditList.find(item => item.id === openId || item.auditNo === openId);
+        if (!match) return;
+        handleEdit(match.id);
+        openedViaDeepLinkRef.current = true;
+        deepLinkAppliedRef.current = true;
+        const next = new URLSearchParams(searchParams);
+        next.delete('openId');
+        setSearchParams(next, { replace: true });
+    }, [searchParams, auditList, handleEdit, setSearchParams]);
+
+    const closeWizard = () => {
+        setIsEditModalOpen(false);
+        setCurrentAuditId(null);
+        if (openedViaDeepLinkRef.current) {
+            openedViaDeepLinkRef.current = false;
+            navigate(-1);
+        }
+    };
+
     // handleReport removed — report generation not yet implemented
 
     const handleDeleteClick = useCallback((id: string) => {
@@ -167,17 +219,24 @@ const Audit: React.FC = () => {
     }, [t]);
 
     const handleDeleteConfirm = async () => {
-        if (deleteModal.id) {
+        if (!deleteModal.id) return;
+        try {
             await deleteAudit(deleteModal.id);
+        } catch {
+            // auditStore has already put the (friendly) reason in this page's error banner
+        } finally {
             setDeleteModal({ isOpen: false, id: null, message: '' });
         }
     };
+
+    // While the wizard is open, printing must show only the wizard (it is an overlay ON this page).
+    const hideWhenPrintingWizard = isEditModalOpen ? ' no-print' : '';
 
     return (
         <div className={shellStyles.container}>
             {/* Error Notification Toast */}
             {error && (
-                <div className={shellStyles.errorBanner}>
+                <div className={shellStyles.errorBanner + hideWhenPrintingWizard}>
                     <div className={styles.errorContent}>
                         <AlertCircle size={18} />
                         <span>{error}</span>
@@ -188,7 +247,7 @@ const Audit: React.FC = () => {
                 </div>
             )}
 
-            <div className={shellStyles.toolbar}>
+            <div className={shellStyles.toolbar + hideWhenPrintingWizard}>
                 <div className={shellStyles.toolbarRight}>
                     <div className={shellStyles.searchWrap}>
                         <Search size={15} className={shellStyles.searchIcon} strokeWidth={2} />
@@ -210,7 +269,7 @@ const Audit: React.FC = () => {
             </div>
 
             {/* Premium Top Section: Interactive Panels */}
-            <div className={styles.topSection}>
+            <div className={styles.topSection + hideWhenPrintingWizard}>
                 <VendorStatsPanel
                     stats={vendorStats}
                     maxAudits={maxAudits}
@@ -218,7 +277,7 @@ const Audit: React.FC = () => {
                     selectedVendorFilter={selectedVendorFilter}
                     onSelectVendor={setSelectedVendorFilter}
                     totalAudits={auditList.length}
-                    pastUnfinishedVendors={new Set(scheduleVendors.filter(v => v.pastUnfinished).map(v => v.name))}
+                    pastUnfinishedVendors={pastUnfinishedVendors}
                     t={t}
                 />
 
@@ -232,15 +291,16 @@ const Audit: React.FC = () => {
                     onSetToday={setToday}
                     onEditAudit={handleEdit}
                     loading={loading}
+                    locale={locale}
                     t={t}
                 />
             </div>
 
             {/* Audit Data Table Area */}
-            <div className={shellStyles.content}>
+            <div className={shellStyles.content + hideWhenPrintingWizard}>
                 <DataTable
                     title={t('audit.listTitle')}
-                    columns={createColumns(handleEdit, handleDeleteClick, t, activeContractors)}
+                    columns={createColumns(handleEdit, handleDeleteClick, t, activeContractors, hasPermission('audit:delete:all'))}
                     data={filteredData}
                     searchKey=""
                     getRowId={(row: AuditItem) => row.id}
@@ -251,21 +311,16 @@ const Audit: React.FC = () => {
             {/* Edit / Detail Wizard Modal */}
             {isEditModalOpen && (
                 <AuditWizard
-                    auditId={currentAuditId}
                     existingItem={currentAuditId ? auditList.find(item => item.id === currentAuditId) : undefined}
-                    // Closed is a true dead end (WorkflowEngine's "Closed": []
-                    // for Audit, same shape as NOI) — unconditional lock, no
-                    // permission escape hatch, matching audit_service.py's
-                    // backend guard.
-                    readOnly={currentAuditId ? auditList.find(item => item.id === currentAuditId)?.status === 'Closed' : false}
-                    onClose={() => {
-                        setIsEditModalOpen(false);
-                        setCurrentAuditId(null);
-                    }}
-                    onSaveSuccess={() => {
-                        setIsEditModalOpen(false);
-                        setCurrentAuditId(null);
-                    }}
+                    // Closed / Void are true dead ends (WorkflowEngine's "Closed": [] /
+                    // "Void": []) — the wizard locks those itself from the record's
+                    // status, unconditionally, matching audit_service.py. Here: an
+                    // existing record is also read-only for anyone without
+                    // audit:update:all (the backend refuses their save anyway).
+                    readOnly={currentAuditId ? !hasPermission('audit:update:all') : false}
+                    canUpdate={hasPermission('audit:update:all')}
+                    onClose={closeWizard}
+                    onSaveSuccess={closeWizard}
                 />
             )}
 

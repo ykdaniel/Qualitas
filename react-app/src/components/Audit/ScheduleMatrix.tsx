@@ -19,6 +19,7 @@ interface Contractor {
 interface ScheduleMatrixProps {
   matrixDates: MatrixDate[];
   vendors: Contractor[];
+  locale: string;
   getAuditForMatrix: (vendorName: string, date: Date) => any;
   viewDate: Date;
   onChangeMonth: (offset: number) => void;
@@ -37,6 +38,7 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
   onSetToday,
   onEditAudit,
   loading,
+  locale,
   t
 }) => {
   return (
@@ -55,7 +57,7 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
           </div>
         </div>
         <div className={styles.monthDisplay}>
-          {viewDate.toLocaleString('en-US', { month: 'long', year: 'numeric' })}
+          {viewDate.toLocaleString(locale, { month: 'long', year: 'numeric' })}
         </div>
       </div>
 
@@ -66,7 +68,7 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
             <div className={styles.skeletonPulse} />
             <div className={styles.skeletonPulse} />
           </div>
-        ) : matrixDates.length === 0 ? (
+        ) : vendors.length === 0 ? (
           <div className={styles.emptyState}>
             <svg className={styles.emptyIcon} width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
               <rect width="18" height="18" x="3" y="4" rx="2" ry="2"/>
@@ -75,8 +77,8 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
               <line x1="3" x2="21" y1="10" y2="10"/>
               <path d="m9 16 2 2 4-4"/>
             </svg>
-            <h3>No Scheduled Audits</h3>
-            <p>Select a different month or clear filters.</p>
+            <h3>{t('audit.scheduleEmptyTitle')}</h3>
+            <p>{t('audit.scheduleEmptyHint')}</p>
           </div>
         ) : (
           <div className={styles.matrixScroll}>

@@ -37,6 +37,28 @@ class ContractorService:
         """
         return self.repo.get_all(skip, limit)
 
+    def get_contractor_options(self, scope=None) -> List[models.Contractor]:
+        """
+        Contractors for every module's pickers, filters and lists (GET /contractors/options), ordered by name.
+
+        The full list (contact details) stays behind contractors:view:all; this one is for any signed-in user — before,
+        roles holding only module permissions got an empty contractor picker everywhere. A contractor-scoped caller only
+        gets its own contractor (the one enforce_create_scope forces on its records).
+        """
+        query = self.repo.db.query(models.Contractor)
+        if scope is not None and scope.vendor_id is not None:
+            query = query.filter(models.Contractor.id == scope.vendor_id)
+        return query.order_by(models.Contractor.name).all()
+
+    def get_contractor_contact(self, contractor_id: str, scope=None) -> Optional[models.Contractor]:
+        """
+        One contractor's contact details for the NOI form's auto-fill. None when it does not exist or is outside a
+        contractor-scoped caller's own contractor.
+        """
+        if scope is not None and scope.vendor_id is not None and contractor_id != scope.vendor_id:
+            return None
+        return self.repo.db.query(models.Contractor).filter(models.Contractor.id == contractor_id).first()
+
     def get_contractor(self, contractor_id: str) -> Optional[models.Contractor]:
         """
         Get a single Contractor by ID

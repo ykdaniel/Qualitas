@@ -1,0 +1,10 @@
+# run(UTC) start: 2026-10-10T02:41:49Z  repo layout /q/backend + /q/react-app; candidate = git archive HEAD 0798dbb9 + G.patch
+# image: sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce arm64
+# cmd: docker run --rm -v <candidate copy>:/src:ro -e DATABASE_URL=sqlite:///:memory: -e PYTHONDONTWRITEBYTECODE=1 python:3.11-slim sh -c 'cp -r /src /q; cd /q/backend; pip install -r requirements.txt -r requirements-dev.txt; python -m pytest -q -p no:warnings -p no:cacheprovider'
+Python 3.11.17
+pip_exit=0
+........................s............................................... [ 98%]
+..........................                                               [100%]
+2386 passed, 16 skipped in 2955.99s (0:49:15)
+pytest_exit=0
+# end: 2026-10-10T03:31:26Z

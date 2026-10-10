@@ -1,0 +1,10 @@
+# print check (react-app/tests-browser/audit-print-check.mjs), isolated stack 3320/8320, audit AHB-DRAFT-1 with 60 check items + long findings (scratch seed), page.pdf with print media, A4
+## before the print fix (this round's working tree minus the two print changes)
+step3 pages=1 items=0/60 list-rows-behind=3 findings-sentences=0/30
+step4 pages=1 items=5/60 list-rows-behind=3 findings-sentences=0/30
+step5 pages=1 items=4/60 list-rows-behind=3 findings-sentences=0/30
+## after
+step3 pages=1 items=0/60 list-rows-behind=0 findings-sentences=0/30 note-cells=0
+step4 pages=9 items=60/60 list-rows-behind=0 findings-sentences=0/30 note-cells=0
+step5 pages=13 items=60/60 list-rows-behind=0 findings-sentences=30/30 note-cells=60
+(step 3 = audit plan: 1 page both times, its content fits; step 4 = checklist; step 5 = execution report)

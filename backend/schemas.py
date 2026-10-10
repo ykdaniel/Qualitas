@@ -1084,6 +1084,27 @@ class Contractor(ContractorBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ContractorOption(BaseModel):
+    """A contractor as every module's picker / filter / list needs it (GET /contractors/options): no contact details,
+    so it is served to any signed-in user (CONTRACTOR-OPTIONS-2026-001). `status` is returned as stored ('Active' /
+    'active' / 'Inactive' all exist); the client compares it case-insensitively."""
+    id: str
+    name: str
+    abbreviation: str | None = None
+    scope: str | None = None
+    status: str | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ContractorContact(BaseModel):
+    """One contractor's contact details for the NOI form's auto-fill (GET /noi/contractor-contact/{id})."""
+    id: str
+    contactPerson: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+
 # Project
 # material_reply_days (MATERIAL-SUBMITTAL M1): calendar days for a material submittal's expected reply date. null = not set;
 # there is no default. Strict non-negative integer — -1, 1.5, "14" and true are rejected. JSON name: materialReplyDays.
@@ -1348,10 +1369,9 @@ class AuditBase(BaseModel):
     selected_templates: list[str] | None = []
     custom_check_items: Any | None = []
 
-    @field_validator('date', 'end_date', mode='before')
-    @classmethod
-    def check_dates(cls, v):
-        return validate_date_format(v)
+    # Date fields: no validator on the base (the READ schema Audit derives from it and must return stored dates untouched —
+    # the old lenient check + start-before-end rule here turned one bad row into a 500 for the whole list). Strict checking
+    # of new writes: AuditCreate (field level) and AuditService (create + update, final content, incl. the order rule).
 
     @field_validator('selected_templates', 'custom_check_items', mode='before')
     @classmethod
@@ -1363,18 +1383,18 @@ class AuditBase(BaseModel):
                 return []
         return v
 
-    @model_validator(mode='after')
-    def check_date_ranges(self):
-        if self.date and self.end_date:
-            if self.date > self.end_date:
-                raise ValueError('Start date must be before or equal to end date')
-        return self
-
 class AuditCreate(AuditBase):
+    # Accepted for compatibility with existing callers but ignored: the server always assigns id and auditNo.
     id: str | None = None
+
+    @field_validator(*strict_dates.AUDIT_DATE_FIELDS, mode='before')
+    @classmethod
+    def check_strict_dates(cls, v):
+        return strict_dates.strict_date_input(v)
 
 class AuditUpdate(BaseModel):
     project_id: str | None = None
+    # Accepted for compatibility (the wizard resends the whole record) but ignored: auditNo never changes after create.
     auditNo: str | None = None
     title: str | None = None
     date: str | None = None
@@ -1789,28 +1809,6 @@ class _MaterialInput(_MaterialCamel):
         if not isinstance(v, str) or not v.strip():
             raise ValueError("name must not be blank")
         return v.strip()
-
-
-class MaterialCreate(_MaterialInput):
-    project_id: constr(strip_whitespace=True, min_length=1)
-    name: str
-    category: str | None = None
-    brand: str | None = None
-    model: str | None = None
-    specification: str | None = None
-    manufacturer: str | None = None
-    supplier: str | None = None
-
-
-class MaterialUpdate(_MaterialInput):
-    """Every field optional; projectId is not a field, so sending it is rejected (422). name cannot be cleared."""
-    name: str | None = None
-    category: str | None = None
-    brand: str | None = None
-    model: str | None = None
-    specification: str | None = None
-    manufacturer: str | None = None
-    supplier: str | None = None
 
 
 class Material(_MaterialCamel):

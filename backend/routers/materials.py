@@ -1,4 +1,8 @@
-"""Material data API (MATERIAL-SUBMITTAL M1). Create / read / update only — there is no DELETE route in V1.
+"""Material data API (MATERIAL-SUBMITTAL M1). READ ONLY since 2026-10-09: list and get. There is no DELETE route.
+
+Create / update (POST /, PUT /{id}) were removed at the user's decision (DECISIONS 材料主檔 API 只留查詢, option A): the
+interface no longer used them, and a material written here bypassed the approved-material register (no approval data,
+register snapshot not updated). Material rows are written only by the register (POST / PUT /material-submittals/...register).
 
 Every route: permission (RoleChecker) → vendor-scoped accounts refused (403, spec §9.2) → service.
 Not visible / not existing project or material → 404. JSON is camelCase (schemas.Material*).
@@ -8,7 +12,7 @@ from sqlalchemy.orm import Session
 
 import schemas
 from core.dependencies import RoleChecker
-from core.perms import MATERIAL_MANAGE, MATERIAL_VIEW
+from core.perms import MATERIAL_VIEW
 from core.material_access import refuse_vendor_scope
 from core.scope import Scope
 from database import get_db
@@ -49,32 +53,3 @@ def get_material(
         return MaterialService(db).get(material_id, scope)
     except NotVisible:
         raise _not_found()
-
-
-@router.post("/", response_model=schemas.Material)
-def create_material(
-    body: schemas.MaterialCreate,
-    current_user: schemas.User = Depends(RoleChecker(MATERIAL_MANAGE)),
-    scope: Scope = Depends(refuse_vendor_scope),
-    db: Session = Depends(get_db),
-):
-    try:
-        return MaterialService(db).create(body, scope, current_user)
-    except NotVisible:
-        raise _not_found()
-
-
-@router.put("/{material_id}", response_model=schemas.Material)
-def update_material(
-    material_id: str,
-    body: schemas.MaterialUpdate,
-    current_user: schemas.User = Depends(RoleChecker(MATERIAL_MANAGE)),
-    scope: Scope = Depends(refuse_vendor_scope),
-    db: Session = Depends(get_db),
-):
-    try:
-        return MaterialService(db).update(material_id, body, scope, current_user)
-    except NotVisible:
-        raise _not_found()
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))

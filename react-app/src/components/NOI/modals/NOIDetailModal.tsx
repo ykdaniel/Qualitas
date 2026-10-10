@@ -1,7 +1,8 @@
 import { useDraftGuard } from '../../Shared/LeaveGuard';
 import FormActions from '../../Shared/FormActions';
 import actionStyles from '../../Shared/FormActions.module.css';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useAuth } from '../../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useLanguage } from '../../../context/LanguageContext';
@@ -14,7 +15,7 @@ import type { NOIItem } from '../../../store/noiStore';
 import { validateStatusTransition, NOIStatusTransitions, NOIStatusTransitionList, validateRequiredFields, NOIValidationRules } from '../../../utils/statusValidation';
 import { checkDateOrder } from '../../../utils/dateValidation';
 import FileAttachment from '../../Shared/FileAttachment';
-import { exportNoiDocx } from '../../../services/api';
+import { exportNoiDocx, getNoiContractorContact } from '../../../services/api';
 import RelatedDocuments from '../../ui/RelatedDocuments';
 import styles from '../NOI.module.css';
 import formStyles from '../../Shared/FormShell.module.css';
@@ -100,11 +101,12 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
             type: '',
             contractor: defaultContractorRecord?.name || '',
             // Pre-selecting the first active contractor also pre-fills its contact
-            // info in the same initialization — these three stay marked 'system'
-            // below so a later contractor change can still safely overwrite them.
-            contacts: defaultContractorRecord?.contactPerson || '',
-            phone: defaultContractorRecord?.phone || '',
-            email: defaultContractorRecord?.email || '',
+            // info — fetched right after mount (the picker list carries no contact
+            // details, CONTRACTOR-OPTIONS-2026-001); these three stay marked
+            // 'system' so a later contractor change can still safely overwrite them.
+            contacts: '',
+            phone: '',
+            email: '',
             status: 'Open',
             remark: '',
             closeoutDate: '',
@@ -124,6 +126,45 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
 
     const [formData, setFormData] = useState<NOIDetailData>(getInitialData());
     const [contactSource, setContactSource] = useState<ContactSource>(getInitialContactSource());
+    // The async contact fetch below must see the CURRENT sources (a field the user types into while the
+    // request is in flight becomes 'user' and must not be overwritten when the answer arrives).
+    const contactSourceRef = useRef(contactSource);
+    contactSourceRef.current = contactSource;
+    const contactRequestRef = useRef(0);
+    const { hasPermission } = useAuth();
+    const canReadContacts = hasPermission('noi:create:all') || hasPermission('noi:update:all');
+
+    // Fill the given system-sourced contact fields from the selected contractor's contact details
+    // (GET /noi/contractor-contact/{id}, needs NOI create or update). Only the latest request counts,
+    // only if the contractor is still the selected one, and only fields still 'system' at that moment.
+    const fillContactFromContractor = async (contractorName: string, fields: ContactField[]) => {
+        const seq = ++contactRequestRef.current;
+        const contractor = getActiveContractors().find(c => c.name === contractorName);
+        if (!contractor || fields.length === 0 || !canReadContacts) return;
+        try {
+            const contact = await getNoiContractorContact(contractor.id);
+            if (seq !== contactRequestRef.current) return;
+            setFormData(prev => {
+                if (prev.contractor !== contractorName) return prev;
+                const next = { ...prev };
+                fields.forEach(field => {
+                    if (contactSourceRef.current[field] !== 'system') return;
+                    next[field] = (field === 'contacts' ? contact.contactPerson : contact[field]) || '';
+                });
+                return next;
+            });
+        } catch (err) {
+            // No auto-fill (the fields stay as they are); the user can type the contact details.
+            console.error('Failed to load contractor contact for NOI:', err);
+        }
+    };
+
+    // A brand-new NOI pre-selects the first active contractor: fetch its contact details once.
+    useEffect(() => {
+        if (existingData || existingItem || readOnly || !formData.contractor) return;
+        void fillContactFromContractor(formData.contractor, ['contacts', 'phone', 'email']);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const filteredITPList = useMemo(() => {
         if (!formData.contractor) return [];
@@ -207,7 +248,16 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
 
     const navigate = useNavigate();
     const [saving, setSaving] = useState(false);
-    const leaveGuard = useDraftGuard({ formData, pendingFiles, deletedFileIds }, saving, !readOnly);
+    // Contact fields still filled by the system (from the selected contractor) are compared as blank: they arrive
+    // asynchronously after the first render (CONTRACTOR-OPTIONS-2026-001), and an auto-fill is not a user change. A field
+    // the user edits becomes 'user' and is compared as usual; changing the contractor itself still counts.
+    const guardedFormData = {
+        ...formData,
+        contacts: contactSource.contacts === 'system' ? '' : formData.contacts,
+        phone: contactSource.phone === 'system' ? '' : formData.phone,
+        email: contactSource.email === 'system' ? '' : formData.email,
+    };
+    const leaveGuard = useDraftGuard({ formData: guardedFormData, pendingFiles, deletedFileIds }, saving, !readOnly);
     const requestClose = () => leaveGuard.requestClose(onClose);
     // Bumped once the pending files are stored on the server, so FileAttachment forgets them (a retry must not upload them twice).
     const [syncToken, setSyncToken] = useState(0);
@@ -327,10 +377,10 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
                                                 // Clearing the contractor selection does not touch the
                                                 // contact fields or their source status — those values
                                                 // may already be user-confirmed for this inspection.
+                                                contactRequestRef.current++;  // an answer still in flight no longer applies
                                                 setFormData(prev => ({ ...prev, contractor: '', itpNo: '' }));
                                                 return;
                                             }
-                                            const selected = getActiveContractors().find(c => c.name === newContractorName);
                                             // Computed from the current contactSource BEFORE calling setFormData:
                                             // the functional updater passed below is not guaranteed to run
                                             // synchronously, so any decision that depends on "what happened in
@@ -341,11 +391,13 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
                                                 const next = { ...prev, contractor: newContractorName, itpNo: '' };
                                                 systemFields.forEach(field => {
                                                     // System-sourced fields always follow the newly selected
-                                                    // contractor, including when that contractor's own field is blank.
-                                                    next[field] = (field === 'contacts' ? selected?.contactPerson : selected?.[field]) || '';
+                                                    // contractor, including when that contractor's own field is
+                                                    // blank: cleared now, filled when its contact details arrive.
+                                                    next[field] = '';
                                                 });
                                                 return next;
                                             });
+                                            void fillContactFromContractor(newContractorName, systemFields);
                                             if (keptFields.length > 0) {
                                                 const fieldLabels = keptFields.map(f => t(CONTACT_FIELD_LABEL_KEY[f])).join('、');
                                                 toast.info(t('noi.contactKeptOnContractorChange', { fields: fieldLabels }));

@@ -1,0 +1,11 @@
+PASS desktop 1440: step 1 has 3 column(s)  -> {"cols":3,"tops":[302,302,302]}
+PASS desktop 1440: no horizontal page scroll  -> overflow=0px
+PASS progress bar has 4 steps  -> ["1","2","3","4"]
+PASS desktop 1440: step 2 holds personnel + scope fields and the print-plan button  -> {"personnel":true,"scope":true,"printPlan":true}
+PASS laptop 1024: step 1 has 2 column(s)  -> {"cols":2,"tops":[302,302,400]}
+PASS laptop 1024: no horizontal page scroll  -> overflow=0px
+PASS laptop 1024: step 2 holds personnel + scope fields and the print-plan button  -> {"personnel":true,"scope":true,"printPlan":true}
+PASS phone 390: step 1 has 1 column(s)  -> {"cols":1,"tops":[294,392,490]}
+PASS phone 390: no horizontal page scroll  -> overflow=0px
+PASS phone 390: step 2 holds personnel + scope fields and the print-plan button  -> {"personnel":true,"scope":true,"printPlan":true}
+ALL PASS

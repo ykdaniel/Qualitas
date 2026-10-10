@@ -1,0 +1,17 @@
+# MATERIAL-API-CLOSE-2026-001 deploy candidate = git archive 78b8cfd93e7901bf01ba0b7fd230194089787774 + 5 files; Python 3.11; 2026-10-10T03:40:30Z
+# overlay 9e594c2a9b5168a2d4d2939b597722ff0b5c1bcb895d1a1a10196feb3cba09a6  routers/materials.py
+# overlay 3d73c6239b75c5c4bd605f4391ff29145aad8722c0f11f59fbd223d8de7fc1d6  services/material_service.py
+# overlay fccbb7f895aed8e03feb4422e7b1ef3b6442ab38d89ab5101c3560e1c855d3bc  schemas.py
+# overlay 4e8f8e2bbf84d2d181996ed35c93cdff5ba363c5b32e80eb8e44be45c69797d9  tests/test_materials_http.py
+# overlay a47273ecdf19db0d137bff2bc7778d4a0d33c692755832b17c1bac0a09d29ad7  tests/test_material_submittals_http.py
+Python 3.11.17
+## collect all
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+2386 tests collected in 1.58s
+## import app
+使用預設 SECRET_KEY，僅適用於開發環境。
+imports ok
+## materials + submittals + contractor options + audit
+...............                                                          [100%]
+87 passed in 143.21s (0:02:23)
+EXIT 0

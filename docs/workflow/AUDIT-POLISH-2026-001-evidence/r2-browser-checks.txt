@@ -1,0 +1,18 @@
+# R2 2026-10-09T15:31:57Z isolated stack 3320/8320 (seed_audit_hardening_b_review + seed_audit_polish_review)
+## audit-ime-enter-check.mjs (synthetic keydown events in Chromium — no Safari here; the Safari sequence is reproduced by keyCode 229 + isComposing false)
+PASS Safari IME confirm (keyCode 229, isComposing false) adds nothing, text kept
+PASS Chrome IME confirm (isComposing true) adds nothing
+PASS plain Enter adds the item and clears the field (items=1)
+## regression: audit-polish-check.mjs
+PASS void-only contractor not flagged overdue  -> {"全部":false,"Review Vendor
+PASS contractor with a past Draft still flagged  -> {"全部":false,"Review Vend
+PASS zh vendor hint  -> 選擇承包商以篩選稽核
+PASS zh month label  -> 2026年10月
+PASS title placeholder translated (no raw key)  -> 輸入稽核主旨
+PASS inactive contractor kept in its audit picker  -> {"value":"retired","text":
+PASS save error shows the reason  -> 無法儲存：end_date: Start date must be
+PASS create-only user: created then read-only with notice  -> {"docNo":"QTS-NA-A
+PASS step-5 search ignores case  -> rows=1
+## regression: print pages step4/step5
+step4 pages=9
+step5 pages=13

@@ -1,0 +1,734 @@
+diff --git a/backend/core/strict_dates.py b/backend/core/strict_dates.py
+index 68bf1698..4b9601eb 100644
+--- a/backend/core/strict_dates.py
++++ b/backend/core/strict_dates.py
+@@ -1,8 +1,8 @@
+-"""Strict date rules for NCR / OBS / NOI (2026-09-20) — a SEPARATE module on purpose.
++"""Strict date rules for NCR / OBS / NOI (2026-09-20) and internal Audit (2026-10-09) — a SEPARATE module on purpose.
+ 
+-The older, lenient ``schemas.validate_date_format`` (prefix regex, silently truncates timestamps) is still used by eight
+-other modules that have not been verified, so it is left untouched. Everything here is NEW and only wired into NCR, OBS
+-and NOI.
++The older, lenient ``schemas.validate_date_format`` (prefix regex, silently truncates timestamps) is still used by seven
++other modules that have not been verified, so it is left untouched. Everything here is NEW and only wired into NCR, OBS,
++NOI and internal Audit.
+ 
+ WRITES accept only a complete, calendar-valid ``YYYY-MM-DD``: no time stamp, no trailing characters, no surrounding
+ whitespace, no non-existent day; nothing is truncated or normalised. NULL / '' are governed by each field's own
+@@ -61,6 +61,15 @@ OBS_DATE_FIELDS = ('raiseDate', 'closeoutDate', 'dueDate', 'verifiedDate',
+ NOI_DATE_FIELDS = ('issueDate', 'inspectionDate', 'closeoutDate', 'dueDate')
+ NOI_REQUIRED_DATE_FIELDS = ('issueDate', 'inspectionDate')
+ 
++# Internal Audit (2026-10-09, AUDIT-HARDENING-A): `date` is a NOT NULL column, so NULL is refused; '' (no start date yet — the
++# wizard saves drafts that way) stays allowed exactly as before. The start-before-end rule used to sit on the shared schema
++# base, which the READ schema inherits, so one inverted row could break the whole list; it now lives here (writes only).
++AUDIT_DATE_FIELDS = ('date', 'end_date')
++AUDIT_REQUIRED_DATE_FIELDS = ('date',)
++AUDIT_ORDER_RELATIONS: Tuple[Tuple[str, str, str, str], ...] = (
++    ('date', 'end_date', 'start_after_end', 'Start date must be before or equal to end date'),
++)
++
+ 
+ def date_problem(value: Any) -> Optional[str]:
+     """None when `value` is a valid strict date OR blank (None / ''); otherwise a stable problem code."""
+diff --git a/backend/core/utils.py b/backend/core/utils.py
+index b237090e..f8bf430d 100644
+--- a/backend/core/utils.py
++++ b/backend/core/utils.py
+@@ -606,6 +606,7 @@ _DOC_TYPE_TABLES = {
+     'OSD': ('osd', 'documentNumber'),
+     'MEETING': ('meeting_minutes', 'documentNumber'),
+     'MSA': ('material_submittals', 'document_number'),
++    'AUDIT': ('audits', 'auditNo'),
+ }
+ 
+ 
+diff --git a/backend/routers/audit.py b/backend/routers/audit.py
+index 21595972..3186d2b4 100755
+--- a/backend/routers/audit.py
++++ b/backend/routers/audit.py
+@@ -4,7 +4,8 @@ import schemas
+ from core.dependencies import RoleChecker, get_audit_service
+ from core.perms import AUDIT_VIEW, AUDIT_CREATE, AUDIT_UPDATE, AUDIT_DELETE
+ from core.scope import Scope, ScopeForbidden, get_scope
+-from services.audit_service import AuditService
++from core.strict_dates import DateValidationError
++from services.audit_service import AuditConflict, AuditService
+ 
+ router = APIRouter(
+     prefix="/audit",
+@@ -54,6 +55,12 @@ def create_audit_route(
+         )
+     except ScopeForbidden as e:
+         raise HTTPException(status_code=403, detail=str(e))
++    except DateValidationError as e:
++        raise HTTPException(status_code=422, detail=e.http_detail())
++    except AuditConflict as e:
++        raise HTTPException(status_code=409, detail=str(e))
++    except ValueError as e:
++        raise HTTPException(status_code=400, detail=str(e))
+ 
+ @router.put("/{audit_id}", response_model=schemas.Audit)
+ def update_audit_route(
+@@ -74,6 +81,10 @@ def update_audit_route(
+         )
+     except ScopeForbidden as e:
+         raise HTTPException(status_code=403, detail=str(e))
++    except DateValidationError as e:
++        raise HTTPException(status_code=422, detail=e.http_detail())
++    except AuditConflict as e:
++        raise HTTPException(status_code=409, detail=str(e))
+     except ValueError as e:
+         raise HTTPException(status_code=400, detail=str(e))
+     if db_audit is None:
+diff --git a/backend/schemas.py b/backend/schemas.py
+index 69225baf..d02af841 100644
+--- a/backend/schemas.py
++++ b/backend/schemas.py
+@@ -1348,10 +1348,9 @@ class AuditBase(BaseModel):
+     selected_templates: list[str] | None = []
+     custom_check_items: Any | None = []
+ 
+-    @field_validator('date', 'end_date', mode='before')
+-    @classmethod
+-    def check_dates(cls, v):
+-        return validate_date_format(v)
++    # Date fields: no validator on the base (the READ schema Audit derives from it and must return stored dates untouched —
++    # the old lenient check + start-before-end rule here turned one bad row into a 500 for the whole list). Strict checking
++    # of new writes: AuditCreate (field level) and AuditService (create + update, final content, incl. the order rule).
+ 
+     @field_validator('selected_templates', 'custom_check_items', mode='before')
+     @classmethod
+@@ -1363,18 +1362,18 @@ class AuditBase(BaseModel):
+                 return []
+         return v
+ 
+-    @model_validator(mode='after')
+-    def check_date_ranges(self):
+-        if self.date and self.end_date:
+-            if self.date > self.end_date:
+-                raise ValueError('Start date must be before or equal to end date')
+-        return self
+-
+ class AuditCreate(AuditBase):
++    # Accepted for compatibility with existing callers but ignored: the server always assigns id and auditNo.
+     id: str | None = None
+ 
++    @field_validator(*strict_dates.AUDIT_DATE_FIELDS, mode='before')
++    @classmethod
++    def check_strict_dates(cls, v):
++        return strict_dates.strict_date_input(v)
++
+ class AuditUpdate(BaseModel):
+     project_id: str | None = None
++    # Accepted for compatibility (the wizard resends the whole record) but ignored: auditNo never changes after create.
+     auditNo: str | None = None
+     title: str | None = None
+     date: str | None = None
+diff --git a/backend/services/audit_service.py b/backend/services/audit_service.py
+index 9d988843..6e78fac3 100755
+--- a/backend/services/audit_service.py
++++ b/backend/services/audit_service.py
+@@ -12,12 +12,37 @@ from typing import List, Optional
+ import models
+ import schemas
+ from repositories.audit_repository import AuditRepository
++from core import strict_dates
+ from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
+-from core.utils import generate_reference_no, WorkflowEngine
++from core.utils import begin_write_transaction, generate_reference_no, WorkflowEngine
++from sqlalchemy.exc import IntegrityError
+ from sqlalchemy.orm import Session
+ 
+ logger = logging.getLogger(__name__)
+ 
++_JSON_FIELDS = ("selected_templates", "custom_check_items")
++
++# A new Audit may start in any status that still has a way forward. Closed / Void are dead ends ("Closed": [] / "Void": [])
++# and an unknown status has no transitions at all, so a record created in one of them could never be edited or deleted.
++_CREATE_STATUSES = tuple(s for s, nxt in WorkflowEngine.TRANSITIONS["Audit"].items() if nxt)
++
++
++class AuditConflict(Exception):
++    """The write collided with existing data (unique number / id, foreign key); the router answers 409."""
++
++
++def _comparable(key, value):
++    """Value as the Closed-lock should compare it: the JSON list fields are stored as JSON text but arrive parsed, and the
++    wizard sends a stored NULL back as [] (list fields) or '' (every other field)."""
++    if key in _JSON_FIELDS:
++        if isinstance(value, str):
++            try:
++                value = json.loads(value)
++            except ValueError:
++                return value
++        return value if value is not None else []
++    return value if value is not None else ''
++
+ 
+ class AuditService:
+     """Service layer for Audit business logic"""
+@@ -71,22 +96,26 @@ class AuditService:
+         Returns:
+             Created Audit object
+         """
+-        # Resolve vendor_id from contractor name
+-        vendor_id = self._resolve_vendor_id(audit.contractor)
+-
+-        # Always auto-generate auditNo server-side (ignore any value from frontend)
+-        audit_no = generate_reference_no(
+-            self.repo.db, audit.contractor or '', 'audit'
+-        )
++        if audit.status not in _CREATE_STATUSES:
++            raise ValueError(
++                f"A new Audit cannot be created with status '{audit.status}'. "
++                f"Allowed: {', '.join(_CREATE_STATUSES)}."
++            )
+ 
+         # Start from the full schema dump so that future fields flow through
+         # automatically instead of silently being dropped by a hand-maintained
+         # field list. Then stamp the server-controlled fields on top.
+         audit_data = audit.model_dump()
+-        audit_data["id"] = audit_data.get("id") or str(uuid.uuid4())
+-        audit_data["auditNo"] = audit_no
+-        audit_data["vendor_id"] = vendor_id
+-        for json_field in ("selected_templates", "custom_check_items"):
++
++        # Final content validated before the write lock / any reference number.
++        strict_dates.validate_date_write(
++            audit_data, strict_dates.AUDIT_DATE_FIELDS,
++            required=strict_dates.AUDIT_REQUIRED_DATE_FIELDS, relations=strict_dates.AUDIT_ORDER_RELATIONS,
++        )
++
++        audit_data["id"] = str(uuid.uuid4())  # never the client's: a reused id used to fail the insert with a 500
++        audit_data["vendor_id"] = self._resolve_vendor_id(audit.contractor)
++        for json_field in _JSON_FIELDS:
+             value = audit_data.get(json_field)
+             if isinstance(value, list):
+                 audit_data[json_field] = json.dumps(value)
+@@ -95,22 +124,37 @@ class AuditService:
+         # (forces vendor_id for contractor users; validates project_id).
+         enforce_create_scope(audit_data, scope)
+ 
+-        # Create audit record
+-        db_audit = self.repo.create(audit_data)
+-
+-        # Log the creation
+-        self._log_audit(
+-            action="CREATE",
+-            entity_type="Audit",
+-            entity_id=db_audit.id,
+-            entity_no=db_audit.auditNo,
+-            new_value=audit_data,
+-            user_id=user_id,
+-            username=username
+-        )
++        db = self.repo.db
++        try:
++            # From here on everything is written in ONE transaction: take the write lock before the
++            # sequence is read (see begin_write_transaction), so two creates can't draw the same number.
++            begin_write_transaction(db)
++
++            # Always auto-generate auditNo server-side (ignore any value from frontend)
++            audit_data["auditNo"] = generate_reference_no(db, audit.contractor or '', 'audit')
++
++            db_audit = self.repo.create(audit_data)
++
++            self._log_audit(
++                action="CREATE",
++                entity_type="Audit",
++                entity_id=db_audit.id,
++                entity_no=db_audit.auditNo,
++                new_value=audit_data,
++                user_id=user_id,
++                username=username
++            )
+ 
+-        self.repo.db.commit()
+-        self.repo.db.refresh(db_audit)
++            # Audit + reference sequence + audit log: ONE commit
++            db.commit()
++        except IntegrityError as e:
++            db.rollback()
++            logger.warning(f"Audit create rejected by the database: {e.orig}")
++            raise AuditConflict("The audit could not be saved because it conflicts with existing data.") from e
++        except Exception:
++            db.rollback()  # releases the write lock; nothing of this create survives
++            raise
++        db.refresh(db_audit)
+         return db_audit
+ 
+     def update_audit(
+@@ -137,8 +181,12 @@ class AuditService:
+         if not db_audit or not record_in_scope(db_audit, scope):
+             return None
+ 
+-        # Validate status transition if status is being changed
+         update_data = audit.model_dump(exclude_unset=True)
++        # auditNo is assigned once at create and never changes: FollowUps link to an audit by it, and a blank or
++        # duplicate value used to be written straight through (the wizard resent '' on its second save).
++        update_data.pop("auditNo", None)
++
++        # Validate status transition if status is being changed
+         if 'status' in update_data and update_data['status'] != db_audit.status:
+             if not WorkflowEngine.validate_transition("Audit", db_audit.status, update_data['status']):
+                 raise ValueError(
+@@ -157,54 +205,76 @@ class AuditService:
+         # resends the whole record on every save.
+         if db_audit.status == 'Closed':
+             changed_fields = {
+-                k for k, v in update_data.items() if v != old_value.get(k)
++                k for k, v in update_data.items()
++                if _comparable(k, v) != _comparable(k, old_value.get(k))
+             }
+             if changed_fields:
+                 raise ValueError(
+                     f"Cannot modify a closed Audit '{db_audit.auditNo}' — "
+                     f"no fields can be changed once an audit is closed."
+                 )
++            return db_audit  # an unchanged resave: nothing to write, no audit-log row
++
++        # Date rules on the merged final content, before anything is written. Only fields whose value changes are
++        # checked, so re-sending a historical value unchanged never blocks an unrelated edit.
++        date_fields = strict_dates.AUDIT_DATE_FIELDS
++        strict_dates.validate_date_write(
++            {f: update_data[f] if f in update_data else getattr(db_audit, f, None) for f in date_fields},
++            date_fields,
++            stored={f: getattr(db_audit, f, None) for f in date_fields},
++            provided=set(update_data) & set(date_fields),
++            required=strict_dates.AUDIT_REQUIRED_DATE_FIELDS,
++            relations=strict_dates.AUDIT_ORDER_RELATIONS,
++        )
+ 
+         processed_data = {}
+ 
+         for key, value in update_data.items():
+-            if key in ["selected_templates", "custom_check_items"]:
++            if key in _JSON_FIELDS:
+                 processed_data[key] = json.dumps(value) if isinstance(value, list) else value
+             else:
+                 processed_data[key] = value
+ 
+-        # Re-resolve vendor_id if contractor changed
+-        if "contractor" in update_data:
+-            processed_data["vendor_id"] = self._resolve_vendor_id(update_data["contractor"])
+-
+-            # Only regenerate auditNo if the record has no auditNo yet
+-            # (initial assignment when a contractor is first set, not on contractor changes)
+-            new_contractor = update_data["contractor"]
+-            if new_contractor and not db_audit.auditNo:
+-                processed_data["auditNo"] = generate_reference_no(
+-                    self.repo.db, new_contractor, 'audit'
+-                )
+-                logger.info(f"Assigned new auditNo {processed_data['auditNo']} (first contractor assignment)")
+-
+-        enforce_update_scope(processed_data, scope)
+-
+-        # Update the audit
+-        updated_audit = self.repo.update(audit_id, processed_data)
+-
+-        # Log the update
+-        self._log_audit(
+-            action="UPDATE",
+-            entity_type="Audit",
+-            entity_id=audit_id,
+-            entity_no=db_audit.auditNo,
+-            old_value=old_value,
+-            new_value=update_data,
+-            user_id=user_id,
+-            username=username
+-        )
++        db = self.repo.db
++        try:
++            # Re-resolve vendor_id if contractor changed
++            if "contractor" in update_data:
++                processed_data["vendor_id"] = self._resolve_vendor_id(update_data["contractor"])
++
++                # Only assign an auditNo if the record has none (a row blanked by the old resave bug):
++                # initial assignment when a contractor is set, never a renumbering on contractor changes.
++                new_contractor = update_data["contractor"]
++                if new_contractor and not db_audit.auditNo:
++                    begin_write_transaction(db)
++                    processed_data["auditNo"] = generate_reference_no(db, new_contractor, 'audit')
++                    logger.info(f"Assigned new auditNo {processed_data['auditNo']} (first contractor assignment)")
++
++            enforce_update_scope(processed_data, scope)
++
++            # Update the audit
++            updated_audit = self.repo.update(audit_id, processed_data)
++
++            # Log the update
++            self._log_audit(
++                action="UPDATE",
++                entity_type="Audit",
++                entity_id=audit_id,
++                entity_no=updated_audit.auditNo,
++                old_value=old_value,
++                new_value=update_data,
++                user_id=user_id,
++                username=username
++            )
+ 
+-        self.repo.db.commit()
+-        self.repo.db.refresh(updated_audit)
++            db.commit()
++        except IntegrityError as e:
++            db.rollback()
++            logger.warning(f"Audit update rejected by the database: {e.orig}")
++            raise AuditConflict("The audit could not be saved because it conflicts with existing data.") from e
++        except Exception:
++            db.rollback()
++            raise
++        db.refresh(updated_audit)
+         return updated_audit
+ 
+     def delete_audit(
+diff --git a/backend/tests/test_audit_service.py b/backend/tests/test_audit_service.py
+index 0357fa88..de381b40 100755
+--- a/backend/tests/test_audit_service.py
++++ b/backend/tests/test_audit_service.py
+@@ -150,8 +150,10 @@ def test_create_audit_without_vendor(audit_service, mock_repo, mock_db):
+     mock_db.add = Mock()
+     mock_db.flush = Mock()
+ 
++    # date is a NOT NULL column: '' (no start date yet) is what the wizard sends for such a draft; NULL is refused.
+     audit_create = schemas.AuditCreate(
+         auditNo="QTS-RKS-XXX-AUD-000002",
++        date="",
+         status="Draft"
+     )
+ 
+@@ -235,7 +237,8 @@ def test_update_closed_audit_rejects_field_change(audit_service, mock_repo, samp
+ def test_update_closed_audit_allows_noop_resave(audit_service, mock_repo, sample_audit, mock_db):
+     """The frontend resends the whole record on every save, so a field
+     being present in the payload with its existing value (no real change)
+-    must not be treated as an attempted edit."""
++    must not be treated as an attempted edit — and, the record being Closed,
++    nothing is written for it (no UPDATE, no audit-log row)."""
+     sample_audit.status = "Closed"
+     mock_repo.get_by_id = Mock(return_value=sample_audit)
+     mock_repo.update = Mock(return_value=sample_audit)
+@@ -249,7 +252,8 @@ def test_update_closed_audit_allows_noop_resave(audit_service, mock_repo, sample
+ 
+     assert result is not None
+     assert result.status == "Closed"
+-    mock_repo.update.assert_called_once()
++    mock_repo.update.assert_not_called()
++    mock_db.commit.assert_not_called()
+ 
+ 
+ def test_update_audit_not_found(audit_service, mock_repo):
+diff --git a/backend/tests/test_audit_hardening_http.py b/backend/tests/test_audit_hardening_http.py
+new file mode 100644
+index 00000000..122acbce
+--- /dev/null
++++ b/backend/tests/test_audit_hardening_http.py
+@@ -0,0 +1,308 @@
++"""Internal Audit backend hardening (AUDIT-HARDENING-A-2026-001): real login/routes, disposable file DB, new-session assertions.
++
++Covers: create status, auditNo immutable on update, strict dates on create + update (and a READ that no longer 500s on a
++stored bad row), Closed resave with list fields, number generation under the write lock + counter self-heal, database
++conflicts as 409, one-transaction rollback. No main import, seeding, scheduler, uploads or development database access.
++"""
++import importlib
++import json
++import secrets
++import threading
++import uuid
++from types import SimpleNamespace
++
++import pytest
++from fastapi import FastAPI
++from fastapi.testclient import TestClient
++from sqlalchemy import create_engine, event
++from sqlalchemy.orm import sessionmaker
++
++import models
++import schemas
++from core.security import get_password_hash
++from database import Base, get_db
++from repositories.audit_repository import AuditRepository
++from services.audit_service import AuditService
++
++VENDOR = 'Audit vendor'
++
++
++def body(**over):
++    """The shape the wizard sends (prepareAuditData): every field, '' for blanks, lists for the JSON fields."""
++    data = dict(auditNo='', title='Site audit', date='2026-10-01', end_date='2026-10-02', project_name='', auditor='Lead',
++                project_director='', support_auditors='', tech_lead='', location='Site', findings='', audit_criteria='',
++                scope_description='', selected_templates=['ISO 9001:2015'], custom_check_items=[{'id': 1, 'no': '7.1', 'clause': 'c', 'task': 't'}],
++                contractor=VENDOR, status='Draft')
++    data.update(over)
++    return data
++
++
++@pytest.fixture
++def env(tmp_path, monkeypatch):
++    engine = create_engine(f"sqlite:///{tmp_path / 'audit-hardening.db'}", connect_args={'check_same_thread': False, 'timeout': 30})
++    Base.metadata.create_all(engine)
++    S = sessionmaker(bind=engine, autoflush=False)
++    import core.security as security
++    monkeypatch.setattr(security, 'SessionLocal', S)
++    password = secrets.token_urlsafe(24)
++    with S() as db:
++        codes = ['audit:view:all', 'audit:create:all', 'audit:update:all', 'audit:delete:all']
++        role = models.Role(name='AuditOwner')
++        role.permissions_rel = [models.Permission(code=c, description=c) for c in codes]
++        db.add(role)
++        db.flush()
++        db.add(models.User(username='auditor', email='auditor@example.test', is_active=True,
++                           role_id=role.id, hashed_password=get_password_hash(password)))
++        db.add(models.Contractor(id='vendor', name=VENDOR, abbreviation='AV'))
++        db.commit()
++    app = FastAPI()
++    for name in ['auth', 'audit']:
++        app.include_router(importlib.import_module('routers.' + name).router, prefix='/api')
++
++    def session():
++        with S() as db:
++            yield db
++    app.dependency_overrides[get_db] = session
++    with TestClient(app, raise_server_exceptions=False) as client:
++        response = client.post('/api/auth/login', data={'username': 'auditor', 'password': password})
++        assert response.status_code == 200, response.text
++        yield SimpleNamespace(client=client, Session=S, engine=engine)
++    engine.dispose()
++
++
++def snapshot(env):
++    with env.Session() as db:
++        return {m.__tablename__: sorted([tuple(str(getattr(r, c.name)) for c in m.__table__.columns) for r in db.query(m).all()])
++                for m in [models.Audit, models.AuditLog, models.ReferenceSequence]}
++
++
++def create(env, **over):
++    return env.client.post('/api/audit/', json=body(**over))
++
++
++def stored(env, audit_id):
++    with env.Session() as db:
++        row = db.get(models.Audit, audit_id)
++        db.expunge(row)
++        return row
++
++
++def insert_raw(env, **cols):
++    """A legacy row written directly (as old code paths could leave it), bypassing the API."""
++    data = dict(id=str(uuid.uuid4()), auditNo=f'LEGACY-{uuid.uuid4().hex[:8]}', date='2026-10-01', status='Draft',
++                contractor=VENDOR, vendor_id='vendor', selected_templates='[]', custom_check_items='[]')
++    data.update(cols)
++    with env.Session() as db:
++        db.add(models.Audit(**data))
++        db.commit()
++    return data['id']
++
++
++# ── #3 status on create ───────────────────────────────────────────────────────────────────────────────────────────
++@pytest.mark.parametrize('status', ['Closed', 'Void', 'Foo', 'closed', ''])
++def test_create_refuses_dead_end_or_unknown_status(env, status):
++    before = snapshot(env)
++    response = create(env, status=status)
++    assert response.status_code == 400, response.text
++    assert snapshot(env) == before  # no record, no audit log, no sequence drawn
++
++
++@pytest.mark.parametrize('status', ['Draft', 'Planned', 'In Progress', 'Completed'])
++def test_create_accepts_every_status_with_a_way_forward(env, status):
++    response = create(env, status=status)
++    assert response.status_code == 200, response.text
++    assert response.json()['status'] == status
++
++
++# ── #4 auditNo immutable; the wizard's "Save Draft, then Submit" no longer blanks it ─────────────────────────────────
++def test_second_save_with_blank_audit_no_keeps_the_number(env):
++    created = create(env).json()
++    number = created['auditNo']
++    assert number.endswith('000001')
++    # exactly what the wizard sends on its 2nd save of a new record (formData.auditDocNo was never filled in)
++    response = env.client.put(f"/api/audit/{created['id']}", json=body(auditNo='', status='Planned'))
++    assert response.status_code == 200, response.text
++    assert response.json()['auditNo'] == number
++    assert stored(env, created['id']).auditNo == number
++
++
++def test_update_cannot_rename_the_number(env):
++    created = create(env).json()
++    response = env.client.put(f"/api/audit/{created['id']}", json={'auditNo': 'HAND-TYPED-1'})
++    assert response.status_code == 200, response.text
++    assert stored(env, created['id']).auditNo == created['auditNo']
++    with env.Session() as db:
++        log = db.query(models.AuditLog).filter_by(entity_id=created['id'], action='UPDATE').one()
++        assert 'auditNo' not in json.loads(log.new_value or '{}')
++
++
++# ── #5 dates: strict on create and update, READ never fails on a stored row ──────────────────────────────────────────
++@pytest.mark.parametrize('over, field', [
++    (dict(date='2026-10-05', end_date='2026-10-01'), 'end_date'),
++    (dict(date='garbage'), 'date'),
++    (dict(date='2026-02-30'), 'date'),
++    (dict(date='2026-10-01T09:00:00'), 'date'),
++    (dict(date=None), 'date'),
++])
++def test_create_refuses_bad_dates_with_422(env, over, field):
++    before = snapshot(env)
++    response = create(env, **over)
++    assert response.status_code == 422, response.text
++    assert field in json.dumps(response.json()['detail'])
++    assert snapshot(env) == before
++
++
++def test_create_without_date_key_is_422_not_500(env):
++    data = body()
++    data.pop('date')
++    response = env.client.post('/api/audit/', json=data)
++    assert response.status_code == 422, response.text
++
++
++def test_create_draft_without_a_start_date_still_works(env):
++    response = create(env, date='', end_date='')
++    assert response.status_code == 200, response.text
++
++
++@pytest.mark.parametrize('over', [
++    dict(end_date='2026-09-01'),          # before the stored start date
++    dict(date='2026-13-01'),
++    dict(end_date='not a date'),
++    dict(date=None),                      # NOT NULL column: used to be a 500
++])
++def test_update_refuses_bad_dates_with_422(env, over):
++    created = create(env).json()
++    before = snapshot(env)
++    response = env.client.put(f"/api/audit/{created['id']}", json=over)
++    assert response.status_code == 422, response.text
++    assert snapshot(env) == before
++
++
++def test_update_resending_an_untouched_legacy_date_is_not_blocked(env):
++    audit_id = insert_raw(env, date='2026/10/01', end_date='2026-09-01')  # bad format AND inverted, written by old code
++    response = env.client.put(f'/api/audit/{audit_id}', json={'date': '2026/10/01', 'end_date': '2026-09-01', 'title': 'Renamed'})
++    assert response.status_code == 200, response.text
++    assert stored(env, audit_id).title == 'Renamed'
++
++
++def test_list_and_get_return_a_stored_bad_row_instead_of_500(env):
++    audit_id = insert_raw(env, date='2026-10-05', end_date='2026-10-01')
++    insert_raw(env, date='garbage')
++    listed = env.client.get('/api/audit/')
++    assert listed.status_code == 200, listed.text
++    assert len(listed.json()) == 2
++    got = env.client.get(f'/api/audit/{audit_id}')
++    assert got.status_code == 200, got.text
++    assert (got.json()['date'], got.json()['end_date']) == ('2026-10-05', '2026-10-01')  # returned untouched
++
++
++# ── #12 Closed lock compares like with like ──────────────────────────────────────────────────────────────────────────
++def test_closed_full_resave_is_a_no_op_but_a_real_change_is_refused(env):
++    audit_id = insert_raw(env, status='Closed', auditNo='CLOSED-1', title='Done', selected_templates='["ISO 9001:2015"]',
++                          custom_check_items=None)
++    row = env.client.get(f'/api/audit/{audit_id}').json()
++    resave = {k: row[k] for k in schemas.AuditUpdate.model_fields if k in row}
++    resave['custom_check_items'] = row['custom_check_items'] or []  # the wizard's `|| []`
++    resave['auditNo'] = ''
++    assert env.client.put(f'/api/audit/{audit_id}', json=resave).status_code == 200
++    changed = env.client.put(f'/api/audit/{audit_id}', json={**resave, 'selected_templates': ['ISO 14001']})
++    assert changed.status_code == 400, changed.text
++    assert stored(env, audit_id).selected_templates == '["ISO 9001:2015"]'
++
++
++def test_closed_wizard_shaped_resave_over_null_columns_writes_nothing(env):
++    # stored NULLs come back from the wizard as '' / [] (prepareAuditData's `|| ''`); that is not a change
++    audit_id = insert_raw(env, status='Closed', auditNo='CLOSED-2', title=None, end_date=None, auditor=None, location=None,
++                          selected_templates=None, custom_check_items=None)
++    before = snapshot(env)
++    blank = {k: '' for k in body() if k not in ('selected_templates', 'custom_check_items')}
++    resave = {**blank, 'date': '2026-10-01', 'contractor': VENDOR, 'status': 'Closed', 'selected_templates': [], 'custom_check_items': []}
++    response = env.client.put(f'/api/audit/{audit_id}', json=resave)
++    assert response.status_code == 200, response.text
++    assert snapshot(env) == before  # no column rewritten, no audit-log row
++    assert env.client.put(f'/api/audit/{audit_id}', json={**resave, 'title': 'sneaky'}).status_code == 400
++
++
++# ── #6 numbering: write lock first, counter self-heals ───────────────────────────────────────────────────────────────
++def test_counter_behind_the_table_does_not_collide(env):
++    first = create(env).json()['auditNo']
++    with env.Session() as db:
++        db.query(models.ReferenceSequence).update({'last_seq': 0})  # drift, as an import / restore can leave it
++        db.commit()
++    response = create(env)
++    assert response.status_code == 200, response.text
++    assert response.json()['auditNo'] == first[:-6] + '000002'
++
++
++def test_write_lock_is_taken_before_the_sequence_is_read(env, monkeypatch):
++    import services.audit_service as svc
++    calls = []
++    real_lock, real_gen = svc.begin_write_transaction, svc.generate_reference_no
++    monkeypatch.setattr(svc, 'begin_write_transaction', lambda db: (calls.append('lock'), real_lock(db))[1])
++    monkeypatch.setattr(svc, 'generate_reference_no', lambda *a, **k: (calls.append('number'), real_gen(*a, **k))[1])
++    assert create(env).status_code == 200
++    assert calls == ['lock', 'number']
++
++
++def test_concurrent_creates_get_distinct_numbers(env):
++    n = 6
++    gate = threading.Barrier(n)
++    results, errors = [], []
++
++    def worker():
++        with env.Session() as db:
++            service = AuditService(AuditRepository(db))
++            gate.wait()
++            try:
++                results.append(service.create_audit(schemas.AuditCreate(**body()), user_id=1, username='auditor').auditNo)
++            except Exception as e:  # noqa: BLE001 — collected and asserted below
++                errors.append(repr(e))
++    threads = [threading.Thread(target=worker) for _ in range(n)]
++    for t in threads:
++        t.start()
++    for t in threads:
++        t.join()
++    assert errors == []
++    assert len(set(results)) == n
++
++
++# ── #7 database conflicts are 409, client id ignored ─────────────────────────────────────────────────────────────────
++def test_client_supplied_id_is_ignored(env):
++    existing = create(env).json()['id']
++    response = env.client.post('/api/audit/', json={**body(), 'id': existing})
++    assert response.status_code == 200, response.text
++    assert response.json()['id'] != existing
++
++
++def test_number_collision_is_409_and_writes_nothing(env, monkeypatch):
++    taken = create(env).json()['auditNo']
++    import services.audit_service as svc
++    monkeypatch.setattr(svc, 'generate_reference_no', lambda *a, **k: taken)
++    before = snapshot(env)
++    response = create(env)
++    assert response.status_code == 409, response.text
++    assert snapshot(env) == before
++
++
++# ── one transaction: a failing audit-log write leaves nothing behind ─────────────────────────────────────────────────
++@pytest.mark.parametrize('op', ['create', 'update'])
++def test_audit_log_failure_rolls_everything_back(env, monkeypatch, op):
++    audit_id = create(env).json()['id'] if op == 'update' else None
++    before = snapshot(env)
++    rollbacks = []
++    event.listen(env.Session.class_, 'after_rollback', lambda s: rollbacks.append(1))
++
++    def fail_audit_flush(session, *args):
++        if any(isinstance(r, models.AuditLog) for r in session.new):
++            raise RuntimeError('injected audit-log failure')
++    event.listen(env.Session.class_, 'before_flush', fail_audit_flush)
++    try:
++        if op == 'create':
++            response = create(env)
++        else:
++            response = env.client.put(f'/api/audit/{audit_id}', json={'title': 'changed'})
++        assert response.status_code == 500
++    finally:
++        event.remove(env.Session.class_, 'before_flush', fail_audit_flush)
++    assert rollbacks
++    assert snapshot(env) == before

@@ -1,0 +1,5 @@
+# 2026-10-09T17:48:06Z Python 3.14.6 candidate tree (HEAD + this round, R2) related backend tests
+# cmd: DATABASE_URL=sqlite:///$TMPDIR/never-co.db python3 -m pytest -q -p no:warnings -p no:cacheprovider tests/test_contractor_options_http.py tests/test_audit_contractor_options_http.py tests/test_noi_service.py tests/test_noi_create_atomic_http.py tests/test_scope_instance_contractor_http.py tests/test_scope_all_modules.py tests/test_reviewed_audit_paths_http.py
+........................................................................ [ 57%]
+......................................................                   [100%]
+126 passed in 121.81s (0:02:01)

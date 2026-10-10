@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { useContractorsStore, Contractor } from '../../store/contractorsStore';
+import { useContractorsStore, ContractorOption } from '../../store/contractorsStore';
 import { useDashboardFilterStore } from '../../store/dashboardFilterStore';
 import { useProjectStore } from '../../store/projectStore';
 import { useDashboardStats } from '../../hooks/useDashboardStats';
@@ -31,7 +31,7 @@ const Dashboard = () => {
 
 const DashboardContent: React.FC<{
   navigate: (path: string) => void;
-  getActiveContractors: () => Contractor[];
+  getActiveContractors: () => ContractorOption[];
 }> = ({ navigate, getActiveContractors }) => {
   const { selectedVendor, setSelectedVendor } = useDashboardFilterStore();
   const { statistics, t } = useDashboardStats(selectedVendor);

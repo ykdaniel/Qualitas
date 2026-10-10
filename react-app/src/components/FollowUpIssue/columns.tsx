@@ -31,6 +31,7 @@ const getModulePath = (module?: string): string | null => {
         case 'ITP': return '/itp';
         case 'PQP': return '/pqp';
         case 'MEETING': return '/meeting-minutes';
+        case 'AUDIT': return '/audit';
         default: return null;
     }
 };
@@ -61,6 +62,7 @@ const getDeepLinkPath = (issue: FollowUpIssueItem): string | null => {
         case 'NOI':
         case 'ITP':
         case 'PQP':
+        case 'AUDIT':
             return issue.sourceReferenceNo
                 ? `${modulePath}?openId=${encodeURIComponent(issue.sourceReferenceNo)}`
                 : modulePath;
