@@ -83,7 +83,7 @@ class NOIService:
         Business logic:
         - Maps contractor name to vendor_id
         - Generates Reference No automatically if not provided
-        - Sets default status to "Draft" if not provided
+        - Sets default status to "Open" (the start of the NOI workflow) if not provided
         - Serializes JSON fields (attachments)
         - Logs audit trail
 
@@ -138,7 +138,7 @@ class NOIService:
 
             # Set default status
             if not data.get('status'):
-                data['status'] = "Draft"
+                data['status'] = "Open"   # "Draft" is not a NOI workflow state (core/utils.py); the UI sends "Open"
 
             # Create NOI object
             db_noi = models.NOI(**data)

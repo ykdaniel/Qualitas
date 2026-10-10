@@ -1,0 +1,10 @@
+# NOI batch candidate = b13b8dff + routers/noi.py delete fix + tests/test_noi_delete_http.py; Python 3.11 full suite; 2026-10-10T17:12:48Z
+Python 3.11.17
+deps-ok
+........................................................................ [  2%]
+........................................................................ [  5%]
+........................................................................ [  8%]
+........................................................................ [ 11%]
+........................................................................ [ 14%]
+......pytest_exit=137; 2026-10-10T17:30:01Z
+STOPPED by coordination hub at 2026-10-10T17:30:05Z with user approval (「可以停」): not the final candidate; was slowing AUDIT-PRINT's gating 3.11 run. Rerun on the final NOI candidate (Qualitas-deploy-artifacts/NOI-BATCH-2026-10-11/final). No failures before stop.

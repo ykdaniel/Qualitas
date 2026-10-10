@@ -220,6 +220,15 @@ Result 的既有操作方式比拆開成縱向區塊更直覺）。
 影響範圍：backend/services/noi_service.py 的 update_noi；測試 backend/tests/test_noi_contractor_lock_http.py。前端承包商選單是否事先停用並說明，尚未決定。
 依據：使用者 2026-10-10 於本會話直接確認（「NOI換承包商：底下有文件就禁止」；縮寫變更「比照處理，底下有文件就保留原編號」；獨立審查後再選「Follow-up 算進去」「允許補選，保留原編號」）。
 
+### NOI 刪除：被任何文件引用就拒絕（400）；未指定狀態時預設 Open（2026-10-11）
+日期：2026-10-11
+決策：
+1. NOI 只要被 ITR、NCR、Observation、Checklist 以編號引用，或有 Follow-up 以它為來源（來源模組 NOI），就不能刪除。範圍與上一條「禁止更換承包商」相同（原本只檢查 ITR、NCR、Checklist）。後端回 400，並說明各類文件的數量，不刪任何資料；原本這種拒絕會變成 500。
+2. 透過 API 建立 NOI 而沒有指定狀態時，預設為 Open（NOI 流程的起點）。原本的預設值 "Draft" 不在 NOI 流程中；畫面上新增時本來就送 Open。
+理由：NOI 全功能模擬（`docs/workflow/NOI-SIMULATION-2026-10-11.md`）發現的 2 個既有問題，以及刪除與承包商鎖定的文件範圍不一致。
+影響範圍：backend/routers/noi.py（delete_noi 的錯誤對應）、core/validators.py（check_noi_references）、services/noi_service.py（create_noi 預設狀態）；測試 backend/tests/test_noi_delete_http.py。不改前端，不改既有資料。
+依據：使用者 2026-10-11 於協調中心指示「修第 1 個問題，NOI 排進佇列」，之後對 Observation／Follow-up 擋刪除、Draft 預設改 Open 回覆「照建議」。
+
 ### IAM 角色權限矩陣、停用測試帳號 john_doe（2026-10-11）
 日期：2026-10-11
 決策：

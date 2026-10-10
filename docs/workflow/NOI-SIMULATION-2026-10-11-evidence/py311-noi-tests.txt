@@ -1,0 +1,7 @@
+# NOI simulation — Python 3.11, clean worktree at b13b8dff; test files mentioning NOI: tests/test_attachment_hardening_http.py tests/test_attachment_authorization_http.py tests/test_audit_service.py tests/test_checklist_validation.py tests/test_date_write_guard_http.py tests/test_contractor_options_http.py tests/test_integration_real_db.py tests/test_followup_validation.py tests/test_integrity_fixes.py tests/test_itr_integrity_guards_http.py tests/test_ncr_photo_evidence.py tests/test_noi_contractor_lock_http.py tests/test_meeting_minutes_service.py tests/test_noi_service.py tests/test_noi_legacy_itp_read_http.py tests/test_qworkflow_photo_impact_script.py tests/test_scope_extra.py tests/test_noi_create_atomic_http.py tests/test_scope_related.py tests/test_noi_qworkflow_backfill_rule_http.py tests/test_obs_service.py tests/test_scope_all_modules.py tests/test_related_service.py tests/test_workflow_project_filter_http.py tests/test_workflow_photo_evidence_http.py tests/test_utils.py tests/test_validation_fixes.py tests/test_workflow_service.py ; 2026-10-10T16:35:52Z
+Python 3.11.17
+........................................................................ [ 85%]
+........................................................................ [ 93%]
+.................s...........................................            [100%]
+924 passed, 1 skipped in 1633.62s (0:27:13)
+EXIT 0
