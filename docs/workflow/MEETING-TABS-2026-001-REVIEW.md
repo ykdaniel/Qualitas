@@ -27,3 +27,6 @@ setCurrentUpdate 邊界、唯讀兩模式、離開提醒與擋存檔、raisedDat
 ## R5：PASS（按鈕縮小、✏️／🗑 hover 顯示、文字框自動高度）
 nextNo 與 addEntry 編號一致；隱形按鈕可 Tab 聚焦且 focus-within 會顯示，有 aria-label；CSS module 的 tr:hover 只作用在討論區；AutoText 的 ResizeObserver 只看寬度、不循環，隱藏分頁首次顯示會補量；討論區已不用撐寬的舊按鈕。tsc 乾淨、npm test 156 passed。
 建議（已處理）：字型晚載入可能少算高度 → document.fonts.ready 後再量一次。資訊（已處理）：.autoText 的 min-height 依賴樣式載入順序 → 改為 .autoText.autoText 提高權重。
+
+## R6：PASS（新增列顯示將取得的編號）
+顯示與 ✓ 時 addEntry 用同一個 nextNo、每次重算，必定一致；編輯中只能改狀態與進度、🗑 不顯示，不影響編號；上層被「顯示已結案」濾掉時 nextNo 仍以完整清單計算；pendingNo 中英齊全，類別格式 n.0 與 displayNo 一致。
