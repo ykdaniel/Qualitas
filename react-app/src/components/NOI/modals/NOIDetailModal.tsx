@@ -267,7 +267,8 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
         setExportingDocx(true);
         try {
             await exportNoiDocx(existingItem.id, formData.referenceNo || 'NOI');
-        } catch {
+        } catch (err) {
+            console.error('NOI Word export failed:', err);
             toast.error(t('common.exportFailed') || 'Export failed. Please try again.');
         } finally {
             setExportingDocx(false);

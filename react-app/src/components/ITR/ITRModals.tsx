@@ -679,11 +679,14 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
 
     // Word export: show a message when it fails, and block repeat clicks while the file is being built.
     const handleExportDocx = async () => {
-        if (!existingItem?.id || exportingDocx || saving) return;
+        if (!existingItem?.id || exportingDocx || saving || revoking || spawning !== null) return;
+        // The export reads the saved records, so unsaved checklist panel edits would be missing from the file.
+        if (blockedByUnsavedChecklist('itr.checklistUnsavedAction')) return;
         setExportingDocx(true);
         try {
             await exportItrDocx(existingItem.id, formData.itrNumber || 'ITR');
-        } catch {
+        } catch (err) {
+            console.error('ITR Word export failed:', err);
             toast.error(t('common.exportFailed') || 'Export failed. Please try again.');
         } finally {
             setExportingDocx(false);
@@ -1297,7 +1300,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                 Print (which only reads already-loaded formData), there is nothing
                                 to export for an unsaved new ITR yet. */}
                             {existingItem?.id && (
-                                <button className={actionStyles.secondary} onClick={handleExportDocx} disabled={saving || exportingDocx}>
+                                <button className={actionStyles.secondary} onClick={handleExportDocx} disabled={saving || exportingDocx || revoking || spawning !== null}>
                                     <FileText size={16} /> {exportingDocx ? (t('common.exporting') || 'Exporting...') : (t('itr.exportWord') || 'Export Word')}
                                 </button>
                             )}

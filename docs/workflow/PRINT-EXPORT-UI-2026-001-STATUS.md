@@ -53,3 +53,26 @@ TASK_ID: PRINT-EXPORT-UI-2026-001 · ROUND: R1 · 2026-10-10（ITR 部分 2026-1
   - NOI QTS-NDR1-NOI-000001：結果相同，PUT 200。
   - console 錯誤只有登入前的 401，以及已知的種子 `/api/ncr/` 500。
 - 工作樹裡其他未提交的後端／文件修改（CHECKLIST-TEMPLATE-CLEAN、NOI 刪除參照等）屬於其他工作階段，不屬本輪。
+
+---
+
+## R3（2026-10-11）：R2 審查的三個非阻擋項目
+來源：R2 REVIEW 的 NON-BLOCKING #1、#2，以及 R1 的 #3。使用者指示「這三點也一起修」。修改前已通知協調中心並獲同意；基準是 HEAD 21f96f38。
+
+### 修改
+- `components/ITR/ITRModals.tsx`（LF，+6／−3）：
+  1. Word 匯出在撤回（`revoking`）、Raise NCR／Re-inspect（`spawning !== null`）進行中停用。按鈕的 `disabled` 和 handler 的防呆都加上這兩個條件。
+  2. `handleExportDocx` 開頭加上 `blockedByUnsavedChecklist('itr.checklistUnsavedAction')`。檢查表有未存修改時擋下匯出並提示，和 Print／Raise NCR／Re-inspect 一致。用的是 ITR 工作階段已提交的函式與翻譯鍵，沒有新增翻譯鍵。
+  3. catch 加上 `console.error('ITR Word export failed:', err)`。
+- `components/NOI/modals/NOIDetailModal.tsx`（CRLF，以二進位方式修改，+2／−1）：catch 加上 `console.error('NOI Word export failed:', err)`。
+- `components/NCR/NCRModals.tsx`（LF，+2／−1）：catch 加上 `console.error('NCR Word export failed:', err)`。
+- **logger 說明**：AGENTS.md 要求用 logger utility，但前端目前沒有這個工具（已全 repo 搜尋確認）。這裡沿用 Audit 既有的 `console.error` 寫法（AuditWizard 的 Word 匯出失敗處理），協調中心同意。只記錯誤物件；登入靠 httpOnly cookie，axios 錯誤物件裡沒有 token 或個資。
+
+### 證據
+- **實測**：`npx tsc --noEmit` exit 0；`npm test` 144 pass／0 fail；ESLint 對三個檔只有既有警告（ITR 的 `ncrList`／`obsList`、NCR 的 hook 相依），0 error。
+- **實測（隔離環境 8291／3291，同一種子，已 `down`）**：在隔離資料庫用 API 建了一張空白範本，連到 QTS-NDR1-ITR-000001（產生 QTS-FHS-CHECKLIST-000001）。
+  - 展開檢查表、輸入 Location 讓它有未存修改，再按 Export Word：出現提示「Checklist QTS-FHS-CHECKLIST-000001 has unsaved changes…then try again.」，docx 請求 0 次。
+  - 在檢查表按 Cancel → Leave 放棄修改，再按 Export Word（已在頁面內改成必定 404）：送出 1 次請求，console 出現 `ITR Word export failed: AxiosError: Request failed with status code 404`（含堆疊），之後按鈕恢復為 `Export Word`、`disabled=false`。
+  - QTS-NDR1-ITR-000002（Reject／Fail）：把非 GET 請求延遲 5 秒後按 Raise NCR，1 秒內 Export Word 呈 `disabled`（同時 Raise NCR 顯示 Saving…、Re-inspect 停用）。
+  - **未實測**：撤回（`revoking`）。種子資料沒有已核准的 ITR，只讀過程式碼，用的是同一個 `disabled` 條件。NOI／NCR 的 console.error 也只讀碼，和 ITR 是同一種一行寫法。
+  - 旁支：延遲 5 秒後送出的 Raise NCR POST 回 400（後端拒絕建立 NCR；拆除前沒查原因，和匯出無關）。CSRF 測試時的 403、已知種子 `/api/ncr/` 的 500，都不屬本輪。

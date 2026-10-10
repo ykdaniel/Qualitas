@@ -56,3 +56,27 @@ PASS。可以照協調中心規則做本地 commit 並回報 hash；部署要排
 ## NON-BLOCKING NOTES
 1. ITR 在 Revoke（`revoking`）、Raise NCR／Re-inspect（`spawning`）進行中，Word 仍然可以按。這不在範圍內，NCR 也沒有這種防護。
 2. R1 的 #2（ITR 有 `panelDirty` 時仍可匯出）和 #3（catch 沒有用 logger 記錄）仍然沒處理。
+
+---
+
+# R3 REVIEW（2026-10-11）：撤回／產生中停用匯出、未存檢查表擋下匯出、匯出失敗記錄錯誤
+審查者：**獨立 Claude 審查代理**（唯讀，非實作者）。
+
+## VERDICT
+**PASS**
+
+## EVIDENCE_CHECK
+- diff 只動三個檔：ITR +6／−3、NOI +2／−1、NCR +2／−1，和 STATUS R3 一致。
+- 換行：NOIDetailModal.tsx 662 行全是 CRLF（HEAD 661 行，加 1 行），新增的行以 `\r\n` 結尾；ITR、NCR 仍是 LF。
+- 代理重跑：`tsc` exit 0；三個檔的 ESLint 0 error，4 個 warning 都是既有的。`npm test` 與瀏覽器實測以 STATUS 為準。
+
+## FINDINGS
+沒有 high 或 medium 等級的問題。
+- `spawning`（:377）、`revoking`（:385）都宣告在 handler（:681）和提前 return（:696）之前。`setSpawning` 在 Raise NCR／Re-inspect 都由 `finally` 設回 null（:635、:665）。`setRevoking` 不論成功或失敗都會設回 false（:601、:609）。按鈕不會卡在停用狀態。
+- `blockedByUnsavedChecklist`（:527）：檢查表乾淨時回傳 false；有未存修改時只跳 warning 再回傳 true，沒有其他副作用。翻譯鍵 `itr.checklistUnsavedAction` 在 HEAD 已有中英文（:388、:1923）。檢查順序是先做不出聲的忙碌防呆、再跳提示，所以忙碌時連點不會重複跳提示。
+- console.error：`src` 裡沒有 logger 工具。`.eslintrc.json:15` 的 `no-console` 規則允許 warn 和 error，寫法和 AuditWizard.tsx:491 一致。repo 裡沒有 `Authorization` 標頭；三個匯出都是 GET，不會帶 CSRF header，所以錯誤物件裡沒有 token。
+- NCR 只多了錯誤記錄，行為沒變。
+
+## NON-BLOCKING NOTES
+1. 撤回期間停用匯出只讀過程式碼、沒實測。撤回對話框本來就蓋在畫面上，實際影響很小。
+2. repo 已有 44 處 `console.error`，但 AGENTS.md 要求的 logger 工具不存在。建議另開任務：補一個 logger，或修訂 AGENTS.md。

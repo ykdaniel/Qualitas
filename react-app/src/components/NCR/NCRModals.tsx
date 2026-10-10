@@ -220,7 +220,8 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         setExportingDocx(true);
         try {
             await exportNcrDocx(existingItem.id, getValues('ncrNumber') || 'NCR');
-        } catch {
+        } catch (err) {
+            console.error('NCR Word export failed:', err);
             toast.error(t('common.saveFailed') || 'Export failed');
         } finally {
             setExportingDocx(false);
