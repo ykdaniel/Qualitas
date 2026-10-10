@@ -1,8 +1,8 @@
-# AUDIT-ENDPOINT-CLEANUP-2026-001 — STATUS（R1，待獨立審查）
+# AUDIT-ENDPOINT-CLEANUP-2026-001 — STATUS（R1，PASS，已上線）
 
 TASK_ID: AUDIT-ENDPOINT-CLEANUP-2026-001
 ROUND: R1。基準是 HEAD `0798dbb9`。差異見 `evidence/G.patch`（SHA-256 `31616ebe…b632`）。部署候選是 `git archive HEAD` 套上 G.patch，已確認相同。`schemas.py` 只移除 `AuditContractorOption`，不含另一個工作階段的材料改動。
-**未提交、推送或部署。不自填 PASS。**
+審查結果 PASS（見 REVIEW）。2026-10-10 已提交、推送並上線，見文末「上線紀錄」。
 
 ## RESULT
 - [x] DONE（交 R1 獨立審查）
@@ -31,3 +31,15 @@ audit.py、audit_service.py 維持 CRLF。
 
 ## 未做／限制
 - 只有後端變動，部署需要重建後端（sudo）；前端不變。
+
+## 上線紀錄（2026-10-10，依 DECISIONS 的 PASS 後部署授權）
+- 提交與推送：`adf597fb`（程式）、`a200f1fd`（文件），推送到 `ui/sidebar-shell-preview`。`schemas.py` 只用補丁把本輪那一段加入暫存區，另一工作階段的材料改動仍留在工作樹。
+- NAS 工作目錄：`~/deploy-audit-endpoint-cleanup-20261010T024722Z`。
+  - 準備：線上 3 個後端檔 = HEAD `0798dbb9`。資料庫線上備份 integrity ok（`fd3aa04c…`），`backend-old/` 已存（`nas-prep-output.txt`）。
+  - 套用：`APPLIED: live backend source == endpoint-cleanup overlay (3 files)`（`apply-backend-output.txt`）。刪除的測試檔與新測試檔不在線上容器內，不需部署。
+- 後端重建：Claude 在終端機面板代為輸入指令，使用者輸入 sudo 密碼。回退映像：`qualitas-backend:pre-endpoint-cleanup-20261010T024722Z`。
+  - 新容器 `ae4253b13475` 在 2026-10-10 03:34:24Z 啟動（第 159 次啟動紀錄）：啟動時自動備份 `qualitas_20261010_033424.db`、migration 完成、權限同步 72 項、排程啟動，日誌裡沒有 ERROR、Traceback 或 ABORTED（`backend-startup-check.txt`）。三個容器都是 Up。
+- 前端不變：`index.html` 仍是 `93b7672a…`。
+- 對外核對（`post-deploy-http-check.txt`，未登入）：`/` 200；`/api/user/profile`、`/api/contractors/options`、`/api/audit/contractors` 都是 401。
+- 回退：`rollback-backend-code.sh` 加重建，或改用 pre-endpoint-cleanup 映像。沒有資料庫結構變更。
+- 未完成：登入後的唯讀冒煙由使用者執行，看 Audit 頁的承包商清單與統計是否照常顯示即可。
