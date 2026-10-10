@@ -1303,7 +1303,13 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                             )}
                             {existingItem?.id && (formData.inspectionResult === 'Fail' || formData.status === 'Reject') && hasPermission('ncr:create:all') && (
                                 <button className={actionStyles.secondary}
-                                    onClick={handleRaiseNcr}
+                                    // Both spawn actions leave this ITR. Unsaved checklist edits stop them first (the
+                                    // toast asks the user to stay and save); only then is the ITR form's own discard
+                                    // confirmed. Raise NCR used to skip that confirmation and drop the form's edits.
+                                    onClick={() => {
+                                        if (blockedByUnsavedChecklist('itr.checklistUnsavedAction')) return;
+                                        leaveGuard.requestAction(handleRaiseNcr);
+                                    }}
                                     disabled={spawning !== null}
                                     title={t('itr.raiseNcrTitle') || 'Create an NCR pre-filled from this failed ITR'}
                                 >
@@ -1313,7 +1319,10 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                             {existingItem?.id && (formData.inspectionResult === 'Fail' || formData.status === 'Reject') && hasPermission('itr:create:all') && (
                                 <div className="flex flex-col items-start gap-1">
                                     <button className={actionStyles.secondary}
-                                        onClick={() => leaveGuard.requestAction(handleReinspect)}
+                                        onClick={() => {
+                                            if (blockedByUnsavedChecklist('itr.checklistUnsavedAction')) return;
+                                            leaveGuard.requestAction(handleReinspect);
+                                        }}
                                         disabled={spawning !== null || !!reinspectBlockedReason}
                                         title={reinspectBlockedReason || t('itr.reinspectTitle') || 'Create a re-inspection ITR pre-filled from this one'}
                                     >
