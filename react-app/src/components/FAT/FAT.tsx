@@ -5,7 +5,7 @@ import { useCreationProjects } from '../../hooks/useCreationProjects';
 import { CreationProjectField } from '../Shared/CreationProjectField';
 import React, { useState, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
-import { BarChart3, FileCheck, TrendingUp, Search } from 'lucide-react';
+import { BarChart3, FileCheck, TrendingUp, Search, Printer } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
@@ -905,7 +905,7 @@ const FATDetailsViewModal: React.FC<FATDetailsViewModalProps> = ({ fatId: _fatId
               <FormActions
                   tools={<>
                       <button className={actionStyles.secondary} onClick={() => setIsPrinting(true)}>
-                          {t('common.print')}
+                          <Printer size={16} /> {t('common.print')}
                       </button>
                   </>}
                   cancel={<>

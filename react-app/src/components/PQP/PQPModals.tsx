@@ -1,6 +1,7 @@
 import { useDraftGuard } from '../Shared/LeaveGuard';
 import FormActions from '../Shared/FormActions';
 import actionStyles from '../Shared/FormActions.module.css';
+import { Printer } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useLanguage } from '../../context/LanguageContext';
@@ -453,7 +454,7 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
                 <FormActions
                     tools={<>
                         <button className={actionStyles.secondary} type="button" onClick={() => setIsPrinting(true)} disabled={saving} title={t('common.print') || 'Print'}>
-                            {t('common.print') || 'Print'}
+                            <Printer size={16} /> {t('common.print') || 'Print'}
                         </button>
                     </>}
                     secondary={<>
@@ -579,7 +580,7 @@ export const PQPDetailsViewModal: React.FC<PQPDetailsViewModalProps> = ({ pqpId:
             <FormActions
                 tools={<>
                     <button className={actionStyles.secondary} onClick={handlePrint}>
-                        {t('common.print') || 'Print'}
+                        <Printer size={16} /> {t('common.print') || 'Print'}
                     </button>
                 </>}
                 cancel={<>

@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Printer } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
@@ -604,7 +604,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                     tools={<>
                         {existingItem?.id && (
                             <button className={actionStyles.secondary} type="button" onClick={handlePrintClick} disabled={saving} title={t('common.print') || 'Print'}>
-                                {t('common.print') || 'Print'}
+                                <Printer size={16} /> {t('common.print') || 'Print'}
                             </button>
                         )}
                         {existingItem?.id && hasPermission('meeting:create:all') && (

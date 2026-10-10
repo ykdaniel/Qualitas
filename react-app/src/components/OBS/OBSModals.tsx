@@ -1,6 +1,7 @@
 import { useDraftGuard } from '../Shared/LeaveGuard';
 import FormActions from '../Shared/FormActions';
 import actionStyles from '../Shared/FormActions.module.css';
+import { Printer } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -647,7 +648,7 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                 <FormActions
                     tools={<>
                         <button className={actionStyles.secondary} type="button" onClick={handlePrintClick} disabled={saving} title={t('common.print') || 'Print'}>
-                            {t('common.print') || 'Print'}
+                            <Printer size={16} /> {t('common.print') || 'Print'}
                         </button>
                     </>}
                     cancel={<>

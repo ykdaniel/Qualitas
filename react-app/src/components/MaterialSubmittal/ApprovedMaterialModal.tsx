@@ -9,6 +9,7 @@ import ReactDOM from 'react-dom';
 import formStyles from '../Shared/FormShell.module.css';
 import FormActions from '../Shared/FormActions';
 import actionStyles from '../Shared/FormActions.module.css';
+import { Printer } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { getAuthenticatedFileUrl, getEntityFiles, type AttachmentInfo } from '../../services/api';
 import { MATERIAL_ENTITY, PHOTO_CATEGORY, type ApprovedMaterial } from '../../services/materialApi';
@@ -105,7 +106,7 @@ const ApprovedMaterialModal: React.FC<{ item: ApprovedMaterial; canManage: boole
                 </div>
                 <FormActions
                     tools={<button className={actionStyles.secondary} type="button" onClick={() => setPrinting(true)} disabled={photos === null && !error}
-                                   data-testid="approved-print">{t('common.print') || 'Print'}</button>}
+                                   data-testid="approved-print"><Printer size={16} /> {t('common.print') || 'Print'}</button>}
                     cancel={<button className={actionStyles.secondary} type="button" onClick={onClose}>{t('common.close')}</button>}
                     primary={canManage ? <button className={actionStyles.primary} type="button" onClick={onEdit} data-testid="approved-edit">{mt('edit')}</button> : undefined}
                 />

@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { ChecklistSnapshotModal } from './ChecklistSnapshotModal';
 import { useChecklistStore } from '../../store/checklistStore';
-import { ShieldCheck, ClipboardCheck, ArrowRight, AlertCircle, Info } from 'lucide-react';
+import { ShieldCheck, ClipboardCheck, ArrowRight, AlertCircle, Info, Printer, FileText } from 'lucide-react';
 import { getNextRevision } from '../../utils/revision';
 import { useLanguage } from '../../context/LanguageContext';
 import ITRApprovalHistoryModal from './ITRApprovalHistoryModal';
@@ -274,6 +274,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
     // ITR Save/Publish never sent them, so unsaved panel edits were silently lost when the ITR modal
     // closed (2026-10-10). Save/Publish now stop and say which checklist still needs saving.
     const [panelDirty, setPanelDirty] = useState(false);
+    const [exportingDocx, setExportingDocx] = useState(false);
 
     const refreshInstances = useCallback(async () => {
         if (!persistedItrId) { setInstances([]); return; }
@@ -669,6 +670,19 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         // current content. Printing now matches export's always-live behavior.
         await refreshInstances();
         setShowPrintPreview(true);
+    };
+
+    // Word export: show a message when it fails, and block repeat clicks while the file is being built.
+    const handleExportDocx = async () => {
+        if (!existingItem?.id || exportingDocx) return;
+        setExportingDocx(true);
+        try {
+            await exportItrDocx(existingItem.id, formData.itrNumber || 'ITR');
+        } catch {
+            toast.error(t('common.exportFailed') || 'Export failed. Please try again.');
+        } finally {
+            setExportingDocx(false);
+        }
     };
 
     if (showPrintPreview) {
@@ -1269,14 +1283,14 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                     <FormActions
                         tools={<>
                             <button className={actionStyles.secondary} onClick={handlePrint}>
-                                {t('common.print')}
+                                <Printer size={16} /> {t('common.print')}
                             </button>
                             {/* Needs a real saved record id to call the export endpoint — unlike
                                 Print (which only reads already-loaded formData), there is nothing
                                 to export for an unsaved new ITR yet. */}
                             {existingItem?.id && (
-                                <button className={actionStyles.secondary} onClick={() => exportItrDocx(existingItem.id, formData.itrNumber || 'ITR')}>
-                                    {t('itr.exportWord') || 'Export Word'}
+                                <button className={actionStyles.secondary} onClick={handleExportDocx} disabled={exportingDocx}>
+                                    <FileText size={16} /> {exportingDocx ? (t('common.exporting') || 'Exporting...') : (t('itr.exportWord') || 'Export Word')}
                                 </button>
                             )}
                             {existingItem?.id && (formData.inspectionResult === 'Fail' || formData.status === 'Reject') && hasPermission('ncr:create:all') && (
@@ -1580,7 +1594,7 @@ export const ITRPrintPreview: React.FC<ITRPrintPreviewProps> = ({ data: displayD
                     <FormActions
                         tools={<>
                             <button className={actionStyles.secondary} onClick={handlePrint}>
-                                {t('common.print')}
+                                <Printer size={16} /> {t('common.print')}
                             </button>
                         </>}
                         cancel={<>
