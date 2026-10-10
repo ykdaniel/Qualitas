@@ -13,6 +13,7 @@ import { useContractorsStore } from '../../store/contractorsStore';
 import { useProjectStore } from '../../store/projectStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { checkDateOrder } from '../../utils/dateValidation';
+import { exportAuditDocx } from '../../services/api';
 
 // Today as YYYY-MM-DD in the browser's time zone (toISOString() is UTC: the previous day before 08:00 in Taiwan).
 const localToday = () => {
@@ -105,6 +106,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
   const [saveError, setSaveError] = useState('');
   const [isDraftSaving, setIsDraftSaving] = useState(false);
   const [draftMessage, setDraftMessage] = useState('');
+  const [exportingDocx, setExportingDocx] = useState(false);
 
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
@@ -426,6 +428,25 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
       setSaveError(`${t('audit.wizard.saveFailedPrefix')}${err?.message || ''}`);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Word export (AUDIT-EXPORT-DOCX-2026-001): the server builds the report from the SAVED record, so unsaved edits would
+  // silently be missing from the file — ask for a save first instead.
+  const handleExportDocx = async () => {
+    if (!recordId || exportingDocx) return;
+    if (leaveGuard.dirty) {
+      toast.warning(t('audit.wizard.exportSaveFirst'));
+      return;
+    }
+    setExportingDocx(true);
+    try {
+      await exportAuditDocx(recordId, auditNo || 'Audit');
+    } catch (err) {
+      console.error('Word 匯出失敗: ', err);
+      toast.error(t('audit.wizard.exportFailed'));
+    } finally {
+      setExportingDocx(false);
     }
   };
 
@@ -864,6 +885,12 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                     <button className={actionStyles.secondary} type="button" onClick={() => window.print()}>
                       <Printer className="w-4 h-4" /> {t('audit.wizard.printReport')}
                     </button>
+                    {/* Needs a saved record (the export reads it from the server). */}
+                    {recordId && (
+                      <button className={actionStyles.secondary} type="button" onClick={handleExportDocx} disabled={exportingDocx}>
+                        <FileText className="w-4 h-4" /> {exportingDocx ? t('audit.wizard.exporting') : t('common.exportWord')}
+                      </button>
+                    )}
                   </div>
                 </header>
 

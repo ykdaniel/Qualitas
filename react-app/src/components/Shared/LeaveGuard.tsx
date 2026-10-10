@@ -97,8 +97,9 @@ export function useLeaveGuard(dirty: boolean, busy = false) {
 export function useDraftGuard(value: unknown, busy = false, enabled = true) {
     const key = JSON.stringify(value);
     const [baseline, setBaseline] = useState(key);
-    const guard = useLeaveGuard(enabled && key !== baseline, busy);
-    return { ...guard, markSaved: () => setBaseline(key) };
+    const dirty = enabled && key !== baseline;
+    const guard = useLeaveGuard(dirty, busy);
+    return { ...guard, dirty, markSaved: () => setBaseline(key) };
 }
 
 /** Local item panels stay mounted in their parent; reset only when a panel opens. */
