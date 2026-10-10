@@ -77,6 +77,17 @@ ROUND: R4。R1–R3 審查結果都是 REVISE，原文留存於 `AUDIT-PRINT-202
   - 判斷是偶發的計時問題，但第一次執行只保留最後 3 行，沒有失敗訊息，無法證實。
   - **因此還不能部署後端。** 最終部署候選要等 ITR 上線後，以那時正式站的版本（`4bdc49ec`）加上 G.patch 重建，重跑完整的 3.11 並保存完整輸出。如果同一個測試又失敗，就停下來回報，另開一輪處理。
 
+## 最終候選與 3.11（ITR 部署之後）
+- 最終候選：`git archive 4bdc49ec`（ITR 已部署的 commit），套上 G.patch R4（`84d30a5f…06f3`）。
+  - 以乾淨的 `4bdc49ec` 建置時，前端 index 是 `8b0d19c9…`，和正式站相同，所以候選的內容正好是「正式站現況加上本輪改動」。
+  - 在最終候選上：tsc、build、`audit-print-template-check`（PDF，18 項）和 3 支回歸測試全部通過。
+- **最終候選的 Python 3.11：1 failed、2411 passed、16 skipped，pytest_exit=1**（`py311-full-suite-final-4bdc49ec.txt`，完整輸出含 `-rfE`）。
+  - 失敗的是 `test_itr_state_protection_http.py::test_delete_first_then_a_late_approval_gets_not_found_not_a_server_error`：ITR 的並行競態測試，預期 404、實際拿到 400。它和第一次失敗的 ITR 測試不是同一個。本輪沒有改到任何 ITR 程式或測試。
+  - 依規則停下回報，沒有套用。
+  - 協調中心「登入測試」用 3.11 把這支測試檔各跑 20 次：純 `4bdc49ec` 20 次，最終候選 20 次，**每次都是 24 passed**（`hub-flaky-check-base-4bdc49ec-20x.txt`、`hub-flaky-check-cand-final-20x.txt`）。協調中心判定這是既有的、負載下才出現的 flaky，與本輪無關。
+  - **依協調中心轉達，使用者同意部署**，條件是等使用者在正式站完成 IAM 帳號設定後再進行。這是 2026-10-10 協調中心的訊息；我在 Audit 工作階段會再向使用者直接確認一次，才會開始套用。
+- NAS 暫存 `~/deploy-audit-print-20261010T171435Z`：prep 已完成。核對結果：線上 index 是 `8b0d19c9…`，線上 `audit_service.py` 是 `08adcfac…`，資料庫備份 integrity ok，`5da6bdc2…`。尚未套用。
+
 ## 行為變化
 - 三個列印按鈕都改成印正式格式。「列印報告」和 Word 內容相同。
 - 開過任何其他模組後再列印，不會再是空白頁，也不會多出空白的第 1 頁。Audit 的頁面設定不會影響其他模組，其他模組的設定也不會影響 Audit。
@@ -87,3 +98,40 @@ ROUND: R4。R1–R3 審查結果都是 REVISE，原文留存於 `AUDIT-PRINT-202
 - 沒有在 Safari 或 Firefox 實測 `:has()` 和具名頁面。不支援 `:has()` 的舊瀏覽器會把畫面和列印內容一起印出來，但不會是空白頁。
 - `@page` 加 `!important` 是審查實測有效的做法；Chromium 上已用 PDF 驗證，其他瀏覽器沒有驗證。
 - 部署需要重建後端（sudo）並切換前端。
+
+## 上線紀錄（2026-10-10）
+- **授權**：
+  - R4 審查判定 PASS。
+  - 最終候選的 3.11 有 1 個失敗，是 ITR 的不穩定（flaky）測試，協調中心重跑 20×2 次後排除，見「最終候選與 3.11」。
+  - 使用者在協調中心表示「照你的建議，先做 IAM 再部署」，並在 Audit 工作階段直接回覆「好」。
+  - 協調中心「登入測試」排定佇列並放行，時間在使用者完成 IAM 設定之後。
+- **提交**：
+  - 本地提交 `8a57ae85`（程式）、`78394437`（文件），父提交為 `b13b8dff`。
+  - 部署紀錄另作一個提交。
+  - 推送由協調中心處理。
+- **部署基準**：正式站的 ITR 部署（`4bdc49ec`）加上 G.patch R4。以乾淨的 `4bdc49ec` 建置，前端 index 為 `8b0d19c9…`，等於部署前的線上值。
+- **NAS 工作目錄** `~/deploy-audit-print-20261010T171435Z`：
+  - prep 核對：線上 index `8b0d19c9…`、線上 `audit_service.py` `08adcfac…`，與預期相符。
+  - 資料庫線上備份 integrity 為 ok（`5da6bdc2…`）。
+  - 另保存 `backend-old/` 和舊的 index。
+  - 暫存檔逐檔核對通過：後端 1 檔、前端 106 檔（`nas-prep-output.txt`）。
+- **後端**：
+  - 套用前再核對一次：index 是 `8b0d19c9…`，啟動次數 162。
+  - apply-backend 輸出 `APPLIED: live audit_service.py == audit-print overlay`。
+  - 協調中心把重建指令轉給使用者，sudo 重建成功。回退映像為 `qualitas-backend:pre-audit-print-20261010T171435Z`。
+  - 第 163 次啟動於 2026-10-10 18:42:31Z：已自動備份 `qualitas_20261010_184231.db`、migration 完成、權限同步 72 項、scheduler 已啟動，日誌沒有 ERROR、Traceback 或 ABORTED（`backend-startup-check.txt`）。
+  - 線上 `audit_service.py` 現為 `9121011d…`。
+  - 協調中心另外核對：IAM 角色權限數維持不變，停用中的帳號仍為停用。
+- **前端**：
+  - 18:43Z 新增 67 個資產（另有 38 個原本就有），再以原子方式替換 `index.html`。
+  - dist 的 inode 不變，106 個候選檔全部在線上（`apply-frontend-output.txt`）。
+- **對外核對**（`post-deploy-http-check.txt`）：
+  - `/` 與 `/index.html` 回 200，雜湊為 `a9ddbeff…59e2`，等於候選檔。
+  - 主 bundle 回 200；ITR 部署那版的主 bundle 仍是 200。
+  - Audit chunk 的 js 和 css 都回 200，css 含 `audit-print-root` 與 `@page audit`。
+  - 未登入時，`/api/user/profile` 和 `/api/audit/<id>/export-docx` 都回 401（路由存在）。
+- **回退方式**：
+  - 前端：執行 `rollback-frontend.sh`，換回 `8b0d19c9…` 的 index。
+  - 後端：執行 `rollback-backend-code.sh` 後重建，或直接改用 pre-audit-print 映像。
+  - 沒有資料庫結構變更。
+- **未完成**：登入後的唯讀冒煙測試由使用者執行。請到任一筆 Audit，在第 2、3、4 步各按一次列印鈕，確認印出的是正式格式、沒有空白頁，並確認報告和 Word 的內容一致。

@@ -1,0 +1,8 @@
+starts=163 (before 162)
+2026-10-10 18:42:31,710 - main - INFO - 日誌系統已啟動 - 級別: INFO, 目錄: logs
+2026-10-10 18:42:32,068 - main - INFO - Database backed up to /app/backups/qualitas_20261010_184231.db
+2026-10-10 18:42:32,355 - db_migrations - INFO - Migrations completed.
+2026-10-10 18:42:32,503 - db_seeder - INFO - Synced admin role permissions (72 perms).
+2026-10-10 18:42:33,096 - scheduler - INFO - [Scheduler] Starting scheduler loop...
+errors: 0
+audit_service: 9121011db169b1fe

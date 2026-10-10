@@ -1,0 +1,176 @@
+# run(UTC) start: 2026-10-10T16:51:16Z  repo layout /q/backend + /q/react-app; FINAL candidate = git archive 4bdc49ec (ITR deploy commit) + G.patch R4 (sha 84d30a5f…06f3)
+# backend files: audit_service.py 9121011db169b1fe, test_audit_export_docx_http.py 90122160b2d04423
+# image: sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce arm64
+# full pytest output kept below (-rfE: failure details), not only the tail
+Python 3.11.17
+pip_exit=0
+........................................................................ [  2%]
+........................................................................ [  5%]
+........................................................................ [  8%]
+........................................................................ [ 11%]
+........................................................................ [ 14%]
+........................................................................ [ 17%]
+........................................................................ [ 20%]
+........................................................................ [ 23%]
+........................................................................ [ 26%]
+........................................................................ [ 29%]
+........................................................................ [ 32%]
+........................................................................ [ 35%]
+........................................................................ [ 38%]
+........................................................................ [ 41%]
+........................................................................ [ 44%]
+........................................................................ [ 47%]
+........................................................................ [ 50%]
+........................................................................ [ 53%]
+............................ss.......................................... [ 56%]
+........................................................................ [ 59%]
+........................................................................ [ 62%]
+.......................................................................F [ 65%]
+...................................................s.ss...s......sssssss [ 68%]
+ss...................................................................... [ 71%]
+........................................................................ [ 74%]
+........................................................................ [ 77%]
+........................................................................ [ 80%]
+........................................................................ [ 83%]
+........................................................................ [ 85%]
+........................................................................ [ 88%]
+........................................................................ [ 91%]
+........................................................................ [ 94%]
+..................................................s..................... [ 97%]
+....................................................                     [100%]
+=================================== FAILURES ===================================
+___ test_delete_first_then_a_late_approval_gets_not_found_not_a_server_error ___
+
+race = (<test_itr_revoke_approval_acceptance.Env object at 0xf05cda1fb790>, Engine(sqlite:////tmp/pytest-of-root/pytest-0/test_delete_first_then_a_late_1/race.db))
+
+    def test_delete_first_then_a_late_approval_gets_not_found_not_a_server_error(race):
+        env, engine = race
+        itr_id = _mk_itr(env)                                                                # no checklists: a delete is allowed
+        approver, full = env.login("acc_approver"), env.login("acc_full")
+        window = _Window(engine, "delete from checklist")
+        try:
+            out = _run_pair(lambda: full.delete(f"/api/itr/{itr_id}").status_code,
+                            lambda: approver.put(f"/api/itr/{itr_id}", json={"status": "Approved"}).status_code)
+        finally:
+            window.close()
+        assert window.fired
+>       assert out["first"] == 200 and out["second"] == 404
+E       assert (200 == 200 and 400 == 404)
+
+tests/test_itr_state_protection_http.py:358: AssertionError
+------------------------------ Captured log call -------------------------------
+ERROR    core.security:security.py:78 Blacklist lookup failed; defaulting to NOT blacklisted
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1946, in _exec_single_context
+    self.dialect.do_execute(
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 1192, in do_execute
+    cursor.execute(statement, parameters)
+sqlite3.OperationalError: no such table: token_blacklist
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/q/backend/core/security.py", line 76, in is_token_blacklisted
+    return db.query(models.TokenBlacklist).filter_by(token_hash=digest).first() is not None
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/query.py", line 2823, in first
+    return self.limit(1)._iter().first()  # type: ignore[return-value]
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/query.py", line 2921, in _iter
+    result: Union[ScalarResult[_T], Result[_T]] = self.session.execute(
+                                                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 2473, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 2363, in _execute_internal
+    compile_state_cls.orm_execute_statement(
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/context.py", line 316, in orm_execute_statement
+    result = conn.execute(
+             ^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1451, in execute
+    return meth(
+           ^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/sql/elements.py", line 533, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1671, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1825, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1965, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 2335, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1946, in _exec_single_context
+    self.dialect.do_execute(
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 1192, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such table: token_blacklist
+[SQL: SELECT token_blacklist.token_hash AS token_blacklist_token_hash, token_blacklist.expires_at AS token_blacklist_expires_at 
+FROM token_blacklist 
+WHERE token_blacklist.token_hash = ?
+ LIMIT ? OFFSET ?]
+[parameters: ('80a9db59bd073096492e766561a3ea26a928f2b689838f9332bf16abeb326183', 1, 0)]
+(Background on this error at: https://sqlalche.me/e/21/e3q8)
+ERROR    core.security:security.py:78 Blacklist lookup failed; defaulting to NOT blacklisted
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1946, in _exec_single_context
+    self.dialect.do_execute(
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 1192, in do_execute
+    cursor.execute(statement, parameters)
+sqlite3.OperationalError: no such table: token_blacklist
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/q/backend/core/security.py", line 76, in is_token_blacklisted
+    return db.query(models.TokenBlacklist).filter_by(token_hash=digest).first() is not None
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/query.py", line 2823, in first
+    return self.limit(1)._iter().first()  # type: ignore[return-value]
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/query.py", line 2921, in _iter
+    result: Union[ScalarResult[_T], Result[_T]] = self.session.execute(
+                                                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 2473, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 2363, in _execute_internal
+    compile_state_cls.orm_execute_statement(
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/context.py", line 316, in orm_execute_statement
+    result = conn.execute(
+             ^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1451, in execute
+    return meth(
+           ^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/sql/elements.py", line 533, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1671, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1825, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1965, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 2335, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1946, in _exec_single_context
+    self.dialect.do_execute(
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 1192, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such table: token_blacklist
+[SQL: SELECT token_blacklist.token_hash AS token_blacklist_token_hash, token_blacklist.expires_at AS token_blacklist_expires_at 
+FROM token_blacklist 
+WHERE token_blacklist.token_hash = ?
+ LIMIT ? OFFSET ?]
+[parameters: ('f4ddbc87c83e8dbf4d06e13a96e91d6a8950030623ec57f5a94b93b6960b69c9', 1, 0)]
+(Background on this error at: https://sqlalche.me/e/21/e3q8)
+=========================== short test summary info ============================
+FAILED tests/test_itr_state_protection_http.py::test_delete_first_then_a_late_approval_gets_not_found_not_a_server_error
+1 failed, 2411 passed, 16 skipped in 3199.71s (0:53:19)
+pytest_exit=1
+# end: 2026-10-10T17:44:58Z
