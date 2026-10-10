@@ -777,6 +777,7 @@ class Audit(Base):
     audit_criteria = Column(String, nullable=True)
     selected_templates = Column(String, nullable=True)
     custom_check_items = Column(String, nullable=True)
+    agenda = Column(Text, nullable=True)  # JSON list of daily schedule rows (AUDIT-AGENDA-2026-001)
     vendor_id = Column(String, ForeignKey("contractors.id", ondelete="SET NULL"), nullable=True, index=True)
     contractor = Column(String, nullable=True)  # NOTE: 保留純文字欄位以相容舊資料
 

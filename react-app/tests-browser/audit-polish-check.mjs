@@ -86,7 +86,7 @@ const closeWizard = async p => { await p.locator('.fixed button:has(svg.lucide-x
 {
   const p = await login('audit_full');
   await openAudit(p, 'AHB-DRAFT-1');
-  await p.locator('button', { hasText: /^4$/ }).first().click();  // last step (Execution & Review)
+  await p.locator('button', { hasText: /^5$/ }).first().click();  // last step (Execution & Review; 5 steps since AUDIT-AGENDA)
   await p.fill('input[placeholder*="Search items"], input[placeholder*="搜尋"]', 'print-item-07');
   await p.waitForTimeout(400);
   const rows = await p.locator('tbody tr', { hasText: 'PRINT-ITEM-07' }).count();

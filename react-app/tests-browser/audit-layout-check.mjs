@@ -38,15 +38,26 @@ for (const [label, width, cols] of [['desktop 1440', 1440, 3], ['laptop 1024', 1
     fit.labels.length ? JSON.stringify(fit.labels) : 'labels hidden at this width (numbers only)');
   await p.screenshot({ path: `${out}/step1-${width}.png`, fullPage: true });
   const steps = await p.evaluate(() => [...document.querySelectorAll('button')].filter(b => /^[0-9]$/.test(b.innerText.trim())).map(b => b.innerText.trim()));
-  if (width === 1440) check('progress bar has 4 steps', JSON.stringify(steps) === '["1","2","3","4"]', JSON.stringify(steps));
+  if (width === 1440) check('progress bar has 5 steps (Agenda added, AUDIT-AGENDA-2026-001)', JSON.stringify(steps) === '["1","2","3","4","5"]', JSON.stringify(steps));
   await p.locator('button', { hasText: /^2$/ }).first().click(); await p.waitForTimeout(400);
   const step2 = await p.evaluate(() => ({
     personnel: ['projectDirector', 'techLead', 'leadAuditor', 'supportAuditors'].every(n => document.querySelector(`input[name=${n}]`)),
     scope: !!document.querySelector('input[name=location]') && !!document.querySelector('input[name=auditCriteria]') && !!document.querySelector('textarea[name=scopeDescription]'),
     printPlan: [...document.querySelectorAll('button')].some(b => /Print Audit Plan/.test(b.innerText)),
   }));
-  check(`${label}: step 2 holds personnel + scope fields and the print-plan button`, step2.personnel && step2.scope && step2.printPlan, JSON.stringify(step2));
+  // "Print Audit Plan" moved to the Agenda step (AUDIT-AGENDA-2026-001)
+  check(`${label}: step 2 holds personnel + scope fields (print-plan button now on the Agenda step)`, step2.personnel && step2.scope && !step2.printPlan, JSON.stringify(step2));
   await p.screenshot({ path: `${out}/step2-${width}.png`, fullPage: true });
+  await p.locator('button', { hasText: /^3$/ }).first().click(); await p.waitForTimeout(400);
+  const step3 = await p.evaluate(() => {
+    const overlay = document.querySelector('[data-agenda-table]').closest('.fixed');
+    return { printPlan: [...document.querySelectorAll('button')].some(b => /Print Audit Plan/.test(b.innerText)),
+             table: !!document.querySelector('[data-agenda-table]'),
+             // the agenda table may scroll inside its own box on narrow screens; the wizard itself must not overflow
+             overlayOverflow: overlay.scrollWidth - overlay.clientWidth, pageOverflow: document.documentElement.scrollWidth - window.innerWidth };
+  });
+  check(`${label}: Agenda step has the table and the print-plan button, no wizard/page overflow`, step3.printPlan && step3.table && step3.overlayOverflow <= 0 && step3.pageOverflow <= 0, JSON.stringify(step3));
+  await p.screenshot({ path: `${out}/step3-${width}.png`, fullPage: true });
   await ctx.close();
 }
 await browser.close();

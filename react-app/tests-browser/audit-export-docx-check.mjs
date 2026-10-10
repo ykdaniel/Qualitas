@@ -25,7 +25,8 @@ const openAudit = async (p, no) => {
   await p.locator('table tbody tr', { hasText: no }).first().locator('td').nth(2).click();
   await p.waitForSelector('input[name=auditDocNo]', { timeout: 10000 });
 };
-const toStep4 = async p => { await p.locator('.max-w-4xl button').nth(3).click(); await p.waitForTimeout(500); };
+// the last step (Execution & Review): step 5 since the Agenda step was added (AUDIT-AGENDA-2026-001)
+const toStep4 = async p => { await p.locator('.max-w-4xl button').nth(4).click(); await p.waitForTimeout(500); };
 const exportButton = p => p.locator('button', { hasText: EXPORT });
 const download = async (p, name) => {
   const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 10000 }), exportButton(p).click()]);

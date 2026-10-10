@@ -83,7 +83,7 @@ const saveDraft = async p => { await p.locator('button', { hasText: 'Save Draft'
   // set the status while still on step 1 (on the last step the earlier steps show a check icon instead of their number)
   await p.locator('select[name=status]').selectOption('Planned');
   // Enter in the last step's search must not save/close
-  await p.locator('button', { hasText: /^4$/ }).first().click();  // last step
+  await p.locator('button', { hasText: /^5$/ }).first().click();  // last step (5 steps since AUDIT-AGENDA)
   const search = p.locator('input[placeholder*="Search items"]');
   const writes = [];
   const onReq = r => { if (r.method() !== 'GET' && r.url().includes('/api/audit')) writes.push(`${r.method()} ${r.url()}`); };

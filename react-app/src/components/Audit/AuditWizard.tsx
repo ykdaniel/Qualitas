@@ -7,15 +7,16 @@ import { toast } from 'sonner';
 import {
   MapPin, ClipboardList, CheckCircle, ChevronRight, ChevronLeft,
   Save, FileText, Users, CheckSquare, Plus, Trash2, Edit2, Check, X,
-  AlertCircle, Search, ShieldCheck, Printer
+  AlertCircle, Search, ShieldCheck, Printer, CalendarDays
 } from 'lucide-react';
-import { useAuditStore, AuditItem } from '../../store/auditStore';
+import { useAuditStore, AuditItem, AuditAgendaEntry } from '../../store/auditStore';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useProjectStore } from '../../store/projectStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { checkDateOrder } from '../../utils/dateValidation';
 import { exportAuditDocx } from '../../services/api';
 import AuditPrintTemplate, { AuditPrintKind, AuditPrintData, auditProgress } from './AuditPrintTemplate';
+import AuditAgendaEditor, { agendaRowTimeInvalid, isBlankAgendaRow, sortAgenda } from './AuditAgendaEditor';
 import './Audit.print.css';
 
 // Today as YYYY-MM-DD in the browser's time zone (toISOString() is UTC: the previous day before 08:00 in Taiwan).
@@ -30,8 +31,9 @@ const localToday = () => {
 const isPlainEnter = (e: React.KeyboardEvent) => e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229;
 
 // Wizard steps (label keys). Personnel and Scope & Location share one step (AUDIT-LAYOUT-2026-001): both are plan data,
-// a handful of fields each, and "Print Audit Plan" prints them together with step 1 anyway.
-const WIZARD_STEPS = ['audit.wizard.step1', 'audit.wizard.stepPersonnelScope', 'audit.wizard.step4', 'audit.wizard.step5'];
+// a handful of fields each.
+// The Agenda (daily schedule, AUDIT-AGENDA-2026-001) sits between them and the checklist and carries "Print Audit Plan".
+const WIZARD_STEPS = ['audit.wizard.step1', 'audit.wizard.stepPersonnelScope', 'audit.wizard.stepAgenda', 'audit.wizard.step4', 'audit.wizard.step5'];
 const LAST_STEP = WIZARD_STEPS.length;
 
 const ALL_CATEGORY = '__ALL__';
@@ -110,6 +112,8 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
   const [isDraftSaving, setIsDraftSaving] = useState(false);
   const [draftMessage, setDraftMessage] = useState('');
   const [exportingDocx, setExportingDocx] = useState(false);
+  // The form a Save Draft re-ordered the agenda into (see handleSaveDraft); null when there is nothing to confirm.
+  const [agendaResyncTarget, setAgendaResyncTarget] = useState<typeof formData | null>(null);
   // The three print buttons render a formal printout (AuditPrintTemplate) into <body> and print that, instead of the
   // wizard itself (AUDIT-PRINT-2026-001); cleared again after the print dialog closes. `n` makes every click a new job, so
   // a button still works if a browser never fired afterprint for the previous one.
@@ -142,6 +146,11 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     scopeDescription: existingItem?.scope_description || '',
     selectedTemplates: existingItem?.selected_templates || [],
     customCheckItems: existingItem?.custom_check_items || [],
+    // only object rows (a hand-edited database value must not crash the wizard), each with its own id for the editor
+    agenda: (Array.isArray(existingItem?.agenda) ? existingItem.agenda : [])
+      .filter((row): row is AuditAgendaEntry => !!row && typeof row === 'object' && !Array.isArray(row))
+      .map((row, i, rows) => (row.id === null || row.id === undefined || rows.findIndex(r => r.id === row.id) !== i
+        ? { ...row, id: `loaded-${i}` } : row)),
     contractor: existingItem?.contractor || '',
     vendorId: existingItem?.vendor_id || '',
     status: existingItem?.status || 'Draft',
@@ -192,6 +201,13 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
   const [editFormData, setEditFormData] = useState({ no: '', clause: '', task: '' });
   const [isCustomEdit, setIsCustomEdit] = useState(false);
   const leaveGuard = useDraftGuard(formData, isSaving || isDraftSaving, !readOnly);
+  // After a Save Draft re-ordered the agenda on screen (handleSaveDraft), that re-ordered form is the saved state — but
+  // only if it is still the form on screen: an edit made while the save was in flight kept the old form (and is unsaved).
+  React.useEffect(() => {
+    if (!agendaResyncTarget) return;
+    if (formData === agendaResyncTarget) leaveGuard.markSaved();
+    setAgendaResyncTarget(null);
+  }, [agendaResyncTarget, formData, leaveGuard]);
   useDraftGuard(newItem, false, !readOnly);
   useItemDraftGuard(editingItemId !== null ? editFormData : null);
   const requestClose = () => leaveGuard.requestClose(onClose, true);
@@ -362,6 +378,8 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
       scope_description: formData.scopeDescription || '',
       selected_templates: formData.selectedTemplates,
       custom_check_items: formData.customCheckItems,
+      // blank rows dropped, in time order — the order the backend stores (and checks a Closed resave against)
+      agenda: sortAgenda(formData.agenda.filter(row => !isBlankAgendaRow(row))),
       contractor: formData.contractor || '',
       vendor_id: formData.vendorId || undefined,
       status: status,
@@ -377,6 +395,10 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
   // was just typed in the inline edit row.
   const hasUnconfirmedNewItem = () => newItem.no.trim() || newItem.clause.trim() || newItem.task.trim();
   const blockSaveForUnconfirmedNewItem = () => {
+    if (formData.agenda.some(agendaRowTimeInvalid)) {
+      toast.error(t('audit.agenda.timeOrder'));
+      return true;
+    }
     if (editingItemId !== null) {
       toast.error(t('audit.wizard.unconfirmedEditItem'));
       return true;
@@ -392,6 +414,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     setIsDraftSaving(true);
     setSaveError('');
     setDraftMessage('');
+    const formAtSave = formData;
 
     try {
       const updates = prepareAuditData(formData.status);
@@ -406,6 +429,13 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
       }
 
       leaveGuard.markSaved();
+      // Show the agenda as it was saved (time order, blank rows dropped) — only when nothing was edited meanwhile, and
+      // then take that re-ordered form as the saved state once it has rendered.
+      if (updates.agenda && JSON.stringify(updates.agenda) !== JSON.stringify(formAtSave.agenda)) {
+        const resynced = { ...formAtSave, agenda: updates.agenda as AuditAgendaEntry[] };
+        setFormData(prev => (prev === formAtSave ? resynced : prev));
+        setAgendaResyncTarget(resynced);
+      }
       const time = new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       setDraftMessage(`${t('audit.wizard.draftSaved')} ${time}`);
       setTimeout(() => setDraftMessage(''), 4000);
@@ -488,6 +518,8 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     scopeDescription: formData.scopeDescription,
     selectedTemplates: formData.selectedTemplates,
     customCheckItems: formData.customCheckItems,
+    // what will be saved: blank rows dropped, in time order
+    agenda: sortAgenda(formData.agenda.filter(row => !isBlankAgendaRow(row))),
     findings: formData.findings,
   };
 
@@ -647,14 +679,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
             {/* Step 2: Personnel + Scope & Location (merged, AUDIT-LAYOUT-2026-001) */}
             {step === 2 && (
               <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-                  <div className="flex items-center gap-3">
-                    <Users className="text-teal-600" size={24} />
-                    <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.stepPersonnelScope')}</h2>
-                  </div>
-                  <button className={actionStyles.secondary} type="button" onClick={() => requestPrint('plan')}>
-                    <Printer className="w-4 h-4" /> {t('audit.wizard.printPlan')}
-                  </button>
+                <div className="flex items-center gap-3 border-b border-slate-100 pb-3 mb-4">
+                  <Users className="text-teal-600" size={24} />
+                  <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.stepPersonnelScope')}</h2>
                 </div>
 
                 <h3 className="flex items-center gap-2 text-sm font-bold text-slate-500 uppercase tracking-wide no-print">
@@ -778,8 +805,31 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
               </div>
             )}
 
-            {/* Step 3: Checklist Configuration */}
+            {/* Step 3: Agenda — the daily schedule (AUDIT-AGENDA-2026-001); "Print Audit Plan" lives here (plan = steps 1-3) */}
             {step === 3 && (
+              <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                  <div className="flex items-center gap-3">
+                    <CalendarDays className="text-teal-600" size={24} />
+                    <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.stepAgenda')}</h2>
+                  </div>
+                  <button className={actionStyles.secondary} type="button" onClick={() => requestPrint('plan')}>
+                    <Printer className="w-4 h-4" /> {t('audit.wizard.printPlan')}
+                  </button>
+                </div>
+                <AuditAgendaEditor
+                  rows={formData.agenda}
+                  onChange={agenda => setFormData(prev => ({ ...prev, agenda }))}
+                  readOnly={readOnly}
+                  startDate={formData.auditStartDate}
+                  endDate={formData.auditEndDate}
+                  defaultAuditor={formData.leadAuditor}
+                />
+              </div>
+            )}
+
+            {/* Step 4: Checklist Configuration */}
+            {step === 4 && (
               <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
                   <div className="flex items-center gap-3">
@@ -910,8 +960,8 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
               </div>
             )}
 
-            {/* Step 4: Execution & Evaluation */}
-            {step === 4 && (
+            {/* Step 5: Execution & Evaluation */}
+            {step === 5 && (
               <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 bg-slate-50 min-h-[500px]">
                 
                 {/* Header Section */}

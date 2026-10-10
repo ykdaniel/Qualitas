@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
-_JSON_FIELDS = ("selected_templates", "custom_check_items")
+_JSON_FIELDS = ("selected_templates", "custom_check_items", "agenda")
 
 # A new Audit may start in any status that still has a way forward. Closed / Void are dead ends ("Closed": [] / "Void": [])
 # and an unknown status has no transitions at all, so a record created in one of them could never be edited or deleted.
@@ -39,6 +39,8 @@ _STATUS_TEXT = {
 _RESULT_TEXT = {'pass': '符合 Pass', 'fail': '不符合 Fail', 'pending': '注意／待改善 Attention'}
 # Checklist detail table: #, clause no., clause & question, result, remarks, updated — 17.4 cm = A4 minus the margins.
 _ITEM_COLUMN_WIDTHS_CM = (0.9, 1.7, 6.2, 2.3, 4.3, 2.0)
+# Agenda table (AUDIT-AGENDA-2026-001): date, time, audit item / process, auditee, auditor, remarks — also 17.4 cm.
+_AGENDA_COLUMN_WIDTHS_CM = (2.2, 2.4, 5.0, 3.2, 2.2, 2.4)
 # Characters an XML 1.0 document cannot contain (python-docx raises ValueError on them).
 _XML_UNSAFE = re.compile('[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]')
 
@@ -205,6 +207,10 @@ class AuditService:
             return None
 
         update_data = audit.model_dump(exclude_unset=True)
+        # exclude_unset also drops the defaults inside each agenda row (a row sent without `remarks` would lose the key),
+        # so the rows are dumped in full — the same shape create stores, which the Closed / Void lock compares against.
+        if "agenda" in update_data and audit.agenda is not None:
+            update_data["agenda"] = [entry.model_dump() for entry in audit.agenda]
         # auditNo is assigned once at create and never changes: FollowUps link to an audit by it, and a blank or
         # duplicate value used to be written straight through (the wizard resent '' on its second save).
         update_data.pop("auditNo", None)
@@ -353,8 +359,9 @@ class AuditService:
     def export_docx(self, audit_id: str, scope=None):
         """
         Formal .docx report for one Audit (AUDIT-EXPORT-DOCX-2026-001): the whole audit in one file — plan (information,
-        team, scope & criteria), checklist results, findings, sign-off — in the NCR report layout, built with the shared
-        core/docx_builder.py primitives.
+        team, scope & criteria, agenda — AUDIT-AGENDA-2026-001), checklist results, findings, sign-off — in the NCR report
+        layout, built with the shared core/docx_builder.py primitives. The wizard's report printout (AuditPrintTemplate)
+        carries the same sections; keep the two in step.
 
         Returns a StreamingResponse, or None when the audit does not exist or is outside the caller's scope (→ 404).
         """
@@ -398,6 +405,7 @@ class AuditService:
         contractor = audit.contractor or (audit.vendor_ref.name if audit.vendor_ref else None)
         templates = [t for t in json_list(audit.selected_templates) if isinstance(t, str) and t.strip()]
         items = [i for i in json_list(audit.custom_check_items) if isinstance(i, dict)]
+        agenda = [a for a in json_list(audit.agenda) if isinstance(a, dict)]
 
         # Same counting as the wizard's statistics cards: anything that is not pass / fail (incl. no status) is pending.
         total = len(items)
@@ -440,14 +448,37 @@ class AuditService:
         db.add_subsection_heading(doc, "3.1 範圍描述", "Audit Scope")
         db.add_field_box(doc, txt(audit.scope_description), guide="說明本次稽核涵蓋之部門、流程、作業與地點")
 
-        # 4. Checklist results
-        db.add_section_heading(doc, "4", "查檢結果", "Checklist Results")
+        # 4. Agenda (stored already sorted by date / start time on every write)
+        db.add_section_heading(doc, "4", "稽核行程", "Agenda")
+        if agenda:
+            rows = []
+            for entry in agenda:
+                start, end = txt(entry.get('start')), txt(entry.get('end'))
+                rows.append([
+                    txt(entry.get('date')) or db.DASH,
+                    f"{start}–{end}" if start and end else (start or end or db.DASH),
+                    txt(entry.get('item')) or db.DASH,
+                    txt(entry.get('auditee')) or db.DASH,
+                    txt(entry.get('auditor')) or db.DASH,
+                    txt(entry.get('remarks')) or db.DASH,
+                ])
+            table = db.add_data_table(doc, ["日期\nDate", "時間\nTime", "稽核項目／流程\nAudit Item / Process",
+                                            "受稽核對象\nAuditee", "稽核員\nAuditor", "備註\nRemarks"], rows)
+            table.autofit = False
+            for row in table.rows:
+                for cell, width in zip(row.cells, _AGENDA_COLUMN_WIDTHS_CM):
+                    cell.width = Cm(width)
+        else:
+            db.add_paragraph(doc, "（尚無行程 No agenda）", size=9, italic=True)
+
+        # 5. Checklist results
+        db.add_section_heading(doc, "5", "查檢結果", "Checklist Results")
         db.add_field_grid(doc, [
             [("查檢項目數", "Total Items", str(total)), ("完成率", "Progress", f"{progress}%")],
             [("符合", "Pass", str(passed)), ("不符合", "Fail", str(failed))],
             [("注意／待改善", "Attention / Pending", str(pending))],
         ])
-        db.add_subsection_heading(doc, "4.1 查檢明細", "Audit Items")
+        db.add_subsection_heading(doc, "5.1 查檢明細", "Audit Items")
         if items:
             rows = []
             for n, item in enumerate(items, start=1):
@@ -470,16 +501,16 @@ class AuditService:
         else:
             db.add_paragraph(doc, "（尚無查檢項目 No audit items）", size=9, italic=True)
 
-        # 5. Findings & summary
-        db.add_section_heading(doc, "5", "稽核發現與總結", "Findings & Summary")
+        # 6. Findings & summary
+        db.add_section_heading(doc, "6", "稽核發現與總結", "Findings & Summary")
         db.add_field_box(doc, txt(audit.findings), guide="記錄稽核發現、不符合事項與總結", tall=True)
 
-        # 6. Sign-off
-        db.add_section_heading(doc, "6", "簽核", "Sign-off")
+        # 7. Sign-off
+        db.add_section_heading(doc, "7", "簽核", "Sign-off")
         db.add_sign_off_grid(doc, [
-            {"num": "6.1", "zh": "主任稽核員", "en": "Lead Auditor", "name": txt(audit.auditor)},
-            {"num": "6.2", "zh": "受稽核方代表", "en": "Auditee Representative"},
-            {"num": "6.3", "zh": "專案經理", "en": "Project Director", "name": txt(audit.project_director)},
+            {"num": "7.1", "zh": "主任稽核員", "en": "Lead Auditor", "name": txt(audit.auditor)},
+            {"num": "7.2", "zh": "受稽核方代表", "en": "Auditee Representative"},
+            {"num": "7.3", "zh": "專案經理", "en": "Project Director", "name": txt(audit.project_director)},
         ])
 
         return db.finalize_response(doc, txt(audit.auditNo) or "Audit")

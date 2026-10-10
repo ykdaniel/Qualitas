@@ -6,9 +6,9 @@ import { val, SignCell, DASH } from '../Shared/PrintPrimitives';
  * it while #root is hidden (printing the wizard itself came out blank once another module's print CSS had been loaded,
  * since those hide #root unconditionally). Styling lives in Audit.print.css, scoped under .audit-print-root.
  *
- * - report:    the same six sections, labels and values as the Word export (backend audit_service.export_docx) —
- *              keep the two in step.
- * - plan:      sections 1-3 of the report plus a plan sign-off.
+ * - report:    the same seven sections, labels and values as the Word export (backend audit_service.export_docx) —
+ *              keep the two in step. Section 4 is the agenda (AUDIT-AGENDA-2026-001).
+ * - plan:      sections 1-4 of the report (information, team, scope & criteria, agenda) plus a plan sign-off.
  * - checklist: audit identity plus the items with blank result / remarks columns, for use on site.
  *
  * Prints what is on screen (the wizard's current form), unlike the Word export, which reads the saved record; unsaved
@@ -33,6 +33,7 @@ export interface AuditPrintData {
     scopeDescription: string;
     selectedTemplates: unknown[];
     customCheckItems: unknown[];
+    agenda: unknown[];
     findings: string;
 }
 
@@ -59,6 +60,8 @@ const RESULT_TEXT: Record<string, string> = { pass: '符合 Pass', fail: '不符
 export const auditProgress = (total: number, pending: number) =>
     total === 0 ? 0 : Math.floor((200 * (total - pending) + total) / (2 * total));
 
+type AgendaRow = { date?: unknown; start?: unknown; end?: unknown; item?: unknown; auditee?: unknown; auditor?: unknown; remarks?: unknown };
+
 type CheckItem = { no?: unknown; clause?: unknown; task?: unknown; status?: unknown; note?: unknown; updatedAt?: unknown };
 
 // Whitespace-only counts as empty, as in the Word export.
@@ -70,6 +73,7 @@ const clean = (v: unknown): string | undefined => {
 
 const AuditPrintTemplate: React.FC<AuditPrintTemplateProps> = ({ kind, data, unsaved = false }) => {
     const items = data.customCheckItems.filter((i): i is CheckItem => !!i && typeof i === 'object' && !Array.isArray(i));
+    const agenda = data.agenda.filter((a): a is AgendaRow => !!a && typeof a === 'object' && !Array.isArray(a));
     const templates = data.selectedTemplates.filter((t): t is string => typeof t === 'string' && !!t.trim());
     // Same counting as the wizard's statistics cards and the Word export: anything not pass / fail is pending.
     const total = items.length;
@@ -147,6 +151,42 @@ const AuditPrintTemplate: React.FC<AuditPrintTemplateProps> = ({ kind, data, uns
             </table>
             <div className="sec-head sec-head-sub">3.1 範圍描述 <span className="en">Audit Scope</span></div>
             <div className="field-box">{clean(data.scopeDescription) || <span className="guide">說明本次稽核涵蓋之部門、流程、作業與地點</span>}</div>
+        </>
+    );
+
+    // 4. Agenda — same columns and wording as the Word export; rows are already in time order
+    const agendaSection = (
+        <>
+            <div className="sec-head">4. 稽核行程 <span className="en">Agenda</span></div>
+            {agenda.length > 0 ? (
+                <table className="items agenda-items">
+                    <thead>
+                        <tr>
+                            <th className="a-date">日期<small>Date</small></th><th className="a-time">時間<small>Time</small></th>
+                            <th className="a-item">稽核項目／流程<small>Audit Item / Process</small></th>
+                            <th className="a-who">受稽核對象<small>Auditee</small></th><th className="a-aud">稽核員<small>Auditor</small></th>
+                            <th className="a-rem">備註<small>Remarks</small></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {agenda.map((row, n) => {
+                            const start = clean(row.start), end = clean(row.end);
+                            return (
+                                <tr key={n}>
+                                    <td className="a-date">{clean(row.date) || DASH}</td>
+                                    <td className="a-time">{start && end ? `${start}–${end}` : (start || end || DASH)}</td>
+                                    <td className="a-item">{clean(row.item) || DASH}</td>
+                                    <td className="a-who">{clean(row.auditee) || DASH}</td>
+                                    <td className="a-aud">{clean(row.auditor) || DASH}</td>
+                                    <td className="a-rem">{clean(row.remarks) || DASH}</td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            ) : (
+                <div className="field-box"><span className="guide">（尚無行程 No agenda）</span></div>
+            )}
         </>
     );
 
@@ -232,9 +272,10 @@ const AuditPrintTemplate: React.FC<AuditPrintTemplateProps> = ({ kind, data, uns
                                     {infoSection}
                                     {teamSection}
                                     {scopeSection}
+                                    {agendaSection}
                                     {kind === 'report' ? (
                                         <>
-                                            <div className="sec-head">4. 查檢結果 <span className="en">Checklist Results</span></div>
+                                            <div className="sec-head">5. 查檢結果 <span className="en">Checklist Results</span></div>
                                             <table>
                                                 <tbody>
                                                     <tr>
@@ -250,7 +291,7 @@ const AuditPrintTemplate: React.FC<AuditPrintTemplateProps> = ({ kind, data, uns
                                                     </tr>
                                                 </tbody>
                                             </table>
-                                            <div className="sec-head sec-head-sub">4.1 查檢明細 <span className="en">Audit Items</span></div>
+                                            <div className="sec-head sec-head-sub">5.1 查檢明細 <span className="en">Audit Items</span></div>
                                             {items.length > 0 ? (
                                                 <table className="items">
                                                     <thead>
@@ -277,21 +318,21 @@ const AuditPrintTemplate: React.FC<AuditPrintTemplateProps> = ({ kind, data, uns
                                             ) : (
                                                 <div className="field-box"><span className="guide">（尚無查檢項目 No audit items）</span></div>
                                             )}
-                                            <div className="sec-head">5. 稽核發現與總結 <span className="en">Findings &amp; Summary</span></div>
+                                            <div className="sec-head">6. 稽核發現與總結 <span className="en">Findings &amp; Summary</span></div>
                                             <div className="field-box fb-tall">{clean(data.findings) || <span className="guide">記錄稽核發現、不符合事項與總結</span>}</div>
-                                            <div className="sec-head">6. 簽核 <span className="en">Sign-off</span></div>
+                                            <div className="sec-head">7. 簽核 <span className="en">Sign-off</span></div>
                                             <div className="sign-grid three">
-                                                <SignCell num="6.1" zh="主任稽核員" en="Lead Auditor" name={clean(data.leadAuditor)} />
-                                                <SignCell num="6.2" zh="受稽核方代表" en="Auditee Representative" />
-                                                <SignCell num="6.3" zh="專案經理" en="Project Director" name={clean(data.projectDirector)} />
+                                                <SignCell num="7.1" zh="主任稽核員" en="Lead Auditor" name={clean(data.leadAuditor)} />
+                                                <SignCell num="7.2" zh="受稽核方代表" en="Auditee Representative" />
+                                                <SignCell num="7.3" zh="專案經理" en="Project Director" name={clean(data.projectDirector)} />
                                             </div>
                                         </>
                                     ) : (
                                         <>
-                                            <div className="sec-head">4. 計畫簽核 <span className="en">Plan Sign-off</span></div>
+                                            <div className="sec-head">5. 計畫簽核 <span className="en">Plan Sign-off</span></div>
                                             <div className="sign-grid">
-                                                <SignCell num="4.1" zh="主任稽核員" en="Lead Auditor" name={clean(data.leadAuditor)} />
-                                                <SignCell num="4.2" zh="專案經理" en="Project Director" name={clean(data.projectDirector)} />
+                                                <SignCell num="5.1" zh="主任稽核員" en="Lead Auditor" name={clean(data.leadAuditor)} />
+                                                <SignCell num="5.2" zh="專案經理" en="Project Director" name={clean(data.projectDirector)} />
                                             </div>
                                         </>
                                     )}

@@ -1349,6 +1349,54 @@ class UserScope(BaseModel):
 
 
 # --- Audit Schemas ---
+_AGENDA_TIME = re.compile(r'([01][0-9]|2[0-3]):[0-5][0-9]')  # ASCII digits only (\d also matches e.g. Arabic-Indic digits)
+
+
+class AuditAgendaEntry(BaseModel):
+    """One row of an audit's daily schedule (AUDIT-AGENDA-2026-001). Every field is optional text; `date` is a strict
+    YYYY-MM-DD date and `start` / `end` are HH:MM (24 h) when given, and a row may not end before it starts."""
+    model_config = ConfigDict(extra='ignore')
+
+    id: StrictInt | str | None = None  # the wizard's row key, kept so a resave of a locked audit compares equal
+    date: str = ''
+    start: str = ''
+    end: str = ''
+    item: str = ''
+    auditee: str = ''
+    auditor: str = ''
+    remarks: str = ''
+
+    @field_validator('date', 'start', 'end', 'item', 'auditee', 'auditor', 'remarks', mode='before')
+    @classmethod
+    def blank_for_null(cls, v):
+        return '' if v is None else v
+
+    @field_validator('date')
+    @classmethod
+    def check_date(cls, v):
+        return strict_dates.strict_date_input(v)
+
+    @field_validator('start', 'end')
+    @classmethod
+    def check_time(cls, v):
+        if v and not _AGENDA_TIME.fullmatch(v):
+            raise ValueError(f'time must be HH:MM (24 h), got {v!r}')
+        return v
+
+    @model_validator(mode='after')
+    def check_order(self):
+        if self.start and self.end and self.end < self.start:
+            raise ValueError(f'end time {self.end} is before start time {self.start}')
+        return self
+
+
+def _sorted_agenda(entries):
+    """By date, then start time; rows without a date / time after the dated / timed ones, otherwise in entry order."""
+    if entries is None:
+        return None
+    return sorted(entries, key=lambda e: (e.date == '', e.date, e.start == '', e.start))
+
+
 class AuditBase(BaseModel):
     project_id: str | None = None
     auditNo: str
@@ -1368,12 +1416,15 @@ class AuditBase(BaseModel):
     audit_criteria: str | None = None
     selected_templates: list[str] | None = []
     custom_check_items: Any | None = []
+    # Lenient on the base (the READ schema derives from it, so one odd stored row must not break the list); writes are
+    # validated and sorted by AuditCreate / AuditUpdate.
+    agenda: Any | None = []
 
     # Date fields: no validator on the base (the READ schema Audit derives from it and must return stored dates untouched —
     # the old lenient check + start-before-end rule here turned one bad row into a 500 for the whole list). Strict checking
     # of new writes: AuditCreate (field level) and AuditService (create + update, final content, incl. the order rule).
 
-    @field_validator('selected_templates', 'custom_check_items', mode='before')
+    @field_validator('selected_templates', 'custom_check_items', 'agenda', mode='before')
     @classmethod
     def parse_json_fields(cls, v):
         if isinstance(v, str):
@@ -1383,9 +1434,21 @@ class AuditBase(BaseModel):
                 return []
         return v
 
+    @field_validator('agenda', mode='after')
+    @classmethod
+    def agenda_list(cls, v):
+        # audits saved before the agenda existed hold NULL: read as an empty schedule, never null
+        return [] if v is None else v
+
 class AuditCreate(AuditBase):
     # Accepted for compatibility with existing callers but ignored: the server always assigns id and auditNo.
     id: str | None = None
+    agenda: list[AuditAgendaEntry] | None = []
+
+    @field_validator('agenda', mode='after')
+    @classmethod
+    def sort_agenda(cls, v):
+        return _sorted_agenda(v)
 
     @field_validator(*strict_dates.AUDIT_DATE_FIELDS, mode='before')
     @classmethod
@@ -1412,8 +1475,9 @@ class AuditUpdate(BaseModel):
     audit_criteria: str | None = None
     selected_templates: list[str] | None = None
     custom_check_items: Any | None = None
+    agenda: list[AuditAgendaEntry] | None = None
 
-    @field_validator('selected_templates', 'custom_check_items', mode='before')
+    @field_validator('selected_templates', 'custom_check_items', 'agenda', mode='before')
     @classmethod
     def parse_json_fields(cls, v):
         if isinstance(v, str):
@@ -1422,6 +1486,11 @@ class AuditUpdate(BaseModel):
             except Exception:
                 return []
         return v
+
+    @field_validator('agenda', mode='after')
+    @classmethod
+    def sort_agenda(cls, v):
+        return _sorted_agenda(v)
 
 class Audit(AuditBase):
     id: str

@@ -107,6 +107,13 @@
 .audit-print-root .checklist-items .c-m { width: 26%; }
 .audit-print-root .checklist-items td { height: 46px; }
 .audit-print-root .checklist-items .boxes { white-space: nowrap; font-size: 8.6px; line-height: 1.7; }
+/* agenda (AUDIT-AGENDA-2026-001): same proportions as the Word export's agenda table */
+.audit-print-root .agenda-items .a-date { width: 13%; }
+.audit-print-root .agenda-items .a-time { width: 14%; white-space: nowrap; }
+.audit-print-root .agenda-items .a-item { width: 29%; }
+.audit-print-root .agenda-items .a-who { width: 18%; }
+.audit-print-root .agenda-items .a-aud { width: 12%; }
+.audit-print-root .agenda-items .a-rem { width: 14%; }
 
 .audit-print-root .field-box { border: 1px solid var(--audit-line); min-height: 34px; padding: 4px 6px; white-space: pre-wrap; word-break: break-word; }
 .audit-print-root .field-box.fb-tall { min-height: 70px; }

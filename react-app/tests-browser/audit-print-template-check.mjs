@@ -88,9 +88,10 @@ async function printOut(n, label, kind) {
 }
 
 // 1-3. each button prints its own formal printout, outside #root, never blank, no buttons / icons, removed afterwards
-const plan = await printOut(2, /列印稽核計畫/, 'plan');
-const checklist = await printOut(3, /列印查檢表/, 'checklist');
-const report = await printOut(4, /列印報告/, 'report');
+// steps since AUDIT-AGENDA-2026-001: 3 Agenda (Print Audit Plan), 4 Checklist, 5 Execution & Review
+const plan = await printOut(3, /列印稽核計畫/, 'plan');
+const checklist = await printOut(4, /列印查檢表/, 'checklist');
+const report = await printOut(5, /列印報告/, 'report');
 for (const [kind, r] of [['plan', plan], ['checklist', checklist], ['report', report]]) {
   result(`${kind}: print called once, printout in <body>, #root hidden, printout visible, no buttons/icons, removed after print`,
     r.printed === r.before + 1 && r.kind === kind && r.inBody && r.rootHidden && r.shown === 'block' && r.buttons === 0 && r.unmounted,
@@ -102,8 +103,8 @@ for (const [kind, r, minPages] of [['plan', plan, 1], ['checklist', checklist, 1
   result(`${kind} PDF: ${r.pdf.length} page(s), every page has text, all A4 portrait`, r.pdf.length >= minPages && r.pdf.every(pg => pg.text) && r.pdf.every(isA4Portrait),
     JSON.stringify(r.pdf));
 }
-result('plan: title + sections 1-3 + plan sign-off, no results', /內部稽核計畫/.test(plan.text) && /3\. 稽核範圍與準則/.test(plan.text)
-  && /4\. 計畫簽核/.test(plan.text) && !/查檢結果|符合 Pass/.test(plan.text), plan.text.slice(0, 300));
+result('plan: title + sections 1-4 (incl. agenda) + plan sign-off, no results', /內部稽核計畫/.test(plan.text) && /3\. 稽核範圍與準則/.test(plan.text)
+  && /4\. 稽核行程/.test(plan.text) && /5\. 計畫簽核/.test(plan.text) && !/查檢結果|符合 Pass/.test(plan.text), plan.text.slice(0, 300));
 result('checklist: title, 5 items with blank result boxes, no recorded results or remarks',
   /稽核查檢表/.test(checklist.text) && (checklist.text.match(/☐ 符合 Pass/g) || []).length === 5
   && !/人力配置表已核准|待補年度稽核計畫/.test(checklist.text) && !/(^|[^☐] )(符合|不符合) (Pass|Fail)/m.test(checklist.text.replace(/☐ /g, '☐'))
@@ -129,12 +130,12 @@ const reportText = squash(report.text);
 const missing = wordTexts.filter(t => !ignored(t) && !reportText.includes(squash(t)));
 result(`report printout contains every text of the Word export (${wordTexts.length} paragraphs, ${wordTexts.filter(ignored).length} wording-only lines skipped)`,
   missing.length === 0, JSON.stringify(missing));
-const order = ['1. 稽核資訊', '2. 稽核團隊', '3. 稽核範圍與準則', '4. 查檢結果', '4.1 查檢明細', '5. 稽核發現與總結', '6. 簽核'];
+const order = ['1. 稽核資訊', '2. 稽核團隊', '3. 稽核範圍與準則', '4. 稽核行程', '5. 查檢結果', '5.1 查檢明細', '6. 稽核發現與總結', '7. 簽核'];
 const positions = order.map(h => report.text.indexOf(h));
 result('report sections in the same order as Word', positions.every((v, i) => v >= 0 && (i === 0 || v > positions[i - 1])), JSON.stringify(positions));
 
 // 5. unsaved edit: printed as on screen, flagged in the masthead
-await step(4);
+await step(5);
 await p.fill('textarea[name=findings]', '列印時尚未儲存的修改');
 await p.locator('button', { hasText: /列印報告/ }).first().click();
 await p.waitForTimeout(600);
@@ -145,7 +146,7 @@ await p.evaluate(() => dispatchEvent(new Event('afterprint')));
 await p.evaluate(() => dispatchEvent(new Event('afterprint')));
 
 // 6. (R2) a second click prints again even if the browser never fired afterprint for the first one
-await step(4);
+await step(5);
 const n0 = await p.evaluate(() => window.__printed);
 await p.locator('button', { hasText: /列印報告/ }).first().click(); await p.waitForTimeout(500);
 await p.locator('button', { hasText: /列印報告/ }).first().click(); await p.waitForTimeout(500);
@@ -191,7 +192,7 @@ const wordProgress = async id => p.evaluate(async id => {
 }, id);
 for (const [key, expected] of [['eight', '13%'], ['forty', '58%']]) {
   await p.goto(UI + `/audit?openId=${made[key]}`); await p.waitForTimeout(1500);
-  await p.waitForSelector('input[name=auditDocNo]'); await step(4);
+  await p.waitForSelector('input[name=auditDocNo]'); await step(5);
   const card = await p.evaluate(() => [...document.querySelectorAll('p')].map(x => x.innerText).find(t => /^\d+%$/.test(t)));
   await p.locator('button', { hasText: /列印報告/ }).first().click(); await p.waitForTimeout(500);
   const printed = await p.evaluate(() => (document.querySelector('.audit-print-root')?.innerText.match(/完成率\s*Progress\s*(\d+%)/) || [])[1]);
@@ -200,7 +201,7 @@ for (const [key, expected] of [['eight', '13%'], ['forty', '58%']]) {
   result(`progress ${key}: wizard card, printout and Word all ${expected}`, card === expected && printed === expected && word === expected, JSON.stringify({ card, printed, word }));
 }
 await p.goto(UI + `/audit?openId=${made.clause}`); await p.waitForTimeout(1500);
-await p.waitForSelector('input[name=auditDocNo]'); await step(4);
+await p.waitForSelector('input[name=auditDocNo]'); await step(5);
 await p.locator('button', { hasText: /列印報告/ }).first().click(); await p.waitForTimeout(500);
 const cell = await p.evaluate(() => [...document.querySelectorAll('.audit-print-root .items tbody tr')].map(r => r.cells[2].innerText));
 result('clause-only item: clause printed, no extra dash line (as in Word)', cell.length === 1 && cell[0].trim() === 'Clause only', JSON.stringify(cell));
