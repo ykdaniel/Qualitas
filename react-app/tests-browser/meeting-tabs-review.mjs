@@ -135,28 +135,50 @@ const newRow = () => modal().locator('[data-row="new"]');
 const apply = () => modal().getByRole('button', { name: 'Apply' });
 check(await modal().getByRole('tab', { name: 'Weekly Update' }).count() === 0, '2: one screen, no mode switch');
 check(await modal().getByLabel('Show closed items').isChecked() === false, '2: "Show closed items" unchecked by default');
+const toolbar = () => modal().locator('[data-register-toolbar]');
+// all three add buttons in the toolbar (user: "第一張圖應該放到第二張圖一起"); Sub-category / Item need a category first
+check((await toolbar().getByRole('button').allTextContents()).map(x => x.trim()).join('|') === 'Add Category|Add Sub-category|Add Item', '2: toolbar: Add Category | Add Sub-category | Add Item');
+check(await toolbar().getByRole('button', { name: 'Add Item' }).getAttribute('aria-disabled') === 'true' && await toolbar().getByRole('button', { name: 'Add Item' }).getAttribute('title') === 'Add a category first', '2: with no category, Add Item is disabled and says why');
+// aria-disabled keeps it focusable: from the keyboard it still says why (Playwright refuses to click aria-disabled)
+await toolbar().getByRole('button', { name: 'Add Item' }).focus();
+await page.keyboard.press('Enter');
+await page.waitForTimeout(300);
+check(await newRow().count() === 0 && /Add a category first/.test(await page.locator('[data-sonner-toast]').allTextContents().then(x => x.join(' '))), '2: pressing it (keyboard) adds nothing and shows the reason');
+const addUnder = async (parent, label) => {
+    await toolbar().getByRole('button', { name: label }).click();
+    await newRow().getByLabel('Under').selectOption(parent);
+};
 await modal().getByRole('button', { name: 'Add Category' }).click();
 const pendingNo = () => newRow().locator('[data-pending-no]').textContent().then(t => t.trim());
 check(await pendingNo() === '1.0', '2: a new category shows the number it will get (1.0), not "Add"');
+check(await newRow().locator('textarea').evaluate(el => el === document.activeElement), '2: the new row opens focused');
 await newRow().locator('textarea').fill('Technical Issues');
 await apply().click();
-await modal().locator('[data-row="1"]').getByRole('button', { name: 'Add Sub-category' }).click();
+await toolbar().getByRole('button', { name: 'Add Sub-category' }).click();
+check(await newRow().getByLabel('Under').inputValue() === '1', '2: after adding category 1.0, the next add goes under it by default');
 check(await pendingNo() === '1.1', '2: a new sub-category shows 1.1');
 await newRow().locator('textarea').fill('Civil OB');
 await apply().click();
-await modal().locator('[data-row="1.1"]').getByRole('button', { name: 'Add Item' }).click();
+await addUnder('1.1', 'Add Item');
 check(await pendingNo() === '1.1.1', '2: a new item under 1.1 shows 1.1.1');
-check(await newRow().isVisible() && await newRow().locator('textarea').evaluate(el => el === document.activeElement), '2: a new item opens straight in edit, focused');
+check(await newRow().isVisible() && await newRow().locator('textarea').count() === 1, '2: a new item opens straight in edit');
 await newRow().locator('textarea').fill('Safety lifeline lacks certificates');
 check(await newRow().locator('input[type=date]').first().inputValue() === '2026-08-11', '2: a new item is raised on the meeting date by default');
 await newRow().getByPlaceholder('Action by').fill('TECO');
 await newRow().getByLabel('Target Date').fill('2026-08-25');
 await apply().click();
-await modal().locator('[data-row="1"]').getByRole('button', { name: 'Add Item' }).click();
+await addUnder('1', 'Add Item');
 check(await pendingNo() === '1.2', '2: a new item directly under 1.0 shows 1.2');
 await newRow().locator('textarea').fill('Direct item under the category');
 await apply().click();
 check((await rowNos()).join(',') === '1,1.1,1.1.1,1.2', `2: register numbered 1 / 1.1 / 1.1.1 / 1.2 (${(await rowNos()).join(',')})`);
+check(await modal().locator('[data-register] tbody').getByRole('button', { name: /^Add / }).count() === 0, '2: no add buttons on the category rows any more');
+await modal().locator('[data-row="1.1.1"] td').first().click();
+await toolbar().getByRole('button', { name: 'Add Item' }).click();
+check(await newRow().getByLabel('Under').inputValue() === '1.1' && (await newRow().locator('[data-pending-no]').textContent()).trim() === '1.1.2', '2: Add Item goes under the heading of the row last clicked (1.1 → 1.1.2)');
+await newRow().getByLabel('Under').selectOption('1');
+check((await newRow().locator('[data-pending-no]').textContent()).trim() === '1.3', '2: changing "Under" renumbers the pending row (1 → 1.3)');
+await newRow().getByRole('button', { name: 'Cancel' }).click();
 check((await modal().locator('[data-row="1"] td').first().textContent()).trim() === '1.0', '2: category shown as 1.0');
 // items read as text; raised date above; one this-week field each; ✏️ / 🗑 per row; status dropdown
 check(await modal().locator('[data-row="1.1.1"] [data-raised]').textContent() === '11 Aug 2026', '2: raised date shown above the item (11 Aug 2026)');
@@ -181,7 +203,7 @@ check(await modal().locator('[data-row="1.2"] [data-this-week] input[type=date]'
 await modal().locator('[data-row="1.2"] [data-this-week] textarea').fill('   ');
 await page.screenshot({ path: `${OUT}/02-register-inline.png` });
 // a row being edited with a change blocks Save from another tab and brings the user back to it
-await modal().locator('[data-row="1"]').getByRole('button', { name: 'Add Item' }).click();
+await addUnder('1', 'Add Item');
 await newRow().locator('textarea').fill('typed, not applied');
 await tab('General Info').click();
 calls.length = 0;
@@ -192,7 +214,7 @@ check(await tab('Discussions').getAttribute('aria-selected') === 'true', '2: the
 check(await pendingNo() === '1.3', '2: the next new item shows 1.3');
 await newRow().getByRole('button', { name: 'Cancel' }).click();
 check(await newRow().count() === 0 && (await rowNos()).join(',') === '1,1.1,1.1.1,1.2', '2: ✕ on a new row adds nothing');
-await modal().locator('[data-row="1"]').getByRole('button', { name: 'Add Item' }).click();
+await addUnder('1', 'Add Item');
 check(await pendingNo() === '1.3', '2: after ✕ the same number is offered again (nothing consumed)');
 await newRow().getByRole('button', { name: 'Cancel' }).click();
 // delete asks first (the dialog handler accepts): remove 1.2, numbering closes up
@@ -275,7 +297,7 @@ check(Math.abs(await indent('[data-item-text]') - await indent('[data-update] di
 check(await carriedRow.getByRole('button', { name: 'Delete' }).count() === 0, '5: carried item has no 🗑');
 // with carried rows the numbers never move: a deleted new row leaves a gap, the next number is max + 1
 const addUnder2 = async (text) => {
-    await modal().locator('[data-row="2"]').getByRole('button', { name: 'Add Item' }).click();
+    await addUnder('2', 'Add Item');
     const no = await modal().locator('[data-row="new"] [data-pending-no]').textContent();
     await modal().locator('[data-row="new"] textarea').fill(text);
     await modal().getByRole('button', { name: 'Apply' }).click();
@@ -285,7 +307,7 @@ check(await addUnder2('temp A') === '2.2' && await addUnder2('temp B') === '2.3'
 await modal().locator('[data-row="2.2"]').hover();
 await modal().locator('[data-row="2.2"]').getByRole('button', { name: 'Delete' }).click();
 check((await rowNos()).includes('2.3') && !(await rowNos()).includes('2.2'), '5: deleting 2.2 keeps 2.3 (no renumbering while carried rows exist)');
-await modal().locator('[data-row="2"]').getByRole('button', { name: 'Add Item' }).click();
+await addUnder('2', 'Add Item');
 check((await modal().locator('[data-row="new"] [data-pending-no]').textContent()).trim() === '2.4', '5: the next one is 2.4 (the gap 2.2 is not reused)');
 await modal().locator('[data-row="new"]').getByRole('button', { name: 'Cancel' }).click();
 await modal().locator('[data-row="2.3"]').hover();
@@ -358,7 +380,7 @@ for (const width of [800, 1400]) {
         }
         return { bad, buttons, tallest: Math.round(tallest) };
     });
-    check(report.buttons >= 6, `5b@${width}: register buttons present (${report.buttons})`);
+    check(report.buttons >= 2, `5b@${width}: register buttons present (${report.buttons})`);
     check(report.bad.length === 0, `5b@${width}: every button inside its cell, no cell overflow (${report.bad.join('; ')})`);
     check(report.tallest <= 26, `5b@${width}: buttons stay one compact line (tallest ${report.tallest}px)`);
     await page.screenshot({ path: `${OUT}/05c-controls-${width}.png` });
