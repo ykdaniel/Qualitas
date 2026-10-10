@@ -1,0 +1,8 @@
+# 2026-10-10T02:42:04Z isolated stack from the candidate tree (HEAD + G.patch); fresh DB; seeds b_review + polish_review
+## network: removed endpoint not called
+requests to /api/audit/contractors: 0; to /api/contractors/options: 8
+PASS no request to the removed endpoint; the shared list is used
+## audit-smoke-all
+ALL PASS
+## audit-layout-check
+ALL PASS
