@@ -1,0 +1,38 @@
+2026-10-10T23:28:48.381Z === 1. unsaved meeting ===
+2026-10-10T23:28:49.911Z PASS 1: no upload, no photo on an unsaved meeting
+2026-10-10T23:28:49.913Z PASS 1: says to save as Draft first
+2026-10-10T23:28:50.658Z === 2. photos on a Draft ===
+2026-10-10T23:28:52.390Z PASS 2: a pasted image shows as a thumbnail under this week's update of 1.1
+2026-10-10T23:28:52.392Z PASS 2: the thumbnail loads
+2026-10-10T23:28:52.600Z PASS 2: the photo button adds one to 2.1
+2026-10-10T23:28:53.421Z PASS 2: × takes it off
+2026-10-10T23:28:53.425Z PASS 2: a photo uploaded in this sitting and removed is deleted at once
+2026-10-10T23:28:53.726Z PASS 2: a photo pasted into the item text (✏️) hangs on the item
+2026-10-10T23:28:55.287Z PASS 2: stored: one photo on the item, one on a photo-only update
+2026-10-10T23:28:55.287Z PASS 2: the JSON holds attachment ids only
+2026-10-10T23:28:55.292Z PASS 2: two discussionPhoto attachments, both referenced
+2026-10-10T23:28:55.292Z === 3. preview and abandon ===
+2026-10-10T23:28:57.208Z PASS 3: clicking a thumbnail opens the enlarged preview
+2026-10-10T23:28:59.385Z PASS 3: a photo pasted and then left without saving is deleted
+2026-10-10T23:28:59.385Z === 4. print ===
+2026-10-10T23:29:01.137Z PASS 4: the text says which photos belong to it
+2026-10-10T23:29:01.138Z PASS 4: photo pages captioned "照片 n｜1.1｜date" (照片 Photo 1｜1.1 / 照片 Photo 2｜1.1｜28 Jul 2026)
+2026-10-10T23:29:01.139Z PASS 4: photos loaded for print
+2026-10-10T23:29:01.214Z PASS 4: minutes portrait, photo page landscape (PL)
+2026-10-10T23:29:01.257Z === 5. carried photos ===
+2026-10-10T23:29:01.320Z PASS 5: next occurrence created
+2026-10-10T23:29:01.320Z PASS 5: it shows the same attachment ids (referenced, not copied)
+2026-10-10T23:29:01.332Z PASS 5: no files copied onto the next occurrence
+2026-10-10T23:29:02.858Z PASS 5: carried photos display in the next occurrence
+2026-10-10T23:29:02.860Z PASS 5: carried photos cannot be removed there
+2026-10-10T23:29:02.902Z PASS 5: the earlier meeting cannot be deleted while its photos are shown
+2026-10-10T23:29:06.370Z PASS 5: rev 1.0 no longer shows it
+2026-10-10T23:29:06.375Z PASS 5: but the file stays — rev 2.0 still shows it
+2026-10-10T23:29:06.375Z === 6. clean-up paths ===
+2026-10-10T23:29:06.385Z PASS 6: a Draft to work on
+2026-10-10T23:29:13.209Z PASS 6: removing a photo and publishing in one save deletes the file (before the lock)
+2026-10-10T23:29:19.871Z PASS 6: 🗑 on an item deletes its photos' files once saved
+2026-10-10T23:29:38.337Z PASS 6: leaving by a route change deletes the unsaved upload
+2026-10-10T23:29:38.341Z PASS 6: a saved photo still in use is untouched
+2026-10-10T23:29:38.341Z PASS no script errors in the console ()
+2026-10-10T23:29:38.365Z ALL 31 CHECKS PASSED

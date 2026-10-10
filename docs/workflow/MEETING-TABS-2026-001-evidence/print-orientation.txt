@@ -2,7 +2,7 @@ PASS 5 photos uploaded (200)
 PASS an unnamed landscape @page from another module is loaded (the old failure condition)
 PASS print waited for all 5 photos to load (1200,1200,1200,1200,1200)
 PASS two photo pages (4 + 1)
-PASS photos in upload order (照片 Photo 1　site-photo-1.png | 照片 Photo 2　site-photo-2.png | 照片 Photo 3　site-photo-3.png | 照片 Photo 4　site-photo-4.png | 照片 Photo 5　site-photo-5.png)
+PASS photos in upload order (照片 Photo 1｜site-photo-1.png | 照片 Photo 2｜site-photo-2.png | 照片 Photo 3｜site-photo-3.png | 照片 Photo 4｜site-photo-4.png | 照片 Photo 5｜site-photo-5.png)
 page orientations: PLL
 PASS PDF pages (3)
 PASS the last two pages (photos) are landscape
