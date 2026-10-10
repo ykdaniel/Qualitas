@@ -91,7 +91,9 @@ export interface ITRDetailModalProps {
     existingData?: ITRDetailData;
     existingItem?: ITRItem;
     itrList: ITRItem[];
-    onSave: (details: ITRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[], publishOnly?: boolean) => void | Promise<void>;
+    /** Resolves `{ keptOpen: true }` when the parent switched the modal over to the record it just created
+     *  (it stays open on it), so the modal must not close itself. */
+    onSave: (details: ITRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[], publishOnly?: boolean) => void | Promise<void | { keptOpen: true }>;
     onClose: () => void;
     // Plain "close the modal, don't run onClose's deep-link back-navigation" —
     // used when this modal is about to navigate elsewhere itself (Raise
@@ -268,6 +270,10 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
     const persistedItrId = existingItem?.id || null;
     const [instances, setInstances] = useState<ChecklistRecordApi[]>([]);
     const [expandedInstanceId, setExpandedInstanceId] = useState<string | null>(null);
+    // The open checklist panel's results live on their own row and are saved only by the panel's own Save;
+    // ITR Save/Publish never sent them, so unsaved panel edits were silently lost when the ITR modal
+    // closed (2026-10-10). Save/Publish now stop and say which checklist still needs saving.
+    const [panelDirty, setPanelDirty] = useState(false);
 
     const refreshInstances = useCallback(async () => {
         if (!persistedItrId) { setInstances([]); return; }
@@ -515,8 +521,16 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         }));
     };
 
+    const blockedByUnsavedChecklist = () => {
+        if (!panelDirty) return false;
+        const open = instances.find(i => i.id === expandedInstanceId);
+        toast.warning(t('itr.checklistUnsaved', { recordsNo: open?.recordsNo || '' }), { duration: 8000 });
+        return true;
+    };
+
     const handleSave = async () => {
         if (saving) return;
+        if (blockedByUnsavedChecklist()) return;
         if (!formData.noiNumber) {
             toast.warning(t('itr.validation.noiRequired') || 'Please select an NOI Number.');
             return;
@@ -524,15 +538,16 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
 
         try {
             setSaving(true);
-            await onSave(formData, pendingUploads, deletedFileIds);
+            const outcome = (await onSave(formData, pendingUploads, deletedFileIds)) as { keptOpen: true } | undefined;
             leaveGuard.release();
-            onClose();
+            if (!outcome?.keptOpen) onClose();
         } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
             // 錯誤已在父層 handleSaveITRDetails 以 toast 顯示，保持 modal 開啟
         } finally { setSaving(false); }
     };
 
     const handlePublish = () => {
+        if (blockedByUnsavedChecklist()) return;
         const nextRev = getNextRevision(formData.type || 'Rev0.0');
         setPublishConfirm({ show: true, nextRev });
     };
@@ -992,6 +1007,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                                             initialData={parseInstance(record)}
                                                             onClose={() => setExpandedInstanceId(null)}
                                                             onSave={(snap) => saveInstance(record.id, snap)}
+                                                            onDirtyChange={setPanelDirty}
                                                         />
                                                     </div>
                                                 )}

@@ -1,7 +1,7 @@
 import { useDraftGuard } from '../Shared/LeaveGuard';
 import FormActions from '../Shared/FormActions';
 import actionStyles from '../Shared/FormActions.module.css';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import styles from './ITR.module.css'; // Corrected import
 
 import { useLanguage } from '../../context/LanguageContext';
@@ -38,6 +38,8 @@ interface ChecklistSnapshotModalProps {
     /** §17: render inline (as an in-form accordion panel) instead of a centered
      *  popup overlay, so the ITR reads as one continuous record. */
     inline?: boolean;
+    /** Reports whether the panel holds unsaved edits, so the parent ITR can refuse to Save/Publish over them. */
+    onDirtyChange?: (dirty: boolean) => void;
 }
 
 export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
@@ -50,7 +52,8 @@ export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
     checklistStatus,
     canReopen = false,
     onReopen,
-    inline = false
+    inline = false,
+    onDirtyChange
 }) => {
     const { t } = useLanguage();
     // Local state for the snapshot being edited. A read-only snapshot (ITR Approved/Void) opens
@@ -80,6 +83,10 @@ export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
     const [reopening, setReopening] = useState(false);
     const leaveGuard = useDraftGuard(formData, saving || reopening, isOpen && !readOnly);
     const requestClose = () => leaveGuard.requestClose(onClose);
+    useEffect(() => {
+        onDirtyChange?.(leaveGuard.dirty);
+    }, [leaveGuard.dirty, onDirtyChange]);
+    useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);   // a closed panel holds nothing unsaved
     const [confirmingReopen, setConfirmingReopen] = useState(false);
     const [reopenError, setReopenError] = useState<string | null>(null);
     const [reopenStale, setReopenStale] = useState(false);
