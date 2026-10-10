@@ -522,10 +522,12 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         }));
     };
 
-    const blockedByUnsavedChecklist = () => {
+    // Also guards every other action that unmounts the panel or leaves the modal — Print, collapsing or
+    // switching the checklist row, Raise NCR, Re-inspect — which dropped the panel's edits the same way.
+    const blockedByUnsavedChecklist = (messageKey = 'itr.checklistUnsaved') => {
         if (!panelDirty) return false;
         const open = instances.find(i => i.id === expandedInstanceId);
-        toast.warning(t('itr.checklistUnsaved', { recordsNo: open?.recordsNo || '' }), { duration: 8000 });
+        toast.warning(t(messageKey, { recordsNo: open?.recordsNo || '' }), { duration: 8000 });
         return true;
     };
 
@@ -614,6 +616,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
 
     const handleRaiseNcr = async () => {
         if (!existingItem?.id || spawning) return;
+        if (blockedByUnsavedChecklist('itr.checklistUnsavedAction')) return;
         setSpawning('ncr');
         try {
             const ncr = await createNcrFromItr(existingItem.id);
@@ -647,6 +650,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
 
     const handleReinspect = async () => {
         if (!existingItem?.id || spawning || reinspectBlockedReason) return;
+        if (blockedByUnsavedChecklist('itr.checklistUnsavedAction')) return;
         setSpawning('reinspect');
         try {
             const newItr = await createReinspectionItr(existingItem.id);
@@ -668,6 +672,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         // checklist edited elsewhere while this modal stayed open would print stale
         // data even though Export Word (which always queries the DB fresh) shows the
         // current content. Printing now matches export's always-live behavior.
+        if (blockedByUnsavedChecklist('itr.checklistUnsavedAction')) return;
         await refreshInstances();
         setShowPrintPreview(true);
     };
@@ -945,7 +950,10 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                             <div key={record.id} className="rounded-lg border border-slate-200 bg-white overflow-hidden">
                                                 <div
                                                     className="group flex items-center justify-between p-3 hover:bg-slate-50 transition-all cursor-pointer"
-                                                    onClick={() => setExpandedInstanceId(expanded ? null : record.id)}
+                                                    onClick={() => {
+                                                        if (blockedByUnsavedChecklist('itr.checklistUnsavedAction')) return;
+                                                        setExpandedInstanceId(expanded ? null : record.id);
+                                                    }}
                                                 >
                                                     <div className="flex flex-col gap-1">
                                                         <div className="flex items-center gap-2">
