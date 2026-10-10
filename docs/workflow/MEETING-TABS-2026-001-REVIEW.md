@@ -39,3 +39,7 @@ REVISE：
 資訊：版次比較前端 parseFloat、後端 int(float())，手填 1.10 vs 1.9 兩邊可能不同（邊緣情況）；作廢會議兩檢視都排除。
 確認正確：存檔流程移除行動項目後只剩附件延後狀態、無 followup 殘留或死碼、未結／已結不重複、逾期用本地日期、移除的 10 個翻譯鍵全 repo 無使用、DECISIONS 與程式一致。
 PASS（修正後）：listSearch 依檢視、存檔後 refetch 參數正確；registerSourcePerSeries 只在使用者刻意清空最新一次時誤判（已註明），全部結案的新版次退回前一版仍是 0 筆未結；latestPerSeries 只剩測試使用、無害；縮排在唯讀與列印一致，僅編輯中的輸入框不縮排。tsc 乾淨、npm test 159 passed。
+
+## R8：PASS（新增按鈕集中到工具列、所屬下拉）
+headingOf、子類取大類、contextNo 刪除後跟隨、所屬選到被濾掉的標題時位置與編號、tr 上 onMouseDown／onFocus 不干擾 ✏️／🗑／狀態／更新欄，均確認；tsc 乾淨、npm test 159 passed、新鍵中英齊全。
+建議（已處理）：✓ 後未更新最後點過的位置；disabled 按鈕鍵盤讀不到提示 → aria-disabled＋按下時提示；預設所屬不在選單時與顯示不符 → 改用第一個選項。資訊：列印第一次逾時、重跑 8/8，判斷偶發。
