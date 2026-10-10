@@ -152,7 +152,7 @@ def test_reinspection_first_then_a_late_delete_is_refused_and_the_new_reinspecti
     window = _Window(engine, "insert into itr (")                                    # the new re-inspection ITR being inserted
     try:
         out = _run_pair(lambda: full.post(f"/api/itr/{original}/re-inspect").status_code,
-                        lambda: full.delete(f"/api/itr/{original}").status_code)
+                        lambda: full.delete(f"/api/itr/{original}").status_code, window=window)
     finally:
         window.close()
     assert window.fired
@@ -170,7 +170,7 @@ def test_delete_first_then_a_late_reinspection_finds_no_source_and_creates_nothi
     window = _Window(engine, "delete from checklist")                                # delete holds its transaction
     try:
         out = _run_pair(lambda: full.delete(f"/api/itr/{original}").status_code,
-                        lambda: full.post(f"/api/itr/{original}/re-inspect").status_code)
+                        lambda: full.post(f"/api/itr/{original}/re-inspect").status_code, window=window)
     finally:
         window.close()
     assert window.fired

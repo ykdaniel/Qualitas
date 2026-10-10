@@ -367,7 +367,7 @@ def test_two_simultaneous_creates_both_succeed_with_distinct_numbers(noi_env):
     # read the stale one and collide on the reference number.
     window = _Window(engine, "insert into audit_logs")
     try:
-        out = _run_pair(lambda: _create(a, package="FIRST").status_code, lambda: _create(b, package="SECOND").status_code)
+        out = _run_pair(lambda: _create(a, package="FIRST").status_code, lambda: _create(b, package="SECOND").status_code, window=window)
     finally:
         window.close()
     assert window.fired and out == {"first": 200, "second": 200}

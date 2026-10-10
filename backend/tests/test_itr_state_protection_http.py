@@ -25,6 +25,7 @@ really opened. Nothing here imports `main`.
 """
 import json
 import threading  # noqa: F401  (used by the shared window helper)
+import time
 
 import pytest
 
@@ -238,7 +239,7 @@ def test_delete_racing_a_saved_result_delete_second_sees_the_evidence_and_refuse
             # status) refuses with 400; the race being tested is unchanged.
             lambda: editor.put(f"/api/checklist/{inst}/", json={"status": "Pass", "passCount": 1, "failCount": 0, "detail_data": json.dumps(
                 {"items": [{**ITEM, "situation": "Measured 150mm", "result": "O"}]})}).status_code,
-            lambda: full.delete(f"/api/itr/{itr_id}").status_code)
+            lambda: full.delete(f"/api/itr/{itr_id}").status_code, window=window)
     finally:
         window.close()
     assert window.fired
@@ -259,7 +260,7 @@ def test_delete_racing_a_saved_result_delete_first_leaves_no_orphan_evidence(rac
         out = _run_pair(
             lambda: full.delete(f"/api/itr/{itr_id}").status_code,
             lambda: editor.put(f"/api/checklist/{inst}/", json={"passCount": 1, "failCount": 0, "detail_data": json.dumps(
-                {"items": [{**ITEM, "situation": "Measured 150mm", "result": "O"}]})}).status_code)
+                {"items": [{**ITEM, "situation": "Measured 150mm", "result": "O"}]})}).status_code, window=window)
     finally:
         window.close()
     assert window.fired
@@ -280,7 +281,7 @@ def test_create_ncr_racing_an_approval_the_snapshot_always_matches_the_record(ra
     make_ncr = lambda: full.post(f"/api/itr/{itr_id}/create-ncr").status_code
     window = _Window(engine, "insert into itr_approval_events" if order == "approval_first" else "insert into ncr (")
     try:
-        out = _run_pair(approve, make_ncr) if order == "approval_first" else _run_pair(make_ncr, approve)
+        out = _run_pair(approve, make_ncr, window=window) if order == "approval_first" else _run_pair(make_ncr, approve, window=window)
     finally:
         window.close()
     assert window.fired
@@ -309,7 +310,7 @@ def test_a_result_change_committed_first_is_seen_by_create_ncr_and_reinspection(
     try:
         out = _run_pair(
             lambda: editor.put(f"/api/itr/{itr_id}", json={"inspectionResult": "Pass"}).status_code,
-            lambda: full.post(f"/api/itr/{itr_id}/{action}").status_code)
+            lambda: full.post(f"/api/itr/{itr_id}/{action}").status_code, window=window)
     finally:
         window.close()
     assert window.fired
@@ -328,7 +329,7 @@ def test_reinspection_copies_exactly_the_state_it_checked(race, order):
     reinspect = lambda: full.post(f"/api/itr/{itr_id}/re-inspect").status_code
     window = _Window(engine, "insert into audit_logs" if order == "edit_first" else "insert into itr (")
     try:
-        out = _run_pair(edit, reinspect) if order == "edit_first" else _run_pair(reinspect, edit)
+        out = _run_pair(edit, reinspect, window=window) if order == "edit_first" else _run_pair(reinspect, edit, window=window)
     finally:
         window.close()
     assert window.fired
@@ -351,7 +352,31 @@ def test_delete_first_then_a_late_approval_gets_not_found_not_a_server_error(rac
     window = _Window(engine, "delete from checklist")
     try:
         out = _run_pair(lambda: full.delete(f"/api/itr/{itr_id}").status_code,
-                        lambda: approver.put(f"/api/itr/{itr_id}", json={"status": "Approved"}).status_code)
+                        lambda: approver.put(f"/api/itr/{itr_id}", json={"status": "Approved"}).status_code, window=window)
+    finally:
+        window.close()
+    assert window.fired
+    assert out["first"] == 200 and out["second"] == 404
+    assert itr_id not in _world(env)["itr"] and _state_events(env, itr_id) == []
+
+
+def test_the_pair_keeps_its_order_even_when_the_first_request_is_slow_to_start(race):
+    """Load simulation for the race helper (2026-10-10): the first request reaches the server late. With the old fixed
+    0.25 s gap the approval ran first instead — it correctly refused an ITR with no checklists (400) and the delete
+    then succeeded, failing the test above under two parallel full suites. `_run_pair(window=...)` starts the second
+    request only once the first is held inside its window, so the order — and the 404 — no longer depend on timing."""
+    env, engine = race
+    itr_id = _mk_itr(env)
+    approver, full = env.login("acc_approver"), env.login("acc_full")
+
+    def late_delete():
+        time.sleep(0.5)
+        return full.delete(f"/api/itr/{itr_id}").status_code
+
+    window = _Window(engine, "delete from checklist")
+    try:
+        out = _run_pair(late_delete,
+                        lambda: approver.put(f"/api/itr/{itr_id}", json={"status": "Approved"}).status_code, window=window)
     finally:
         window.close()
     assert window.fired
@@ -367,7 +392,7 @@ def test_approval_first_then_a_late_delete_is_refused_and_the_record_survives(ra
     window = _Window(engine, "insert into itr_approval_events")
     try:
         out = _run_pair(lambda: approver.put(f"/api/itr/{itr_id}", json={"status": "Approved"}).status_code,
-                        lambda: full.delete(f"/api/itr/{itr_id}").status_code)
+                        lambda: full.delete(f"/api/itr/{itr_id}").status_code, window=window)
     finally:
         window.close()
     assert window.fired
