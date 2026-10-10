@@ -188,10 +188,20 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
             {canRemove(log, e.no) && iconButton(t('common.delete'), <Trash2 size={14} />, () => remove(e), true)}
         </div>
     );
+    /** Esc anywhere in the row being added / edited = ✕ (user, 2026-10-11: "按錯了…一般是按ESC"). Handled here and not
+     *  passed on, so it never closes the form or reaches the leave guard; outside an edit Esc keeps its usual meaning.
+     *  (Enter = ✓ was left out on purpose: in "Action by" Enter also picks a suggestion and confirms Chinese IME input.) */
+    const escToCancel = (ev: React.KeyboardEvent) => {
+        // keyCode 229: Safari ends IME composition before this keydown, so isComposing alone misses it
+        if (ev.key !== 'Escape' || ev.nativeEvent.isComposing || ev.nativeEvent.keyCode === 229) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        setEdit(null);
+    };
     const applyButtons = (
         <div style={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
             {iconButton(t('meetingMinutes.applyRow'), <Check size={16} />, apply, false, !edit?.content.trim())}
-            {iconButton(t('common.cancel'), <X size={16} />, () => setEdit(null))}
+            {iconButton(t('meetingMinutes.cancelRow'), <X size={16} />, () => setEdit(null))}
         </div>
     );
     const statusSelect = (e: DiscussionLogEntry) => (
@@ -226,7 +236,7 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
         const cur = currentUpdateIndex(e);
         const curUpdate = cur >= 0 ? e.updates![cur] : null;
         return (
-            <tr key={e.no} data-row={e.no} data-editing={editing ? '' : undefined}
+            <tr key={e.no} data-row={e.no} data-editing={editing ? '' : undefined} onKeyDown={editing ? escToCancel : undefined}
                 onMouseDown={() => setContextNo(headingOf(e.no))} onFocus={() => setContextNo(headingOf(e.no))}>
                 <td style={cell}>
                     {e.no}
@@ -278,7 +288,7 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
     const headingRow = (e: DiscussionLogEntry) => {
         const editing = edit?.no === e.no ? edit : null;
         return (
-            <tr key={e.no} data-row={e.no} data-editing={editing ? '' : undefined} style={{ background: HEAD_BG[e.kind || 'category'] }}
+            <tr key={e.no} data-row={e.no} data-editing={editing ? '' : undefined} onKeyDown={editing ? escToCancel : undefined} style={{ background: HEAD_BG[e.kind || 'category'] }}
                 onMouseDown={() => setContextNo(e.no)} onFocus={() => setContextNo(e.no)}>
                 <td style={{ ...cell, fontWeight: 600 }}>{displayNo(e)}</td>
                 <td style={cell} colSpan={3}>
@@ -299,7 +309,7 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
         if (!edit || edit.no !== null) return null;
         const isHeading = edit.kind !== 'item';
         return (
-            <tr key="__new" data-row="new" data-editing="" style={isHeading ? { background: HEAD_BG[edit.kind] } : undefined}>
+            <tr key="__new" data-row="new" data-editing="" onKeyDown={escToCancel} style={isHeading ? { background: HEAD_BG[edit.kind] } : undefined}>
                 {/* the number this row will get on ✓ (the same nextNo addEntry uses), faint until applied */}
                 <td style={{ ...cell, color: grey, fontWeight: isHeading ? 600 : 400 }}>
                     <span data-pending-no title={t('meetingMinutes.pendingNo')}>

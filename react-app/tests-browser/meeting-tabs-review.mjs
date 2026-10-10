@@ -192,6 +192,26 @@ check(await modal().locator('[data-row="1.1.1"]').getByRole('button', { name: 'E
 await modal().locator('[data-row="1.2"] textarea[aria-label="1.2"]').fill('changed then cancelled');
 await modal().locator('[data-row="1.2"]').getByRole('button', { name: 'Cancel' }).click();
 check(await modal().locator('[data-row="1.2"] td').nth(1).textContent().then(t => t.includes('Direct item under the category')), '2: ✕ leaves the row unchanged');
+// Esc = ✕ (user: "按錯了…一般是按ESC"): in the text, in the "Under" picker, on a ✏️ row; the form itself stays open
+await toolbar().getByRole('button', { name: 'Add Item' }).click();
+await newRow().locator('textarea').fill('typed by mistake');
+await newRow().locator('textarea').press('Escape');
+check(await newRow().count() === 0 && await modal().isVisible(), '2: Esc in a new row cancels it; the form stays open');
+check(await page.getByRole('button', { name: 'Leave' }).count() === 0, '2: Esc does not bring up the leave prompt');
+await toolbar().getByRole('button', { name: 'Add Item' }).click();
+await newRow().getByLabel('Under').focus();
+await page.keyboard.press('Escape');
+check(await newRow().count() === 0, '2: Esc with the "Under" picker focused cancels too');
+await modal().locator('[data-row="1.2"]').hover();
+await modal().locator('[data-row="1.2"]').getByRole('button', { name: 'Edit' }).click();
+await modal().locator('textarea[aria-label="1.2"]').fill('edited by mistake');
+await modal().locator('textarea[aria-label="1.2"]').press('Escape');
+check(await modal().locator('[data-register] [data-editing]').count() === 0
+    && (await modal().locator('[data-row="1.2"] td').nth(1).textContent()).includes('Direct item under the category'), '2: Esc on a ✏️ row drops the change');
+check(await toolbar().getByRole('button', { name: 'Add Item' }).isVisible(), '2: and the toolbar is back');
+await toolbar().getByRole('button', { name: 'Add Item' }).click();
+check(await newRow().getByRole('button', { name: 'Cancel (Esc)' }).getAttribute('title') === 'Cancel (Esc)', '2: ✕ says "Cancel (Esc)"');
+await newRow().getByRole('button', { name: 'Cancel (Esc)' }).click();
 await modal().locator('[data-row="1.2"]').getByRole('button', { name: 'Edit' }).click();
 await modal().locator('[data-row="1.2"]').getByLabel('Action by').fill('HL');
 await apply().click();
