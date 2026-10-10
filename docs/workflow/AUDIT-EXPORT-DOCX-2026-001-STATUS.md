@@ -59,3 +59,25 @@ ROUND: R2。基準 HEAD `37d71b03`。差異見 `evidence/G.patch`（SHA-256 `05f
 ## 未做／限制
 - 沒有用 Microsoft Word 開啟樣本目視確認，只用 python-docx 讀回內容，再看 Quick Look 縮圖。版面元件和 NCR 匯出相同。
 - 部署需要後端重建（sudo）和前端切換。另一個工作階段（登入測試／MATERIAL-API-CLOSE）可能正在部署，要等它結束才能部署本輪。
+
+## 上線紀錄（2026-10-10，依 DECISIONS 的 PASS 後部署授權）
+- 提交與推送：`774eb27f`（程式，9 個檔案；staged diff 的 SHA-256 等於 G.patch `05fec531…30e0`）、`dbed9845`（文件），推送到 `ui/sidebar-shell-preview`。
+- 部署時機：「登入測試」工作階段的 MATERIAL-API-CLOSE 已在 03:45Z 上線，沒有和本輪混在同一次重建裡。準備前也確認了線上的材料與 Audit 後端檔案都等於 HEAD `37d71b03`。
+- NAS 工作目錄：`~/deploy-audit-export-docx-20261010T052217Z`。
+  - 準備：線上 2 個後端檔案等於 HEAD `37d71b03`；前端是 CONTRACTOR-OPTIONS 的入口 `93b7672a…`。
+  - 備份：資料庫線上備份 integrity ok（`fd3aa04c…`）、`backend-old/`、前端舊入口。
+  - 暫存區逐檔 OK（後端 2 檔、前端 106 檔，沒有 `._` 檔）（`nas-prep-output.txt`）。
+- 後端：套用 2 個檔案（`apply-backend-output.txt`）。
+  - 第一次 sudo 重建因為密碼提示逾時，沒有執行（`sudo: timed out reading password`），正式站仍是舊程式；第二次重建成功。
+  - 回退映像：`qualitas-backend:pre-audit-export-docx-20261010T052217Z`。
+  - 新容器 `387f0de6e736` 在 2026-10-10 07:24:40Z 啟動，是第 161 次啟動紀錄，部署前為 160 次。啟動時自動備份 `qualitas_20261010_072440.db`，migration 完成，權限同步 72 項，排程啟動。日誌沒有 ERROR、Traceback 或 ABORTED（`backend-startup-check.txt`）。
+  - 三個容器都是 Up。
+- 前端：07:25Z 新增 67 個資產（另有 38 個原本就有），之後原子替換 `index.html`。dist 的 inode 沒變，106 個候選檔案全部在線上（`apply-frontend-output.txt`）。
+- 對外核對（`post-deploy-http-check.txt`）：
+  - `/` 與 `/index.html` 都是 200，雜湊為 `cd426c4f…25a6`，等於候選版本。
+  - 主 bundle 和 Audit chunk 都是 200，上一版的主 bundle 仍是 200。
+  - 未登入時 `/api/user/profile` 回 401。
+  - 未登入時 `/api/audit/<id>/export-docx` 回 401，不是 404，表示新路由已經註冊。
+- 隔離環境 8320/3320 已關閉。
+- 回退：前端用 `rollback-frontend.sh`；後端用 `rollback-backend-code.sh` 再重建，或改用 pre-audit-export-docx 映像。沒有資料庫結構變更。
+- 未完成：登入後的唯讀冒煙由使用者執行。請打開任一筆 Audit，到第 4 步按「匯出 Word」，看下載的報告內容和格式。這一步不會建立資料。
