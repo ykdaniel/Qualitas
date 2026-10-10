@@ -24,7 +24,6 @@ from core.attachment_access import (
 from core.uploads import upload_root
 from core.utils import lock_ncr_for_write
 from core.material_access import lock_material_submittal_for_write
-from services.meeting_minutes_service import DISCUSSION_PHOTO_CATEGORY, meetings_referencing_photo
 import models
 # Cookie-aware auth (accepts httpOnly access_token cookie OR legacy Bearer
 # header). middleware.auth.get_current_user is Bearer-only and 401s the
@@ -451,12 +450,6 @@ def delete_file(
     if reason:
         db.rollback()
         raise HTTPException(status_code=409, detail=reason)
-    if attachment.entity_type == "meeting" and attachment.category == DISCUSSION_PHOTO_CATEGORY:
-        # carried to a later occurrence = the same attachment shown there too: remove it there first
-        users = meetings_referencing_photo(db, attachment.id, attachment.entity_id)
-        if users:
-            db.rollback()
-            raise HTTPException(status_code=409, detail=f"This photo is still shown in {', '.join(users)}.")
 
     attachment.is_deleted = True
     db.commit()

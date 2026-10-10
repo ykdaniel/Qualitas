@@ -9,7 +9,7 @@
  * edit like new ones; a Draft is written back in the new shape the next time it is saved (Published / Void
  * meetings are locked and never rewritten).
  */
-import type { DiscussionLogEntry, PhotoRef, ProgressUpdate } from '../../store/meetingMinutesStore';
+import type { DiscussionLogEntry, ProgressUpdate } from '../../store/meetingMinutesStore';
 
 export type EntryKind = 'category' | 'subcategory' | 'item';
 
@@ -30,13 +30,6 @@ export const depthOf = (no: string) => no.split('.').length - 1;
 export const parentOf = (no: string) => (no.includes('.') ? no.slice(0, no.lastIndexOf('.')) : null);
 export const isItem = (e: DiscussionLogEntry) => e.kind === 'item';
 export const displayNo = (e: DiscussionLogEntry) => (e.kind === 'category' ? `${e.no}.0` : e.no);
-
-/** Only well-formed photo references survive (an id string), duplicates dropped. */
-const cleanPhotos = (photos: unknown): PhotoRef[] =>
-    Array.isArray(photos)
-        ? photos.filter((p, i, all): p is PhotoRef => !!p && typeof (p as PhotoRef).id === 'string' && (p as PhotoRef).id !== ''
-            && all.findIndex(q => (q as PhotoRef)?.id === (p as PhotoRef).id) === i)
-        : [];
 
 const legacyContent = (e: DiscussionLogEntry) =>
     e.content ?? [e.topic, e.discussion, e.decision].filter(Boolean).join(' / ');
@@ -66,10 +59,7 @@ export function normalizeDiscussionLog(raw: DiscussionLogEntry[] | null | undefi
                 out.owner = e.owner || '';
                 out.targetDate = e.targetDate || '';
                 out.status = e.status === 'Closed' ? 'Closed' : 'Open';
-                out.updates = Array.isArray(e.updates)
-                    ? e.updates.filter(u => u && typeof u.content === 'string').map(u => (u.photos ? { ...u, photos: cleanPhotos(u.photos) } : u))
-                    : [];
-                if (e.photos) out.photos = cleanPhotos(e.photos);
+                out.updates = Array.isArray(e.updates) ? e.updates.filter(u => u && typeof u.content === 'string') : [];
             }
             return out;
         })
@@ -193,7 +183,7 @@ export function setCurrentUpdate(log: DiscussionLogEntry[], no: string, patch: {
             ups.push({ date: patch.date ?? defaultDate, content: patch.content });
         } else {
             const next = { ...ups[i], ...patch };
-            if (!next.content.trim() && !next.photos?.length) ups.splice(i, 1);   // kept while it still has photos
+            if (!next.content.trim()) ups.splice(i, 1);
             else ups[i] = next;
         }
         return { ...e, updates: ups };
@@ -298,67 +288,4 @@ export function collectRegisterItems(meetings: MeetingForItems[], which: 'open' 
         ? (a, b) => Number(b.overdue) - Number(a.overdue) || (a.targetDate || '9999').localeCompare(b.targetDate || '9999')
             || a.documentNumber.localeCompare(b.documentNumber) || compareNo(a.itemNo, b.itemNo)
         : (a, b) => b.meetingDate.localeCompare(a.meetingDate) || a.documentNumber.localeCompare(b.documentNumber) || compareNo(a.itemNo, b.itemNo));
-}
-
-// ── photos (R9) ──
-
-/** Where a photo hangs: the item's own text, or this meeting's update (created, dated `defaultDate`, if there is none). */
-export type PhotoTarget = 'item' | 'currentUpdate';
-
-export function addPhotos(log: DiscussionLogEntry[], no: string, target: PhotoTarget, refs: PhotoRef[], defaultDate: string): DiscussionLogEntry[] {
-    if (refs.length === 0) return log;
-    return log.map(e => {
-        if (e.no !== no) return e;
-        if (target === 'item') return { ...e, photos: cleanPhotos([...(e.photos || []), ...refs]) };
-        const ups = [...(e.updates || [])];
-        const i = currentUpdateIndex(e);
-        if (i === -1) ups.push({ date: defaultDate, content: '', photos: cleanPhotos(refs) });
-        else ups[i] = { ...ups[i], photos: cleanPhotos([...(ups[i].photos || []), ...refs]) };
-        return { ...e, updates: ups };
-    });
-}
-
-/** Removes a photo from an item's text or from this meeting's update (an update left with no text and no photo goes). */
-export function removePhoto(log: DiscussionLogEntry[], no: string, target: PhotoTarget, id: string): DiscussionLogEntry[] {
-    return log.map(e => {
-        if (e.no !== no) return e;
-        if (target === 'item') return { ...e, photos: (e.photos || []).filter(p => p.id !== id) };
-        const ups = [...(e.updates || [])];
-        const i = currentUpdateIndex(e);
-        if (i === -1) return e;
-        const next = { ...ups[i], photos: (ups[i].photos || []).filter(p => p.id !== id) };
-        if (!next.content.trim() && !next.photos.length) ups.splice(i, 1);
-        else ups[i] = next;
-        return { ...e, updates: ups };
-    });
-}
-
-/** Every photo id the register refers to (carried ones included). */
-export const allPhotoIds = (log: DiscussionLogEntry[]): string[] => [...new Set(log.flatMap(e => [
-    ...(e.photos || []).map(p => p.id),
-    ...(e.updates || []).flatMap(u => (u.photos || []).map(p => p.id)),
-]))];
-
-export interface NumberedPhoto {
-    id: string;
-    /** 1-based photo number in the printout */
-    n: number;
-    itemNo: string;
-    /** the date of the text it belongs to: the item's raised date, or the update's date */
-    date: string;
-    /** -1 for the item's own text, else the update index */
-    updateIndex: number;
-}
-
-/** Photo numbers for the printout, in register order: an item's own photos, then each update's, item by item. */
-export function numberPhotos(log: DiscussionLogEntry[]): NumberedPhoto[] {
-    const out: NumberedPhoto[] = [];
-    for (const e of normalizeDiscussionLog(log)) {
-        if (!isItem(e)) continue;
-        for (const p of e.photos || []) out.push({ id: p.id, n: out.length + 1, itemNo: e.no, date: e.raisedDate || '', updateIndex: -1 });
-        (e.updates || []).forEach((u, ui) => {
-            for (const p of u.photos || []) out.push({ id: p.id, n: out.length + 1, itemNo: e.no, date: u.date || '', updateIndex: ui });
-        });
-    }
-    return out;
 }

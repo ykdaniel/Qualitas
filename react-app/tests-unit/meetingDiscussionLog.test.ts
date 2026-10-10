@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
     compareNo, normalizeDiscussionLog, nextNo, addEntry, removeEntry, removeEntryWithMap, renumber, displayNo, canRemove,
     addUpdate, removeUpdate, openItemCount, headingsOf, currentUpdateIndex, setCurrentUpdate, formatMinutesDate,
-    latestPerSeries, collectRegisterItems, registerSourcePerSeries, addPhotos, removePhoto, allPhotoIds, numberPhotos,
+    latestPerSeries, collectRegisterItems, registerSourcePerSeries,
 } from '../src/components/MeetingMinutes/discussionLog.ts';
 
 test('compareNo is tree order', () => {
@@ -177,26 +177,4 @@ test('an occurrence created before open items were carried forward (empty regist
     ];
     assert.deepEqual(registerSourcePerSeries(meetings).map(m => m.id).sort(), ['r1', 't2']);
     assert.deepEqual(collectRegisterItems(meetings, 'open', '2026-10-11').map(r => `${r.meetingId}#${r.itemNo}`).sort(), ['r1#1', 't2#1']);
-});
-
-test('photos: added to the item text or to this meeting\'s update (created if needed), removed only from those, numbered in register order', () => {
-    let log = normalizeDiscussionLog([
-        { no: '1', kind: 'category', content: 'Tech' },
-        { no: '1.1', kind: 'item', content: 'crack', raisedDate: '2026-07-14', photos: [{ id: 'a' }, { id: 'a' }, { bad: 1 } as unknown as { id: string }],
-          updates: [{ date: '2026-07-21', content: 'old', carried: true, photos: [{ id: 'b' }] }] },
-        { no: '1.2', kind: 'item', content: 'leak' },
-    ]);
-    assert.deepEqual(log[1].photos, [{ id: 'a' }]);                                    // malformed and duplicate refs dropped
-    log = addPhotos(log, '1.2', 'currentUpdate', [{ id: 'c' }], '2026-07-28');            // no update yet: one is created, dated
-    assert.deepEqual(log[2].updates, [{ date: '2026-07-28', content: '', photos: [{ id: 'c' }] }]);
-    log = addPhotos(log, '1.1', 'currentUpdate', [{ id: 'd' }], '2026-07-28');
-    assert.equal(log[1].updates?.length, 2);                                           // the carried update is left alone
-    log = addPhotos(log, '1.1', 'item', [{ id: 'e' }], '2026-07-28');
-    assert.deepEqual(allPhotoIds(log).sort(), ['a', 'b', 'c', 'd', 'e']);
-    assert.deepEqual(numberPhotos(log).map(p => `${p.n}:${p.id}:${p.itemNo}:${p.updateIndex}:${p.date}`),
-        ['1:a:1.1:-1:2026-07-14', '2:e:1.1:-1:2026-07-14', '3:b:1.1:0:2026-07-21', '4:d:1.1:1:2026-07-28', '5:c:1.2:0:2026-07-28']);
-    log = removePhoto(log, '1.2', 'currentUpdate', 'c');                               // photo-only update with no photo left: gone
-    assert.deepEqual(log[2].updates, []);
-    log = removePhoto(log, '1.1', 'currentUpdate', 'b');                               // 'b' is in the carried update: not touched
-    assert.ok(allPhotoIds(log).includes('b'));
 });

@@ -14,7 +14,7 @@ import { createColumns, createItemColumns } from './columns';
 import { MeetingMinutesDetailModal, MeetingMinutesDetailData, MeetingSaveResult } from './MeetingMinutesModals';
 import { useDebounce } from '../../hooks/useDebounce';
 import { collectRegisterItems } from './discussionLog';
-import { deleteFile, uploadFiles } from '../../services/api';
+import { uploadFiles } from '../../services/api';
 import { getErrorMessage } from '../../utils/errorUtils';
 import { describeSaveError } from '../../utils/saveErrors';
 import { runSaveFlow, sameWrite } from '../../utils/saveFlow';
@@ -135,15 +135,14 @@ const MeetingMinutes: React.FC = () => {
   // meeting is written its id replaces 'new' at once, so pressing Save again after a later step failed updates it
   // (or, unchanged, does not write it at all) and never creates a second meeting. It used to stay 'new', and every
   // retry created another meeting with a new number (MEETING-FIX-2026-001).
-  const handleSaveMeetingDetails = async (details: MeetingMinutesDetailData, pendingFiles: File[], removedPhotoIds: string[] = []): Promise<MeetingSaveResult> => {
+  const handleSaveMeetingDetails = async (details: MeetingMinutesDetailData, pendingFiles: File[]): Promise<MeetingSaveResult> => {
     if (!currentMeetingId) return { status: 'failed', message: t('common.saveFailed') };
     const isNew = currentMeetingId === 'new';
     const targetStatus = details.status || 'Draft';
     // Published / Void lock the meeting: attachments would be refused and the form could no longer be saved to
     // finish anything. With attachments still to upload, write it as Draft and set the target status only once they
     // went through (uploading needs update permission, which setting the status afterwards needs too).
-    // Removed discussion photos are deleted before that status too: a locked meeting refuses deleting its attachments.
-    const deferStatus = LOCKING_STATUSES.includes(targetStatus) && (pendingFiles.length > 0 || removedPhotoIds.length > 0);
+    const deferStatus = LOCKING_STATUSES.includes(targetStatus) && pendingFiles.length > 0;
     // documentNumber 由後端自動產生，新建時不送
     const payload: Record<string, unknown> = {
       vendor: details.contractor || undefined,
@@ -191,9 +190,6 @@ const MeetingMinutes: React.FC = () => {
       },
     });
     if (outcome.status === 'failed') return { status: 'failed', message: outcome.message };
-    // The register no longer shows these photos of this meeting: delete the files, best effort. The server refuses one that
-    // another occurrence still shows (it was carried there) — that file then simply stays; nothing ever points at a gone file.
-    if (removedPhotoIds.length) await Promise.allSettled(removedPhotoIds.map(id => deleteFile(id)));
 
     const id = lastWriteRef.current?.id || currentId;
     if (!documentNumber) {

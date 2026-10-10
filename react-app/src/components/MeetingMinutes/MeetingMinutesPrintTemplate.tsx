@@ -29,29 +29,16 @@ interface MeetingMinutesPrintTemplateProps {
     discussionLog?: DiscussionLogEntry[];
     /** every stored attachment; the images among them are also printed on the landscape photo pages */
     attachmentFiles?: { name: string; url: string; isImage?: boolean }[];
-    /** photos of the discussion register, numbered in register order (discussionLog.ts numberPhotos) — printed first */
-    registerPhotos?: { n: number; url: string; itemNo: string; date: string; updateIndex: number }[];
 }
 
 const MeetingMinutesPrintTemplate: React.FC<MeetingMinutesPrintTemplateProps> = ({
-    data, attendees = [], discussionLog = [], attachmentFiles = [], registerPhotos = [],
+    data, attendees = [], discussionLog = [], attachmentFiles = [],
 }) => {
     const register = normalizeDiscussionLog(discussionLog);
     const timeRange = [data.meetingTime, data.meetingEndTime].filter(Boolean).join(' ~ ');
-    // One photo numbering for the appendix: the discussion register's photos first (the text refers to them as "見照片 n"),
-    // then the images uploaded on the Attachments tab.
-    const attachmentImages = attachmentFiles.filter(f => f.isImage);
-    const photos: { url: string; caption: string }[] = [
-        ...registerPhotos.map(p => ({ url: p.url, caption: [`照片 Photo ${p.n}`, p.itemNo, formatMinutesDate(p.date)].filter(Boolean).join('｜') })),
-        ...attachmentImages.map((f, i) => ({ url: f.url, caption: `照片 Photo ${registerPhotos.length + i + 1}｜${f.name}` })),
-    ];
+    const photos = attachmentFiles.filter(f => f.isImage);
     const photoPages: (typeof photos)[] = [];
     for (let i = 0; i < photos.length; i += 4) photoPages.push(photos.slice(i, i + 4));
-    /** "（見照片 1、2）" after a text: the register photos of item `no`, its own text (-1) or update `ui` */
-    const seePhotos = (no: string, ui: number) => {
-        const ns = registerPhotos.filter(p => p.itemNo === no && p.updateIndex === ui).map(p => p.n);
-        return ns.length ? <span className="see-photos">（見照片 See photo {ns.join('、')}）</span> : null;
-    };
     const docRef = `${data.documentNumber || ''}${data.rev ? ` (${data.rev})` : ''}`;
     return (
         <div className="mom-print-root">
@@ -135,11 +122,11 @@ const MeetingMinutesPrintTemplate: React.FC<MeetingMinutesPrintTemplateProps> = 
                                                 <td>{e.no}</td>
                                                 <td>
                                                     {e.raisedDate && <div className="raised-date">{formatMinutesDate(e.raisedDate)}</div>}
-                                                    <div className={e.raisedDate ? 'update-text' : undefined} style={{ whiteSpace: 'pre-wrap' }}>{val(e.content)}{seePhotos(e.no, -1)}</div>
+                                                    <div className={e.raisedDate ? 'update-text' : undefined} style={{ whiteSpace: 'pre-wrap' }}>{val(e.content)}</div>
                                                     {(e.updates || []).map((u, i) => (
                                                         <div key={i} className={u.carried ? 'update carried' : 'update'}>
                                                             {u.date && <div className="update-date">{formatMinutesDate(u.date)}</div>}
-                                                            <div className="update-text">{u.content}{seePhotos(e.no, i)}</div>
+                                                            <div className="update-text">{u.content}</div>
                                                         </div>
                                                     ))}
                                                 </td>
@@ -173,7 +160,7 @@ const MeetingMinutesPrintTemplate: React.FC<MeetingMinutesPrintTemplateProps> = 
                                                 <td>{i + 1}</td>
                                                 <td>
                                                     <a href={f.url} target="_blank" rel="noreferrer">{f.name}</a>
-                                                    {f.isImage && <span className="blank">{'\u3000'}（照片 {registerPhotos.length + attachmentImages.indexOf(f) + 1}，見照片附頁 See photo pages）</span>}
+                                                    {f.isImage && <span className="blank">{'\u3000'}（照片 {photos.indexOf(f) + 1}，見照片附頁 See photo pages）</span>}
                                                 </td>
                                             </tr>
                                         ))}
@@ -206,8 +193,8 @@ const MeetingMinutesPrintTemplate: React.FC<MeetingMinutesPrintTemplateProps> = 
                     <div className="photo-grid-2x2">
                         {group.map((f, i) => (
                             <figure className="photo-cell" key={i}>
-                                <img src={f.url} alt={f.caption} />
-                                <figcaption>{f.caption}</figcaption>
+                                <img src={f.url} alt={f.name} />
+                                <figcaption>照片 Photo {pi * 4 + i + 1}{'\u3000'}{f.name}</figcaption>
                             </figure>
                         ))}
                     </div>

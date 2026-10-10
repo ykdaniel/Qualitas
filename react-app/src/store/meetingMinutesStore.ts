@@ -11,20 +11,10 @@ export interface Attendee {
     role?: string;
 }
 
-/**
- * A photo pasted / dropped onto a discussion item or one of its updates (MEETING-TABS-2026-001 R9): only the id of an
- * attachment row (category "discussionPhoto" of the meeting it was added in) — the file itself goes through the normal
- * upload checks; never base64 in the JSON. A carried item keeps the same id, so the photo is referenced, not copied.
- */
-export interface PhotoRef {
-    id: string;
-}
-
 /** A dated progress note under a discussion item ("21 Jul 2026 — TECO supplemented drawing …"). */
 export interface ProgressUpdate {
     date?: string;           // YYYY-MM-DD
     content: string;
-    photos?: PhotoRef[];
     /** Brought in from an earlier meeting by "New Occurrence": shown grey and read-only. */
     carried?: boolean;
 }
@@ -52,7 +42,6 @@ export interface DiscussionLogEntry {
     targetDate?: string;     // items only — YYYY-MM-DD
     status?: string;         // items only — 'Open' | 'Closed'
     updates?: ProgressUpdate[];
-    photos?: PhotoRef[];     // items only — photos of the item's own text
     /** Brought in from an earlier meeting by "New Occurrence": its text stays as recorded there. */
     carried?: boolean;
 }

@@ -46,41 +46,6 @@ def _entry_kind(entry: dict) -> str:
     return 'category'
 
 
-DISCUSSION_PHOTO_CATEGORY = "discussionPhoto"
-
-
-def _photo_refs(photos) -> list:
-    """Well-formed photo references only ({"id": <attachment id>}); anything else in the JSON is dropped."""
-    return [{"id": p["id"]} for p in (photos or []) if isinstance(p, dict) and isinstance(p.get("id"), str) and p["id"]]
-
-
-def _log_photo_ids(raw) -> set:
-    try:
-        entries = json.loads(raw) if isinstance(raw, str) else raw
-    except (TypeError, ValueError):
-        return set()
-    ids = set()
-    for e in entries if isinstance(entries, list) else []:
-        if not isinstance(e, dict):
-            continue
-        ids.update(p["id"] for p in _photo_refs(e.get("photos")))
-        for u in e.get("updates") or []:
-            if isinstance(u, dict):
-                ids.update(p["id"] for p in _photo_refs(u.get("photos")))
-    return ids
-
-
-def meetings_referencing_photo(db, attachment_id: str, except_meeting_id: str) -> List[str]:
-    """Other meetings whose discussion register still shows this photo ("QTS-…-000001 (2.0)") — MEETING-TABS-2026-001 R9.
-    A photo carried to the next occurrence is the SAME attachment (referenced, not copied), so it may only be deleted once
-    no other meeting uses it, and the meeting it belongs to may not be deleted while another one does."""
-    rows = db.query(models.MeetingMinutes).filter(
-        models.MeetingMinutes.id != except_meeting_id,
-        models.MeetingMinutes.discussionLog.like(f"%{attachment_id}%"),
-    ).all()
-    return [f"{m.documentNumber} ({m.rev})" for m in rows if attachment_id in _log_photo_ids(m.discussionLog)]
-
-
 def carry_forward_discussion_log(raw) -> Optional[str]:
     """The discussion register the next occurrence starts with (MEETING-TABS-2026-001, user decision 2026-10-11:
     only unfinished items are brought forward). A COPY, not a reference: the earlier meeting keeps its own record.
@@ -116,7 +81,6 @@ def carry_forward_discussion_log(raw) -> Optional[str]:
         row = {'no': no, 'kind': kind, 'level': no.count('.'), 'content': content, 'carried': True}
         if kind == 'item':
             row.update({
-                'photos': _photo_refs(e.get('photos')),           # the same attachments, referenced — not copied
                 'raisedDate': e.get('raisedDate') or '',
                 'owner': e.get('owner') or '',
                 'targetDate': e.get('targetDate') or '',
@@ -385,18 +349,6 @@ class MeetingMinutesService:
                 raise ValueError(
                     f"Cannot delete Meeting Minutes '{db_meeting.documentNumber}' "
                     f"with status '{db_meeting.status}'. Please Void it first, then delete."
-                )
-
-            # Its discussion photos may be shown by a later occurrence (carried items reference them): keep it then.
-            own_photos = [a.id for a in self.repo.db.query(models.Attachment.id).filter(
-                models.Attachment.entity_type == 'meeting', models.Attachment.entity_id == meeting_id,
-                models.Attachment.category == DISCUSSION_PHOTO_CATEGORY, models.Attachment.is_deleted == False,  # noqa: E712
-            ).all()]
-            users = sorted({u for a in own_photos for u in meetings_referencing_photo(self.repo.db, a, meeting_id)})
-            if users:
-                raise ValueError(
-                    f"Cannot delete Meeting Minutes '{db_meeting.documentNumber}' ({db_meeting.rev}): its discussion photos "
-                    f"are still shown in {', '.join(users)}."
                 )
 
             is_draft = db_meeting.status == 'Draft'

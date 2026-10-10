@@ -1,7 +1,7 @@
 import { useDraftGuard } from '../Shared/LeaveGuard';
 import FormActions from '../Shared/FormActions';
 import actionStyles from '../Shared/FormActions.module.css';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -11,12 +11,12 @@ import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useMeetingMinutesStore } from '../../store/meetingMinutesStore';
 import { describeSaveError } from '../../utils/saveErrors';
-import api, { getUsers, getEntityFiles, getAuthenticatedFileUrl, createMeetingMinutesOccurrence, uploadFiles, deleteFile, type User as ApiUser } from '../../services/api';
-import type { MeetingMinutesItem, Attendee, DiscussionLogEntry, PhotoRef } from '../../store/meetingMinutesStore';
+import { getUsers, getEntityFiles, getAuthenticatedFileUrl, createMeetingMinutesOccurrence, type User as ApiUser } from '../../services/api';
+import type { MeetingMinutesItem, Attendee, DiscussionLogEntry } from '../../store/meetingMinutesStore';
 import FileAttachment from '../Shared/FileAttachment';
 import { BackButton } from '../ui/BackButton';
 import DiscussionRegister, { isEditDirty, type RegisterEdit } from './DiscussionRegister';
-import { allPhotoIds, normalizeDiscussionLog, numberPhotos, openItemCount } from './discussionLog';
+import { normalizeDiscussionLog, openItemCount } from './discussionLog';
 import ImagePreviewOverlay from '../Shared/ImagePreviewOverlay';
 import MeetingMinutesPrintTemplate from './MeetingMinutesPrintTemplate';
 import formStyles from '../Shared/FormShell.module.css';
@@ -68,8 +68,7 @@ export interface MeetingMinutesDetailModalProps {
     meetingId: string | null;
     existingItem?: MeetingMinutesItem;
     readOnly?: boolean;
-    /** `removedPhotoIds`: this meeting's own discussion photos taken off the register — the page deletes them once saved */
-    onSave: (details: MeetingMinutesDetailData, pendingFiles: File[], removedPhotoIds: string[]) => Promise<MeetingSaveResult>;
+    onSave: (details: MeetingMinutesDetailData, pendingFiles: File[]) => Promise<MeetingSaveResult>;
     /** Voids the (Published) record: sends the status change alone — the record is locked, so resending its fields is refused. */
     onVoid?: () => Promise<void>;
     onClose: () => void;
@@ -131,54 +130,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
     // the Save check below). This week's updates are written straight into discussionLog, so they are covered by it.
     const registerEditDirty = isEditDirty(registerEdit, discussionLog);
     const leaveGuard = useDraftGuard({ formData, attendees, newAttendee, discussionLog, registerEditDirty, pendingFiles }, saving || spawningOccurrence, !readOnly);
-
-    // ── discussion photos (R9) ──
-    // Uploaded as the meeting's "discussionPhoto" attachments the moment they are pasted (a saved Draft only: the upload needs
-    // the meeting's id); the register keeps their ids. Photos uploaded in this sitting and then abandoned (Cancel / Back /
-    // closing without saving) are deleted again, best effort — only a browser closed mid-edit can leave an orphan file.
-    const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
-    const uploadedHere = useRef(new Set<string>());
-    const [removedPhotos, setRemovedPhotos] = useState<string[]>([]);
-    const photoIdsKey = allPhotoIds(discussionLog).join(',');
-    useEffect(() => {
-        const missing = photoIdsKey.split(',').filter(id => id && !(id in photoUrls));
-        if (missing.length === 0) return;
-        let alive = true;
-        // carried photos belong to an earlier occurrence: read them by id (same contractor / project, so in scope)
-        Promise.all(missing.map(id => api.get(`/files/${id}`)
-            .then(r => [id, getAuthenticatedFileUrl(r.data?.file_url || '')] as const)
-            .catch(() => [id, ''] as const)))
-            .then(pairs => { if (alive) setPhotoUrls(prev => ({ ...prev, ...Object.fromEntries(pairs) })); });
-        return () => { alive = false; };
-    }, [photoIdsKey, photoUrls]);
-    const canAddPhotos = !!existingItem?.id && !readOnly && hasPermission('meeting:update:all');
-    const uploadPhotos = async (files: File[]): Promise<PhotoRef[]> => {
-        const stored = await uploadFiles('meeting', existingItem!.id, files, 'discussionPhoto');
-        setPhotoUrls(prev => ({ ...prev, ...Object.fromEntries(stored.map(f => [f.id, getAuthenticatedFileUrl(f.file_url)])) }));
-        stored.forEach(f => uploadedHere.current.add(f.id));
-        return stored.map(f => ({ id: f.id }));
-    };
-    const onPhotoRemoved = (id: string) => {
-        if (uploadedHere.current.has(id)) {                        // never saved anywhere: delete it now
-            uploadedHere.current.delete(id);
-            deleteFile(id).catch(() => { /* best effort: an orphan file, no broken reference */ });
-        } else {
-            setRemovedPhotos(prev => [...prev, id]);               // saved before: deleted once this save goes through
-        }
-    };
-    // Ids of the register last handed to Save: while that save runs (or once it stored them) they are referenced, never orphans.
-    const submittedPhotoIds = useRef<Set<string> | null>(null);
-    const discardUploadedPhotos = () => {
-        uploadedHere.current.forEach(id => {
-            if (!submittedPhotoIds.current?.has(id)) deleteFile(id).catch(() => { /* best effort */ });
-        });
-        uploadedHere.current.clear();
-    };
-    // Any other way out (e.g. a route change the leave guard let through) unmounts the form: same clean-up.
-    const discardRef = useRef(discardUploadedPhotos);
-    discardRef.current = discardUploadedPhotos;
-    useEffect(() => () => discardRef.current(), []);
-    const requestClose = () => leaveGuard.requestClose(() => { discardUploadedPhotos(); onClose(); });
+    const requestClose = () => leaveGuard.requestClose(onClose);
 
     const handleFieldChange = (field: keyof typeof formData, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -222,19 +174,11 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
         if (blockSaveForUnconfirmedDraft()) return;
         setSaving(true);
         setIncompleteNotice(null);
-        submittedPhotoIds.current = new Set(allPhotoIds(discussionLog));
         try {
             const result = await onSave(
                 { ...formData, attendees, discussionLog, attachments: [] },
                 pendingFiles,
-                removedPhotos,
             );
-            if (result.status !== 'failed') {                      // the register (with its photo ids) is stored now
-                uploadedHere.current.clear();
-                setRemovedPhotos([]);
-            } else {
-                submittedPhotoIds.current = null;                  // nothing stored: they are this sitting's uploads again
-            }
             if (result.status === 'failed') {
                 toast.error(t('saveFlow.failedKeep', { message: result.message }), { duration: 10000 });
             } else if (result.status === 'saved-incomplete') {
@@ -249,7 +193,6 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
             }
             // 'saved': the page closes the modal.
         } catch (err) {
-            submittedPhotoIds.current = null;
             toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
         } finally {
             setSaving(false);
@@ -286,7 +229,6 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
             toast.success(t('meetingMinutes.occurrenceCreated') || `New occurrence created (rev ${created.rev})`);
             await useMeetingMinutesStore.getState().refetch();
             leaveGuard.release();
-            discardUploadedPhotos();                               // unsaved changes were confirmed away by the leave guard
             (onDismiss || onClose)();
             navigate(`/meeting-minutes?openId=${created.id}`);
         } catch (err: any) {
@@ -299,7 +241,6 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
     // Print: mount the report portal, print, unmount (same pattern as NCR/OBS).
     const [isPrinting, setIsPrinting] = useState(false);
     const [printAttachments, setPrintAttachments] = useState<{ name: string; url: string; isImage: boolean }[]>([]);
-    const [printRegisterPhotos, setPrintRegisterPhotos] = useState<{ n: number; url: string; itemNo: string; date: string; updateIndex: number }[]>([]);
     useEffect(() => {
         if (!isPrinting) return;
         // wait for the photo pages' images (up to 8 s), or they print blank
@@ -331,7 +272,6 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
             } catch {/* no attachments to show */}
         }
         setPrintAttachments(files);
-        setPrintRegisterPhotos(numberPhotos(discussionLog).map(p => ({ ...p, url: photoUrls[p.id] || '' })));
         setIsPrinting(true);
     };
 
@@ -492,13 +432,6 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                                     edit={registerEdit}
                                     setEdit={setRegisterEdit}
                                     peopleListId="meeting-attendee-people"
-                                    photos={{
-                                        upload: canAddPhotos ? uploadPhotos : undefined,
-                                        blockedReason: !existingItem ? t('meetingMinutes.photoSaveFirst') : t('saveFlow.attachmentsBlocked.edit'),
-                                        urls: photoUrls,
-                                        onRemoved: onPhotoRemoved,
-                                        onPreview: url => handlePreview(url),
-                                    }}
                                 />
                             </div>
                         </div>
@@ -561,7 +494,6 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                     attendees={attendees}
                     discussionLog={discussionLog}
                     attachmentFiles={printAttachments}
-                    registerPhotos={printRegisterPhotos}
                 />,
                 document.body
             )}
