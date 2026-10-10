@@ -273,7 +273,10 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
         const isHeading = edit.kind !== 'item';
         return (
             <tr key="__new" data-row="new" data-editing="" style={isHeading ? { background: HEAD_BG[edit.kind] } : undefined}>
-                <td style={{ ...cell, ...small }}>{t('common.add')}</td>
+                {/* the number this row will get on ✓ (the same nextNo addEntry uses), faint until applied */}
+                <td style={{ ...cell, color: grey, fontWeight: isHeading ? 600 : 400 }} data-pending-no title={t('meetingMinutes.pendingNo')}>
+                    {(() => { const no = nextNo(log, edit.parent); return edit.kind === 'category' ? `${no}.0` : no; })()}
+                </td>
                 {isHeading ? (
                     <td style={cell} colSpan={3}>
                         <AutoText style={{ fontWeight: 600 }} value={edit.content} autoFocus

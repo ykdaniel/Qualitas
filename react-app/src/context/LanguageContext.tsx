@@ -764,6 +764,7 @@ const translations: Record<Language, Record<string, string>> = {
     'meetingMinutes.applyRow': 'Apply',
     'meetingMinutes.confirmDeleteRow': 'Delete {no} and everything under it?',
     'meetingMinutes.confirmDeleteItem': 'Delete {no}?',
+    'meetingMinutes.pendingNo': 'Number this row gets when applied',
 
     // OBS
     'obs.title': 'OBS List',
@@ -2291,6 +2292,7 @@ const translations: Record<Language, Record<string, string>> = {
     'meetingMinutes.applyRow': '套用',
     'meetingMinutes.confirmDeleteRow': '要刪除 {no} 及其底下所有項目嗎？',
     'meetingMinutes.confirmDeleteItem': '要刪除 {no} 嗎？',
+    'meetingMinutes.pendingNo': '套用後取得的編號',
 
     // OBS
     'obs.title': 'OBS 列表',
