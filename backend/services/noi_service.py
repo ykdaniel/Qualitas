@@ -181,6 +181,17 @@ class NOIService:
             logger.error(f"Error creating NOI: {e}", exc_info=True)
             raise e
 
+    def _documents_citing(self, reference_no: str) -> List[str]:
+        """Counts of the documents that cite this NOI by number, e.g. ['2 ITR(s)', '1 NCR(s)'] — counts only, so the
+        message names nothing the caller may not be allowed to see."""
+        cited = []
+        for label, model in (("ITR", models.ITR), ("NCR", models.NCR), ("Observation", models.OBS),
+                             ("Checklist", models.Checklist)):
+            n = self.repo.db.query(model.id).filter(model.noiNumber == reference_no).count()
+            if n:
+                cited.append(f"{n} {label}(s)")
+        return cited
+
     def update_noi(self, noi_id: str, noi_update: schemas.NOIUpdate,
                    user_id: int = None, username: str = None, scope=None) -> Optional[models.NOI]:
         """
@@ -238,7 +249,20 @@ class NOIService:
             if 'contractor' in d:
                 vendor_name = d.pop('contractor')
                 new_vendor_id = _resolve_vendor_id(self.repo.db, vendor_name)
-                
+
+                # Business decision 2026-10-10: once documents are filed under this NOI, its contractor is fixed.
+                # Changing it renumbers the NOI below, and ITR / NCR / OBS / Checklist cite the NOI by that number
+                # with nothing to carry the change over — they were cut loose (the ITR could not be saved again,
+                # the NOI close check and Q-Workflow stopped seeing it).
+                if new_vendor_id != db_noi.vendor_id and db_noi.referenceNo:
+                    cited = self._documents_citing(db_noi.referenceNo)
+                    if cited:
+                        raise ValueError(
+                            f"Cannot change the contractor of NOI '{db_noi.referenceNo}': "
+                            f"{', '.join(cited)} already filed under it. Changing the contractor would renumber the NOI "
+                            f"and cut those links."
+                        )
+
                 # Determine if reference number needs regeneration
                 regenerate = False
                 if new_vendor_id and new_vendor_id != db_noi.vendor_id:
@@ -260,7 +284,12 @@ class NOIService:
                         project_code = getattr(settings, 'PROJECT_CODE', 'QTS')
                         expected_prefix = f"{project_code}-{vendor_abbrev}-NOI-"
                         
-                    if not db_noi.referenceNo.startswith(expected_prefix):
+                    # Same contractor, but its abbreviation (or the naming rule) changed since this NOI was numbered.
+                    # Business decision 2026-10-10: an NOI that already has documents filed under it keeps its number —
+                    # the UI resends the contractor on every save, so otherwise any ordinary save renumbered it and cut
+                    # those documents loose. An NOI with nothing under it is still brought in line, as before.
+                    if not db_noi.referenceNo.startswith(expected_prefix) \
+                            and not self._documents_citing(db_noi.referenceNo):
                         regenerate = True
 
                 if regenerate:
