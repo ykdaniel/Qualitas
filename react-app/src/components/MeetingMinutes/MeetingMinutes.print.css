@@ -19,6 +19,7 @@
 .mom-print-root { display: none; }
 
 .mom-print-root {
+    page: mom;
     font-family: "Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
     color: var(--mom-ink);
     font-size: 9.3px;
@@ -99,6 +100,18 @@
     background: var(--mom-fill); font-weight: 700; color: #2a2e34;
 }
 
+/* header block laid out like the company's minutes (MEETING-TABS-2026-001) */
+.mom-print-root .center { text-align: center; }
+.mom-print-root .mom-header th { background: var(--mom-fill-head); font-weight: 700; text-align: center; }
+/* discussion register: categories (n.0) and sub-categories (n.n) as shaded rows,
+   progress updates under an item, updates from earlier meetings grey */
+.mom-print-root .register tr.cat-row td { background: var(--mom-fill-head); font-weight: 700; }
+.mom-print-root .register tr.sub-row td { background: var(--mom-fill); font-weight: 600; }
+.mom-print-root .register .update { margin-top: 4px; }
+.mom-print-root .register .update-date { color: var(--mom-note); }
+.mom-print-root .register .update-text { padding-left: 12px; white-space: pre-wrap; }
+.mom-print-root .register .update.carried .update-text { color: var(--mom-note); }
+
 .mom-print-root .sign-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 4px; }
 .mom-print-root .sign-cell { border: 1px solid var(--mom-line); padding: 6px 8px 7px; }
 .mom-print-root .sign-cell .role { font-weight: 700; font-size: 9px; }
@@ -117,8 +130,38 @@
 .mom-print-root .sign-cell { break-inside: avoid; page-break-inside: avoid; }
 .mom-print-root .sec-head { break-after: avoid; page-break-after: avoid; }
 
+/* Photo pages: landscape A4, 2 × 2 (user decision 2026-10-11). Height is the landscape page less its margins and a little rounding room. */
+.mom-print-root .photo-page {
+    page: mom-photos;
+    break-before: page; page-break-before: always;
+    height: 184mm; display: flex; flex-direction: column;   /* 210 - 2 x 12mm margins, less 2mm of rounding room */
+}
+.mom-print-root .photo-head {
+    display: flex; justify-content: space-between; font-weight: 700; font-size: 10px;
+    border-bottom: 1.6px solid var(--mom-ink); padding-bottom: 2mm; margin-bottom: 3mm;
+}
+.mom-print-root .photo-grid-2x2 {
+    flex: 1; min-height: 0;
+    display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 4mm;
+}
+.mom-print-root .photo-cell {
+    margin: 0; min-height: 0; border: 1px solid var(--mom-line); padding: 2mm;
+    display: grid; grid-template-rows: minmax(0, 1fr) auto;
+    break-inside: avoid; page-break-inside: avoid;
+}
+.mom-print-root .photo-cell img { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
+.mom-print-root .photo-cell figcaption { font-size: 8px; color: var(--mom-muted); text-align: center; margin-top: 1mm; word-break: break-all; }
+
+/* Named pages: an unnamed @page from another module (ITP is landscape) would otherwise decide the size once its CSS
+   has been loaded in the same session — that is how the minutes came out landscape. Same approach as Audit.print.css. */
+@page mom { size: A4 portrait !important; margin: 13mm 12mm !important; }
+@page mom-photos { size: A4 landscape !important; margin: 12mm !important; }
+
 @media print {
-    @page { size: A4; margin: 13mm 12mm; }
+    body:has(> .mom-print-root) > :not(.mom-print-root) { display: none !important; }
+    /* ITR.module.css forces this always-present index.html container visible with an id selector — hidden here too,
+       or once ITR has been opened it takes a blank first page */
+    body:has(> .mom-print-root) > #itr-single-print-root { display: none !important; }
     #root { display: none !important; }
     .mom-print-root { display: block !important; }
     .mom-print-root .mom-report > thead { display: table-header-group; }

@@ -4,6 +4,7 @@ Meeting Minutes Service
 Business logic layer for the Meeting Minutes module
 """
 
+import json
 import re
 import uuid
 import logging
@@ -26,6 +27,68 @@ from core.utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _entry_kind(entry: dict) -> str:
+    """Same reading as the front end's normalizeDiscussionLog (MeetingMinutes/discussionLog.ts): rows saved before
+    MEETING-TABS-2026-001 have no `kind` — level 1 (or a dotted number without a level) is an item, the rest a category."""
+    kind = entry.get('kind')
+    if kind in ('category', 'subcategory', 'item'):
+        return kind
+    if entry.get('level') == 1:
+        return 'item'
+    if entry.get('level') is None:
+        # flat rows saved 2026-08-29 … 08-31 already had an owner / status: action rows, not headings
+        if 'owner' in entry or 'status' in entry:
+            return 'item'
+        if '.' in str(entry.get('no', '')):
+            return 'item'
+    return 'category'
+
+
+def carry_forward_discussion_log(raw) -> Optional[str]:
+    """The discussion register the next occurrence starts with (MEETING-TABS-2026-001, user decision 2026-10-11:
+    only unfinished items are brought forward). A COPY, not a reference: the earlier meeting keeps its own record.
+
+    Items still Open are kept with their Action by / Target date and every progress update, together with the
+    categories / sub-categories above them; a heading with nothing open under it is not carried (user decision
+    2026-10-11), and Closed items stay only in the meeting that closed them.
+    Everything brought forward is marked `carried`, which the form shows grey / read-only, and numbers are not
+    changed — people refer to an item by its number across meetings. Returns None when nothing is carried.
+    """
+    try:
+        entries = json.loads(raw) if isinstance(raw, str) else raw
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(entries, list):
+        return None
+    rows = []
+    for e in entries:
+        if not isinstance(e, dict) or not str(e.get('no', '')).strip():
+            continue
+        kind = _entry_kind(e)
+        if kind == 'item' and e.get('status') == 'Closed':
+            continue
+        rows.append((str(e['no']).strip(), kind, e))
+    open_items = [no for no, kind, _ in rows if kind == 'item']
+    carried = []
+    for no, kind, e in rows:
+        if kind != 'item' and not any(i.startswith(f"{no}.") for i in open_items):
+            continue
+        content = e.get('content')
+        if content is None:
+            content = ' / '.join(str(e[k]) for k in ('topic', 'discussion', 'decision') if e.get(k))
+        row = {'no': no, 'kind': kind, 'level': no.count('.'), 'content': content, 'carried': True}
+        if kind == 'item':
+            row.update({
+                'owner': e.get('owner') or '',
+                'targetDate': e.get('targetDate') or '',
+                'status': 'Open',
+                'updates': [{**u, 'carried': True} for u in (e.get('updates') or [])
+                            if isinstance(u, dict) and isinstance(u.get('content'), str)],
+            })
+        carried.append(row)
+    return json.dumps(carried, ensure_ascii=False) if carried else None
 
 
 class MeetingMinutesService:
@@ -99,9 +162,10 @@ class MeetingMinutesService:
         shares one document number for its lifetime) and bumps rev
         ("1.0" -> "2.0" -> ...); carries forward vendor/project/meetingType/
         organizer/location/attendees so the common case (same people, same
-        format, different week) doesn't need retyping. discussionLog is
-        deliberately NOT carried forward (fresh agenda every occurrence),
-        and meetingDate is deliberately left blank (not defaulted to
+        format, different week) doesn't need retyping. Of the discussion
+        register only the unfinished items are carried forward (with their
+        categories and progress updates — carry_forward_discussion_log,
+        MEETING-TABS-2026-001), and meetingDate is deliberately left blank (not defaulted to
         today) — the user fills in the actual date.
 
         Unlike ITR's create_reinspection / create_ncr_from_itr (which mint
@@ -143,10 +207,11 @@ class MeetingMinutesService:
                 meetingType=source.meetingType,
                 meetingDate=None,
                 meetingTime=None,
+                meetingEndTime=None,
                 location=source.location,
                 organizer=source.organizer,
                 attendees=source.attendees,  # already a JSON string column — plain copy
-                discussionLog=None,
+                discussionLog=carry_forward_discussion_log(source.discussionLog),
                 attachments=None,
                 createdAt=datetime.now().isoformat(),
                 updatedAt=datetime.now().isoformat(),

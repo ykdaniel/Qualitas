@@ -1,3 +1,4 @@
+import json
 import pytest
 from unittest.mock import MagicMock, patch
 from services.meeting_minutes_service import MeetingMinutesService
@@ -209,8 +210,9 @@ def test_create_new_occurrence_bumps_rev_and_carries_fields(meeting_service, moc
     """BACKLOG #18: new occurrence shares the source's documentNumber,
     computes next_rev from the max across all siblings (not just the
     source's own rev), starts as Draft, carries vendor/project/meetingType/
-    organizer/location/attendees, and does NOT carry discussionLog or
-    meetingDate."""
+    organizer/location/attendees, and does NOT carry meetingDate; of the
+    discussion register only unfinished items and their headings are carried
+    (MEETING-TABS-2026-001, previously nothing)."""
     source = models.MeetingMinutes(
         id="mtg-src", documentNumber="MOM-001", rev="2.0", status="Published",
         title="Weekly Sync - 2026-08-24", project_id="proj-1", vendor_id="vendor-1",
@@ -239,6 +241,7 @@ def test_create_new_occurrence_bumps_rev_and_carries_fields(meeting_service, moc
     assert new_meeting.location == "Site Office"
     assert new_meeting.organizer == "Alice"
     assert new_meeting.attendees == '[{"name": "Bob", "company": "Acme"}]'
+    # MEETING-TABS-2026-001: only unfinished items (and their headings) are carried; a lone heading is not
     assert new_meeting.discussionLog is None
     assert new_meeting.meetingDate is None
     assert result is new_meeting

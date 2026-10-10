@@ -992,6 +992,7 @@ class MeetingMinutesBase(BaseModel):
     meetingType: str | None = None
     meetingDate: str | None = None
     meetingTime: str | None = None
+    meetingEndTime: str | None = None
     location: str | None = None
     organizer: str | None = None
     attendees: Any | None = None
@@ -1030,6 +1031,7 @@ class MeetingMinutesUpdate(BaseModel):
     meetingType: str | None = None
     meetingDate: str | None = None
     meetingTime: str | None = None
+    meetingEndTime: str | None = None
     location: str | None = None
     organizer: str | None = None
     attendees: Any | None = None

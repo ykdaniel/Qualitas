@@ -688,6 +688,9 @@ def _add_missing_columns():
             _add_column_if_missing(conn, "audits", "custom_check_items", "TEXT")
             _add_column_if_missing(conn, "audits", "agenda", "TEXT")  # AUDIT-AGENDA-2026-001
 
+            # Meeting Minutes
+            _add_column_if_missing(conn, "meeting_minutes", "meetingEndTime", "VARCHAR")  # MEETING-TABS-2026-001
+
             # AuditLog
             _add_column_if_missing(conn, "audit_logs", "reason", "TEXT")
             _add_column_if_missing(conn, "audit_logs", "details", "TEXT")

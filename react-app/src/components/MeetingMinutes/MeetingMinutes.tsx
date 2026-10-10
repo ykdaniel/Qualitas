@@ -14,6 +14,7 @@ import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns, createClosedItemsColumns, type ClosedItemRow } from './columns';
 import { MeetingMinutesDetailModal, MeetingMinutesDetailData, ActionItemDraft, MeetingSaveResult, toActionItemPayload } from './MeetingMinutesModals';
 import { useDebounce } from '../../hooks/useDebounce';
+import { headingsOf, isItem, normalizeDiscussionLog } from './discussionLog';
 import api, { uploadFiles } from '../../services/api';
 import { getErrorMessage } from '../../utils/errorUtils';
 import { describeSaveError } from '../../utils/saveErrors';
@@ -73,21 +74,18 @@ const MeetingMinutes: React.FC = () => {
   const closedItems = useMemo<ClosedItemRow[]>(() => {
     const rows: ClosedItemRow[] = [];
     for (const meeting of meetingList) {
-      const log = meeting.discussionLog || [];
-      const majors = log.filter(d => (d.level ?? 0) === 0);
-      const subs = log.filter(d => d.level === 1 && d.status === 'Closed');
-      for (const sub of subs) {
-        const parentNo = sub.no.split('.')[0];
-        const topic = majors.find(m => m.no === parentNo);
+      // any stored shape (legacy two-level or the current register) — see discussionLog.ts
+      const log = normalizeDiscussionLog(meeting.discussionLog);
+      for (const item of log.filter(e => isItem(e) && e.status === 'Closed')) {
         rows.push({
           meetingId: meeting.id,
           documentNumber: meeting.documentNumber,
           meetingTitle: meeting.title || '',
           meetingDate: meeting.meetingDate || '',
-          itemNo: sub.no,
-          content: sub.content || '',
-          owner: sub.owner || '',
-          topicTitle: topic?.content || '',
+          itemNo: item.no,
+          content: item.content || '',
+          owner: item.owner || '',
+          topicTitle: headingsOf(log, item.no).join(' / '),
         });
       }
     }
@@ -162,6 +160,7 @@ const MeetingMinutes: React.FC = () => {
       meetingType: details.meetingType || undefined,
       meetingDate: details.meetingDate || undefined,
       meetingTime: details.meetingTime || undefined,
+      meetingEndTime: details.meetingEndTime || undefined,
       location: details.location || undefined,
       organizer: details.organizer || undefined,
       attendees: details.attendees,

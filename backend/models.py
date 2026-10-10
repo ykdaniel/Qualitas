@@ -540,6 +540,7 @@ class MeetingMinutes(Base):
     meetingType = Column(String, nullable=True)
     meetingDate = Column(String, nullable=True)
     meetingTime = Column(String, nullable=True)
+    meetingEndTime = Column(String, nullable=True)  # MEETING-TABS-2026-001: time range start ~ end
     location = Column(String, nullable=True)
     organizer = Column(String, nullable=True)
     attendees = Column(Text, nullable=True)       # JSON: [{name, company, role}]

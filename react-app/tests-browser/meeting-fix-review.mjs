@@ -62,6 +62,8 @@ const saveBtn = () => modal().getByRole('button', { name: /^Save$/ });
 const openList = async () => { await page.goto(`${BASE}/meeting-minutes`); await page.waitForTimeout(700); };
 const openNew = async () => { await openList(); await page.getByRole('button', { name: /Add New Meeting/i }).click(); await modal().waitFor(); };
 const addActionItem = async (title) => {
+    // MEETING-TABS-2026-001: action items live on their own tab
+    await modal().getByRole('tab', { name: /^Action Items/ }).click();
     await modal().getByPlaceholder('Action Item').first().fill(title);
     await modal().getByPlaceholder('Action Item').first().locator('xpath=..').locator('button').last().click();
 };
@@ -72,7 +74,7 @@ const toastText = async () => (await page.locator('[data-sonner-toast]').allText
 log('=== 2. new Published meeting, attachment + 2 action items, first upload fails ===');
 const T2 = 'MFX upload-fails-once';
 await openNew();
-await field('Title').fill(T2);
+await field('Subject').fill(T2);
 await field('Status').selectOption('Published');
 await field('Contractor').selectOption('Hailong Construction');
 await addActionItem('MFX action A');
@@ -131,7 +133,7 @@ check(!(await modal().isVisible().catch(() => false)), '1b: modal closed');
 log('=== 3. new Draft meeting, 2 action items, the second fails once ===');
 const T3 = 'MFX action-fails-once';
 await openNew();
-await field('Title').fill(T3);
+await field('Subject').fill(T3);
 await addActionItem('MFX first ok');
 await addActionItem('MFX second fails once');
 let followupPosts = 0;
@@ -197,7 +199,7 @@ await page.waitForURL(u => !u.pathname.includes('/login'), { waitUntil: 'commit'
 await page.waitForTimeout(1000);
 const T5 = 'MFX create-only publish';
 await openNew();
-await field('Title').fill(T5);
+await field('Subject').fill(T5);
 await field('Status').selectOption('Published');
 await addActionItem('MFX creator action');
 calls.length = 0;
