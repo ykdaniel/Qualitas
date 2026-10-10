@@ -143,6 +143,26 @@ def test_a_status_that_is_not_a_string_counts_as_pending(env):
     assert '25%' in docx_text(response)  # 1 of 4 done, the other three pending
 
 
+def summary_values(response):
+    doc = Document(BytesIO(response.content))
+    summary = next(t for t in doc.tables if 'Total Items' in t.rows[0].cells[0].text)
+    values = {}
+    for row in summary.rows:
+        texts = [c.text for c in row.cells]
+        texts = [x for i, x in enumerate(texts) if i == 0 or x != texts[i - 1]]
+        values.update({texts[i].split('\n')[1]: texts[i + 1] for i in range(0, len(texts), 2)})
+    return values
+
+
+def test_progress_rounds_half_up_like_the_wizard(env):
+    # 1 of 8 done = 12.5 % -> 13 % (round() would give 12); 23 of 40 = 57.5 % -> 58 % (in JavaScript 23 / 40 * 100 is
+    # 57.4999..., so Math.round gave 57 — the wizard and the printouts now use the same integer formula)
+    for total, done, expected in [(8, 1, '13%'), (40, 23, '58%'), (3, 1, '33%'), (3, 2, '67%'), (6, 6, '100%')]:
+        items = [{'id': n, 'task': f'q{n}', 'status': 'pass' if n < done else None} for n in range(total)]
+        created = create(env, custom_check_items=items).json()
+        assert summary_values(export(env, created['id']))['Progress'] == expected, (total, done)
+
+
 def test_characters_xml_cannot_carry_are_dropped_not_an_error(env):
     audit_id = insert_raw(env, title='Ti\x01tle', findings='Line\x1fone\nLine two',
                           custom_check_items='[{"id": 1, "no": "7.1", "clause": "Res\\u000bources", "task": "Q\\u0000?",'

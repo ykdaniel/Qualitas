@@ -2,6 +2,7 @@ import { useDraftGuard, useItemDraftGuard } from '../Shared/LeaveGuard';
 import FormActions from '../Shared/FormActions';
 import actionStyles from '../Shared/FormActions.module.css';
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import {
   MapPin, ClipboardList, CheckCircle, ChevronRight, ChevronLeft,
@@ -14,6 +15,8 @@ import { useProjectStore } from '../../store/projectStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { checkDateOrder } from '../../utils/dateValidation';
 import { exportAuditDocx } from '../../services/api';
+import AuditPrintTemplate, { AuditPrintKind, AuditPrintData, auditProgress } from './AuditPrintTemplate';
+import './Audit.print.css';
 
 // Today as YYYY-MM-DD in the browser's time zone (toISOString() is UTC: the previous day before 08:00 in Taiwan).
 const localToday = () => {
@@ -107,6 +110,18 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
   const [isDraftSaving, setIsDraftSaving] = useState(false);
   const [draftMessage, setDraftMessage] = useState('');
   const [exportingDocx, setExportingDocx] = useState(false);
+  // The three print buttons render a formal printout (AuditPrintTemplate) into <body> and print that, instead of the
+  // wizard itself (AUDIT-PRINT-2026-001); cleared again after the print dialog closes. `n` makes every click a new job, so
+  // a button still works if a browser never fired afterprint for the previous one.
+  const [printJob, setPrintJob] = useState<{ kind: AuditPrintKind; n: number } | null>(null);
+  const requestPrint = (kind: AuditPrintKind) => setPrintJob(prev => ({ kind, n: (prev?.n ?? 0) + 1 }));
+  React.useEffect(() => {
+    if (!printJob) return;
+    const timer = setTimeout(() => window.print(), 200);
+    const onAfterPrint = () => setPrintJob(null);
+    window.addEventListener('afterprint', onAfterPrint);
+    return () => { clearTimeout(timer); window.removeEventListener('afterprint', onAfterPrint); };
+  }, [printJob]);
 
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
@@ -221,7 +236,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     const passed = formData.customCheckItems.filter((i: any) => i.status === 'pass').length;
     const failed = formData.customCheckItems.filter((i: any) => i.status === 'fail').length;
     const pending = total - passed - failed; // The "!" status is treated as pending or warning
-    const progress = total === 0 ? 0 : Math.round(((total - pending) / total) * 100);
+    const progress = auditProgress(total, pending);
     return { total, passed, failed, pending, progress };
   }, [formData.customCheckItems]);
 
@@ -450,6 +465,32 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     }
   };
 
+  // What the printouts show: the form as it is on screen (the Word export reads the saved record instead).
+  const printData: AuditPrintData = {
+    auditNo,
+    status: formData.status,
+    title: formData.auditTitle,
+    // Same label as the Word export and the project picker: "[code] name", or the legacy name when no project is linked.
+    projectLabel: (() => {
+      const project = projectList.find(p => p.id === selectedProjectId);
+      return project ? (project.code ? `[${project.code}] ${project.name}` : project.name) : formData.projectName;
+    })(),
+    // Legacy rows may hold only the contractor id; the Word export then falls back to the contractor's name too.
+    contractor: formData.contractor || contractorOptions.find(c => c.id === formData.vendorId)?.name || '',
+    startDate: formData.auditStartDate,
+    endDate: formData.auditEndDate,
+    location: formData.location,
+    projectDirector: formData.projectDirector,
+    techLead: formData.techLead,
+    leadAuditor: formData.leadAuditor,
+    supportAuditors: formData.supportAuditors,
+    auditCriteria: formData.auditCriteria,
+    scopeDescription: formData.scopeDescription,
+    selectedTemplates: formData.selectedTemplates,
+    customCheckItems: formData.customCheckItems,
+    findings: formData.findings,
+  };
+
   const renderProgressBar = () => (
     // px-10: each label is centred under its circle and wider than it, so the first and last labels hang ~36px past the
     // circles — the padding keeps them inside the wizard at every width (AUDIT-LAYOUT R2).
@@ -484,8 +525,10 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
   );
 
   return (
-    // print: the wizard is a fixed, internally scrolling overlay — printed as is, only the first screenful came out (one
-    // page, the rest cut off). In print it becomes normal flow so the browser paginates it; Audit.tsx hides the page behind.
+    <>
+    {/* print: the wizard is a fixed, internally scrolling overlay — printed as is (browser print menu, no printout
+        mounted), only the first screenful came out. In print it becomes normal flow so the browser paginates it;
+        Audit.tsx hides the page behind. */}
     <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto py-8 px-4 md:px-8 flex justify-center items-start pt-10 print:static print:overflow-visible print:block print:p-0 print:bg-white">
       <div className="w-full max-w-[1400px]">
         <div className="flex justify-between items-center mb-6 no-print">
@@ -609,7 +652,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                     <Users className="text-teal-600" size={24} />
                     <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.stepPersonnelScope')}</h2>
                   </div>
-                  <button className={actionStyles.secondary} type="button" onClick={() => window.print()}>
+                  <button className={actionStyles.secondary} type="button" onClick={() => requestPrint('plan')}>
                     <Printer className="w-4 h-4" /> {t('audit.wizard.printPlan')}
                   </button>
                 </div>
@@ -743,7 +786,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                     <CheckSquare className="text-teal-600" size={24} />
                     <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.step4')} Checklist</h2>
                   </div>
-                  <button className={actionStyles.secondary} type="button" onClick={() => window.print()}>
+                  <button className={actionStyles.secondary} type="button" onClick={() => requestPrint('checklist')}>
                     <Printer className="w-4 h-4" /> {t('audit.wizard.printChecklist')}
                   </button>
                 </div>
@@ -882,7 +925,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                   </div>
                   
                   <div className="flex items-center gap-3 no-print">
-                    <button className={actionStyles.secondary} type="button" onClick={() => window.print()}>
+                    <button className={actionStyles.secondary} type="button" onClick={() => requestPrint('report')}>
                       <Printer className="w-4 h-4" /> {t('audit.wizard.printReport')}
                     </button>
                     {/* Needs a saved record (the export reads it from the server). */}
@@ -1145,6 +1188,8 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
         </div>
       </div>
     </div>
+    {printJob && createPortal(<AuditPrintTemplate key={printJob.n} kind={printJob.kind} data={printData} unsaved={leaveGuard.dirty} />, document.body)}
+    </>
   );
 };
 

@@ -404,7 +404,9 @@ class AuditService:
         passed = sum(1 for i in items if i.get('status') == 'pass')
         failed = sum(1 for i in items if i.get('status') == 'fail')
         pending = total - passed - failed
-        progress = 0 if total == 0 else round((total - pending) / total * 100)
+        # Percent rounded half up in integers (12.5 -> 13), the same formula as the wizard and its printouts
+        # (AUDIT-PRINT-2026-001): Python's round() rounds half to even, and in JavaScript a float product can land just under .5.
+        progress = 0 if total == 0 else (200 * (total - pending) + total) // (2 * total)
 
         doc = db.new_document()
         db.add_masthead(doc, "內部稽核報告", "INTERNAL AUDIT REPORT", doc_no=txt(audit.auditNo), status=txt(audit.status))
