@@ -53,3 +53,7 @@ headingOf、子類取大類、contextNo 刪除後跟隨、所屬選到被濾掉�
 ## R10：PASS（Esc 取消列）
 非編輯狀態不受影響、isComposing 取自 nativeEvent 正確、不影響 ImagePreviewOverlay（照片已 revert，編輯列內無預覽）、新鍵中英齊全；原生下拉展開時 Esc 只收起選單。
 建議：Safari 組字 → 已加 keyCode 229 判斷；資訊：建議清單／日期選擇器開啟時 Esc 可能同時取消整列，待手動確認（已記 STATUS）。
+
+## R11：PASS（拿掉子類，只留兩層）
+舊子類仍可 ✏️ 改標題與刪除（canRemove 不變，帶入的不可刪）；nextNo 取大類底下所有直接子列最大號＋1，不撞號；contextNo split('.')[0] 對事項、子類、大類皆正確，無大類時退回最後一個大類；startNew 只剩 category／item，不會產生新子類；移除的鍵無殘留使用。tsc 乾淨、npm test 159 passed。
+資訊：有舊子類的大類，新事項（如 1.3）會排在 1.1.x 之後，看起來像在子類下，但編號已表明直屬大類，不影響資料。
