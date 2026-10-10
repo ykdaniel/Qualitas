@@ -127,8 +127,9 @@ def _build(engine, admin_role_name):
 
     app.dependency_overrides[get_db] = _db
     import database as database_module
-    orig = (database_module.engine, database_module.SessionLocal)
-    database_module.engine, database_module.SessionLocal = engine, Session_
+    import core.security as security_module   # binds SessionLocal at import: swap it too (token blacklist)
+    orig = (database_module.engine, database_module.SessionLocal, security_module.SessionLocal)
+    database_module.engine, database_module.SessionLocal, security_module.SessionLocal = engine, Session_, Session_
     return Env(app, Session_, admin_role_name), orig
 
 
@@ -136,12 +137,13 @@ def _build(engine, admin_role_name):
 def env(request):
     from database import Base
     import database as database_module
+    import core.security as security_module   # binds SessionLocal at import: swap it too (token blacklist)
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     e, orig = _build(engine, request.param)
     try:
         yield e
     finally:
-        database_module.engine, database_module.SessionLocal = orig
+        database_module.engine, database_module.SessionLocal, security_module.SessionLocal = orig
         Base.metadata.drop_all(engine)
 
 
@@ -349,6 +351,7 @@ def test_two_concurrent_requests_cannot_remove_both_admins(tmp_path):
     without the write lock, both requests would see "another admin exists"."""
     from database import Base
     import database as database_module
+    import core.security as security_module   # binds SessionLocal at import: swap it too (token blacklist)
     engine = create_engine(f"sqlite:///{tmp_path / 'race.db'}", connect_args={"check_same_thread": False, "timeout": 15})
     e, orig = _build(engine, "admin")
     _add_user(e, "admin2", "admin")
@@ -378,7 +381,7 @@ def test_two_concurrent_requests_cannot_remove_both_admins(tmp_path):
         assert len(active_admins) == 1                                  # never zero
     finally:
         event.remove(engine, "after_cursor_execute", _slow_count)
-        database_module.engine, database_module.SessionLocal = orig
+        database_module.engine, database_module.SessionLocal, security_module.SessionLocal = orig
         Base.metadata.drop_all(engine)
         engine.dispose()
 

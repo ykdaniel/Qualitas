@@ -481,6 +481,7 @@ def file_env(tmp_path):
     from database import Base, get_db
     from routers import auth as auth_router, itr as itr_router, checklist as checklist_router
     import database as database_module
+    import core.security as security_module   # binds SessionLocal at import: swap it too (token blacklist)
     engine = create_engine(f"sqlite:///{tmp_path / 'race.db'}", connect_args={"check_same_thread": False, "timeout": 20})
     Base.metadata.create_all(engine)
     Session_ = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -497,12 +498,12 @@ def file_env(tmp_path):
             s.close()
 
     app.dependency_overrides[get_db] = _db
-    orig = (database_module.engine, database_module.SessionLocal)
-    database_module.engine, database_module.SessionLocal = engine, Session_
+    orig = (database_module.engine, database_module.SessionLocal, security_module.SessionLocal)
+    database_module.engine, database_module.SessionLocal, security_module.SessionLocal = engine, Session_, Session_
     try:
         yield Env(app, Session_), engine
     finally:
-        database_module.engine, database_module.SessionLocal = orig
+        database_module.engine, database_module.SessionLocal, security_module.SessionLocal = orig
         Base.metadata.drop_all(engine)
         engine.dispose()
 
