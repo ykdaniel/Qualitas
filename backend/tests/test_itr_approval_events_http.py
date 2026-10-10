@@ -549,7 +549,9 @@ def _run_pair(first, second, gap=0.25, window=None):
     t2 = threading.Thread(target=call, args=("second", second), name="second")
     t1.start()
     if window is not None:
-        assert window.entered.wait(30), f"the first request never reached its race window ({window.needle!r})"
+        if not window.entered.wait(30):                # not an assert: the wait must also run under `python -O`
+            t1.join(60)                                # never leave the first request running into fixture teardown
+            raise AssertionError(f"the first request never reached its race window ({window.needle!r})")
     else:
         time.sleep(gap)
     t2.start(); t1.join(60); t2.join(60)
