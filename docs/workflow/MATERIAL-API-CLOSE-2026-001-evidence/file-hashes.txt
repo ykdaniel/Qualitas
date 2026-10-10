@@ -1,0 +1,6 @@
+# sha256 of the committed / deployed files (base HEAD 78b8cfd9), 2026-10-10T03:47:18Z
+9e594c2a9b5168a2d4d2939b597722ff0b5c1bcb895d1a1a10196feb3cba09a6  backend/routers/materials.py
+3d73c6239b75c5c4bd605f4391ff29145aad8722c0f11f59fbd223d8de7fc1d6  backend/services/material_service.py
+fccbb7f895aed8e03feb4422e7b1ef3b6442ab38d89ab5101c3560e1c855d3bc  backend/schemas.py
+4e8f8e2bbf84d2d181996ed35c93cdff5ba363c5b32e80eb8e44be45c69797d9  backend/tests/test_materials_http.py
+a47273ecdf19db0d137bff2bc7778d4a0d33c692755832b17c1bac0a09d29ad7  backend/tests/test_material_submittals_http.py

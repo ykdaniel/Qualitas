@@ -168,7 +168,7 @@ def legacy_row(env, statuses, name="Legacy", project="P1"):
 def test_api_surface_is_the_register_only(env):
     routes = {(m, r.path) for r in env.app.routes if getattr(r, "path", "").startswith("/api/material") for m in r.methods}
     assert routes == {
-        ("GET", "/api/materials/"), ("POST", "/api/materials/"), ("GET", "/api/materials/{material_id}"), ("PUT", "/api/materials/{material_id}"),
+        ("GET", "/api/materials/"), ("GET", "/api/materials/{material_id}"),          # material data: read only (2026-10-09)
         ("GET", "/api/material-submittals/approved"),
         ("GET", "/api/material-submittals/duplicates"), ("GET", "/api/material-submittals/stats"),      # R2, read-only
         ("GET", "/api/material-submittals/{submittal_id}"),

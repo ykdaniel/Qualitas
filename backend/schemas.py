@@ -1811,28 +1811,6 @@ class _MaterialInput(_MaterialCamel):
         return v.strip()
 
 
-class MaterialCreate(_MaterialInput):
-    project_id: constr(strip_whitespace=True, min_length=1)
-    name: str
-    category: str | None = None
-    brand: str | None = None
-    model: str | None = None
-    specification: str | None = None
-    manufacturer: str | None = None
-    supplier: str | None = None
-
-
-class MaterialUpdate(_MaterialInput):
-    """Every field optional; projectId is not a field, so sending it is rejected (422). name cannot be cleared."""
-    name: str | None = None
-    category: str | None = None
-    brand: str | None = None
-    model: str | None = None
-    specification: str | None = None
-    manufacturer: str | None = None
-    supplier: str | None = None
-
-
 class Material(_MaterialCamel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, from_attributes=True)
     id: str

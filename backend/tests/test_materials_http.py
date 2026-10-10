@@ -1,5 +1,9 @@
 """MATERIAL-SUBMITTAL M1 — material data API, project reply days, scope and permissions (spec §9.4).
 
+Since 2026-10-09 the material data API is READ ONLY (DECISIONS 材料主檔 API 只留查詢, option A): POST / PUT were removed, so
+the create / update tests became "the write routes are gone and write nothing"; materials are seeded directly in the
+database here (in the application only the approved-material register writes them).
+
 Real login + routes against a throwaway file database under tmp_path. No `main` import, no seeding, no scheduler,
 no uploads, no development database.
 """
@@ -86,56 +90,43 @@ def snapshot(env):
                 for m in (models.Material, models.AuditLog, models.Project)}
 
 
-def create(env, who="admin", **body):
-    payload = {"projectId": "P1", "name": "Fire stop sealant"}
-    payload.update(body)
-    return env.c[who].post("/api/materials/", json=payload)
-
-
-# ── AC-M1-1′ / AC-R3-7 ────────────────────────────────────────────────────────────────────────────────────────
-def test_create_returns_camelcase_and_audits(env):
-    r = create(env, brand="  A brand ", model="FS-200", specification="2h", category="Fire")
-    assert r.status_code == 200, r.text
-    body = r.json()
-    assert body["projectId"] == "P1" and body["name"] == "Fire stop sealant" and body["brand"] == "A brand"
-    assert "project_id" not in body and "createdBy" in body and body["createdBy"] == "m-admin"
+def create(env, project="P1", name="Fire stop sealant", **fields):
+    """Seed one material row directly (the API no longer creates materials); returns its id."""
+    import uuid
+    mid = str(uuid.uuid4())
     with env.Session() as db:
-        row = db.get(models.Material, body["id"])
-        assert row.project_id == "P1"
-        audit = db.query(models.AuditLog).filter_by(entity_type="Material", entity_id=body["id"]).one()
-        assert audit.action == "CREATE" and audit.username == "m-admin"
+        db.add(models.Material(id=mid, project_id=project, name=name, created_by="seed", created_at="2026-10-01", **fields))
+        db.commit()
+    return mid
 
 
-@pytest.mark.parametrize("project", ["P2", "NOPE"])
-def test_create_in_invisible_or_missing_project_is_404_and_writes_nothing(env, project):
-    who = "scoped" if project == "P2" else "admin"
+# ── 2026-10-09: read only — the write routes are gone ─────────────────────────────────────────────────────────
+def test_material_api_is_read_only(env):
+    import routers.materials as r
+    assert {(m, route.path) for route in r.router.routes for m in route.methods} == {("GET", "/materials/"), ("GET", "/materials/{material_id}")}
+    mid = create(env)
     before = snapshot(env)
-    r = create(env, who=who, projectId=project)
-    assert r.status_code == 404, r.text
-    assert snapshot(env) == before
+    for who in ("admin", "scoped", "viewer", "vendor", "nobody"):
+        c = env.c[who]
+        assert c.post("/api/materials/", json={"projectId": "P1", "name": "x"}).status_code == 405, who
+        assert c.put(f"/api/materials/{mid}", json={"name": "hijack"}).status_code == 405, who
+        assert c.patch(f"/api/materials/{mid}", json={"name": "hijack"}).status_code == 405, who
+    assert snapshot(env) == before                                            # nothing written, no audit row
 
 
-@pytest.mark.parametrize("body", [{"name": "   "}, {"name": None}, {"projectId": ""}, {"unknownField": 1},
-                                  {"createdBy": "spoof"}, {"id": "forced-id"}])
-def test_create_rejects_blank_name_and_unknown_or_controlled_fields(env, body):
-    before = snapshot(env)
-    r = create(env, **body)
-    assert r.status_code == 422, r.text
-    assert snapshot(env) == before
-
-
-def test_create_requires_project_id(env):
-    r = env.c["admin"].post("/api/materials/", json={"name": "x"})
-    assert r.status_code == 422
+def test_get_returns_camelcase(env):
+    mid = create(env, brand="A brand", model="FS-200", category="Fire")
+    body = env.c["admin"].get(f"/api/materials/{mid}").json()
+    assert body["id"] == mid and body["projectId"] == "P1" and body["name"] == "Fire stop sealant" and body["brand"] == "A brand"
+    assert "project_id" not in body and body["createdBy"] == "seed"
 
 
 # ── AC-M1-2 / AC-R3-8 ─────────────────────────────────────────────────────────────────────────────────────────
 def test_scoped_user_sees_only_own_project(env):
-    a = create(env).json()["id"]
-    b = create(env, projectId="P2", name="Other project material").json()["id"]
+    a = create(env)
+    b = create(env, project="P2", name="Other project material")
     s = env.c["scoped"]
     assert s.get(f"/api/materials/{b}").status_code == 404
-    assert s.put(f"/api/materials/{b}", json={"name": "hijack"}).status_code == 404
     assert s.get("/api/materials/", params={"projectId": "P2"}).status_code == 404
     page = s.get("/api/materials/", params={"projectId": "P1"}).json()
     assert [m["id"] for m in page["items"]] == [a] and page["total"] == 1
@@ -145,8 +136,8 @@ def test_scoped_user_sees_only_own_project(env):
 
 def test_list_requires_project_and_reports_full_total(env):
     for i in range(5):
-        assert create(env, name=f"M{i}").status_code == 200
-    create(env, projectId="P2", name="elsewhere")
+        create(env, name=f"M{i}")
+    create(env, project="P2", name="elsewhere")
     assert env.c["admin"].get("/api/materials/").status_code == 422
     assert env.c["admin"].get("/api/materials/", params={"projectId": "NOPE"}).status_code == 404
     page = env.c["admin"].get("/api/materials/", params={"projectId": "P1", "limit": 2, "offset": 0}).json()
@@ -159,74 +150,32 @@ def test_list_requires_project_and_reports_full_total(env):
 def test_list_search_and_category_stay_inside_project(env):
     create(env, name="Steel pipe", category="Pipe")
     create(env, name="Copper pipe", category="Pipe")
-    create(env, projectId="P2", name="Steel pipe P2", category="Pipe")
+    create(env, project="P2", name="Steel pipe P2", category="Pipe")
     page = env.c["admin"].get("/api/materials/", params={"projectId": "P1", "q": "steel"}).json()
     assert [m["name"] for m in page["items"]] == ["Steel pipe"]
     page = env.c["admin"].get("/api/materials/", params={"projectId": "P1", "category": "Pipe"}).json()
     assert page["total"] == 2
 
 
-# ── update / AC-R3-7 / AC-M1-6 ──────────────────────────────────────────────────────────────────────────────
-def test_update_changes_allowed_fields_and_audits(env):
-    mid = create(env).json()["id"]
-    r = env.c["admin"].put(f"/api/materials/{mid}", json={"model": "FS-300", "brand": ""})
-    assert r.status_code == 200, r.text
-    assert r.json()["model"] == "FS-300" and r.json()["brand"] is None and r.json()["updatedBy"] == "m-admin"
-    with env.Session() as db:
-        audit = db.query(models.AuditLog).filter_by(entity_type="Material", entity_id=mid, action="UPDATE").one()
-        assert audit.old_value and audit.new_value
-
-
-@pytest.mark.parametrize("body", [{"projectId": "P2"}, {"name": None}, {"name": "  "}, {"createdAt": "x"}, {"id": "y"}])
-def test_update_cannot_move_project_clear_name_or_set_controlled_fields(env, body):
-    mid = create(env).json()["id"]
-    before = snapshot(env)
-    r = env.c["admin"].put(f"/api/materials/{mid}", json=body)
-    assert r.status_code == 422, r.text
-    assert snapshot(env) == before
-
-
-@pytest.mark.parametrize("op", ["create", "update"])
-def test_audit_failure_rolls_back(env, monkeypatch, op):
-    mid = create(env).json()["id"] if op == "update" else None
-    before = snapshot(env)
-    import services.material_service as svc
-
-    def boom(*a, **k):
-        raise RuntimeError("injected audit failure")
-    monkeypatch.setattr(svc, "log_audit", boom)
-    r = create(env, name="never") if op == "create" else env.c["admin"].put(f"/api/materials/{mid}", json={"name": "never"})
-    assert r.status_code == 500
-    assert snapshot(env) == before
-
-
 # ── AC-M1-5 permissions and vendor scope ───────────────────────────────────────────────────────────────────
 def test_permissions(env):
-    mid = create(env).json()["id"]
+    mid = create(env)
     assert env.c["nobody"].get("/api/materials/", params={"projectId": "P1"}).status_code == 403
     assert env.c["nobody"].get(f"/api/materials/{mid}").status_code == 403
     v = env.c["viewer"]
     assert v.get("/api/materials/", params={"projectId": "P1"}).status_code == 200
     assert v.get(f"/api/materials/{mid}").status_code == 200
-    before = snapshot(env)
-    assert v.post("/api/materials/", json={"projectId": "P1", "name": "x"}).status_code == 403
-    assert v.put(f"/api/materials/{mid}", json={"name": "x"}).status_code == 403
-    assert snapshot(env) == before
 
 
 def test_vendor_scoped_account_is_refused_even_with_material_permissions(env):
-    mid = create(env).json()["id"]
-    before = snapshot(env)
+    mid = create(env)
     v = env.c["vendor"]
     assert v.get("/api/materials/", params={"projectId": "P1"}).status_code == 403
     assert v.get(f"/api/materials/{mid}").status_code == 403
-    assert v.post("/api/materials/", json={"projectId": "P1", "name": "x"}).status_code == 403
-    assert v.put(f"/api/materials/{mid}", json={"name": "x"}).status_code == 403
-    assert snapshot(env) == before
 
 
 def test_there_is_no_delete_route(env):
-    mid = create(env).json()["id"]
+    mid = create(env)
     assert env.c["admin"].delete(f"/api/materials/{mid}").status_code == 405
     with env.Session() as db:
         assert db.get(models.Material, mid) is not None
@@ -262,7 +211,7 @@ def test_project_reply_days_has_no_default_and_can_be_cleared(env):
 
 # ── AC-M1-7 project deletion guard ─────────────────────────────────────────────────────────────────────────
 def test_project_with_materials_cannot_be_deleted(env):
-    create(env, projectId="P2")
+    create(env, project="P2")
     from repositories.project_repository import ProjectRepository
     from services.project_service import ProjectService
     with env.Session() as db:
