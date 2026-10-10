@@ -1,21 +1,12 @@
 # STATUS.md — Claude 執行結果
 
 TASK_ID: DEPLOY-EXEC-2026-001
-ROUND: 結案（2026-10-10）。前一版（PARTIAL）逐字封存為 `docs/workflow/DEPLOY-EXEC-2026-001-PARTIAL-{TASK,STATUS,REVIEW,handoff}-archive.md`。
+ROUND: 前端部署執行（後端未部署）
 
 ## RESULT
-- [x] DONE（前端 2026-10-07 上線；後端 DOCX 路徑防護 2026-10-09 上線）
-- [ ] PARTIAL
+- [ ] DONE
+- [x] PARTIAL（**前端已上線**；後端仍 blocked，未部署）
 - [ ] BLOCKED
-
-## 結案摘要
-- **前端**：見下方「前端部署紀錄」（2026-10-07T16:05:07Z）。之後正式站前端已由材料（MATERIAL-SUBMITTAL M5，2026-10-09）與 audit 系列多次更新；本任務的 ITP 7 檔仍包含在內（雜湊未變）。
-- **後端（DOCX-PATH-GUARD）**：2026-10-09 12:14:09Z 上線，紀錄見 `docs/workflow/DEPLOY-EXEC-2026-001-docx-deploy-record.md`。
-  - 原定的後端預檢 r3（以 056c245c 為基準的雜湊閘門）在材料上線後已不適用，**未執行**；改以「正式站原始碼＝材料上線候選樹 341 檔」的唯讀核對取代，並做 Python 3.11 測試（DOCX＋KM 35 passed；NCR／NOI／ITR＋DOCX 424 passed）、資料庫一致性備份與回退映像 `qualitas-backend:pre-docx-20261009T115405Z`。
-  - 依 DECISIONS「每批 PASS 後完成準備即提交、推送及部署」執行（DOCX-PATH-GUARD-2026-001 獨立審查 PASS）；部署執行本身未另經獨立審查。
-- **程式碼**：ITP 7 檔 `2e98d0dd`、ITP 測試與決策 `cc8b83fb`、DOCX `52986ac2`，皆已合併進 main（PR #2、#3）。
-- **未完成**：登入後唯讀冒煙（ITP 的 Criteria 排列、中英擇一提示、Insert After 文字、Subject 寬度；既有紀錄的 DOCX 匯出）由使用者執行，結案不代表已驗。
-- **以下為封存前的原文**（「後端 blocked」「剩餘待辦」等段落已由本摘要取代）。
 
 ## 前端部署紀錄
 - **上線時間**：`index.html` 原子替換於 **2026-10-07T16:05:07Z**（台北 2026-10-08 00:05:07）。

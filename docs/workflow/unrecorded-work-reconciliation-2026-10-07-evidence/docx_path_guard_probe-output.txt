@@ -1,0 +1,19 @@
+# Run: 2026-10-07T13:53:52Z  HEAD=056c245c  core/docx_builder.py md5=3b2d806376c613cd7d5cc4f21b88fc58  python=Python 3.14.6
+temp tree: /private/tmp/claude-501/docx-guard-probe-20wy1ftg
+case                               expected current  candidate
+normal relative                    ALLOW    ALLOW    ALLOW    
+normal download URL                ALLOW    ALLOW    ALLOW    
+normal legacy /uploads/            ALLOW    ALLOW    ALLOW    
+sibling via ..                     DENY     ALLOW    DENY     
+sibling via /uploads/..            DENY     ALLOW    DENY     
+.. to outside                      DENY     DENY     DENY     
+deep .. to outside                 DENY     DENY     DENY     
+absolute path stripped             DENY     DENY     DENY     
+symlink -> outside                 DENY     DENY     DENY     
+symlink -> same-prefix sibling     DENY     ALLOW    DENY     
+
+add_photo_section with sibling path: media parts=['word/media/image1.png'] sibling bytes embedded=True
+
+current helper mismatches: ['sibling via ..', 'sibling via /uploads/..', 'symlink -> same-prefix sibling']
+candidate fix mismatches: none
+# exit=0

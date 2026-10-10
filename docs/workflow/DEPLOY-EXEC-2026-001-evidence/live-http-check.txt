@@ -1,0 +1,34 @@
+# live HTTP check 2026-10-07T16:00:15Z — existing names only
+## / -> 200 sha256=3de542e7fc7992e297985ebaa5f48d2fc28b7ceade3b3a56a18d98c71198e607
+   content-type: text/html
+   cache-control: no-cache, no-store, must-revalidate
+   expires: 0
+   last-modified: Wed, 07 Oct 2026 12:50:30 GMT
+   cf-cache-status: DYNAMIC
+## /index.html -> 200 sha256=3de542e7fc7992e297985ebaa5f48d2fc28b7ceade3b3a56a18d98c71198e607
+   content-type: text/html
+   cache-control: no-cache, no-store, must-revalidate
+   expires: 0
+   last-modified: Wed, 07 Oct 2026 12:50:30 GMT
+   cf-cache-status: DYNAMIC
+## /assets/ITPDetail-vB1xYO_H.js -> 200 sha256=e62a92a3d60c954c7ad56686ee99be250c88fbd6388ebe6e33e6b3ffa9a3b3ec
+   content-type: application/javascript
+   cache-control: public, max-age=31536000, immutable
+   etag: "6ac64016-7fe7"
+   expires: Thu, 07 Oct 2027 16:00:18 GMT
+   last-modified: Wed, 07 Oct 2026 12:50:30 GMT
+   cf-cache-status: MISS
+## /assets/index-Ba-6qph1.js -> 200 sha256=d1113cfe84f6ee07b88c32a4dacb4c7faf7b5b72bd74b80c397ae0876b7d6a24
+   content-type: application/javascript
+   cache-control: public, max-age=31536000, immutable
+   etag: "6ac64016-7399f"
+   expires: Thu, 07 Oct 2027 16:00:19 GMT
+   last-modified: Wed, 07 Oct 2026 12:50:30 GMT
+   cf-cache-status: MISS
+## /assets/ITP-CYLo9iOX.css -> 200 sha256=0d9403787a2ec1cfcd4493298ed99807cabd88028dfedcce09490f358ebbe476
+   content-type: text/css
+   cache-control: public, max-age=31536000, immutable
+   etag: "6ac64016-3dc"
+   expires: Thu, 07 Oct 2027 16:00:20 GMT
+   last-modified: Wed, 07 Oct 2026 12:50:30 GMT
+   cf-cache-status: MISS

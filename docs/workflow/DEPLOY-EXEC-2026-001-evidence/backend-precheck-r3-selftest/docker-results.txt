@@ -1,0 +1,12 @@
+script sha256=7f51580e787206a551cfde53d485800e12ad5e418608301c55a25a3a1b179218
+real-docker R4 subset, local Colima (docker 29.2.1), 2026-10-07T16:53:42Z
+
+A-pass                 exit=0 expected=0 secret_hits=0 OK
+R4-memory-limit        exit=1 expected=1 secret_hits=0 OK
+R4-restart-retries     exit=1 expected=1 secret_hits=0 OK
+R4-restart-retries-match exit=0 expected=0 secret_hits=0 OK
+R4-ulimit              exit=1 expected=1 secret_hits=0 OK
+R4-security-opt        exit=1 expected=1 secret_hits=0 OK
+R4-log-opt             exit=1 expected=1 secret_hits=0 OK
+leftover precheck containers: 0
+cleanup done (container/network/image qbr3-selftest/qbr3-selftest_net/qbr3test-backend)

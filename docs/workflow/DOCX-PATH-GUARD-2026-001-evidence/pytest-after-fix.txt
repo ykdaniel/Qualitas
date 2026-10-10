@@ -1,0 +1,82 @@
+# phase: AFTER fix
+# run(UTC): 2026-10-07T14:07:06Z  HEAD=056c245c (fix is an uncommitted working-tree change)
+# sha256 0e43664f4e600804688cd37263bcd1b84e0c48da64f4767cc147cf2cf07b4cdd  core/docx_builder.py
+# sha256 4222b14bdc40aea5e7ac23dedf7663e6c27e8e1b67922386614db1ca151ad348  tests/test_docx_path_guard.py
+# sha256 8251ca31b871a542ce7f1e23b9cb4adf4bb12a3a9bd72196f5672d7efccc984f  tests/test_docx_path_guard_http.py
+# python=Python 3.14.6  cmd: DATABASE_URL=sqlite:///:memory: python3 -m pytest tests/test_docx_path_guard.py tests/test_docx_path_guard_http.py -v -p no:cacheprovider
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-9.0.2, pluggy-1.6.0 -- /opt/homebrew/opt/python@3.14/bin/python3.14
+rootdir: /Users/nook/Documents/Qualitas/backend
+configfile: pytest.ini
+plugins: anyio-4.13.0
+collecting ... collected 32 items
+
+tests/test_docx_path_guard.py::test_files_inside_the_root_still_resolve[itr/ok.png] PASSED [  3%]
+tests/test_docx_path_guard.py::test_files_inside_the_root_still_resolve[/itr/ok.png] PASSED [  6%]
+tests/test_docx_path_guard.py::test_files_inside_the_root_still_resolve[https://host/api/files/download/itr/ok.png] PASSED [  9%]
+tests/test_docx_path_guard.py::test_files_inside_the_root_still_resolve[/api/files/download/itr/ok.png?token=abc&v=2] PASSED [ 12%]
+tests/test_docx_path_guard.py::test_files_inside_the_root_still_resolve[/uploads/itr/ok.png] PASSED [ 15%]
+tests/test_docx_path_guard.py::test_files_inside_the_root_still_resolve[http://host/uploads/itr/ok.png?x=1] PASSED [ 18%]
+tests/test_docx_path_guard.py::test_files_inside_the_root_still_resolve[itr/../itr/ok.png] PASSED [ 21%]
+tests/test_docx_path_guard.py::test_files_inside_the_root_still_resolve[itr/link_inside.png] PASSED [ 25%]
+tests/test_docx_path_guard.py::test_same_prefix_sibling_is_rejected[../uploads_evil/secret.png] PASSED [ 28%]
+tests/test_docx_path_guard.py::test_same_prefix_sibling_is_rejected[/uploads/../uploads_evil/secret.png] PASSED [ 31%]
+tests/test_docx_path_guard.py::test_same_prefix_sibling_is_rejected[https://host/api/files/download/../uploads_evil/secret.png] PASSED [ 34%]
+tests/test_docx_path_guard.py::test_same_prefix_sibling_is_rejected[itr/../../uploads_evil/secret.png] PASSED [ 37%]
+tests/test_docx_path_guard.py::test_same_prefix_sibling_is_rejected[link_to_sibling.png] PASSED [ 40%]
+tests/test_docx_path_guard.py::test_same_prefix_sibling_is_rejected[link_dir_sibling/secret.png] PASSED [ 43%]
+tests/test_docx_path_guard.py::test_paths_outside_the_root_are_rejected[../outside/secret.png] PASSED [ 46%]
+tests/test_docx_path_guard.py::test_paths_outside_the_root_are_rejected[a/b/../../../outside/secret.png] PASSED [ 50%]
+tests/test_docx_path_guard.py::test_paths_outside_the_root_are_rejected[link_to_outside.png] PASSED [ 53%]
+tests/test_docx_path_guard.py::test_absolute_path_is_treated_as_relative_to_the_root PASSED [ 56%]
+tests/test_docx_path_guard.py::test_empty_values_resolve_to_nothing[None] PASSED [ 59%]
+tests/test_docx_path_guard.py::test_empty_values_resolve_to_nothing[] PASSED [ 62%]
+tests/test_docx_path_guard.py::test_empty_values_resolve_to_nothing[?token=abc] PASSED [ 65%]
+tests/test_docx_path_guard.py::test_missing_files_resolve_to_nothing[itr/missing.png] PASSED [ 68%]
+tests/test_docx_path_guard.py::test_missing_files_resolve_to_nothing[/uploads/nope.png] PASSED [ 71%]
+tests/test_docx_path_guard.py::test_missing_files_resolve_to_nothing[https://host/api/files/download/none.png] PASSED [ 75%]
+tests/test_docx_path_guard.py::test_directories_resolve_to_nothing[subdir] PASSED [ 78%]
+tests/test_docx_path_guard.py::test_directories_resolve_to_nothing[itr] PASSED [ 81%]
+tests/test_docx_path_guard.py::test_directories_resolve_to_nothing[/uploads/subdir] PASSED [ 84%]
+tests/test_docx_path_guard.py::test_directories_resolve_to_nothing[.] PASSED [ 87%]
+tests/test_docx_path_guard.py::test_directories_resolve_to_nothing[/] PASSED [ 90%]
+tests/test_docx_path_guard.py::test_legal_image_is_embedded_and_out_of_root_images_are_not PASSED [ 93%]
+tests/test_docx_path_guard_http.py::test_itr_update_then_export_embeds_only_the_in_root_photo PASSED [ 96%]
+tests/test_docx_path_guard_http.py::test_ncr_update_then_export_embeds_only_the_in_root_photo PASSED [100%]
+
+=============================== warnings summary ===============================
+tests/test_docx_path_guard_http.py: 87 warnings
+  /opt/homebrew/lib/python3.14/site-packages/fastapi/routing.py:211: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    is_coroutine = asyncio.iscoroutinefunction(dependant.call)
+
+tests/test_docx_path_guard_http.py::test_itr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_itr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_itr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_itr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_ncr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_ncr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_ncr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_ncr_update_then_export_embeds_only_the_in_root_photo
+  /opt/homebrew/lib/python3.14/site-packages/starlette/_utils.py:40: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    return asyncio.iscoroutinefunction(obj) or (
+
+tests/test_docx_path_guard_http.py::test_itr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_ncr_update_then_export_embeds_only_the_in_root_photo
+  /opt/homebrew/lib/python3.14/site-packages/starlette/_utils.py:41: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    callable(obj) and asyncio.iscoroutinefunction(obj.__call__)
+
+tests/test_docx_path_guard_http.py::test_itr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_ncr_update_then_export_embeds_only_the_in_root_photo
+  /Users/nook/Library/Python/3.14/lib/python/site-packages/httpx/_client.py:690: DeprecationWarning: The 'app' shortcut is now deprecated. Use the explicit style 'transport=WSGITransport(app=...)' instead.
+    warnings.warn(message, DeprecationWarning)
+
+tests/test_docx_path_guard_http.py::test_itr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_itr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_ncr_update_then_export_embeds_only_the_in_root_photo
+tests/test_docx_path_guard_http.py::test_ncr_update_then_export_embeds_only_the_in_root_photo
+  /opt/homebrew/lib/python3.14/site-packages/jose/jwt.py:311: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    now = timegm(datetime.utcnow().utctimetuple())
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================= 32 passed, 103 warnings in 1.51s =======================
+# exit=0

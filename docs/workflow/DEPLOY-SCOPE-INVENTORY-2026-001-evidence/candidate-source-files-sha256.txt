@@ -1,0 +1,9 @@
+# Source files of the candidate overlay (sha256 at inventory time)
+44ac3c092207c92c6962cbed348daa957009a308d9e83379f55955799c0160c1  react-app/src/components/ITP/ITPDetail.tsx
+88c2e931a597a82c0907c4b0dccb5123b1b49964146b8d7a2270b1d45b9cb2cc  react-app/src/components/ITP/ITPAdvancedEditor.tsx
+51c74352bfcda27d754736fd8556f717dad93fcaf9793526b1e0f90628b7942f  react-app/src/components/ITP/ITPModals.tsx
+945e50ee318f4313a8b6f26d21781d8029596b221069f89fa4bbd8153e2b39c7  react-app/src/components/ITP/ITP.module.css
+3e9aa40c7d6c348fbc43ca03af1dd47939d09b00b4d8a3949275d976009fc190  react-app/src/components/Shared/FormShell.module.css
+eeca6b2d8ca0c4da9c90b748a759b8bcdd482288802774b4cfe965e140e579d1  react-app/src/context/LanguageContext.tsx
+fba64764d8b4ce1390decf59d418396f99b56a8bbe7437f5a9c1c44ab07a40c7  react-app/src/utils/itpItemValidation.ts
+0e43664f4e600804688cd37263bcd1b84e0c48da64f4767cc147cf2cf07b4cdd  backend/core/docx_builder.py

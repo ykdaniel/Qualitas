@@ -1,0 +1,30 @@
+# npx eslint (changed files only)  run(UTC): 2026-10-07T14:55:26Z  HEAD=056c245c
+# sha256 1853440ee3828ba47fc1116de0edff1f5f5e7d25c3c169a73f55d7cd5abcad68  src/components/ITP/ITPDetail.tsx
+# sha256 556476f0f9f44e89460597b77a8826fd716346cb8d1aea8a50ac3d212bdcf226  src/components/ITP/ITPAdvancedEditor.tsx
+# sha256 0af437c03d7173223a6bb6f5580614d06e2aaefd5d12c3686749e59ebe9b90ca  src/utils/itpItemValidation.ts
+# sha256 9b2ef6f45103e9a563547b4251f5b915d3bef48124e8b4ffc906c2c660369746  tests-unit/itpItemValidation.test.ts
+# sha256 eeca6b2d8ca0c4da9c90b748a759b8bcdd482288802774b4cfe965e140e579d1  src/context/LanguageContext.tsx
+
+/Users/nook/Documents/Qualitas/react-app/src/components/ITP/ITPAdvancedEditor.tsx
+  5:27  warning  'ArrowDown' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/nook/Documents/Qualitas/react-app/src/components/ITP/ITPDetail.tsx
+  12:22   warning  'Filter' is defined but never used        @typescript-eslint/no-unused-vars
+  12:55   warning  'Layers' is defined but never used        @typescript-eslint/no-unused-vars
+  12:72   warning  'AlertCircle' is defined but never used   @typescript-eslint/no-unused-vars
+  13:3    warning  'CheckCircle2' is defined but never used  @typescript-eslint/no-unused-vars
+  13:17   warning  'ChevronDown' is defined but never used   @typescript-eslint/no-unused-vars
+  13:30   warning  'Calendar' is defined but never used      @typescript-eslint/no-unused-vars
+  13:40   warning  'Hash' is defined but never used          @typescript-eslint/no-unused-vars
+  13:46   warning  'Tag' is defined but never used           @typescript-eslint/no-unused-vars
+  13:51   warning  'FileCheck' is defined but never used     @typescript-eslint/no-unused-vars
+  13:109  warning  'ArrowDown' is defined but never used     @typescript-eslint/no-unused-vars
+
+✖ 11 problems (0 errors, 11 warnings)
+
+npm notice
+npm notice New minor version of npm available! 11.11.0 -> 11.21.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.21.0
+npm notice To update run: npm install -g npm@11.21.0
+npm notice
+# exit=0

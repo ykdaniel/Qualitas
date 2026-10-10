@@ -1,0 +1,19 @@
+# probe re-run AFTER fix  run(UTC): 2026-10-07T14:07:16Z  HEAD=056c245c  docx_builder sha256=0e43664f4e600804688cd37263bcd1b84e0c48da64f4767cc147cf2cf07b4cdd
+temp tree: /private/tmp/claude-501/docx-guard-probe-9w_4yw1p
+case                               expected current  candidate
+normal relative                    ALLOW    ALLOW    ALLOW    
+normal download URL                ALLOW    ALLOW    ALLOW    
+normal legacy /uploads/            ALLOW    ALLOW    ALLOW    
+sibling via ..                     DENY     DENY     DENY     
+sibling via /uploads/..            DENY     DENY     DENY     
+.. to outside                      DENY     DENY     DENY     
+deep .. to outside                 DENY     DENY     DENY     
+absolute path stripped             DENY     DENY     DENY     
+symlink -> outside                 DENY     DENY     DENY     
+symlink -> same-prefix sibling     DENY     DENY     DENY     
+
+add_photo_section with sibling path: media parts=[] sibling bytes embedded=False
+
+current helper mismatches: none
+candidate fix mismatches: none
+# exit=0

@@ -1,0 +1,9 @@
+# npx tsc --noEmit -p tsconfig.json  run(UTC): 2026-10-07T14:36:54Z  HEAD=056c245c
+# sha256 73661c91733718828bd5a0cc53cb0eb5a15cb29e9c04c78824d82e63d59b8b6a  src/components/ITP/ITPDetail.tsx
+# sha256 06a23cb7d65e86cc71e7dc40f366cf7dcf7e4a924fee174b74d2acf7a1236f63  src/components/ITP/ITPAdvancedEditor.tsx
+npm notice
+npm notice New minor version of npm available! 11.11.0 -> 11.21.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.21.0
+npm notice To update run: npm install -g npm@11.21.0
+npm notice
+# exit=0

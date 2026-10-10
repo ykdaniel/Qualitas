@@ -1,0 +1,82 @@
+需要 sudo 密碼（只在本機終端機輸入，不會寫入報告）：
+== DEPLOY-EXEC-2026-001 backend diagnostic precheck r2 ==
+utc=20261007T162415Z host=NookdeMac-mini.local user=nook
+
+-- collection stages --
+stage container-inspect rc=0
+stage image-inspect     rc=0
+stage compose-config    rc=98
+stage docker-diff       rc=0
+stage helper-container  rc=0
+stage helper-image      rc=0
+temp container name = qualitas-precheck-20261007T162415Z
+
+-- 3.1 container / image identity --
+container_id = f74931a5f9279ad08a363d52d9dff4150375fa444466ac53f8ab0be43dca116d
+name = /qbr2-selftest  image_id = sha256:04b2aa3a192b2e81509be6962b756490c65e7d8c1f6ef06d248c185d8179a64c  config_image = qbr2test-backend
+status = running  restarting = False  restart_count = 0  started = 2026-10-07T16:24:15.575057333Z
+image_id = sha256:04b2aa3a192b2e81509be6962b756490c65e7d8c1f6ef06d248c185d8179a64c  tags = ['qbr2test-backend:latest']  created = 2026-10-08T00:21:40.596378508+08:00
+
+-- mounts (running) --
+  approved data mounts = ['/app/backups', '/app/logs', '/app/qualitas.db', '/app/uploads']
+networks = ['qbr2-selftest_net']
+
+-- 3.2 docker diff (full, no truncation) --
+total entries = 0  unparsable lines = 0
+  [cache] 0
+  [tmp] 0
+  [mountpoint] 0
+  [parent-dir] 0
+  [sqlite-sidecar] 0
+  [UNEXPLAINED] 0
+
+-- 3.3 helper /app/core/docx_builder.py --
+container: sha=95208d8af5c231f4f3de22b4fc74f7e0e5d604d79bac191ceceb80f768e78e6d mode=644 10001:10001 15417
+image    : sha=95208d8af5c231f4f3de22b4fc74f7e0e5d604d79bac191ceceb80f768e78e6d mode=644 10001:10001 15417 Python 3.11.17
+host     : sha=95208d8af5c231f4f3de22b4fc74f7e0e5d604d79bac191ceceb80f768e78e6d
+
+-- 3.4 API probe baseline --
+GET /api/user/profile (no auth) -> 401
+
+-- G1/G2/G3 compose labels / executor --
+  com.docker.compose.project = (missing)
+  com.docker.compose.config_files = (missing)
+  com.docker.compose.working_dir = (missing)
+  com.docker.compose.environment_file = (missing)
+  com.docker.compose.service = (missing)
+  com.docker.compose.version = (missing)
+  executor docker-compose version = 2.20.1
+
+-- G4 effective config vs running (values compared in memory only) --
+
+-- checks --
+[PASS] stage container-inspect rc=0
+[PASS] stage image-inspect rc=0
+[FAIL] stage compose-config rc=0 :: rc=98
+[PASS] stage docker-diff rc=0
+[PASS] stage helper-container rc=0
+[PASS] stage helper-image rc=0
+[PASS] container running, not restarting
+[PASS] container image id == inspected image id
+[PASS] container Config.Image tag still points to running image
+[PASS] no mount covers application code / helper
+[PASS] all mounts are approved data mounts
+[PASS] docker diff collected
+[PASS] docker diff: no unexplained changes (incl. outside /app)
+[PASS] docker diff: no SQLite sidecar in container layer (would be lost on recreate)
+[PASS] helper container sha == image sha
+[PASS] helper image sha == pre-fix base 95208d8a…
+[PASS] helper mode/owner/size equal in container and image, mode 644
+[PASS] image python version readable
+[INFO] host helper sha == base :: True
+[PASS] probe baseline is 401
+[FAIL] G1 labels present
+[FAIL] G1 service label is backend :: (missing)
+[FAIL] G2 executor version == label version
+[FAIL] G3 env-file determined from label
+[FAIL] G4 inputs available (container, image, compose config)
+
+OVERALL = FAIL (6)
+
+報告：<scratch>/home-I2-no-labels/qualitas-backend-precheck-20261007T162415Z.txt（不含環境變數值）
+PRECHECK_EXIT=1

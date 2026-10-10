@@ -1,0 +1,76 @@
+# Source: Claude Code transcript 453911c4-....jsonl (tool_use toolu_018iYLmfF19WE5TzWTWvYVs5)
+# Recovered verbatim from the tool_result; sanitized (preview password / JWTs redacted).
+# Call started (UTC): 2026-10-07T12:38:19.625Z
+# Result recorded (UTC): 2026-10-07T12:38:33.946Z
+# Command:
+python3 - <<'EOF'
+p='ITP/columns.tsx'
+s=open(p,encoding='utf-8').read()
+def rep(o,n):
+    global s
+    assert s.count(o)==1,o
+    s=s.replace(o,n)
+rep('import { cn } from "@/lib/utils";','import { cn } from "@/lib/utils";\nimport { StatusBadge } from "@/components/Shared/StatusBadge";')
+rep('''const getLocalizedStatus''','''// Maps ITP statuses onto StatusBadge colour classes (green = approved, teal = approved with comments,
+// yellow = pending, orange = revise & resubmit, red = rejected, grey = no submit / void).
+const getBadgeKey = (status: string) => {
+    const s = status.toLowerCase();
+    if (s === 'approved') return 'approved';
+    if (s === 'approved with comments') return 'approvedwithcomments';
+    if (s === 'revise & resubmit' || s === 'revise and resubmit') return 'reviseresubmit';
+    if (s === 'rejected') return 'rejected';
+    if (s === 'pending') return 'pending';
+    if (s === 'void') return 'cancelled';
+    return 'na';
+};
+
+const getLocalizedStatus''')
+rep('''                    <div className={cn("text-center", isVoid && "line-through text-gray-400")}>
+                        {row.getValue("referenceNo") || '-'}
+                    </div>''','''                    <div className={cn("text-center font-medium text-[#8a6a3a] underline-offset-2 group-hover:underline", isVoid && "line-through text-gray-400")}>
+                        {row.getValue("referenceNo") || '-'}
+                    </div>''')
+rep('''                    <div className={cn("text-center", isVoid && "line-through text-gray-400")}>
+                        {getLocalizedStatus(status, t)}
+                    </div>''','''                    <div className="text-center">
+                        <StatusBadge
+                            status={getBadgeKey(status)}
+                            label={getLocalizedStatus(status, t)}
+                            className={cn(isVoid && "line-through")}
+                        />
+                    </div>''')
+rep('className="h-8 w-8 p-0 text-red-500 hover:text-white hover:bg-red-500"','className="h-8 w-8 p-0 text-slate-300 group-hover:text-red-500 focus-visible:text-red-500 hover:text-white hover:bg-red-500"')
+open(p,'w',encoding='utf-8').write(s)
+
+p='ITP/ITP.tsx'
+s=open(p,encoding='utf-8').read()
+rep("(row.status || '').toLowerCase() === 'void' ? shellStyles.rowDim : ''","`group ${(row.status || '').toLowerCase() === 'void' ? shellStyles.rowDim : ''}`")
+open(p,'w',encoding='utf-8').write(s)
+
+p='Shared/StatusBadge.module.css'
+s=open(p,encoding='utf-8').read().rstrip('\n')
+s+='''
+
+/* Teal: approved, but with comments to address */
+.approvedwithcomments {
+    background-color: #ccfbf1;
+    /* teal-100 */
+    color: #115e59;
+    /* teal-800 */
+}
+
+/* Orange: sent back for revision */
+.reviseresubmit {
+    background-color: #ffedd5;
+    /* orange-100 */
+    color: #9a3412;
+    /* orange-800 */
+}
+'''
+open(p,'w',encoding='utf-8').write(s)
+EOF
+cd /Users/nook/Documents/Qualitas/react-app && npx tsc --noEmit -p tsconfig.json 2>&1 | grep -v "npm notice"; npm run build 2>&1 | grep -E "error|✓ built"; npm test 2>&1 | grep -E "^ℹ (pass|fail)"
+# ---- output ----
+✓ built in 4.19s
+ℹ pass 129
+ℹ fail 0

@@ -1,0 +1,27 @@
+# npx eslint ITPDetail.tsx ITPAdvancedEditor.tsx  run(UTC): 2026-10-07T14:37:07Z  HEAD=056c245c
+# sha256 73661c91733718828bd5a0cc53cb0eb5a15cb29e9c04c78824d82e63d59b8b6a  src/components/ITP/ITPDetail.tsx
+# sha256 06a23cb7d65e86cc71e7dc40f366cf7dcf7e4a924fee174b74d2acf7a1236f63  src/components/ITP/ITPAdvancedEditor.tsx
+
+/Users/nook/Documents/Qualitas/react-app/src/components/ITP/ITPAdvancedEditor.tsx
+  5:27  warning  'ArrowDown' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/nook/Documents/Qualitas/react-app/src/components/ITP/ITPDetail.tsx
+  12:22   warning  'Filter' is defined but never used        @typescript-eslint/no-unused-vars
+  12:55   warning  'Layers' is defined but never used        @typescript-eslint/no-unused-vars
+  12:72   warning  'AlertCircle' is defined but never used   @typescript-eslint/no-unused-vars
+  13:3    warning  'CheckCircle2' is defined but never used  @typescript-eslint/no-unused-vars
+  13:17   warning  'ChevronDown' is defined but never used   @typescript-eslint/no-unused-vars
+  13:30   warning  'Calendar' is defined but never used      @typescript-eslint/no-unused-vars
+  13:40   warning  'Hash' is defined but never used          @typescript-eslint/no-unused-vars
+  13:46   warning  'Tag' is defined but never used           @typescript-eslint/no-unused-vars
+  13:51   warning  'FileCheck' is defined but never used     @typescript-eslint/no-unused-vars
+  13:109  warning  'ArrowDown' is defined but never used     @typescript-eslint/no-unused-vars
+
+✖ 11 problems (0 errors, 11 warnings)
+
+npm notice
+npm notice New minor version of npm available! 11.11.0 -> 11.21.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.21.0
+npm notice To update run: npm install -g npm@11.21.0
+npm notice
+# exit=0

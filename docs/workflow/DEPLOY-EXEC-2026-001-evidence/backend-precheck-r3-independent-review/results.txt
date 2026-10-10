@@ -1,0 +1,86 @@
+script sha256=7f51580e787206a551cfde53d485800e12ad5e418608301c55a25a3a1b179218
+analyzer run with python 3.14.6
+baseline                               exit=0 expected=0 secret_hits=0 OK
+rev-missing-HostConfig                 exit=1 expected=1 secret_hits=0 OK
+    [FAIL] required inspect fields present and well-typed :: missing/invalid=['container.HostConfig', 'container.HostConfig.RestartPolicy', 'container.HostConfig.RestartPolicy.Name', 'container.HostConfig.RestartPolicy.MaximumRetryCount', 'container.HostConfig.PortBindings', 'container.HostConfig.NetworkMode']
+    [FAIL] G4 restart policy (name, max retries) :: unsupported value format (raw values differ, not printed)
+    [FAIL] G4 NetworkMode is one of the compose networks :: running NetworkMode not in expected networks
+    [FAIL] G4 HostConfig has every key the reference has :: missing=['CapAdd', 'CpuShares', 'DnsOptions', 'IpcMode', 'LogConfig', 'MaskedPaths', 'Memory', 'MemorySwappiness', 'NanoCpus', 'OomKillDisable', 'PidsLimit', 'Privileged', 'ReadonlyPaths', 'SecurityOpt', 'ShmSize', 'Tmpfs', 'Ulimits']
+rev-missing-Env-both                   exit=1 expected=1 secret_hits=0 OK
+    [FAIL] required inspect fields present and well-typed :: missing/invalid=['container.Config.Env', 'image.Config.Env']
+    [FAIL] G4 env: running keys == image+compose keys :: missing=['SECRET_KEY'] extra=[]
+rev-redacted-workingdir-mismatch       exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 working_dir :: unsupported value format (raw values differ, not printed)
+rev-undeclared-resource-limit          exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 HostConfig equals daemon defaults except compose-managed keys (memory/CPU/security/ulimits/logging/...) :: non-default keys=['Memory']
+rev-restart-retry-mismatch             exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 restart policy (name, max retries) :: expected=on-failure:0 running=on-failure:5
+redacted-equal-workingdir              exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 working_dir :: unsupported value format (raw values equal, not printed)
+redacted-network-mismatch              exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 networks :: unsupported value format (raw values differ, not printed)
+    [FAIL] G4 NetworkMode is one of the compose networks :: running NetworkMode not in expected networks
+redacted-image-ref-mismatch            exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 image reference :: unsupported value format (raw values differ, not printed)
+redacted-container-name-mismatch       exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 container_name :: unsupported value format (raw values differ, not printed)
+missing-Env-container-only             exit=1 expected=1 secret_hits=0 OK
+    [FAIL] required inspect fields present and well-typed :: missing/invalid=['container.Config.Env']
+    [FAIL] G4 env: running keys == image+compose keys :: missing=['IMGKEY', 'PATH', 'SECRET_KEY'] extra=[]
+missing-Env-image-only                 exit=1 expected=1 secret_hits=0 OK
+    [FAIL] required inspect fields present and well-typed :: missing/invalid=['image.Config.Env']
+    [FAIL] G4 env: running keys == image+compose keys :: missing=[] extra=['IMGKEY', 'PATH']
+missing-RestartPolicy-MaxRetry         exit=1 expected=1 secret_hits=0 OK
+    [FAIL] required inspect fields present and well-typed :: missing/invalid=['container.HostConfig.RestartPolicy.MaximumRetryCount']
+    [FAIL] G4 restart policy (name, max retries) :: unsupported value format (raw values differ, not printed)
+missing-User-container                 exit=1 expected=1 secret_hits=0 OK
+    [FAIL] required inspect fields present and well-typed :: missing/invalid=['container.Config.User']
+missing-PortBindings                   exit=1 expected=1 secret_hits=0 OK
+    [FAIL] required inspect fields present and well-typed :: missing/invalid=['container.HostConfig.PortBindings']
+missing-HostConfig-key-vs-reference    exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 HostConfig has every key the reference has :: missing=['ShmSize']
+wrong-type-RestartCount                exit=1 expected=1 secret_hits=0 OK
+    [FAIL] required inspect fields present and well-typed :: missing/invalid=['container.RestartCount']
+reference-stage-failed                 exit=1 expected=1 secret_hits=0 OK
+    [FAIL] stage reference-create rc=0 :: rc=96
+    [FAIL] required inspect fields present and well-typed :: inputs unavailable
+    [FAIL] G4 reference container (daemon defaults) available
+reference-missing-HostConfig           exit=1 expected=1 secret_hits=0 OK
+    [FAIL] required inspect fields present and well-typed :: missing/invalid=['reference.HostConfig']
+    [FAIL] G4 reference container (daemon defaults) available
+restart-on-failure-5-match             exit=0 expected=0 secret_hits=0 OK
+restart-on-failure-5-vs-3              exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 restart policy (name, max retries) :: expected=on-failure:5 running=on-failure:3
+restart-unsupported-form               exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 restart policy form supported :: unsupported restart value
+undeclared-cpu                         exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 HostConfig equals daemon defaults except compose-managed keys (memory/CPU/security/ulimits/logging/...) :: non-default keys=['NanoCpus']
+undeclared-ulimits                     exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 HostConfig equals daemon defaults except compose-managed keys (memory/CPU/security/ulimits/logging/...) :: non-default keys=['Ulimits']
+undeclared-security-opt                exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 HostConfig equals daemon defaults except compose-managed keys (memory/CPU/security/ulimits/logging/...) :: non-default keys=['SecurityOpt']
+undeclared-logging                     exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 HostConfig equals daemon defaults except compose-managed keys (memory/CPU/security/ulimits/logging/...) :: non-default keys=['LogConfig']
+undeclared-memswappiness-0             exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 HostConfig equals daemon defaults except compose-managed keys (memory/CPU/security/ulimits/logging/...) :: non-default keys=['MemorySwappiness']
+undeclared-tmpfs                       exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 HostConfig equals daemon defaults except compose-managed keys (memory/CPU/security/ulimits/logging/...) :: non-default keys=['Tmpfs']
+undeclared-unknown-key                 exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 HostConfig equals daemon defaults except compose-managed keys (memory/CPU/security/ulimits/logging/...) :: non-default keys=['SomeFutureKnob']
+undeclared-stop-signal                 exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 runtime Config fields equal reference (tty/stdin/stop signal+timeout/healthcheck/...) :: differ=['StopSignal']
+undeclared-tty                         exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 runtime Config fields equal reference (tty/stdin/stop signal+timeout/healthcheck/...) :: differ=['Tty']
+undeclared-label                       exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 no undeclared container labels; image labels unchanged :: extra=['custom.owner'] changed=[]
+static-ip-endpoint                     exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 running endpoints have no static IP/links :: endpoints=['p_default']
+compose-network-options                exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 no per-network options (aliases/static IP) in compose :: networks_with_options=['default']
+networkmode-not-compose                exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 NetworkMode is one of the compose networks :: running NetworkMode not in expected networks
+omitempty-image-fields-ok              exit=0 expected=0 secret_hits=0 OK
+svc-field-wrong-type                   exit=1 expected=1 secret_hits=0 OK
+    [FAIL] G4 service field types supported :: invalid=['environment']
+
+TOTAL cases=37 mismatches=0

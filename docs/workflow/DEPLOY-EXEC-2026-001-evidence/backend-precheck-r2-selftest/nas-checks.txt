@@ -1,0 +1,8 @@
+NAS checks for qualitas-backend-precheck-r2.sh, 2026-10-07T16:24Z
+sha256 on NAS: 6d92caeff95811cc86b16a68cd06fb897dc4c54bb40c27d69fa8b41eee562fe9 (mode 600)
+bash 4.4.23 bash -n: ok
+python 3.8.15 ast.parse via stdin: ok (no files written)
+launcher gate (dummy script in unique dir ~/precheck-launcher-test-20261007T162445Z, removed):
+  correct hash -> ran, rc=7 propagated (PRECHECK_EXIT=7)
+  wrong hash   -> 'HASH MISMATCH - not run', rc=90, dummy not executed
+old copy: ~/qualitas-backend-precheck.sh (a609b622…) renamed to qualitas-backend-precheck.sh.r1-REVISED-do-not-run, mode 600; never executed (no report files existed)

@@ -1,0 +1,21 @@
+# Source: background task output file /private/tmp/claude-501/-Users-nook-Documents-Qualitas/453911c4-4f3e-4459-8150-ad84eb992c42/tasks/bi8uqray8.output
+# File birth (local UTC+8): 2026-10-07 21:06:58  last modified: 2026-10-07 21:19:37
+# NOTE: the command piped pytest through 'tail -15', so ONLY the last 15 lines were ever written. Per-test detail was never captured and cannot be recovered.
+# ---- output (verbatim) ----
+
+tests/test_attachment_authorization_http.py: 382 warnings
+tests/test_attachment_hardening_http.py: 273 warnings
+tests/test_file_list_route_http.py: 6 warnings
+  /Users/nook/Library/Python/3.14/lib/python/site-packages/httpx/_client.py:690: DeprecationWarning: The 'app' shortcut is now deprecated. Use the explicit style 'transport=WSGITransport(app=...)' instead.
+    warnings.warn(message, DeprecationWarning)
+
+tests/test_attachment_authorization_http.py: 682 warnings
+tests/test_attachment_hardening_http.py: 303 warnings
+tests/test_file_list_route_http.py: 5 warnings
+  /opt/homebrew/lib/python3.14/site-packages/jose/jwt.py:311: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    now = timegm(datetime.utcnow().utctimetuple())
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+391 passed, 17213 warnings in 756.62s (0:12:36)
+
+[exited with code 0]

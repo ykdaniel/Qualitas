@@ -1,0 +1,10 @@
+total 1664
+drwx------  1 ykdaniel users    182 Oct  8 00:04 .
+drwxrwxrwx+ 1 ykdaniel users    512 Oct  8 00:04 ..
+-rw-------  1 ykdaniel users   9898 Oct  8 00:04 candidate-manifest.txt
+-rw-------  1 ykdaniel users 839664 Oct  8 00:04 candidate.tgz
+-rw-r--r--  1 ykdaniel users  10056 Oct  8 00:04 rollback-manifest.txt
+drwxr-xr-x  1 ykdaniel users     72 Oct  7 20:50 rollback-staging
+-rw-------  1 ykdaniel users 837878 Oct  8 00:04 rollback.tgz
+drwxr-xr-x  1 ykdaniel users     32 Oct  7 23:46 staging
+0

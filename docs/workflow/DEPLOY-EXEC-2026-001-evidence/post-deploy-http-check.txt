@@ -1,0 +1,16 @@
+# post-deploy external check 2026-10-07T16:05:21Z
+/ -> 200 sha256=63ae5c2e46b6153432daa0908c828100f70acf95eab9dd45b581213b49c99bf3 (candidate index 63ae5c2e46b6153432daa0908c828100f70acf95eab9dd45b581213b49c99bf3)
+/index.html -> 200 sha256=63ae5c2e46b6153432daa0908c828100f70acf95eab9dd45b581213b49c99bf3
+assets referenced by live index:
+/assets/index-D0YnVE8K.css
+/assets/index-DUtTVD_j.js
+NEW /assets/index-D0YnVE8K.css -> 200 MATCH
+NEW /assets/index-DUtTVD_j.js -> 200 MATCH
+NEW /assets/ITPDetail-BTigSi82.js -> 200 MATCH
+NEW /assets/ITP-CPTcm3wb.js -> 200 MATCH
+NEW /assets/ITP-BVefYkJ7.css -> 200 MATCH
+NEW /assets/FormShell-B6QrKzCD.css -> 200 MATCH
+NEW /assets/itpParser-AiLQE9pS.js -> 200 MATCH
+OLD /assets/index-Ba-6qph1.js -> 200 (retained)
+OLD /assets/ITPDetail-vB1xYO_H.js -> 200 (retained)
+/api/user/profile -> 401 body={"detail":"Could not validate credentials"}
