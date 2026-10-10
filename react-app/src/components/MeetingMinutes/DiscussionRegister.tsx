@@ -1,12 +1,13 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
-import { Check, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Check, ImagePlus, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { describeSaveError } from '../../utils/saveErrors';
 import { useLanguage } from '../../context/LanguageContext';
-import type { DiscussionLogEntry } from '../../store/meetingMinutesStore';
+import type { DiscussionLogEntry, PhotoRef } from '../../store/meetingMinutesStore';
 import formStyles from '../Shared/FormShell.module.css';
 import styles from './DiscussionRegister.module.css';
 import {
-    addEntry, canRemove, currentUpdateIndex, displayNo, formatMinutesDate, isItem, nextNo, parentOf, removeEntryWithMap, setCurrentUpdate,
+    addEntry, addPhotos, canRemove, removePhoto, type PhotoTarget, currentUpdateIndex, displayNo, formatMinutesDate, isItem, nextNo, parentOf, removeEntryWithMap, setCurrentUpdate,
     updateEntry, type EntryKind,
 } from './discussionLog';
 
@@ -34,9 +35,23 @@ export function isEditDirty(edit: RegisterEdit | null, log: DiscussionLogEntry[]
         || (e.targetDate || '') !== edit.targetDate || (e.raisedDate || '') !== edit.raisedDate));
 }
 
+/** Photos in the register (R9): uploads as the meeting's "discussionPhoto" attachments; the register keeps the ids. */
+export interface RegisterPhotos {
+    /** uploads image files and returns their references; absent when photos cannot be added (see `blockedReason`) */
+    upload?: (files: File[]) => Promise<PhotoRef[]>;
+    /** why photos cannot be added now (a new, unsaved meeting; no update permission) */
+    blockedReason?: string;
+    /** attachment id → viewable URL ('' = cannot be shown) */
+    urls: Record<string, string>;
+    /** a photo the user removed from this meeting's own text / update (the form decides what happens to the file) */
+    onRemoved: (id: string) => void;
+    onPreview: (url: string) => void;
+}
+
 interface Props {
     log: DiscussionLogEntry[];
-    onChange: (log: DiscussionLogEntry[]) => void;
+    /** takes an updater too: a photo upload finishes later and must not undo what was typed meanwhile */
+    onChange: React.Dispatch<React.SetStateAction<DiscussionLogEntry[]>>;
     readOnly: boolean;
     /** the meeting date (else today): default date of this week's updates and of new items */
     meetingDate: string;
@@ -44,6 +59,7 @@ interface Props {
     setEdit: (e: RegisterEdit | null) => void;
     /** <datalist> id with attendee / user names for "Action by" */
     peopleListId: string;
+    photos: RegisterPhotos;
 }
 
 const HEAD_BG: Record<string, string> = { category: '#e5e7eb', subcategory: '#f1f5f9' };
@@ -92,7 +108,7 @@ const AutoText: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement>> = ({
  *  - rows carried from an earlier meeting keep their text (only Action by / target date / status change) and stay;
  *  - Published / Void: everything read-only, no buttons, no this-week field.
  */
-const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingDate, edit, setEdit, peopleListId }) => {
+const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingDate, edit, setEdit, peopleListId, photos }) => {
     const { t } = useLanguage();
     const editable = !readOnly;
     const [showClosed, setShowClosed] = useState(false);
@@ -156,6 +172,10 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
     };
     const remove = (e: DiscussionLogEntry) => {
         if (!window.confirm(t(isItem(e) ? 'meetingMinutes.confirmDeleteItem' : 'meetingMinutes.confirmDeleteRow', { no: displayNo(e) }))) return;
+        // this meeting's own photos on the removed rows go too (a removable row is never carried)
+        for (const r of log.filter(x => x.no === e.no || x.no.startsWith(`${e.no}.`))) {
+            for (const p of [...(r.photos || []), ...(r.updates || []).filter(u => !u.carried).flatMap(u => u.photos || [])]) photos.onRemoved(p.id);
+        }
         const { log: next, map } = removeEntryWithMap(log, e.no);
         onChange(next);
         // everything kept by row number follows the renumbering
@@ -209,13 +229,77 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
         </label>
     );
 
-    /** Earlier updates as "date + text" (grey when from an earlier meeting); this meeting's own goes in the field. */
+    // ── photos ──
+    const [uploading, setUploading] = useState<string | null>(null);        // "<no>#<target>" while its upload runs
+    const imagesOf = (list: FileList | null | undefined) => Array.from(list || []).filter(f => f.type.startsWith('image/'));
+    const attach = async (no: string, target: PhotoTarget, files: File[]) => {
+        if (files.length === 0) return;
+        if (!photos.upload) { toast.info(photos.blockedReason || t('meetingMinutes.photoSaveFirst')); return; }
+        setUploading(`${no}#${target}`);
+        try {
+            const refs = await photos.upload(files);
+            onChange(prev => addPhotos(prev, no, target, refs, weekDates[no] ?? meetingDate));
+        } catch (err) {
+            toast.error(describeSaveError(err, t));
+        } finally {
+            setUploading(null);
+        }
+    };
+    /** Paste (Cmd/Ctrl+V of an image) and drop onto a text box attach photos to that text; plain text pastes as usual. */
+    const photoInputProps = (no: string, target: PhotoTarget) => ({
+        onPaste: (ev: React.ClipboardEvent) => {
+            const files = imagesOf(ev.clipboardData?.files);
+            if (files.length) { ev.preventDefault(); void attach(no, target, files); }
+        },
+        onDragOver: (ev: React.DragEvent) => { if (Array.from(ev.dataTransfer?.types || []).includes('Files')) ev.preventDefault(); },
+        onDrop: (ev: React.DragEvent) => {
+            const files = imagesOf(ev.dataTransfer?.files);
+            if (files.length) { ev.preventDefault(); void attach(no, target, files); }
+        },
+    });
+    /** The small "add photo" button (opens the file picker), next to a text box. */
+    const pickButton = (no: string, target: PhotoTarget) => (
+        <label className={styles.iconBtn} title={photos.upload ? t('meetingMinutes.addPhoto') : photos.blockedReason} aria-label={t('meetingMinutes.addPhoto')}
+            data-add-photo={`${no}#${target}`} style={{ cursor: 'pointer', marginTop: 6 }}>
+            <ImagePlus size={16} />
+            <input type="file" accept="image/*" multiple hidden
+                onClick={ev => { if (!photos.upload) { ev.preventDefault(); toast.info(photos.blockedReason || t('meetingMinutes.photoSaveFirst')); } }}
+                onChange={ev => { const files = imagesOf(ev.target.files); ev.target.value = ''; void attach(no, target, files); }} />
+        </label>
+    );
+    /** Thumbnails under a text; × only where this meeting's own photos may be taken off. */
+    const thumbs = (list: PhotoRef[] | undefined, onRemove?: (id: string) => void, busy = false) => (list?.length || busy) ? (
+        <div data-photos style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6, paddingLeft: 12 }}>
+            {(list || []).map(p => {
+                const url = photos.urls[p.id];
+                return (
+                    <div key={p.id} data-photo={p.id} style={{ position: 'relative', width: 64, height: 64, border: '1px solid #e2e8f0', borderRadius: 6, overflow: 'hidden', background: '#f8fafc' }}>
+                        {url
+                            ? <img src={url} alt="" onClick={() => photos.onPreview(url)} style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }} />
+                            : <span style={{ fontSize: 10, color: grey, display: 'block', padding: 4 }}>{url === '' ? t('meetingMinutes.photoMissing') : '…'}</span>}
+                        {onRemove && (
+                            <button type="button" aria-label={t('meetingMinutes.removePhoto')} title={t('meetingMinutes.removePhoto')} onClick={() => onRemove(p.id)}
+                                style={{ position: 'absolute', top: 1, right: 1, width: 18, height: 18, borderRadius: 9, border: 'none', background: 'rgba(15,23,42,.6)', color: '#fff', fontSize: 12, lineHeight: '18px', padding: 0, cursor: 'pointer' }}>×</button>
+                        )}
+                    </div>
+                );
+            })}
+            {busy && <span style={{ fontSize: 12, color: grey, alignSelf: 'center' }}>{t('meetingMinutes.photoUploading')}</span>}
+        </div>
+    ) : null;
+    const removeFrom = (no: string, target: PhotoTarget) => (id: string) => {
+        onChange(prev => removePhoto(prev, no, target, id));
+        photos.onRemoved(id);
+    };
+
+    /** Earlier updates as "date + text" (grey when from an earlier meeting), with their photos; this meeting's own goes in the field. */
     const updateList = (e: DiscussionLogEntry, skipCurrent: boolean) => {
         const cur = skipCurrent ? currentUpdateIndex(e) : -1;
         return (e.updates || []).map((u, i) => i === cur ? null : (
             <div key={i} data-update={`${e.no}#${i}`} style={{ marginTop: 6, color: u.carried ? grey : '#334155' }}>
                 <div style={{ fontSize: 12 }}>{formatMinutesDate(u.date)}</div>
                 <div style={{ whiteSpace: 'pre-wrap', paddingLeft: 12 }}>{u.content}</div>
+                {thumbs(u.photos)}
             </div>
         ));
     };
@@ -237,10 +321,16 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
                         ? raisedInput(editing.raisedDate, v => setEdit({ ...editing, raisedDate: v }))
                         : e.raisedDate ? <div style={small} data-raised>{formatMinutesDate(e.raisedDate)}</div> : null}
                     {editing && !e.carried
-                        ? <AutoText value={editing.content} aria-label={e.no}
-                            onChange={ev => setEdit({ ...editing, content: ev.target.value })} />
+                        ? (
+                            <div style={{ display: 'flex', gap: 4, alignItems: 'flex-start' }}>
+                                <AutoText value={editing.content} aria-label={e.no} style={{ flex: 1 }} {...photoInputProps(e.no, 'item')}
+                                    onChange={ev => setEdit({ ...editing, content: ev.target.value })} />
+                                {pickButton(e.no, 'item')}
+                            </div>
+                        )
                         // under its raised date, indented like every progress update below it: one "date / text" list
                         : <div data-item-text style={{ whiteSpace: 'pre-wrap', paddingLeft: e.raisedDate ? 12 : 0 }}>{e.content}</div>}
+                    {thumbs(e.photos, editing && !e.carried ? removeFrom(e.no, 'item') : undefined, uploading === `${e.no}#item`)}
                     {updateList(e, weekField)}
                     {weekField && (
                         <div data-this-week style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginTop: 8 }}>
@@ -249,11 +339,13 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
                                 onChange={ev => (curUpdate
                                     ? onChange(setCurrentUpdate(log, e.no, { date: ev.target.value }, meetingDate))
                                     : setWeekDates({ ...weekDates, [e.no]: ev.target.value }))} />
-                            <AutoText style={{ flex: 1 }} placeholder={t('meetingMinutes.updateContent')}
+                            <AutoText style={{ flex: 1 }} placeholder={t('meetingMinutes.updateContent')} {...photoInputProps(e.no, 'currentUpdate')}
                                 value={curUpdate?.content ?? ''}
                                 onChange={ev => onChange(setCurrentUpdate(log, e.no, { content: ev.target.value }, weekDates[e.no] ?? meetingDate))} />
+                            {pickButton(e.no, 'currentUpdate')}
                         </div>
                     )}
+                    {weekField && thumbs(curUpdate?.photos, removeFrom(e.no, 'currentUpdate'), uploading === `${e.no}#currentUpdate`)}
                 </td>
                 <td style={cell}>
                     {editing

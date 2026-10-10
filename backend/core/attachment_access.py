@@ -68,7 +68,7 @@ VENDOR_REFUSED_ENTITY_TYPES = {"material_rev"}
 
 MATERIAL_SUBMISSION_CATEGORIES = {"catalogue", "technicalData", "certificate", "testReport", "photo", "other"}
 # Categories that only accept images (checked on the DETECTED type, after the general allow-list). M6: material photos.
-IMAGE_ONLY_CATEGORIES = {("material_rev", "photo")}
+IMAGE_ONLY_CATEGORIES = {("material_rev", "photo"), ("meeting", "discussionPhoto")}   # meeting: photos pasted into the discussion register (MEETING-TABS-2026-001 R9)
 # Categories never locked by the record's state (M6, DECISIONS 材料：只作為核准材料登錄簿): registered materials are already
 # approved and their photos must stay maintainable; permission and scope checks still apply.
 NEVER_LOCKED_CATEGORIES = {("material_rev", "photo")}
@@ -109,7 +109,7 @@ ALLOWED_CATEGORIES = {
     "obs": set(_PHOTO_AND_FILES),
     "osd": set(_PHOTO_AND_FILES),
     "itr": _PHOTO_AND_FILES | {"drawing", "certificate"},
-    "noi": {"attachment"}, "pqp": {"attachment"}, "itp": {"attachment"}, "meeting": {"attachment"},
+    "noi": {"attachment"}, "pqp": {"attachment"}, "itp": {"attachment"}, "meeting": {"attachment", "discussionPhoto"},
     # no front end sends a category for these; the API default is the only value accepted
     "audit": {"attachment"}, "fat": {"attachment"}, "followup": {"attachment"}, "checklist": {"attachment"}, "km": {"attachment"}, "contractor": {"attachment"},
     "material_rev": MATERIAL_SUBMISSION_CATEGORIES | {"replyDocument"},

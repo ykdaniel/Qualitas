@@ -3,7 +3,7 @@ database; it is a seed script, not a read-only script.
 
 Isolated stack only. Requires MTG_TABS_REVIEW_PASSWORD in the environment (no hardcoded or defaulted password).
 
-Creates one contractor, a reviewer (Meeting Minutes view / create / update, Follow Up view / create) and three meetings
+Creates one contractor, a reviewer (Meeting Minutes view / create / update / delete, Follow Up view / create) and three meetings
 the user can look at in the new tabbed form:
   * MOM-DEMO-001 rev 1.0 "Weekly 110 (legacy format)" — Draft, discussion register in the OLD two-level shape (no
     `kind`, level 0 topics / level 1 sub-items, one Closed), as meetings saved before this task are stored. Opening
@@ -45,7 +45,7 @@ def _perm(code):
 
 
 role = models.Role(name="MeetingTabsReview")
-role.permissions_rel = [_perm(c) for c in ("meeting:view:all", "meeting:create:all", "meeting:update:all",
+role.permissions_rel = [_perm(c) for c in ("meeting:view:all", "meeting:create:all", "meeting:update:all", "meeting:delete:all",
                                             "followup:view:all", "followup:create:all", "contractors:view:all",
                                             "iam:user:view")]
 d.add(role)

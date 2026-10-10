@@ -109,6 +109,7 @@
 .mom-print-root .register tr.sub-row td { background: var(--mom-fill); font-weight: 600; }
 .mom-print-root .register .raised-date { color: var(--mom-muted); margin-bottom: 2px; }
 .mom-print-root .register .update { margin-top: 4px; }
+.mom-print-root .register .see-photos { color: var(--mom-muted); margin-left: 4px; white-space: nowrap; }
 .mom-print-root .register .update-date { color: var(--mom-note); }
 .mom-print-root .register .update-text { padding-left: 12px; white-space: pre-wrap; }
 .mom-print-root .register .update.carried .update-text { color: var(--mom-note); }
