@@ -1,0 +1,674 @@
+diff --git a/backend/routers/audit.py b/backend/routers/audit.py
+index 3186d2b4..677a40f9 100755
+--- a/backend/routers/audit.py
++++ b/backend/routers/audit.py
+@@ -1,4 +1,5 @@
+ from fastapi import APIRouter, Depends, HTTPException
++from fastapi.responses import StreamingResponse
+ 
+ import schemas
+ from core.dependencies import RoleChecker, get_audit_service
+@@ -38,6 +39,19 @@ def read_audit(
+         raise HTTPException(status_code=404, detail="Audit not found")
+     return db_audit
+ 
++@router.get("/{audit_id}/export-docx", response_class=StreamingResponse)
++def export_audit_docx(
++    audit_id: str,
++    service: AuditService = Depends(get_audit_service),
++    scope: Scope = Depends(get_scope),
++    current_user: schemas.User = Depends(RoleChecker(AUDIT_VIEW))
++):
++    """Formal .docx export of the whole audit report (AUDIT-EXPORT-DOCX-2026-001)."""
++    response = service.export_docx(audit_id, scope=scope)
++    if response is None:
++        raise HTTPException(status_code=404, detail="Audit not found")
++    return response
++
+ @router.post("/", response_model=schemas.Audit)
+ def create_audit_route(
+     audit: schemas.AuditCreate,
+diff --git a/backend/scripts/verification/seed_audit_export_docx_review.py b/backend/scripts/verification/seed_audit_export_docx_review.py
+new file mode 100644
+index 00000000..67885bd3
+--- /dev/null
++++ b/backend/scripts/verification/seed_audit_export_docx_review.py
+@@ -0,0 +1,42 @@
++"""Seed for AUDIT-EXPORT-DOCX-2026-001 browser review (isolated stack only — never run against a real DB).
++
++Run AFTER seed_audit_hardening_b_review.py (it reuses that seed's project AHB-P1, contractor "Review Vendor" and the
++`audit_full` / `audit_viewer` accounts, password `Accept-Test-1234`). Adds one fully filled audit, AHB-EXPORT-1, with
++every plan field, templates, five checklist items (pass / fail / pending / no status, multi-line note) and multi-line
++findings, so the exported Word report can be checked section by section.
++"""
++import json
++import os
++import sys
++
++BACKEND = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
++sys.path.insert(0, BACKEND)
++import database, models  # noqa: E402
++
++ITEMS = [
++    {"id": 1, "no": "7.1", "clause": "Resources", "task": "How does the organization provide the resources needed?",
++     "status": "pass", "note": "人力配置表已核准", "updatedAt": "2026-10-02"},
++    {"id": 2, "no": "8.4", "clause": "Control of externally provided processes",
++     "task": "How do you ensure externally provided products conform?", "status": "fail",
++     "note": "兩家供應商未做評鑑\nTwo suppliers not evaluated", "updatedAt": "2026-10-02"},
++    {"id": 3, "no": "9.2", "clause": "Internal audit", "task": "Are internal audits conducted at planned intervals?",
++     "status": "pending", "note": "待補年度稽核計畫", "updatedAt": "2026-10-02"},
++    {"id": 4, "no": "", "clause": "", "task": "現場材料標示是否清楚？"},
++    {"id": 5, "no": "10.2", "clause": "Nonconformity and corrective action",
++     "task": "When a nonconformity occurs, how does the organization react?", "status": "pass", "updatedAt": "2026-10-02"},
++]
++
++d = database.SessionLocal()
++d.add(models.Audit(
++    id="ahb-export-1", auditNo="AHB-EXPORT-1", title="第四季供應商品質稽核 Q4 Supplier Audit", date="2026-10-01",
++    end_date="2026-10-02", status="In Progress", project_id="AHB-P1", project_name="Audit Review P1",
++    contractor="Review Vendor", vendor_id="ahb-vendor", location="三號料場 Yard 3", project_director="陳經理",
++    tech_lead="林工程師", auditor="王稽核", support_auditors="李稽核、張稽核", audit_criteria="專案合約、ISO 9001:2015",
++    scope_description="材料收料、儲存與標示\nReceiving, storage and identification",
++    selected_templates=json.dumps(["ISO 9001:2015", "供應商評鑑表"], ensure_ascii=False),
++    custom_check_items=json.dumps(ITEMS, ensure_ascii=False),
++    findings="1. 兩家供應商未完成評鑑，將開立 NCR。\n2. 年度稽核計畫需補齊。\nOverall: acceptable with two follow-ups.",
++))
++d.commit()
++d.close()
++print("SEED " + json.dumps({"ok": True}))
+diff --git a/backend/services/audit_service.py b/backend/services/audit_service.py
+index d7e8fc3d..8474ce3a 100755
+--- a/backend/services/audit_service.py
++++ b/backend/services/audit_service.py
+@@ -6,6 +6,7 @@ Business logic layer for Audit module
+ 
+ import json
+ import logging
++import re
+ import uuid
+ from typing import List, Optional
+ 
+@@ -29,6 +30,19 @@ _CREATE_STATUSES = tuple(s for s, nxt in WorkflowEngine.TRANSITIONS["Audit"].ite
+ _LOCKED_STATUSES = tuple(s for s, nxt in WorkflowEngine.TRANSITIONS["Audit"].items() if not nxt)
+ 
+ 
++# Word export (AUDIT-EXPORT-DOCX-2026-001): bilingual labels for the status and for a checklist item's result. An item
++# without a status counts as pending, as in the wizard.
++_STATUS_TEXT = {
++    'Draft': '草稿 Draft', 'Planned': '計畫中 Planned', 'In Progress': '進行中 In Progress',
++    'Completed': '已完成 Completed', 'Closed': '已關閉 Closed', 'Void': '作廢 Void',
++}
++_RESULT_TEXT = {'pass': '符合 Pass', 'fail': '不符合 Fail', 'pending': '注意／待改善 Attention'}
++# Checklist detail table: #, clause no., clause & question, result, remarks, updated — 17.4 cm = A4 minus the margins.
++_ITEM_COLUMN_WIDTHS_CM = (0.9, 1.7, 6.2, 2.3, 4.3, 2.0)
++# Characters an XML 1.0 document cannot contain (python-docx raises ValueError on them).
++_XML_UNSAFE = re.compile('[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]')
++
++
+ class AuditConflict(Exception):
+     """The write collided with existing data (unique number / id, foreign key); the router answers 409."""
+ 
+@@ -336,6 +350,132 @@ class AuditService:
+         self.repo.db.commit()
+         return success
+ 
++    def export_docx(self, audit_id: str, scope=None):
++        """
++        Formal .docx report for one Audit (AUDIT-EXPORT-DOCX-2026-001): the whole audit in one file — plan (information,
++        team, scope & criteria), checklist results, findings, sign-off — in the NCR report layout, built with the shared
++        core/docx_builder.py primitives.
++
++        Returns a StreamingResponse, or None when the audit does not exist or is outside the caller's scope (→ 404).
++        """
++        from docx.shared import Cm
++        from core import docx_builder as db
++
++        audit = self.get_audit(audit_id, scope=scope)
++        if audit is None:
++            return None
++
++        def txt(value):
++            # Stored free text may hold characters an XML document cannot carry (control characters, lone surrogates from
++            # JSON "\\ud800" escapes); python-docx refuses those with a ValueError, so drop them instead of failing the export.
++            if value is None:
++                return None
++            text = _XML_UNSAFE.sub('', str(value))
++            return text if text.strip() else None
++
++        def json_list(raw):
++            if isinstance(raw, list):
++                return raw
++            try:
++                parsed = json.loads(raw) if raw else []
++            except (TypeError, ValueError):
++                return []
++            return parsed if isinstance(parsed, list) else []
++
++        project = None
++        if audit.project_id:
++            project = self.repo.db.query(models.Project).filter(models.Project.id == audit.project_id).first()
++        if project is not None:
++            project_label = f"[{project.code}] {project.name}" if project.code else project.name
++        else:
++            project_label = audit.project_name
++        contractor = audit.contractor or (audit.vendor_ref.name if audit.vendor_ref else None)
++        templates = [t for t in json_list(audit.selected_templates) if isinstance(t, str) and t.strip()]
++        items = [i for i in json_list(audit.custom_check_items) if isinstance(i, dict)]
++
++        # Same counting as the wizard's statistics cards: anything that is not pass / fail (incl. no status) is pending.
++        total = len(items)
++        passed = sum(1 for i in items if i.get('status') == 'pass')
++        failed = sum(1 for i in items if i.get('status') == 'fail')
++        pending = total - passed - failed
++        progress = 0 if total == 0 else round((total - pending) / total * 100)
++
++        doc = db.new_document()
++        db.add_masthead(doc, "內部稽核報告", "INTERNAL AUDIT REPORT", doc_no=txt(audit.auditNo), status=txt(audit.status))
++
++        # 1. Audit information
++        db.add_section_heading(doc, "1", "稽核資訊", "Audit Information")
++        db.add_field_grid(doc, [
++            [("稽核編號", "Audit No.", txt(audit.auditNo)),
++             ("狀態", "Status", _STATUS_TEXT.get(audit.status) or txt(audit.status))],
++            [("稽核標題", "Audit Title", txt(audit.title))],
++            [("專案", "Project", txt(project_label)), ("受稽核廠商", "Auditee / Contractor", txt(contractor))],
++            [("開始日期", "Start Date", txt(audit.date)), ("結束日期", "End Date", txt(audit.end_date))],
++            [("稽核地點", "Location", txt(audit.location))],
++        ])
++
++        # 2. Audit team
++        db.add_section_heading(doc, "2", "稽核團隊", "Audit Team")
++        db.add_field_grid(doc, [
++            [("專案經理", "Project Director", txt(audit.project_director)),
++             ("工作包／技術負責人", "Package / Tech. Lead", txt(audit.tech_lead))],
++            [("主任稽核員", "Lead Auditor", txt(audit.auditor)),
++             ("協同稽核員", "Support Auditor(s)", txt(audit.support_auditors))],
++        ])
++
++        # 3. Scope & criteria
++        db.add_section_heading(doc, "3", "稽核範圍與準則", "Scope & Criteria")
++        db.add_field_grid(doc, [
++            [("稽核準則", "Audit Criteria", txt(audit.audit_criteria))],
++            [("選用模板", "Templates", txt("、".join(templates)))],
++        ])
++        db.add_subsection_heading(doc, "3.1 範圍描述", "Audit Scope")
++        db.add_field_box(doc, txt(audit.scope_description), guide="說明本次稽核涵蓋之部門、流程、作業與地點")
++
++        # 4. Checklist results
++        db.add_section_heading(doc, "4", "查檢結果", "Checklist Results")
++        db.add_field_grid(doc, [
++            [("查檢項目數", "Total Items", str(total)), ("完成率", "Progress", f"{progress}%")],
++            [("符合", "Pass", str(passed)), ("不符合", "Fail", str(failed))],
++            [("注意／待改善", "Attention / Pending", str(pending))],
++        ])
++        db.add_subsection_heading(doc, "4.1 查檢明細", "Audit Items")
++        if items:
++            rows = []
++            for n, item in enumerate(items, start=1):
++                content = "\n".join(filter(None, [txt(item.get('clause')), txt(item.get('task'))]))
++                rows.append([
++                    str(n),
++                    txt(item.get('no')) or db.DASH,
++                    content or db.DASH,
++                    _RESULT_TEXT.get(item.get('status'), _RESULT_TEXT['pending']),
++                    txt(item.get('note')) or db.DASH,
++                    txt(item.get('updatedAt')) or db.DASH,
++                ])
++            table = db.add_data_table(doc, ["#", "條文編號\nClause No.", "條文與查檢重點\nClause & Audit Question",
++                                            "結果\nResult", "備註\nRemarks", "更新日期\nUpdated"], rows)
++            # Word gives every column the same width by default: a narrow "#", most of the room for the question.
++            table.autofit = False
++            for row in table.rows:
++                for cell, width in zip(row.cells, _ITEM_COLUMN_WIDTHS_CM):
++                    cell.width = Cm(width)
++        else:
++            db.add_paragraph(doc, "（尚無查檢項目 No audit items）", size=9, italic=True)
++
++        # 5. Findings & summary
++        db.add_section_heading(doc, "5", "稽核發現與總結", "Findings & Summary")
++        db.add_field_box(doc, txt(audit.findings), guide="記錄稽核發現、不符合事項與總結", tall=True)
++
++        # 6. Sign-off
++        db.add_section_heading(doc, "6", "簽核", "Sign-off")
++        db.add_sign_off_grid(doc, [
++            {"num": "6.1", "zh": "主任稽核員", "en": "Lead Auditor", "name": txt(audit.auditor)},
++            {"num": "6.2", "zh": "受稽核方代表", "en": "Auditee Representative"},
++            {"num": "6.3", "zh": "專案經理", "en": "Project Director", "name": txt(audit.project_director)},
++        ])
++
++        return db.finalize_response(doc, txt(audit.auditNo) or "Audit")
++
+     def _resolve_vendor_id(self, vendor_name: Optional[str]) -> Optional[str]:
+         """
+         Resolve vendor name to vendor ID
+diff --git a/backend/tests/test_audit_export_docx_http.py b/backend/tests/test_audit_export_docx_http.py
+new file mode 100644
+index 00000000..e767a4f4
+--- /dev/null
++++ b/backend/tests/test_audit_export_docx_http.py
+@@ -0,0 +1,186 @@
++"""Audit Word export (AUDIT-EXPORT-DOCX-2026-001): GET /api/audit/{id}/export-docx returns the whole audit report.
++
++Real login/routes on a disposable file DB (fixture shared with test_audit_hardening_http); the .docx is opened with
++python-docx and its text checked. No main import, no development database access.
++"""
++from io import BytesIO
++from urllib.parse import unquote
++
++from docx import Document
++
++import models
++from core.security import get_password_hash
++from test_audit_hardening_http import create, env, insert_raw  # noqa: F401  (env is a fixture)
++
++PW = 'Export-Test-1234'  # isolated, test-only
++DOCX_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
++
++
++def export(env, audit_id):
++    return env.client.get(f'/api/audit/{audit_id}/export-docx')
++
++
++def docx_text(response):
++    """Every paragraph of the document, body and table cells, in order."""
++    doc = Document(BytesIO(response.content))
++    parts = [p.text for p in doc.paragraphs]
++    for table in doc.tables:
++        for row in table.rows:
++            for cell in row.cells:
++                parts.extend(p.text for p in cell.paragraphs)
++    return '\n'.join(parts)
++
++
++def item_rows(response):
++    """The checklist detail table (header row starts with '#'), as lists of cell texts."""
++    doc = Document(BytesIO(response.content))
++    for table in doc.tables:
++        if table.rows[0].cells[0].text == '#':
++            return [[c.text for c in row.cells] for row in table.rows[1:]]
++    return None
++
++
++def add_user(env, username, codes, vendor_id=None):
++    with env.Session() as db:
++        role = models.Role(name=f'role-{username}')
++        role.permissions_rel = [db.query(models.Permission).filter_by(code=c).first() or models.Permission(code=c, description=c)
++                                for c in codes]
++        db.add(role)
++        db.flush()
++        db.add(models.User(username=username, email=f'{username}@example.com', is_active=True, role_id=role.id,
++                           vendor_id=vendor_id, hashed_password=get_password_hash(PW)))
++        db.commit()
++
++
++def login(env, username):
++    response = env.client.post('/api/auth/login', data={'username': username, 'password': PW})
++    assert response.status_code == 200, response.text
++
++
++ITEMS = [
++    {'id': 1, 'no': '7.1', 'clause': 'Resources', 'task': 'How are resources provided?', 'status': 'pass',
++     'note': 'Budget approved', 'updatedAt': '2026-10-02'},
++    {'id': 2, 'no': '8.4', 'clause': 'External providers', 'task': 'How are suppliers controlled?', 'status': 'fail',
++     'note': 'No evaluation\nfor two vendors', 'updatedAt': '2026-10-02'},
++    {'id': 3, 'no': '', 'clause': '', 'task': 'Custom question', 'status': 'pending'},
++    {'id': 4, 'no': '9.2', 'clause': 'Internal audit', 'task': 'Planned intervals?'},  # no status yet → pending
++]
++
++
++def test_export_contains_the_whole_report(env):
++    with env.Session() as db:
++        db.add(models.Project(id='p1', name='Harbour Line', code='HL'))
++        db.commit()
++    created = create(env, title='Q4 supplier audit', project_id='p1', project_name='Harbour Line', location='Yard 3',
++                     project_director='Director Chen', tech_lead='Tech Lin', auditor='Lead Wang', support_auditors='Support Lee',
++                     audit_criteria='Contract + ISO 9001', scope_description='Receiving and storage',
++                     selected_templates=['ISO 9001:2015', '供應商評鑑表'], custom_check_items=ITEMS,
++                     findings='Two suppliers lack evaluation.\nFollow-up NCR to be raised.', status='In Progress').json()
++    response = export(env, created['id'])
++    assert response.status_code == 200, response.text
++    assert response.headers['content-type'] == DOCX_TYPE
++    disposition = response.headers['content-disposition']
++    assert disposition.startswith('attachment;')
++    assert unquote(disposition.split("filename*=UTF-8''")[1]) == f"{created['auditNo']}.docx"
++
++    text = docx_text(response)
++    for expected in ['內部稽核報告 INTERNAL AUDIT REPORT', created['auditNo'], '狀態：IN PROGRESS', '進行中 In Progress',
++                     'Q4 supplier audit', '[HL] Harbour Line', 'Audit vendor', '2026-10-01', '2026-10-02', 'Yard 3',
++                     'Director Chen', 'Tech Lin', 'Lead Wang', 'Support Lee', 'Contract + ISO 9001', 'ISO 9001:2015、供應商評鑑表',
++                     'Receiving and storage', 'Two suppliers lack evaluation.', 'Follow-up NCR to be raised.',
++                     '主任稽核員 Lead Auditor', '受稽核方代表 Auditee Representative', '專案經理 Project Director']:
++        assert expected in text, expected
++    # summary: 4 items, 1 pass, 1 fail, 2 pending → progress 50%
++    doc = Document(BytesIO(response.content))
++    summary = next(t for t in doc.tables if 'Total Items' in t.rows[0].cells[0].text)
++    values = {}
++    for row in summary.rows:
++        texts = [c.text for c in row.cells]
++        texts = [x for i, x in enumerate(texts) if i == 0 or x != texts[i - 1]]  # a merged value cell repeats its text
++        values.update({texts[i].split('\n')[1]: texts[i + 1] for i in range(0, len(texts), 2)})
++    assert values == {'Total Items': '4', 'Progress': '50%', 'Pass': '1', 'Fail': '1', 'Attention / Pending': '2'}
++
++    rows = item_rows(response)
++    assert [r[0] for r in rows] == ['1', '2', '3', '4']  # stored order
++    assert rows[0][1:] == ['7.1', 'Resources\nHow are resources provided?', '符合 Pass', 'Budget approved', '2026-10-02']
++    assert rows[1][3] == '不符合 Fail' and rows[1][4] == 'No evaluation\nfor two vendors'  # multi-line note kept
++    assert rows[2][1:4] == ['—', 'Custom question', '注意／待改善 Attention']
++    assert rows[3][3] == '注意／待改善 Attention' and rows[3][4] == '—' and rows[3][5] == '—'
++    table = next(t for t in Document(BytesIO(response.content)).tables if t.rows[0].cells[0].text == '#')
++    assert [round(c.width.cm, 1) for c in table.rows[1].cells] == [0.9, 1.7, 6.2, 2.3, 4.3, 2.0]  # narrow '#', wide question
++
++
++def test_export_of_an_audit_without_items_or_optional_fields(env):
++    created = create(env, custom_check_items=[], selected_templates=[], location='', findings='').json()
++    response = export(env, created['id'])
++    assert response.status_code == 200, response.text
++    text = docx_text(response)
++    assert '（尚無查檢項目 No audit items）' in text
++    assert item_rows(response) is None
++    assert '記錄稽核發現、不符合事項與總結' in text  # empty findings → the guide text, like the NCR report
++
++
++def test_legacy_rows_export_without_failing(env):
++    # project name only (no project_id), list fields that are not valid JSON / not lists / hold non-objects
++    for templates, items in [('not json', '{"a": 1}'), ('{"x": 1}', '[1, "two", null]'), (None, None)]:
++        audit_id = insert_raw(env, project_name='Old Project', selected_templates=templates, custom_check_items=items)
++        response = export(env, audit_id)
++        assert response.status_code == 200, response.text
++        text = docx_text(response)
++        assert 'Old Project' in text
++        assert '（尚無查檢項目 No audit items）' in text
++
++
++def test_characters_xml_cannot_carry_are_dropped_not_an_error(env):
++    audit_id = insert_raw(env, title='Ti\x01tle', findings='Line\x1fone\nLine two',
++                          custom_check_items='[{"id": 1, "no": "7.1", "clause": "Res\\u000bources", "task": "Q\\u0000?",'
++                                             ' "status": "pass", "note": "bad\\ud800char"}]')
++    response = export(env, audit_id)
++    assert response.status_code == 200, response.text
++    text = docx_text(response)
++    assert 'Title' in text and 'Lineone' in text and 'Line two' in text
++    assert item_rows(response)[0][2:5] == ['Resources\nQ?', '符合 Pass', 'badchar']
++
++
++def test_unknown_audit_is_404(env):
++    response = export(env, 'no-such-audit')
++    assert response.status_code == 404
++    assert response.json() == {'detail': 'Audit not found'}
++
++
++def test_contractor_scoped_user_exports_only_its_own_audits(env):
++    with env.Session() as db:
++        db.add(models.Contractor(id='alpha', name='Alpha Build', abbreviation='AB', status='active'))
++        db.commit()
++    other = create(env).json()  # vendor 'Audit vendor', created by the unrestricted auditor
++    add_user(env, 'alpha-viewer', ['audit:view:all', 'audit:create:all'], vendor_id='alpha')
++    login(env, 'alpha-viewer')
++    own = create(env).json()
++    assert own['vendor_id'] == 'alpha'
++    assert export(env, own['id']).status_code == 200
++    response = export(env, other['id'])
++    assert response.status_code == 404  # outside the scope: same answer as a missing audit, no existence leak
++    assert response.json() == {'detail': 'Audit not found'}
++
++
++def test_project_scoped_user_cannot_export_another_projects_audit(env):
++    with env.Session() as db:
++        db.add_all([models.Project(id='p1', name='Project One'), models.Project(id='p2', name='Project Two')])
++        db.commit()
++    other = create(env, project_id='p2').json()
++    add_user(env, 'p1-viewer', ['audit:view:all'])
++    with env.Session() as db:
++        user = db.query(models.User).filter_by(username='p1-viewer').one()
++        db.add(models.UserProject(user_id=user.id, project_id='p1'))
++        db.commit()
++    login(env, 'p1-viewer')
++    assert export(env, other['id']).status_code == 404
++
++
++def test_without_audit_view_or_signed_out_is_refused(env):
++    created = create(env).json()
++    add_user(env, 'no-audit', ['ncr:view:all'])
++    login(env, 'no-audit')
++    assert export(env, created['id']).status_code == 403
++    env.client.cookies.clear()
++    assert export(env, created['id']).status_code == 401
+diff --git a/react-app/src/components/Audit/AuditWizard.tsx b/react-app/src/components/Audit/AuditWizard.tsx
+index a7815c5d..c0853e89 100755
+--- a/react-app/src/components/Audit/AuditWizard.tsx
++++ b/react-app/src/components/Audit/AuditWizard.tsx
+@@ -13,6 +13,7 @@ import { useContractorsStore } from '../../store/contractorsStore';
+ import { useProjectStore } from '../../store/projectStore';
+ import { useLanguage } from '../../context/LanguageContext';
+ import { checkDateOrder } from '../../utils/dateValidation';
++import { exportAuditDocx } from '../../services/api';
+ 
+ // Today as YYYY-MM-DD in the browser's time zone (toISOString() is UTC: the previous day before 08:00 in Taiwan).
+ const localToday = () => {
+@@ -105,6 +106,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+   const [saveError, setSaveError] = useState('');
+   const [isDraftSaving, setIsDraftSaving] = useState(false);
+   const [draftMessage, setDraftMessage] = useState('');
++  const [exportingDocx, setExportingDocx] = useState(false);
+ 
+   const [step, setStep] = useState(1);
+   const [formData, setFormData] = useState({
+@@ -429,6 +431,25 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+     }
+   };
+ 
++  // Word export (AUDIT-EXPORT-DOCX-2026-001): the server builds the report from the SAVED record, so unsaved edits would
++  // silently be missing from the file — ask for a save first instead.
++  const handleExportDocx = async () => {
++    if (!recordId || exportingDocx) return;
++    if (leaveGuard.dirty) {
++      toast.warning(t('audit.wizard.exportSaveFirst'));
++      return;
++    }
++    setExportingDocx(true);
++    try {
++      await exportAuditDocx(recordId, auditNo || 'Audit');
++    } catch (err) {
++      console.error('Word 匯出失敗: ', err);
++      toast.error(t('audit.wizard.exportFailed'));
++    } finally {
++      setExportingDocx(false);
++    }
++  };
++
+   const renderProgressBar = () => (
+     // px-10: each label is centred under its circle and wider than it, so the first and last labels hang ~36px past the
+     // circles — the padding keeps them inside the wizard at every width (AUDIT-LAYOUT R2).
+@@ -864,6 +885,12 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                     <button className={actionStyles.secondary} type="button" onClick={() => window.print()}>
+                       <Printer className="w-4 h-4" /> {t('audit.wizard.printReport')}
+                     </button>
++                    {/* Needs a saved record (the export reads it from the server). */}
++                    {recordId && (
++                      <button className={actionStyles.secondary} type="button" onClick={handleExportDocx} disabled={exportingDocx}>
++                        <FileText className="w-4 h-4" /> {exportingDocx ? t('audit.wizard.exporting') : t('common.exportWord')}
++                      </button>
++                    )}
+                   </div>
+                 </header>
+ 
+diff --git a/react-app/src/components/Shared/LeaveGuard.tsx b/react-app/src/components/Shared/LeaveGuard.tsx
+index 96b9c5f4..db050802 100644
+--- a/react-app/src/components/Shared/LeaveGuard.tsx
++++ b/react-app/src/components/Shared/LeaveGuard.tsx
+@@ -97,8 +97,9 @@ export function useLeaveGuard(dirty: boolean, busy = false) {
+ export function useDraftGuard(value: unknown, busy = false, enabled = true) {
+     const key = JSON.stringify(value);
+     const [baseline, setBaseline] = useState(key);
+-    const guard = useLeaveGuard(enabled && key !== baseline, busy);
+-    return { ...guard, markSaved: () => setBaseline(key) };
++    const dirty = enabled && key !== baseline;
++    const guard = useLeaveGuard(dirty, busy);
++    return { ...guard, dirty, markSaved: () => setBaseline(key) };
+ }
+ 
+ /** Local item panels stay mounted in their parent; reset only when a panel opens. */
+diff --git a/react-app/src/context/LanguageContext.tsx b/react-app/src/context/LanguageContext.tsx
+index 61709eac..4b1e4c63 100755
+--- a/react-app/src/context/LanguageContext.tsx
++++ b/react-app/src/context/LanguageContext.tsx
+@@ -886,6 +886,9 @@ const translations: Record<Language, Record<string, string>> = {
+     'audit.wizard.printPlan': 'Print Audit Plan',
+     'audit.wizard.printChecklist': 'Print Checklist',
+     'audit.wizard.printReport': 'Print Report',
++    'audit.wizard.exporting': 'Exporting...',
++    'audit.wizard.exportSaveFirst': 'There are unsaved changes. Save Draft first, then export: the Word file contains the saved record.',
++    'audit.wizard.exportFailed': 'Export failed. Please try again.',
+     'audit.wizard.successTitle': 'Audit Plan Saved Successfully',
+     'audit.wizard.successSubtitle': 'Record created. Document No.:',
+     'audit.wizard.successSubtitleAuto': 'Auto-generated',
+@@ -2356,6 +2359,9 @@ const translations: Record<Language, Record<string, string>> = {
+     'audit.wizard.printPlan': '列印稽核計畫',
+     'audit.wizard.printChecklist': '列印查檢表',
+     'audit.wizard.printReport': '列印報告',
++    'audit.wizard.exporting': '匯出中...',
++    'audit.wizard.exportSaveFirst': '有尚未儲存的修改。請先按「儲存草稿」再匯出，Word 檔的內容是已儲存的資料。',
++    'audit.wizard.exportFailed': '匯出失敗，請再試一次。',
+     'audit.wizard.successTitle': '稽核計畫已成功寫入資料庫',
+     'audit.wizard.successSubtitle': '雲端紀錄已建立，文件編號：',
+     'audit.wizard.successSubtitleAuto': '自動產生',
+diff --git a/react-app/src/services/api.ts b/react-app/src/services/api.ts
+index 4ae375e1..84300ff5 100755
+--- a/react-app/src/services/api.ts
++++ b/react-app/src/services/api.ts
+@@ -597,6 +597,18 @@ export const exportNoiDocx = async (noiId: string, filename: string): Promise<vo
+   URL.revokeObjectURL(url);
+ };
+ 
++// Formal .docx export of the whole Audit report (AUDIT-EXPORT-DOCX-2026-001) — mirrors
++// exportNcrDocx's blob-download pattern.
++export const exportAuditDocx = async (auditId: string, filename: string): Promise<void> => {
++  const response = await api.get(`/audit/${auditId}/export-docx`, { responseType: 'blob' });
++  const url = URL.createObjectURL(new Blob([response.data]));
++  const a = document.createElement('a');
++  a.href = url;
++  a.download = `${filename}.docx`;
++  a.click();
++  URL.revokeObjectURL(url);
++};
++
+ // --- File Management API ---
+ 
+ export interface AttachmentInfo {
+diff --git a/react-app/tests-browser/audit-export-docx-check.mjs b/react-app/tests-browser/audit-export-docx-check.mjs
+new file mode 100644
+index 00000000..3aa64d08
+--- /dev/null
++++ b/react-app/tests-browser/audit-export-docx-check.mjs
+@@ -0,0 +1,111 @@
++// AUDIT-EXPORT-DOCX-2026-001 browser checks (isolated stack only; seeds: seed_audit_hardening_b_review.py then
++// seed_audit_export_docx_review.py). Usage: node audit-export-docx-check.mjs <stack.json> <outDir>
++import { chromium } from '/Users/nook/Documents/Qualitas/react-app/node_modules/playwright/index.mjs';
++import { readFileSync, mkdirSync, statSync } from 'node:fs';
++const stack = JSON.parse(readFileSync(process.argv[2], 'utf8'));
++const out = process.argv[3]; mkdirSync(out, { recursive: true });
++const UI = `http://127.0.0.1:${stack.vite_port}`, PW = 'Accept-Test-1234';
++let failures = 0;
++const result = (name, ok, extra = '') => { if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${extra ? '  -> ' + String(extra).replace(/\s+/g, ' ').slice(0, 300) : ''}`); };
++const browser = await chromium.launch({ headless: true });
++const EXPORT = /匯出 Word|Export Word/;
++
++async function login(user, language = 'zh') {
++  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 }, acceptDownloads: true });
++  await ctx.addInitScript(lang => localStorage.setItem('language', lang), language);
++  const p = await ctx.newPage();
++  await p.goto(UI + '/login'); await p.fill('#email', user); await p.fill('#password', PW); await p.click('button[type=submit]');
++  await p.waitForURL(u => !u.pathname.startsWith('/login'), { timeout: 15000 });
++  await p.goto(UI + '/audit');
++  await p.waitForSelector('table tbody tr', { timeout: 15000 });
++  await p.waitForTimeout(800);
++  return p;
++}
++const openAudit = async (p, no) => {
++  await p.locator('table tbody tr', { hasText: no }).first().locator('td').nth(2).click();
++  await p.waitForSelector('input[name=auditDocNo]', { timeout: 10000 });
++};
++const toStep4 = async p => { await p.locator('.max-w-4xl button').nth(3).click(); await p.waitForTimeout(500); };
++const exportButton = p => p.locator('button', { hasText: EXPORT });
++const download = async (p, name) => {
++  const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 10000 }), exportButton(p).click()]);
++  const path = `${out}/${name}-${dl.suggestedFilename()}`;
++  await dl.saveAs(path);
++  const head = readFileSync(path).subarray(0, 2).toString();
++  return { file: dl.suggestedFilename(), size: statSync(path).size, zip: head === 'PK' };
++};
++
++// 1. full user: button on step 4 beside "Print Report", downloads <auditNo>.docx; not on steps 1-3
++{
++  const p = await login('audit_full');
++  await openAudit(p, 'AHB-EXPORT-1');
++  const early = await exportButton(p).count();
++  await toStep4(p);
++  const header = await p.locator('header .no-print').first().innerText();
++  result('export button only on step 4, next to Print Report', early === 0 && /列印報告/.test(header) && EXPORT.test(header), `${early} | ${header}`);
++  const got = await download(p, 'full');
++  result('download is AHB-EXPORT-1.docx (a real docx/zip)', got.file === 'AHB-EXPORT-1.docx' && got.zip && got.size > 10000, JSON.stringify(got));
++  await p.screenshot({ path: `${out}/step4-export-button.png` });
++
++  // 2. unsaved change: warned, nothing downloaded
++  await p.fill('textarea[name=findings]', 'unsaved edit');
++  let downloaded = false;
++  p.once('download', () => { downloaded = true; });
++  await exportButton(p).click();
++  await p.waitForTimeout(1500);
++  const toast = await p.locator('[data-sonner-toast]').last().innerText().catch(() => '');
++  result('unsaved changes: asks to save first, no download', !downloaded && /儲存草稿/.test(toast), toast);
++  await p.screenshot({ path: `${out}/unsaved-warning.png` });
++  await p.context().close();
++}
++
++// 3. new audit: no button until the first Save Draft, then it exports the new number
++{
++  const p = await login('audit_full');
++  await p.locator('button', { hasText: /新增|Add/ }).first().click();
++  await p.waitForSelector('input[name=auditTitle]');
++  await toStep4(p);
++  const before = await exportButton(p).count();
++  await p.locator('.max-w-4xl button').nth(0).click();
++  await p.fill('input[name=auditTitle]', 'export after first save');
++  await p.locator('button', { hasText: /儲存草稿|Save Draft/ }).first().click();
++  await p.waitForTimeout(1500);
++  const docNo = await p.inputValue('input[name=auditDocNo]');
++  await toStep4(p);
++  const got = await download(p, 'new');
++  result('new audit: no button before saving, exports after Save Draft', before === 0 && !!docNo && got.file === `${docNo}.docx` && got.zip,
++    `${before} | ${docNo} | ${JSON.stringify(got)}`);
++  await p.context().close();
++}
++
++// 4. read-only cases still export: a view-only user, and a locked Void record
++{
++  const p = await login('audit_viewer');
++  await openAudit(p, 'AHB-EXPORT-1');
++  await toStep4(p);
++  const got = await download(p, 'viewer');
++  result('view-only user can export', got.file === 'AHB-EXPORT-1.docx' && got.zip, JSON.stringify(got));
++  await p.context().close();
++  const q = await login('audit_full');
++  await openAudit(q, 'AHB-VOID-1');
++  await toStep4(q);
++  const void1 = await download(q, 'void');
++  result('locked Void record can export', void1.file === 'AHB-VOID-1.docx' && void1.zip, JSON.stringify(void1));
++  await q.context().close();
++}
++
++// 5. English label; the button is hidden in print (inside the header's no-print group)
++{
++  const p = await login('audit_full', 'en');
++  await openAudit(p, 'AHB-EXPORT-1');
++  await toStep4(p);
++  const label = await exportButton(p).innerText();
++  await p.emulateMedia({ media: 'print' });
++  const printed = await exportButton(p).isVisible();
++  result('English label, hidden when printing', /Export Word/.test(label) && !printed, `${label} | visible in print: ${printed}`);
++  await p.context().close();
++}
++
++await browser.close();
++console.log(failures ? `${failures} FAILED` : 'ALL PASS');
++process.exit(failures ? 1 : 0);
