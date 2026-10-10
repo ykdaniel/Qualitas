@@ -210,6 +210,22 @@ Result 的既有操作方式比拆開成縱向區塊更直覺）。
 影響範圍：backend/services/noi_service.py 的 update_noi；測試 backend/tests/test_noi_contractor_lock_http.py。前端承包商選單是否事先停用並說明，尚未決定。
 依據：使用者 2026-10-10 於本會話直接確認（「NOI換承包商：底下有文件就禁止」；縮寫變更「比照處理，底下有文件就保留原編號」；獨立審查後再選「Follow-up 算進去」「允許補選，保留原編號」）。
 
+### IAM 角色權限矩陣、停用測試帳號 john_doe（2026-10-11）
+日期：2026-10-11
+決策：
+1. 正式站角色權限依下列矩陣，由使用者在 IAM UI 指派（不改程式、不用 migration 寫入）。代碼以 `backend/core/perms.py` 為準；共 72 個，ADMIN 維持全部。
+   - QA_MANAGER（69）：全部，但不含 `iam:user:manage`、`iam:role:manage`、`settings:manage:all`。
+   - ENGINEER（43）：ITP view／create／update／void；NCR view／create／update／close；NOI view／create／update；Checklist view／create／update／close；ITR、OBS、OSD、FAT、Meeting、FollowUp、KM 各 view／create／update；PQP、Audit、KPI、Contractors view；`material:view:all`；`iam:user:view`、`iam:role:view`。
+   - Inspector（26）：ITP、NOI、FAT、Meeting、KM、Contractors view；ITR、Checklist、NCR、OBS、OSD 各 view／create／update；FollowUp view／update；`material:view:all`；`iam:user:view`、`iam:role:view`。不含 PQP、Audit、KPI。
+   - VIEWER（18）：16 個業務模組各自的 view（ITP、NCR、NOI、Checklist、PQP、Contractors、FAT、Audit、OBS、OSD、Material、Meeting、KPI、FollowUp、ITR、KM）；`iam:user:view`、`iam:role:view`。
+   - USER（1）：維持 `iam:user:view`，不調整。
+   - 所有刪除、審核（approve）、`material:manage:all`、`contractors:manage:all`、`kpi:update:all` 只給 QA_MANAGER（及 ADMIN）。
+2. 停用使用者 john_doe（不刪除），由使用者在 IAM UI 操作。Inspector 角色保留，供日後真正的檢驗員使用。
+3. BACKLOG #21 子項 3（停用使用者的批次轉移指派工具）延後。
+理由：Inspector 角色與 john_doe 是 2026-02-08 測試腳本 `backend/scripts/verification/verify_iam_backend.py` 建立的；腳本傳入無效代碼，所以角色為 0 權限，帳號從未登入。舊的 ENGINEER／QA_MANAGER／VIEWER 只涵蓋 ITP、NCR、NOI、Checklist，ITR、OBS、材料等後來的模組都沒有權限。所有非管理員角色都需要 `iam:user:view`，NCR、OBS、OSD、Follow-up、會議記錄的指派人選單才載得到名單。Inspector 的 NCR 給到 update，因為附件上傳沿用 update 權限（見「附件沿用 update 權限（方案 A）」）。未指派專案或廠商的非管理員帳號不受資料範圍限制（`core/scope.py`），所以先停用 john_doe，再給 Inspector 權限。
+影響範圍：正式站 roles／role_permissions 資料（由使用者在 UI 指派，寫入稽核）與 users.is_active（john_doe）。不改程式與 seeder；新資料庫不會自動帶入這個矩陣。
+依據：使用者 2026-10-11 於 IAM 工作階段確認（john_doe「選 A」、矩陣「照建議」、#21 子項 3「延後」）。
+
 ## 尚未決策（不得當成已核准規則）
 
 - ITR 核准是否須額外檢查 Inspection Result。
