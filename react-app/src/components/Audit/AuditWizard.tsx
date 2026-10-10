@@ -36,6 +36,15 @@ const isPlainEnter = (e: React.KeyboardEvent) => e.key === 'Enter' && !e.nativeE
 const WIZARD_STEPS = ['audit.wizard.step1', 'audit.wizard.stepPersonnelScope', 'audit.wizard.stepAgenda', 'audit.wizard.step4', 'audit.wizard.step5'];
 const LAST_STEP = WIZARD_STEPS.length;
 
+// Steps with a document (AUDIT-BUTTONS-2026-001): which printout / Word kind, and the print button label.
+const STEP_DOCUMENTS: Record<number, { kind: AuditPrintKind; printLabel: string }> = {
+  3: { kind: 'plan', printLabel: 'audit.wizard.printPlan' },
+  4: { kind: 'checklist', printLabel: 'audit.wizard.printChecklist' },
+  5: { kind: 'report', printLabel: 'audit.wizard.printReport' },
+};
+// Same file names as the backend (_DOCX_KINDS suffixes).
+const DOCX_SUFFIX: Record<AuditPrintKind, string> = { report: '', plan: '-Plan', checklist: '-Checklist' };
+
 const ALL_CATEGORY = '__ALL__';
 const UNCATEGORIZED = '__UNCATEGORIZED__';
 
@@ -478,7 +487,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
 
   // Word export (AUDIT-EXPORT-DOCX-2026-001): the server builds the report from the SAVED record, so unsaved edits would
   // silently be missing from the file — ask for a save first instead.
-  const handleExportDocx = async () => {
+  const handleExportDocx = async (kind: AuditPrintKind) => {
     if (!recordId || exportingDocx) return;
     if (leaveGuard.dirty) {
       toast.warning(t('audit.wizard.exportSaveFirst'));
@@ -486,7 +495,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     }
     setExportingDocx(true);
     try {
-      await exportAuditDocx(recordId, auditNo || 'Audit');
+      await exportAuditDocx(recordId, `${auditNo || 'Audit'}${DOCX_SUFFIX[kind]}`, kind);
     } catch (err) {
       console.error('Word 匯出失敗: ', err);
       toast.error(t('audit.wizard.exportFailed'));
@@ -523,6 +532,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     findings: formData.findings,
   };
 
+  // The document that belongs to the current step: its print button and its Word export sit in the footer.
+  const stepDocument = STEP_DOCUMENTS[step];
+
   const renderProgressBar = () => (
     // px-10: each label is centred under its circle and wider than it, so the first and last labels hang ~36px past the
     // circles — the padding keeps them inside the wizard at every width (AUDIT-LAYOUT R2).
@@ -533,7 +545,8 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
             <button
               type="button"
               onClick={() => setStep(i)}
-              className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 z-10 cursor-pointer hover:scale-110 ${
+              // no motion on the step bar: no hover zoom, no transitions (AUDIT-BUTTONS-2026-001)
+              className={`w-10 h-10 rounded-full flex items-center justify-center border-2 z-10 cursor-pointer ${
                 step >= i ? 'bg-teal-600 border-teal-600 text-white shadow-lg' : 'bg-white border-gray-300 text-gray-400 hover:border-teal-400'
               }`}
             >
@@ -547,7 +560,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
             </span>
           </div>
           {i < LAST_STEP && (
-            <div className={`flex-1 h-1 mx-2 rounded-full transition-colors duration-300 drop-shadow-sm ${
+            <div className={`flex-1 h-1 mx-2 rounded-full drop-shadow-sm ${
               step > i ? 'bg-teal-500' : 'bg-slate-600/50'
             }`} />
           )}
@@ -561,9 +574,12 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     {/* print: the wizard is a fixed, internally scrolling overlay — printed as is (browser print menu, no printout
         mounted), only the first screenful came out. In print it becomes normal flow so the browser paginates it;
         Audit.tsx hides the page behind. */}
-    <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto py-8 px-4 md:px-8 flex justify-center items-start pt-10 print:static print:overflow-visible print:block print:p-0 print:bg-white">
-      <div className="w-full max-w-[1400px]">
-        <div className="flex justify-between items-center mb-6 no-print">
+    <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto px-4 md:px-8 flex justify-center items-start print:static print:overflow-visible print:block print:p-0 print:bg-white">
+      {/* vertical padding lives here, not on the scroll container, so the sticky header / footer sit flush with its edges */}
+      <div className="w-full max-w-[1400px] pt-8 pb-8 print:p-0">
+        {/* Title and step bar stay put while the step scrolls (AUDIT-BUTTONS-2026-001: "要固定不要轉動"). */}
+        <div className="sticky top-0 z-20 bg-slate-50 pt-2 pb-2 no-print" data-wizard-header>
+        <div className="flex justify-between items-center mb-6">
             <div className="text-left flex items-center gap-4">
                 <div className="inline-flex items-center justify-center p-2.5 bg-emerald-50 text-teal-700 rounded-2xl">
                     <ClipboardList size={24} />
@@ -578,7 +594,6 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
             </button>
         </div>
 
-        <div className="no-print">
           {renderProgressBar()}
         </div>
 
@@ -593,7 +608,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
           </div>
         )}
 
-        <div className="bg-white rounded-4xl shadow-xl shadow-slate-900/10 overflow-hidden relative border border-slate-100/50 print-modal-content">
+        {/* overflow-clip (not -hidden) keeps the rounded corners without making the card a scroll container, so the sticky
+            footer below sticks to the wizard's own scroll area */}
+        <div className="bg-white rounded-4xl shadow-xl shadow-slate-900/10 overflow-clip relative border border-slate-100/50 print-modal-content">
           <form onSubmit={handleSubmit}>
             
             {/* Step 1: Project Info */}
@@ -805,17 +822,12 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
               </div>
             )}
 
-            {/* Step 3: Agenda — the daily schedule (AUDIT-AGENDA-2026-001); "Print Audit Plan" lives here (plan = steps 1-3) */}
+            {/* Step 3: Audit Plan — the daily schedule (AUDIT-AGENDA-2026-001); its print / Word buttons are in the footer */}
             {step === 3 && (
               <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-                  <div className="flex items-center gap-3">
-                    <CalendarDays className="text-teal-600" size={24} />
-                    <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.stepAgenda')}</h2>
-                  </div>
-                  <button className={actionStyles.secondary} type="button" onClick={() => requestPrint('plan')}>
-                    <Printer className="w-4 h-4" /> {t('audit.wizard.printPlan')}
-                  </button>
+                <div className="flex items-center gap-3 border-b border-slate-100 pb-3 mb-4">
+                  <CalendarDays className="text-teal-600" size={24} />
+                  <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.stepAgenda')}</h2>
                 </div>
                 <AuditAgendaEditor
                   rows={formData.agenda}
@@ -831,14 +843,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
             {/* Step 4: Checklist Configuration */}
             {step === 4 && (
               <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-                  <div className="flex items-center gap-3">
-                    <CheckSquare className="text-teal-600" size={24} />
-                    <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.step4')} Checklist</h2>
-                  </div>
-                  <button className={actionStyles.secondary} type="button" onClick={() => requestPrint('checklist')}>
-                    <Printer className="w-4 h-4" /> {t('audit.wizard.printChecklist')}
-                  </button>
+                <div className="flex items-center gap-3 border-b border-slate-100 pb-3 mb-4">
+                  <CheckSquare className="text-teal-600" size={24} />
+                  <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.step4')}</h2>
                 </div>
 
                 {/* Template Selection */}
@@ -965,26 +972,12 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
               <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 bg-slate-50 min-h-[500px]">
                 
                 {/* Header Section */}
-                <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <ShieldCheck className="w-8 h-8 text-indigo-600" />
-                      <h1 className="text-2xl font-bold text-slate-800">{t('audit.wizard.executionTitle')}</h1>
-                    </div>
-                    <p className="text-slate-500">{formData.projectName ? `${formData.projectName} - ${t('audit.wizard.regularAudit')}` : t('audit.wizard.configureFirst')}</p>
+                <header>
+                  <div className="flex items-center gap-2 mb-1">
+                    <ShieldCheck className="w-8 h-8 text-indigo-600" />
+                    <h1 className="text-2xl font-bold text-slate-800">{t('audit.wizard.executionTitle')}</h1>
                   </div>
-                  
-                  <div className="flex items-center gap-3 no-print">
-                    <button className={actionStyles.secondary} type="button" onClick={() => requestPrint('report')}>
-                      <Printer className="w-4 h-4" /> {t('audit.wizard.printReport')}
-                    </button>
-                    {/* Needs a saved record (the export reads it from the server). */}
-                    {recordId && (
-                      <button className={actionStyles.secondary} type="button" onClick={handleExportDocx} disabled={exportingDocx}>
-                        <FileText className="w-4 h-4" /> {exportingDocx ? t('audit.wizard.exporting') : t('common.exportWord')}
-                      </button>
-                    )}
-                  </div>
+                  <p className="text-slate-500">{formData.projectName ? `${formData.projectName} - ${t('audit.wizard.regularAudit')}` : t('audit.wizard.configureFirst')}</p>
                 </header>
 
                 {/* Statistics Cards */}
@@ -1197,14 +1190,28 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
               </div>
             )}
 
-            {/* Footer Navigation */}
+            {/* Footer Navigation — sticky at the bottom so Back / Print / Word / Save / Next stay reachable on long steps */}
+                      <div className="sticky bottom-0 z-10" data-wizard-footer>
                       <FormActions tools={<>{step > 1 && (
                           <button className={actionStyles.secondary}
                               type="button" onClick={prevStep}
                           >
                               <ChevronLeft size={20} /> {t('audit.wizard.prevStep')}
                           </button>
-                      )}</>} secondary={<>{/* 儲存進度按鈕 (Ghost Style) — hidden entirely once Closed:
+                      )}
+                      {/* This step's printout and Word document, bottom-left like every other module's Print / Export Word
+                          (AUDIT-BUTTONS-2026-001): step 3 the audit plan, step 4 the on-site checklist, step 5 the report.
+                          Word needs a saved record (the server builds it from the saved audit). */}
+                      {stepDocument && (<>
+                          <button className={actionStyles.secondary} type="button" onClick={() => requestPrint(stepDocument.kind)} data-step-print={stepDocument.kind}>
+                              <Printer size={16} /> {t(stepDocument.printLabel)}
+                          </button>
+                          {recordId && (
+                              <button className={actionStyles.secondary} type="button" onClick={() => handleExportDocx(stepDocument.kind)} disabled={exportingDocx} data-step-word={stepDocument.kind}>
+                                  <FileText size={16} /> {exportingDocx ? t('audit.wizard.exporting') : t('common.exportWord')}
+                              </button>
+                          )}
+                      </>)}</>} secondary={<>{/* 儲存進度按鈕 (Ghost Style) — hidden entirely once Closed:
                     a true dead end (WorkflowEngine "Closed": []), so there's
                     nothing left to save, matching the backend's unconditional
                     lock in audit_service.py. */}
@@ -1234,6 +1241,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                                   {isSaving ? t('audit.wizard.submitting') : t('audit.wizard.submit')} <CheckCircle size={20} />
                               </button>
                           ) : null}</>} />
+                      </div>
           </form>
         </div>
       </div>

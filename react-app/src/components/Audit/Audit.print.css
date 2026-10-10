@@ -114,6 +114,8 @@
 .audit-print-root .agenda-items .a-who { width: 18%; }
 .audit-print-root .agenda-items .a-aud { width: 12%; }
 .audit-print-root .agenda-items .a-rem { width: 14%; }
+/* lunch rows (kind "lunch", AUDIT-BUTTONS-2026-001): grey, like the Word export */
+.audit-print-root .agenda-items tr.lunch td { background: #e5e7eb; }
 
 .audit-print-root .field-box { border: 1px solid var(--audit-line); min-height: 34px; padding: 4px 6px; white-space: pre-wrap; word-break: break-word; }
 .audit-print-root .field-box.fb-tall { min-height: 70px; }

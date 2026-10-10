@@ -216,3 +216,56 @@ def test_without_audit_view_or_signed_out_is_refused(env):
     assert export(env, created['id']).status_code == 403
     env.client.cookies.clear()
     assert export(env, created['id']).status_code == 401
+
+
+# ── AUDIT-BUTTONS-2026-001: the plan and the on-site checklist as Word, like the step printouts ───────────────────────
+def section_headings(response):
+    doc = Document(BytesIO(response.content))
+    return [t.rows[0].cells[0].text for t in doc.tables if len(t.columns) == 1 and t.rows[0].cells[0].text[:2].rstrip('.').isdigit()]
+
+
+def test_kind_plan_is_sections_1_to_4_plus_a_plan_sign_off(env):
+    created = create(env, title='Plan export', agenda=[{'date': '2026-10-01', 'start': '09:00', 'end': '09:30', 'item': 'Opening'}],
+                     custom_check_items=ITEMS).json()
+    response = env.client.get(f"/api/audit/{created['id']}/export-docx?kind=plan")
+    assert response.status_code == 200, response.text
+    assert unquote(response.headers['content-disposition'].split("filename*=UTF-8''")[1]) == f"{created['auditNo']}-Plan.docx"
+    text = docx_text(response)
+    assert '內部稽核計畫 INTERNAL AUDIT PLAN' in text and 'Plan export' in text and 'Opening' in text
+    assert section_headings(response) == ['1. 稽核資訊  Audit Information', '2. 稽核團隊  Audit Team', '3. 稽核範圍與準則  Scope & Criteria',
+                                          '4. 稽核行程  Agenda', '5. 計畫簽核  Plan Sign-off']
+    assert '查檢結果' not in text and 'Budget approved' not in text  # no results in a plan
+    assert '5.1 主任稽核員 Lead Auditor' in text and '5.2 專案經理 Project Director' in text
+
+
+def test_kind_checklist_has_blank_result_boxes_and_no_recorded_results(env):
+    created = create(env, custom_check_items=ITEMS, location='Yard 3').json()
+    response = env.client.get(f"/api/audit/{created['id']}/export-docx?kind=checklist")
+    assert response.status_code == 200, response.text
+    assert unquote(response.headers['content-disposition'].split("filename*=UTF-8''")[1]) == f"{created['auditNo']}-Checklist.docx"
+    text = docx_text(response)
+    assert '稽核查檢表 AUDIT CHECKLIST' in text and 'Yard 3' in text and '2026-10-01 ~ 2026-10-02' in text
+    assert section_headings(response) == ['1. 稽核資訊  Audit Information', '2. 查檢項目  Audit Items', '3. 簽核  Sign-off']
+    rows = item_rows(response)
+    assert [r[0] for r in rows] == ['1', '2', '3', '4']
+    assert rows[0][1:] == ['7.1', 'Resources\nHow are resources provided?', '☐ 符合 Pass\n☐ 不符合 Fail\n☐ 注意 Attention', '']
+    assert 'Budget approved' not in text and '符合 Pass\n' not in text.replace('☐ 符合 Pass', '')  # recorded results / notes are not printed
+    table = next(t for t in Document(BytesIO(response.content)).tables if t.rows[0].cells[0].text == '#')
+    assert [round(c.width.cm, 1) for c in table.rows[1].cells] == [0.9, 1.7, 7.4, 3.0, 4.4]
+    empty = create(env, custom_check_items=[]).json()
+    assert '（尚無查檢項目 No audit items）' in docx_text(env.client.get(f"/api/audit/{empty['id']}/export-docx?kind=checklist"))
+
+
+def test_kind_report_is_the_default_and_unknown_kinds_are_refused(env):
+    created = create(env, custom_check_items=ITEMS).json()
+    default = env.client.get(f"/api/audit/{created['id']}/export-docx")
+    explicit = env.client.get(f"/api/audit/{created['id']}/export-docx?kind=report")
+    assert default.status_code == explicit.status_code == 200
+    assert section_headings(default) == section_headings(explicit)
+    assert section_headings(default)[-1] == '7. 簽核  Sign-off'
+    for bad in ['summary', 'REPORT', '', '../plan']:
+        response = env.client.get(f"/api/audit/{created['id']}/export-docx", params={'kind': bad})
+        assert response.status_code == 400, (bad, response.text)
+        assert 'Unknown export kind' in response.json()['detail']
+    # scope / not-found still answer before the kind matters for an existing kind
+    assert env.client.get('/api/audit/no-such/export-docx?kind=plan').status_code == 404

@@ -1360,6 +1360,9 @@ class AuditAgendaEntry(BaseModel):
     model_config = ConfigDict(extra='ignore')
 
     id: StrictInt | str | None = None  # the wizard's row key, kept so a resave of a locked audit compares equal
+    # '' = a session; 'lunch' = the 12:00-13:00 Lunch Time default the wizard adds for each new day (AUDIT-BUTTONS-2026-001),
+    # editable / deletable like any row and shaded in the printouts and Word
+    kind: str = ''
     date: str = ''
     start: str = ''
     end: str = ''
@@ -1368,10 +1371,17 @@ class AuditAgendaEntry(BaseModel):
     auditor: str = ''
     remarks: str = ''
 
-    @field_validator('date', 'start', 'end', 'item', 'auditee', 'auditor', 'remarks', mode='before')
+    @field_validator('kind', 'date', 'start', 'end', 'item', 'auditee', 'auditor', 'remarks', mode='before')
     @classmethod
     def blank_for_null(cls, v):
         return '' if v is None else v
+
+    @field_validator('kind')
+    @classmethod
+    def check_kind(cls, v):
+        if v not in ('', 'lunch'):
+            raise ValueError(f"agenda row kind must be '' or 'lunch', got {v!r}")
+        return v
 
     @field_validator('date')
     @classmethod

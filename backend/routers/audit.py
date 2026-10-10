@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 import schemas
@@ -6,7 +6,7 @@ from core.dependencies import RoleChecker, get_audit_service
 from core.perms import AUDIT_VIEW, AUDIT_CREATE, AUDIT_UPDATE, AUDIT_DELETE
 from core.scope import Scope, ScopeForbidden, get_scope
 from core.strict_dates import DateValidationError
-from services.audit_service import AuditConflict, AuditService
+from services.audit_service import AUDIT_DOCX_KINDS, AuditConflict, AuditService
 
 router = APIRouter(
     prefix="/audit",
@@ -42,12 +42,16 @@ def read_audit(
 @router.get("/{audit_id}/export-docx", response_class=StreamingResponse)
 def export_audit_docx(
     audit_id: str,
+    kind: str = Query("report"),
     service: AuditService = Depends(get_audit_service),
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(AUDIT_VIEW))
 ):
-    """Formal .docx export of the whole audit report (AUDIT-EXPORT-DOCX-2026-001)."""
-    response = service.export_docx(audit_id, scope=scope)
+    """Formal .docx export: the whole audit report (default, AUDIT-EXPORT-DOCX-2026-001), or the audit plan / the
+    on-site checklist (kind=plan / checklist, AUDIT-BUTTONS-2026-001) — the same three documents as the wizard's printouts."""
+    if kind not in AUDIT_DOCX_KINDS:  # whitelist: an unknown kind is a bad request, never a guess
+        raise HTTPException(status_code=400, detail=f"Unknown export kind '{kind}'. Allowed: {', '.join(AUDIT_DOCX_KINDS)}.")
+    response = service.export_docx(audit_id, scope=scope, kind=kind)
     if response is None:
         raise HTTPException(status_code=404, detail="Audit not found")
     return response

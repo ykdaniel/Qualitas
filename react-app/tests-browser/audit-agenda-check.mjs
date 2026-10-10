@@ -24,7 +24,14 @@ const rowInputs = (p, i) => p.locator('[data-agenda-row]').nth(i).locator('input
 const fillRow = async (p, i, [date, start, end, item, auditee, auditor, remarks]) => {
   const inputs = rowInputs(p, i);
   for (const [k, v] of [[0, date], [1, start], [2, end], [3, item], [4, auditee], [5, auditor], [6, remarks]]) {
-    if (v !== undefined) await inputs.nth(k).fill(v);
+    if (v !== undefined) { await inputs.nth(k).fill(v); if (k === 0) { await inputs.nth(k).focus(); await inputs.nth(k).blur(); } }  // leave the date field, as a user does
+  }
+};
+// Since AUDIT-BUTTONS-2026-001 the first row of a new day brings a default "Lunch Time" row (kind lunch). This script is
+// about the agenda itself, so it deletes those defaults as they appear (lunch behaviour: audit-buttons-check.mjs).
+const dropLunch = async p => {
+  while (await p.locator('[data-agenda-row][data-agenda-kind=lunch]').count()) {
+    await p.locator('[data-agenda-row][data-agenda-kind=lunch] button').first().click(); await p.waitForTimeout(100);
   }
 };
 const api = (p, path) => p.evaluate(async u => (await fetch(u, { credentials: 'include' })).json(), path);
@@ -41,7 +48,8 @@ const printText = async (p, label) => {
   const p = await login('audit_full');
   await open(p, 'ahb-agenda-1');
   const labels = await p.evaluate(() => [...document.querySelectorAll('.max-w-4xl span')].map(s => s.innerText.trim()).filter(Boolean));
-  result('five steps with 稽核行程 third', JSON.stringify(labels) === JSON.stringify(['專案資訊', '人員與範圍', '稽核行程', '配置查檢表', '執行與評估']), JSON.stringify(labels));
+  // step 3 renamed "稽核計畫 Audit Plan" in AUDIT-BUTTONS-2026-001 (the printouts keep their "4. 稽核行程 Agenda" section)
+  result('five steps with 稽核計畫 third', JSON.stringify(labels) === JSON.stringify(['專案資訊', '人員與範圍', '稽核計畫', '配置查檢表', '執行與評估']), JSON.stringify(labels));
   await step(p, 2);
   const printOn2 = await p.locator('button', { hasText: /列印稽核計畫/ }).count();
   await step(p, 3);
@@ -51,13 +59,16 @@ const printText = async (p, label) => {
 
   // 2. add rows (out of order); new rows continue the last row's date / end time and auditor
   await p.locator('button', { hasText: /新增一列/ }).click();
+  await dropLunch(p);
   const first = await rowInputs(p, 0).evaluateAll(els => els.map(e => e.value));
   result('a new row starts on the audit start date with the lead auditor', first[0] === '2026-10-01' && first[5] === '王稽核', JSON.stringify(first));
   await fillRow(p, 0, ['2026-10-02', '15:00', '15:30', '結束會議', '全體', undefined, '']);
+  await dropLunch(p);
   await p.locator('button', { hasText: /新增一列/ }).click();
   const second = await rowInputs(p, 1).evaluateAll(els => els.map(e => e.value));
   result('the next row continues the last row\'s date and end time', second[0] === '2026-10-02' && second[1] === '15:30', JSON.stringify(second));
   await fillRow(p, 1, ['2026-10-01', '09:00', '09:30', '起始會議', '全體', undefined, '會議室 A']);
+  await dropLunch(p);
   await p.locator('button', { hasText: /新增一列/ }).click();
   await fillRow(p, 2, ['2026-10-01', '12:00', '09:30', '8.4 外部供應管理', '採購部 / 陳', undefined, '']);  // end before start
   await p.locator('button', { hasText: /新增一列/ }).click();  // a blank row: dropped on save
@@ -86,6 +97,7 @@ const printText = async (p, label) => {
   // 4. a date outside the audit period: notice only, still saved
   await p.locator('button', { hasText: /新增一列/ }).click();
   await fillRow(p, 3, ['2026-10-05', '10:00', '11:00', '補充訪談', '品保部', undefined, '']);  // row 4 (index 3) now that the blank row is gone
+  await dropLunch(p);
   const notice = await p.locator('text=不在稽核期間').count();
   await p.locator('button', { hasText: /儲存草稿/ }).first().click(); await p.waitForTimeout(1500);
   const saved2 = (await api(p, '/api/audit/ahb-agenda-1')).agenda;
@@ -178,7 +190,7 @@ for (const [user, id, label] of [['audit_viewer', 'ahb-agenda-1', 'view-only use
   const p = await login('audit_full', 'en');
   await open(p, 'ahb-agenda-closed-1'); await step(p, 3);
   const head = await p.locator('[data-agenda-table] thead').innerText();
-  const title = await p.locator('h2', { hasText: 'Agenda' }).count();
+  const title = await p.locator('h2', { hasText: 'Audit Plan' }).count();
   result('English: step title and column headers', title === 1 && /Date/.test(head) && /Audit Item \/ Process/.test(head) && /Auditee/.test(head), head);
   await p.context().close();
 }

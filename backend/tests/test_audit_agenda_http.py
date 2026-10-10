@@ -33,7 +33,7 @@ def test_agenda_is_saved_sorted_and_returned(env):
     assert response.status_code == 200, response.text
     body = response.json()
     assert [r['id'] for r in body['agenda']] == [1, 2, 3, 4]  # by date, then start; the undated row last
-    assert body['agenda'][0] == {'id': 1, 'date': '2026-10-01', 'start': '09:00', 'end': '09:30', 'item': 'Opening meeting',
+    assert body['agenda'][0] == {'id': 1, 'kind': '', 'date': '2026-10-01', 'start': '09:00', 'end': '09:30', 'item': 'Opening meeting',
                                  'auditee': 'All', 'auditor': 'Wang', 'remarks': 'Room A'}
     assert env.client.get(f"/api/audit/{body['id']}").json()['agenda'] == body['agenda']
     # update replaces the list (and sorts it again)
@@ -103,3 +103,45 @@ def test_word_export_without_agenda_and_with_odd_stored_rows(env):
     response = env.client.get(f'/api/audit/{odd}/export-docx')
     assert response.status_code == 200, response.text
     assert agenda_rows(response) == [['2026-10-01', '08:00', 'Only start', '—', '—', '—']]
+
+
+# ── AUDIT-BUTTONS-2026-001: lunch rows are real, editable agenda rows with kind "lunch" ─────────────────────────────────
+LUNCH = {'id': 9, 'kind': 'lunch', 'date': '2026-10-01', 'start': '12:00', 'end': '13:00', 'item': 'Lunch Time'}
+
+
+def test_lunch_rows_are_stored_sorted_and_editable(env):
+    created = create(env, agenda=ROWS + [LUNCH])
+    assert created.status_code == 200, created.text
+    agenda = created.json()['agenda']
+    assert [(r['id'], r['kind']) for r in agenda] == [(1, ''), (2, ''), (9, 'lunch'), (3, ''), (4, '')]  # sorts at 12:00
+    moved = dict(LUNCH, start='12:30', end='13:30', item='Lunch (late)')
+    updated = env.client.put(f"/api/audit/{created.json()['id']}", json={'agenda': ROWS + [moved]}).json()['agenda']
+    assert [r for r in updated if r['kind'] == 'lunch'] == [dict(moved, auditee='', auditor='', remarks='')]
+    removed = env.client.put(f"/api/audit/{created.json()['id']}", json={'agenda': ROWS}).json()['agenda']
+    assert all(r['kind'] == '' for r in removed)  # deletable like any row
+    assert create(env, agenda=[dict(LUNCH, kind='break')]).status_code == 422
+
+
+def test_closed_audit_saved_before_rows_had_a_kind_still_resaves_unchanged(env):
+    # rows stored by the AUDIT-AGENDA release (no "kind" key); the wizard now resends them with kind ''
+    legacy = '[{"id": 1, "date": "2026-10-01", "start": "09:00", "end": "09:30", "item": "Opening", "auditee": "", "auditor": "", "remarks": ""}]'
+    audit_id = insert_raw(env, status='Closed', agenda=legacy)
+    resave = env.client.put(f'/api/audit/{audit_id}', json={'agenda': [{'id': 1, 'date': '2026-10-01', 'start': '09:00', 'end': '09:30',
+                                                                         'item': 'Opening'}], 'status': 'Closed'})
+    assert resave.status_code == 200, resave.text
+    changed = env.client.put(f'/api/audit/{audit_id}', json={'agenda': [{'id': 1, 'kind': 'lunch', 'date': '2026-10-01'}], 'status': 'Closed'})
+    assert changed.status_code == 400, changed.text
+
+
+def test_word_export_shades_lunch_rows(env):
+    from docx.oxml.ns import qn
+    created = create(env, agenda=ROWS + [LUNCH]).json()
+    response = env.client.get(f"/api/audit/{created['id']}/export-docx")
+    doc = Document(BytesIO(response.content))
+    table = next(t for t in doc.tables if t.rows[0].cells[0].text.startswith('日期'))
+    fills = []
+    for row in table.rows[1:]:
+        shd = row.cells[0]._element.tcPr.find(qn('w:shd')) if row.cells[0]._element.tcPr is not None else None
+        fills.append((row.cells[2].text, shd.get(qn('w:fill')) if shd is not None else None))
+    assert fills[2] == ('Lunch Time', 'E5E7EB')
+    assert all(fill is None for text, fill in fills if text != 'Lunch Time')

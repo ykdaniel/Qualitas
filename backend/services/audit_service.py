@@ -41,6 +41,33 @@ _RESULT_TEXT = {'pass': '符合 Pass', 'fail': '不符合 Fail', 'pending': '注
 _ITEM_COLUMN_WIDTHS_CM = (0.9, 1.7, 6.2, 2.3, 4.3, 2.0)
 # Agenda table (AUDIT-AGENDA-2026-001): date, time, audit item / process, auditee, auditor, remarks — also 17.4 cm.
 _AGENDA_COLUMN_WIDTHS_CM = (2.2, 2.4, 5.0, 3.2, 2.2, 2.4)
+# Agenda lunch rows (AUDIT-BUTTONS-2026-001): kind "lunch" — a default the wizard adds for each new day, editable and
+# deletable like any row — are shaded in the Word export as in the printouts.
+_LUNCH_SHADE = "E5E7EB"
+
+
+def _shade(cell, hex_color):
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    tc_pr = cell._element.get_or_add_tcPr()
+    for old in tc_pr.findall(qn('w:shd')):
+        tc_pr.remove(old)
+    shd = OxmlElement('w:shd')
+    shd.set(qn('w:val'), 'clear')
+    shd.set(qn('w:color'), 'auto')
+    shd.set(qn('w:fill'), hex_color)
+    tc_pr.append(shd)
+
+
+# On-site checklist (AUDIT-BUTTONS-2026-001): #, clause no., clause & question, result boxes, blank remarks — 17.4 cm.
+_CHECKLIST_COLUMN_WIDTHS_CM = (0.9, 1.7, 7.4, 3.0, 4.4)
+# Word export kinds: title (zh, en) and the file-name suffix after the audit number; same titles as the printouts.
+_DOCX_KINDS = {
+    "report": ("內部稽核報告", "INTERNAL AUDIT REPORT", ""),
+    "plan": ("內部稽核計畫", "INTERNAL AUDIT PLAN", "-Plan"),
+    "checklist": ("稽核查檢表", "AUDIT CHECKLIST", "-Checklist"),
+}
+AUDIT_DOCX_KINDS = tuple(_DOCX_KINDS)  # the router's whitelist for ?kind=
 # Characters an XML 1.0 document cannot contain (python-docx raises ValueError on them).
 _XML_UNSAFE = re.compile('[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]')
 
@@ -58,6 +85,10 @@ def _comparable(key, value):
                 value = json.loads(value)
             except ValueError:
                 return value
+        if key == "agenda" and isinstance(value, list):
+            # rows saved before agenda rows had a `kind` (AUDIT-AGENDA, live 2026-10-10) mean kind '' — the wizard now
+            # resends them with it, which is no change
+            value = [{"kind": "", **row} if isinstance(row, dict) else row for row in value]
         return value if value is not None else []
     return value if value is not None else ''
 
@@ -356,12 +387,14 @@ class AuditService:
         self.repo.db.commit()
         return success
 
-    def export_docx(self, audit_id: str, scope=None):
+    def export_docx(self, audit_id: str, scope=None, kind: str = "report"):
         """
-        Formal .docx report for one Audit (AUDIT-EXPORT-DOCX-2026-001): the whole audit in one file — plan (information,
-        team, scope & criteria, agenda — AUDIT-AGENDA-2026-001), checklist results, findings, sign-off — in the NCR report
-        layout, built with the shared core/docx_builder.py primitives. The wizard's report printout (AuditPrintTemplate)
-        carries the same sections; keep the two in step.
+        Formal .docx for one Audit in the NCR report layout, built with the shared core/docx_builder.py primitives. `kind`
+        matches the wizard's printouts (AuditPrintTemplate) — keep the two in step:
+        - "report" (AUDIT-EXPORT-DOCX-2026-001): the whole audit — information, team, scope & criteria, agenda
+          (AUDIT-AGENDA-2026-001), checklist results, findings, sign-off;
+        - "plan" (AUDIT-BUTTONS-2026-001): sections 1-4 of the report plus a plan sign-off;
+        - "checklist" (AUDIT-BUTTONS-2026-001): audit identity and the items with blank result / remarks, for use on site.
 
         Returns a StreamingResponse, or None when the audit does not exist or is outside the caller's scope (→ 404).
         """
@@ -416,8 +449,43 @@ class AuditService:
         # (AUDIT-PRINT-2026-001): Python's round() rounds half to even, and in JavaScript a float product can land just under .5.
         progress = 0 if total == 0 else (200 * (total - pending) + total) // (2 * total)
 
+        title_zh, title_en, suffix = _DOCX_KINDS[kind]
+        file_name = (txt(audit.auditNo) or "Audit") + suffix
         doc = db.new_document()
-        db.add_masthead(doc, "內部稽核報告", "INTERNAL AUDIT REPORT", doc_no=txt(audit.auditNo), status=txt(audit.status))
+        db.add_masthead(doc, title_zh, title_en, doc_no=txt(audit.auditNo), status=txt(audit.status))
+
+        if kind == "checklist":
+            # 1. Audit information (what the auditor needs on site)
+            db.add_section_heading(doc, "1", "稽核資訊", "Audit Information")
+            db.add_field_grid(doc, [
+                [("稽核編號", "Audit No.", txt(audit.auditNo)), ("專案", "Project", txt(project_label))],
+                [("受稽核廠商", "Auditee / Contractor", txt(contractor)), ("稽核地點", "Location", txt(audit.location))],
+                [("稽核日期", "Audit Date", " ~ ".join(filter(None, [txt(audit.date), txt(audit.end_date)])) or None),
+                 ("主任稽核員", "Lead Auditor", txt(audit.auditor))],
+            ])
+            # 2. Audit items with blank result boxes and remarks
+            db.add_section_heading(doc, "2", "查檢項目", "Audit Items")
+            if items:
+                rows = []
+                for n, item in enumerate(items, start=1):
+                    content = "\n".join(filter(None, [txt(item.get('clause')), txt(item.get('task'))]))
+                    rows.append([str(n), txt(item.get('no')) or db.DASH, content or db.DASH,
+                                 "☐ 符合 Pass\n☐ 不符合 Fail\n☐ 注意 Attention", ""])
+                table = db.add_data_table(doc, ["#", "條文編號\nClause No.", "條文與查檢重點\nClause & Audit Question",
+                                                "結果\nResult", "備註\nRemarks"], rows)
+                table.autofit = False
+                for row in table.rows:
+                    for cell, width in zip(row.cells, _CHECKLIST_COLUMN_WIDTHS_CM):
+                        cell.width = Cm(width)
+            else:
+                db.add_paragraph(doc, "（尚無查檢項目 No audit items）", size=9, italic=True)
+            # 3. Sign-off
+            db.add_section_heading(doc, "3", "簽核", "Sign-off")
+            db.add_sign_off_grid(doc, [
+                {"num": "3.1", "zh": "主任稽核員", "en": "Lead Auditor", "name": txt(audit.auditor)},
+                {"num": "3.2", "zh": "受稽核方代表", "en": "Auditee Representative"},
+            ])
+            return db.finalize_response(doc, file_name)
 
         # 1. Audit information
         db.add_section_heading(doc, "1", "稽核資訊", "Audit Information")
@@ -448,7 +516,8 @@ class AuditService:
         db.add_subsection_heading(doc, "3.1 範圍描述", "Audit Scope")
         db.add_field_box(doc, txt(audit.scope_description), guide="說明本次稽核涵蓋之部門、流程、作業與地點")
 
-        # 4. Agenda (stored already sorted by date / start time on every write)
+        # 4. Agenda (stored already sorted by date / start time on every write); lunch rows (kind "lunch", added by the
+        # wizard as an editable default) are shaded grey like in the printouts
         db.add_section_heading(doc, "4", "稽核行程", "Agenda")
         if agenda:
             rows = []
@@ -468,8 +537,21 @@ class AuditService:
             for row in table.rows:
                 for cell, width in zip(row.cells, _AGENDA_COLUMN_WIDTHS_CM):
                     cell.width = Cm(width)
+            for row, entry in zip(table.rows[1:], agenda):
+                if entry.get('kind') == 'lunch':
+                    for cell in row.cells:
+                        _shade(cell, _LUNCH_SHADE)
         else:
             db.add_paragraph(doc, "（尚無行程 No agenda）", size=9, italic=True)
+
+        if kind == "plan":
+            # 5. Plan sign-off
+            db.add_section_heading(doc, "5", "計畫簽核", "Plan Sign-off")
+            db.add_sign_off_grid(doc, [
+                {"num": "5.1", "zh": "主任稽核員", "en": "Lead Auditor", "name": txt(audit.auditor)},
+                {"num": "5.2", "zh": "專案經理", "en": "Project Director", "name": txt(audit.project_director)},
+            ])
+            return db.finalize_response(doc, file_name)
 
         # 5. Checklist results
         db.add_section_heading(doc, "5", "查檢結果", "Checklist Results")
@@ -513,7 +595,7 @@ class AuditService:
             {"num": "7.3", "zh": "專案經理", "en": "Project Director", "name": txt(audit.project_director)},
         ])
 
-        return db.finalize_response(doc, txt(audit.auditNo) or "Audit")
+        return db.finalize_response(doc, file_name)
 
     def _resolve_vendor_id(self, vendor_name: Optional[str]) -> Optional[str]:
         """

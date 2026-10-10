@@ -60,7 +60,7 @@ const RESULT_TEXT: Record<string, string> = { pass: '符合 Pass', fail: '不符
 export const auditProgress = (total: number, pending: number) =>
     total === 0 ? 0 : Math.floor((200 * (total - pending) + total) / (2 * total));
 
-type AgendaRow = { date?: unknown; start?: unknown; end?: unknown; item?: unknown; auditee?: unknown; auditor?: unknown; remarks?: unknown };
+type AgendaRow = { kind?: unknown; date?: unknown; start?: unknown; end?: unknown; item?: unknown; auditee?: unknown; auditor?: unknown; remarks?: unknown };
 
 type CheckItem = { no?: unknown; clause?: unknown; task?: unknown; status?: unknown; note?: unknown; updatedAt?: unknown };
 
@@ -172,7 +172,7 @@ const AuditPrintTemplate: React.FC<AuditPrintTemplateProps> = ({ kind, data, uns
                         {agenda.map((row, n) => {
                             const start = clean(row.start), end = clean(row.end);
                             return (
-                                <tr key={n}>
+                                <tr key={n} className={row.kind === 'lunch' ? 'lunch' : undefined}>
                                     <td className="a-date">{clean(row.date) || DASH}</td>
                                     <td className="a-time">{start && end ? `${start}–${end}` : (start || end || DASH)}</td>
                                     <td className="a-item">{clean(row.item) || DASH}</td>
