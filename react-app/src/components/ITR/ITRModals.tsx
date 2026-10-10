@@ -252,6 +252,17 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
     ]);
     const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
 
+    // Stored files live in the attachment table, so each FileAttachment below fetches its own list
+    // (same as NCR). Passing the record's columns as `attachments` — an empty array for every upload,
+    // since uploads never write those columns — stopped that fetch, and saved files never showed
+    // again on reopen (BACKLOG #23, reproduced 2026-10-10). The columns now only feed legacy strings.
+    const legacyStrings = (arr?: (string | AttachmentInfo)[]) =>
+        (arr || []).filter((a): a is string => typeof a === 'string');
+    // Print preview and collapsing a section unmount FileAttachment; hand it the files still
+    // pending here, and the stored ones queued for deletion, so neither vanishes from view nor
+    // gets dropped when more files are added afterwards.
+    const pendingFilesFor = (category: string) => pendingUploads.find(p => p.category === category)?.files;
+
     // §17: linked checklists are now standalone INSTANCE rows fetched from the
     // backend (Checklist with itrId = this ITR), not snapshots in detail_data.
     const persistedItrId = existingItem?.id || null;
@@ -1138,7 +1149,9 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                 <div className={styles.photoSection}>
                                     <h3 className={formStyles.sectionTitle}>{t('itr.photo.defect')}</h3>
                                     <FileAttachment
-                                        attachments={formData.defectPhotos || [] as any[]}
+                                        legacyAttachments={legacyStrings(formData.defectPhotos)}
+                                        initialPendingFiles={pendingFilesFor('defectPhoto')}
+                                        hiddenFileIds={deletedFileIds}
                                         onPendingFilesChange={(files) => handlePendingFilesChange('defectPhoto', files)}
                                         onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'defect')}
                                         onDeleteExistingFile={handleDeleteExistingFile}
@@ -1154,7 +1167,9 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                 <div className={styles.photoSection}>
                                     <h3 className={formStyles.sectionTitle}>{t('itr.photo.improvement')}</h3>
                                     <FileAttachment
-                                        attachments={formData.improvementPhotos || [] as any[]}
+                                        legacyAttachments={legacyStrings(formData.improvementPhotos)}
+                                        initialPendingFiles={pendingFilesFor('improvementPhoto')}
+                                        hiddenFileIds={deletedFileIds}
                                         onPendingFilesChange={(files) => handlePendingFilesChange('improvementPhoto', files)}
                                         onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'improvement')}
                                         onDeleteExistingFile={handleDeleteExistingFile}
@@ -1175,7 +1190,9 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                             defaultExpanded={(formData.drawings?.length || 0) > 0}
                         >
                             <FileAttachment
-                                attachments={formData.drawings || [] as any[]}
+                                legacyAttachments={legacyStrings(formData.drawings)}
+                                initialPendingFiles={pendingFilesFor('drawing')}
+                                hiddenFileIds={deletedFileIds}
                                 onPendingFilesChange={(files) => handlePendingFilesChange('drawing', files)}
                                 onRemoveLegacy={(index) => handleRemoveLegacyGeneric(index, 'drawings')}
                                 onDeleteExistingFile={handleDeleteExistingFile}
@@ -1193,7 +1210,9 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                             defaultExpanded={(formData.certificates?.length || 0) > 0}
                         >
                             <FileAttachment
-                                attachments={formData.certificates || [] as any[]}
+                                legacyAttachments={legacyStrings(formData.certificates)}
+                                initialPendingFiles={pendingFilesFor('certificate')}
+                                hiddenFileIds={deletedFileIds}
                                 onPendingFilesChange={(files) => handlePendingFilesChange('certificate', files)}
                                 onRemoveLegacy={(index) => handleRemoveLegacyGeneric(index, 'certificates')}
                                 onDeleteExistingFile={handleDeleteExistingFile}
@@ -1211,7 +1230,9 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                             defaultExpanded={(formData.attachments?.length || 0) > 0}
                         >
                             <FileAttachment
-                                attachments={formData.attachments || [] as any[]}
+                                legacyAttachments={legacyStrings(formData.attachments)}
+                                initialPendingFiles={pendingFilesFor('attachment')}
+                                hiddenFileIds={deletedFileIds}
                                 onPendingFilesChange={(files) => handlePendingFilesChange('attachment', files)}
                                 onRemoveLegacy={handleRemoveLegacyAttachment}
                                 onDeleteExistingFile={handleDeleteExistingFile}

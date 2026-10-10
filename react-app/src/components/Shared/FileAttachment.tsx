@@ -32,6 +32,9 @@ export interface FileAttachmentProps {
     /** Files the parent still holds as pending when this component (re)mounts — e.g. after switching away from and back to the tab it
      *  lives in — so they are shown again instead of being queued invisibly. Read once, at mount. */
     initialPendingFiles?: File[];
+    /** Stored file ids the parent has already queued for deletion when this component (re)mounts, so they stay hidden instead of
+     *  reappearing from the fresh fetch. Read once, at mount. */
+    hiddenFileIds?: string[];
 }
 
 const FileAttachment: React.FC<FileAttachmentProps> = ({
@@ -51,7 +54,8 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
     hideTitle = false,
     onPreview,
     syncToken,
-    initialPendingFiles
+    initialPendingFiles,
+    hiddenFileIds
 }) => {
     const { t } = useLanguage();
     // 儲存已從 Server 拿回來的檔案
@@ -59,12 +63,21 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
     // Locally-hidden attachment ids (optimistic delete). Needed because when
     // `propsAttachments` is provided by the parent, filtering `apiAttachments`
     // does not affect the rendered list.
-    const [pendingDeletes, setPendingDeletes] = useState<Set<string>>(new Set());
+    const [pendingDeletes, setPendingDeletes] = useState<Set<string>>(() => new Set(hiddenFileIds ?? []));
     // 儲存使用者剛選取但尚未上傳至 Server 的實體 File 物件
     const [pendingFiles, setPendingFiles] = useState<File[]>(() => initialPendingFiles ?? []);
     // 儲存待上傳 File 所產生出的預覽用 URL (blob UI)
-    const [pendingPreviews, setPendingPreviews] = useState<string[]>(() => (initialPendingFiles ?? []).map(f => URL.createObjectURL(f)));
+    const [pendingPreviews, setPendingPreviews] = useState<string[]>([]);
     const uploading = false;
+
+    // One preview URL per pending file, created and revoked as a set with the list it belongs to. URLs used to be revoked by a
+    // cleanup keyed on the previews array, which also revoked the earlier files' URLs (still listed) whenever one was added, and
+    // under StrictMode revoked the ones made at mount from initialPendingFiles before they were ever shown (2026-10-10).
+    useEffect(() => {
+        const urls = pendingFiles.map(f => URL.createObjectURL(f));
+        setPendingPreviews(urls);
+        return () => urls.forEach(url => URL.revokeObjectURL(url));
+    }, [pendingFiles]);
 
     // 如果提供了實體 ID，嘗試自動抓取遠端檔案 (如果外部沒傳 propsAttachments 的話)
     useEffect(() => {
@@ -80,7 +93,6 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
     if (syncToken !== seenSyncToken) {
         setSeenSyncToken(syncToken);
         setPendingFiles([]);
-        setPendingPreviews([]);
     }
 
     // Callers like NOIDetailModal pass ``formData.attachments`` which
@@ -108,13 +120,6 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
         ...stringLegacyAttachments,
     ];
 
-    // 清理 ObjectURL 防止記憶體洩漏
-    useEffect(() => {
-        return () => {
-            pendingPreviews.forEach(url => URL.revokeObjectURL(url));
-        };
-    }, [pendingPreviews]);
-
     // 處理新選擇的檔案
     const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
@@ -128,11 +133,7 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
         
         const updatedPendingFiles = [...pendingFiles, ...newFilesArray];
         setPendingFiles(updatedPendingFiles);
-        
-        // 建立 Blob URL 用於本地預覽
-        const newPreviews = newFilesArray.map(f => URL.createObjectURL(f));
-        setPendingPreviews(prev => [...prev, ...newPreviews]);
-        
+
         onPendingFilesChange?.(updatedPendingFiles);
         
         // 清除 input 值以允許重新選擇相同檔案
@@ -141,14 +142,9 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
 
     // 移除等待上傳的檔案
     const handleRemovePendingFile = (index: number) => {
-        const urlToRevoke = pendingPreviews[index];
-        URL.revokeObjectURL(urlToRevoke);
-
         const newPendingFiles = pendingFiles.filter((_, i) => i !== index);
-        const newPreviews = pendingPreviews.filter((_, i) => i !== index);
-        
+
         setPendingFiles(newPendingFiles);
-        setPendingPreviews(newPreviews);
         onPendingFilesChange?.(newPendingFiles);
     };
 
