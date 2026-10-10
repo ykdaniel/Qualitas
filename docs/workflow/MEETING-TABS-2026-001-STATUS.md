@@ -1,0 +1,47 @@
+# MEETING-TABS-2026-001 — STATUS（R2，獨立審查 PASS）
+
+TASK_ID: MEETING-TABS-2026-001 · ROUND: R2 · 本地提交，未推送、未部署。基準：MEETING-FIX 提交後的 HEAD。
+
+## 修改
+| 檔案 | 內容 |
+|---|---|
+| `backend/models.py`／`schemas.py`／`db_migrations.py` | 新增可空欄位 `meetingEndTime`（model 1 行、Base／Update 各 1 行、`_add_missing_columns` 在 audits.agenda 後 `_add_column_if_missing`，CRLF 保留）。無預設值；舊資料讀為 null |
+| `backend/services/meeting_minutes_service.py` | `carry_forward_discussion_log`：下次會議只帶未結事項＋其大類／子類＋全部進度，標 `carried`，編號不變；已結事項不帶；讀舊兩層格式（無 kind：level 1／帶點編號＝事項，其餘＝大類；舊 topic／discussion／decision 合併）。`create_new_occurrence` 改用它（原本清空），並清掉 meetingEndTime |
+| `react-app/src/components/MeetingMinutes/discussionLog.ts`（新） | 討論事項純函式：讀任何格式、樹狀排序、編號、增刪（帶入列不可刪；有帶入列時不重編號，否則刪除後重編）、進度增刪（帶入的不可刪）、未結數、上層標題 |
+| `DiscussionRegister.tsx`（新） | 表格：# ／Discussions / Actions／Action by／Target Date / Status；大類 n.0、子類灰底；事項內可加帶日期進度；進行中／已結案／全部篩選；帶入事項標「前次帶入」、內文與舊進度唯讀 |
+| `MeetingMinutesModals.tsx` | 滿版＋返回鍵＋5 分頁（數字：與會人數、未結事項數、行動項目數）；各分頁只隱藏不卸載（切換不丟輸入或待上傳檔案）；基本資訊加結束時間、記錄人可從人員清單選；與會人員改表格 Company／Name／Position；未按新增的輸入擋存檔時自動切到該分頁；原寫死中文提示改翻譯鍵；`common.pleaseSelect` 修正 |
+| `MeetingMinutes.tsx` | payload 加 meetingEndTime；「已結案項目」清單改用 discussionLog.ts（兩種格式都讀） |
+| `MeetingMinutesPrintTemplate.tsx`／`.print.css` | 列印改成公司格式：SUBJECT／DATE／VENUE & TIME（起～訖）／RECORDED BY／出席人員 Company／Name／Position；討論事項表 #／DISCUSSIONS / ACTIONS／Action by／Target Date / Status，大類、子類灰底，進度日期＋內容，帶入的舊進度灰字；簽核改「記錄人」 |
+| `react-app/src/store/meetingMinutesStore.ts` | 型別：kind／level 0–2／targetDate／updates／carried；meetingEndTime |
+| `LanguageContext.tsx` | 新增 22 個 meetingMinutes.* 鍵＋`common.pleaseSelect`、`common.deleteConfirmMessage`（中英）；改 5 個標籤（Subject 主題、Start Time 開始時間、Venue、Recorded By 記錄人、Position）。`common.deleteConfirmMessage` 原本不存在，NOI／OSD／OBS／會議記錄的刪除確認都顯示鍵名，這次一併有字 |
+| 測試 | `backend/tests/test_meeting_minutes_carry_forward_http.py`（新，5 項）；`test_meeting_minutes_service.py` 舊斷言「不帶討論紀錄」依新決定改為帶入；`tests-unit/meetingDiscussionLog.test.ts`（新，7 項）；`tests-browser/meeting-tabs-review.mjs`（新）；`meeting-fix-review.mjs` 配合分頁（Subject 標籤、行動項目在分頁上） |
+| `backend/scripts/verification/seed_meeting_tabs_review.py`（新） | 隔離環境／使用者預覽 seed：MOM-DEMO-001 舊兩層草稿、MOM-DEMO-002 依公司截圖的已發布會議（含未結事項與進度，可「建立下次會議」看帶入）、MOM-DEMO-003 舊兩層已發布 |
+
+## R2（依 R1 審查與使用者追加決定）
+- 使用者 2026-10-11 追加：列印正文直式 A4、只有照片附頁橫式 A4，每頁 2×2；下次會議只帶有未結事項的大類／子類（空標題不帶）；「主持人」直接改稱「記錄人」。
+- 列印方向的根因：ITP 的列印樣式有不具名 `@page { size: landscape }`，同一工作階段載入過 ITP 後會蓋掉本模組不具名的 `@page { size: A4 }`，使用者截圖即為此狀況。改為具名頁面（同 Audit）：`@page mom`（A4 直式）、`@page mom-photos`（A4 橫式），並移除本模組的不具名 @page；列印時隱藏其他 body 子元素與 `#itr-single-print-root`。
+- 照片附頁：附件中的圖片（mime 或副檔名）依上傳時間排序，每頁 4 張 2×2、說明「照片 n＋檔名」；附件表標註「見照片附頁」；列印前等待圖片載入（最多 8 秒）。
+- R1 必改 1：刪除列時回傳新舊編號對照，進度草稿與新增列上層跟著改寫或清除（`removeEntryWithMap`）。
+- R1 必改 2：前後端都把「沒有 level 但有 owner／status」的扁平列（2026-08-29～31 存的格式）判成事項，存檔與帶入都保留負責人與狀態。
+- R1 建議 3：有孤兒列或重複編號時不重編號（不丟列、不重複）。
+- R1 建議 4：討論事項區移到 disabled fieldset 外，已發布／作廢也能切換進行中／已結案／全部。
+- R1 建議 5：照使用者決定，空標題不帶。
+- R1 建議 6：離開提醒忽略空白的新增列與進度草稿。
+- 驗證：後端 46 passed；`npm test` 154 passed／0（新增 3 項邊界）；tsc 乾淨；隔離環境 `meeting-print-orientation-check.mjs` **8/8**（先載入 ITP 的橫式 @page 再列印：PDF 3 頁＝直、橫、橫，5 張照片依上傳順序且全部載入，`print-a4-with-photos.pdf`）、`meeting-tabs-review.mjs` **49/49**、MEETING-FIX 回歸 **39/39**。
+
+- R2 審查 PASS 後：照片頁高度依建議 186mm → 184mm，列印檢查重跑 8/8。
+
+## 舊資料會不會被改寫
+讀取時一律在前端轉成新格式（不改資料庫）。舊格式**草稿**開啟後按儲存，會以新格式寫回（內容、狀態、負責人不變，已實測）；已發布／作廢紀錄鎖定、不會被改寫（實測儲存按鈕不存在、資料庫內容不變）。後端帶入也讀舊格式。
+
+## 驗證（實測）
+- 後端（本機 3.14）：meeting 三檔＋integration＋followup **45 passed**（含舊資料庫刪欄位後跑 `_add_missing_columns` 補回、舊紀錄讀出 null）。
+- 前端：tsc 乾淨；`npm test` **151 passed／0**（新 7 項）。ESLint：MeetingMinutes.tsx 深連結 effect 1 條 set-state-in-effect（MEETING-FIX 已記）；Modals 原有全形空白錯誤已隨改寫消失。
+- 隔離環境瀏覽器（8344／3344，臨時資料庫，結束已 down）：
+  - `meeting-tabs-review.mjs` **49 項全部通過**（`tabs-acceptance.txt`，截圖 7 張）：滿版、5 分頁順序、返回鍵、Meeting Type「-- Please select --」；新建三層＋進度（日期預設會議日）＋與會人員＋起訖時間存檔形狀；未加入的進度擋存檔並切回討論分頁；切分頁後待上傳檔案仍在；舊草稿讀取與寫回；舊已發布唯讀不改；下次會議只帶未結事項、編號不變、帶入列唯讀不可刪、新增進度與結案後原會議不變；列印含 SUBJECT／VENUE & TIME／RECORDED BY／DISCUSSIONS / ACTIONS／15:00 ~ 17:15／1.0／1.1.1；中文分頁名、「-- 請選擇 --」、記錄人、結束時間；無前端錯誤（HTTP 403 為該測試帳號無其他模組權限的儀表板請求，已排除）。
+  - MEETING-FIX 回歸 `meeting-fix-review.mjs` **39 項全部通過**（`meeting-fix-regression.txt`）。
+  - 截圖 05a／07 中分頁底線停在「基本資訊」是 0.15 秒 CSS 轉場時截圖；已用 DOM 確認 aria-selected 與 class 正確。
+- **未做**：Python 3.11 全套；附件權限兩支測試（同 MEETING-FIX，沙箱卡住）；Word 匯出不在範圍（本模組原本就沒有）。
+
+## 上線注意
+有 schema 變動（`meeting_minutes.meetingEndTime`，啟動時自動補欄位，可空）。前端＋後端，需重建。疊在 AGENDA 之後需以當時正式站重做候選（協調中心已說明）。

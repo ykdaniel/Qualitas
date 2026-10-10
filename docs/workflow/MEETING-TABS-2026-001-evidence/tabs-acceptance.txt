@@ -1,0 +1,57 @@
+2026-10-10T21:20:39.673Z === 1. layout ===
+2026-10-10T21:20:40.573Z PASS 1: full-screen form (width 1440)
+2026-10-10T21:20:40.576Z PASS 1: five tabs in order
+2026-10-10T21:20:40.578Z PASS 1: back button
+2026-10-10T21:20:40.580Z PASS 1: Meeting Type placeholder translated (-- Please select --)
+2026-10-10T21:20:40.580Z PASS 1: General tab has "Subject"
+2026-10-10T21:20:40.581Z PASS 1: General tab has "Start Time"
+2026-10-10T21:20:40.581Z PASS 1: General tab has "End Time"
+2026-10-10T21:20:40.582Z PASS 1: General tab has "Venue"
+2026-10-10T21:20:40.583Z PASS 1: General tab has "Recorded By"
+2026-10-10T21:20:40.614Z === 2. build a register on a new meeting ===
+2026-10-10T21:20:41.031Z PASS 2: register numbered 1 / 1.1 / 1.1.1 / 1.2 (1,1.1,1.1.1,1.2)
+2026-10-10T21:20:41.031Z PASS 2: category shown as 1.0
+2026-10-10T21:20:41.936Z PASS 2: Save blocked while a progress update is typed but not added
+2026-10-10T21:20:41.938Z PASS 2: the form switched to the Discussions tab
+2026-10-10T21:20:41.990Z PASS 2: queued file kept across tab switches
+2026-10-10T21:20:44.526Z PASS 2: meeting saved
+2026-10-10T21:20:44.527Z PASS 2: start and end time stored
+2026-10-10T21:20:44.527Z PASS 2: attendee by Company / Name / Position
+2026-10-10T21:20:44.527Z PASS 2: stored register shape
+2026-10-10T21:20:44.527Z PASS 2: item fields and dated update (date defaults to the meeting date)
+2026-10-10T21:20:44.527Z === 3. legacy format Draft ===
+2026-10-10T21:20:46.026Z PASS 3: legacy open rows (1,1.1,2,2.1)
+2026-10-10T21:20:46.046Z PASS 3: legacy Closed sub-item under its topic in the Closed filter
+2026-10-10T21:20:47.603Z PASS 3: saving a legacy Draft writes the new shape
+2026-10-10T21:20:47.609Z PASS 3: content and statuses preserved
+2026-10-10T21:20:47.609Z === 4. legacy Published ===
+2026-10-10T21:20:49.116Z PASS 4: legacy published register readable
+2026-10-10T21:20:49.117Z PASS 4: read-only (no Save)
+2026-10-10T21:20:49.119Z PASS 4: no editable register fields
+2026-10-10T21:20:49.132Z PASS 4: stored log untouched
+2026-10-10T21:20:49.132Z === 5. new occurrence carry-forward ===
+2026-10-10T21:20:50.655Z PASS 5: published register (Open filter hides the Closed 1.1.2)
+2026-10-10T21:20:53.320Z PASS 5: rev 2.0 created
+2026-10-10T21:20:53.320Z PASS 5: unfinished items + headings carried, numbers kept, Closed 1.1.2 left behind
+2026-10-10T21:20:53.348Z PASS 5: carried item marked
+2026-10-10T21:20:53.349Z PASS 5: carried item text not editable
+2026-10-10T21:20:53.349Z PASS 5: carried update read-only
+2026-10-10T21:20:53.350Z PASS 5: carried item cannot be deleted
+2026-10-10T21:21:09.971Z PASS 5: new update added after the carried one, item closed
+2026-10-10T21:21:09.978Z PASS 5: the earlier meeting keeps its own record (a copy, not a reference)
+2026-10-10T21:21:09.978Z === 6. print ===
+2026-10-10T21:21:12.266Z PASS 6: print contains "SUBJECT"
+2026-10-10T21:21:12.266Z PASS 6: print contains "VENUE & TIME"
+2026-10-10T21:21:12.266Z PASS 6: print contains "RECORDED BY"
+2026-10-10T21:21:12.266Z PASS 6: print contains "DISCUSSIONS / ACTIONS"
+2026-10-10T21:21:12.266Z PASS 6: print contains "Action by"
+2026-10-10T21:21:12.266Z PASS 6: print contains "15:00 ~ 17:15"
+2026-10-10T21:21:12.266Z PASS 6: print contains "1.0"
+2026-10-10T21:21:12.266Z PASS 6: print contains "1.1.1"
+2026-10-10T21:21:12.266Z PASS 6: print contains "2026-07-21"
+2026-10-10T21:21:12.323Z === 7. zh labels ===
+2026-10-10T21:21:16.023Z PASS 7: zh tab names
+2026-10-10T21:21:16.024Z PASS 7: zh placeholder (-- 請選擇 --)
+2026-10-10T21:21:16.025Z PASS 7: zh 記錄人 / 結束時間
+2026-10-10T21:21:16.072Z PASS no script errors in the console ()
+2026-10-10T21:21:16.087Z ALL 49 CHECKS PASSED
