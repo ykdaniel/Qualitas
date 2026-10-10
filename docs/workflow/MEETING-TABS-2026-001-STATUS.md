@@ -69,7 +69,7 @@ TASK_ID: MEETING-TABS-2026-001 · ROUND: R6 · R1/R2：ff8c6481／0d6a09bc；R3�
 
 ## R7（使用者：「會議記錄內的每件事項都是要追蹤的，Action by 就是指定人員」→ 選「拿掉，以討論事項為準」，經協調中心轉達）
 - 表單拿掉「行動項目」分頁（剩 4 個）：移除 Follow-up 草稿／即時建立／查詢已開 Follow-up 的程式；存檔流程不再建立 Follow-up（延後狀態只剩「有待上傳附件」一種情況）。
-- 舊資料：已由會議記錄開出的 Follow-up（sourceModule=MEETING）不刪不改，在 Follow Up 模組照常可看可追蹤，點來源仍可開回會議（Follow Up 既有的 ?openId= 深連結）。**正式站筆數：本工作階段連不到 NAS（沙箱擋 SSH），未查；已請協調中心以唯讀查詢回報。**
+- 舊資料：已由會議記錄開出的 Follow-up（sourceModule=MEETING）不刪不改，在 Follow Up 模組照常可看可追蹤，點來源仍可開回會議（Follow Up 既有的 ?openId= 深連結）。**正式站（協調中心 2026-10-11 唯讀查詢，sqlite3 -readonly）：followup 中 sourceModule=MEETING 為 0 筆；meeting_minutes 只有 2 筆（QTS-NA-MEETING-000001 rev 1.0 Published、discussionLog "[]"；rev 2.0 Draft、discussionLog NULL），皆無討論事項，舊格式寫回與「空白下次會議」退回前一版在正式站都沒有實際資料受影響。**
 - 後端 `POST /followup/bulk/` 與 `validate_followup_source_reference` 的 MEETING 分支：**保留不動**。理由：不影響使用；舊 Follow-up 的來源驗證仍需要 MEETING 分支（編輯舊 Follow-up 時會再驗）；bulk 端點移除屬 API 變更，需另案核對呼叫端與測試。前端已無任何呼叫 bulk 的地方。
 - 清單頁新增「未結事項」檢視，與「已結案項目」並列（會議清單／未結事項／已結案項目）：
   - 未結：每個系列只取最新一次（rev 最大，同 rev 取較晚更新），作廢會議不算；已結：所有非作廢會議（結案事項不會再被帶入，所以只出現一次）。
