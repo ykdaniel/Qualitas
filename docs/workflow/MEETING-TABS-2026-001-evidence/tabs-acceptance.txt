@@ -1,72 +1,102 @@
-2026-10-10T22:05:53.445Z === 1. layout ===
-2026-10-10T22:05:54.341Z PASS 1: full-screen form (width 1440)
-2026-10-10T22:05:54.344Z PASS 1: five tabs in order
-2026-10-10T22:05:54.346Z PASS 1: back button
-2026-10-10T22:05:54.347Z PASS 1: Meeting Type placeholder translated (-- Please select --)
-2026-10-10T22:05:54.348Z PASS 1: General tab has "Subject"
-2026-10-10T22:05:54.349Z PASS 1: General tab has "Start Time"
-2026-10-10T22:05:54.349Z PASS 1: General tab has "End Time"
-2026-10-10T22:05:54.350Z PASS 1: General tab has "Venue"
-2026-10-10T22:05:54.351Z PASS 1: General tab has "Recorded By"
-2026-10-10T22:05:54.382Z === 2. build a register on a new meeting ===
-2026-10-10T22:05:54.515Z PASS 2: the register opens in Weekly Update mode
-2026-10-10T22:05:54.680Z PASS 2: a new item is raised on the meeting date by default
-2026-10-10T22:05:54.770Z PASS 2: register numbered 1 / 1.1 / 1.1.1 / 1.2 (1,1.1,1.1.1,1.2)
-2026-10-10T22:05:54.771Z PASS 2: category shown as 1.0
-2026-10-10T22:05:54.820Z PASS 2: raised date shown above the item (11 Aug 2026)
-2026-10-10T22:05:54.821Z PASS 2: weekly mode has only the this-week field in the item cell
-2026-10-10T22:05:54.821Z PASS 2: weekly mode has no structure controls
-2026-10-10T22:05:54.827Z PASS 2: date picked before typing stays in the field
-2026-10-10T22:05:55.770Z PASS 2: Save blocked while a new item is typed but not added
-2026-10-10T22:05:55.774Z PASS 2: the form switched to the Discussions tab
-2026-10-10T22:05:55.824Z PASS 2: queued file kept across tab switches
-2026-10-10T22:05:58.373Z PASS 2: meeting saved
-2026-10-10T22:05:58.374Z PASS 2: start and end time stored
-2026-10-10T22:05:58.374Z PASS 2: attendee by Company / Name / Position
-2026-10-10T22:05:58.374Z PASS 2: stored register shape
-2026-10-10T22:05:58.374Z PASS 2: item fields, raised date and this week's update dated with the meeting date
-2026-10-10T22:05:58.374Z PASS 2: spaces only in this week's field store no update
-2026-10-10T22:05:58.374Z === 3. legacy format Draft ===
-2026-10-10T22:05:59.923Z PASS 3: legacy open rows (1,1.1,2,2.1)
-2026-10-10T22:05:59.984Z PASS 3: legacy Closed sub-item under its topic in the Closed filter
-2026-10-10T22:06:01.552Z PASS 3: saving a legacy Draft writes the new shape
-2026-10-10T22:06:01.565Z PASS 3: content and statuses preserved
-2026-10-10T22:06:01.565Z PASS 3: this week's update stored with the date picked before typing
-2026-10-10T22:06:01.565Z === 4. legacy Published ===
-2026-10-10T22:06:03.111Z PASS 4: legacy published register readable
-2026-10-10T22:06:03.113Z PASS 4: read-only (no Save)
-2026-10-10T22:06:03.114Z PASS 4: no editable register fields
-2026-10-10T22:06:03.122Z PASS 4: stored log untouched
-2026-10-10T22:06:03.122Z === 5. new occurrence carry-forward ===
-2026-10-10T22:06:04.646Z PASS 5: published register (Open filter hides the Closed 1.1.2)
-2026-10-10T22:06:07.347Z PASS 5: rev 2.0 created
-2026-10-10T22:06:07.348Z PASS 5: unfinished items + headings carried, numbers kept, Closed 1.1.2 left behind
-2026-10-10T22:06:07.379Z PASS 5: carried item marked
-2026-10-10T22:06:07.381Z PASS 5: weekly mode: carried item text not editable (only the this-week field)
-2026-10-10T22:06:07.415Z PASS 5: structure mode: carried item text read-only and not removable
-2026-10-10T22:06:07.416Z PASS 5: raised date kept on the carried item
-2026-10-10T22:06:07.440Z PASS 5: carried update read-only
-2026-10-10T22:06:07.441Z PASS 5: carried item cannot be deleted
-2026-10-10T22:06:07.441Z PASS 5: earlier update shown as "21 Jul 2026" + text
-2026-10-10T22:06:07.450Z PASS 5: an item closed this week stays on the weekly list until the form closes
-2026-10-10T22:06:09.035Z PASS 5: new update added after the carried one, item closed
-2026-10-10T22:06:09.045Z PASS 5: the earlier meeting keeps its own record (a copy, not a reference)
-2026-10-10T22:06:09.045Z === 6. print ===
-2026-10-10T22:06:11.371Z PASS 6: print contains "SUBJECT"
-2026-10-10T22:06:11.371Z PASS 6: print contains "VENUE & TIME"
-2026-10-10T22:06:11.371Z PASS 6: print contains "RECORDED BY"
-2026-10-10T22:06:11.371Z PASS 6: print contains "DISCUSSIONS / ACTIONS"
-2026-10-10T22:06:11.371Z PASS 6: print contains "Action by"
-2026-10-10T22:06:11.371Z PASS 6: print contains "15:00 ~ 17:15"
-2026-10-10T22:06:11.371Z PASS 6: print contains "1.0"
-2026-10-10T22:06:11.371Z PASS 6: print contains "1.1.1"
-2026-10-10T22:06:11.371Z PASS 6: print contains "21 Jul 2026"
-2026-10-10T22:06:11.371Z PASS 6: print contains "14 Jul 2026"
-2026-10-10T22:06:11.371Z PASS 6: print contains "15 Aug 2026"
-2026-10-10T22:06:11.372Z PASS 6: print contains "4 Aug 2026"
-2026-10-10T22:06:11.438Z === 7. zh labels ===
-2026-10-10T22:06:15.183Z PASS 7: zh tab names
-2026-10-10T22:06:15.188Z PASS 7: zh placeholder (-- 請選擇 --)
-2026-10-10T22:06:15.190Z PASS 7: zh 記錄人 / 結束時間
-2026-10-10T22:06:15.276Z PASS no script errors in the console ()
-2026-10-10T22:06:15.295Z ALL 64 CHECKS PASSED
+2026-10-10T22:29:17.023Z === 1. layout ===
+2026-10-10T22:29:17.918Z PASS 1: full-screen form (width 1440)
+2026-10-10T22:29:17.922Z PASS 1: five tabs in order
+2026-10-10T22:29:17.923Z PASS 1: back button
+2026-10-10T22:29:17.924Z PASS 1: Meeting Type placeholder translated (-- Please select --)
+2026-10-10T22:29:17.925Z PASS 1: General tab has "Subject"
+2026-10-10T22:29:17.925Z PASS 1: General tab has "Start Time"
+2026-10-10T22:29:17.926Z PASS 1: General tab has "End Time"
+2026-10-10T22:29:17.926Z PASS 1: General tab has "Venue"
+2026-10-10T22:29:17.927Z PASS 1: General tab has "Recorded By"
+2026-10-10T22:29:17.964Z === 2. build a register on a new meeting ===
+2026-10-10T22:29:18.094Z PASS 2: one screen, no mode switch
+2026-10-10T22:29:18.096Z PASS 2: "Show closed items" unchecked by default
+2026-10-10T22:29:18.231Z PASS 2: a new item opens straight in edit, focused
+2026-10-10T22:29:18.235Z PASS 2: a new item is raised on the meeting date by default
+2026-10-10T22:29:18.324Z PASS 2: register numbered 1 / 1.1 / 1.1.1 / 1.2 (1,1.1,1.1.1,1.2)
+2026-10-10T22:29:18.325Z PASS 2: category shown as 1.0
+2026-10-10T22:29:18.326Z PASS 2: raised date shown above the item (11 Aug 2026)
+2026-10-10T22:29:18.327Z PASS 2: only the this-week field is an input in a resting item
+2026-10-10T22:29:18.327Z PASS 2: ✏️ on the item
+2026-10-10T22:29:18.330Z PASS 2: no "This week" label; the field says "Add progress…"
+2026-10-10T22:29:18.362Z PASS 2: only that row is in edit
+2026-10-10T22:29:18.362Z PASS 2: other rows have no ✏️ while one is open
+2026-10-10T22:29:18.389Z PASS 2: ✕ leaves the row unchanged
+2026-10-10T22:29:18.442Z PASS 2: ✓ applies the change
+2026-10-10T22:29:18.451Z PASS 2: date picked before typing stays in the field
+2026-10-10T22:29:19.360Z PASS 2: Save blocked while a new item is typed but not applied
+2026-10-10T22:29:19.363Z PASS 2: the form switched to the Discussions tab
+2026-10-10T22:29:19.392Z PASS 2: ✕ on a new row adds nothing
+2026-10-10T22:29:19.399Z PASS 2: an item added and closed this session stays on screen
+2026-10-10T22:29:19.430Z PASS 2: deleting an item asks about that item only (Delete 1.2?)
+2026-10-10T22:29:19.432Z PASS 2: 🗑 (confirmed) removes the row
+2026-10-10T22:29:19.457Z PASS 2: queued file kept across tab switches
+2026-10-10T22:29:21.994Z PASS 2: meeting saved
+2026-10-10T22:29:21.994Z PASS 2: start and end time stored
+2026-10-10T22:29:21.994Z PASS 2: attendee by Company / Name / Position
+2026-10-10T22:29:21.994Z PASS 2: stored register shape
+2026-10-10T22:29:21.994Z PASS 2: item fields, raised date and this week's update dated with the meeting date
+2026-10-10T22:29:21.994Z PASS 2: the cancelled new row was not stored
+2026-10-10T22:29:21.994Z === 3. legacy format Draft ===
+2026-10-10T22:29:23.587Z PASS 3: legacy open rows (1,1.1,2,2.1)
+2026-10-10T22:29:23.617Z PASS 3: "Show closed items" adds the legacy Closed sub-item under its topic
+2026-10-10T22:29:23.617Z PASS 3: a closed item has no this-week field
+2026-10-10T22:29:25.171Z PASS 3: saving a legacy Draft writes the new shape
+2026-10-10T22:29:25.190Z PASS 3: content and statuses preserved
+2026-10-10T22:29:25.190Z PASS 3: this week's update stored with the date picked before typing
+2026-10-10T22:29:25.190Z === 4. legacy Published ===
+2026-10-10T22:29:26.736Z PASS 4: legacy published register readable
+2026-10-10T22:29:26.738Z PASS 4: read-only (no Save)
+2026-10-10T22:29:26.739Z PASS 4: no editable register fields
+2026-10-10T22:29:26.740Z PASS 4: no ✏️ / 🗑 / add buttons on a published record
+2026-10-10T22:29:26.740Z PASS 4: no this-week field on a published record
+2026-10-10T22:29:26.747Z PASS 4: stored log untouched
+2026-10-10T22:29:26.747Z === 5. new occurrence carry-forward ===
+2026-10-10T22:29:28.251Z PASS 5: published register (Open filter hides the Closed 1.1.2)
+2026-10-10T22:29:30.935Z PASS 5: rev 2.0 created
+2026-10-10T22:29:30.935Z PASS 5: unfinished items + headings carried, numbers kept, Closed 1.1.2 left behind
+2026-10-10T22:29:30.973Z PASS 5: carried item marked
+2026-10-10T22:29:30.976Z PASS 5: raised date kept on the carried item
+2026-10-10T22:29:30.979Z PASS 5: carried item has no 🗑
+2026-10-10T22:29:31.008Z PASS 5: ✏️ on a carried item: text stays read-only, Action by editable
+2026-10-10T22:29:31.034Z PASS 5: carried update read-only
+2026-10-10T22:29:31.034Z PASS 5: carried item cannot be deleted
+2026-10-10T22:29:31.035Z PASS 5: earlier update shown as "21 Jul 2026" + text
+2026-10-10T22:29:31.047Z PASS 5: an item closed this week stays, with its this-week field, until the form closes
+2026-10-10T22:29:32.629Z PASS 5: new update added after the carried one, item closed
+2026-10-10T22:29:32.639Z PASS 5: the earlier meeting keeps its own record (a copy, not a reference)
+2026-10-10T22:29:32.639Z === 5a. hover icons, auto-height text ===
+2026-10-10T22:29:34.198Z PASS 5a: row icons hidden until hover
+2026-10-10T22:29:34.502Z PASS 5a: row icons shown on hover
+2026-10-10T22:29:34.507Z PASS 5a: ✏️ is a small icon (18x18)
+2026-10-10T22:29:34.521Z PASS 5a: row icons shown on keyboard focus
+2026-10-10T22:29:34.525Z PASS 5a: empty update box is one line high (34px)
+2026-10-10T22:29:34.539Z PASS 5a: the box grows with its text, no scrollbar (34 -> 92px)
+2026-10-10T22:29:34.546Z PASS 5a: and shrinks back to one line when emptied
+2026-10-10T22:29:34.584Z PASS 5a: edit box sized to its one-line content
+2026-10-10T22:29:34.608Z === 5b. control sizes ===
+2026-10-10T22:29:36.603Z PASS 5b@800: register buttons present (7)
+2026-10-10T22:29:36.603Z PASS 5b@800: every button inside its cell, no cell overflow ()
+2026-10-10T22:29:36.603Z PASS 5b@800: buttons stay one compact line (tallest 22px)
+2026-10-10T22:29:37.064Z PASS 5b@1400: register buttons present (7)
+2026-10-10T22:29:37.065Z PASS 5b@1400: every button inside its cell, no cell overflow ()
+2026-10-10T22:29:37.065Z PASS 5b@1400: buttons stay one compact line (tallest 22px)
+2026-10-10T22:29:37.134Z === 6. print ===
+2026-10-10T22:29:39.468Z PASS 6: print contains "SUBJECT"
+2026-10-10T22:29:39.468Z PASS 6: print contains "VENUE & TIME"
+2026-10-10T22:29:39.468Z PASS 6: print contains "RECORDED BY"
+2026-10-10T22:29:39.468Z PASS 6: print contains "DISCUSSIONS / ACTIONS"
+2026-10-10T22:29:39.468Z PASS 6: print contains "Action by"
+2026-10-10T22:29:39.468Z PASS 6: print contains "15:00 ~ 17:15"
+2026-10-10T22:29:39.468Z PASS 6: print contains "1.0"
+2026-10-10T22:29:39.468Z PASS 6: print contains "1.1.1"
+2026-10-10T22:29:39.468Z PASS 6: print contains "21 Jul 2026"
+2026-10-10T22:29:39.468Z PASS 6: print contains "14 Jul 2026"
+2026-10-10T22:29:39.468Z PASS 6: print contains "15 Aug 2026"
+2026-10-10T22:29:39.468Z PASS 6: print contains "4 Aug 2026"
+2026-10-10T22:29:39.526Z === 7. zh labels ===
+2026-10-10T22:29:43.248Z PASS 7: zh tab names
+2026-10-10T22:29:43.251Z PASS 7: zh placeholder (-- 請選擇 --)
+2026-10-10T22:29:43.253Z PASS 7: zh 記錄人 / 結束時間
+2026-10-10T22:29:43.317Z PASS no script errors in the console ()
+2026-10-10T22:29:43.344Z ALL 92 CHECKS PASSED

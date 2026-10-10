@@ -19,3 +19,11 @@
 setCurrentUpdate 邊界、唯讀兩模式、離開提醒與擋存檔、raisedDate 前後端與帶入、列印與日期格式、翻譯鍵、CRLF 均確認正確；tsc 乾淨、npm test 156 passed。
 不擋 PASS 的建議（已全部處理）：1 先選日期再打字日期會丟 → 暫存所選日期；2 只有空白會存成更新 → trim；3 openAtStart 以編號記住，重編號後錯位 → 依刪除對照表改編號；4 切回本週會直接清掉已打字的新增列 → 先確認。
 資訊：同事項多筆本次更新只來自 R2 版資料（未上線，不處理）；formatMinutesDate 不檢查日數（如 2026-02-31），影響可忽略。
+
+## R4：PASS（單一畫面＋✏️ 就地編輯）
+刪除時編號跟隨、新列插入位置、headingShown、帶入列 ✏️ 不寫入內容／起始日期、isEditDirty、已發布全唯讀、移除的翻譯鍵無殘留，均確認。tsc 乾淨、npm test 156 passed。
+建議（已處理）：本次新增事項改已結案會立刻消失 → 新事項加入 openAtStart；刪除事項的確認文字依類型區分（confirmDeleteItem）。資訊：新列開著時取消「顯示已結案」若上層被隱藏，新列移到表尾（資料不受影響）。
+
+## R5：PASS（按鈕縮小、✏️／🗑 hover 顯示、文字框自動高度）
+nextNo 與 addEntry 編號一致；隱形按鈕可 Tab 聚焦且 focus-within 會顯示，有 aria-label；CSS module 的 tr:hover 只作用在討論區；AutoText 的 ResizeObserver 只看寬度、不循環，隱藏分頁首次顯示會補量；討論區已不用撐寬的舊按鈕。tsc 乾淨、npm test 156 passed。
+建議（已處理）：字型晚載入可能少算高度 → document.fonts.ready 後再量一次。資訊（已處理）：.autoText 的 min-height 依賴樣式載入順序 → 改為 .autoText.autoText 提高權重。
