@@ -25,15 +25,6 @@ def read_audits(
     """Get list of audits with pagination"""
     return service.get_audits(skip=skip, limit=limit, project_id=project_id, scope=scope)
 
-@router.get("/contractors", response_model=list[schemas.AuditContractorOption])
-def read_audit_contractor_options(
-    service: AuditService = Depends(get_audit_service),
-    scope: Scope = Depends(get_scope),
-    current_user: schemas.User = Depends(RoleChecker(AUDIT_VIEW))
-):
-    """Contractor names for the Audit page / wizard (needs audit:view only). Declared before /{audit_id}."""
-    return service.get_contractor_options(scope=scope)
-
 @router.get("/{audit_id}", response_model=schemas.Audit)
 def read_audit(
     audit_id: str,
