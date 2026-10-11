@@ -58,11 +58,13 @@ def user(username, full_name, codes, vendor_id=None):
                       hashed_password=get_password_hash(PW), role_id=role.id, full_name=full_name))
 
 
-d.add_all([
-    models.Contractor(id="CP-TECO", name="TECO", abbreviation="TECO", status="Active"),
-    models.Contractor(id="CP-HL", name="Hailong Construction", abbreviation="HL", status="active"),
-    models.Contractor(id="CP-EC", name="Empty Co", abbreviation="EC", status="active"),
-])
+# Run after seed_meeting_tabs_review.py in the same preview, Hailong Construction already exists (names are unique):
+# its people go onto that one.
+existing_hl = d.query(models.Contractor).filter_by(name="Hailong Construction").first()
+HL = existing_hl.id if existing_hl else "CP-HL"
+d.add_all([models.Contractor(id="CP-TECO", name="TECO", abbreviation="TECO", status="Active"),
+           models.Contractor(id="CP-EC", name="Empty Co", abbreviation="EC", status="active")]
+          + ([] if existing_hl else [models.Contractor(id="CP-HL", name="Hailong Construction", abbreviation="HL", status="active")]))
 d.flush()
 user("cp_admin", "Daniel Huang", MEETING + ("contractors:view:all", "contractors:manage:all"))
 user("cp_meeting", "Meeting Only", MEETING)
@@ -76,16 +78,16 @@ PEOPLE = [
     ("CP-TECO", "陳俊維(Arisaka Chen)", "QA/QC MEP Engineer", True),
     ("CP-TECO", "謝明倫(ML Hsieh)", "Site Manager", True),
     ("CP-TECO", "Former Staff", "Site Engineer", False),
-    ("CP-HL", "Breeze Yeh", "PM", True),
-    ("CP-HL", "Daniel Huang", "Quality Manager", True),
-    ("CP-HL", "Dennis Luo", "MEP Engineer", True),
+    (HL, "Breeze Yeh", "PM", True),
+    (HL, "Daniel Huang", "Quality Manager", True),
+    (HL, "Dennis Luo", "MEP Engineer", True),
 ]
 for company, name, position, active in PEOPLE:
     d.add(models.ContractorPersonnel(id=str(uuid.uuid4()), contractor_id=company, name=name, position=position,
                                      is_active=active, created_at=now, updated_at=now))
 
 d.add(models.MeetingMinutes(
-    id=str(uuid.uuid4()), vendor_id="CP-HL", documentNumber="MOM-CP-001", rev="1.0", status="Draft",
+    id=str(uuid.uuid4()), vendor_id=HL, documentNumber="MOM-CP-001", rev="1.0", status="Draft",
     title="Weekly 120 (text attendees)", meetingType="週會", meetingDate="2026-08-18", meetingTime="15:00",
     location="HL Office Meeting Room", organizer="Daniel Huang",
     attendees=json.dumps([{"company": "TECO", "name": "曾耀葦(Toby Tseng)", "role": "QAQC Manager"},
