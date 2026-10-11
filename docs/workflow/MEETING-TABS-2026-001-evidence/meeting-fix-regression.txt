@@ -1,34 +1,34 @@
-2026-10-11T04:56:35.225Z LOGIN OK
-2026-10-11T04:56:35.226Z === 2. new Published meeting with an attachment, first upload fails ===
-2026-10-11T04:56:38.166Z PASS 2a: exactly one meeting created (got 1)
-2026-10-11T04:56:38.166Z PASS 2a: written as Draft while its attachment is unfinished (got Draft)
-2026-10-11T04:56:38.167Z PASS 2a: one create request
-2026-10-11T04:56:38.167Z PASS 2a: create request carried status Draft
-2026-10-11T04:56:38.168Z PASS 2a: modal stays open
-2026-10-11T04:56:38.169Z PASS 2a: notice names the saved meeting number
-2026-10-11T04:56:38.170Z PASS 2a: Save is still available to finish
-2026-10-11T04:56:40.770Z PASS 2b: still exactly one meeting (got 1)
-2026-10-11T04:56:40.770Z PASS 2b: retry sent no create request
-2026-10-11T04:56:40.770Z PASS 2b: no Follow-up is created from a meeting any more
-2026-10-11T04:56:40.770Z PASS 2b: published after the upload went through (got Published)
-2026-10-11T04:56:40.775Z PASS 2b: exactly one attachment stored
-2026-10-11T04:56:40.776Z PASS 2b: modal closed
-2026-10-11T04:56:40.776Z === 1. Void a Published meeting (contractor + attachment) from inside the form ===
-2026-10-11T04:56:40.781Z PASS 1a: the OLD full-form void payload is refused by the backend lock (got 400) — the bug
-2026-10-11T04:56:43.683Z PASS 1b: the form sends the status alone ({"status":"Void"})
-2026-10-11T04:56:43.689Z PASS 1b: meeting is Void
-2026-10-11T04:56:43.690Z PASS 1b: modal closed
-2026-10-11T04:56:43.690Z === 4. rev is saved; a rev the series already uses is a friendly 400 ===
-2026-10-11T04:56:43.698Z PASS 4: a Draft meeting to edit
-2026-10-11T04:56:46.542Z PASS 4a: rev is in the update request
-2026-10-11T04:56:46.560Z PASS 4a: rev 1.1 stored
-2026-10-11T04:56:46.577Z PASS 4b: next occurrence created (rev 2.0)
-2026-10-11T04:56:49.511Z PASS 4b: friendly conflict message shown (Not saved — everything you entered is kept. Rev '1.1' already exists for meeting minute 'QTS-HL-MEETING-000002' — choose another rev.)
-2026-10-11T04:56:49.511Z PASS 4b: modal stays open
-2026-10-11T04:56:49.517Z PASS 4b: the occurrence keeps its rev
-2026-10-11T04:56:49.517Z === 5. create-only account: new Published meeting ===
-2026-10-11T04:56:54.666Z PASS 5: one meeting, Published (got Published)
-2026-10-11T04:56:54.666Z PASS 5: one create request carrying Published
-2026-10-11T04:56:54.666Z PASS 5: no update request (it would be refused without update permission)
-2026-10-11T04:56:54.666Z PASS 5: modal closed
-2026-10-11T04:56:54.682Z ALL 28 CHECKS PASSED
+2026-10-11T05:10:13.032Z LOGIN OK
+2026-10-11T05:10:13.032Z === 2. new Published meeting with an attachment, first upload fails ===
+2026-10-11T05:10:15.925Z PASS 2a: exactly one meeting created (got 1)
+2026-10-11T05:10:15.925Z PASS 2a: written as Draft while its attachment is unfinished (got Draft)
+2026-10-11T05:10:15.925Z PASS 2a: one create request
+2026-10-11T05:10:15.925Z PASS 2a: create request carried status Draft
+2026-10-11T05:10:15.926Z PASS 2a: modal stays open
+2026-10-11T05:10:15.927Z PASS 2a: notice names the saved meeting number
+2026-10-11T05:10:15.928Z PASS 2a: Save is still available to finish
+2026-10-11T05:10:18.512Z PASS 2b: still exactly one meeting (got 1)
+2026-10-11T05:10:18.512Z PASS 2b: retry sent no create request
+2026-10-11T05:10:18.512Z PASS 2b: no Follow-up is created from a meeting any more
+2026-10-11T05:10:18.512Z PASS 2b: published after the upload went through (got Published)
+2026-10-11T05:10:18.518Z PASS 2b: exactly one attachment stored
+2026-10-11T05:10:18.519Z PASS 2b: modal closed
+2026-10-11T05:10:18.520Z === 1. Void a Published meeting (contractor + attachment) from inside the form ===
+2026-10-11T05:10:18.526Z PASS 1a: the OLD full-form void payload is refused by the backend lock (got 400) — the bug
+2026-10-11T05:10:21.401Z PASS 1b: the form sends the status alone ({"status":"Void"})
+2026-10-11T05:10:21.407Z PASS 1b: meeting is Void
+2026-10-11T05:10:21.407Z PASS 1b: modal closed
+2026-10-11T05:10:21.407Z === 4. rev is saved; a rev the series already uses is a friendly 400 ===
+2026-10-11T05:10:21.416Z PASS 4: a Draft meeting to edit
+2026-10-11T05:10:24.256Z PASS 4a: rev is in the update request
+2026-10-11T05:10:24.264Z PASS 4a: rev 1.1 stored
+2026-10-11T05:10:24.271Z PASS 4b: next occurrence created (rev 2.0)
+2026-10-11T05:10:27.162Z PASS 4b: friendly conflict message shown (Not saved — everything you entered is kept. Rev '1.1' already exists for meeting minute 'QTS-HL-MEETING-000002' — choose another rev.)
+2026-10-11T05:10:27.163Z PASS 4b: modal stays open
+2026-10-11T05:10:27.169Z PASS 4b: the occurrence keeps its rev
+2026-10-11T05:10:27.169Z === 5. create-only account: new Published meeting ===
+2026-10-11T05:10:31.612Z PASS 5: one meeting, Published (got Published)
+2026-10-11T05:10:31.612Z PASS 5: one create request carrying Published
+2026-10-11T05:10:31.612Z PASS 5: no update request (it would be refused without update permission)
+2026-10-11T05:10:31.613Z PASS 5: modal closed
+2026-10-11T05:10:31.635Z ALL 28 CHECKS PASSED
