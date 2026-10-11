@@ -1,0 +1,5 @@
+# 2026-10-11T06:53:48Z BTNFIX work tree = git archive d78e9023 + C1 + C2
+tsc exit=0
+eslint --max-warnings 0 (13 files) exit=0
+npm test exit=0 (ℹ tests 164 ℹ pass 164 ℹ fail 0 )
+npm run build exit=0

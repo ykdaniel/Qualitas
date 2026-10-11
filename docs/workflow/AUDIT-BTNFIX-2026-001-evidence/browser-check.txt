@@ -1,0 +1,35 @@
+PASS #36 承包商欄篩選 Second Vendor：只剩 AHB-SV-1（沒有承包商的 AHB-NOVENDOR-1 不在內）  -> ["AHB-SV-1"]
+PASS #36 承包商欄篩選 Review Vendor：每一列都是 Review Vendor，沒有「-」  -> ["Review Vendor","Review Vendor","Review Vendor","Review Vendor","Review Vendor","Review Vendor"]
+PASS #36 篩選改回「全部」：回到原本筆數  -> 8 vs 8
+PASS #36 狀態欄篩選 Void：只剩 Void（精確比對同樣適用狀態欄）  -> ["AHB-VOID-1"]
+PASS 灰色刪除鈕滑鼠移上去：提示「請先將此稽核作廢，才能刪除」  -> 請先將此稽核作廢，才能刪除
+PASS 可用的刪除鈕滑鼠移上去：提示「刪除」  -> 刪除
+PASS #41 audit_full 點 Draft 列的灰色刪除鈕：不開啟精靈
+PASS #41 點同一列的其他欄位：仍會開啟精靈
+PASS #41 點 Void 列可用的刪除鈕：跳出刪除確認，不開啟精靈
+PASS #41 取消刪除後 AHB-VOID-1 仍在清單
+PASS audit_viewer 灰色刪除鈕滑鼠移上去：提示沒有刪除權限  -> 您沒有刪除稽核的權限
+PASS #41 audit_viewer（無刪除權限）點 Void 列的灰色刪除鈕：不開啟精靈、不跳確認
+PASS 唯讀橫幅 ahb-ahb-closed-1：已結案  -> {"key":"audit.wizard.readOnlyClosed","text":"此稽核已結案（Closed），內容唯讀，不能再修改。"}
+PASS 唯讀橫幅 ahb-ahb-void-1：已作廢  -> {"key":"audit.wizard.readOnlyVoid","text":"此稽核已作廢（Void），內容唯讀，不能再修改。"}
+PASS 可編輯的 Draft（audit_full）：沒有唯讀橫幅
+PASS Draft 第 5 步也沒有橫幅
+PASS Closed 切到第 4 步：橫幅仍在
+PASS audit_viewer 開 Draft：沒有修改權限的橫幅  -> {"key":"audit.wizard.readOnlyNoPermission","text":"您沒有修改稽核的權限，此稽核只能檢視。"}
+PASS audit_viewer 開 Closed：以「已結案」為原因
+PASS audit_viewer 新增稽核：存檔前沒有橫幅，存檔後顯示「已建立、無更新權限」  -> {"before":null,"after":{"key":"audit.wizard.createdNoUpdateNotice","text":"稽核已建立。您沒有「更新稽核」權限，所以現在改為唯讀；後續修改請由具更新權限的人處理。"}}
+PASS English: closed banner in English  -> {"key":"audit.wizard.readOnlyClosed","text":"This audit is closed: it is read-only and can no longer be changed."}
+PASS #68 新的一天新增一列（帶出午餐）→ 刪掉這一列：午餐一併移除  -> {"r1":[{"kind":"session","date":"2026-10-01","remarks":""},{"kind":"lunch","date":"2026-10-01","remarks":""}],"r2":[]}
+PASS #68 同一天還有其他行程：刪掉一列，午餐保留  -> {"r3":[{"kind":"session","date":"2026-10-01","remarks":""},{"kind":"lunch","date":"2026-10-01","remarks":""},{"kind":"session","date":"2026-10-01","remarks":""}],"r4":[{"kind":"lunch","date":"2026-10-01","remarks":""},{"kind":"session","date":"2026-10-01","remarks":""}]}
+PASS #68 使用者改過的午餐（備註 keep）：刪掉當天最後一個行程後保留  -> [{"kind":"lunch","date":"2026-10-01","remarks":"keep"}]
+PASS 日期先後警告為中文（結束日期早於開始日期）  -> ["稽核結束日（2026-09-01）早於稽核開始日（2026-10-01）"]
+PASS Audit 清單：分頁、每頁列數、選取列數、檢視為中文
+PASS 欄位標題選單：升冪／降冪排序、隱藏此欄、篩選為中文  -> 升冪排序 降冪排序 隱藏此欄 篩選 全部
+PASS 「檢視」選單標題為「顯示欄位」
+WARN [i18n] Missing translation: "common.deleteConfirmTitle" (zh)
+PASS NOI 清單（共用 DataTable）：中文分頁、沒有英文殘留或未翻譯的鍵
+PASS OSD 清單（共用 DataTable）：中文分頁、沒有英文殘留或未翻譯的鍵
+PASS MeetingMinutes 清單（共用 DataTable）：中文分頁、沒有英文殘留或未翻譯的鍵
+WARN [i18n] Missing translation: "common.deleteConfirmTitle" (en)
+PASS English NOI list: pagination stays English (Page x of y, Rows per page, View)
+ALL PASS

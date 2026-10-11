@@ -1,0 +1,4 @@
+# 2026-10-11T07:14:57Z FINAL candidate = AUDIT-BUTTONS cand-final (live AGENDA + NOI + BUTTONS) + C1 3f703be3 + C2 09c07a8e
+tsc exit=0
+npm test exit=0 (ℹ tests 148 ℹ pass 148 ℹ fail 0 )
+npm run build exit=0
