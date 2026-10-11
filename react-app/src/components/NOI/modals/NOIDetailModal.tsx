@@ -3,7 +3,6 @@ import FormActions from '../../Shared/FormActions';
 import actionStyles from '../../Shared/FormActions.module.css';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { FileText, Printer } from 'lucide-react';
 import { useLanguage } from '../../../context/LanguageContext';
@@ -247,7 +246,6 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
         setPreviewName(name || '');
     };
 
-    const navigate = useNavigate();
     const [saving, setSaving] = useState(false);
     // Contact fields still filled by the system (from the selected contractor) are compared as blank: they arrive
     // asynchronously after the first render (CONTRACTOR-OPTIONS-2026-001), and an auto-fill is not a user change. A field
@@ -594,22 +592,10 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
                                 </div>
                             </div>
                         </div>
+                        {/* Default click-through: opens the linked record itself via ?openId= on
+                            every target page (ITP / ITR / NCR), not just its list. */}
                         {existingItem?.id && (
-                            <RelatedDocuments
-                                entityType="noi"
-                                entityId={existingItem.id}
-                                onOpen={(entityType, id) => {
-                                    // Only ITR has a confirmed, symmetric ?openId= consumer
-                                    // (ITR.tsx) plus its own existing navigate(-1) return path.
-                                    // Every other related-document type keeps its original
-                                    // unfiltered-list navigation — unchanged from before this fix.
-                                    if (entityType === 'itr') {
-                                        navigate(`/itr?openId=${encodeURIComponent(id)}`);
-                                        return;
-                                    }
-                                    navigate(`/${entityType}`);
-                                }}
-                            />
+                            <RelatedDocuments entityType="noi" entityId={existingItem.id} />
                         )}
                     </div>
                     </fieldset>

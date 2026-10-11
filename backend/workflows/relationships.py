@@ -52,6 +52,10 @@ def _itp_from_noi(noi: Any) -> List[Any]:
     return [ref] if ref is not None else []
 
 
+# NOTE: every edge joins two DIFFERENT modules, and traversal keeps one direction, so a related
+# entry is never in the same module as its source. The frontend relies on this: RelatedDocuments
+# opens a target via `<module>?openId=` on another page. A same-module edge (e.g. ITR -> ITR
+# re-inspection) would need same-page handling first (deep-link guard, modal re-init).
 EDGES: List[Edge] = [
     # ITP -> NOI (downstream)
     Edge("itp", "downstream", "noi",
