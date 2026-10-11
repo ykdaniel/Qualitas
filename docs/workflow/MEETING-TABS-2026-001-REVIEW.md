@@ -61,3 +61,7 @@ headingOf、子類取大類、contextNo 刪除後跟隨、所屬選到被濾掉�
 ## R12：PASS（工具列常駐、連續新增、操作提示）
 commit() 在 setEdit(null) 後讀閉包的 edit／log 正確，每次只呼叫一次 onChange，startNew 在同一批更新中覆蓋 setEdit(null)；剛新增的大類以 trusted 直接當所屬；rowError 以物件身分判斷，改動即清除；「新增事項」在已填名稱的新大類開著時可按，合理；焦點計數器只由 ✓ 觸發，與新列 autoFocus 不衝突；離開提醒與擋存檔一致，被拒時該列與輸入都保留。tsc 乾淨、npm test 159 passed、新鍵中英齊全且為 CRLF。
 建議（已處理）：✏️ 打開未改就按新增仍跳「已套用」→ 改為未變更時直接關閉、不提示（已加測試）。資訊（未處理，已記 STATUS）：帶入列原內容空白時按新增會一直被拒；被拒聚焦用 document.querySelector（頁面只有一個討論區，目前無虞）。
+
+## R13：PASS（同一事項多筆進度／補登）
+pending 只由 typeNote 附加在最後，清空／Esc 刪掉不影響其他進度位置，刪前面的進度時索引減一正確；列重編號時 pending／noteDates／noteEdit 依對照表改寫；每次輸入只呼叫一次 onChange，無閉包過期或重複新增；patchUpdate／removeUpdate 拒改帶入進度，存檔檢查也略過帶入的；Esc 在進度欄或進度 ✏️ 內只處理那筆並停止傳遞；擋存檔無回歸風險（正式站尚無進度資料，R3 後寫入的都有日期）；後端帶入對多筆進度正常。tsc 乾淨、npm test 160 passed、舊函式無殘留、新鍵中英齊全。
+建議（已處理）：欄位沒有輸入時 Esc 不攔，交給整列（例如取消 ✏️ 列）。資訊（未處理，已記 STATUS）：正在輸入的長篇進度 Esc 直接丟掉不確認；✏️ 改日期後該筆跳到新位置。
