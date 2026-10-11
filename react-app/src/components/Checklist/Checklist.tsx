@@ -17,6 +17,7 @@ import { withResult, deriveChecklistStatus, itemCounts } from '../../utils/check
 import styles from './Checklist.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import { useDebounce } from '../../hooks/useDebounce';
+import { RETURN_ITP_PARAM, itpReopenPath } from '../../utils/itpReturnLink';
 import { useNOIStore } from '../../store/noiStore';
 import { useITPStore } from '../../store/itpStore';
 import { useITRStore } from '../../store/itrStore';
@@ -97,8 +98,15 @@ const Checklist: React.FC = () => {
         setSearchParams(next, { replace: true });
     }, [searchParams, records, setSearchParams]);
 
+    const returnItpId = searchParams.get(RETURN_ITP_PARAM);
+
     const handleBack = () => {
-        if (fromSource === 'itp' || fromSource === 'itr') {
+        if (fromSource === 'itp' && returnItpId) {
+            // Back to the ITP edit window this Checklist was opened from (see utils/itpReturnLink).
+            // replace: the Checklist entry is left behind, so the browser's own Back afterwards
+            // does not bounce between the two pages.
+            navigate(itpReopenPath(returnItpId), { replace: true });
+        } else if (fromSource === 'itp' || fromSource === 'itr') {
             navigate(-1);
         } else if (view === 'editor') {
             setView('list');

@@ -268,6 +268,7 @@ const UserScopeSection: React.FC<UserScopeSectionProps> = ({ userId, t, value, o
             </div>
 
             <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280' }}>{t('iam.scope.contractor') || 'Contractor (optional)'}</label>
+            <p style={{ ...s.hint, margin: '2px 0 8px' }}>{t('iam.scope.contractorHint')}</p>
             {contractorsError && (
                 <div style={s.errorBanner}>
                     <span>{t('iam.scope.contractorsLoadFailed') || 'Failed to load the contractor list — the current contractor assignment is kept, but cannot be changed until this is retried.'}</span>

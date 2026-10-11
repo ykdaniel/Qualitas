@@ -1,0 +1,18 @@
+PASS five steps with 稽核計畫 third  -> ["專案資訊","人員與範圍","稽核計畫","配置查檢表","執行與評估"]
+PASS print plan button only on the Agenda step; empty agenda shows the hint  -> 0/1
+PASS a new row starts on the audit start date with the lead auditor  -> ["2026-10-01","","","","","王稽核",""]
+PASS the next row continues the last row's date and end time  -> ["2026-10-02","15:30","","","","王稽核",""]
+PASS end before start: row flagged, save refused with a message, nothing sent  -> 1 0 有時段的結束時間早於開始時間，請修正後再儲存。
+PASS saved in time order, blank row dropped  -> [{"id":1791717344956,"kind":"","date":"2026-10-01","start":"09:00","end":"09:30","item":"起始會議","auditee":"全體","auditor":"王稽核","remarks":"會議室 A"},{"id":1791717345116,"kind":"","date":"2026-10-01","start":"09:30","end":"12:00","item":"8.4 外部供應管理","auditee":"採購部 / 陳","auditor":"王稽核","remarks":""},{"id":1791717344676,"kind":"","date":"2026-10-02","start":"15:00","end":"15:30","item":"結束會議","auditee":"
+PASS after Save Draft the table shows the saved order (blank row gone) and is not "unsaved"  -> ["起始會議","8.4 外部供應管理","結束會議"]
+PASS outside the audit period: notice shown, row still saved  -> ["2026-10-01","2026-10-01","2026-10-02","2026-10-05"]
+PASS reopened in time order  -> ["起始會議","8.4 外部供應管理","結束會議","補充訪談"]
+PASS plan printout: section 4 稽核行程 with the rows in order  -> [["2026-10-01","09:00–09:30","起始會議","全體","王稽核","會議室 A"],["2026-10-01","09:30–12:00","8.4 外部供應管理","採購部 / 陳","王稽核","—"],["2026-10-02","15:00–15:30","結束會議","全體","王稽核","—"],["2026-10-05","10:00–11:00","補充訪談","品保部","王稽核","—"]]
+PASS report printout: same agenda as section 4  -> [["2026-10-01","09:00–09:30","起始會議","全體","王稽核","會議室 A"],["2026-10-01","09:30–12:00","8.4 外部供應管理","採購部 / 陳","王稽核","—"],["2026-10-02","15:00–15:30","結束會議","全體","王稽核","—"],["2026-10-05","10:00–11:00","補充訪談","品保部","王稽核","—"]]
+PASS Word export: the same agenda rows  -> [["2026-10-01","09:00–09:30","起始會議","全體","王稽核","會議室 A"],["2026-10-01","09:30–12:00","8.4 外部供應管理","採購部 / 陳","王稽核","—"],["2026-10-02","15:00–15:30","結束會議","全體","王稽核","—"],["2026-10-05","10:00–11:00","補充訪談","品保部","王稽核","—"]]
+PASS edit during an in-flight save: still on screen, not in the database, flagged unsaved  -> {"onScreen":"EDITED-DURING-SAVE","storedLocation":"","firstRow":"事前文件審查","unsavedFlag":true}
+PASS control: saving again stores the edit and clears the unsaved flag  -> {"storedLocation":"EDITED-DURING-SAVE"}
+PASS view-only user: agenda shown read-only, no add/delete, print still available  -> {"rows":6,"disabled":true,"add":false,"remove":0,"print":true}
+PASS Closed audit: agenda shown read-only, no add/delete, print still available  -> {"rows":3,"disabled":true,"add":false,"remove":0,"print":true}
+PASS English: step title and column headers  -> Date Start End Audit Item / Process Auditee Auditor Remarks 
+ALL PASS

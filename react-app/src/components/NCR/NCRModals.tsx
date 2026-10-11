@@ -1,6 +1,7 @@
 import { useDraftGuard } from '../Shared/LeaveGuard';
 import FormActions from '../Shared/FormActions';
 import actionStyles from '../Shared/FormActions.module.css';
+import { Printer, FileText } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -219,7 +220,8 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         setExportingDocx(true);
         try {
             await exportNcrDocx(existingItem.id, getValues('ncrNumber') || 'NCR');
-        } catch {
+        } catch (err) {
+            console.error('NCR Word export failed:', err);
             toast.error(t('common.saveFailed') || 'Export failed');
         } finally {
             setExportingDocx(false);
@@ -1303,11 +1305,11 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
                 <FormActions
                     tools={<>
                         <button className={actionStyles.secondary} onClick={handlePrintClick} disabled={saving} title={t('common.print') || 'Print'}>
-                            {t('common.print') || 'Print'}
+                            <Printer size={16} /> {t('common.print') || 'Print'}
                         </button>
                         {existingItem?.id && (
                             <button className={actionStyles.secondary} onClick={handleExportDocxClick} disabled={saving || exportingDocx} title={t('common.exportWord') || 'Export Word'}>
-                                {exportingDocx ? (t('common.saving') || '...') : (t('common.exportWord') || 'Export Word')}
+                                <FileText size={16} /> {exportingDocx ? (t('common.saving') || '...') : (t('common.exportWord') || 'Export Word')}
                             </button>
                         )}
                     </>}

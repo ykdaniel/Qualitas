@@ -9,11 +9,35 @@ export interface Attendee {
     name: string;
     company?: string;
     role?: string;
+    /** CONTRACTOR-PERSONNEL-2026-001: picked from a company's personnel list. The texts above are the snapshot shown and
+     *  printed, so renaming or deactivating that person later never changes these minutes; older rows have no ids. */
+    contractorId?: string;
+    personnelId?: string;
 }
 
+/** A dated progress note under a discussion item ("21 Jul 2026 — TECO supplemented drawing …"). */
+export interface ProgressUpdate {
+    date?: string;           // YYYY-MM-DD
+    content: string;
+    /** Brought in from an earlier meeting by "New Occurrence": shown grey and read-only. */
+    carried?: boolean;
+    /** Written in the meeting just before this one (set when "New Occurrence" brings it in): shown blue (R17). */
+    lastMeeting?: boolean;
+    /** Marked as a key point by the user: shown red in every later meeting until unmarked (R17). */
+    highlight?: boolean;
+}
+
+/**
+ * One row of the discussion register (MEETING-TABS-2026-001): a category ("1" → shown 1.0), an optional
+ * sub-category ("1.1") or an item ("1.1" directly under a category, or "1.1.1" under a sub-category).
+ * Items carry Action by / Target date / Status and dated progress updates. Older rows had only two levels
+ * (major topic / sub-item) and no `kind`; they are read through normalizeDiscussionLog
+ * (components/MeetingMinutes/discussionLog.ts) and written back in this shape when a Draft is saved.
+ */
 export interface DiscussionLogEntry {
-    no: string;             // "1", "1.1", "1.2" — fixed once assigned
-    level?: 0 | 1;           // 0 = major topic, 1 = sub-item (undefined = legacy flat entry, treated as level 0)
+    no: string;              // fixed once assigned while any carried row exists (see discussionLog.ts)
+    kind?: 'category' | 'subcategory' | 'item';
+    level?: 0 | 1 | 2;       // depth of `no`; legacy rows: 0 = major topic, 1 = sub-item, undefined = flat (topic)
     /** Free-text "topic + discussion" combined field (current shape). */
     content?: string;
     /** Legacy shape (pre-merge) — kept optional so old saved rows still
@@ -21,8 +45,17 @@ export interface DiscussionLogEntry {
     topic?: string;
     discussion?: string;
     decision?: string;
-    owner?: string;          // sub-items only
-    status?: string;         // sub-items only — 'Open' | 'Closed'
+    raisedDate?: string;     // items only — YYYY-MM-DD the item was first raised
+    owner?: string;          // items only — "Action by"
+    targetDate?: string;     // items only — YYYY-MM-DD
+    status?: string;         // items only — 'Open' | 'Closed'
+    updates?: ProgressUpdate[];
+    /** Brought in from an earlier meeting by "New Occurrence": its text stays as recorded there. */
+    carried?: boolean;
+    /** Items: added in the meeting just before this one (set by "New Occurrence"): shown blue (R17). */
+    lastMeeting?: boolean;
+    /** Items: marked as a key point: shown red until unmarked (R17). */
+    highlight?: boolean;
 }
 
 export interface MeetingMinutesItem {
@@ -35,6 +68,7 @@ export interface MeetingMinutesItem {
     meetingType?: string;
     meetingDate?: string;
     meetingTime?: string;
+    meetingEndTime?: string;
     location?: string;
     organizer?: string;
     attendees?: Attendee[];

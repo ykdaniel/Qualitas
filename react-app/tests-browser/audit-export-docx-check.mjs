@@ -25,7 +25,8 @@ const openAudit = async (p, no) => {
   await p.locator('table tbody tr', { hasText: no }).first().locator('td').nth(2).click();
   await p.waitForSelector('input[name=auditDocNo]', { timeout: 10000 });
 };
-const toStep4 = async p => { await p.locator('.max-w-4xl button').nth(3).click(); await p.waitForTimeout(500); };
+// the last step (Execution & Review): step 5 since the Agenda step was added (AUDIT-AGENDA-2026-001)
+const toStep4 = async p => { await p.locator('.max-w-4xl button').nth(4).click(); await p.waitForTimeout(500); };
 const exportButton = p => p.locator('button', { hasText: EXPORT });
 const download = async (p, name) => {
   const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 10000 }), exportButton(p).click()]);
@@ -41,8 +42,9 @@ const download = async (p, name) => {
   await openAudit(p, 'AHB-EXPORT-1');
   const early = await exportButton(p).count();
   await toStep4(p);
-  const header = await p.locator('header .no-print').first().innerText();
-  result('export button only on step 4, next to Print Report', early === 0 && /列印報告/.test(header) && EXPORT.test(header), `${early} | ${header}`);
+  // since AUDIT-BUTTONS-2026-001 the step's Print / Export Word sit in the footer's left group, like the other modules
+  const header = await p.locator('[data-form-actions] > div').first().innerText();
+  result('export button not on step 1; on the last step it sits in the footer beside Print Report', early === 0 && /列印報告/.test(header) && EXPORT.test(header), `${early} | ${header}`);
   const got = await download(p, 'full');
   result('download is AHB-EXPORT-1.docx (a real docx/zip)', got.file === 'AHB-EXPORT-1.docx' && got.zip && got.size > 10000, JSON.stringify(got));
   await p.screenshot({ path: `${out}/step4-export-button.png` });

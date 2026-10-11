@@ -1,0 +1,188 @@
+PASS [清單頁] 清單 | 頁面載入 -> ["AHB-DRAFT-1","AHB-VOID-1","AHB-CLOSED-1","AHB-LEGACY-1","AHB-EXPORT-1","AHB-AGENDA-1","AHB-AGENDA-CLOSED-1"]
+PASS [清單頁] 工具列 | 搜尋框（編號） -> ["AHB-EXPORT-1"]
+PASS [清單頁] 工具列 | 搜尋框（狀態） -> ["AHB-CLOSED-1","AHB-AGENDA-CLOSED-1"]
+PASS [清單頁] 工具列 | 搜尋框（稽核員） -> ["AHB-EXPORT-1","AHB-AGENDA-1","AHB-AGENDA-CLOSED-1"]
+PASS [清單頁] 工具列 | 搜尋框（無結果） -> {"rows":[],"noData":1}
+PASS [清單頁] 工具列 | 搜尋框（清空） -> 7
+PASS [清單頁] 工具列 | 新增稽核 -> {"open":true,"docNo":"","title":"","step":1,"status":"Draft","options":["Draft","Planned","In Progress","Completed"]}
+PASS [清單頁] 精靈 | ✕ 關閉（新稽核、未修改） -> {"open":false,"modal":0}
+PASS [清單頁] 排程月曆 | 上一月 ‹ -> {"m0":"2026年10月","mPrev":"2026年9月"}
+PASS [清單頁] 排程月曆 | 今天 -> 2026年10月
+PASS [清單頁] 排程月曆 | 下一月 › -> {"mNext":"2026年11月","mNext2":"2026年12月"}
+PASS [清單頁] 排程月曆 | 9 月無稽核 -> 0
+PASS [清單頁] 排程月曆 | 10 月排程列 -> ["Review Vendor"]
+待確認 [清單頁] 排程月曆 | 同日多筆稽核顯示 -> 10/01 格只顯示 1 個圖示：AHB-DRAFT-1: Draft in P1
+PASS [清單頁] 排程月曆 | 點擊排程圖示 -> AHB-DRAFT-1
+created 200 200 200 QTS-SV-AUDIT-000001 QTS-NA-AUDIT-000005 Void
+PASS [清單頁] 承包商面板 | 面板內容 -> ["全部 13","Review Vendor 7","Second Vendor 1"]
+PASS [清單頁] 承包商面板 | 點 Second Vendor -> {"rows":["QTS-SV-AUDIT-000001"],"matrix":["Second Vendor"]}
+PASS [清單頁] 承包商面板 | 再點一次 Second Vendor -> 10
+PASS [清單頁] 承包商面板 | 點 Review Vendor -> 7
+PASS [清單頁] 承包商面板 | 點 全部 -> 10
+PASS [清單頁] 分頁 | 初始 -> {"page":"Page 1 of 2","rows":10}
+PASS [清單頁] 分頁 | 下一頁 › -> {"page":"Page 2 of 2","rows":3}
+PASS [清單頁] 分頁 | 上一頁 ‹ -> {"page":"Page 1 of 2"}
+PASS [清單頁] 分頁 | 最後一頁 » -> {"page":"Page 2 of 2"}
+PASS [清單頁] 分頁 | 第一頁 « -> {"page":"Page 1 of 2","prevDisabled":true}
+PASS [清單頁] 分頁 | 每頁筆數 10→20 -> {"page":"Page 1 of 1","rows":13}
+PASS [清單頁] 資料表 | View（欄位清單） -> ["AuditNo","Title","Date","Contractor","Location","Auditor","Status"]
+PASS [清單頁] 資料表 | View 取消勾選 location -> ["#","稽核編號","主旨","日期","承包商","稽核員","狀態","操作"]
+PASS [清單頁] 資料表 | View 重新勾選 location -> ["#","稽核編號","主旨","日期","承包商","地點","稽核員","狀態","操作"]
+PASS [清單頁] 資料表 | 欄標題選單（稽核編號） -> Sort Asc Sort Desc Hide Column Filter
+PASS [清單頁] 資料表 | Sort Desc -> ["QTS-SV-AUDIT-000001","QTS-NA-AUDIT-000005","QTS-NA-AUDIT-000004"]
+PASS [清單頁] 資料表 | Sort Asc -> ["AHB-AGENDA-1","AHB-AGENDA-CLOSED-1","AHB-CLOSED-1"]
+PASS [清單頁] 資料表 | 狀態欄 Filter = Closed -> ["AHB-AGENDA-CLOSED-1","AHB-CLOSED-1"]
+PASS [清單頁] 資料表 | 狀態欄 Filter = All -> 13
+PASS [清單頁] 資料表 | 主旨欄 Filter 文字 -> ["AHB-AGENDA-1","AHB-AGENDA-CLOSED-1"]
+FAIL [清單頁] 資料表 | 承包商欄 Filter = Second Vendor -> ["QTS-NA-AUDIT-000001","QTS-NA-AUDIT-000002","QTS-NA-AUDIT-000003","QTS-NA-AUDIT-000004","QTS-NA-AUDIT-000005","QTS-SV-AUDIT-000001"]
+PASS [清單頁] 資料表 | Hide Column（稽核員） -> ["#","稽核編號","主旨","日期","承包商","地點","狀態","操作"]
+PASS [清單頁] 資料表 | 點擊整列 -> AHB-DRAFT-1
+待確認 [清單頁] 資料表 | 編輯圖示 -> 操作欄只有刪除鈕（每列 1 個按鈕），沒有編輯圖示；開啟只能點整列
+PASS [清單頁] 資料表 | 刪除鈕（非 Void 列） -> {"disabled":true,"title":"請先將此稽核作廢，才能刪除"}
+FAIL [清單頁] 資料表 | 點停用的刪除鈕 -> {"wizardOpened":true,"modal":0}
+PASS [清單頁] 資料表 | 刪除鈕（Void 列） -> {"disabled":false,"title":"刪除"}
+PASS [清單頁] 資料表 | 刪除鈕 → 確認視窗 -> {"modal":1,"text":"確認刪除 × 您確定要刪除此稽核嗎？ 取消 刪除","wizard":false}
+PASS [清單頁] 資料表 | 確認視窗「取消」 -> {"modal":0,"row":1}
+PASS [清單頁] 資料表 | 確認視窗「×」 -> {"modal":0,"row":1}
+PASS [清單頁] 資料表 | 確認視窗「刪除」 -> {"row":0,"api":404}
+PASS [清單頁] API | DELETE 非 Void（audit_full） -> {"status":400,"detail":"Cannot delete Audit 'AHB-DRAFT-1' with status 'Draft'. Please Void the Audit first, then delete."}
+PASS [精靈] 第1步 | 上一步 -> 0
+PASS [精靈] 第1步 | 結束日早於開始日 -> {"warned":true,"text":"稽核結束日 (2026-10-20) is before 稽核開始日 (2026-10-21)"}
+PASS [精靈] 第1步 | 狀態下拉（新稽核） -> In Progress
+PASS [精靈] 導覽 | 下一步 -> {"step":2,"h":"人員與範圍"}
+PASS [精靈] 導覽 | 上一步 -> {"step":1,"title":"BTN 進行中稽核"}
+PASS [精靈] 導覽 | 步驟列點第 4 步 -> {"step":4,"h":"配置查檢表"}
+PASS [精靈] 導覽 | 步驟列點第 5 步 -> {"step":5,"next":0,"submit":1}
+PASS [精靈] 導覽 | 步驟列點第 1 步 -> {"step":1,"title":"BTN 進行中稽核"}
+PASS [精靈] 第2步 | 人員／範圍欄位輸入 -> true
+PASS [精靈] 第3步 | 空白議程 -> 1
+PASS [精靈] 第3步 | 列印稽核計畫（未儲存的新稽核） -> {"calls":1,"kind":"plan"}
+PASS [精靈] 第3步 | 匯出 Word（未儲存） -> 0
+PASS [精靈] 第3步 | 新增一列（新的一天） -> [{"kind":"session","date":"2026-10-21","start":"","end":"","item":"","auditor":"王稽核","bg":"rgba(0, 0, 0, 0)"},{"kind":"lunch","date":"2026-10-21","start":"12:00","end":"13:00","item":"Lunch Time","auditor":"","bg":"oklch(0.968 0.007 247.896)"}]
+PASS [精靈] 第3步 | 新增一列（同一天） -> [{"kind":"session","date":"2026-10-21","start":"09:00","end":"10:00","item":"文件審查","auditor":"王稽核","bg":"rgba(0, 0, 0, 0)"},{"kind":"lunch","date":"2026-10-21","start":"12:00","end":"13:00","item":"Lunch Time","auditor":"","bg":"oklch(0.968 0.007 247.896)"},{"kind":"session","date":"2026-10-21","sta
+PASS [精靈] 第3步 | 結束早於開始 + 儲存草稿 -> {"notice":1,"toast":true,"posts":0}
+PASS [精靈] 第3步 | 刪除列（垃圾桶） -> 2
+PASS [精靈] 第3步 | 日期改到期間外（10/25） -> {"outside":1,"lunches":["2026-10-21","2026-10-25"]}
+待確認 [精靈] 第3步 | 刪除當天唯一時段 -> 刪除 10/25 唯一時段後，10/25 的預設午餐仍留在議程
+PASS [精靈] 第3步 | 刪除午餐列 -> 2
+PASS [精靈] 頁尾 | 儲存草稿（新稽核首次） -> {"posts":1,"newNo":"QTS-RV-AUDIT-000001","msg":1,"word":1,"status":"In Progress","agenda":2}
+PASS [精靈] 頁尾 | 儲存草稿（第二次） -> {"POST":0,"PUT":1,"DELETE":0,"docx":0}
+PASS [精靈] 第3步 | 列印稽核計畫 -> {"calls":1,"kind":"plan","hasNo":true,"hasItem":true}
+PASS [精靈] 第3步 | 匯出 Word（計畫） -> {"file":"QTS-RV-AUDIT-000001-Plan.docx","kind":"plan","zip":true,"title":true,"hasItem":true}
+PASS [精靈] 第4步 | 模板選項 -> ["ISO 9001:2015","ISO 45001","品質管理程序書","供應商評鑑表"]
+PASS [精靈] 第4步 | 模板 chip 點選 -> [true,true,true,true]
+PASS [精靈] 第4步 | 模板 chip 再點取消 -> [true,false,true,true]
+PASS [精靈] 第4步 | ISO 條文下拉選 7.2 -> {"clause":"Competence","task":"How do you determine the necessary competence of person(s) doing work under your control?"}
+PASS [精靈] 第4步 | 新增（+） -> {"items":1,"task":""}
+PASS [精靈] 第4步 | 查檢問題欄按 Enter -> 2
+PASS [精靈] 第4步 | 自訂條文 → ✕ -> {"customShown":1,"select":true,"clause":"","task":""}
+PASS [精靈] 第4步 | 自訂條文新增 -> 3 條文編號 CLAUSE NO. C-1 CLAUSE DESCRIPTION 現場安全 AUDIT QUESTION 是否配戴安全帽？
+PASS [精靈] 第4步 | 空白時按 + -> 3
+PASS [精靈] 第4步 | 編輯（筆）→ 儲存 -> 1 條文編號 CLAUSE NO. 7.2 CLAUSE DESCRIPTION Competence AUDIT QUESTION 人員資格是否有紀錄？（已修改）
+PASS [精靈] 第4步 | 編輯 → 取消 -> 1 條文編號 CLAUSE NO. 7.2 CLAUSE DESCRIPTION Competence AUDIT QUESTION 人員資格是否有紀錄？（已修改）
+PASS [精靈] 第4步 | 編輯自訂條文項目 -> C-1
+PASS [精靈] 第4步 | 編輯中改 ISO 條文下拉 -> 2 條文編號 CLAUSE NO. 9.1 CLAUSE DESCRIPTION Monitoring, measurement, analysis and evaluation AUDIT QUESTION How do you determine what needs to be monitored and measured?
+PASS [精靈] 第4步 | 刪除項目（垃圾桶） -> {"before":4,"after":3}
+PASS [精靈] 第4步 | 未按新增就儲存草稿 -> {"toast":true,"POST":0,"PUT":0,"DELETE":0,"docx":0}
+PASS [精靈] 第4步 | 編輯中就儲存草稿 -> {"toast":true,"POST":0,"PUT":0,"DELETE":0,"docx":0}
+PASS [精靈] 第4步 | 有未儲存修改時按匯出 Word -> {"toast":true,"docx":0}
+PASS [精靈] 第4步 | 儲存草稿 -> {"put":1,"templates":["ISO 9001:2015","品質管理程序書","供應商評鑑表"],"nos":["7.2","9.1","C-1"]}
+PASS [精靈] 第4步 | 列印查檢表 -> {"calls":1,"kind":"checklist","hasItem":true}
+PASS [精靈] 第4步 | 匯出 Word（查檢表） -> {"file":"QTS-RV-AUDIT-000001-Checklist.docx","kind":"checklist","zip":true,"title":true,"hasItem":true}
+PASS [精靈] 第5步 | 統計卡 -> ["3","0%","0","0"]
+PASS [精靈] 第5步 | 未評估項目預設 -> true
+PASS [精靈] 第5步 | Pass ✓ 按鈕 -> true
+PASS [精靈] 第5步 | Fail ✕ 按鈕 -> true
+PASS [精靈] 第5步 | Warning ! 按鈕 -> {"warn":true,"passOff":true}
+PASS [精靈] 第5步 | 統計即時更新 -> ["3","67%","1","1"]
+PASS [精靈] 第5步 | 更新日期欄 -> 2026-10-11
+PASS [精靈] 第5步 | 分類篩選 chip -> {"chipTexts":["全部","7.2","9.1","C-1"],"c1":1,"c2":3}
+PASS [精靈] 第5步 | 搜尋框 -> 1
+PASS [精靈] 第5步 | 搜尋框按 Enter -> {"stillOpen":true,"POST":0,"PUT":0,"DELETE":0,"docx":0}
+PASS [精靈] 第5步 | 無結果 → 重設過濾條件 -> {"none":1,"search":"","rows":3}
+待確認 [精靈] 第5步 | 證據／附件輸入 -> 第 5 步沒有任何檔案／證據上傳欄（input[type=file] = 0），只有備註與稽核發現文字欄
+PASS [精靈] 第5步 | 列印報告 -> {"calls":1,"kind":"report","note":true,"findings":true}
+PASS [精靈] 第5步 | 匯出 Word（報告） -> {"file":"QTS-RV-AUDIT-000001.docx","kind":"report","zip":true,"title":true,"note":true,"findings":true}
+PASS [精靈] 頁尾 | 完成並建立計畫（第 5 步） -> {"put":1,"closed":true,"status":"In Progress","statuses":["pass","fail","pending"],"notes":["Remark A 人員資格表已備","兩份資格證明過期",""],"findings":"整體符合，一項待改善。","listStatus":"In Progress"}
+PASS [精靈] 精靈 | ✕ 關閉（既有稽核、未修改） -> {"open":false,"modal":0}
+PASS [精靈] 精靈 | ✕ 關閉（有未儲存修改） -> {"modal":1,"text":"未儲存的變更 × 確定離開嗎？尚未保存的編輯將遺失，已保存到伺服器的內容仍會保留。 留下並儲存 離開"}
+PASS [精靈] 精靈 | 未儲存視窗「留下並儲存」 -> {"open":true,"modal":0,"title":"BTN 進行中稽核（未儲存）"}
+PASS [精靈] 精靈 | 未儲存視窗「離開」 -> {"open":false,"title":"BTN 進行中稽核"}
+PASS [精靈] 精靈 | ✕ 關閉（第 4 步有未新增的查檢項） -> 1
+PASS [精靈] 精靈 | ✕ 關閉（以 ?openId= 深連結開啟） -> {"opened":"AHB-DRAFT-1","url":"/"}
+PASS [精靈] 第1步 | 狀態下拉（Draft 既有稽核） -> ["Draft","Planned","Void"]
+PASS [精靈] 第1步 | 狀態改 Void + 儲存草稿 -> {"titleDisabled":true,"saveDraft":0,"status":"Void","submit":0}
+PASS [精靈] 精靈 | ✕ 關閉（剛鎖定的稽核） -> {"open":false,"modal":0}
+PASS [精靈] 第1步 | 專案下拉（舊資料只有專案名稱） -> AHB-P1
+PASS [狀態與權限] audit_full／Draft（AHB-DRAFT-1） | 編輯控制項（第 1–5 步欄位、Agenda 新增/刪除、模板、查檢項、Pass/Fail/!、備註、發現） -> {"step1":{"title":false,"project":false,"status":false,"startDate":false,"statusOptions":["Draft","Planned","Void"]},"step2AllDisabled":false,"step3":{"addRow":true,"rowDelete":0,"rows":0,"inputsDisabled":true},"step4":{"chipDisabled":false,"taskDisabled":false,"plusDisabled":false,"items":1,"itemBt
+PASS [狀態與權限] audit_full／Draft（AHB-DRAFT-1） | 儲存草稿／完成並建立計畫 -> {"saveDraft":1,"submit":1}
+PASS [狀態與權限] audit_full／Draft（AHB-DRAFT-1） | 下一步／上一步／步驟列 -> {"back1":0,"next1":1,"afterNext":2,"afterBack":1,"next5":0}
+PASS [狀態與權限] audit_full／Draft（AHB-DRAFT-1） | 列印（第 3/4/5 步）＋匯出 Word -> [1,1,1,1,1,1]
+PASS [狀態與權限] audit_full／Draft（AHB-DRAFT-1） | 第 5 步分類篩選／搜尋 -> {"chipDisabled":false,"searchDisabled":false}
+PASS [狀態與權限] audit_full／Draft（AHB-DRAFT-1） | 狀態下拉選項 -> ["Draft","Planned","Void"]
+PASS [狀態與權限] audit_full／In Progress（AHB-EXPORT-1） | 編輯控制項（第 1–5 步欄位、Agenda 新增/刪除、模板、查檢項、Pass/Fail/!、備註、發現） -> {"step1":{"title":false,"project":false,"status":false,"startDate":false,"statusOptions":["In Progress","Completed","Void"]},"step2AllDisabled":false,"step3":{"addRow":true,"rowDelete":0,"rows":0,"inputsDisabled":true},"step4":{"chipDisabled":false,"taskDisabled":false,"plusDisabled":false,"items":5
+PASS [狀態與權限] audit_full／In Progress（AHB-EXPORT-1） | 儲存草稿／完成並建立計畫 -> {"saveDraft":1,"submit":1}
+PASS [狀態與權限] audit_full／In Progress（AHB-EXPORT-1） | 下一步／上一步／步驟列 -> {"back1":0,"next1":1,"afterNext":2,"afterBack":1,"next5":0}
+PASS [狀態與權限] audit_full／In Progress（AHB-EXPORT-1） | 列印（第 3/4/5 步）＋匯出 Word -> [1,1,1,1,1,1]
+PASS [狀態與權限] audit_full／In Progress（AHB-EXPORT-1） | 第 5 步分類篩選／搜尋 -> {"chipDisabled":false,"searchDisabled":false}
+PASS [狀態與權限] audit_full／In Progress（AHB-EXPORT-1） | 狀態下拉選項 -> ["In Progress","Completed","Void"]
+PASS [狀態與權限] audit_full／Closed（AHB-CLOSED-1） | 編輯控制項（第 1–5 步欄位、Agenda 新增/刪除、模板、查檢項、Pass/Fail/!、備註、發現） -> {"step1":{"title":true,"project":true,"status":true,"startDate":true,"statusOptions":["Closed"]},"step2AllDisabled":true,"step3":{"addRow":false,"rowDelete":0,"rows":0,"inputsDisabled":true},"step4":{"chipDisabled":true,"taskDisabled":true,"plusDisabled":true,"items":1,"itemBtnsDisabled":true,"chipC
+PASS [狀態與權限] audit_full／Closed（AHB-CLOSED-1） | 儲存草稿／完成並建立計畫 -> {"saveDraft":0,"submit":0}
+PASS [狀態與權限] audit_full／Closed（AHB-CLOSED-1） | 下一步／上一步／步驟列 -> {"back1":0,"next1":1,"afterNext":2,"afterBack":1,"next5":0}
+PASS [狀態與權限] audit_full／Closed（AHB-CLOSED-1） | 列印（第 3/4/5 步）＋匯出 Word -> [1,1,1,1,1,1]
+PASS [狀態與權限] audit_full／Closed（AHB-CLOSED-1） | 第 5 步分類篩選／搜尋 -> {"chipDisabled":false,"searchDisabled":false}
+PASS [狀態與權限] audit_full／Closed（AHB-CLOSED-1） | 點擊鎖定中的 Fail ✕ -> 無變化
+觀察 [狀態與權限] audit_full／Closed（AHB-CLOSED-1） | 唯讀提示 -> 畫面沒有任何唯讀／已鎖定說明
+PASS [狀態與權限] audit_full／Closed（AHB-CLOSED-1） | 列印報告＋匯出 Word（唯讀） -> {"print":"report","calls":1,"file":"AHB-CLOSED-1.docx","zip":true}
+PASS [狀態與權限] audit_full／Void（AHB-VOID-1） | 編輯控制項（第 1–5 步欄位、Agenda 新增/刪除、模板、查檢項、Pass/Fail/!、備註、發現） -> {"step1":{"title":true,"project":true,"status":true,"startDate":true,"statusOptions":["Void"]},"step2AllDisabled":true,"step3":{"addRow":false,"rowDelete":0,"rows":0,"inputsDisabled":true},"step4":{"chipDisabled":true,"taskDisabled":true,"plusDisabled":true,"items":1,"itemBtnsDisabled":true,"chipCur
+PASS [狀態與權限] audit_full／Void（AHB-VOID-1） | 儲存草稿／完成並建立計畫 -> {"saveDraft":0,"submit":0}
+PASS [狀態與權限] audit_full／Void（AHB-VOID-1） | 下一步／上一步／步驟列 -> {"back1":0,"next1":1,"afterNext":2,"afterBack":1,"next5":0}
+PASS [狀態與權限] audit_full／Void（AHB-VOID-1） | 列印（第 3/4/5 步）＋匯出 Word -> [1,1,1,1,1,1]
+PASS [狀態與權限] audit_full／Void（AHB-VOID-1） | 第 5 步分類篩選／搜尋 -> {"chipDisabled":false,"searchDisabled":false}
+PASS [狀態與權限] audit_full／Void（AHB-VOID-1） | 點擊鎖定中的 Fail ✕ -> 無變化
+觀察 [狀態與權限] audit_full／Void（AHB-VOID-1） | 唯讀提示 -> 畫面沒有任何唯讀／已鎖定說明
+PASS [狀態與權限] audit_full／Void（AHB-VOID-1） | 列印報告＋匯出 Word（唯讀） -> {"print":"report","calls":1,"file":"AHB-VOID-1.docx","zip":true}
+PASS [狀態與權限] audit_full／API | PUT Closed 稽核（改標題） -> {"status":400,"detail":"Cannot modify Audit 'AHB-CLOSED-1' with status 'Closed' — no fields can be changed once an audit is closed or void."}
+PASS [狀態與權限] audit_full／API | DELETE Closed 稽核 -> 400
+PASS [狀態與權限] audit_viewer／Draft（AHB-DRAFT-1） | 編輯控制項（第 1–5 步欄位、Agenda 新增/刪除、模板、查檢項、Pass/Fail/!、備註、發現） -> {"step1":{"title":true,"project":true,"status":true,"startDate":true,"statusOptions":["Draft","Planned","Void"]},"step2AllDisabled":true,"step3":{"addRow":false,"rowDelete":0,"rows":0,"inputsDisabled":true},"step4":{"chipDisabled":true,"taskDisabled":true,"plusDisabled":true,"items":1,"itemBtnsDisab
+PASS [狀態與權限] audit_viewer／Draft（AHB-DRAFT-1） | 儲存草稿／完成並建立計畫 -> {"saveDraft":0,"submit":0}
+PASS [狀態與權限] audit_viewer／Draft（AHB-DRAFT-1） | 下一步／上一步／步驟列 -> {"back1":0,"next1":1,"afterNext":2,"afterBack":1,"next5":0}
+PASS [狀態與權限] audit_viewer／Draft（AHB-DRAFT-1） | 列印（第 3/4/5 步）＋匯出 Word -> [1,1,1,1,1,1]
+PASS [狀態與權限] audit_viewer／Draft（AHB-DRAFT-1） | 第 5 步分類篩選／搜尋 -> {"chipDisabled":false,"searchDisabled":false}
+PASS [狀態與權限] audit_viewer／Draft（AHB-DRAFT-1） | 點擊鎖定中的 Fail ✕ -> 無變化
+觀察 [狀態與權限] audit_viewer／Draft（AHB-DRAFT-1） | 唯讀提示 -> 畫面沒有任何唯讀／已鎖定說明
+PASS [狀態與權限] audit_viewer／Draft（AHB-DRAFT-1） | 列印報告＋匯出 Word（唯讀） -> {"print":"report","calls":1,"file":"AHB-DRAFT-1.docx","zip":true}
+PASS [狀態與權限] audit_viewer／In Progress（AHB-EXPORT-1） | 編輯控制項（第 1–5 步欄位、Agenda 新增/刪除、模板、查檢項、Pass/Fail/!、備註、發現） -> {"step1":{"title":true,"project":true,"status":true,"startDate":true,"statusOptions":["In Progress","Completed","Void"]},"step2AllDisabled":true,"step3":{"addRow":false,"rowDelete":0,"rows":0,"inputsDisabled":true},"step4":{"chipDisabled":true,"taskDisabled":true,"plusDisabled":true,"items":5,"itemB
+PASS [狀態與權限] audit_viewer／In Progress（AHB-EXPORT-1） | 儲存草稿／完成並建立計畫 -> {"saveDraft":0,"submit":0}
+PASS [狀態與權限] audit_viewer／In Progress（AHB-EXPORT-1） | 下一步／上一步／步驟列 -> {"back1":0,"next1":1,"afterNext":2,"afterBack":1,"next5":0}
+PASS [狀態與權限] audit_viewer／In Progress（AHB-EXPORT-1） | 列印（第 3/4/5 步）＋匯出 Word -> [1,1,1,1,1,1]
+PASS [狀態與權限] audit_viewer／In Progress（AHB-EXPORT-1） | 第 5 步分類篩選／搜尋 -> {"chipDisabled":false,"searchDisabled":false}
+PASS [狀態與權限] audit_viewer／In Progress（AHB-EXPORT-1） | 點擊鎖定中的 Fail ✕ -> 無變化
+觀察 [狀態與權限] audit_viewer／In Progress（AHB-EXPORT-1） | 唯讀提示 -> 畫面沒有任何唯讀／已鎖定說明
+PASS [狀態與權限] audit_viewer／In Progress（AHB-EXPORT-1） | 列印報告＋匯出 Word（唯讀） -> {"print":"report","calls":1,"file":"AHB-EXPORT-1.docx","zip":true}
+PASS [狀態與權限] audit_viewer／Closed（AHB-CLOSED-1） | 編輯控制項（第 1–5 步欄位、Agenda 新增/刪除、模板、查檢項、Pass/Fail/!、備註、發現） -> {"step1":{"title":true,"project":true,"status":true,"startDate":true,"statusOptions":["Closed"]},"step2AllDisabled":true,"step3":{"addRow":false,"rowDelete":0,"rows":0,"inputsDisabled":true},"step4":{"chipDisabled":true,"taskDisabled":true,"plusDisabled":true,"items":1,"itemBtnsDisabled":true,"chipC
+PASS [狀態與權限] audit_viewer／Closed（AHB-CLOSED-1） | 儲存草稿／完成並建立計畫 -> {"saveDraft":0,"submit":0}
+PASS [狀態與權限] audit_viewer／Closed（AHB-CLOSED-1） | 下一步／上一步／步驟列 -> {"back1":0,"next1":1,"afterNext":2,"afterBack":1,"next5":0}
+PASS [狀態與權限] audit_viewer／Closed（AHB-CLOSED-1） | 列印（第 3/4/5 步）＋匯出 Word -> [1,1,1,1,1,1]
+PASS [狀態與權限] audit_viewer／Closed（AHB-CLOSED-1） | 第 5 步分類篩選／搜尋 -> {"chipDisabled":false,"searchDisabled":false}
+PASS [狀態與權限] audit_viewer／Closed（AHB-CLOSED-1） | 點擊鎖定中的 Fail ✕ -> 無變化
+觀察 [狀態與權限] audit_viewer／Closed（AHB-CLOSED-1） | 唯讀提示 -> 畫面沒有任何唯讀／已鎖定說明
+PASS [狀態與權限] audit_viewer／Closed（AHB-CLOSED-1） | 列印報告＋匯出 Word（唯讀） -> {"print":"report","calls":1,"file":"AHB-CLOSED-1.docx","zip":true}
+PASS [狀態與權限] audit_viewer／Void（AHB-VOID-1） | 編輯控制項（第 1–5 步欄位、Agenda 新增/刪除、模板、查檢項、Pass/Fail/!、備註、發現） -> {"step1":{"title":true,"project":true,"status":true,"startDate":true,"statusOptions":["Void"]},"step2AllDisabled":true,"step3":{"addRow":false,"rowDelete":0,"rows":0,"inputsDisabled":true},"step4":{"chipDisabled":true,"taskDisabled":true,"plusDisabled":true,"items":1,"itemBtnsDisabled":true,"chipCur
+PASS [狀態與權限] audit_viewer／Void（AHB-VOID-1） | 儲存草稿／完成並建立計畫 -> {"saveDraft":0,"submit":0}
+PASS [狀態與權限] audit_viewer／Void（AHB-VOID-1） | 下一步／上一步／步驟列 -> {"back1":0,"next1":1,"afterNext":2,"afterBack":1,"next5":0}
+PASS [狀態與權限] audit_viewer／Void（AHB-VOID-1） | 列印（第 3/4/5 步）＋匯出 Word -> [1,1,1,1,1,1]
+PASS [狀態與權限] audit_viewer／Void（AHB-VOID-1） | 第 5 步分類篩選／搜尋 -> {"chipDisabled":false,"searchDisabled":false}
+PASS [狀態與權限] audit_viewer／Void（AHB-VOID-1） | 點擊鎖定中的 Fail ✕ -> 無變化
+觀察 [狀態與權限] audit_viewer／Void（AHB-VOID-1） | 唯讀提示 -> 畫面沒有任何唯讀／已鎖定說明
+PASS [狀態與權限] audit_viewer／Void（AHB-VOID-1） | 列印報告＋匯出 Word（唯讀） -> {"print":"report","calls":1,"file":"AHB-VOID-1.docx","zip":true}
+PASS [狀態與權限] audit_viewer／清單 | 新增稽核 -> 1
+PASS [狀態與權限] audit_viewer／清單 | 刪除鈕（含 Void 列） -> {"all":10,"disabled":10,"voidTitle":"您沒有刪除稽核的權限"}
+PASS [狀態與權限] audit_viewer／API | DELETE Void 稽核 -> 403
+PASS [狀態與權限] audit_viewer／API | PUT 既有稽核 -> 403
+PASS [狀態與權限] audit_viewer／新稽核 | 新稽核可編輯 -> true
+PASS [狀態與權限] audit_viewer／新稽核 | 儲存草稿（首次建立） -> {"posts":1,"docNo":"QTS-NA-AUDIT-000007","notice":1,"saveDraft":0,"titleDisabled":true}
+PASS [狀態與權限] audit_viewer／新稽核 | ✕ 關閉 -> {"open":false,"modal":0}
+PASS [狀態與權限] audit_multi（限 2 專案） | 清單＋開啟 Draft -> {"rows":14,"legacy":false,"editable":true}
+
+PASS 173  FAIL 2  待確認 4  觀察 6  未測 0  SCRIPT-ERROR 0

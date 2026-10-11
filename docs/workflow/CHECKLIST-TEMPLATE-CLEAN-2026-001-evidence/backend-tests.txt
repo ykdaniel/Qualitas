@@ -1,0 +1,4 @@
+# CHECKLIST-TEMPLATE-CLEAN-2026-001 — local Python 3.14.6, 2026-10-10 20:15; base HEAD 127d187e + this task's files
+## new + isolation tests: 18 passed (test_checklist_template_cleanup.py 6, test_checklist_itr_isolation_integration.py 12)
+## test_itr*.py + test_checklist*.py: 420 passed in 350.22s, EXIT 0
+## test_checklist*.py + test_material_schema_migration.py (boots run_migrations incl. step 23): 240 passed, EXIT 0 (before the link_checklist change)

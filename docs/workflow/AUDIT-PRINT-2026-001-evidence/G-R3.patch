@@ -1,0 +1,845 @@
+diff --git a/backend/services/audit_service.py b/backend/services/audit_service.py
+index 4f789162..a0615cc6 100755
+--- a/backend/services/audit_service.py
++++ b/backend/services/audit_service.py
+@@ -404,7 +404,9 @@ class AuditService:
+         passed = sum(1 for i in items if i.get('status') == 'pass')
+         failed = sum(1 for i in items if i.get('status') == 'fail')
+         pending = total - passed - failed
+-        progress = 0 if total == 0 else round((total - pending) / total * 100)
++        # Percent rounded half up in integers (12.5 -> 13), the same formula as the wizard and its printouts
++        # (AUDIT-PRINT-2026-001): Python's round() rounds half to even, and in JavaScript a float product can land just under .5.
++        progress = 0 if total == 0 else (200 * (total - pending) + total) // (2 * total)
+ 
+         doc = db.new_document()
+         db.add_masthead(doc, "內部稽核報告", "INTERNAL AUDIT REPORT", doc_no=txt(audit.auditNo), status=txt(audit.status))
+diff --git a/backend/tests/test_audit_export_docx_http.py b/backend/tests/test_audit_export_docx_http.py
+index 29a0b74f..db55a484 100644
+--- a/backend/tests/test_audit_export_docx_http.py
++++ b/backend/tests/test_audit_export_docx_http.py
+@@ -143,6 +143,26 @@ def test_a_status_that_is_not_a_string_counts_as_pending(env):
+     assert '25%' in docx_text(response)  # 1 of 4 done, the other three pending
+ 
+ 
++def summary_values(response):
++    doc = Document(BytesIO(response.content))
++    summary = next(t for t in doc.tables if 'Total Items' in t.rows[0].cells[0].text)
++    values = {}
++    for row in summary.rows:
++        texts = [c.text for c in row.cells]
++        texts = [x for i, x in enumerate(texts) if i == 0 or x != texts[i - 1]]
++        values.update({texts[i].split('\n')[1]: texts[i + 1] for i in range(0, len(texts), 2)})
++    return values
++
++
++def test_progress_rounds_half_up_like_the_wizard(env):
++    # 1 of 8 done = 12.5 % -> 13 % (round() would give 12); 23 of 40 = 57.5 % -> 58 % (in JavaScript 23 / 40 * 100 is
++    # 57.4999..., so Math.round gave 57 — the wizard and the printouts now use the same integer formula)
++    for total, done, expected in [(8, 1, '13%'), (40, 23, '58%'), (3, 1, '33%'), (3, 2, '67%'), (6, 6, '100%')]:
++        items = [{'id': n, 'task': f'q{n}', 'status': 'pass' if n < done else None} for n in range(total)]
++        created = create(env, custom_check_items=items).json()
++        assert summary_values(export(env, created['id']))['Progress'] == expected, (total, done)
++
++
+ def test_characters_xml_cannot_carry_are_dropped_not_an_error(env):
+     audit_id = insert_raw(env, title='Ti\x01tle', findings='Line\x1fone\nLine two',
+                           custom_check_items='[{"id": 1, "no": "7.1", "clause": "Res\\u000bources", "task": "Q\\u0000?",'
+diff --git a/react-app/src/components/Audit/Audit.print.css b/react-app/src/components/Audit/Audit.print.css
+new file mode 100644
+index 00000000..37fa3c9a
+--- /dev/null
++++ b/react-app/src/components/Audit/Audit.print.css
+@@ -0,0 +1,141 @@
++/* Audit printouts (AUDIT-PRINT-2026-001) — report / plan / checklist in the formal NCR-style layout, mirroring the
++   OSD/NCR print CSS. Portal-mounted into <body> (sibling of #root) and shown only while printing; every rule is scoped
++   under .audit-print-root so the generic table/td/th selectors never leak into the app. The masthead lives in the
++   outer table's <thead> so the browser repeats it on every printed page.
++
++   Unlike the other modules' print CSS, the rest of <body> (#root, and the empty #itr-single-print-root index.html keeps
++   in front of us) is hidden only while an Audit printout is mounted (body:has(...)), so this file never blanks a plain
++   browser print of another page. Hiding the empty sibling matters: with a named page it would otherwise get a page of
++   its own (a blank first page). The page size / margins are a named page (@page audit); !important because another
++   module's unnamed @page (ITP landscape Letter, Checklist zero margins), once loaded, otherwise still wins the size. */
++
++:root {
++    --audit-ink: #1c1f24;
++    --audit-muted: #5b6068;
++    --audit-line: #9aa0a8;
++    --audit-line-soft: #c9ced4;
++    --audit-fill: #eef1f4;
++    --audit-fill-head: #dfe4ea;
++    --audit-accent: #0f766e;
++    --audit-status: #1f6f8b;
++    --audit-note: #7a818a;
++}
++
++.audit-print-root { display: none; }
++
++.audit-print-root {
++    page: audit;
++    font-family: "Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
++    color: var(--audit-ink);
++    font-size: 9.3px;
++    line-height: 1.5;
++    background: #fff;
++}
++.audit-print-root * { box-sizing: border-box; }
++
++.audit-print-root .audit-report { width: 100%; border-collapse: collapse; }
++.audit-print-root .head-cell,
++.audit-print-root .body-cell { border: none; padding: 0; text-align: left; font-weight: 400; }
++
++.audit-print-root .doc-head {
++    display: flex; align-items: stretch;
++    border-bottom: 2.2px solid var(--audit-ink);
++    padding-bottom: 6px; margin-bottom: 10px;
++}
++.audit-print-root .logo-box {
++    width: 78px; min-height: 46px;
++    border: 1px dashed var(--audit-line-soft);
++    display: flex; align-items: center; justify-content: center;
++    color: #b8bdc4; font-size: 9px; letter-spacing: 1px;
++}
++.audit-print-root .head-mid { flex: 1; padding: 2px 14px; }
++.audit-print-root .head-mid .co { font-size: 14px; font-weight: 700; letter-spacing: .5px; }
++.audit-print-root .head-mid .sub { font-size: 9.5px; color: var(--audit-muted); margin-top: 2px; }
++.audit-print-root .head-right { text-align: right; font-size: 9px; line-height: 1.6; min-width: 120px; }
++.audit-print-root .head-right .docno { font-weight: 700; font-size: 10px; letter-spacing: .3px; }
++.audit-print-root .head-right .unsaved { color: #b45309; font-weight: 700; font-size: 8.4px; }
++
++.audit-print-root .badge {
++    display: inline-block; padding: 1px 7px; border-radius: 2px;
++    font-weight: 700; font-size: 8.6px; letter-spacing: .4px; color: #fff;
++}
++.audit-print-root .b-status { background: var(--audit-status); }
++
++.audit-print-root .title {
++    text-align: center; font-size: 16px; font-weight: 700;
++    letter-spacing: 3px; margin: 4px 0 12px;
++}
++.audit-print-root .title .en {
++    font-size: 9px; font-weight: 500; letter-spacing: 2px;
++    color: var(--audit-muted); display: block; margin-top: 2px;
++}
++
++.audit-print-root .sec-head {
++    background: var(--audit-fill-head);
++    border-left: 3px solid var(--audit-accent);
++    padding: 3px 9px; font-weight: 700; font-size: 10px;
++    letter-spacing: .5px; margin: 11px 0 0;
++}
++.audit-print-root .sec-head.sec-head-sub { margin-top: 6px; }
++.audit-print-root .sec-head .en { font-weight: 500; color: var(--audit-muted); font-size: 8.6px; letter-spacing: .5px; }
++
++/* label / value grids: fixed layout so the value columns split the width evenly */
++.audit-print-root table { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: -1px; }
++.audit-print-root td, .audit-print-root th { border: 1px solid var(--audit-line); padding: 3px 6px; vertical-align: top; }
++.audit-print-root .val { word-break: break-word; white-space: pre-wrap; min-height: 14px; }
++.audit-print-root td.lbl {
++    background: var(--audit-fill); font-weight: 600;
++    width: 96px; color: #2a2e34;
++}
++.audit-print-root td.lbl small,
++.audit-print-root .items th small { display: block; color: var(--audit-note); font-weight: 500; font-size: 7.6px; letter-spacing: .2px; }
++.audit-print-root .blank { color: #aeb3ba; }
++
++/* checklist items: narrow #, most of the width for the question (same proportions as the Word export) */
++.audit-print-root .items th { background: var(--audit-fill); font-weight: 600; text-align: left; }
++.audit-print-root .items td { white-space: pre-wrap; word-break: break-word; }
++.audit-print-root .items .c-n { width: 5%; text-align: center; }
++.audit-print-root .items .c-no { width: 10%; }
++.audit-print-root .items .c-q { width: 36%; }
++.audit-print-root .items .c-r { width: 13%; }
++.audit-print-root .items .c-m { width: 24%; }
++.audit-print-root .items .c-d { width: 12%; }
++.audit-print-root .items .clause { font-weight: 600; }
++.audit-print-root .checklist-items .c-q { width: 42%; }
++.audit-print-root .checklist-items .c-r { width: 17%; }
++.audit-print-root .checklist-items .c-m { width: 26%; }
++.audit-print-root .checklist-items td { height: 46px; }
++.audit-print-root .checklist-items .boxes { white-space: nowrap; font-size: 8.6px; line-height: 1.7; }
++
++.audit-print-root .field-box { border: 1px solid var(--audit-line); min-height: 34px; padding: 4px 6px; white-space: pre-wrap; word-break: break-word; }
++.audit-print-root .field-box.fb-tall { min-height: 70px; }
++.audit-print-root .guide { color: #aeb3ba; font-style: italic; }
++
++/* sign-off (mirrors the NCR/OSD reports) */
++.audit-print-root .sign-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 4px; }
++.audit-print-root .sign-grid.three { grid-template-columns: 1fr 1fr 1fr; }
++.audit-print-root .sign-cell { border: 1px solid var(--audit-line); padding: 6px 8px 7px; }
++.audit-print-root .sign-cell .role { font-weight: 700; font-size: 9px; }
++.audit-print-root .sign-cell .role .en { color: var(--audit-muted); font-weight: 500; font-size: 7.6px; }
++.audit-print-root .sign-line { border-bottom: 1px solid var(--audit-ink); height: 24px; margin: 6px 0 4px; }
++.audit-print-root .sign-meta { display: flex; justify-content: space-between; font-size: 8px; color: var(--audit-muted); }
++.audit-print-root .sign-meta span { flex: 1; }
++
++/* keep rows / boxes intact across page breaks */
++.audit-print-root tr,
++.audit-print-root .sign-cell,
++.audit-print-root .field-box { break-inside: avoid; page-break-inside: avoid; }
++.audit-print-root .sec-head { break-after: avoid; page-break-after: avoid; }
++
++@page audit { size: A4 portrait !important; margin: 13mm 12mm !important; }
++
++@media print {
++    body:has(> .audit-print-root) > :not(.audit-print-root) { display: none !important; }
++    .audit-print-root { display: block !important; }
++    .audit-print-root .audit-report > thead,
++    .audit-print-root .items > thead { display: table-header-group; }
++    .audit-print-root * {
++        -webkit-print-color-adjust: exact !important;
++        print-color-adjust: exact !important;
++    }
++}
+diff --git a/react-app/src/components/Audit/AuditPrintTemplate.tsx b/react-app/src/components/Audit/AuditPrintTemplate.tsx
+new file mode 100644
+index 00000000..df4dd25a
+--- /dev/null
++++ b/react-app/src/components/Audit/AuditPrintTemplate.tsx
+@@ -0,0 +1,308 @@
++import React from 'react';
++import { val, SignCell, DASH } from '../Shared/PrintPrimitives';
++
++/**
++ * Audit printouts (AUDIT-PRINT-2026-001) — the formal NCR-style layout, portal-mounted into <body> so @media print can show
++ * it while #root is hidden (printing the wizard itself came out blank once another module's print CSS had been loaded,
++ * since those hide #root unconditionally). Styling lives in Audit.print.css, scoped under .audit-print-root.
++ *
++ * - report:    the same six sections, labels and values as the Word export (backend audit_service.export_docx) —
++ *              keep the two in step.
++ * - plan:      sections 1-3 of the report plus a plan sign-off.
++ * - checklist: audit identity plus the items with blank result / remarks columns, for use on site.
++ *
++ * Prints what is on screen (the wizard's current form), unlike the Word export, which reads the saved record; unsaved
++ * changes are flagged in the masthead.
++ */
++export type AuditPrintKind = 'report' | 'plan' | 'checklist';
++
++export interface AuditPrintData {
++    auditNo: string;
++    status: string;
++    title: string;
++    projectLabel: string;
++    contractor: string;
++    startDate: string;
++    endDate: string;
++    location: string;
++    projectDirector: string;
++    techLead: string;
++    leadAuditor: string;
++    supportAuditors: string;
++    auditCriteria: string;
++    scopeDescription: string;
++    selectedTemplates: unknown[];
++    customCheckItems: unknown[];
++    findings: string;
++}
++
++interface AuditPrintTemplateProps {
++    kind: AuditPrintKind;
++    data: AuditPrintData;
++    unsaved?: boolean;
++}
++
++const TITLES: Record<AuditPrintKind, [string, string]> = {
++    report: ['內部稽核報告', 'INTERNAL AUDIT REPORT'],
++    plan: ['內部稽核計畫', 'INTERNAL AUDIT PLAN'],
++    checklist: ['稽核查檢表', 'AUDIT CHECKLIST'],
++};
++// Same wording as the Word export (_STATUS_TEXT / _RESULT_TEXT in audit_service.py).
++const STATUS_TEXT: Record<string, string> = {
++    'Draft': '草稿 Draft', 'Planned': '計畫中 Planned', 'In Progress': '進行中 In Progress',
++    'Completed': '已完成 Completed', 'Closed': '已關閉 Closed', 'Void': '作廢 Void',
++};
++const RESULT_TEXT: Record<string, string> = { pass: '符合 Pass', fail: '不符合 Fail', pending: '注意／待改善 Attention' };
++
++// Completion percent rounded half up in integers (12.5 -> 13): the wizard's statistics card, these printouts and the Word
++// export all use this formula — Math.round(done / total * 100) gave 57 for 23 of 40 (the float is 57.4999...).
++export const auditProgress = (total: number, pending: number) =>
++    total === 0 ? 0 : Math.floor((200 * (total - pending) + total) / (2 * total));
++
++type CheckItem = { no?: unknown; clause?: unknown; task?: unknown; status?: unknown; note?: unknown; updatedAt?: unknown };
++
++// Whitespace-only counts as empty, as in the Word export.
++const clean = (v: unknown): string | undefined => {
++    if (v === null || v === undefined) return undefined;
++    const s = String(v);
++    return s.trim() ? s : undefined;
++};
++
++const AuditPrintTemplate: React.FC<AuditPrintTemplateProps> = ({ kind, data, unsaved = false }) => {
++    const items = data.customCheckItems.filter((i): i is CheckItem => !!i && typeof i === 'object' && !Array.isArray(i));
++    const templates = data.selectedTemplates.filter((t): t is string => typeof t === 'string' && !!t.trim());
++    // Same counting as the wizard's statistics cards and the Word export: anything not pass / fail is pending.
++    const total = items.length;
++    const passed = items.filter(i => i.status === 'pass').length;
++    const failed = items.filter(i => i.status === 'fail').length;
++    const pending = total - passed - failed;
++    const progress = auditProgress(total, pending);
++    const resultText = (s: unknown) => RESULT_TEXT[typeof s === 'string' ? s : ''] || RESULT_TEXT.pending;
++    const [titleZh, titleEn] = TITLES[kind];
++    // Clause (bold) over the question; a single dash only when both are empty — the Word cell joins the two the same way.
++    const questionCell = (item: CheckItem) => {
++        const clause = clean(item.clause), task = clean(item.task);
++        if (!clause && !task) return DASH;
++        return <>{clause && <div className="clause">{clause}</div>}{task && <div>{task}</div>}</>;
++    };
++
++    const infoSection = (
++        <>
++            <div className="sec-head">1. 稽核資訊 <span className="en">Audit Information</span></div>
++            <table>
++                <tbody>
++                    <tr>
++                        <td className="lbl">稽核編號<small>Audit No.</small></td><td className="val">{val(clean(data.auditNo))}</td>
++                        <td className="lbl">狀態<small>Status</small></td><td className="val">{val(STATUS_TEXT[data.status] || clean(data.status))}</td>
++                    </tr>
++                    <tr>
++                        <td className="lbl">稽核標題<small>Audit Title</small></td><td className="val" colSpan={3}>{val(clean(data.title))}</td>
++                    </tr>
++                    <tr>
++                        <td className="lbl">專案<small>Project</small></td><td className="val">{val(clean(data.projectLabel))}</td>
++                        <td className="lbl">受稽核廠商<small>Auditee / Contractor</small></td><td className="val">{val(clean(data.contractor))}</td>
++                    </tr>
++                    <tr>
++                        <td className="lbl">開始日期<small>Start Date</small></td><td className="val">{val(clean(data.startDate))}</td>
++                        <td className="lbl">結束日期<small>End Date</small></td><td className="val">{val(clean(data.endDate))}</td>
++                    </tr>
++                    <tr>
++                        <td className="lbl">稽核地點<small>Location</small></td><td className="val" colSpan={3}>{val(clean(data.location))}</td>
++                    </tr>
++                </tbody>
++            </table>
++        </>
++    );
++
++    const teamSection = (
++        <>
++            <div className="sec-head">2. 稽核團隊 <span className="en">Audit Team</span></div>
++            <table>
++                <tbody>
++                    <tr>
++                        <td className="lbl">專案經理<small>Project Director</small></td><td className="val">{val(clean(data.projectDirector))}</td>
++                        <td className="lbl">工作包／技術負責人<small>Package / Tech. Lead</small></td><td className="val">{val(clean(data.techLead))}</td>
++                    </tr>
++                    <tr>
++                        <td className="lbl">主任稽核員<small>Lead Auditor</small></td><td className="val">{val(clean(data.leadAuditor))}</td>
++                        <td className="lbl">協同稽核員<small>Support Auditor(s)</small></td><td className="val">{val(clean(data.supportAuditors))}</td>
++                    </tr>
++                </tbody>
++            </table>
++        </>
++    );
++
++    const scopeSection = (
++        <>
++            <div className="sec-head">3. 稽核範圍與準則 <span className="en">Scope &amp; Criteria</span></div>
++            <table>
++                <tbody>
++                    <tr>
++                        <td className="lbl">稽核準則<small>Audit Criteria</small></td><td className="val" colSpan={3}>{val(clean(data.auditCriteria))}</td>
++                    </tr>
++                    <tr>
++                        <td className="lbl">選用模板<small>Templates</small></td><td className="val" colSpan={3}>{val(clean(templates.join('、')))}</td>
++                    </tr>
++                </tbody>
++            </table>
++            <div className="sec-head sec-head-sub">3.1 範圍描述 <span className="en">Audit Scope</span></div>
++            <div className="field-box">{clean(data.scopeDescription) || <span className="guide">說明本次稽核涵蓋之部門、流程、作業與地點</span>}</div>
++        </>
++    );
++
++    return (
++        <div className="audit-print-root" data-print-kind={kind}>
++            <table className="audit-report">
++                <thead>
++                    <tr>
++                        <th className="head-cell">
++                            <div className="doc-head">
++                                <div className="logo-box">LOGO</div>
++                                <div className="head-mid">
++                                    <div className="co">［ 公司名稱 Company Name ］</div>
++                                    <div className="sub">品質管理 — Quality Management</div>
++                                </div>
++                                <div className="head-right">
++                                    <div className="docno">{clean(data.auditNo) || '(自動 auto)'}</div>
++                                    <div>版次 Rev：{DASH}</div>
++                                    <div>狀態 <span className="badge b-status">{(data.status || '').toUpperCase() || DASH}</span></div>
++                                    {unsaved && <div className="unsaved">含未儲存的修改 Unsaved changes</div>}
++                                </div>
++                            </div>
++                            <div className="title">{titleZh}<span className="en">{titleEn}</span></div>
++                        </th>
++                    </tr>
++                </thead>
++                <tbody>
++                    <tr>
++                        <td className="body-cell">
++                            {kind === 'checklist' ? (
++                                <>
++                                    <div className="sec-head">1. 稽核資訊 <span className="en">Audit Information</span></div>
++                                    <table>
++                                        <tbody>
++                                            <tr>
++                                                <td className="lbl">稽核編號<small>Audit No.</small></td><td className="val">{val(clean(data.auditNo))}</td>
++                                                <td className="lbl">專案<small>Project</small></td><td className="val">{val(clean(data.projectLabel))}</td>
++                                            </tr>
++                                            <tr>
++                                                <td className="lbl">受稽核廠商<small>Auditee / Contractor</small></td><td className="val">{val(clean(data.contractor))}</td>
++                                                <td className="lbl">稽核地點<small>Location</small></td><td className="val">{val(clean(data.location))}</td>
++                                            </tr>
++                                            <tr>
++                                                <td className="lbl">稽核日期<small>Audit Date</small></td>
++                                                <td className="val">{val([clean(data.startDate), clean(data.endDate)].filter(Boolean).join(' ~ ') || undefined)}</td>
++                                                <td className="lbl">主任稽核員<small>Lead Auditor</small></td><td className="val">{val(clean(data.leadAuditor))}</td>
++                                            </tr>
++                                        </tbody>
++                                    </table>
++                                    <div className="sec-head">2. 查檢項目 <span className="en">Audit Items</span></div>
++                                    {items.length > 0 ? (
++                                        <table className="items checklist-items">
++                                            <thead>
++                                                <tr>
++                                                    <th className="c-n">#</th><th className="c-no">條文編號<small>Clause No.</small></th>
++                                                    <th className="c-q">條文與查檢重點<small>Clause &amp; Audit Question</small></th>
++                                                    <th className="c-r">結果<small>Result</small></th><th className="c-m">備註<small>Remarks</small></th>
++                                                </tr>
++                                            </thead>
++                                            <tbody>
++                                                {items.map((item, n) => (
++                                                    <tr key={n}>
++                                                        <td className="c-n">{n + 1}</td>
++                                                        <td className="c-no">{clean(item.no) || DASH}</td>
++                                                        <td className="c-q">{questionCell(item)}</td>
++                                                        <td className="c-r boxes"><div>☐ 符合 Pass</div><div>☐ 不符合 Fail</div><div>☐ 注意 Attention</div></td>
++                                                        <td className="c-m" />
++                                                    </tr>
++                                                ))}
++                                            </tbody>
++                                        </table>
++                                    ) : (
++                                        <div className="field-box"><span className="guide">（尚無查檢項目 No audit items）</span></div>
++                                    )}
++                                    <div className="sec-head">3. 簽核 <span className="en">Sign-off</span></div>
++                                    <div className="sign-grid">
++                                        <SignCell num="3.1" zh="主任稽核員" en="Lead Auditor" name={clean(data.leadAuditor)} />
++                                        <SignCell num="3.2" zh="受稽核方代表" en="Auditee Representative" />
++                                    </div>
++                                </>
++                            ) : (
++                                <>
++                                    {infoSection}
++                                    {teamSection}
++                                    {scopeSection}
++                                    {kind === 'report' ? (
++                                        <>
++                                            <div className="sec-head">4. 查檢結果 <span className="en">Checklist Results</span></div>
++                                            <table>
++                                                <tbody>
++                                                    <tr>
++                                                        <td className="lbl">查檢項目數<small>Total Items</small></td><td className="val">{total}</td>
++                                                        <td className="lbl">完成率<small>Progress</small></td><td className="val">{progress}%</td>
++                                                    </tr>
++                                                    <tr>
++                                                        <td className="lbl">符合<small>Pass</small></td><td className="val">{passed}</td>
++                                                        <td className="lbl">不符合<small>Fail</small></td><td className="val">{failed}</td>
++                                                    </tr>
++                                                    <tr>
++                                                        <td className="lbl">注意／待改善<small>Attention / Pending</small></td><td className="val" colSpan={3}>{pending}</td>
++                                                    </tr>
++                                                </tbody>
++                                            </table>
++                                            <div className="sec-head sec-head-sub">4.1 查檢明細 <span className="en">Audit Items</span></div>
++                                            {items.length > 0 ? (
++                                                <table className="items">
++                                                    <thead>
++                                                        <tr>
++                                                            <th className="c-n">#</th><th className="c-no">條文編號<small>Clause No.</small></th>
++                                                            <th className="c-q">條文與查檢重點<small>Clause &amp; Audit Question</small></th>
++                                                            <th className="c-r">結果<small>Result</small></th><th className="c-m">備註<small>Remarks</small></th>
++                                                            <th className="c-d">更新日期<small>Updated</small></th>
++                                                        </tr>
++                                                    </thead>
++                                                    <tbody>
++                                                        {items.map((item, n) => (
++                                                            <tr key={n}>
++                                                                <td className="c-n">{n + 1}</td>
++                                                                <td className="c-no">{clean(item.no) || DASH}</td>
++                                                                <td className="c-q">{questionCell(item)}</td>
++                                                                <td className="c-r">{resultText(item.status)}</td>
++                                                                <td className="c-m">{clean(item.note) || DASH}</td>
++                                                                <td className="c-d">{clean(item.updatedAt) || DASH}</td>
++                                                            </tr>
++                                                        ))}
++                                                    </tbody>
++                                                </table>
++                                            ) : (
++                                                <div className="field-box"><span className="guide">（尚無查檢項目 No audit items）</span></div>
++                                            )}
++                                            <div className="sec-head">5. 稽核發現與總結 <span className="en">Findings &amp; Summary</span></div>
++                                            <div className="field-box fb-tall">{clean(data.findings) || <span className="guide">記錄稽核發現、不符合事項與總結</span>}</div>
++                                            <div className="sec-head">6. 簽核 <span className="en">Sign-off</span></div>
++                                            <div className="sign-grid three">
++                                                <SignCell num="6.1" zh="主任稽核員" en="Lead Auditor" name={clean(data.leadAuditor)} />
++                                                <SignCell num="6.2" zh="受稽核方代表" en="Auditee Representative" />
++                                                <SignCell num="6.3" zh="專案經理" en="Project Director" name={clean(data.projectDirector)} />
++                                            </div>
++                                        </>
++                                    ) : (
++                                        <>
++                                            <div className="sec-head">4. 計畫簽核 <span className="en">Plan Sign-off</span></div>
++                                            <div className="sign-grid">
++                                                <SignCell num="4.1" zh="主任稽核員" en="Lead Auditor" name={clean(data.leadAuditor)} />
++                                                <SignCell num="4.2" zh="專案經理" en="Project Director" name={clean(data.projectDirector)} />
++                                            </div>
++                                        </>
++                                    )}
++                                </>
++                            )}
++                        </td>
++                    </tr>
++                </tbody>
++            </table>
++        </div>
++    );
++};
++
++export default AuditPrintTemplate;
+diff --git a/react-app/src/components/Audit/AuditWizard.tsx b/react-app/src/components/Audit/AuditWizard.tsx
+index c0853e89..c745396c 100755
+--- a/react-app/src/components/Audit/AuditWizard.tsx
++++ b/react-app/src/components/Audit/AuditWizard.tsx
+@@ -2,6 +2,7 @@ import { useDraftGuard, useItemDraftGuard } from '../Shared/LeaveGuard';
+ import FormActions from '../Shared/FormActions';
+ import actionStyles from '../Shared/FormActions.module.css';
+ import React, { useState, useMemo } from 'react';
++import { createPortal } from 'react-dom';
+ import { toast } from 'sonner';
+ import {
+   MapPin, ClipboardList, CheckCircle, ChevronRight, ChevronLeft,
+@@ -14,6 +15,8 @@ import { useProjectStore } from '../../store/projectStore';
+ import { useLanguage } from '../../context/LanguageContext';
+ import { checkDateOrder } from '../../utils/dateValidation';
+ import { exportAuditDocx } from '../../services/api';
++import AuditPrintTemplate, { AuditPrintKind, AuditPrintData, auditProgress } from './AuditPrintTemplate';
++import './Audit.print.css';
+ 
+ // Today as YYYY-MM-DD in the browser's time zone (toISOString() is UTC: the previous day before 08:00 in Taiwan).
+ const localToday = () => {
+@@ -107,6 +110,18 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+   const [isDraftSaving, setIsDraftSaving] = useState(false);
+   const [draftMessage, setDraftMessage] = useState('');
+   const [exportingDocx, setExportingDocx] = useState(false);
++  // The three print buttons render a formal printout (AuditPrintTemplate) into <body> and print that, instead of the
++  // wizard itself (AUDIT-PRINT-2026-001); cleared again after the print dialog closes. `n` makes every click a new job, so
++  // a button still works if a browser never fired afterprint for the previous one.
++  const [printJob, setPrintJob] = useState<{ kind: AuditPrintKind; n: number } | null>(null);
++  const requestPrint = (kind: AuditPrintKind) => setPrintJob(prev => ({ kind, n: (prev?.n ?? 0) + 1 }));
++  React.useEffect(() => {
++    if (!printJob) return;
++    const timer = setTimeout(() => window.print(), 200);
++    const onAfterPrint = () => setPrintJob(null);
++    window.addEventListener('afterprint', onAfterPrint);
++    return () => { clearTimeout(timer); window.removeEventListener('afterprint', onAfterPrint); };
++  }, [printJob]);
+ 
+   const [step, setStep] = useState(1);
+   const [formData, setFormData] = useState({
+@@ -221,7 +236,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+     const passed = formData.customCheckItems.filter((i: any) => i.status === 'pass').length;
+     const failed = formData.customCheckItems.filter((i: any) => i.status === 'fail').length;
+     const pending = total - passed - failed; // The "!" status is treated as pending or warning
+-    const progress = total === 0 ? 0 : Math.round(((total - pending) / total) * 100);
++    const progress = auditProgress(total, pending);
+     return { total, passed, failed, pending, progress };
+   }, [formData.customCheckItems]);
+ 
+@@ -450,6 +465,32 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+     }
+   };
+ 
++  // What the printouts show: the form as it is on screen (the Word export reads the saved record instead).
++  const printData: AuditPrintData = {
++    auditNo,
++    status: formData.status,
++    title: formData.auditTitle,
++    // Same label as the Word export and the project picker: "[code] name", or the legacy name when no project is linked.
++    projectLabel: (() => {
++      const project = projectList.find(p => p.id === selectedProjectId);
++      return project ? (project.code ? `[${project.code}] ${project.name}` : project.name) : formData.projectName;
++    })(),
++    // Legacy rows may hold only the contractor id; the Word export then falls back to the contractor's name too.
++    contractor: formData.contractor || contractorOptions.find(c => c.id === formData.vendorId)?.name || '',
++    startDate: formData.auditStartDate,
++    endDate: formData.auditEndDate,
++    location: formData.location,
++    projectDirector: formData.projectDirector,
++    techLead: formData.techLead,
++    leadAuditor: formData.leadAuditor,
++    supportAuditors: formData.supportAuditors,
++    auditCriteria: formData.auditCriteria,
++    scopeDescription: formData.scopeDescription,
++    selectedTemplates: formData.selectedTemplates,
++    customCheckItems: formData.customCheckItems,
++    findings: formData.findings,
++  };
++
+   const renderProgressBar = () => (
+     // px-10: each label is centred under its circle and wider than it, so the first and last labels hang ~36px past the
+     // circles — the padding keeps them inside the wizard at every width (AUDIT-LAYOUT R2).
+@@ -484,8 +525,10 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+   );
+ 
+   return (
+-    // print: the wizard is a fixed, internally scrolling overlay — printed as is, only the first screenful came out (one
+-    // page, the rest cut off). In print it becomes normal flow so the browser paginates it; Audit.tsx hides the page behind.
++    <>
++    {/* print: the wizard is a fixed, internally scrolling overlay — printed as is (browser print menu, no printout
++        mounted), only the first screenful came out. In print it becomes normal flow so the browser paginates it;
++        Audit.tsx hides the page behind. */}
+     <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto py-8 px-4 md:px-8 flex justify-center items-start pt-10 print:static print:overflow-visible print:block print:p-0 print:bg-white">
+       <div className="w-full max-w-[1400px]">
+         <div className="flex justify-between items-center mb-6 no-print">
+@@ -609,7 +652,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                     <Users className="text-teal-600" size={24} />
+                     <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.stepPersonnelScope')}</h2>
+                   </div>
+-                  <button className={actionStyles.secondary} type="button" onClick={() => window.print()}>
++                  <button className={actionStyles.secondary} type="button" onClick={() => requestPrint('plan')}>
+                     <Printer className="w-4 h-4" /> {t('audit.wizard.printPlan')}
+                   </button>
+                 </div>
+@@ -743,7 +786,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                     <CheckSquare className="text-teal-600" size={24} />
+                     <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.step4')} Checklist</h2>
+                   </div>
+-                  <button className={actionStyles.secondary} type="button" onClick={() => window.print()}>
++                  <button className={actionStyles.secondary} type="button" onClick={() => requestPrint('checklist')}>
+                     <Printer className="w-4 h-4" /> {t('audit.wizard.printChecklist')}
+                   </button>
+                 </div>
+@@ -882,7 +925,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                   </div>
+                   
+                   <div className="flex items-center gap-3 no-print">
+-                    <button className={actionStyles.secondary} type="button" onClick={() => window.print()}>
++                    <button className={actionStyles.secondary} type="button" onClick={() => requestPrint('report')}>
+                       <Printer className="w-4 h-4" /> {t('audit.wizard.printReport')}
+                     </button>
+                     {/* Needs a saved record (the export reads it from the server). */}
+@@ -1145,6 +1188,8 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+         </div>
+       </div>
+     </div>
++    {printJob && createPortal(<AuditPrintTemplate key={printJob.n} kind={printJob.kind} data={printData} unsaved={leaveGuard.dirty} />, document.body)}
++    </>
+   );
+ };
+ 
+diff --git a/react-app/tests-browser/audit-print-template-check.mjs b/react-app/tests-browser/audit-print-template-check.mjs
+new file mode 100644
+index 00000000..aeddefd4
+--- /dev/null
++++ b/react-app/tests-browser/audit-print-template-check.mjs
+@@ -0,0 +1,201 @@
++// AUDIT-PRINT-2026-001 browser checks (isolated stack only; seeds: seed_audit_hardening_b_review.py then
++// seed_audit_export_docx_review.py). Usage: node audit-print-template-check.mjs <stack.json> <outDir>
++// window.print is stubbed (counted, never opened); the printout is inspected under print media emulation.
++import { chromium } from '/Users/nook/Documents/Qualitas/react-app/node_modules/playwright/index.mjs';
++import { readFileSync, mkdirSync } from 'node:fs';
++import { inflateSync } from 'node:zlib';
++const stack = JSON.parse(readFileSync(process.argv[2], 'utf8'));
++const out = process.argv[3]; mkdirSync(out, { recursive: true });
++const UI = `http://127.0.0.1:${stack.vite_port}`, PW = 'Accept-Test-1234';
++let failures = 0;
++const result = (name, ok, extra = '') => { if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${extra ? '  -> ' + String(extra).replace(/\s+/g, ' ').slice(0, 400) : ''}`); };
++const squash = s => s.replace(/\s+/g, '');
++// (R3) The printed PDF itself: pages in order with size (pt) and whether the page draws any text. Chromium writes plain
++// (non object-stream) PDFs with Flate content streams, so a small reader is enough: page tree Kids -> MediaBox + Contents.
++function pdfPages(path) {
++  const pdf = readFileSync(path), text = pdf.toString('latin1');
++  const obj = n => { const m = new RegExp(`(?:^|\\s)${n} 0 obj`).exec(text); return m ? text.slice(m.index, text.indexOf('endobj', m.index)) : ''; };
++  const stream = n => {
++    const m = new RegExp(`(?:^|\\s)${n} 0 obj`).exec(text); const start = text.indexOf('stream', m.index) + 6;
++    const from = start + (text[start] === '\r' ? 2 : 1); const end = text.indexOf('endstream', from);
++    const raw = pdf.subarray(from, end); try { return inflateSync(raw).toString('latin1'); } catch { return raw.toString('latin1'); }
++  };
++  const root = /\/Root (\d+) 0 R/.exec(text)[1];
++  const kidsOf = n => { const k = /\/Kids\s*\[([^\]]*)\]/.exec(obj(n)); return k ? [...k[1].matchAll(/(\d+) 0 R/g)].map(x => x[1]) : []; };
++  const pages = [];
++  const walk = n => { const o = obj(n); if (/\/Type\s*\/Pages/.test(o)) kidsOf(n).forEach(walk); else pages.push(n); };
++  walk(/\/Pages (\d+) 0 R/.exec(obj(root))[1]);
++  return pages.map(n => {
++    const o = obj(n); const box = (/\/MediaBox\s*\[([^\]]*)\]/.exec(o) || [, ''])[1].trim().split(/\s+/).map(Number);
++    const contents = [...((/\/Contents\s*(\[[^\]]*\]|\d+ 0 R)/.exec(o) || [, ''])[1]).matchAll(/(\d+) 0 R/g)].map(x => x[1]);
++    return { w: Math.round(box[2] - box[0]), h: Math.round(box[3] - box[1]), text: contents.some(c => /T[Jj]\b/.test(stream(c))) };
++  });
++}
++const isA4Portrait = pg => Math.abs(pg.w - 595) <= 2 && Math.abs(pg.h - 842) <= 2;
++const browser = await chromium.launch({ headless: true });
++const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
++await ctx.addInitScript(() => { localStorage.setItem('language', 'zh'); window.__printed = 0; window.print = () => { window.__printed++; }; });
++const p = await ctx.newPage();
++await p.goto(UI + '/login'); await p.fill('#email', 'audit_full'); await p.fill('#password', PW); await p.click('button[type=submit]');
++await p.waitForURL(u => !u.pathname.startsWith('/login'), { timeout: 15000 });
++
++// The scenario that used to print a blank page: another module's print CSS (#root hidden in print) loaded first, SPA only.
++await p.goto(UI + '/ncr'); await p.waitForTimeout(2500);
++const spa = async path => { await p.evaluate(u => { history.pushState({}, '', u); dispatchEvent(new PopStateEvent('popstate')); }, path); };
++// (R3) also ITP and Checklist, whose unnamed @page (Letter landscape, zero margins) used to win over Audit's page size
++await spa('/itp'); await p.waitForTimeout(2000);
++await spa('/checklist'); await p.waitForTimeout(2000);
++await spa('/audit?openId=ahb-export-1');
++await p.waitForSelector('input[name=auditDocNo]', { timeout: 15000 });
++const ncrRuleLoaded = await p.evaluate(() => [...document.styleSheets].some(s => { try { return [...s.cssRules].some(r => /#root/.test(r.cssText) && /none/.test(r.cssText) && !/has\(/.test(r.cssText)); } catch { return false; } }));
++result('setup: another module\'s unconditional #root print rule is loaded (old blank-page condition)', ncrRuleLoaded);
++
++const step = async n => { await p.locator('.max-w-4xl button').nth(n - 1).click(); await p.waitForTimeout(500); };
++async function printOut(n, label, kind) {
++  await step(n);
++  const before = await p.evaluate(() => window.__printed);
++  await p.locator('button', { hasText: label }).first().click();
++  await p.waitForTimeout(600);
++  await p.emulateMedia({ media: 'print' });
++  const state = await p.evaluate(k => {
++    const root = document.querySelector('.audit-print-root');
++    return {
++      printed: window.__printed, kind: root?.dataset.printKind, inBody: root?.parentElement === document.body,
++      rootHidden: getComputedStyle(document.getElementById('root')).display === 'none',
++      shown: root ? getComputedStyle(root).display : null, text: root?.innerText || '',
++      buttons: root ? root.querySelectorAll('button, svg').length : -1, k,
++    };
++  }, kind);
++  // preferCSSPageSize: the page size / margins come from the CSS (@page audit), as in a real print, not from Playwright
++  await p.pdf({ path: `${out}/print-${kind}.pdf`, preferCSSPageSize: true, printBackground: true });
++  state.pdf = pdfPages(`${out}/print-${kind}.pdf`);
++  await p.screenshot({ path: `${out}/print-${kind}.png`, fullPage: true });
++  await p.emulateMedia({ media: 'screen' });
++  await p.evaluate(() => dispatchEvent(new Event('afterprint')));
++  await p.waitForTimeout(300);
++  const unmounted = await p.evaluate(() => !document.querySelector('.audit-print-root'));
++  return { ...state, before, unmounted };
++}
++
++// 1-3. each button prints its own formal printout, outside #root, never blank, no buttons / icons, removed afterwards
++const plan = await printOut(2, /列印稽核計畫/, 'plan');
++const checklist = await printOut(3, /列印查檢表/, 'checklist');
++const report = await printOut(4, /列印報告/, 'report');
++for (const [kind, r] of [['plan', plan], ['checklist', checklist], ['report', report]]) {
++  result(`${kind}: print called once, printout in <body>, #root hidden, printout visible, no buttons/icons, removed after print`,
++    r.printed === r.before + 1 && r.kind === kind && r.inBody && r.rootHidden && r.shown === 'block' && r.buttons === 0 && r.unmounted,
++    JSON.stringify({ ...r, text: undefined }));
++}
++// (R3) the actual PDFs: no blank page (the first page used to be an empty sibling of the printout), every page A4 portrait
++// although ITP's and Checklist's @page rules are loaded
++for (const [kind, r, minPages] of [['plan', plan, 1], ['checklist', checklist, 1], ['report', report, 2]]) {
++  result(`${kind} PDF: ${r.pdf.length} page(s), every page has text, all A4 portrait`, r.pdf.length >= minPages && r.pdf.every(pg => pg.text) && r.pdf.every(isA4Portrait),
++    JSON.stringify(r.pdf));
++}
++result('plan: title + sections 1-3 + plan sign-off, no results', /內部稽核計畫/.test(plan.text) && /3\. 稽核範圍與準則/.test(plan.text)
++  && /4\. 計畫簽核/.test(plan.text) && !/查檢結果|符合 Pass/.test(plan.text), plan.text.slice(0, 300));
++result('checklist: title, 5 items with blank result boxes, no recorded results or remarks',
++  /稽核查檢表/.test(checklist.text) && (checklist.text.match(/☐ 符合 Pass/g) || []).length === 5
++  && !/人力配置表已核准|待補年度稽核計畫/.test(checklist.text) && !/(^|[^☐] )(符合|不符合) (Pass|Fail)/m.test(checklist.text.replace(/☐ /g, '☐'))
++  && /現場材料標示是否清楚/.test(checklist.text), checklist.text.slice(0, 300));
++
++// 4. the report printout carries everything the Word export carries (every cell / paragraph text of the .docx)
++const wordTexts = await p.evaluate(async () => {
++  const r = await fetch('/api/audit/ahb-export-1/export-docx', { credentials: 'include' });
++  const bin = new Uint8Array(await r.arrayBuffer()); const dv = new DataView(bin.buffer); let off = 0, xml = null;
++  while (off < bin.length - 30 && dv.getUint32(off, true) === 0x04034b50) {
++    const method = dv.getUint16(off + 8, true), csize = dv.getUint32(off + 18, true), nlen = dv.getUint16(off + 26, true), elen = dv.getUint16(off + 28, true);
++    const name = new TextDecoder().decode(bin.subarray(off + 30, off + 30 + nlen)); const start = off + 30 + nlen + elen;
++    if (name === 'word/document.xml') { const data = bin.subarray(start, start + csize); xml = method === 8 ? await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text() : new TextDecoder().decode(data); break; }
++    off = start + csize;
++  }
++  const doc = new DOMParser().parseFromString(xml, 'application/xml'); const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
++  return [...doc.getElementsByTagNameNS(W, 'p')].map(p => [...p.getElementsByTagNameNS(W, 't')].map(t => t.textContent).join('')).filter(t => t.trim());
++});
++// Word-only lines: the masthead's "Rev ... 狀態" line (one paragraph in Word, two lines + a badge in print) and the sign-off
++// cells' fill-in lines (the printout's shared SignCell words them slightly differently).
++const ignored = t => /^版次 Rev|^姓名：|^日期：|^單位 Company：/.test(t);
++const reportText = squash(report.text);
++const missing = wordTexts.filter(t => !ignored(t) && !reportText.includes(squash(t)));
++result(`report printout contains every text of the Word export (${wordTexts.length} paragraphs, ${wordTexts.filter(ignored).length} wording-only lines skipped)`,
++  missing.length === 0, JSON.stringify(missing));
++const order = ['1. 稽核資訊', '2. 稽核團隊', '3. 稽核範圍與準則', '4. 查檢結果', '4.1 查檢明細', '5. 稽核發現與總結', '6. 簽核'];
++const positions = order.map(h => report.text.indexOf(h));
++result('report sections in the same order as Word', positions.every((v, i) => v >= 0 && (i === 0 || v > positions[i - 1])), JSON.stringify(positions));
++
++// 5. unsaved edit: printed as on screen, flagged in the masthead
++await step(4);
++await p.fill('textarea[name=findings]', '列印時尚未儲存的修改');
++await p.locator('button', { hasText: /列印報告/ }).first().click();
++await p.waitForTimeout(600);
++const unsaved = await p.evaluate(() => document.querySelector('.audit-print-root')?.innerText || '');
++result('unsaved changes: printout shows the screen content and flags it', /列印時尚未儲存的修改/.test(unsaved) && /含未儲存的修改/.test(unsaved), unsaved.slice(0, 200));
++await p.evaluate(() => dispatchEvent(new Event('afterprint')));
++
++await p.evaluate(() => dispatchEvent(new Event('afterprint')));
++
++// 6. (R2) a second click prints again even if the browser never fired afterprint for the first one
++await step(4);
++const n0 = await p.evaluate(() => window.__printed);
++await p.locator('button', { hasText: /列印報告/ }).first().click(); await p.waitForTimeout(500);
++await p.locator('button', { hasText: /列印報告/ }).first().click(); await p.waitForTimeout(500);
++const n1 = await p.evaluate(() => ({ printed: window.__printed, mounted: document.querySelectorAll('.audit-print-root').length }));
++result('two clicks without afterprint print twice (one printout mounted)', n1.printed === n0 + 2 && n1.mounted === 1, JSON.stringify({ n0, ...n1 }));
++await p.evaluate(() => dispatchEvent(new Event('afterprint')));
++
++// 7. (R2) the page size / margins are Audit's own named page, not a global @page
++const pageRules = await p.evaluate(() => {
++  // the stylesheet that defines .audit-print-root (Audit.print.css) — other modules' sheets have their own unnamed @page
++  const sheet = [...document.styleSheets].find(s => { try { return [...s.cssRules].some(r => r.cssText.includes('.audit-print-root')); } catch { return false; } });
++  const flat = [...sheet.cssRules].flatMap(r => r.cssRules ? [r, ...r.cssRules] : [r]).map(r => r.cssText);
++  return { named: flat.filter(t => /^@page audit/.test(t)), unnamed: flat.filter(t => /^@page \{/.test(t)), pageProp: flat.filter(t => /page: audit/.test(t)).length };
++});
++result('Audit.print.css: named @page audit (A4) used by .audit-print-root, no unnamed @page', pageRules.named.length === 1 && /a4/i.test(pageRules.named[0])
++  && pageRules.unnamed.length === 0 && pageRules.pageProp === 1, JSON.stringify(pageRules));
++
++// 8. (R2) half-percent rounding and clause-only items: wizard card, printout and Word agree
++const made = await p.evaluate(async () => {
++  const csrf = decodeURIComponent((document.cookie.match(/(?:^|; )csrf_token=([^;]*)/) || [])[1] || '');
++  const mk = async (title, items) => (await (await fetch('/api/audit/', { method: 'POST', credentials: 'include',
++    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
++    body: JSON.stringify({ auditNo: '', title, date: '2026-10-01', end_date: '2026-10-02', project_id: 'AHB-P1', project_name: '', auditor: 'R2',
++      project_director: '', support_auditors: '', tech_lead: '', location: '', findings: '', audit_criteria: '', scope_description: '',
++      selected_templates: [], custom_check_items: items, contractor: '', status: 'Draft' }) })).json()).id;
++  const q = (n, status, extra = {}) => ({ id: n, task: `q${n}`, status, ...extra });
++  return {
++    eight: await mk('R2 one of eight', [q(0, 'pass'), ...[1, 2, 3, 4, 5, 6, 7].map(n => q(n))]),
++    forty: await mk('R2 23 of 40', Array.from({ length: 40 }, (_, n) => q(n, n < 23 ? 'pass' : undefined))),
++    clause: await mk('R2 clause only', [{ id: 1, no: '7.1', clause: 'Clause only', task: '', status: 'pass' }]),
++  };
++});
++const wordProgress = async id => p.evaluate(async id => {
++  const r = await fetch(`/api/audit/${id}/export-docx`, { credentials: 'include' });
++  const bin = new Uint8Array(await r.arrayBuffer()); const dv = new DataView(bin.buffer); let off = 0, xml = '';
++  while (off < bin.length - 30 && dv.getUint32(off, true) === 0x04034b50) {
++    const method = dv.getUint16(off + 8, true), csize = dv.getUint32(off + 18, true), nlen = dv.getUint16(off + 26, true), elen = dv.getUint16(off + 28, true);
++    const name = new TextDecoder().decode(bin.subarray(off + 30, off + 30 + nlen)); const start = off + 30 + nlen + elen;
++    if (name === 'word/document.xml') { const data = bin.subarray(start, start + csize); xml = method === 8 ? await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text() : new TextDecoder().decode(data); break; }
++    off = start + csize;
++  }
++  return (xml.match(/<w:t[^>]*>(\d+%)<\/w:t>/) || [])[1];
++}, id);
++for (const [key, expected] of [['eight', '13%'], ['forty', '58%']]) {
++  await p.goto(UI + `/audit?openId=${made[key]}`); await p.waitForTimeout(1500);
++  await p.waitForSelector('input[name=auditDocNo]'); await step(4);
++  const card = await p.evaluate(() => [...document.querySelectorAll('p')].map(x => x.innerText).find(t => /^\d+%$/.test(t)));
++  await p.locator('button', { hasText: /列印報告/ }).first().click(); await p.waitForTimeout(500);
++  const printed = await p.evaluate(() => (document.querySelector('.audit-print-root')?.innerText.match(/完成率\s*Progress\s*(\d+%)/) || [])[1]);
++  await p.evaluate(() => dispatchEvent(new Event('afterprint')));
++  const word = await wordProgress(made[key]);
++  result(`progress ${key}: wizard card, printout and Word all ${expected}`, card === expected && printed === expected && word === expected, JSON.stringify({ card, printed, word }));
++}
++await p.goto(UI + `/audit?openId=${made.clause}`); await p.waitForTimeout(1500);
++await p.waitForSelector('input[name=auditDocNo]'); await step(4);
++await p.locator('button', { hasText: /列印報告/ }).first().click(); await p.waitForTimeout(500);
++const cell = await p.evaluate(() => [...document.querySelectorAll('.audit-print-root .items tbody tr')].map(r => r.cells[2].innerText));
++result('clause-only item: clause printed, no extra dash line (as in Word)', cell.length === 1 && cell[0].trim() === 'Clause only', JSON.stringify(cell));
++await p.evaluate(() => dispatchEvent(new Event('afterprint')));
++
++await browser.close();
++console.log(failures ? `${failures} FAILED` : 'ALL PASS');
++process.exit(failures ? 1 : 0);

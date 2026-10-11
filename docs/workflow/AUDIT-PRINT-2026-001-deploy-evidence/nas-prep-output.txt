@@ -1,0 +1,13 @@
+== 1. live state
+OK live audit_service.py = 688d87b3 version
+frontend index now: 8b0d19c94019e80606803b3847837764b5999e2e10540e422739d06c2f5591bd
+OK live frontend = ITR deploy index
+== 2. backups
+integrity: ok
+5da6bdc27a44cd37206579d5f908ddb71ed70813ba1a99d5cc9cf51d22b1b949  qualitas-pre-audit-print.db
+OK backend-old copy
+== 3. staging
+OK uploads
+OK backend staging (1 file)
+OK frontend staging (106 files, 106 on disk)
+PREP DONE

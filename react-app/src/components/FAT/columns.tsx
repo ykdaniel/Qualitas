@@ -44,7 +44,7 @@ export const createColumns = (
             ),
             cell: ({ row }) => <div className="text-center">{row.getValue("supplier")}</div>,
             filterFn: (row, id, value) => {
-                return value.includes(row.getValue(id));
+                return !value || row.getValue(id) === value;
             },
         },
         {
@@ -119,7 +119,7 @@ export const createColumns = (
             ),
             cell: ({ row }) => <div className="text-center">{row.getValue("status") || 'Scheduled'}</div>,
             filterFn: (row, id, value) => {
-                return value.includes(row.getValue(id));
+                return !value || row.getValue(id) === value;
             },
         },
         {

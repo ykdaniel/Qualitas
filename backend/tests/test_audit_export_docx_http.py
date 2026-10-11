@@ -57,13 +57,18 @@ def login(env, username):
     assert response.status_code == 200, response.text
 
 
+# results (AUDIT-GRADES-2026-001): pass / positive / major / minor; an older 'fail' is "不符合（未分級）" (graded);
+# 'pending' and no status are 未評 (not graded)
 ITEMS = [
     {'id': 1, 'no': '7.1', 'clause': 'Resources', 'task': 'How are resources provided?', 'status': 'pass',
      'note': 'Budget approved', 'updatedAt': '2026-10-02'},
-    {'id': 2, 'no': '8.4', 'clause': 'External providers', 'task': 'How are suppliers controlled?', 'status': 'fail',
+    {'id': 2, 'no': '8.4', 'clause': 'External providers', 'task': 'How are suppliers controlled?', 'status': 'major',
      'note': 'No evaluation\nfor two vendors', 'updatedAt': '2026-10-02'},
     {'id': 3, 'no': '', 'clause': '', 'task': 'Custom question', 'status': 'pending'},
-    {'id': 4, 'no': '9.2', 'clause': 'Internal audit', 'task': 'Planned intervals?'},  # no status yet → pending
+    {'id': 4, 'no': '9.2', 'clause': 'Internal audit', 'task': 'Planned intervals?'},  # no status yet → not graded
+    {'id': 5, 'no': '7.2', 'clause': 'Competence', 'task': 'Training records?', 'status': 'positive'},
+    {'id': 6, 'no': '7.5', 'clause': 'Documented information', 'task': 'Document control?', 'status': 'minor'},
+    {'id': 7, 'no': '8.7', 'clause': 'Nonconforming outputs', 'task': 'Segregation?', 'status': 'fail'},  # older audit
 ]
 
 
@@ -90,7 +95,7 @@ def test_export_contains_the_whole_report(env):
                      'Receiving and storage', 'Two suppliers lack evaluation.', 'Follow-up NCR to be raised.',
                      '主任稽核員 Lead Auditor', '受稽核方代表 Auditee Representative', '專案經理 Project Director']:
         assert expected in text, expected
-    # summary: 4 items, 1 pass, 1 fail, 2 pending → progress 50%
+    # summary: 7 items, one of each grade + an older ungraded fail, 2 not graded → progress 5 / 7 = 71%
     doc = Document(BytesIO(response.content))
     summary = next(t for t in doc.tables if 'Total Items' in t.rows[0].cells[0].text)
     values = {}
@@ -98,16 +103,20 @@ def test_export_contains_the_whole_report(env):
         texts = [c.text for c in row.cells]
         texts = [x for i, x in enumerate(texts) if i == 0 or x != texts[i - 1]]  # a merged value cell repeats its text
         values.update({texts[i].split('\n')[1]: texts[i + 1] for i in range(0, len(texts), 2)})
-    assert values == {'Total Items': '4', 'Progress': '50%', 'Pass': '1', 'Fail': '1', 'Attention / Pending': '2'}
+    assert values == {'Total Items': '7', 'Progress': '71%', 'Pass': '1', 'Positive': '1', 'Major': '1', 'Minor': '1',
+                      'Not graded': '2', 'Fail (ungraded)': '1'}
 
     rows = item_rows(response)
-    assert [r[0] for r in rows] == ['1', '2', '3', '4']  # stored order
-    assert rows[0][1:] == ['7.1', 'Resources\nHow are resources provided?', '符合 Pass', 'Budget approved', '2026-10-02']
-    assert rows[1][3] == '不符合 Fail' and rows[1][4] == 'No evaluation\nfor two vendors'  # multi-line note kept
-    assert rows[2][1:4] == ['—', 'Custom question', '注意／待改善 Attention']
-    assert rows[3][3] == '注意／待改善 Attention' and rows[3][4] == '—' and rows[3][5] == '—'
+    assert [r[0] for r in rows] == ['1', '2', '3', '4', '5', '6', '7']  # stored order
+    # clause text and audit question in separate columns (AUDIT-GRADES-2026-001)
+    assert rows[0][1:] == ['7.1', 'Resources', 'How are resources provided?', '符合 Pass', 'Budget approved', '2026-10-02']
+    assert rows[1][4] == '主要不符合 Major' and rows[1][5] == 'No evaluation\nfor two vendors'  # multi-line note kept
+    assert rows[2][1:5] == ['—', '—', 'Custom question', '未評 Not graded']
+    assert rows[3][4] == '未評 Not graded' and rows[3][5] == '—' and rows[3][6] == '—'
+    assert [r[4] for r in rows[4:]] == ['正面發現 Positive', '次要不符合 Minor', '不符合（未分級） Fail']
     table = next(t for t in Document(BytesIO(response.content)).tables if t.rows[0].cells[0].text == '#')
-    assert [round(c.width.cm, 1) for c in table.rows[1].cells] == [0.9, 1.7, 6.2, 2.3, 4.3, 2.0]  # narrow '#', wide question
+    assert [c.text.split('\n')[0] for c in table.rows[0].cells] == ['#', '條文編號', '條文內容', '查檢重點', '結果', '備註', '更新日期']
+    assert [round(c.width.cm, 1) for c in table.rows[1].cells] == [0.8, 1.4, 4.4, 3.8, 2.2, 3.0, 1.8]
 
 
 def test_export_of_an_audit_without_items_or_optional_fields(env):
@@ -131,7 +140,7 @@ def test_legacy_rows_export_without_failing(env):
         assert '（尚無查檢項目 No audit items）' in text
 
 
-def test_a_status_that_is_not_a_string_counts_as_pending(env):
+def test_a_status_that_is_not_a_string_counts_as_not_graded(env):
     # the create API accepts any JSON in custom_check_items, so a list / object / number status can be stored (R1 review)
     items = [{'id': 1, 'task': 'list', 'status': ['pass']}, {'id': 2, 'task': 'object', 'status': {'v': 'fail'}},
              {'id': 3, 'task': 'number', 'status': 1}, {'id': 4, 'task': 'ok', 'status': 'pass'}]
@@ -139,8 +148,29 @@ def test_a_status_that_is_not_a_string_counts_as_pending(env):
     assert created.status_code == 200, created.text
     response = export(env, created.json()['id'])
     assert response.status_code == 200, response.text
-    assert [r[3] for r in item_rows(response)] == ['注意／待改善 Attention'] * 3 + ['符合 Pass']
-    assert '25%' in docx_text(response)  # 1 of 4 done, the other three pending
+    assert [r[4] for r in item_rows(response)] == ['未評 Not graded'] * 3 + ['符合 Pass']
+    assert '25%' in docx_text(response)  # 1 of 4 graded, the other three not graded
+    assert 'Fail (ungraded)' not in docx_text(response)  # the ungraded-fail line only shows when there is one
+
+
+def summary_values(response):
+    doc = Document(BytesIO(response.content))
+    summary = next(t for t in doc.tables if 'Total Items' in t.rows[0].cells[0].text)
+    values = {}
+    for row in summary.rows:
+        texts = [c.text for c in row.cells]
+        texts = [x for i, x in enumerate(texts) if i == 0 or x != texts[i - 1]]
+        values.update({texts[i].split('\n')[1]: texts[i + 1] for i in range(0, len(texts), 2)})
+    return values
+
+
+def test_progress_rounds_half_up_like_the_wizard(env):
+    # 1 of 8 done = 12.5 % -> 13 % (round() would give 12); 23 of 40 = 57.5 % -> 58 % (in JavaScript 23 / 40 * 100 is
+    # 57.4999..., so Math.round gave 57 — the wizard and the printouts now use the same integer formula)
+    for total, done, expected in [(8, 1, '13%'), (40, 23, '58%'), (3, 1, '33%'), (3, 2, '67%'), (6, 6, '100%')]:
+        items = [{'id': n, 'task': f'q{n}', 'status': 'pass' if n < done else None} for n in range(total)]
+        created = create(env, custom_check_items=items).json()
+        assert summary_values(export(env, created['id']))['Progress'] == expected, (total, done)
 
 
 def test_characters_xml_cannot_carry_are_dropped_not_an_error(env):
@@ -151,7 +181,7 @@ def test_characters_xml_cannot_carry_are_dropped_not_an_error(env):
     assert response.status_code == 200, response.text
     text = docx_text(response)
     assert 'Title' in text and 'Lineone' in text and 'Line two' in text
-    assert item_rows(response)[0][2:5] == ['Resources\nQ?', '符合 Pass', 'badchar']
+    assert item_rows(response)[0][2:6] == ['Resources', 'Q?', '符合 Pass', 'badchar']
 
 
 def test_unknown_audit_is_404(env):
@@ -196,3 +226,58 @@ def test_without_audit_view_or_signed_out_is_refused(env):
     assert export(env, created['id']).status_code == 403
     env.client.cookies.clear()
     assert export(env, created['id']).status_code == 401
+
+
+# ── AUDIT-BUTTONS-2026-001: the plan and the on-site checklist as Word, like the step printouts ───────────────────────
+def section_headings(response):
+    doc = Document(BytesIO(response.content))
+    return [t.rows[0].cells[0].text for t in doc.tables if len(t.columns) == 1 and t.rows[0].cells[0].text[:2].rstrip('.').isdigit()]
+
+
+def test_kind_plan_is_sections_1_to_4_plus_a_plan_sign_off(env):
+    created = create(env, title='Plan export', agenda=[{'date': '2026-10-01', 'start': '09:00', 'end': '09:30', 'item': 'Opening'}],
+                     custom_check_items=ITEMS).json()
+    response = env.client.get(f"/api/audit/{created['id']}/export-docx?kind=plan")
+    assert response.status_code == 200, response.text
+    assert unquote(response.headers['content-disposition'].split("filename*=UTF-8''")[1]) == f"{created['auditNo']}-Plan.docx"
+    text = docx_text(response)
+    assert '內部稽核計畫 INTERNAL AUDIT PLAN' in text and 'Plan export' in text and 'Opening' in text
+    assert section_headings(response) == ['1. 稽核資訊  Audit Information', '2. 稽核團隊  Audit Team', '3. 稽核範圍與準則  Scope & Criteria',
+                                          '4. 稽核行程  Agenda', '5. 計畫簽核  Plan Sign-off']
+    assert '查檢結果' not in text and 'Budget approved' not in text  # no results in a plan
+    assert '5.1 主任稽核員 Lead Auditor' in text and '5.2 專案經理 Project Director' in text
+
+
+def test_kind_checklist_has_blank_result_boxes_and_no_recorded_results(env):
+    created = create(env, custom_check_items=ITEMS, location='Yard 3').json()
+    response = env.client.get(f"/api/audit/{created['id']}/export-docx?kind=checklist")
+    assert response.status_code == 200, response.text
+    assert unquote(response.headers['content-disposition'].split("filename*=UTF-8''")[1]) == f"{created['auditNo']}-Checklist.docx"
+    text = docx_text(response)
+    assert '稽核查檢表 AUDIT CHECKLIST' in text and 'Yard 3' in text and '2026-10-01 ~ 2026-10-02' in text
+    assert section_headings(response) == ['1. 稽核資訊  Audit Information', '2. 查檢項目  Audit Items', '3. 簽核  Sign-off']
+    rows = item_rows(response)
+    assert [r[0] for r in rows] == ['1', '2', '3', '4', '5', '6', '7']
+    assert rows[0][1:] == ['7.1', 'Resources', 'How are resources provided?',
+                           '☐ 符合 Pass\n☐ 正面發現 Positive\n☐ 主要不符合 Major\n☐ 次要不符合 Minor', '']
+    # recorded results / notes are not printed
+    assert 'Budget approved' not in text and '主要不符合 Major' not in text.replace('☐ 主要不符合 Major', '')
+    table = next(t for t in Document(BytesIO(response.content)).tables if t.rows[0].cells[0].text == '#')
+    assert [round(c.width.cm, 1) for c in table.rows[1].cells] == [0.8, 1.4, 5.0, 4.4, 2.8, 3.0]
+    empty = create(env, custom_check_items=[]).json()
+    assert '（尚無查檢項目 No audit items）' in docx_text(env.client.get(f"/api/audit/{empty['id']}/export-docx?kind=checklist"))
+
+
+def test_kind_report_is_the_default_and_unknown_kinds_are_refused(env):
+    created = create(env, custom_check_items=ITEMS).json()
+    default = env.client.get(f"/api/audit/{created['id']}/export-docx")
+    explicit = env.client.get(f"/api/audit/{created['id']}/export-docx?kind=report")
+    assert default.status_code == explicit.status_code == 200
+    assert section_headings(default) == section_headings(explicit)
+    assert section_headings(default)[-1] == '7. 簽核  Sign-off'
+    for bad in ['summary', 'REPORT', '', '../plan']:
+        response = env.client.get(f"/api/audit/{created['id']}/export-docx", params={'kind': bad})
+        assert response.status_code == 400, (bad, response.text)
+        assert 'Unknown export kind' in response.json()['detail']
+    # scope / not-found still answer before the kind matters for an existing kind
+    assert env.client.get('/api/audit/no-such/export-docx?kind=plan').status_code == 404

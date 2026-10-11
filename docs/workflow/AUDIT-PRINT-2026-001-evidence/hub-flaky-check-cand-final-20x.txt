@@ -1,0 +1,22 @@
+# cand = /Users/nook/Documents/Qualitas-deploy-artifacts/AUDIT-PRINT-2026-001/cand-final-4bdc49ec/backend; test_itr_state_protection_http.py x20, Python 3.11, 2026-10-10T18:04:23Z
+run 1: 24 passed, 87 warnings in 50.31s
+run 2: 24 passed, 87 warnings in 49.63s
+run 3: 24 passed, 87 warnings in 49.34s
+run 4: 24 passed, 87 warnings in 50.26s
+run 5: 24 passed, 87 warnings in 49.79s
+run 6: 24 passed, 87 warnings in 49.74s
+run 7: 24 passed, 87 warnings in 50.62s
+run 8: 24 passed, 87 warnings in 52.62s
+run 9: 24 passed, 87 warnings in 50.38s
+run 10: 24 passed, 87 warnings in 50.52s
+run 11: 24 passed, 87 warnings in 50.44s
+run 12: 24 passed, 87 warnings in 50.57s
+run 13: 24 passed, 87 warnings in 51.63s
+run 14: 24 passed, 87 warnings in 54.23s
+run 15: 24 passed, 87 warnings in 61.20s (0:01:01)
+run 16: 24 passed, 87 warnings in 53.33s
+run 17: 24 passed, 87 warnings in 52.40s
+run 18: 24 passed, 87 warnings in 50.16s
+run 19: 24 passed, 87 warnings in 50.51s
+run 20: 24 passed, 87 warnings in 50.91s
+# end 2026-10-10T18:22:55Z

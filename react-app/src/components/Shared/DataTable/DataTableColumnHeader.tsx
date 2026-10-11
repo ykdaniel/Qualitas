@@ -18,6 +18,7 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Filter } from "lucide-react"
+import { useDataTableText } from "./useDataTableText"
 
 interface DataTableColumnHeaderProps<TData, TValue>
     extends React.HTMLAttributes<HTMLDivElement> {
@@ -32,6 +33,7 @@ export function DataTableColumnHeader<TData, TValue>({
     className,
     filterOptions,
 }: DataTableColumnHeaderProps<TData, TValue>) {
+    const text = useDataTableText()
     if (!column.getCanSort() && !column.getCanFilter()) {
         return <div className={cn(className)}>{title}</div>
     }
@@ -66,7 +68,7 @@ export function DataTableColumnHeader<TData, TValue>({
                                     onClick={() => column.toggleSorting(false)}
                                 >
                                     <ArrowUpIcon className="mr-2 h-3.5 w-3.5 text-muted-foreground/70" />
-                                    Sort Asc
+                                    {text("sortAsc")}
                                 </Button>
                                 <Button
                                     variant="ghost"
@@ -75,7 +77,7 @@ export function DataTableColumnHeader<TData, TValue>({
                                     onClick={() => column.toggleSorting(true)}
                                 >
                                     <ArrowDownIcon className="mr-2 h-3.5 w-3.5 text-muted-foreground/70" />
-                                    Sort Desc
+                                    {text("sortDesc")}
                                 </Button>
                             </>
                         )}
@@ -87,7 +89,7 @@ export function DataTableColumnHeader<TData, TValue>({
                             onClick={() => column.toggleVisibility(false)}
                         >
                             <EyeNoneIcon className="mr-2 h-3.5 w-3.5 text-muted-foreground/70" />
-                            Hide Column
+                            {text("hideColumn")}
                         </Button>
 
                         {(column.getCanSort() || column.getCanHide()) && column.getCanFilter() && (
@@ -98,7 +100,7 @@ export function DataTableColumnHeader<TData, TValue>({
                             <div className="px-2 py-1.5 space-y-2">
                                 <div className="flex items-center text-xs font-medium text-muted-foreground">
                                     <Filter className="mr-1 h-3 w-3" />
-                                    Filter
+                                    {text("filter")}
                                 </div>
                                 {filterOptions ? (
                                     <Select
@@ -108,10 +110,10 @@ export function DataTableColumnHeader<TData, TValue>({
                                         }
                                     >
                                         <SelectTrigger className="h-8 w-full">
-                                            <SelectValue placeholder="Select..." />
+                                            <SelectValue placeholder={text("selectPlaceholder")} />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="ALL">All</SelectItem>
+                                            <SelectItem value="ALL">{text("all")}</SelectItem>
                                             {filterOptions.map((option) => (
                                                 <SelectItem key={option.value} value={option.value}>
                                                     {option.label}
@@ -121,7 +123,7 @@ export function DataTableColumnHeader<TData, TValue>({
                                     </Select>
                                 ) : (
                                     <Input
-                                        placeholder={`Filter ${title}...`}
+                                        placeholder={text("filterColumn", { title })}
                                         value={(column.getFilterValue() as string) ?? ""}
                                         onChange={(event) =>
                                             column.setFilterValue(event.target.value)

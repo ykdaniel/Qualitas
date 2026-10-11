@@ -1,0 +1,17 @@
+PASS desktop 1440: step 1 has 3 column(s)  -> {"cols":3,"tops":[310,310,310]}
+PASS desktop 1440: no horizontal overflow (wizard overlay and page)  -> overlay=0px page=0px
+PASS desktop 1440: every visible progress label inside the viewport  -> [{"text":"Project Info","left":299,"right":365},{"text":"Personnel & Scope","left":472,"right":580},{"text":"Audit Plan","left":691,"right":749},{"text":"Checklist Setup","left":869,"right":959},{"text":"Execution & Review","left":1052,"right":1164}]
+PASS progress bar has 5 steps (Agenda added, AUDIT-AGENDA-2026-001)  -> ["1","2","3","4","5"]
+PASS desktop 1440: step 2 holds personnel + scope fields (print-plan button now on the Agenda step)  -> {"personnel":true,"scope":true,"printPlan":false}
+PASS desktop 1440: Agenda step has the table and the print-plan button, no wizard/page overflow  -> {"printPlan":true,"table":true,"overlayOverflow":0,"pageOverflow":0}
+PASS laptop 1024: step 1 has 2 column(s)  -> {"cols":2,"tops":[310,310,408]}
+PASS laptop 1024: no horizontal overflow (wizard overlay and page)  -> overlay=0px page=0px
+PASS laptop 1024: every visible progress label inside the viewport  -> [{"text":"Project Info","left":91,"right":157},{"text":"Personnel & Scope","left":264,"right":372},{"text":"Audit Plan","left":483,"right":541},{"text":"Checklist Setup","left":661,"right":751},{"text":"Execution & Review","left":844,"right":956}]
+PASS laptop 1024: step 2 holds personnel + scope fields (print-plan button now on the Agenda step)  -> {"personnel":true,"scope":true,"printPlan":false}
+PASS laptop 1024: Agenda step has the table and the print-plan button, no wizard/page overflow  -> {"printPlan":true,"table":true,"overlayOverflow":0,"pageOverflow":0}
+PASS phone 390: step 1 has 1 column(s)  -> {"cols":1,"tops":[302,400,498]}
+PASS phone 390: no horizontal overflow (wizard overlay and page)  -> overlay=0px page=0px
+PASS phone 390: every visible progress label inside the viewport  -> labels hidden at this width (numbers only)
+PASS phone 390: step 2 holds personnel + scope fields (print-plan button now on the Agenda step)  -> {"personnel":true,"scope":true,"printPlan":false}
+PASS phone 390: Agenda step has the table and the print-plan button, no wizard/page overflow  -> {"printPlan":true,"table":true,"overlayOverflow":0,"pageOverflow":0}
+ALL PASS

@@ -2,7 +2,7 @@ import { useItemDraftGuard } from '../Shared/LeaveGuard';
 import FormActions from '../Shared/FormActions';
 import actionStyles from '../Shared/FormActions.module.css';
 import React, { useState } from 'react';
-import { PenTool, Trash2, ArrowDown, X, Save, ShieldCheck, HardHat, Building2, User, FileText, GripVertical, Copy } from 'lucide-react';
+import { PenTool, Trash2, ArrowDown, X, Check, Save, ShieldCheck, HardHat, Building2, User, FileText, GripVertical, Copy } from 'lucide-react';
 import { InspectionItem } from '../../types/itp';
 import { PHASES, EMPTY_ITEM } from '../../constants/itp';
 import { useITRStore } from '../../store/itrStore';
@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import VPBadge from './VPBadge';
 import { resolveItpRecordLink } from '../../utils/itpRecordLink';
+import { checklistFromItpPath } from '../../utils/itpReturnLink';
 import { useLanguage } from '../../context/LanguageContext';
 import { missingRequiredItemFields, preferEnglishText } from '../../utils/itpItemValidation';
 // Define Props
@@ -17,7 +18,12 @@ interface ITPAdvancedEditorProps {
     items: InspectionItem[];
     onItemsChange: (items: InspectionItem[]) => void;
     readOnly?: boolean;
+    /** True when every item change is written to the server at once (an already-saved ITP), so the
+     *  item panel's button reads Save; a never-saved ITP keeps Apply until the main Save creates it. */
+    savesImmediately?: boolean;
     onViewRecord?: (itr: any) => void;
+    /** Id of the ITP being edited; lets a Checklist opened from here return to this window. */
+    itpId?: string | null;
     headerData?: {
         referenceNo: string;
         description: string;
@@ -32,7 +38,7 @@ export interface ITPAdvancedEditorRef {
     handleAddNew: () => void;
 }
 
-export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvancedEditorProps>(({ items, onItemsChange, readOnly = false, onViewRecord, headerData }, ref) => {
+export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvancedEditorProps>(({ items, onItemsChange, readOnly = false, savesImmediately = false, onViewRecord, itpId, headerData }, ref) => {
     const itrList = useITRStore(state => state.itrList);
     const { t } = useLanguage();
     const navigate = useNavigate();
@@ -58,7 +64,7 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
                     }
                     break;
                 case 'checklist':
-                    navigate(`/checklist?openId=${result.recordsNo}&from=itp`);
+                    navigate(checklistFromItpPath(result.recordsNo, itpId));
                     break;
                 case 'ambiguous':
                     toast.error(`Multiple documents match "${value}" — cannot tell which one this Record refers to. Please check the record number.`);
@@ -496,23 +502,23 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
                                     modal title. Phase stays (only way to move an item between phases);
                                     Insert After shares its row for new items. */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                    <div>
+                                    <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                                         <div className="flex items-center gap-3 mb-2">
                                             <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.phase') || 'Phase'}</span>
                                             <span className="flex-1 border-t-2 border-slate-400"></span>
                                         </div>
-                                        <select className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm" value={editingItem.phase} onChange={(e) => handleChange('phase', e.target.value)}>
+                                        <select className="w-full border border-slate-300 bg-white rounded-lg px-4 h-10 text-sm" value={editingItem.phase} onChange={(e) => handleChange('phase', e.target.value)}>
                                             {PHASES.map(p => <option key={p.code} value={p.code}>{p.title}</option>)}
                                         </select>
                                     </div>
                                     {editingItem.isNew && (
-                                        <div>
+                                        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                                             <div className="flex items-center gap-3 mb-2">
                                                 <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">Insert After (插入位置)</span>
                                                 <span className="flex-1 border-t-2 border-slate-400"></span>
                                             </div>
                                             <select
-                                                className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm"
+                                                className="w-full border border-slate-300 bg-white rounded-lg px-4 h-10 text-sm"
                                                 value={editingItem.insertAfter || 'end'}
                                                 onChange={(e) => handleChange('insertAfter', e.target.value)}
                                             >
@@ -535,30 +541,30 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
                                         own EN/CH stays stacked top-to-bottom internally, matching the table/print
                                         direction, with a persistent "EN"/"中文" label on every box). */}
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                        <div>
+                                        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                                             <div className="flex items-center gap-3 mb-2">
                                                 <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.activityLabel') || 'Activity (EN/CH)'}</span>
                                                 <span className="text-[11px] font-semibold text-[#b91c1c] whitespace-nowrap">{t('itp.itemPanel.eitherLanguageRequired') || 'English or Chinese — at least one'}</span>
                                                 <span className="flex-1 border-t-2 border-slate-400"></span>
                                             </div>
                                             <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
-                                            <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm resize-y mb-2" value={editingItem.activity.en} onChange={(e) => handleChange('activity', e.target.value, 'en')} />
+                                            <textarea rows={2} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm resize-y mb-2" value={editingItem.activity.en} onChange={(e) => handleChange('activity', e.target.value, 'en')} />
                                             <span className="inline-block text-[11px] font-bold text-[#8a6a3a] bg-[#faf7f1] border border-[#b8945a]/40 rounded px-1.5 py-0.5 mb-1">中文</span>
-                                            <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={editingItem.activity.ch} onChange={(e) => handleChange('activity', e.target.value, 'ch')} />
+                                            <textarea rows={2} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={editingItem.activity.ch} onChange={(e) => handleChange('activity', e.target.value, 'ch')} />
                                         </div>
 
-                                        <div>
+                                        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                                             <div className="flex items-center gap-3 mb-2">
                                                 <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.standardLabel') || 'Standard (EN/CH)'}</span>
                                                 <span className="text-[11px] font-semibold text-[#b91c1c] whitespace-nowrap">{t('itp.itemPanel.eitherLanguageRequired') || 'English or Chinese — at least one'}</span>
                                                 <span className="flex-1 border-t-2 border-slate-400"></span>
                                             </div>
                                             <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
-                                            <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm resize-y mb-2"
+                                            <textarea rows={2} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm resize-y mb-2"
                                                 value={typeof editingItem.standard === 'string' ? editingItem.standard : editingItem.standard.en}
                                                 onChange={(e) => handleChange('standard', e.target.value, 'en')} />
                                             <span className="inline-block text-[11px] font-bold text-[#8a6a3a] bg-[#faf7f1] border border-[#b8945a]/40 rounded px-1.5 py-0.5 mb-1">中文</span>
-                                            <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y"
+                                            <textarea rows={2} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm text-slate-900 resize-y"
                                                 value={typeof editingItem.standard === 'string' ? '' : editingItem.standard.ch}
                                                 onChange={(e) => handleChange('standard', e.target.value, 'ch')} />
                                         </div>
@@ -568,13 +574,13 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
                                         Section label sits ON the divider line (2026-10-07, "字可以放在橫線
                                         前面"), not below a plain line, so the label reads as part of the same
                                         divider. */}
-                                    <div className="pt-2">
+                                    <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                                         <div className="flex items-center gap-3 mb-2">
                                             <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.criteriaLabel') || 'Criteria'}</span>
                                             <span className="flex-1 border-t-2 border-slate-400"></span>
                                         </div>
                                         {normalizeCriteria(editingItem.criteria).map((c, idx) => (
-                                            <div key={idx} data-criteria-row={idx} className="flex items-start gap-2 mb-3 p-2 rounded-lg border border-slate-200 bg-slate-50/60">
+                                            <div key={idx} data-criteria-row={idx} className="flex items-start gap-2 mb-3 p-2 rounded-lg border border-slate-200 bg-white">
                                                 {normalizeCriteria(editingItem.criteria).length > 1 && (
                                                     <span className="shrink-0 w-6 h-6 mt-0.5 rounded-full bg-slate-700 text-white text-xs font-bold flex items-center justify-center">{idx + 1}</span>
                                                 )}
@@ -582,11 +588,11 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
                                                 <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-3">
                                                     <div className="min-w-0">
                                                         <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
-                                                        <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm resize-y" value={c.en} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'en')} />
+                                                        <textarea rows={2} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm resize-y" value={c.en} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'en')} />
                                                     </div>
                                                     <div className="min-w-0">
                                                         <span className="inline-block text-[11px] font-bold text-[#8a6a3a] bg-[#faf7f1] border border-[#b8945a]/40 rounded px-1.5 py-0.5 mb-1">中文</span>
-                                                        <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={c.ch} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'ch')} />
+                                                        <textarea rows={2} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={c.ch} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'ch')} />
                                                     </div>
                                                 </div>
                                                 <button className={actionStyles.iconDanger} type="button" onClick={() => handleCriteriaRemove(idx)}>✕</button>
@@ -597,41 +603,47 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
 
                                     {/* Others — Check Time / Method each get their own labeled-divider line (2026-10-07, "Check Time/Method 各劃一條") */}
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 pt-2">
-                                        <div>
+                                        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                                             <div className="flex items-center gap-3 mb-2">
                                                 <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.checkTimeLabel') || 'Check Time (EN/CH)'}</span>
                                                 <span className="flex-1 border-t-2 border-slate-400"></span>
                                             </div>
-                                            <textarea rows={3} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm mb-2 resize-y" value={editingItem.checkTime.en} onChange={(e) => handleChange('checkTime', e.target.value, 'en')} />
-                                            <textarea rows={3} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={editingItem.checkTime.ch} onChange={(e) => handleChange('checkTime', e.target.value, 'ch')} />
+                                            <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
+                                            <textarea rows={3} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm mb-2 resize-y" value={editingItem.checkTime.en} onChange={(e) => handleChange('checkTime', e.target.value, 'en')} />
+                                            <span className="inline-block text-[11px] font-bold text-[#8a6a3a] bg-[#faf7f1] border border-[#b8945a]/40 rounded px-1.5 py-0.5 mb-1">中文</span>
+                                            <textarea rows={3} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={editingItem.checkTime.ch} onChange={(e) => handleChange('checkTime', e.target.value, 'ch')} />
                                         </div>
-                                        <div>
+                                        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                                             <div className="flex items-center gap-3 mb-2">
                                                 <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.methodLabel') || 'Method (EN/CH)'}</span>
                                                 <span className="flex-1 border-t-2 border-slate-400"></span>
                                             </div>
-                                            <textarea rows={3} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm mb-2 resize-y" value={editingItem.method.en} onChange={(e) => handleChange('method', e.target.value, 'en')} />
-                                            <textarea rows={3} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={editingItem.method.ch} onChange={(e) => handleChange('method', e.target.value, 'ch')} />
+                                            <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
+                                            <textarea rows={3} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm mb-2 resize-y" value={editingItem.method.en} onChange={(e) => handleChange('method', e.target.value, 'en')} />
+                                            <span className="inline-block text-[11px] font-bold text-[#8a6a3a] bg-[#faf7f1] border border-[#b8945a]/40 rounded px-1.5 py-0.5 mb-1">中文</span>
+                                            <textarea rows={3} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={editingItem.method.ch} onChange={(e) => handleChange('method', e.target.value, 'ch')} />
                                         </div>
-                                        <div>
+                                        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                                             <div className="flex items-center gap-3 mb-2">
                                                 <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.frequencyLabel') || 'Frequency (EN/CH)'}</span>
                                                 <span className="flex-1 border-t-2 border-slate-400"></span>
                                             </div>
-                                            <textarea rows={3} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm mb-2 resize-y"
+                                            <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
+                                            <textarea rows={3} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm mb-2 resize-y"
                                                 value={typeof editingItem.frequency === 'string' ? editingItem.frequency : editingItem.frequency.en}
                                                 onChange={(e) => handleChange('frequency', e.target.value, 'en')} />
-                                            <textarea rows={3} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y"
+                                            <span className="inline-block text-[11px] font-bold text-[#8a6a3a] bg-[#faf7f1] border border-[#b8945a]/40 rounded px-1.5 py-0.5 mb-1">中文</span>
+                                            <textarea rows={3} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm text-slate-900 resize-y"
                                                 value={typeof editingItem.frequency === 'string' ? '' : editingItem.frequency.ch}
                                                 onChange={(e) => handleChange('frequency', e.target.value, 'ch')} />
                                         </div>
-                                        <div>
+                                        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                                             <div className="flex items-center gap-3 mb-2">
                                                 <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.recordLabel') || 'Record'}</span>
                                                 <span className="flex-1 border-t-2 border-slate-400"></span>
                                             </div>
                                             <input
-                                                className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm"
+                                                className="w-full border border-slate-300 bg-white rounded-lg px-4 h-10 text-sm"
                                                 list="itr-options"
                                                 value={editingItem.record}
                                                 onChange={(e) => handleChange('record', e.target.value)}
@@ -674,7 +686,7 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
                             </div>
 
                             {/* Footer */}
-                            <FormActions cancel={<button className={actionStyles.secondary} onClick={() => itemGuard.requestClose(() => setEditingItem(null))}>{t('common.cancel')}</button>} primary={<button className={actionStyles.primary} onClick={handleSaveItem}><Save size={18} /> {t('common.apply')}</button>} />
+                            <FormActions cancel={<button className={actionStyles.secondary} onClick={() => itemGuard.requestClose(() => setEditingItem(null))}>{t('common.cancel')}</button>} primary={<button className={actionStyles.primary} onClick={handleSaveItem}>{savesImmediately ? <><Save size={18} /> {t('common.save')}</> : <><Check size={18} /> {t('common.apply')}</>}</button>} />
                         </div>
                     </div>
                 )}

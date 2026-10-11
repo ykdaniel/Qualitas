@@ -229,6 +229,50 @@ export const deleteContractor = async (id: string): Promise<void> => {
   await api.delete(`/contractors/${id}`);
 };
 
+// --- Company personnel (CONTRACTOR-PERSONNEL-2026-001): a company's people, not system accounts; no delete, deactivate ---
+
+export interface ContractorPersonnelApi {
+  id: string;
+  contractor_id: string;
+  name: string;
+  position?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  is_active: boolean;
+}
+
+/** The attendee picker's view: active people, name and position only (any signed-in user; scoped to the caller's company). */
+export interface PersonnelOptionApi {
+  id: string;
+  contractor_id: string;
+  name: string;
+  position?: string | null;
+}
+
+export const getContractorPersonnel = async (contractorId: string, includeInactive = false): Promise<ContractorPersonnelApi[]> => {
+  const response = await api.get<ContractorPersonnelApi[]>(`/contractors/${contractorId}/personnel`, { params: { include_inactive: includeInactive } });
+  return response.data;
+};
+
+export const createContractorPersonnel = async (
+  contractorId: string, data: { name: string; position?: string; email?: string; phone?: string },
+): Promise<ContractorPersonnelApi> => {
+  const response = await api.post<ContractorPersonnelApi>(`/contractors/${contractorId}/personnel`, data);
+  return response.data;
+};
+
+export const updateContractorPersonnel = async (
+  personnelId: string, data: { name?: string; position?: string; email?: string; phone?: string; is_active?: boolean },
+): Promise<ContractorPersonnelApi> => {
+  const response = await api.put<ContractorPersonnelApi>(`/contractors/personnel/${personnelId}`, data);
+  return response.data;
+};
+
+export const getPersonnelOptions = async (contractorId?: string): Promise<PersonnelOptionApi[]> => {
+  const response = await api.get<PersonnelOptionApi[]>('/contractors/personnel/options', { params: contractorId ? { contractor_id: contractorId } : {} });
+  return response.data;
+};
+
 // --- Projects API ---
 
 export interface ProjectApi {
@@ -281,12 +325,12 @@ export interface User {
   permissions: string[];
   is_active: boolean;
   full_name?: string;
-  /** Editable, cosmetic-only company label — only meaningful for internal
-   *  staff (no vendor_id). Prefer `display_company` for showing a user's
-   *  company; this is the raw settable field. */
+  /** The person's company as entered (required for new accounts; never affects data scope).
+   *  Prefer `display_company` for showing a user's company; this is the raw settable field. */
   company_name?: string | null;
-  /** Resolved "Name / Company" label source: the user's real vendor name
-   *  when contractor-scoped, else their `company_name`. Read-only. */
+  /** Resolved "Name / Company" label: the company's abbreviation from the company list (the
+   *  bound vendor when contractor-scoped, else `company_name`), or the full name / typed text
+   *  when there is no abbreviation. Read-only. */
   display_company?: string | null;
 }
 
@@ -597,10 +641,22 @@ export const exportNoiDocx = async (noiId: string, filename: string): Promise<vo
   URL.revokeObjectURL(url);
 };
 
-// Formal .docx export of the whole Audit report (AUDIT-EXPORT-DOCX-2026-001) — mirrors
-// exportNcrDocx's blob-download pattern.
-export const exportAuditDocx = async (auditId: string, filename: string): Promise<void> => {
-  const response = await api.get(`/audit/${auditId}/export-docx`, { responseType: 'blob' });
+// Formal .docx export of an Audit — the whole report (default, AUDIT-EXPORT-DOCX-2026-001), or the audit plan / the
+// on-site checklist (AUDIT-BUTTONS-2026-001) — mirrors exportNcrDocx's blob-download pattern.
+export const exportAuditDocx = async (auditId: string, filename: string, kind: 'report' | 'plan' | 'checklist' = 'report'): Promise<void> => {
+  const response = await api.get(`/audit/${auditId}/export-docx`, { params: { kind }, responseType: 'blob' });
+  const url = URL.createObjectURL(new Blob([response.data]));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filename}.docx`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+// Word copy of the printed Meeting Minutes, photo appendix included (MEETING-TABS-2026-001 R15) — mirrors
+// exportNoiDocx's blob-download pattern.
+export const exportMeetingMinutesDocx = async (meetingId: string, filename: string): Promise<void> => {
+  const response = await api.get(`/meeting-minutes/${meetingId}/export-docx`, { responseType: 'blob' });
   const url = URL.createObjectURL(new Blob([response.data]));
   const a = document.createElement('a');
   a.href = url;

@@ -3,6 +3,16 @@ import sys
 import requests
 
 import os
+
+
+def _require_env(name):
+    """Credentials come only from the environment; this script has no built-in password."""
+    value = os.environ.get(name)
+    if not value:
+        sys.exit(f"{name} is not set. Export it before running this script (no built-in default).")
+    return value
+
+
 PORT = os.environ.get("VERIFY_PORT", "8000")
 BASE_URL = f"http://localhost:{PORT}/api"
 
@@ -11,7 +21,7 @@ def get_auth_token():
     try:
         login_data = {
             "username": "admin@example.com",
-            "password": "admin"
+            "password": _require_env("QUALITAS_ADMIN_PASSWORD")
         }
         resp = requests.post(f"{BASE_URL}/auth/login", data=login_data)
         if resp.status_code == 200:

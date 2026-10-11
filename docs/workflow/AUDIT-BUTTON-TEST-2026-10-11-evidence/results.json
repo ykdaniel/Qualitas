@@ -1,0 +1,2071 @@
+{
+ "probes": {
+  "audit_full|Draft": {
+   "step1": {
+    "title": false,
+    "project": false,
+    "status": false,
+    "startDate": false,
+    "statusOptions": [
+     "Draft",
+     "Planned",
+     "Void"
+    ]
+   },
+   "back1": 0,
+   "next1": 1,
+   "saveDraft": 1,
+   "notice": false,
+   "afterNext": 2,
+   "step2": false,
+   "afterBack": 1,
+   "step3": {
+    "addRow": true,
+    "rowDelete": 0,
+    "rows": 0,
+    "inputsDisabled": true
+   },
+   "print3": 1,
+   "word3": 1,
+   "step4": {
+    "chipDisabled": false,
+    "taskDisabled": false,
+    "plusDisabled": false,
+    "items": 1,
+    "itemBtnsDisabled": false,
+    "chipCursor": "default"
+   },
+   "print4": 1,
+   "word4": 1,
+   "step5": {
+    "passDisabled": false,
+    "noteDisabled": false,
+    "findingsDisabled": false,
+    "searchDisabled": false,
+    "chipDisabled": false,
+    "passCursor": "default"
+   },
+   "next5": 0,
+   "submit": 1,
+   "print5": 1,
+   "word5": 1,
+   "saveDraft5": 1
+  },
+  "audit_full|In Progress": {
+   "step1": {
+    "title": false,
+    "project": false,
+    "status": false,
+    "startDate": false,
+    "statusOptions": [
+     "In Progress",
+     "Completed",
+     "Void"
+    ]
+   },
+   "back1": 0,
+   "next1": 1,
+   "saveDraft": 1,
+   "notice": false,
+   "afterNext": 2,
+   "step2": false,
+   "afterBack": 1,
+   "step3": {
+    "addRow": true,
+    "rowDelete": 0,
+    "rows": 0,
+    "inputsDisabled": true
+   },
+   "print3": 1,
+   "word3": 1,
+   "step4": {
+    "chipDisabled": false,
+    "taskDisabled": false,
+    "plusDisabled": false,
+    "items": 5,
+    "itemBtnsDisabled": false,
+    "chipCursor": "default"
+   },
+   "print4": 1,
+   "word4": 1,
+   "step5": {
+    "passDisabled": false,
+    "noteDisabled": false,
+    "findingsDisabled": false,
+    "searchDisabled": false,
+    "chipDisabled": false,
+    "passCursor": "default"
+   },
+   "next5": 0,
+   "submit": 1,
+   "print5": 1,
+   "word5": 1,
+   "saveDraft5": 1
+  },
+  "audit_full|Closed": {
+   "step1": {
+    "title": true,
+    "project": true,
+    "status": true,
+    "startDate": true,
+    "statusOptions": [
+     "Closed"
+    ]
+   },
+   "back1": 0,
+   "next1": 1,
+   "saveDraft": 0,
+   "notice": false,
+   "afterNext": 2,
+   "step2": true,
+   "afterBack": 1,
+   "step3": {
+    "addRow": false,
+    "rowDelete": 0,
+    "rows": 0,
+    "inputsDisabled": true
+   },
+   "print3": 1,
+   "word3": 1,
+   "step4": {
+    "chipDisabled": true,
+    "taskDisabled": true,
+    "plusDisabled": true,
+    "items": 1,
+    "itemBtnsDisabled": true,
+    "chipCursor": "default"
+   },
+   "print4": 1,
+   "word4": 1,
+   "step5": {
+    "passDisabled": true,
+    "noteDisabled": true,
+    "findingsDisabled": true,
+    "searchDisabled": false,
+    "chipDisabled": false,
+    "passCursor": "default"
+   },
+   "next5": 0,
+   "submit": 0,
+   "print5": 1,
+   "word5": 1,
+   "saveDraft5": 0
+  },
+  "audit_full|Void": {
+   "step1": {
+    "title": true,
+    "project": true,
+    "status": true,
+    "startDate": true,
+    "statusOptions": [
+     "Void"
+    ]
+   },
+   "back1": 0,
+   "next1": 1,
+   "saveDraft": 0,
+   "notice": false,
+   "afterNext": 2,
+   "step2": true,
+   "afterBack": 1,
+   "step3": {
+    "addRow": false,
+    "rowDelete": 0,
+    "rows": 0,
+    "inputsDisabled": true
+   },
+   "print3": 1,
+   "word3": 1,
+   "step4": {
+    "chipDisabled": true,
+    "taskDisabled": true,
+    "plusDisabled": true,
+    "items": 1,
+    "itemBtnsDisabled": true,
+    "chipCursor": "default"
+   },
+   "print4": 1,
+   "word4": 1,
+   "step5": {
+    "passDisabled": true,
+    "noteDisabled": true,
+    "findingsDisabled": true,
+    "searchDisabled": false,
+    "chipDisabled": false,
+    "passCursor": "default"
+   },
+   "next5": 0,
+   "submit": 0,
+   "print5": 1,
+   "word5": 1,
+   "saveDraft5": 0
+  },
+  "audit_viewer|Draft": {
+   "step1": {
+    "title": true,
+    "project": true,
+    "status": true,
+    "startDate": true,
+    "statusOptions": [
+     "Draft",
+     "Planned",
+     "Void"
+    ]
+   },
+   "back1": 0,
+   "next1": 1,
+   "saveDraft": 0,
+   "notice": false,
+   "afterNext": 2,
+   "step2": true,
+   "afterBack": 1,
+   "step3": {
+    "addRow": false,
+    "rowDelete": 0,
+    "rows": 0,
+    "inputsDisabled": true
+   },
+   "print3": 1,
+   "word3": 1,
+   "step4": {
+    "chipDisabled": true,
+    "taskDisabled": true,
+    "plusDisabled": true,
+    "items": 1,
+    "itemBtnsDisabled": true,
+    "chipCursor": "default"
+   },
+   "print4": 1,
+   "word4": 1,
+   "step5": {
+    "passDisabled": true,
+    "noteDisabled": true,
+    "findingsDisabled": true,
+    "searchDisabled": false,
+    "chipDisabled": false,
+    "passCursor": "default"
+   },
+   "next5": 0,
+   "submit": 0,
+   "print5": 1,
+   "word5": 1,
+   "saveDraft5": 0
+  },
+  "audit_viewer|In Progress": {
+   "step1": {
+    "title": true,
+    "project": true,
+    "status": true,
+    "startDate": true,
+    "statusOptions": [
+     "In Progress",
+     "Completed",
+     "Void"
+    ]
+   },
+   "back1": 0,
+   "next1": 1,
+   "saveDraft": 0,
+   "notice": false,
+   "afterNext": 2,
+   "step2": true,
+   "afterBack": 1,
+   "step3": {
+    "addRow": false,
+    "rowDelete": 0,
+    "rows": 0,
+    "inputsDisabled": true
+   },
+   "print3": 1,
+   "word3": 1,
+   "step4": {
+    "chipDisabled": true,
+    "taskDisabled": true,
+    "plusDisabled": true,
+    "items": 5,
+    "itemBtnsDisabled": true,
+    "chipCursor": "default"
+   },
+   "print4": 1,
+   "word4": 1,
+   "step5": {
+    "passDisabled": true,
+    "noteDisabled": true,
+    "findingsDisabled": true,
+    "searchDisabled": false,
+    "chipDisabled": false,
+    "passCursor": "default"
+   },
+   "next5": 0,
+   "submit": 0,
+   "print5": 1,
+   "word5": 1,
+   "saveDraft5": 0
+  },
+  "audit_viewer|Closed": {
+   "step1": {
+    "title": true,
+    "project": true,
+    "status": true,
+    "startDate": true,
+    "statusOptions": [
+     "Closed"
+    ]
+   },
+   "back1": 0,
+   "next1": 1,
+   "saveDraft": 0,
+   "notice": false,
+   "afterNext": 2,
+   "step2": true,
+   "afterBack": 1,
+   "step3": {
+    "addRow": false,
+    "rowDelete": 0,
+    "rows": 0,
+    "inputsDisabled": true
+   },
+   "print3": 1,
+   "word3": 1,
+   "step4": {
+    "chipDisabled": true,
+    "taskDisabled": true,
+    "plusDisabled": true,
+    "items": 1,
+    "itemBtnsDisabled": true,
+    "chipCursor": "default"
+   },
+   "print4": 1,
+   "word4": 1,
+   "step5": {
+    "passDisabled": true,
+    "noteDisabled": true,
+    "findingsDisabled": true,
+    "searchDisabled": false,
+    "chipDisabled": false,
+    "passCursor": "default"
+   },
+   "next5": 0,
+   "submit": 0,
+   "print5": 1,
+   "word5": 1,
+   "saveDraft5": 0
+  },
+  "audit_viewer|Void": {
+   "step1": {
+    "title": true,
+    "project": true,
+    "status": true,
+    "startDate": true,
+    "statusOptions": [
+     "Void"
+    ]
+   },
+   "back1": 0,
+   "next1": 1,
+   "saveDraft": 0,
+   "notice": false,
+   "afterNext": 2,
+   "step2": true,
+   "afterBack": 1,
+   "step3": {
+    "addRow": false,
+    "rowDelete": 0,
+    "rows": 0,
+    "inputsDisabled": true
+   },
+   "print3": 1,
+   "word3": 1,
+   "step4": {
+    "chipDisabled": true,
+    "taskDisabled": true,
+    "plusDisabled": true,
+    "items": 1,
+    "itemBtnsDisabled": true,
+    "chipCursor": "default"
+   },
+   "print4": 1,
+   "word4": 1,
+   "step5": {
+    "passDisabled": true,
+    "noteDisabled": true,
+    "findingsDisabled": true,
+    "searchDisabled": false,
+    "chipDisabled": false,
+    "passCursor": "default"
+   },
+   "next5": 0,
+   "submit": 0,
+   "print5": 1,
+   "word5": 1,
+   "saveDraft5": 0
+  }
+ },
+ "results": [
+  {
+   "sec": "清單頁",
+   "loc": "清單",
+   "btn": "頁面載入",
+   "exp": "列出 7 筆種子稽核",
+   "act": "[\"AHB-DRAFT-1\",\"AHB-VOID-1\",\"AHB-CLOSED-1\",\"AHB-LEGACY-1\",\"AHB-EXPORT-1\",\"AHB-AGENDA-1\",\"AHB-AGENDA-CLOSED-1\"]",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/A01-list.png"
+  },
+  {
+   "sec": "清單頁",
+   "loc": "工具列",
+   "btn": "搜尋框（編號）",
+   "exp": "輸入 export 只剩 AHB-EXPORT-1",
+   "act": "[\"AHB-EXPORT-1\"]",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "工具列",
+   "btn": "搜尋框（狀態）",
+   "exp": "輸入 closed 只剩 2 筆 Closed",
+   "act": "[\"AHB-CLOSED-1\",\"AHB-AGENDA-CLOSED-1\"]",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "工具列",
+   "btn": "搜尋框（稽核員）",
+   "exp": "輸入 王稽核 列出稽核員為王稽核的 3 筆",
+   "act": "[\"AHB-EXPORT-1\",\"AHB-AGENDA-1\",\"AHB-AGENDA-CLOSED-1\"]",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "工具列",
+   "btn": "搜尋框（無結果）",
+   "exp": "無符合時顯示「沒有符合條件的資料」",
+   "act": "{\"rows\":[],\"noData\":1}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/A02-search-empty.png"
+  },
+  {
+   "sec": "清單頁",
+   "loc": "工具列",
+   "btn": "搜尋框（清空）",
+   "exp": "清空後回到 7 筆",
+   "act": "7",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "工具列",
+   "btn": "新增稽核",
+   "exp": "開啟空白精靈：第 1 步、編號空白、狀態 Draft、可選 Draft/Planned/In Progress/Completed",
+   "act": "{\"open\":true,\"docNo\":\"\",\"title\":\"\",\"step\":1,\"status\":\"Draft\",\"options\":[\"Draft\",\"Planned\",\"In Progress\",\"Completed\"]}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/A03-add-wizard.png"
+  },
+  {
+   "sec": "清單頁",
+   "loc": "精靈",
+   "btn": "✕ 關閉（新稽核、未修改）",
+   "exp": "直接關閉、不出現未儲存提示",
+   "act": "{\"open\":false,\"modal\":0}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "排程月曆",
+   "btn": "上一月 ‹",
+   "exp": "月份由 2026年10月 變 2026年9月",
+   "act": "{\"m0\":\"2026年10月\",\"mPrev\":\"2026年9月\"}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "排程月曆",
+   "btn": "今天",
+   "exp": "回到本月 2026年10月",
+   "act": "2026年10月",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "排程月曆",
+   "btn": "下一月 ›",
+   "exp": "連按兩次：11月、12月",
+   "act": "{\"mNext\":\"2026年11月\",\"mNext2\":\"2026年12月\"}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "排程月曆",
+   "btn": "9 月無稽核",
+   "exp": "9 月格內沒有稽核圖示",
+   "act": "0",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "排程月曆",
+   "btn": "10 月排程列",
+   "exp": "只列有稽核的 Active 承包商（Review Vendor）",
+   "act": "[\"Review Vendor\"]",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/A04-matrix.png"
+  },
+  {
+   "sec": "清單頁",
+   "loc": "排程月曆",
+   "btn": "同日多筆稽核顯示",
+   "exp": "10/01 同一承包商有 7 筆稽核，應能看到／點到每一筆",
+   "act": "10/01 格只顯示 1 個圖示：AHB-DRAFT-1: Draft in P1",
+   "status": "待確認",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/A04-matrix.png"
+  },
+  {
+   "sec": "清單頁",
+   "loc": "排程月曆",
+   "btn": "點擊排程圖示",
+   "exp": "開啟該筆稽核（AHB-DRAFT-1）",
+   "act": "AHB-DRAFT-1",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/A05-matrix-open.png"
+  },
+  {
+   "sec": "清單頁",
+   "loc": "承包商面板",
+   "btn": "面板內容",
+   "exp": "全部 13、Review Vendor 7、Second Vendor 1",
+   "act": "[\"全部 13\",\"Review Vendor 7\",\"Second Vendor 1\"]",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "承包商面板",
+   "btn": "點 Second Vendor",
+   "exp": "清單只剩該承包商 1 筆；排程只剩該承包商",
+   "act": "{\"rows\":[\"QTS-SV-AUDIT-000001\"],\"matrix\":[\"Second Vendor\"]}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/A06-vendor-filter.png"
+  },
+  {
+   "sec": "清單頁",
+   "loc": "承包商面板",
+   "btn": "再點一次 Second Vendor",
+   "exp": "取消篩選，回到全部（第一頁 10 筆）",
+   "act": "10",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "承包商面板",
+   "btn": "點 Review Vendor",
+   "exp": "只列 7 筆 Review Vendor",
+   "act": "7",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "承包商面板",
+   "btn": "點 全部",
+   "exp": "取消篩選",
+   "act": "10",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "分頁",
+   "btn": "初始",
+   "exp": "Page 1 of 2，10 筆",
+   "act": "{\"page\":\"Page 1 of 2\",\"rows\":10}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "分頁",
+   "btn": "下一頁 ›",
+   "exp": "Page 2 of 2，3 筆",
+   "act": "{\"page\":\"Page 2 of 2\",\"rows\":3}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/A07-page2.png"
+  },
+  {
+   "sec": "清單頁",
+   "loc": "分頁",
+   "btn": "上一頁 ‹",
+   "exp": "回到 Page 1",
+   "act": "{\"page\":\"Page 1 of 2\"}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "分頁",
+   "btn": "最後一頁 »",
+   "exp": "Page 2 of 2",
+   "act": "{\"page\":\"Page 2 of 2\"}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "分頁",
+   "btn": "第一頁 «",
+   "exp": "Page 1，上一頁停用",
+   "act": "{\"page\":\"Page 1 of 2\",\"prevDisabled\":true}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "分頁",
+   "btn": "每頁筆數 10→20",
+   "exp": "Page 1 of 1，13 筆",
+   "act": "{\"page\":\"Page 1 of 1\",\"rows\":13}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "資料表",
+   "btn": "View（欄位清單）",
+   "exp": "列出可隱藏欄位",
+   "act": "[\"AuditNo\",\"Title\",\"Date\",\"Contractor\",\"Location\",\"Auditor\",\"Status\"]",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "資料表",
+   "btn": "View 取消勾選 location",
+   "exp": "「地點」欄隱藏",
+   "act": "[\"#\",\"稽核編號\",\"主旨\",\"日期\",\"承包商\",\"稽核員\",\"狀態\",\"操作\"]",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/A08-view-hide-location.png"
+  },
+  {
+   "sec": "清單頁",
+   "loc": "資料表",
+   "btn": "View 重新勾選 location",
+   "exp": "「地點」欄恢復",
+   "act": "[\"#\",\"稽核編號\",\"主旨\",\"日期\",\"承包商\",\"地點\",\"稽核員\",\"狀態\",\"操作\"]",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "資料表",
+   "btn": "欄標題選單（稽核編號）",
+   "exp": "出現 Sort Asc / Sort Desc / Hide Column / Filter",
+   "act": "Sort Asc Sort Desc Hide Column Filter",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "資料表",
+   "btn": "Sort Desc",
+   "exp": "依編號遞減",
+   "act": "[\"QTS-SV-AUDIT-000001\",\"QTS-NA-AUDIT-000005\",\"QTS-NA-AUDIT-000004\"]",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "資料表",
+   "btn": "Sort Asc",
+   "exp": "依編號遞增",
+   "act": "[\"AHB-AGENDA-1\",\"AHB-AGENDA-CLOSED-1\",\"AHB-CLOSED-1\"]",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "資料表",
+   "btn": "狀態欄 Filter = Closed",
+   "exp": "只剩 2 筆 Closed",
+   "act": "[\"AHB-AGENDA-CLOSED-1\",\"AHB-CLOSED-1\"]",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/A09-status-filter.png"
+  },
+  {
+   "sec": "清單頁",
+   "loc": "資料表",
+   "btn": "狀態欄 Filter = All",
+   "exp": "回到全部",
+   "act": "13",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "資料表",
+   "btn": "主旨欄 Filter 文字",
+   "exp": "輸入 Agenda 只剩 2 筆",
+   "act": "[\"AHB-AGENDA-1\",\"AHB-AGENDA-CLOSED-1\"]",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "資料表",
+   "btn": "承包商欄 Filter = Second Vendor",
+   "exp": "只剩 Second Vendor 的 1 筆",
+   "act": "[\"QTS-NA-AUDIT-000001\",\"QTS-NA-AUDIT-000002\",\"QTS-NA-AUDIT-000003\",\"QTS-NA-AUDIT-000004\",\"QTS-NA-AUDIT-000005\",\"QTS-SV-AUDIT-000001\"]",
+   "status": "FAIL",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/A09b-contractor-filter.png"
+  },
+  {
+   "sec": "清單頁",
+   "loc": "資料表",
+   "btn": "Hide Column（稽核員）",
+   "exp": "「稽核員」欄隱藏，可由 View 恢復",
+   "act": "[\"#\",\"稽核編號\",\"主旨\",\"日期\",\"承包商\",\"地點\",\"狀態\",\"操作\"]",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "資料表",
+   "btn": "點擊整列",
+   "exp": "開啟該筆稽核精靈",
+   "act": "AHB-DRAFT-1",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/A10-row-open.png"
+  },
+  {
+   "sec": "清單頁",
+   "loc": "資料表",
+   "btn": "編輯圖示",
+   "exp": "（任務提到「edit icon」）",
+   "act": "操作欄只有刪除鈕（每列 1 個按鈕），沒有編輯圖示；開啟只能點整列",
+   "status": "待確認",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "資料表",
+   "btn": "刪除鈕（非 Void 列）",
+   "exp": "停用，提示「請先將此稽核作廢，才能刪除」",
+   "act": "{\"disabled\":true,\"title\":\"請先將此稽核作廢，才能刪除\"}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "資料表",
+   "btn": "點停用的刪除鈕",
+   "exp": "不刪除、不開啟精靈",
+   "act": "{\"wizardOpened\":true,\"modal\":0}",
+   "status": "FAIL",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/A11-disabled-trash-opens.png"
+  },
+  {
+   "sec": "清單頁",
+   "loc": "資料表",
+   "btn": "刪除鈕（Void 列）",
+   "exp": "可按，提示「刪除」",
+   "act": "{\"disabled\":false,\"title\":\"刪除\"}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "資料表",
+   "btn": "刪除鈕 → 確認視窗",
+   "exp": "出現 ConfirmModal「確認刪除／您確定要刪除此稽核嗎？」，不開啟精靈",
+   "act": "{\"modal\":1,\"text\":\"確認刪除 × 您確定要刪除此稽核嗎？ 取消 刪除\",\"wizard\":false}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/A12-delete-confirm.png"
+  },
+  {
+   "sec": "清單頁",
+   "loc": "資料表",
+   "btn": "確認視窗「取消」",
+   "exp": "視窗關閉、資料仍在",
+   "act": "{\"modal\":0,\"row\":1}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "資料表",
+   "btn": "確認視窗「×」",
+   "exp": "視窗關閉、資料仍在",
+   "act": "{\"modal\":0,\"row\":1}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "清單頁",
+   "loc": "資料表",
+   "btn": "確認視窗「刪除」",
+   "exp": "列消失、API 回 404",
+   "act": "{\"row\":0,\"api\":404}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/A13-deleted.png"
+  },
+  {
+   "sec": "清單頁",
+   "loc": "API",
+   "btn": "DELETE 非 Void（audit_full）",
+   "exp": "後端拒絕（400），資料保留",
+   "act": "{\"status\":400,\"detail\":\"Cannot delete Audit 'AHB-DRAFT-1' with status 'Draft'. Please Void the Audit first, then delete.\"}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第1步",
+   "btn": "上一步",
+   "exp": "第 1 步不顯示上一步",
+   "act": "0",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第1步",
+   "btn": "結束日早於開始日",
+   "exp": "跳出日期順序警告 toast",
+   "act": "{\"warned\":true,\"text\":\"稽核結束日 (2026-10-20) is before 稽核開始日 (2026-10-21)\"}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/B01-date-warning.png"
+  },
+  {
+   "sec": "精靈",
+   "loc": "第1步",
+   "btn": "狀態下拉（新稽核）",
+   "exp": "可選 In Progress",
+   "act": "In Progress",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "導覽",
+   "btn": "下一步",
+   "exp": "第 1→2 步（人員與範圍）",
+   "act": "{\"step\":2,\"h\":\"人員與範圍\"}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "導覽",
+   "btn": "上一步",
+   "exp": "回第 1 步，已填資料保留",
+   "act": "{\"step\":1,\"title\":\"BTN 進行中稽核\"}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "導覽",
+   "btn": "步驟列點第 4 步",
+   "exp": "直接跳到「配置查檢表」",
+   "act": "{\"step\":4,\"h\":\"配置查檢表\"}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "導覽",
+   "btn": "步驟列點第 5 步",
+   "exp": "第 5 步無「下一步」，顯示「完成並建立計畫」",
+   "act": "{\"step\":5,\"next\":0,\"submit\":1}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/B02-step5-footer.png"
+  },
+  {
+   "sec": "精靈",
+   "loc": "導覽",
+   "btn": "步驟列點第 1 步",
+   "exp": "回第 1 步，資料保留",
+   "act": "{\"step\":1,\"title\":\"BTN 進行中稽核\"}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第2步",
+   "btn": "人員／範圍欄位輸入",
+   "exp": "7 個欄位皆可輸入",
+   "act": "true",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/B03-step2.png"
+  },
+  {
+   "sec": "精靈",
+   "loc": "第3步",
+   "btn": "空白議程",
+   "exp": "顯示「尚未安排行程…」",
+   "act": "1",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第3步",
+   "btn": "列印稽核計畫（未儲存的新稽核）",
+   "exp": "呼叫列印一次、列印內容為 plan",
+   "act": "{\"calls\":1,\"kind\":\"plan\"}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第3步",
+   "btn": "匯出 Word（未儲存）",
+   "exp": "新稽核首次儲存前不顯示 Word 鈕",
+   "act": "0",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第3步",
+   "btn": "新增一列（新的一天）",
+   "exp": "新增 2026-10-21 時段 + 灰底 12:00–13:00 Lunch Time；稽核員預設王稽核",
+   "act": "[{\"kind\":\"session\",\"date\":\"2026-10-21\",\"start\":\"\",\"end\":\"\",\"item\":\"\",\"auditor\":\"王稽核\",\"bg\":\"rgba(0, 0, 0, 0)\"},{\"kind\":\"lunch\",\"date\":\"2026-10-21\",\"start\":\"12:00\",\"end\":\"13:00\",\"item\":\"Lunch Time\",\"auditor\":\"\",\"bg\":\"oklch(0.968 0.007 247.896)\"}]",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/B04-agenda-lunch.png"
+  },
+  {
+   "sec": "精靈",
+   "loc": "第3步",
+   "btn": "新增一列（同一天）",
+   "exp": "接續 10/21、從 13:00 開始，不再加午餐",
+   "act": "[{\"kind\":\"session\",\"date\":\"2026-10-21\",\"start\":\"09:00\",\"end\":\"10:00\",\"item\":\"文件審查\",\"auditor\":\"王稽核\",\"bg\":\"rgba(0, 0, 0, 0)\"},{\"kind\":\"lunch\",\"date\":\"2026-10-21\",\"start\":\"12:00\",\"end\":\"13:00\",\"item\":\"Lunch Time\",\"auditor\":\"\",\"bg\":\"oklch(0.968 0.007 247.896)\"},{\"kind\":\"session\",\"date\":\"2026-10-21\",\"start\":\"13:00\",\"end\":\"\",\"item\":\"\",\"auditor\":\"王稽核\",\"bg\":\"rgba(0, 0, 0, 0)\"}]",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第3步",
+   "btn": "結束早於開始 + 儲存草稿",
+   "exp": "顯示紅字提示，儲存被擋（toast，無 POST）",
+   "act": "{\"notice\":1,\"toast\":true,\"posts\":0}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/B05-agenda-timeorder.png"
+  },
+  {
+   "sec": "精靈",
+   "loc": "第3步",
+   "btn": "刪除列（垃圾桶）",
+   "exp": "該列移除",
+   "act": "2",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第3步",
+   "btn": "日期改到期間外（10/25）",
+   "exp": "黃色提示「部分日期不在稽核期間」，10/25 自動加午餐",
+   "act": "{\"outside\":1,\"lunches\":[\"2026-10-21\",\"2026-10-25\"]}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/B06-agenda-outside.png"
+  },
+  {
+   "sec": "精靈",
+   "loc": "第3步",
+   "btn": "刪除當天唯一時段",
+   "exp": "（設計未明）當天未修改的預設午餐是否一併移除",
+   "act": "刪除 10/25 唯一時段後，10/25 的預設午餐仍留在議程",
+   "status": "待確認",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第3步",
+   "btn": "刪除午餐列",
+   "exp": "午餐列可刪除",
+   "act": "2",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "頁尾",
+   "btn": "儲存草稿（新稽核首次）",
+   "exp": "POST 1 次、產生編號、顯示「進度已於…」、Word 鈕出現；狀態 In Progress、議程 2 列",
+   "act": "{\"posts\":1,\"newNo\":\"QTS-RV-AUDIT-000001\",\"msg\":1,\"word\":1,\"status\":\"In Progress\",\"agenda\":2}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/B07-saved-draft.png"
+  },
+  {
+   "sec": "精靈",
+   "loc": "頁尾",
+   "btn": "儲存草稿（第二次）",
+   "exp": "PUT 1 次、不再 POST（不產生重複稽核）",
+   "act": "{\"POST\":0,\"PUT\":1,\"DELETE\":0,\"docx\":0}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第3步",
+   "btn": "列印稽核計畫",
+   "exp": "列印一次、kind=plan、內容含編號與議程",
+   "act": "{\"calls\":1,\"kind\":\"plan\",\"hasNo\":true,\"hasItem\":true}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第3步",
+   "btn": "匯出 Word（計畫）",
+   "exp": "下載 QTS-RV-AUDIT-000001-Plan.docx（docx、標題 內部稽核計畫）",
+   "act": "{\"file\":\"QTS-RV-AUDIT-000001-Plan.docx\",\"kind\":\"plan\",\"zip\":true,\"title\":true,\"hasItem\":true}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/downloads/QTS-RV-AUDIT-000001-Plan.docx"
+  },
+  {
+   "sec": "精靈",
+   "loc": "第4步",
+   "btn": "模板選項",
+   "exp": "固定 4 個：ISO 9001:2015 / ISO 45001 / 品質管理程序書 / 供應商評鑑表",
+   "act": "[\"ISO 9001:2015\",\"ISO 45001\",\"品質管理程序書\",\"供應商評鑑表\"]",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第4步",
+   "btn": "模板 chip 點選",
+   "exp": "4 個皆可選取（變色）",
+   "act": "[true,true,true,true]",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第4步",
+   "btn": "模板 chip 再點取消",
+   "exp": "ISO 45001 取消選取，其餘保留",
+   "act": "[true,false,true,true]",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/B08-templates.png"
+  },
+  {
+   "sec": "精靈",
+   "loc": "第4步",
+   "btn": "ISO 條文下拉選 7.2",
+   "exp": "自動帶入條文與查檢問題",
+   "act": "{\"clause\":\"Competence\",\"task\":\"How do you determine the necessary competence of person(s) doing work under your control?\"}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第4步",
+   "btn": "新增（+）",
+   "exp": "新增 1 筆、輸入欄清空",
+   "act": "{\"items\":1,\"task\":\"\"}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第4步",
+   "btn": "查檢問題欄按 Enter",
+   "exp": "等同新增",
+   "act": "2",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第4步",
+   "btn": "自訂條文 → ✕",
+   "exp": "自訂編號欄出現；按 ✕ 回到下拉、欄位清空",
+   "act": "{\"customShown\":1,\"select\":true,\"clause\":\"\",\"task\":\"\"}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第4步",
+   "btn": "自訂條文新增",
+   "exp": "新增編號 C-1 的項目",
+   "act": "3 條文編號 CLAUSE NO. C-1 CLAUSE DESCRIPTION 現場安全 AUDIT QUESTION 是否配戴安全帽？",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/B09-custom-items.png"
+  },
+  {
+   "sec": "精靈",
+   "loc": "第4步",
+   "btn": "空白時按 +",
+   "exp": "不新增",
+   "act": "3",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第4步",
+   "btn": "編輯（筆）→ 儲存",
+   "exp": "項目內容更新",
+   "act": "1 條文編號 CLAUSE NO. 7.2 CLAUSE DESCRIPTION Competence AUDIT QUESTION 人員資格是否有紀錄？（已修改）",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第4步",
+   "btn": "編輯 → 取消",
+   "exp": "內容不變",
+   "act": "1 條文編號 CLAUSE NO. 7.2 CLAUSE DESCRIPTION Competence AUDIT QUESTION 人員資格是否有紀錄？（已修改）",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第4步",
+   "btn": "編輯自訂條文項目",
+   "exp": "編輯列顯示自訂編號輸入框（C-1）",
+   "act": "C-1",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第4步",
+   "btn": "編輯中改 ISO 條文下拉",
+   "exp": "改為 9.1 並帶入條文",
+   "act": "2 條文編號 CLAUSE NO. 9.1 CLAUSE DESCRIPTION Monitoring, measurement, analysis and evaluation AUDIT QUESTION How do you determine what needs to be monitored and measured?",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第4步",
+   "btn": "刪除項目（垃圾桶）",
+   "exp": "項目移除",
+   "act": "{\"before\":4,\"after\":3}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第4步",
+   "btn": "未按新增就儲存草稿",
+   "exp": "toast 提醒、不送出",
+   "act": "{\"toast\":true,\"POST\":0,\"PUT\":0,\"DELETE\":0,\"docx\":0}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第4步",
+   "btn": "編輯中就儲存草稿",
+   "exp": "toast 提醒、不送出",
+   "act": "{\"toast\":true,\"POST\":0,\"PUT\":0,\"DELETE\":0,\"docx\":0}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第4步",
+   "btn": "有未儲存修改時按匯出 Word",
+   "exp": "toast 要求先儲存、不下載",
+   "act": "{\"toast\":true,\"docx\":0}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/B10-export-save-first.png"
+  },
+  {
+   "sec": "精靈",
+   "loc": "第4步",
+   "btn": "儲存草稿",
+   "exp": "模板 3 個、查檢項 3 筆（7.2 / 9.1 / C-1）已儲存",
+   "act": "{\"put\":1,\"templates\":[\"ISO 9001:2015\",\"品質管理程序書\",\"供應商評鑑表\"],\"nos\":[\"7.2\",\"9.1\",\"C-1\"]}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第4步",
+   "btn": "列印查檢表",
+   "exp": "列印一次、kind=checklist、含查檢項",
+   "act": "{\"calls\":1,\"kind\":\"checklist\",\"hasItem\":true}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第4步",
+   "btn": "匯出 Word（查檢表）",
+   "exp": "下載 QTS-RV-AUDIT-000001-Checklist.docx（docx、標題 稽核查檢表）",
+   "act": "{\"file\":\"QTS-RV-AUDIT-000001-Checklist.docx\",\"kind\":\"checklist\",\"zip\":true,\"title\":true,\"hasItem\":true}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/downloads/QTS-RV-AUDIT-000001-Checklist.docx"
+  },
+  {
+   "sec": "精靈",
+   "loc": "第5步",
+   "btn": "統計卡",
+   "exp": "總數 3、進度 0%、符合 0、不符合 0",
+   "act": "[\"3\",\"0%\",\"0\",\"0\"]",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第5步",
+   "btn": "未評估項目預設",
+   "exp": "預設亮起「!」（待改善）",
+   "act": "true",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第5步",
+   "btn": "Pass ✓ 按鈕",
+   "exp": "第 1 列變綠色符合",
+   "act": "true",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第5步",
+   "btn": "Fail ✕ 按鈕",
+   "exp": "第 2 列變紅色不符合",
+   "act": "true",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第5步",
+   "btn": "Warning ! 按鈕",
+   "exp": "第 3 列由符合切回「!」",
+   "act": "{\"warn\":true,\"passOff\":true}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第5步",
+   "btn": "統計即時更新",
+   "exp": "符合 1、不符合 1、進度 67%",
+   "act": "[\"3\",\"67%\",\"1\",\"1\"]",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第5步",
+   "btn": "更新日期欄",
+   "exp": "改狀態後記錄今天 2026-10-11",
+   "act": "2026-10-11",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/B11-step5-status.png"
+  },
+  {
+   "sec": "精靈",
+   "loc": "第5步",
+   "btn": "分類篩選 chip",
+   "exp": "有 全部 / 7.2 / 9.1 / C-1；點 9.1 剩 1 列，點 全部 回 3 列",
+   "act": "{\"chipTexts\":[\"全部\",\"7.2\",\"9.1\",\"C-1\"],\"c1\":1,\"c2\":3}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第5步",
+   "btn": "搜尋框",
+   "exp": "輸入 Competence 剩 1 列",
+   "act": "1",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第5步",
+   "btn": "搜尋框按 Enter",
+   "exp": "不送出表單、精靈不關閉",
+   "act": "{\"stillOpen\":true,\"POST\":0,\"PUT\":0,\"DELETE\":0,\"docx\":0}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第5步",
+   "btn": "無結果 → 重設過濾條件",
+   "exp": "顯示「找不到符合條件的項目」；重設後搜尋清空、回 3 列",
+   "act": "{\"none\":1,\"search\":\"\",\"rows\":3}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/B12-step5-noresults.png"
+  },
+  {
+   "sec": "精靈",
+   "loc": "第5步",
+   "btn": "證據／附件輸入",
+   "exp": "（任務：有則測）",
+   "act": "第 5 步沒有任何檔案／證據上傳欄（input[type=file] = 0），只有備註與稽核發現文字欄",
+   "status": "待確認",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第5步",
+   "btn": "列印報告",
+   "exp": "列印一次、kind=report、含備註與稽核發現（未儲存內容也印出）",
+   "act": "{\"calls\":1,\"kind\":\"report\",\"note\":true,\"findings\":true}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第5步",
+   "btn": "匯出 Word（報告）",
+   "exp": "下載 QTS-RV-AUDIT-000001.docx（docx、標題 內部稽核報告、含備註與發現）",
+   "act": "{\"file\":\"QTS-RV-AUDIT-000001.docx\",\"kind\":\"report\",\"zip\":true,\"title\":true,\"note\":true,\"findings\":true}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/downloads/QTS-RV-AUDIT-000001.docx"
+  },
+  {
+   "sec": "精靈",
+   "loc": "頁尾",
+   "btn": "完成並建立計畫（第 5 步）",
+   "exp": "PUT 儲存並關閉精靈；狀態維持 In Progress；評估結果、備註、發現已存",
+   "act": "{\"put\":1,\"closed\":true,\"status\":\"In Progress\",\"statuses\":[\"pass\",\"fail\",\"pending\"],\"notes\":[\"Remark A 人員資格表已備\",\"兩份資格證明過期\",\"\"],\"findings\":\"整體符合，一項待改善。\",\"listStatus\":\"In Progress\"}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/B13-after-submit.png"
+  },
+  {
+   "sec": "精靈",
+   "loc": "精靈",
+   "btn": "✕ 關閉（既有稽核、未修改）",
+   "exp": "直接關閉、無提示",
+   "act": "{\"open\":false,\"modal\":0}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "精靈",
+   "btn": "✕ 關閉（有未儲存修改）",
+   "exp": "出現「未儲存的變更」視窗，按鈕「留下並儲存」／「離開」",
+   "act": "{\"modal\":1,\"text\":\"未儲存的變更 × 確定離開嗎？尚未保存的編輯將遺失，已保存到伺服器的內容仍會保留。 留下並儲存 離開\"}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/B14-unsaved-modal.png"
+  },
+  {
+   "sec": "精靈",
+   "loc": "精靈",
+   "btn": "未儲存視窗「留下並儲存」",
+   "exp": "視窗關閉、精靈保留修改內容",
+   "act": "{\"open\":true,\"modal\":0,\"title\":\"BTN 進行中稽核（未儲存）\"}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "精靈",
+   "btn": "未儲存視窗「離開」",
+   "exp": "精靈關閉、修改未存（標題不變）",
+   "act": "{\"open\":false,\"title\":\"BTN 進行中稽核\"}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "精靈",
+   "btn": "✕ 關閉（第 4 步有未新增的查檢項）",
+   "exp": "同樣出現未儲存提示",
+   "act": "1",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "精靈",
+   "btn": "✕ 關閉（以 ?openId= 深連結開啟）",
+   "exp": "開啟 AHB-DRAFT-1；關閉後回到前一頁（/）",
+   "act": "{\"opened\":\"AHB-DRAFT-1\",\"url\":\"/\"}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第1步",
+   "btn": "狀態下拉（Draft 既有稽核）",
+   "exp": "只列 Draft / Planned / Void（工作流程允許的）",
+   "act": "[\"Draft\",\"Planned\",\"Void\"]",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第1步",
+   "btn": "狀態改 Void + 儲存草稿",
+   "exp": "存成 Void 後精靈立即鎖定（欄位停用、儲存草稿與完成鈕消失）",
+   "act": "{\"titleDisabled\":true,\"saveDraft\":0,\"status\":\"Void\",\"submit\":0}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/B15-void-live-lock.png"
+  },
+  {
+   "sec": "精靈",
+   "loc": "精靈",
+   "btn": "✕ 關閉（剛鎖定的稽核）",
+   "exp": "直接關閉、無提示",
+   "act": "{\"open\":false,\"modal\":0}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "精靈",
+   "loc": "第1步",
+   "btn": "專案下拉（舊資料只有專案名稱）",
+   "exp": "自動對應到 AHB-P1",
+   "act": "AHB-P1",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／Draft（AHB-DRAFT-1）",
+   "btn": "編輯控制項（第 1–5 步欄位、Agenda 新增/刪除、模板、查檢項、Pass/Fail/!、備註、發現）",
+   "exp": "全部可用",
+   "act": "{\"step1\":{\"title\":false,\"project\":false,\"status\":false,\"startDate\":false,\"statusOptions\":[\"Draft\",\"Planned\",\"Void\"]},\"step2AllDisabled\":false,\"step3\":{\"addRow\":true,\"rowDelete\":0,\"rows\":0,\"inputsDisabled\":true},\"step4\":{\"chipDisabled\":false,\"taskDisabled\":false,\"plusDisabled\":false,\"items\":1,\"itemBtnsDisabled\":false,\"chipCursor\":\"default\"},\"step5\":{\"passDisabled\":false,\"noteDisabled\":false,\"findingsDisabled\":false,\"searchDisabled\":false,\"chipDisabled\":false,\"passCursor\":\"default\"}}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/C-audit_full-Draft-step4.png"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／Draft（AHB-DRAFT-1）",
+   "btn": "儲存草稿／完成並建立計畫",
+   "exp": "顯示",
+   "act": "{\"saveDraft\":1,\"submit\":1}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／Draft（AHB-DRAFT-1）",
+   "btn": "下一步／上一步／步驟列",
+   "exp": "唯讀時仍可瀏覽各步",
+   "act": "{\"back1\":0,\"next1\":1,\"afterNext\":2,\"afterBack\":1,\"next5\":0}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／Draft（AHB-DRAFT-1）",
+   "btn": "列印（第 3/4/5 步）＋匯出 Word",
+   "exp": "三步皆有列印與 Word",
+   "act": "[1,1,1,1,1,1]",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/C-audit_full-Draft-step5.png"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／Draft（AHB-DRAFT-1）",
+   "btn": "第 5 步分類篩選／搜尋",
+   "exp": "仍可使用（只是瀏覽）",
+   "act": "{\"chipDisabled\":false,\"searchDisabled\":false}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／Draft（AHB-DRAFT-1）",
+   "btn": "狀態下拉選項",
+   "exp": "Draft / Planned / Void",
+   "act": "[\"Draft\",\"Planned\",\"Void\"]",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／In Progress（AHB-EXPORT-1）",
+   "btn": "編輯控制項（第 1–5 步欄位、Agenda 新增/刪除、模板、查檢項、Pass/Fail/!、備註、發現）",
+   "exp": "全部可用",
+   "act": "{\"step1\":{\"title\":false,\"project\":false,\"status\":false,\"startDate\":false,\"statusOptions\":[\"In Progress\",\"Completed\",\"Void\"]},\"step2AllDisabled\":false,\"step3\":{\"addRow\":true,\"rowDelete\":0,\"rows\":0,\"inputsDisabled\":true},\"step4\":{\"chipDisabled\":false,\"taskDisabled\":false,\"plusDisabled\":false,\"items\":5,\"itemBtnsDisabled\":false,\"chipCursor\":\"default\"},\"step5\":{\"passDisabled\":false,\"noteDisabled\":false,\"findingsDisabled\":false,\"searchDisabled\":false,\"chipDisabled\":false,\"passCursor\":\"default\"}}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/C-audit_full-InProgress-step4.png"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／In Progress（AHB-EXPORT-1）",
+   "btn": "儲存草稿／完成並建立計畫",
+   "exp": "顯示",
+   "act": "{\"saveDraft\":1,\"submit\":1}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／In Progress（AHB-EXPORT-1）",
+   "btn": "下一步／上一步／步驟列",
+   "exp": "唯讀時仍可瀏覽各步",
+   "act": "{\"back1\":0,\"next1\":1,\"afterNext\":2,\"afterBack\":1,\"next5\":0}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／In Progress（AHB-EXPORT-1）",
+   "btn": "列印（第 3/4/5 步）＋匯出 Word",
+   "exp": "三步皆有列印與 Word",
+   "act": "[1,1,1,1,1,1]",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/C-audit_full-InProgress-step5.png"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／In Progress（AHB-EXPORT-1）",
+   "btn": "第 5 步分類篩選／搜尋",
+   "exp": "仍可使用（只是瀏覽）",
+   "act": "{\"chipDisabled\":false,\"searchDisabled\":false}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／In Progress（AHB-EXPORT-1）",
+   "btn": "狀態下拉選項",
+   "exp": "In Progress / Completed / Void",
+   "act": "[\"In Progress\",\"Completed\",\"Void\"]",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／Closed（AHB-CLOSED-1）",
+   "btn": "編輯控制項（第 1–5 步欄位、Agenda 新增/刪除、模板、查檢項、Pass/Fail/!、備註、發現）",
+   "exp": "全部停用／隱藏（唯讀）",
+   "act": "{\"step1\":{\"title\":true,\"project\":true,\"status\":true,\"startDate\":true,\"statusOptions\":[\"Closed\"]},\"step2AllDisabled\":true,\"step3\":{\"addRow\":false,\"rowDelete\":0,\"rows\":0,\"inputsDisabled\":true},\"step4\":{\"chipDisabled\":true,\"taskDisabled\":true,\"plusDisabled\":true,\"items\":1,\"itemBtnsDisabled\":true,\"chipCursor\":\"default\"},\"step5\":{\"passDisabled\":true,\"noteDisabled\":true,\"findingsDisabled\":true,\"searchDisabled\":false,\"chipDisabled\":false,\"passCursor\":\"default\"}}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/C-audit_full-Closed-step4.png"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／Closed（AHB-CLOSED-1）",
+   "btn": "儲存草稿／完成並建立計畫",
+   "exp": "隱藏",
+   "act": "{\"saveDraft\":0,\"submit\":0}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／Closed（AHB-CLOSED-1）",
+   "btn": "下一步／上一步／步驟列",
+   "exp": "唯讀時仍可瀏覽各步",
+   "act": "{\"back1\":0,\"next1\":1,\"afterNext\":2,\"afterBack\":1,\"next5\":0}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／Closed（AHB-CLOSED-1）",
+   "btn": "列印（第 3/4/5 步）＋匯出 Word",
+   "exp": "三步皆有列印與 Word",
+   "act": "[1,1,1,1,1,1]",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/C-audit_full-Closed-step5.png"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／Closed（AHB-CLOSED-1）",
+   "btn": "第 5 步分類篩選／搜尋",
+   "exp": "仍可使用（只是瀏覽）",
+   "act": "{\"chipDisabled\":false,\"searchDisabled\":false}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／Closed（AHB-CLOSED-1）",
+   "btn": "點擊鎖定中的 Fail ✕",
+   "exp": "沒有反應（狀態不變）",
+   "act": "無變化",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／Closed（AHB-CLOSED-1）",
+   "btn": "唯讀提示",
+   "exp": "（UX）唯讀時是否有說明",
+   "act": "畫面沒有任何唯讀／已鎖定說明",
+   "status": "觀察",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／Closed（AHB-CLOSED-1）",
+   "btn": "列印報告＋匯出 Word（唯讀）",
+   "exp": "列印 kind=report；下載 AHB-CLOSED-1.docx",
+   "act": "{\"print\":\"report\",\"calls\":1,\"file\":\"AHB-CLOSED-1.docx\",\"zip\":true}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/downloads/AHB-CLOSED-1.docx"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／Void（AHB-VOID-1）",
+   "btn": "編輯控制項（第 1–5 步欄位、Agenda 新增/刪除、模板、查檢項、Pass/Fail/!、備註、發現）",
+   "exp": "全部停用／隱藏（唯讀）",
+   "act": "{\"step1\":{\"title\":true,\"project\":true,\"status\":true,\"startDate\":true,\"statusOptions\":[\"Void\"]},\"step2AllDisabled\":true,\"step3\":{\"addRow\":false,\"rowDelete\":0,\"rows\":0,\"inputsDisabled\":true},\"step4\":{\"chipDisabled\":true,\"taskDisabled\":true,\"plusDisabled\":true,\"items\":1,\"itemBtnsDisabled\":true,\"chipCursor\":\"default\"},\"step5\":{\"passDisabled\":true,\"noteDisabled\":true,\"findingsDisabled\":true,\"searchDisabled\":false,\"chipDisabled\":false,\"passCursor\":\"default\"}}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/C-audit_full-Void-step4.png"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／Void（AHB-VOID-1）",
+   "btn": "儲存草稿／完成並建立計畫",
+   "exp": "隱藏",
+   "act": "{\"saveDraft\":0,\"submit\":0}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／Void（AHB-VOID-1）",
+   "btn": "下一步／上一步／步驟列",
+   "exp": "唯讀時仍可瀏覽各步",
+   "act": "{\"back1\":0,\"next1\":1,\"afterNext\":2,\"afterBack\":1,\"next5\":0}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／Void（AHB-VOID-1）",
+   "btn": "列印（第 3/4/5 步）＋匯出 Word",
+   "exp": "三步皆有列印與 Word",
+   "act": "[1,1,1,1,1,1]",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/C-audit_full-Void-step5.png"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／Void（AHB-VOID-1）",
+   "btn": "第 5 步分類篩選／搜尋",
+   "exp": "仍可使用（只是瀏覽）",
+   "act": "{\"chipDisabled\":false,\"searchDisabled\":false}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／Void（AHB-VOID-1）",
+   "btn": "點擊鎖定中的 Fail ✕",
+   "exp": "沒有反應（狀態不變）",
+   "act": "無變化",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／Void（AHB-VOID-1）",
+   "btn": "唯讀提示",
+   "exp": "（UX）唯讀時是否有說明",
+   "act": "畫面沒有任何唯讀／已鎖定說明",
+   "status": "觀察",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／Void（AHB-VOID-1）",
+   "btn": "列印報告＋匯出 Word（唯讀）",
+   "exp": "列印 kind=report；下載 AHB-VOID-1.docx",
+   "act": "{\"print\":\"report\",\"calls\":1,\"file\":\"AHB-VOID-1.docx\",\"zip\":true}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/downloads/AHB-VOID-1.docx"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／API",
+   "btn": "PUT Closed 稽核（改標題）",
+   "exp": "後端拒絕（400），資料不變",
+   "act": "{\"status\":400,\"detail\":\"Cannot modify Audit 'AHB-CLOSED-1' with status 'Closed' — no fields can be changed once an audit is closed or void.\"}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_full／API",
+   "btn": "DELETE Closed 稽核",
+   "exp": "後端拒絕（400）",
+   "act": "400",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Draft（AHB-DRAFT-1）",
+   "btn": "編輯控制項（第 1–5 步欄位、Agenda 新增/刪除、模板、查檢項、Pass/Fail/!、備註、發現）",
+   "exp": "全部停用／隱藏（唯讀）",
+   "act": "{\"step1\":{\"title\":true,\"project\":true,\"status\":true,\"startDate\":true,\"statusOptions\":[\"Draft\",\"Planned\",\"Void\"]},\"step2AllDisabled\":true,\"step3\":{\"addRow\":false,\"rowDelete\":0,\"rows\":0,\"inputsDisabled\":true},\"step4\":{\"chipDisabled\":true,\"taskDisabled\":true,\"plusDisabled\":true,\"items\":1,\"itemBtnsDisabled\":true,\"chipCursor\":\"default\"},\"step5\":{\"passDisabled\":true,\"noteDisabled\":true,\"findingsDisabled\":true,\"searchDisabled\":false,\"chipDisabled\":false,\"passCursor\":\"default\"}}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/C-audit_viewer-Draft-step4.png"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Draft（AHB-DRAFT-1）",
+   "btn": "儲存草稿／完成並建立計畫",
+   "exp": "隱藏",
+   "act": "{\"saveDraft\":0,\"submit\":0}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Draft（AHB-DRAFT-1）",
+   "btn": "下一步／上一步／步驟列",
+   "exp": "唯讀時仍可瀏覽各步",
+   "act": "{\"back1\":0,\"next1\":1,\"afterNext\":2,\"afterBack\":1,\"next5\":0}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Draft（AHB-DRAFT-1）",
+   "btn": "列印（第 3/4/5 步）＋匯出 Word",
+   "exp": "三步皆有列印與 Word",
+   "act": "[1,1,1,1,1,1]",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/C-audit_viewer-Draft-step5.png"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Draft（AHB-DRAFT-1）",
+   "btn": "第 5 步分類篩選／搜尋",
+   "exp": "仍可使用（只是瀏覽）",
+   "act": "{\"chipDisabled\":false,\"searchDisabled\":false}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Draft（AHB-DRAFT-1）",
+   "btn": "點擊鎖定中的 Fail ✕",
+   "exp": "沒有反應（狀態不變）",
+   "act": "無變化",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Draft（AHB-DRAFT-1）",
+   "btn": "唯讀提示",
+   "exp": "（UX）唯讀時是否有說明",
+   "act": "畫面沒有任何唯讀／已鎖定說明",
+   "status": "觀察",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Draft（AHB-DRAFT-1）",
+   "btn": "列印報告＋匯出 Word（唯讀）",
+   "exp": "列印 kind=report；下載 AHB-DRAFT-1.docx",
+   "act": "{\"print\":\"report\",\"calls\":1,\"file\":\"AHB-DRAFT-1.docx\",\"zip\":true}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/downloads/AHB-DRAFT-1.docx"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／In Progress（AHB-EXPORT-1）",
+   "btn": "編輯控制項（第 1–5 步欄位、Agenda 新增/刪除、模板、查檢項、Pass/Fail/!、備註、發現）",
+   "exp": "全部停用／隱藏（唯讀）",
+   "act": "{\"step1\":{\"title\":true,\"project\":true,\"status\":true,\"startDate\":true,\"statusOptions\":[\"In Progress\",\"Completed\",\"Void\"]},\"step2AllDisabled\":true,\"step3\":{\"addRow\":false,\"rowDelete\":0,\"rows\":0,\"inputsDisabled\":true},\"step4\":{\"chipDisabled\":true,\"taskDisabled\":true,\"plusDisabled\":true,\"items\":5,\"itemBtnsDisabled\":true,\"chipCursor\":\"default\"},\"step5\":{\"passDisabled\":true,\"noteDisabled\":true,\"findingsDisabled\":true,\"searchDisabled\":false,\"chipDisabled\":false,\"passCursor\":\"default\"}}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/C-audit_viewer-InProgress-step4.png"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／In Progress（AHB-EXPORT-1）",
+   "btn": "儲存草稿／完成並建立計畫",
+   "exp": "隱藏",
+   "act": "{\"saveDraft\":0,\"submit\":0}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／In Progress（AHB-EXPORT-1）",
+   "btn": "下一步／上一步／步驟列",
+   "exp": "唯讀時仍可瀏覽各步",
+   "act": "{\"back1\":0,\"next1\":1,\"afterNext\":2,\"afterBack\":1,\"next5\":0}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／In Progress（AHB-EXPORT-1）",
+   "btn": "列印（第 3/4/5 步）＋匯出 Word",
+   "exp": "三步皆有列印與 Word",
+   "act": "[1,1,1,1,1,1]",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/C-audit_viewer-InProgress-step5.png"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／In Progress（AHB-EXPORT-1）",
+   "btn": "第 5 步分類篩選／搜尋",
+   "exp": "仍可使用（只是瀏覽）",
+   "act": "{\"chipDisabled\":false,\"searchDisabled\":false}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／In Progress（AHB-EXPORT-1）",
+   "btn": "點擊鎖定中的 Fail ✕",
+   "exp": "沒有反應（狀態不變）",
+   "act": "無變化",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／In Progress（AHB-EXPORT-1）",
+   "btn": "唯讀提示",
+   "exp": "（UX）唯讀時是否有說明",
+   "act": "畫面沒有任何唯讀／已鎖定說明",
+   "status": "觀察",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／In Progress（AHB-EXPORT-1）",
+   "btn": "列印報告＋匯出 Word（唯讀）",
+   "exp": "列印 kind=report；下載 AHB-EXPORT-1.docx",
+   "act": "{\"print\":\"report\",\"calls\":1,\"file\":\"AHB-EXPORT-1.docx\",\"zip\":true}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/downloads/AHB-EXPORT-1.docx"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Closed（AHB-CLOSED-1）",
+   "btn": "編輯控制項（第 1–5 步欄位、Agenda 新增/刪除、模板、查檢項、Pass/Fail/!、備註、發現）",
+   "exp": "全部停用／隱藏（唯讀）",
+   "act": "{\"step1\":{\"title\":true,\"project\":true,\"status\":true,\"startDate\":true,\"statusOptions\":[\"Closed\"]},\"step2AllDisabled\":true,\"step3\":{\"addRow\":false,\"rowDelete\":0,\"rows\":0,\"inputsDisabled\":true},\"step4\":{\"chipDisabled\":true,\"taskDisabled\":true,\"plusDisabled\":true,\"items\":1,\"itemBtnsDisabled\":true,\"chipCursor\":\"default\"},\"step5\":{\"passDisabled\":true,\"noteDisabled\":true,\"findingsDisabled\":true,\"searchDisabled\":false,\"chipDisabled\":false,\"passCursor\":\"default\"}}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/C-audit_viewer-Closed-step4.png"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Closed（AHB-CLOSED-1）",
+   "btn": "儲存草稿／完成並建立計畫",
+   "exp": "隱藏",
+   "act": "{\"saveDraft\":0,\"submit\":0}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Closed（AHB-CLOSED-1）",
+   "btn": "下一步／上一步／步驟列",
+   "exp": "唯讀時仍可瀏覽各步",
+   "act": "{\"back1\":0,\"next1\":1,\"afterNext\":2,\"afterBack\":1,\"next5\":0}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Closed（AHB-CLOSED-1）",
+   "btn": "列印（第 3/4/5 步）＋匯出 Word",
+   "exp": "三步皆有列印與 Word",
+   "act": "[1,1,1,1,1,1]",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/C-audit_viewer-Closed-step5.png"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Closed（AHB-CLOSED-1）",
+   "btn": "第 5 步分類篩選／搜尋",
+   "exp": "仍可使用（只是瀏覽）",
+   "act": "{\"chipDisabled\":false,\"searchDisabled\":false}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Closed（AHB-CLOSED-1）",
+   "btn": "點擊鎖定中的 Fail ✕",
+   "exp": "沒有反應（狀態不變）",
+   "act": "無變化",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Closed（AHB-CLOSED-1）",
+   "btn": "唯讀提示",
+   "exp": "（UX）唯讀時是否有說明",
+   "act": "畫面沒有任何唯讀／已鎖定說明",
+   "status": "觀察",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Closed（AHB-CLOSED-1）",
+   "btn": "列印報告＋匯出 Word（唯讀）",
+   "exp": "列印 kind=report；下載 AHB-CLOSED-1.docx",
+   "act": "{\"print\":\"report\",\"calls\":1,\"file\":\"AHB-CLOSED-1.docx\",\"zip\":true}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/downloads/AHB-CLOSED-1.docx"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Void（AHB-VOID-1）",
+   "btn": "編輯控制項（第 1–5 步欄位、Agenda 新增/刪除、模板、查檢項、Pass/Fail/!、備註、發現）",
+   "exp": "全部停用／隱藏（唯讀）",
+   "act": "{\"step1\":{\"title\":true,\"project\":true,\"status\":true,\"startDate\":true,\"statusOptions\":[\"Void\"]},\"step2AllDisabled\":true,\"step3\":{\"addRow\":false,\"rowDelete\":0,\"rows\":0,\"inputsDisabled\":true},\"step4\":{\"chipDisabled\":true,\"taskDisabled\":true,\"plusDisabled\":true,\"items\":1,\"itemBtnsDisabled\":true,\"chipCursor\":\"default\"},\"step5\":{\"passDisabled\":true,\"noteDisabled\":true,\"findingsDisabled\":true,\"searchDisabled\":false,\"chipDisabled\":false,\"passCursor\":\"default\"}}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/C-audit_viewer-Void-step4.png"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Void（AHB-VOID-1）",
+   "btn": "儲存草稿／完成並建立計畫",
+   "exp": "隱藏",
+   "act": "{\"saveDraft\":0,\"submit\":0}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Void（AHB-VOID-1）",
+   "btn": "下一步／上一步／步驟列",
+   "exp": "唯讀時仍可瀏覽各步",
+   "act": "{\"back1\":0,\"next1\":1,\"afterNext\":2,\"afterBack\":1,\"next5\":0}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Void（AHB-VOID-1）",
+   "btn": "列印（第 3/4/5 步）＋匯出 Word",
+   "exp": "三步皆有列印與 Word",
+   "act": "[1,1,1,1,1,1]",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/C-audit_viewer-Void-step5.png"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Void（AHB-VOID-1）",
+   "btn": "第 5 步分類篩選／搜尋",
+   "exp": "仍可使用（只是瀏覽）",
+   "act": "{\"chipDisabled\":false,\"searchDisabled\":false}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Void（AHB-VOID-1）",
+   "btn": "點擊鎖定中的 Fail ✕",
+   "exp": "沒有反應（狀態不變）",
+   "act": "無變化",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Void（AHB-VOID-1）",
+   "btn": "唯讀提示",
+   "exp": "（UX）唯讀時是否有說明",
+   "act": "畫面沒有任何唯讀／已鎖定說明",
+   "status": "觀察",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／Void（AHB-VOID-1）",
+   "btn": "列印報告＋匯出 Word（唯讀）",
+   "exp": "列印 kind=report；下載 AHB-VOID-1.docx",
+   "act": "{\"print\":\"report\",\"calls\":1,\"file\":\"AHB-VOID-1.docx\",\"zip\":true}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/downloads/AHB-VOID-1.docx"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／清單",
+   "btn": "新增稽核",
+   "exp": "有建立權限 → 顯示",
+   "act": "1",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／清單",
+   "btn": "刪除鈕（含 Void 列）",
+   "exp": "全部停用，提示「您沒有刪除稽核的權限」",
+   "act": "{\"all\":10,\"disabled\":10,\"voidTitle\":\"您沒有刪除稽核的權限\"}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/C-viewer-list.png"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／API",
+   "btn": "DELETE Void 稽核",
+   "exp": "403",
+   "act": "403",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／API",
+   "btn": "PUT 既有稽核",
+   "exp": "403",
+   "act": "403",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／新稽核",
+   "btn": "新稽核可編輯",
+   "exp": "欄位可填、顯示儲存草稿",
+   "act": "true",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／新稽核",
+   "btn": "儲存草稿（首次建立）",
+   "exp": "建立成功（POST 1 次、有編號），之後轉唯讀並顯示黃色說明、儲存草稿消失",
+   "act": "{\"posts\":1,\"docNo\":\"QTS-NA-AUDIT-000007\",\"notice\":1,\"saveDraft\":0,\"titleDisabled\":true}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/C-viewer-created.png"
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_viewer／新稽核",
+   "btn": "✕ 關閉",
+   "exp": "直接關閉、無提示",
+   "act": "{\"open\":false,\"modal\":0}",
+   "status": "PASS",
+   "ev": ""
+  },
+  {
+   "sec": "狀態與權限",
+   "loc": "audit_multi（限 2 專案）",
+   "btn": "清單＋開啟 Draft",
+   "exp": "看得到 P1/P2 的稽核（不含無專案的舊資料）；Draft 可編輯",
+   "act": "{\"rows\":14,\"legacy\":false,\"editable\":true}",
+   "status": "PASS",
+   "ev": "docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence/shots/C-multi-draft.png"
+  }
+ ]
+}

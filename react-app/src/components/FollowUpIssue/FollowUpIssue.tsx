@@ -4,7 +4,7 @@ import actionStyles from '../Shared/FormActions.module.css';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import { Clock, CheckCircle2, BarChart3, Search } from 'lucide-react';
+import { Clock, CheckCircle2, BarChart3, Search, Printer } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useNCRStore } from '../../store/ncrStore';
@@ -846,7 +846,7 @@ const FollowUpIssueDetailsViewModal: React.FC<FollowUpIssueDetailsViewModalProps
               <FormActions
                   tools={<>
                       <button className={actionStyles.secondary} onClick={handlePrint}>
-                          {t('common.print')}
+                          <Printer size={16} /> {t('common.print')}
                       </button>
                   </>}
                   cancel={<>

@@ -1,0 +1,14 @@
+== 1. live state
+OK live backend = CHECKLIST-TEMPLATE-CLEAN deploy for the 4 files
+frontend index now: a9ddbeffc3e1a3ff253cb762632d5b39dfecf123729006bcf7185d62a27159e2
+OK live frontend = AUDIT-PRINT index
+== 2. backups
+integrity: ok
+d7e25596cca2dc2eb7a7c093e990b5526938f7d82068cc33ec4149bc08f9ca8b  qualitas-pre-audit-agenda.db
+audits.agenda column before: 0
+OK backend-old copy
+== 3. staging
+OK uploads
+OK backend staging (4 files)
+OK frontend staging (106 files, 106 on disk)
+PREP DONE

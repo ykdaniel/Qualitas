@@ -436,7 +436,7 @@ const NOI: React.FC = () => {
 
       <ConfirmModal
         isOpen={deleteModal.isOpen}
-        title={t('common.deleteConfirmTitle')}
+        title={t('common.confirmDeleteTitle')}
         message={deleteModal.message || t('common.deleteConfirmMessage', { item: 'NOI' })}
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteModal({ isOpen: false, id: null, message: '' })}

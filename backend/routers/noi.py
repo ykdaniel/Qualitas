@@ -152,10 +152,16 @@ def delete_noi(
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(NOI_DELETE))
 ):
-    deleted = noi_service.delete_noi(
-        noi_id=noi_id, user_id=current_user.id, username=current_user.username,
-        scope=scope,
-    )
+    try:
+        deleted = noi_service.delete_noi(
+            noi_id=noi_id, user_id=current_user.id, username=current_user.username,
+            scope=scope,
+        )
+    except ScopeForbidden as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        # a business refusal (e.g. the NOI is still referenced by ITR / NCR records) is a 400, never a 500
+        raise HTTPException(status_code=400, detail=str(e))
     if not deleted:
         raise HTTPException(status_code=404, detail="NOI not found")
     return {"ok": True}
@@ -173,4 +179,4 @@ def read_noi_related(
     # Only expose the relation graph for an NOI the caller may actually see.
     if noi_service.get_noi(noi_id=noi_id, scope=scope) is None:
         raise HTTPException(status_code=404, detail="NOI not found")
-    return related_service.get_related("noi", noi_id, max_depth=max_depth)
+    return related_service.get_related("noi", noi_id, max_depth=max_depth, scope=scope)

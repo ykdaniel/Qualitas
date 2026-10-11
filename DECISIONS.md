@@ -82,6 +82,16 @@ Result 的既有操作方式比拆開成縱向區塊更直覺）。
 影響範圍：Qualitas 已 PASS 前後端批次；取代先前「未經要求不得提交推送部署」中需要逐批重新取得授權的部分。當前部署盤點 REVISE 仍須補正，不因授權自動轉為 PASS。
 依據：使用者本日先授權定期推送部署，再明確選定每批 PASS 後執行。
 
+### Checklist 空白範本：清除舊結果、連結時重設檢驗欄位、複檢不限範本（2026-10-10）
+日期：2026-10-10
+決策：
+1. 正式站仍帶著檢驗結果的空白範本（QTS-RKS-HL-CHK-000001「Stakeout」、QTS-RKS-RKS-CHK-000006「TESTTTT」）清掉舊結果、留作範本：狀態 Ongoing、計數 0、移除 ITR 參照，`detail_data` 只留項目結構與說明。以一次性 migration 執行並寫稽核；不刪資料，已由範本產生的檢查單不動。
+2. 由範本產生檢查單時，檢驗日期、簽名、NCR 編號、複檢日期、合格勾選、計數與逐項結果一律從空白開始，不沿用範本或舊檢驗的值。
+3. 複檢時新的檢查單不限定要連結原本不合格那張的同一個範本（維持現狀）。
+理由：BACKLOG #22。後端早已拒絕在空白範本寫入結果（§17 hardening），但舊資料仍在，且連結時會把範本頁首的舊檢驗值（例如 2024 的檢驗日期）帶進新檢查單。
+影響範圍：backend/services/checklist_service.py（blank_inspection_detail_data）、services/itr_service.py（link_checklist：detail_data 與 date）、db_migrations.py 第 23 步、db_seeder.py（新資料庫的預設範本改為乾淨範本）。不改前端。
+依據：使用者 2026-10-10 於對話中選定；任務 CHECKLIST-TEMPLATE-CLEAN-2026-001。
+
 ### 材料主檔 API 只留查詢（2026-10-09）
 日期：2026-10-09
 決策：`/api/materials` 移除新增（POST）與修改（PUT），只保留列表與單筆查詢。材料主檔只由核准材料登錄簿（`/material-submittals/register`）建立與修改。資料表與既有資料不動，不提供刪除。
@@ -199,6 +209,108 @@ Result 的既有操作方式比拆開成縱向區塊更直覺）。
 範圍：安排於 M2 實作；M1 不實作。首版不提供「撤回登錄、回到審查中」與「登錄業主撤銷核准」屬規格的範圍建議，不在本決策內。
 影響範圍：`docs/planning/MATERIAL-SUBMITTAL-V1-SPEC-2026-10-08.md`（§3.5、§4.2、§7、AC-R4-*）。
 依據：使用者 2026-10-08 同意（經 GPT 轉交）。
+
+### NOI 底下已有文件時禁止更換承包商，且不重新編號
+日期：2026-10-10
+決策：
+- NOI 只要已有 ITR、NCR、Observation、Checklist 或 Follow-up（來源模組 NOI）以其編號引用，就不得更換承包商（包括改成系統找不到的承包商名稱）；後端拒絕並說明各類文件數量。底下沒有任何文件的 NOI 仍可更換承包商，並照舊重新編號。
+- 同一承包商的縮寫（或 NOI 編號規則）在 NOI 編號後被修改時：底下已有文件的 NOI 保留原編號；底下沒有文件的 NOI 照舊在下次存檔時改為新縮寫的編號。
+- 原本沒有承包商的 NOI（舊資料）可以補選承包商；底下已有文件時保留原編號，沒有文件時照舊重新編號。
+理由：更換承包商會重新產生 NOI 編號，而下游文件只以編號引用、沒有同步機制，會造成 ITR 之後無法存檔、NOI 結案檢查與 Q-Workflow 看不到該 ITR。使用者在「禁止」與「同步更新所有引用」之間選擇禁止。
+影響範圍：backend/services/noi_service.py 的 update_noi；測試 backend/tests/test_noi_contractor_lock_http.py。前端承包商選單是否事先停用並說明，尚未決定。
+依據：使用者 2026-10-10 於本會話直接確認（「NOI換承包商：底下有文件就禁止」；縮寫變更「比照處理，底下有文件就保留原編號」；獨立審查後再選「Follow-up 算進去」「允許補選，保留原編號」）。
+
+### NOI 刪除：被任何文件引用就拒絕（400）；未指定狀態時預設 Open（2026-10-11）
+日期：2026-10-11
+決策：
+1. NOI 只要被 ITR、NCR、Observation、Checklist 以編號引用，或有 Follow-up 以它為來源（來源模組 NOI），就不能刪除。範圍與上一條「禁止更換承包商」相同（原本只檢查 ITR、NCR、Checklist）。後端回 400，並說明各類文件的數量，不刪任何資料；原本這種拒絕會變成 500。
+2. 透過 API 建立 NOI 而沒有指定狀態時，預設為 Open（NOI 流程的起點）。原本的預設值 "Draft" 不在 NOI 流程中；畫面上新增時本來就送 Open。
+理由：NOI 全功能模擬（`docs/workflow/NOI-SIMULATION-2026-10-11.md`）發現的 2 個既有問題，以及刪除與承包商鎖定的文件範圍不一致。
+影響範圍：backend/routers/noi.py（delete_noi 的錯誤對應）、core/validators.py（check_noi_references）、services/noi_service.py（create_noi 預設狀態）；測試 backend/tests/test_noi_delete_http.py。不改前端，不改既有資料。
+依據：使用者 2026-10-11 於協調中心指示「修第 1 個問題，NOI 排進佇列」，之後對 Observation／Follow-up 擋刪除、Draft 預設改 Open 回覆「照建議」。
+
+### IAM 角色權限矩陣、停用測試帳號 john_doe（2026-10-11）
+日期：2026-10-11
+決策：
+1. 正式站角色權限依下列矩陣，由使用者在 IAM UI 指派（不改程式、不用 migration 寫入）。代碼以 `backend/core/perms.py` 為準；共 72 個，ADMIN 維持全部。
+   - QA_MANAGER（69）：全部，但不含 `iam:user:manage`、`iam:role:manage`、`settings:manage:all`。
+   - ENGINEER（43）：ITP view／create／update／void；NCR view／create／update／close；NOI view／create／update；Checklist view／create／update／close；ITR、OBS、OSD、FAT、Meeting、FollowUp、KM 各 view／create／update；PQP、Audit、KPI、Contractors view；`material:view:all`；`iam:user:view`、`iam:role:view`。
+   - Inspector（26）：ITP、NOI、FAT、Meeting、KM、Contractors view；ITR、Checklist、NCR、OBS、OSD 各 view／create／update；FollowUp view／update；`material:view:all`；`iam:user:view`、`iam:role:view`。不含 PQP、Audit、KPI。
+   - VIEWER（18）：16 個業務模組各自的 view（ITP、NCR、NOI、Checklist、PQP、Contractors、FAT、Audit、OBS、OSD、Material、Meeting、KPI、FollowUp、ITR、KM）；`iam:user:view`、`iam:role:view`。
+   - USER（1）：維持 `iam:user:view`，不調整。
+   - 所有刪除、審核（approve）、`material:manage:all`、`contractors:manage:all`、`kpi:update:all` 只給 QA_MANAGER（及 ADMIN）。
+2. 停用使用者 john_doe（不刪除），由使用者在 IAM UI 操作。Inspector 角色保留，供日後真正的檢驗員使用。
+3. BACKLOG #21 子項 3（停用使用者的批次轉移指派工具）延後。
+理由：Inspector 角色與 john_doe 是 2026-02-08 測試腳本 `backend/scripts/verification/verify_iam_backend.py` 建立的；腳本傳入無效代碼，所以角色為 0 權限，帳號從未登入。舊的 ENGINEER／QA_MANAGER／VIEWER 只涵蓋 ITP、NCR、NOI、Checklist，ITR、OBS、材料等後來的模組都沒有權限。所有非管理員角色都需要 `iam:user:view`，NCR、OBS、OSD、Follow-up、會議記錄的指派人選單才載得到名單。Inspector 的 NCR 給到 update，因為附件上傳沿用 update 權限（見「附件沿用 update 權限（方案 A）」）。未指派專案或廠商的非管理員帳號不受資料範圍限制（`core/scope.py`），所以先停用 john_doe，再給 Inspector 權限。
+影響範圍：正式站 roles／role_permissions 資料（由使用者在 UI 指派，寫入稽核）與 users.is_active（john_doe）。不改程式與 seeder；新資料庫不會自動帶入這個矩陣。
+依據：使用者 2026-10-11 於 IAM 工作階段確認（john_doe「選 A」、矩陣「照建議」、#21 子項 3「延後」）。
+
+### 會議記錄：以討論事項追蹤，不再從會議開 Follow-up（2026-10-11，取代「Action by 與 Follow Up 分開」）
+日期：2026-10-11
+決策：會議記錄的每一件討論事項都要追蹤，由事項本身的「Action by」（指定人員或公司，自由文字，可填外部公司）、目標日期與狀態追蹤，不再另開 Follow-up。會議記錄表單拿掉「行動項目」分頁，前端不再從會議記錄建立 Follow-up；會議清單頁提供「未結事項」總覽（各會議最新一次的未結事項，可依 Action by、逾期篩選，逾期醒目標示）與「已結案項目」。已由會議記錄開出、存在 Follow Up Issues 的 Follow-up（sourceModule=MEETING）全部保留不刪不改，照常在 Follow Up 模組追蹤；後端 `/followup/bulk/` 與 MEETING 來源驗證保留不動。
+理由：使用者（2026-10-11）：「會議記錄內的每件事項都是要追蹤的，Action by 就是指定人員」，並選擇「拿掉，以討論事項為準」。同一件事分在討論事項與 Follow-up 兩處追蹤會不一致。本條取代 MEETING-TABS-2026-001 先前記在任務文件的決定「Action by 與行動項目（Follow Up）分開、維持現狀」。
+影響範圍：`react-app/src/components/MeetingMinutes/`（MeetingMinutesModals.tsx、MeetingMinutes.tsx、columns.tsx、discussionLog.ts）；Follow Up 模組與後端 followup 端點不變。
+
+### 稽核查檢模板庫（AUDIT-TEMPLATES-2026-001，2026-10-11）
+日期：2026-10-11
+決策：
+1. 稽核精靈第 4 步的模板改由資料表 `audit_templates` 管理。原本是寫死的 4 個名稱，勾選只記名稱、不帶入任何項目。
+2. **模板按鈕代表「稽核類型」**，例如 ISO 9001 稽核、供應商評鑑。勾選只是標記類型，名稱記入 `selected_templates`，不會自動帶入題目。題目的帶入方式：
+   - **條文選單與題目選單**：左邊選條文（編號加條文標題），右邊選「全部（N 題）」或「第 N 題」。選單只列出已勾選類型的題目。
+     - 選單題：條文內容和查檢重點會填入下方，兩欄都可以修改後再按「+」加入。
+     - 選全部：逐題預覽條文內容與查檢重點，按「+」一次加入這條還沒加過的題目。
+     - 已加入的題目或條文標示「（已加入）」，同一題不能重複加入。
+     - 另有「✎ 自訂題目」，可以自行輸入。
+   - **「從某類型批次挑題」**：打開勾選視窗，可以跨條文一次勾很多題，例如完整稽核時勾全部。已加入的題目預設勾選；已填寫的題目鎖定，不能移除。
+   - 帶入的每一題都會標記來源模板與項目（`templateId`、`templateItemId`）。之後修改或停用模板，不影響已經帶入的稽核；改名後的模板，仍然認得它帶入的題目。
+3. **取消勾選類型時**，只移除從它帶入、還沒填結果也沒填備註的題目。已填寫的保留，並提示保留了幾題；只要還有保留的題目，類型就維持勾選，讓按鈕、列印上的類型名稱和題目一致。模板庫已經沒有的舊名稱，只能取消，取消時只移除名稱。
+4. 模板管理放在 Audit 頁的「模板管理」分頁。有未儲存的修改時，切回「稽核記錄」會先詢問；選擇離開就丟棄修改。模板不硬刪，以停用取代（稽核會引用模板名稱）。每題的欄位是條文編號、條文標題、條文內容（要求原文，最多 2000 字）、查檢重點。
+5. 新增權限 `audit:template:manage`（管理稽核模板）。
+   - 讀取模板只需要 `audit:view:all`；新增、編輯、停用需要這個權限。
+   - ADMIN 由 seeder 自動同步。正式站的 QA_MANAGER 部署後由使用者在 IAM UI 指派，不經 seeder 或 migration。
+   - 上一條「IAM 角色權限矩陣」的數字因此變為：共 73 個權限，QA_MANAGER 70 個（該條原文不改）。
+6. 既有 4 個名稱轉為 4 個初始模板，由 db_migrations 第 24 步寫入，只執行一次，旗標 `audit_templates_initial_v1`。
+   - **ISO 9001:2015** 內容是使用者提供的公司 checklist：4～10 章，59 條條文，116 題。條文標題取自 checklist 的標題列。應備證據（Audit Evidence）併入查檢重點的最後一行「應備證據：…」。
+   - 使用者對 checklist 的處理選擇：5.2.1 補擬一題、修正 4 處錯字、保留 6.2.2.1；LSC／海龍專案的追查重點不放進模板。
+   - ISO 45001、品質管理程序書、供應商評鑑表先留空，由使用者在管理頁填寫。
+   - 初始模板寫入後就是一般資料，改名、停用或刪除都不會在重啟時被補回。
+理由：使用者 2026-10-11 預覽第 4 步時問「可以自己新增嗎？」，在 A（自訂名稱）與 B（真正的模板庫）中選 B。之後在隔離環境逐步確認第 4 步的用法：模板按鈕是稽核類型，條文選單與題目選單並排，保留批次挑題，文字框自動調整高度。
+影響範圍：
+- 後端：models.py（AuditTemplate）、schemas.py、db_migrations.py（第 24 步）、core/perms.py、core/dependencies.py、routers/audit.py（`/api/audit/templates`）、services/audit_template_service.py 與 audit_template_iso9001_2015.json。
+- 前端：Audit.tsx、AuditTemplatesPanel.tsx、AuditTemplatePicker.tsx、AutoGrowTextarea.tsx、AuditWizard.tsx 第 4 步。
+依據：使用者 2026-10-11 於 Audit 工作階段的選擇：
+- 取消勾選「只移除還沒填的項目」、管理頁「Audit 頁的模板管理分頁」、權限「新增管理稽核模板權限」、既有名稱「轉成 4 個初始模板」。
+- ISO 9001 改用公司 checklist：條文放要求原文、證據併入查檢重點、只寫條文號；不放 LSC 欄。
+- 第 4 步的用法：「模板按鈕：標記哪一種稽核，分別帶入相對應的條文及問題」、兩層選單、題目只顯示題號、兩個選單並排、保留批次挑題、條文標題存進模板。
+
+### 公司人員名單與會議出席人員（CONTRACTOR-PERSONNEL-2026-001，2026-10-11）
+日期：2026-10-11
+決策：
+1. 每家公司（廠商、業主、本公司）在廠商管理裡維護「人員」名單（姓名、職稱、Email、電話、在職），不是系統帳號，不需能登入。本公司與業主也以一筆「廠商」維護（使用者選「都當成公司維護名單」），因此也會出現在各模組的廠商選單，不另加公司類型欄位。
+2. 人員不硬刪，以停用取代；有人員名單的公司不可刪除（400，請改為停用）——防呆、可還原（協調中心同意）。
+3. 會議出席人員：先選公司再選該公司在職人員，職稱自動帶入；名單外的人可直接輸入，有 `contractors:manage:all` 者可同時加入該公司名單。每筆出席者存快照文字（company／name／role）加 `contractorId`／`personnelId`，人員之後改名或停用不影響舊會議；舊資料（純文字）照常顯示。列印與 Word 只用快照文字。公司以縮寫（無縮寫時用全名）記錄，與公司會議記錄的寫法一致（TECO、HL）。
+4. 權限：管理沿用 `contractors:manage:all`、完整名單（含聯絡資料）沿用 `contractors:view:all`；會議選人用的 `/contractors/personnel/options` 給任何登入者，只回 id／姓名／職稱／公司 id，廠商範圍帳號只拿得到自己公司的人。不新增權限。
+理由：使用者 2026-10-11：「這裡要從contractor 內取得資料 contractor 有人員 但不一定能進系統」，選「廠商新增人員名單，出席人員從名單選」。
+影響範圍：backend/models.py（ContractorPersonnel，新表 contractor_personnel，啟動 create_all 建立）、schemas.py、services/contractor_service.py、routers/contractors.py；前端 Contractors/ContractorModal.tsx、ContractorPersonnel.tsx、Contractors.tsx（刪除被拒的提示）、MeetingMinutes/AttendeePicker.tsx、MeetingMinutesModals.tsx、services/api.ts、store/meetingMinutesStore.ts（Attendee 型別）。
+依據：使用者 2026-10-11 經協調中心選定；本公司人員來源於會議記錄工作階段選定。
+
+### 稽核結果四級與查檢表欄位（AUDIT-GRADES-2026-001，2026-10-11）
+日期：2026-10-11
+決策：
+1. 稽核查檢項目的結果改為四級：**符合 Pass、正面發現 Positive、主要不符合 Major、次要不符合 Minor**。原本的「不符合 Fail」和「注意 Attention」不再提供。四級用在第 5 步的結果按鈕、統計卡片與圖例、進度，以及查檢表和報告的列印與 Word。
+2. 舊資料不自動修改：
+   - 已評為 `fail` 的題目，顯示為「不符合（未分級）」，算已評，等稽核員改選 Major 或 Minor；已結案的稽核維持原樣。
+   - `pending` 和沒有結果的題目算「未評」。
+   - 再點一次已選的結果會清除，回到未評。
+3. **完成率**＝已評題數 ÷ 全部題數（四級和舊的 `fail` 都算已評）。**不新增符合率**：統計和報告摘要只列 Pass、Positive、Major、Minor、未評的數量；只有在還有舊的 `fail` 時，才另列「不符合（未分級）」。第 5 步的統計卡片是總數、完成率與四級共 6 張（寬螢幕一排，約 1280 以下排成 3×2）；未評和不符合（未分級）的數量列在頁尾圖例，不另做卡片。
+4. 查檢表和報告（列印與 Word）的查檢項目表，拆成「條文編號｜條文內容｜查檢重點｜結果｜備註」，報告另加更新日期。查檢表的空白勾選框改為四級。
+5. 後端不加結果值的白名單：`custom_check_items` 照舊是自由 JSON，舊值可以讀寫；已關閉的稽核原樣重存時，不會被判定為有修改。
+理由：使用者 2026-10-11 預覽查檢表列印時提出：「列印怎麼把條文重點跟問題放在一起，而且結果只有 Pass Postive Major Minor」。
+影響範圍：前端 AuditWizard.tsx（第 5 步）、AuditPrintTemplate.tsx、Audit.print.css、LanguageContext.tsx；後端 services/audit_service.py（Word 匯出）。盤點確認 Dashboard、KPI、Owner Performance 沒有讀取稽核結果（見 TASK）。
+依據：使用者 2026-10-11 於 Audit 工作階段的選擇：
+- 欄位「分成兩欄並排」、結果「全部改成這四級」、舊 fail「顯示不符合（未分級）」、未評「空白，算未評」。
+- 中文名稱「符合／正面發現／主要不符合／次要不符合」、完成率「已評題數 ÷ 全部題數」、符合率「不要，只列各級數量」。
+- 預覽後：1024 寬統計卡「窄螢幕改成 3×2」、未評數量「放圖例就好」。
 
 ## 尚未決策（不得當成已核准規則）
 

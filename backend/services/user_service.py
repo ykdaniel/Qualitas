@@ -42,6 +42,12 @@ _ADMIN_ONLY_MODIFY = "Only an Admin can modify an Admin account"
 _ADMIN_ONLY_PASSWORD = "Only an Admin can set a password through IAM"
 _ADMIN_ONLY_ASSIGN = "Only an Admin can create an account with, or assign, the Admin role"
 _ADMIN_ONLY_ROLE = "Only an Admin can create, rename, modify or delete the Admin role"
+# Every account names its company so "Name / Company" labels identify the person
+# (IAM-USER-COMPANY-LABEL-2026-001). Required when an account is created; an
+# existing account may not have it blanked. Older accounts without one can still
+# be edited (deactivated, password reset) without adding it.
+_COMPANY_REQUIRED = "Company name is required"
+_COMPANY_NOT_BLANK = "Company name cannot be cleared"
 
 
 def _admin_like_name(name: Optional[str]) -> bool:
@@ -185,6 +191,9 @@ class UserService:
             raise HTTPException(status_code=400, detail="Email already registered")
         if self.repo.get_by_username(user.username):
             raise HTTPException(status_code=400, detail="Username already registered")
+        company_name = (user.company_name or "").strip()
+        if not company_name:
+            raise HTTPException(status_code=400, detail=_COMPANY_REQUIRED)
         if user.role_id is not None:
             self._require_existing_role(user.role_id)
 
@@ -212,7 +221,7 @@ class UserService:
                 hashed_password=hashed_password,
                 is_active=True if user.is_active is None else user.is_active,
                 role_id=user.role_id,
-                company_name=user.company_name,
+                company_name=company_name,
                 created_at=date.today().isoformat(),  # stored as YYYY-MM-DD
             )
             created_user = self.repo.create(new_user, commit=False)   # flushed: id assigned
@@ -253,6 +262,10 @@ class UserService:
 
             requested = {k: v for k, v in user_update.model_dump(exclude_unset=True).items()
                          if v is not None and k not in ("password", "reason")}
+            if "company_name" in requested:
+                requested["company_name"] = requested["company_name"].strip()
+                if not requested["company_name"] and not (db_user.company_name or "").strip():
+                    del requested["company_name"]   # nothing there to clear: a blank resend is "not sent"
             # Only real changes are applied and audited (the UI resends the whole record on every save).
             update_dict = {k: v for k, v in requested.items() if getattr(db_user, k, None) != v}
 
@@ -272,6 +285,8 @@ class UserService:
                 if update_dict and self.repo.is_admin_role_name(db_user.role.name if db_user.role else None):
                     raise HTTPException(status_code=403, detail=_ADMIN_ONLY_MODIFY)
 
+            if "company_name" in update_dict and not update_dict["company_name"]:
+                raise HTTPException(status_code=400, detail=_COMPANY_NOT_BLANK)
             if "username" in update_dict:
                 other = self.repo.get_by_username(update_dict["username"])
                 if other and other.id != user_id:

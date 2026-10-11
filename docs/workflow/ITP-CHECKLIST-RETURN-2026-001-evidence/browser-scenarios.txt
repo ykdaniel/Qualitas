@@ -1,0 +1,13 @@
+PASS 1a link carries source ITP | http://127.0.0.1:3291/checklist?from=itp&returnItp=da3bfeac-19c5-4128-a30a-efb4e125f745
+PASS 1b back reopens ITP-A window | url=http://127.0.0.1:3291/itp modal=QTS-RKS-RRC-ITP-000001
+PASS 1c reopen param removed from URL | http://127.0.0.1:3291/itp
+PASS 1e reopened on Inspection Plan tab | tab=plan
+PASS 1d closing reopened window stays on ITP list | url=http://127.0.0.1:3291/itp modal=None
+PASS 2 openId deep link unchanged (opens B, close goes back) | opened=QTS-RKS-RRC-ITP-000002 after-close url=http://127.0.0.1:3291/checklist
+PASS 3 legacy from=itp link still goes history-back | url=http://127.0.0.1:3291/itp modal=None
+PASS 4a generate link carries source ITP | http://127.0.0.1:3291/checklist?from=itp&returnItp=da3bfeac-19c5-4128-a30a-efb4e125f745
+PASS 4b back after Generate reopens ITP-A | url=http://127.0.0.1:3291/itp modal=QTS-RKS-RRC-ITP-000001
+PASS 4c reopened on Inspection Plan tab | tab=plan
+PASS 6a row click opens General tab | tab=general modal=QTS-RKS-RRC-ITP-000002
+PASS 6b Add New opens General tab | tab=general
+PASS 5 unknown reopen id -> notice, no window | toast=True url=http://127.0.0.1:3291/itp

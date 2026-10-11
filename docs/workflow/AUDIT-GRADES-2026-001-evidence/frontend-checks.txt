@@ -1,0 +1,5 @@
+# 2026-10-11T10:42:38Z GRADES candidate = git archive HEAD 89671cbb + G.patch
+tsc exit=0
+eslint --max-warnings 0 (3 files) exit=0
+npm test exit=0 (ℹ tests 169 ℹ pass 169 ℹ fail 0 )
+npm run build exit=0

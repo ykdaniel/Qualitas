@@ -1,0 +1,1188 @@
+diff --git a/DECISIONS.md b/DECISIONS.md
+index f189906c..3a1b3f04 100644
+--- a/DECISIONS.md
++++ b/DECISIONS.md
+@@ -294,6 +294,24 @@ Result 的既有操作方式比拆開成縱向區塊更直覺）。
+ 影響範圍：backend/models.py（ContractorPersonnel，新表 contractor_personnel，啟動 create_all 建立）、schemas.py、services/contractor_service.py、routers/contractors.py；前端 Contractors/ContractorModal.tsx、ContractorPersonnel.tsx、Contractors.tsx（刪除被拒的提示）、MeetingMinutes/AttendeePicker.tsx、MeetingMinutesModals.tsx、services/api.ts、store/meetingMinutesStore.ts（Attendee 型別）。
+ 依據：使用者 2026-10-11 經協調中心選定；本公司人員來源於會議記錄工作階段選定。
+ 
++### 稽核結果四級與查檢表欄位（AUDIT-GRADES-2026-001，2026-10-11）
++日期：2026-10-11
++決策：
++1. 稽核查檢項目的結果改為四級：**符合 Pass、正面發現 Positive、主要不符合 Major、次要不符合 Minor**。原本的「不符合 Fail」和「注意 Attention」不再提供。四級用在第 5 步的結果按鈕、統計卡片與圖例、進度，以及查檢表和報告的列印與 Word。
++2. 舊資料不自動修改：
++   - 已評為 `fail` 的題目，顯示為「不符合（未分級）」，算已評，等稽核員改選 Major 或 Minor；已結案的稽核維持原樣。
++   - `pending` 和沒有結果的題目算「未評」。
++   - 再點一次已選的結果會清除，回到未評。
++3. **完成率**＝已評題數 ÷ 全部題數（四級和舊的 `fail` 都算已評）。**不新增符合率**：統計和報告摘要只列 Pass、Positive、Major、Minor、未評的數量；只有在還有舊的 `fail` 時，才另列「不符合（未分級）」。第 5 步的統計卡片是總數、完成率與四級共 6 張（寬螢幕一排，約 1280 以下排成 3×2）；未評和不符合（未分級）的數量列在頁尾圖例，不另做卡片。
++4. 查檢表和報告（列印與 Word）的查檢項目表，拆成「條文編號｜條文內容｜查檢重點｜結果｜備註」，報告另加更新日期。查檢表的空白勾選框改為四級。
++5. 後端不加結果值的白名單：`custom_check_items` 照舊是自由 JSON，舊值可以讀寫；已關閉的稽核原樣重存時，不會被判定為有修改。
++理由：使用者 2026-10-11 預覽查檢表列印時提出：「列印怎麼把條文重點跟問題放在一起，而且結果只有 Pass Postive Major Minor」。
++影響範圍：前端 AuditWizard.tsx（第 5 步）、AuditPrintTemplate.tsx、Audit.print.css、LanguageContext.tsx；後端 services/audit_service.py（Word 匯出）。盤點確認 Dashboard、KPI、Owner Performance 沒有讀取稽核結果（見 TASK）。
++依據：使用者 2026-10-11 於 Audit 工作階段的選擇：
++- 欄位「分成兩欄並排」、結果「全部改成這四級」、舊 fail「顯示不符合（未分級）」、未評「空白，算未評」。
++- 中文名稱「符合／正面發現／主要不符合／次要不符合」、完成率「已評題數 ÷ 全部題數」、符合率「不要，只列各級數量」。
++- 預覽後：1024 寬統計卡「窄螢幕改成 3×2」、未評數量「放圖例就好」。
++
+ ## 尚未決策（不得當成已核准規則）
+ 
+ - ITR 核准是否須額外檢查 Inspection Result。
+diff --git a/backend/scripts/verification/seed_audit_grades_review.py b/backend/scripts/verification/seed_audit_grades_review.py
+new file mode 100644
+index 00000000..94bc9966
+--- /dev/null
++++ b/backend/scripts/verification/seed_audit_grades_review.py
+@@ -0,0 +1,43 @@
++"""Seed for AUDIT-GRADES-2026-001 browser review (isolated stack only — never run against a real DB).
++
++Run AFTER seed_audit_hardening_b_review.py (reuses project AHB-P1, contractor "Review Vendor" and the accounts, password
++`Accept-Test-1234`). Adds:
++    AHB-GRADES-1        In Progress: one item of each grade (pass / positive / major / minor), one older 'fail'
++                        (shown as 不符合（未分級）), one old 'pending' and one without a result (both 未評) → progress 5 / 7
++    AHB-GRADES-CLOSED-1 Closed, same items — the lock compares them unchanged on a resave
++"""
++import json
++import os
++import sys
++
++if not os.environ.get("DATABASE_URL"):
++    sys.exit("refusing to seed: DATABASE_URL is not set (run through isolated_stack.py seed, never against a real DB)")
++
++BACKEND = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
++sys.path.insert(0, BACKEND)
++import database, models  # noqa: E402
++
++ITEMS = [
++    {"id": 1, "no": "7.1", "clause": "The organization shall determine and provide the resources needed",
++     "task": "How are resources provided?", "status": "pass", "note": "Budget approved", "updatedAt": "2026-10-02"},
++    {"id": 2, "no": "7.2", "clause": "The organization shall determine the necessary competence",
++     "task": "Training records?", "status": "positive", "note": "Training matrix is exemplary", "updatedAt": "2026-10-02"},
++    {"id": 3, "no": "8.4", "clause": "The organization shall ensure that externally provided processes conform",
++     "task": "How are suppliers controlled?", "status": "major", "note": "No evaluation\nfor two vendors", "updatedAt": "2026-10-02"},
++    {"id": 4, "no": "7.5", "clause": "Documented information shall be controlled",
++     "task": "Document control?", "status": "minor", "note": "One obsolete form in use", "updatedAt": "2026-10-02"},
++    {"id": 5, "no": "8.7", "clause": "Nonconforming outputs are identified and controlled",
++     "task": "Segregation?", "status": "fail", "note": "Recorded before the four grades", "updatedAt": "2026-09-30"},
++    {"id": 6, "no": "9.2", "clause": "Internal audits at planned intervals", "task": "Audit programme?", "status": "pending"},
++    {"id": 7, "no": "10.2", "clause": "Nonconformity and corrective action", "task": "Corrective actions?"},
++]
++
++d = database.SessionLocal()
++common = dict(project_id="AHB-P1", project_name="Audit Review P1", contractor="Review Vendor", vendor_id="ahb-vendor",
++              date="2026-10-01", end_date="2026-10-02", auditor="王稽核", location="Yard 3",
++              selected_templates=json.dumps(["ISO 9001:2015"]), custom_check_items=json.dumps(ITEMS, ensure_ascii=False))
++d.add(models.Audit(id="ahb-grades-1", auditNo="AHB-GRADES-1", title="Grades review", status="In Progress", **common))
++d.add(models.Audit(id="ahb-grades-closed-1", auditNo="AHB-GRADES-CLOSED-1", title="Grades review (closed)", status="Closed", **common))
++d.commit()
++d.close()
++print("SEED " + json.dumps({"ok": True}))
+diff --git a/backend/services/audit_service.py b/backend/services/audit_service.py
+index 6634da1b..76bd52ef 100755
+--- a/backend/services/audit_service.py
++++ b/backend/services/audit_service.py
+@@ -30,15 +30,20 @@ _CREATE_STATUSES = tuple(s for s, nxt in WorkflowEngine.TRANSITIONS["Audit"].ite
+ _LOCKED_STATUSES = tuple(s for s, nxt in WorkflowEngine.TRANSITIONS["Audit"].items() if not nxt)
+ 
+ 
+-# Word export (AUDIT-EXPORT-DOCX-2026-001): bilingual labels for the status and for a checklist item's result. An item
+-# without a status counts as pending, as in the wizard.
++# Word export (AUDIT-EXPORT-DOCX-2026-001): bilingual labels for the status and for a checklist item's result.
++# Results (AUDIT-GRADES-2026-001, user's choice 2026-10-11): pass / positive / major / minor. An older audit's 'fail' is
++# shown as "不符合（未分級）" and counts as graded; 'pending', no status or anything else is 未評 (not graded).
+ _STATUS_TEXT = {
+     'Draft': '草稿 Draft', 'Planned': '計畫中 Planned', 'In Progress': '進行中 In Progress',
+     'Completed': '已完成 Completed', 'Closed': '已關閉 Closed', 'Void': '作廢 Void',
+ }
+-_RESULT_TEXT = {'pass': '符合 Pass', 'fail': '不符合 Fail', 'pending': '注意／待改善 Attention'}
+-# Checklist detail table: #, clause no., clause & question, result, remarks, updated — 17.4 cm = A4 minus the margins.
+-_ITEM_COLUMN_WIDTHS_CM = (0.9, 1.7, 6.2, 2.3, 4.3, 2.0)
++AUDIT_GRADES = ('pass', 'positive', 'major', 'minor')
++_RESULT_TEXT = {'pass': '符合 Pass', 'positive': '正面發現 Positive', 'major': '主要不符合 Major', 'minor': '次要不符合 Minor',
++                'fail': '不符合（未分級） Fail'}
++_UNGRADED_TEXT = '未評 Not graded'
++# Checklist detail table: #, clause no., clause text, audit question, result, remarks, updated — 17.4 cm = A4 minus the
++# margins. Clause text and question are separate columns (AUDIT-GRADES-2026-001).
++_ITEM_COLUMN_WIDTHS_CM = (0.8, 1.4, 4.4, 3.8, 2.2, 3.0, 1.8)
+ # Agenda table (AUDIT-AGENDA-2026-001): date, time, audit item / process, auditee, auditor, remarks — also 17.4 cm.
+ _AGENDA_COLUMN_WIDTHS_CM = (2.2, 2.4, 5.0, 3.2, 2.2, 2.4)
+ # Agenda lunch rows (AUDIT-BUTTONS-2026-001): kind "lunch" — a default the wizard adds for each new day, editable and
+@@ -60,7 +65,7 @@ def _shade(cell, hex_color):
+ 
+ 
+ # On-site checklist (AUDIT-BUTTONS-2026-001): #, clause no., clause & question, result boxes, blank remarks — 17.4 cm.
+-_CHECKLIST_COLUMN_WIDTHS_CM = (0.9, 1.7, 7.4, 3.0, 4.4)
++_CHECKLIST_COLUMN_WIDTHS_CM = (0.8, 1.4, 5.0, 4.4, 2.8, 3.0)
+ # Word export kinds: title (zh, en) and the file-name suffix after the audit number; same titles as the printouts.
+ _DOCX_KINDS = {
+     "report": ("內部稽核報告", "INTERNAL AUDIT REPORT", ""),
+@@ -440,11 +445,11 @@ class AuditService:
+         items = [i for i in json_list(audit.custom_check_items) if isinstance(i, dict)]
+         agenda = [a for a in json_list(audit.agenda) if isinstance(a, dict)]
+ 
+-        # Same counting as the wizard's statistics cards: anything that is not pass / fail (incl. no status) is pending.
++        # Same counting as the wizard's statistics cards: the four grades and an older 'fail' are graded; anything else
++        # (pending, no status, an odd value) is not graded. Progress = graded / total.
+         total = len(items)
+-        passed = sum(1 for i in items if i.get('status') == 'pass')
+-        failed = sum(1 for i in items if i.get('status') == 'fail')
+-        pending = total - passed - failed
++        counts = {g: sum(1 for i in items if status_key(i) == g) for g in AUDIT_GRADES + ('fail',)}
++        pending = total - sum(counts.values())
+         # Percent rounded half up in integers (12.5 -> 13), the same formula as the wizard and its printouts
+         # (AUDIT-PRINT-2026-001): Python's round() rounds half to even, and in JavaScript a float product can land just under .5.
+         progress = 0 if total == 0 else (200 * (total - pending) + total) // (2 * total)
+@@ -468,10 +473,10 @@ class AuditService:
+             if items:
+                 rows = []
+                 for n, item in enumerate(items, start=1):
+-                    content = "\n".join(filter(None, [txt(item.get('clause')), txt(item.get('task'))]))
+-                    rows.append([str(n), txt(item.get('no')) or db.DASH, content or db.DASH,
+-                                 "☐ 符合 Pass\n☐ 不符合 Fail\n☐ 注意 Attention", ""])
+-                table = db.add_data_table(doc, ["#", "條文編號\nClause No.", "條文與查檢重點\nClause & Audit Question",
++                    rows.append([str(n), txt(item.get('no')) or db.DASH, txt(item.get('clause')) or db.DASH,
++                                 txt(item.get('task')) or db.DASH,
++                                 "☐ 符合 Pass\n☐ 正面發現 Positive\n☐ 主要不符合 Major\n☐ 次要不符合 Minor", ""])
++                table = db.add_data_table(doc, ["#", "條文編號\nClause No.", "條文內容\nClause", "查檢重點\nAudit Question",
+                                                 "結果\nResult", "備註\nRemarks"], rows)
+                 table.autofit = False
+                 for row in table.rows:
+@@ -557,23 +562,25 @@ class AuditService:
+         db.add_section_heading(doc, "5", "查檢結果", "Checklist Results")
+         db.add_field_grid(doc, [
+             [("查檢項目數", "Total Items", str(total)), ("完成率", "Progress", f"{progress}%")],
+-            [("符合", "Pass", str(passed)), ("不符合", "Fail", str(failed))],
+-            [("注意／待改善", "Attention / Pending", str(pending))],
++            [("符合", "Pass", str(counts['pass'])), ("正面發現", "Positive", str(counts['positive']))],
++            [("主要不符合", "Major", str(counts['major'])), ("次要不符合", "Minor", str(counts['minor']))],
++            # an older audit's ungraded 'fail' only shows up when there is one
++            [("未評", "Not graded", str(pending))] + ([("不符合（未分級）", "Fail (ungraded)", str(counts['fail']))] if counts['fail'] else []),
+         ])
+         db.add_subsection_heading(doc, "5.1 查檢明細", "Audit Items")
+         if items:
+             rows = []
+             for n, item in enumerate(items, start=1):
+-                content = "\n".join(filter(None, [txt(item.get('clause')), txt(item.get('task'))]))
+                 rows.append([
+                     str(n),
+                     txt(item.get('no')) or db.DASH,
+-                    content or db.DASH,
+-                    _RESULT_TEXT.get(status_key(item), _RESULT_TEXT['pending']),
++                    txt(item.get('clause')) or db.DASH,
++                    txt(item.get('task')) or db.DASH,
++                    _RESULT_TEXT.get(status_key(item), _UNGRADED_TEXT),
+                     txt(item.get('note')) or db.DASH,
+                     txt(item.get('updatedAt')) or db.DASH,
+                 ])
+-            table = db.add_data_table(doc, ["#", "條文編號\nClause No.", "條文與查檢重點\nClause & Audit Question",
++            table = db.add_data_table(doc, ["#", "條文編號\nClause No.", "條文內容\nClause", "查檢重點\nAudit Question",
+                                             "結果\nResult", "備註\nRemarks", "更新日期\nUpdated"], rows)
+             # Word gives every column the same width by default: a narrow "#", most of the room for the question.
+             table.autofit = False
+diff --git a/backend/tests/test_audit_export_docx_http.py b/backend/tests/test_audit_export_docx_http.py
+index 4f5677df..9e16125f 100644
+--- a/backend/tests/test_audit_export_docx_http.py
++++ b/backend/tests/test_audit_export_docx_http.py
+@@ -57,13 +57,18 @@ def login(env, username):
+     assert response.status_code == 200, response.text
+ 
+ 
++# results (AUDIT-GRADES-2026-001): pass / positive / major / minor; an older 'fail' is "不符合（未分級）" (graded);
++# 'pending' and no status are 未評 (not graded)
+ ITEMS = [
+     {'id': 1, 'no': '7.1', 'clause': 'Resources', 'task': 'How are resources provided?', 'status': 'pass',
+      'note': 'Budget approved', 'updatedAt': '2026-10-02'},
+-    {'id': 2, 'no': '8.4', 'clause': 'External providers', 'task': 'How are suppliers controlled?', 'status': 'fail',
++    {'id': 2, 'no': '8.4', 'clause': 'External providers', 'task': 'How are suppliers controlled?', 'status': 'major',
+      'note': 'No evaluation\nfor two vendors', 'updatedAt': '2026-10-02'},
+     {'id': 3, 'no': '', 'clause': '', 'task': 'Custom question', 'status': 'pending'},
+-    {'id': 4, 'no': '9.2', 'clause': 'Internal audit', 'task': 'Planned intervals?'},  # no status yet → pending
++    {'id': 4, 'no': '9.2', 'clause': 'Internal audit', 'task': 'Planned intervals?'},  # no status yet → not graded
++    {'id': 5, 'no': '7.2', 'clause': 'Competence', 'task': 'Training records?', 'status': 'positive'},
++    {'id': 6, 'no': '7.5', 'clause': 'Documented information', 'task': 'Document control?', 'status': 'minor'},
++    {'id': 7, 'no': '8.7', 'clause': 'Nonconforming outputs', 'task': 'Segregation?', 'status': 'fail'},  # older audit
+ ]
+ 
+ 
+@@ -90,7 +95,7 @@ def test_export_contains_the_whole_report(env):
+                      'Receiving and storage', 'Two suppliers lack evaluation.', 'Follow-up NCR to be raised.',
+                      '主任稽核員 Lead Auditor', '受稽核方代表 Auditee Representative', '專案經理 Project Director']:
+         assert expected in text, expected
+-    # summary: 4 items, 1 pass, 1 fail, 2 pending → progress 50%
++    # summary: 7 items, one of each grade + an older ungraded fail, 2 not graded → progress 5 / 7 = 71%
+     doc = Document(BytesIO(response.content))
+     summary = next(t for t in doc.tables if 'Total Items' in t.rows[0].cells[0].text)
+     values = {}
+@@ -98,16 +103,20 @@ def test_export_contains_the_whole_report(env):
+         texts = [c.text for c in row.cells]
+         texts = [x for i, x in enumerate(texts) if i == 0 or x != texts[i - 1]]  # a merged value cell repeats its text
+         values.update({texts[i].split('\n')[1]: texts[i + 1] for i in range(0, len(texts), 2)})
+-    assert values == {'Total Items': '4', 'Progress': '50%', 'Pass': '1', 'Fail': '1', 'Attention / Pending': '2'}
++    assert values == {'Total Items': '7', 'Progress': '71%', 'Pass': '1', 'Positive': '1', 'Major': '1', 'Minor': '1',
++                      'Not graded': '2', 'Fail (ungraded)': '1'}
+ 
+     rows = item_rows(response)
+-    assert [r[0] for r in rows] == ['1', '2', '3', '4']  # stored order
+-    assert rows[0][1:] == ['7.1', 'Resources\nHow are resources provided?', '符合 Pass', 'Budget approved', '2026-10-02']
+-    assert rows[1][3] == '不符合 Fail' and rows[1][4] == 'No evaluation\nfor two vendors'  # multi-line note kept
+-    assert rows[2][1:4] == ['—', 'Custom question', '注意／待改善 Attention']
+-    assert rows[3][3] == '注意／待改善 Attention' and rows[3][4] == '—' and rows[3][5] == '—'
++    assert [r[0] for r in rows] == ['1', '2', '3', '4', '5', '6', '7']  # stored order
++    # clause text and audit question in separate columns (AUDIT-GRADES-2026-001)
++    assert rows[0][1:] == ['7.1', 'Resources', 'How are resources provided?', '符合 Pass', 'Budget approved', '2026-10-02']
++    assert rows[1][4] == '主要不符合 Major' and rows[1][5] == 'No evaluation\nfor two vendors'  # multi-line note kept
++    assert rows[2][1:5] == ['—', '—', 'Custom question', '未評 Not graded']
++    assert rows[3][4] == '未評 Not graded' and rows[3][5] == '—' and rows[3][6] == '—'
++    assert [r[4] for r in rows[4:]] == ['正面發現 Positive', '次要不符合 Minor', '不符合（未分級） Fail']
+     table = next(t for t in Document(BytesIO(response.content)).tables if t.rows[0].cells[0].text == '#')
+-    assert [round(c.width.cm, 1) for c in table.rows[1].cells] == [0.9, 1.7, 6.2, 2.3, 4.3, 2.0]  # narrow '#', wide question
++    assert [c.text.split('\n')[0] for c in table.rows[0].cells] == ['#', '條文編號', '條文內容', '查檢重點', '結果', '備註', '更新日期']
++    assert [round(c.width.cm, 1) for c in table.rows[1].cells] == [0.8, 1.4, 4.4, 3.8, 2.2, 3.0, 1.8]
+ 
+ 
+ def test_export_of_an_audit_without_items_or_optional_fields(env):
+@@ -131,7 +140,7 @@ def test_legacy_rows_export_without_failing(env):
+         assert '（尚無查檢項目 No audit items）' in text
+ 
+ 
+-def test_a_status_that_is_not_a_string_counts_as_pending(env):
++def test_a_status_that_is_not_a_string_counts_as_not_graded(env):
+     # the create API accepts any JSON in custom_check_items, so a list / object / number status can be stored (R1 review)
+     items = [{'id': 1, 'task': 'list', 'status': ['pass']}, {'id': 2, 'task': 'object', 'status': {'v': 'fail'}},
+              {'id': 3, 'task': 'number', 'status': 1}, {'id': 4, 'task': 'ok', 'status': 'pass'}]
+@@ -139,8 +148,9 @@ def test_a_status_that_is_not_a_string_counts_as_pending(env):
+     assert created.status_code == 200, created.text
+     response = export(env, created.json()['id'])
+     assert response.status_code == 200, response.text
+-    assert [r[3] for r in item_rows(response)] == ['注意／待改善 Attention'] * 3 + ['符合 Pass']
+-    assert '25%' in docx_text(response)  # 1 of 4 done, the other three pending
++    assert [r[4] for r in item_rows(response)] == ['未評 Not graded'] * 3 + ['符合 Pass']
++    assert '25%' in docx_text(response)  # 1 of 4 graded, the other three not graded
++    assert 'Fail (ungraded)' not in docx_text(response)  # the ungraded-fail line only shows when there is one
+ 
+ 
+ def summary_values(response):
+@@ -171,7 +181,7 @@ def test_characters_xml_cannot_carry_are_dropped_not_an_error(env):
+     assert response.status_code == 200, response.text
+     text = docx_text(response)
+     assert 'Title' in text and 'Lineone' in text and 'Line two' in text
+-    assert item_rows(response)[0][2:5] == ['Resources\nQ?', '符合 Pass', 'badchar']
++    assert item_rows(response)[0][2:6] == ['Resources', 'Q?', '符合 Pass', 'badchar']
+ 
+ 
+ def test_unknown_audit_is_404(env):
+@@ -247,11 +257,13 @@ def test_kind_checklist_has_blank_result_boxes_and_no_recorded_results(env):
+     assert '稽核查檢表 AUDIT CHECKLIST' in text and 'Yard 3' in text and '2026-10-01 ~ 2026-10-02' in text
+     assert section_headings(response) == ['1. 稽核資訊  Audit Information', '2. 查檢項目  Audit Items', '3. 簽核  Sign-off']
+     rows = item_rows(response)
+-    assert [r[0] for r in rows] == ['1', '2', '3', '4']
+-    assert rows[0][1:] == ['7.1', 'Resources\nHow are resources provided?', '☐ 符合 Pass\n☐ 不符合 Fail\n☐ 注意 Attention', '']
+-    assert 'Budget approved' not in text and '符合 Pass\n' not in text.replace('☐ 符合 Pass', '')  # recorded results / notes are not printed
++    assert [r[0] for r in rows] == ['1', '2', '3', '4', '5', '6', '7']
++    assert rows[0][1:] == ['7.1', 'Resources', 'How are resources provided?',
++                           '☐ 符合 Pass\n☐ 正面發現 Positive\n☐ 主要不符合 Major\n☐ 次要不符合 Minor', '']
++    # recorded results / notes are not printed
++    assert 'Budget approved' not in text and '主要不符合 Major' not in text.replace('☐ 主要不符合 Major', '')
+     table = next(t for t in Document(BytesIO(response.content)).tables if t.rows[0].cells[0].text == '#')
+-    assert [round(c.width.cm, 1) for c in table.rows[1].cells] == [0.9, 1.7, 7.4, 3.0, 4.4]
++    assert [round(c.width.cm, 1) for c in table.rows[1].cells] == [0.8, 1.4, 5.0, 4.4, 2.8, 3.0]
+     empty = create(env, custom_check_items=[]).json()
+     assert '（尚無查檢項目 No audit items）' in docx_text(env.client.get(f"/api/audit/{empty['id']}/export-docx?kind=checklist"))
+ 
+diff --git a/react-app/src/components/Audit/Audit.print.css b/react-app/src/components/Audit/Audit.print.css
+index 78add057..78421563 100644
+--- a/react-app/src/components/Audit/Audit.print.css
++++ b/react-app/src/components/Audit/Audit.print.css
+@@ -92,19 +92,21 @@
+ .audit-print-root .items th small { display: block; color: var(--audit-note); font-weight: 500; font-size: 7.6px; letter-spacing: .2px; }
+ .audit-print-root .blank { color: #aeb3ba; }
+ 
+-/* checklist items: narrow #, most of the width for the question (same proportions as the Word export) */
++/* checklist items: clause text and audit question in their own columns (AUDIT-GRADES-2026-001) — the same proportions
++   as the Word export (report 0.8 / 1.4 / 4.4 / 3.8 / 2.2 / 3.0 / 1.8 cm, checklist 0.8 / 1.4 / 5.0 / 4.4 / 2.8 / 3.0 cm) */
+ .audit-print-root .items th { background: var(--audit-fill); font-weight: 600; text-align: left; }
+ .audit-print-root .items td { white-space: pre-wrap; word-break: break-word; }
+ .audit-print-root .items .c-n { width: 5%; text-align: center; }
+-.audit-print-root .items .c-no { width: 10%; }
+-.audit-print-root .items .c-q { width: 36%; }
++.audit-print-root .items .c-no { width: 8%; }
++.audit-print-root .items .c-c { width: 25%; }
++.audit-print-root .items .c-q { width: 22%; }
+ .audit-print-root .items .c-r { width: 13%; }
+-.audit-print-root .items .c-m { width: 24%; }
+-.audit-print-root .items .c-d { width: 12%; }
+-.audit-print-root .items .clause { font-weight: 600; }
+-.audit-print-root .checklist-items .c-q { width: 42%; }
+-.audit-print-root .checklist-items .c-r { width: 17%; }
+-.audit-print-root .checklist-items .c-m { width: 26%; }
++.audit-print-root .items .c-m { width: 17%; }
++.audit-print-root .items .c-d { width: 10%; }
++.audit-print-root .checklist-items .c-c { width: 29%; }
++.audit-print-root .checklist-items .c-q { width: 25%; }
++.audit-print-root .checklist-items .c-r { width: 16%; }
++.audit-print-root .checklist-items .c-m { width: 17%; }
+ .audit-print-root .checklist-items td { height: 46px; }
+ .audit-print-root .checklist-items .boxes { white-space: nowrap; font-size: 8.6px; line-height: 1.7; }
+ /* agenda (AUDIT-AGENDA-2026-001): same proportions as the Word export's agenda table */
+diff --git a/react-app/src/components/Audit/AuditPrintTemplate.tsx b/react-app/src/components/Audit/AuditPrintTemplate.tsx
+index e0656481..3c12d924 100644
+--- a/react-app/src/components/Audit/AuditPrintTemplate.tsx
++++ b/react-app/src/components/Audit/AuditPrintTemplate.tsx
+@@ -53,7 +53,12 @@ const STATUS_TEXT: Record<string, string> = {
+     'Draft': '草稿 Draft', 'Planned': '計畫中 Planned', 'In Progress': '進行中 In Progress',
+     'Completed': '已完成 Completed', 'Closed': '已關閉 Closed', 'Void': '作廢 Void',
+ };
+-const RESULT_TEXT: Record<string, string> = { pass: '符合 Pass', fail: '不符合 Fail', pending: '注意／待改善 Attention' };
++// Results (AUDIT-GRADES-2026-001): the four grades; an older audit's 'fail' is shown as 不符合（未分級）; anything else is
++// 未評 (not graded).
++const RESULT_TEXT: Record<string, string> = {
++    pass: '符合 Pass', positive: '正面發現 Positive', major: '主要不符合 Major', minor: '次要不符合 Minor', fail: '不符合（未分級） Fail',
++};
++const UNGRADED_TEXT = '未評 Not graded';
+ 
+ // Completion percent rounded half up in integers (12.5 -> 13): the wizard's statistics card, these printouts and the Word
+ // export all use this formula — Math.round(done / total * 100) gave 57 for 23 of 40 (the float is 57.4999...).
+@@ -75,20 +80,17 @@ const AuditPrintTemplate: React.FC<AuditPrintTemplateProps> = ({ kind, data, uns
+     const items = data.customCheckItems.filter((i): i is CheckItem => !!i && typeof i === 'object' && !Array.isArray(i));
+     const agenda = data.agenda.filter((a): a is AgendaRow => !!a && typeof a === 'object' && !Array.isArray(a));
+     const templates = data.selectedTemplates.filter((t): t is string => typeof t === 'string' && !!t.trim());
+-    // Same counting as the wizard's statistics cards and the Word export: anything not pass / fail is pending.
++    // Same counting as the wizard's statistics cards and the Word export: the four grades and an older 'fail' are graded,
++    // anything else is not graded; progress = graded / total.
+     const total = items.length;
+-    const passed = items.filter(i => i.status === 'pass').length;
+-    const failed = items.filter(i => i.status === 'fail').length;
+-    const pending = total - passed - failed;
++    const count = (s: string) => items.filter(i => i.status === s).length;
++    const byGrade = { pass: count('pass'), positive: count('positive'), major: count('major'), minor: count('minor'), fail: count('fail') };
++    const pending = total - Object.values(byGrade).reduce((a, b) => a + b, 0);
+     const progress = auditProgress(total, pending);
+-    const resultText = (s: unknown) => RESULT_TEXT[typeof s === 'string' ? s : ''] || RESULT_TEXT.pending;
++    // own keys only: a stored status like '__proto__' / 'constructor' must not reach the prototype (R1 review)
++    const resultText = (s: unknown) =>
++        typeof s === 'string' && Object.prototype.hasOwnProperty.call(RESULT_TEXT, s) ? RESULT_TEXT[s] : UNGRADED_TEXT;
+     const [titleZh, titleEn] = TITLES[kind];
+-    // Clause (bold) over the question; a single dash only when both are empty — the Word cell joins the two the same way.
+-    const questionCell = (item: CheckItem) => {
+-        const clause = clean(item.clause), task = clean(item.task);
+-        if (!clause && !task) return DASH;
+-        return <>{clause && <div className="clause">{clause}</div>}{task && <div>{task}</div>}</>;
+-    };
+ 
+     const infoSection = (
+         <>
+@@ -242,7 +244,7 @@ const AuditPrintTemplate: React.FC<AuditPrintTemplateProps> = ({ kind, data, uns
+                                             <thead>
+                                                 <tr>
+                                                     <th className="c-n">#</th><th className="c-no">條文編號<small>Clause No.</small></th>
+-                                                    <th className="c-q">條文與查檢重點<small>Clause &amp; Audit Question</small></th>
++                                                    <th className="c-c">條文內容<small>Clause</small></th><th className="c-q">查檢重點<small>Audit Question</small></th>
+                                                     <th className="c-r">結果<small>Result</small></th><th className="c-m">備註<small>Remarks</small></th>
+                                                 </tr>
+                                             </thead>
+@@ -251,8 +253,8 @@ const AuditPrintTemplate: React.FC<AuditPrintTemplateProps> = ({ kind, data, uns
+                                                     <tr key={n}>
+                                                         <td className="c-n">{n + 1}</td>
+                                                         <td className="c-no">{clean(item.no) || DASH}</td>
+-                                                        <td className="c-q">{questionCell(item)}</td>
+-                                                        <td className="c-r boxes"><div>☐ 符合 Pass</div><div>☐ 不符合 Fail</div><div>☐ 注意 Attention</div></td>
++                                                        <td className="c-c">{clean(item.clause) || DASH}</td><td className="c-q">{clean(item.task) || DASH}</td>
++                                                        <td className="c-r boxes"><div>☐ 符合 Pass</div><div>☐ 正面發現 Positive</div><div>☐ 主要不符合 Major</div><div>☐ 次要不符合 Minor</div></td>
+                                                         <td className="c-m" />
+                                                     </tr>
+                                                 ))}
+@@ -283,11 +285,16 @@ const AuditPrintTemplate: React.FC<AuditPrintTemplateProps> = ({ kind, data, uns
+                                                         <td className="lbl">完成率<small>Progress</small></td><td className="val">{progress}%</td>
+                                                     </tr>
+                                                     <tr>
+-                                                        <td className="lbl">符合<small>Pass</small></td><td className="val">{passed}</td>
+-                                                        <td className="lbl">不符合<small>Fail</small></td><td className="val">{failed}</td>
++                                                        <td className="lbl">符合<small>Pass</small></td><td className="val">{byGrade.pass}</td>
++                                                        <td className="lbl">正面發現<small>Positive</small></td><td className="val">{byGrade.positive}</td>
++                                                    </tr>
++                                                    <tr>
++                                                        <td className="lbl">主要不符合<small>Major</small></td><td className="val">{byGrade.major}</td>
++                                                        <td className="lbl">次要不符合<small>Minor</small></td><td className="val">{byGrade.minor}</td>
+                                                     </tr>
+                                                     <tr>
+-                                                        <td className="lbl">注意／待改善<small>Attention / Pending</small></td><td className="val" colSpan={3}>{pending}</td>
++                                                        <td className="lbl">未評<small>Not graded</small></td><td className="val" colSpan={byGrade.fail ? 1 : 3}>{pending}</td>
++                                                        {byGrade.fail > 0 && <><td className="lbl">不符合（未分級）<small>Fail (ungraded)</small></td><td className="val">{byGrade.fail}</td></>}
+                                                     </tr>
+                                                 </tbody>
+                                             </table>
+@@ -297,7 +304,7 @@ const AuditPrintTemplate: React.FC<AuditPrintTemplateProps> = ({ kind, data, uns
+                                                     <thead>
+                                                         <tr>
+                                                             <th className="c-n">#</th><th className="c-no">條文編號<small>Clause No.</small></th>
+-                                                            <th className="c-q">條文與查檢重點<small>Clause &amp; Audit Question</small></th>
++                                                            <th className="c-c">條文內容<small>Clause</small></th><th className="c-q">查檢重點<small>Audit Question</small></th>
+                                                             <th className="c-r">結果<small>Result</small></th><th className="c-m">備註<small>Remarks</small></th>
+                                                             <th className="c-d">更新日期<small>Updated</small></th>
+                                                         </tr>
+@@ -307,7 +314,7 @@ const AuditPrintTemplate: React.FC<AuditPrintTemplateProps> = ({ kind, data, uns
+                                                             <tr key={n}>
+                                                                 <td className="c-n">{n + 1}</td>
+                                                                 <td className="c-no">{clean(item.no) || DASH}</td>
+-                                                                <td className="c-q">{questionCell(item)}</td>
++                                                                <td className="c-c">{clean(item.clause) || DASH}</td><td className="c-q">{clean(item.task) || DASH}</td>
+                                                                 <td className="c-r">{resultText(item.status)}</td>
+                                                                 <td className="c-m">{clean(item.note) || DASH}</td>
+                                                                 <td className="c-d">{clean(item.updatedAt) || DASH}</td>
+diff --git a/react-app/src/components/Audit/AuditWizard.tsx b/react-app/src/components/Audit/AuditWizard.tsx
+index 51f12d19..3a05c465 100755
+--- a/react-app/src/components/Audit/AuditWizard.tsx
++++ b/react-app/src/components/Audit/AuditWizard.tsx
+@@ -7,7 +7,7 @@ import { toast } from 'sonner';
+ import {
+   MapPin, ClipboardList, CheckCircle, ChevronRight, ChevronLeft,
+   Save, FileText, Users, CheckSquare, Plus, Trash2, Edit2, Check, X,
+-  AlertCircle, Search, ShieldCheck, Printer, CalendarDays, Lock, ListChecks
++  Search, ShieldCheck, Printer, CalendarDays, Lock, ListChecks
+ } from 'lucide-react';
+ import { useAuditStore, AuditItem, AuditAgendaEntry } from '../../store/auditStore';
+ import { useAuditTemplateStore, AuditTemplate } from '../../store/auditTemplateStore';
+@@ -67,6 +67,15 @@ const AUDIT_STATUS_TRANSITIONS: Record<string, string[]> = {
+ const AUDIT_CREATE_STATUSES = ['Draft', 'Planned', 'In Progress', 'Completed'];
+ // Closed and Void are dead ends ("Closed": [] / "Void": []): read-only here and in the backend.
+ const AUDIT_LOCKED_STATUSES = new Set(['Closed', 'Void']);
++// Checklist results (AUDIT-GRADES-2026-001, user's choice 2026-10-11): 符合 Pass, 正面發現 Positive, 主要不符合 Major,
++// 次要不符合 Minor. An older audit's 'fail' still counts as graded (shown as 不符合（未分級）) until the auditor regrades it.
++const GRADE_BUTTONS = [
++  { value: 'pass', label: 'audit.grades.passShort', title: '符合 (Pass)', active: 'text-green-600' },
++  { value: 'positive', label: 'audit.grades.positiveShort', title: '正面發現 (Positive)', active: 'text-sky-600' },
++  { value: 'major', label: 'audit.grades.majorShort', title: '主要不符合 (Major)', active: 'text-red-600' },
++  { value: 'minor', label: 'audit.grades.minorShort', title: '次要不符合 (Minor)', active: 'text-amber-600' },
++];
++const GRADED_STATUSES = new Set(['pass', 'positive', 'major', 'minor', 'fail']);
+ const AUDIT_STATUS_LABELS: Record<string, string> = {
+   'Draft': '✏️ Draft（草稿）',
+   'Planned': '📅 Planned（計畫中）',
+@@ -265,8 +274,8 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+   const templateNames = useMemo(() => new Map(libraryTemplates.map(tpl => [tpl.id, tpl.name])), [libraryTemplates]);
+   const [pickerTemplate, setPickerTemplate] = useState<AuditTemplate | null>(null);
+ 
+-  // A copied question counts as filled once it has a result (pass / fail) or a note: those are never removed.
+-  const isFilledItem = (item: any) => item?.status === 'pass' || item?.status === 'fail' || !!String(item?.note ?? '').trim();
++  // A copied question counts as filled once it has a result (one of the four grades, or an older 'fail') or a note: those are never removed.
++  const isFilledItem = (item: any) => GRADED_STATUSES.has(item?.status) || !!String(item?.note ?? '').trim();
+ 
+   // Clicking a chip ticks / unticks an audit type (user's design 2026-10-11): ticking only records the name — its questions
+   // become available in the add form's dropdown and the batch picker; unticking removes the unfilled questions that came
+@@ -328,13 +337,17 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+     setPickerTemplate(null);
+   };
+ 
++  // Results (AUDIT-GRADES-2026-001): the four grades and an older audit's 'fail' (不符合（未分級）) are graded; anything
++  // else (no status, the old 'pending') is not graded. Progress = graded / total, as in the printouts and the Word export.
+   const stats = useMemo(() => {
+-    const total = formData.customCheckItems.length;
+-    const passed = formData.customCheckItems.filter((i: any) => i.status === 'pass').length;
+-    const failed = formData.customCheckItems.filter((i: any) => i.status === 'fail').length;
+-    const pending = total - passed - failed; // The "!" status is treated as pending or warning
++    // only object items count, the same filter as the printouts and the Word export (R1 review)
++    const items: any[] = formData.customCheckItems.filter((i: any) => !!i && typeof i === 'object' && !Array.isArray(i));
++    const total = items.length;
++    const count = (s: string) => items.filter(i => i?.status === s).length;
++    const byGrade = { pass: count('pass'), positive: count('positive'), major: count('major'), minor: count('minor'), fail: count('fail') };
++    const pending = total - Object.values(byGrade).reduce((a, b) => a + b, 0);
+     const progress = auditProgress(total, pending);
+-    return { total, passed, failed, pending, progress };
++    return { total, ...byGrade, pending, progress };
+   }, [formData.customCheckItems]);
+ 
+   const filteredItems = useMemo(() => {
+@@ -346,11 +359,12 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+     });
+   }, [formData.customCheckItems, searchTerm, activeCategory]);
+ 
++  // Clicking the grade an item already has clears it (back to not graded).
+   const updateItemStatus = (id: number, newStatus: string) => {
+     setFormData(prev => ({
+       ...prev,
+-      customCheckItems: prev.customCheckItems.map((item: any) => 
+-        item.id === id ? { ...item, status: newStatus, updatedAt: localToday() } : item
++      customCheckItems: prev.customCheckItems.map((item: any) =>
++        item.id === id ? { ...item, status: item.status === newStatus ? '' : newStatus, updatedAt: localToday() } : item
+       )
+     }));
+   };
+@@ -1176,7 +1190,8 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                 </header>
+ 
+                 {/* Statistics Cards */}
+-                <div className="grid grid-cols-4 gap-4 overflow-x-auto min-w-full pb-2">
++                {/* six cards: one row from xl, 3 × 2 below it so a ~1024px screen needs no sideways scroll (user 2026-10-11) */}
++                <div className="grid grid-cols-3 xl:grid-cols-6 gap-4 overflow-x-auto min-w-full pb-2">
+                   <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]">
+                     <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">{t('audit.wizard.statTotal')}</p>
+                     <p className="text-2xl font-bold text-slate-800">{stats.total}</p>
+@@ -1194,18 +1209,32 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                       <div className="bg-blue-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${stats.progress}%` }}></div>
+                     </div>
+                   </div>
+-                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]">
++                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]" data-stat="pass">
+                     <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">{t('audit.wizard.statPass')}</p>
+-                    <p className="text-2xl font-bold text-green-600">{stats.passed}</p>
++                    <p className="text-2xl font-bold text-green-600">{stats.pass}</p>
+                     <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3">
+-                      <div className="bg-green-500 h-1.5 rounded-full" style={{ width: stats.total ? `${(stats.passed / stats.total) * 100}%` : '0%' }}></div>
++                      <div className="bg-green-500 h-1.5 rounded-full" style={{ width: stats.total ? `${(stats.pass / stats.total) * 100}%` : '0%' }}></div>
+                     </div>
+                   </div>
+-                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]">
+-                    <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">{t('audit.wizard.statFail')}</p>
+-                    <p className="text-2xl font-bold text-red-600">{stats.failed}</p>
++                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]" data-stat="positive">
++                    <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">{t('audit.wizard.statPositive')}</p>
++                    <p className="text-2xl font-bold text-sky-600">{stats.positive}</p>
++                    <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3">
++                      <div className="bg-sky-500 h-1.5 rounded-full" style={{ width: stats.total ? `${(stats.positive / stats.total) * 100}%` : '0%' }}></div>
++                    </div>
++                  </div>
++                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]" data-stat="major">
++                    <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">{t('audit.wizard.statMajor')}</p>
++                    <p className="text-2xl font-bold text-red-600">{stats.major}</p>
++                    <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3">
++                      <div className="bg-red-500 h-1.5 rounded-full" style={{ width: stats.total ? `${(stats.major / stats.total) * 100}%` : '0%' }}></div>
++                    </div>
++                  </div>
++                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]" data-stat="minor">
++                    <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">{t('audit.wizard.statMinor')}</p>
++                    <p className="text-2xl font-bold text-amber-600">{stats.minor}</p>
+                     <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3">
+-                      <div className="bg-red-500 h-1.5 rounded-full" style={{ width: stats.total ? `${(stats.failed / stats.total) * 100}%` : '0%' }}></div>
++                      <div className="bg-amber-500 h-1.5 rounded-full" style={{ width: stats.total ? `${(stats.minor / stats.total) * 100}%` : '0%' }}></div>
+                     </div>
+                   </div>
+                 </div>
+@@ -1253,7 +1282,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                         <tr className="bg-slate-50 border-b border-slate-100">
+                           <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-32">{t('audit.wizard.colCategory')}</th>
+                           <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">{t('audit.wizard.colContent')}</th>
+-                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-40 text-center">{t('audit.wizard.colStatus')}</th>
++                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-64 text-center">{t('audit.wizard.colStatus')}</th>
+                           <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">{t('audit.wizard.colRemarks')}</th>
+                           <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-28 text-right">{t('audit.wizard.colUpdated')}</th>
+                         </tr>
+@@ -1274,31 +1303,26 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                             </td>
+                             <td className="px-6 py-4">
+                               <div className="flex justify-center">
+-                                <div className="flex bg-slate-100 p-1 rounded-lg gap-1 border border-slate-200">
+-                                  <button 
+-                                    type="button"
+-                                    onClick={() => updateItemStatus(item.id, 'pass')}
+-                                    className={`p-1.5 rounded transition-all ${item.status === 'pass' ? 'bg-white shadow-sm text-green-600' : 'text-slate-400 hover:text-slate-600'}`}
+-                                    title="符合 (Pass)"
+-                                  >
+-                                    <CheckCircle className="w-4 h-4" />
+-                                  </button>
+-                                  <button 
+-                                    type="button"
+-                                    onClick={() => updateItemStatus(item.id, 'pending')}
+-                                    className={`p-1.5 rounded transition-all ${(!item.status || item.status === 'pending') ? 'bg-white shadow-sm text-amber-500' : 'text-slate-400 hover:text-slate-600'}`}
+-                                    title="注意/待改善 (!)"
+-                                  >
+-                                    <AlertCircle className="w-4 h-4" />
+-                                  </button>
+-                                  <button 
+-                                    type="button"
+-                                    onClick={() => updateItemStatus(item.id, 'fail')}
+-                                    className={`p-1.5 rounded transition-all ${item.status === 'fail' ? 'bg-white shadow-sm text-red-600' : 'text-slate-400 hover:text-slate-600'}`}
+-                                    title="不符合 (X)"
+-                                  >
+-                                    <X className="w-4 h-4" />
+-                                  </button>
++                                <div className="flex flex-col items-center gap-1">
++                                  {/* an older audit's ungraded fail: shown until the auditor picks Major or Minor */}
++                                  {item.status === 'fail' && (
++                                    <span className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-200 rounded px-1.5" data-ungraded-fail>{t('audit.wizard.legendUngraded')}</span>
++                                  )}
++                                  <div className="flex bg-slate-100 p-1 rounded-lg gap-1 border border-slate-200" data-grade-buttons>
++                                    {GRADE_BUTTONS.map(g => (
++                                      <button
++                                        key={g.value}
++                                        type="button"
++                                        onClick={() => updateItemStatus(item.id, g.value)}
++                                        className={`px-2 py-1 rounded text-xs font-bold transition-all whitespace-nowrap ${item.status === g.value ? `bg-white shadow-sm ${g.active}` : 'text-slate-400 hover:text-slate-600'}`}
++                                        title={g.title}
++                                        aria-pressed={item.status === g.value}
++                                        data-grade={g.value}
++                                      >
++                                        {t(g.label)}
++                                      </button>
++                                    ))}
++                                  </div>
+                                 </div>
+                               </div>
+                             </td>
+@@ -1347,15 +1371,29 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                     <div className="flex items-center gap-4">
+                       <div className="flex items-center gap-1.5">
+                         <div className="w-2 h-2 rounded-full bg-green-500"></div>
+-                        <span className="text-xs text-slate-500">{t('audit.wizard.legendPass')}: {stats.passed}</span>
++                        <span className="text-xs text-slate-500">{t('audit.wizard.legendPass')}: {stats.pass}</span>
+                       </div>
+                       <div className="flex items-center gap-1.5">
+-                        <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+-                        <span className="text-xs text-slate-500">{t('audit.wizard.legendWarning')}: {stats.pending}</span>
++                        <div className="w-2 h-2 rounded-full bg-sky-500"></div>
++                        <span className="text-xs text-slate-500">{t('audit.wizard.legendPositive')}: {stats.positive}</span>
+                       </div>
+                       <div className="flex items-center gap-1.5">
+                         <div className="w-2 h-2 rounded-full bg-red-500"></div>
+-                        <span className="text-xs text-slate-500">{t('audit.wizard.legendFail')}: {stats.failed}</span>
++                        <span className="text-xs text-slate-500">{t('audit.wizard.legendMajor')}: {stats.major}</span>
++                      </div>
++                      <div className="flex items-center gap-1.5">
++                        <div className="w-2 h-2 rounded-full bg-amber-500"></div>
++                        <span className="text-xs text-slate-500">{t('audit.wizard.legendMinor')}: {stats.minor}</span>
++                      </div>
++                      {stats.fail > 0 && (
++                        <div className="flex items-center gap-1.5">
++                          <div className="w-2 h-2 rounded-full bg-red-300"></div>
++                          <span className="text-xs text-slate-500">{t('audit.wizard.legendUngraded')}: {stats.fail}</span>
++                        </div>
++                      )}
++                      <div className="flex items-center gap-1.5">
++                        <div className="w-2 h-2 rounded-full bg-slate-300"></div>
++                        <span className="text-xs text-slate-500">{t('audit.wizard.legendNotGraded')}: {stats.pending}</span>
+                       </div>
+                     </div>
+                     <p className="text-xs text-slate-400 font-medium italic">
+diff --git a/react-app/src/context/LanguageContext.tsx b/react-app/src/context/LanguageContext.tsx
+index 71b0a6ee..981a20a1 100644
+--- a/react-app/src/context/LanguageContext.tsx
++++ b/react-app/src/context/LanguageContext.tsx
+@@ -1059,17 +1059,26 @@ const translations: Record<Language, Record<string, string>> = {
+     'audit.wizard.notSet': 'N/A',
+     'audit.wizard.statTotal': 'Total Items',
+     'audit.wizard.statProgress': 'Progress',
+-    'audit.wizard.statCompleted': 'Completed',
++    'audit.wizard.statCompleted': 'Graded',
+     'audit.wizard.statPass': 'Pass',
+-    'audit.wizard.statFail': 'Fail',
++    'audit.wizard.statPositive': 'Positive',
++    'audit.wizard.statMajor': 'Major',
++    'audit.wizard.statMinor': 'Minor',
+     'audit.wizard.colCategory': 'Category',
+     'audit.wizard.colContent': 'Check Content',
+     'audit.wizard.colStatus': 'Status',
+     'audit.wizard.colRemarks': 'Remarks / Evidence',
+     'audit.wizard.colUpdated': 'Updated',
+     'audit.wizard.legendPass': 'Pass',
+-    'audit.wizard.legendWarning': 'Warning',
+-    'audit.wizard.legendFail': 'Fail',
++    'audit.wizard.legendNotGraded': 'Not graded',
++    'audit.wizard.legendUngraded': 'Fail (ungraded)',
++    'audit.wizard.legendPositive': 'Positive',
++    'audit.wizard.legendMajor': 'Major',
++    'audit.wizard.legendMinor': 'Minor',
++    'audit.grades.passShort': 'Pass',
++    'audit.grades.positiveShort': 'Positive',
++    'audit.grades.majorShort': 'Major',
++    'audit.grades.minorShort': 'Minor',
+     'audit.wizard.autoTimestamp': 'System will auto-record status changes with timestamp',
+     'audit.wizard.executionTitle': 'Execution & Evaluation',
+     'audit.wizard.regularAudit': 'Regular Audit',
+@@ -2725,17 +2734,26 @@ const translations: Record<Language, Record<string, string>> = {
+     'audit.wizard.notSet': '未設定',
+     'audit.wizard.statTotal': '總查核項目',
+     'audit.wizard.statProgress': '查核進度',
+-    'audit.wizard.statCompleted': '已完成',
+-    'audit.wizard.statPass': '符合項 (Pass)',
+-    'audit.wizard.statFail': '缺失項 (Fail)',
++    'audit.wizard.statCompleted': '已評',
++    'audit.wizard.statPass': '符合 (Pass)',
++    'audit.wizard.statPositive': '正面發現 (Positive)',
++    'audit.wizard.statMajor': '主要不符合 (Major)',
++    'audit.wizard.statMinor': '次要不符合 (Minor)',
+     'audit.wizard.colCategory': '分類',
+     'audit.wizard.colContent': '查核內容',
+     'audit.wizard.colStatus': '狀態',
+     'audit.wizard.colRemarks': '查核備註 / 證據說明',
+     'audit.wizard.colUpdated': '更新日期',
+     'audit.wizard.legendPass': '符合',
+-    'audit.wizard.legendWarning': '注意',
+-    'audit.wizard.legendFail': '缺失',
++    'audit.wizard.legendNotGraded': '未評',
++    'audit.wizard.legendUngraded': '不符合（未分級）',
++    'audit.wizard.legendPositive': '正面發現',
++    'audit.wizard.legendMajor': '主要不符合',
++    'audit.wizard.legendMinor': '次要不符合',
++    'audit.grades.passShort': '符合',
++    'audit.grades.positiveShort': '正面',
++    'audit.grades.majorShort': '主要',
++    'audit.grades.minorShort': '次要',
+     'audit.wizard.autoTimestamp': '系統將自動記錄每一次的狀態變更與時間戳記',
+     'audit.wizard.executionTitle': '稽核執行與評估',
+     'audit.wizard.regularAudit': '例行性稽核',
+diff --git a/react-app/tests-browser/audit-all-buttons-check.mjs b/react-app/tests-browser/audit-all-buttons-check.mjs
+index 0a8eb88b..9469695c 100644
+--- a/react-app/tests-browser/audit-all-buttons-check.mjs
++++ b/react-app/tests-browser/audit-all-buttons-check.mjs
+@@ -3,7 +3,13 @@
+ // exact contractor / status column filters, the disabled delete button's tooltip on its wrapper, the read-only banner,
+ // the default lunch leaving with a day's last session, and step 4's audit types (template library) + clause / question
+ // dropdowns instead of the old fixed 20-clause ISO dropdown.
+-// TEST ONLY — isolated stack (vite 3323 / backend 8323), freshly reset with /tmp/claude-501/reset-r2-3323.sh (seeds
++// v3 (AUDIT-GRADES-2026-001): step 5's results are four grade buttons per item ([data-grade-buttons] >
++// button[data-grade=pass|positive|major|minor], aria-pressed = active, clicking the active grade clears it); the old
++// 「注意/待改善 (!)」/「不符合 (X)」 buttons and the default "pending" are gone; 6 stats cards ([data-stat=...]); an older
++// audit's 'fail' shows [data-ungraded-fail] 「不符合（未分級）」 and still counts as graded; printouts / Word use the
++// grade texts (符合 Pass / 正面發現 Positive / 主要不符合 Major / 次要不符合 Minor / 未評 Not graded).
++// Reset with /tmp/claude-501/reset-grades-3323.sh for the AUDIT-GRADES candidate.
++// TEST ONLY — isolated stack (vite 3323 / backend 8323), freshly reset (reset-grades-3323.sh above; earlier rounds used reset-r2-3323.sh) (seeds
+ // seed_audit_hardening_b_review.py, seed_audit_export_docx_review.py, seed_audit_agenda_review.py and the scratch seed
+ // that adds contractor "Second Vendor"; the 4 audit templates come from backend startup).
+ // Usage: node audit-all-buttons-check.mjs <stack.json> <outDir>
+@@ -98,7 +104,7 @@ const printCheck = async (p, kind) => {
+   const before = await p.evaluate(() => window.__printed);
+   await p.locator(`[data-step-print=${kind}]`).click(); await p.waitForTimeout(700);
+   const got = await p.evaluate(() => ({ printed: window.__printed, kind: document.querySelector('.audit-print-root')?.dataset.printKind,
+-    text: (document.querySelector('.audit-print-root')?.innerText || '').slice(0, 4000) }));
++    text: (document.querySelector('.audit-print-root')?.innerText || '').slice(0, 30000) }));
+   await p.evaluate(() => dispatchEvent(new Event('afterprint'))); await p.waitForTimeout(200);
+   return { calls: got.printed - before, kind: got.kind, text: got.text };
+ };
+@@ -131,9 +137,29 @@ const wordDownload = async (p, kind) => {
+   const buf = readFileSync(path);
+   return { file, kind: url ? new URL(url).searchParams.get('kind') : null, zip: buf.subarray(0, 2).toString() === 'PK', text: docxText(buf) || '', ev: `${EV}/downloads/${file}` };
+ };
++// AUDIT-GRADES: grade texts in printouts / Word, compared with all whitespace removed (innerText / joined <w:t> runs
++// put <small> labels and runs together differently)
++const nows = s => (s || '').replace(/\s+/g, '');
++const has = (text, ...parts) => parts.every(x => nows(text).includes(nows(x)));
++const GRADE_TEXT = { pass: '符合 Pass', positive: '正面發現 Positive', major: '主要不符合 Major', minor: '次要不符合 Minor', fail: '不符合（未分級） Fail', none: '未評 Not graded' };
++const OLD_RESULT_TITLES = ['注意/待改善 (!)', '不符合 (X)'];
+ const DOC_TITLE = { plan: '內部稽核計畫', checklist: '稽核查檢表', report: '內部稽核報告' };
+ const DOC_SUFFIX = { plan: '-Plan', checklist: '-Checklist', report: '' };
+ 
++// step 5 display (AUDIT-GRADES): the 6 stats cards' numbers, 「已評 N」, the legend under the table and the legacy-fail badges
++const step5Display = p => p.evaluate(() => {
++  const grid = document.querySelector('form [data-stat=pass]')?.parentElement;
++  const box = document.querySelector('form table')?.closest('div.bg-white');
++  return {
++    stats: grid ? [...grid.children].map(c => c.querySelector('p.text-2xl')?.innerText.trim() ?? null) : null,
++    statKeys: grid ? [...grid.children].map(c => c.getAttribute('data-stat')) : null,
++    graded: (grid?.innerText.match(/已評\s*(\d+)/) || [])[1] ?? null,
++    legend: [...(box?.querySelectorAll('span.text-xs') || [])].map(s => s.innerText.trim()).filter(t => /^[^:]+:\s*\d+$/.test(t)).join(' / '),
++    // "<row index>:<badge text>" for every row that shows the legacy-fail badge
++    ungradedBadges: [...document.querySelectorAll('form table tbody tr')].map((r, i) => { const b = r.querySelector('[data-ungraded-fail]'); return b ? `${i}:${b.innerText.trim()}` : null; }).filter(Boolean),
++  };
++});
++
+ // state probe of an open wizard: walks the 5 steps with Next / Back and records which controls are usable
+ async function probeWizard(p) {
+   const s = {};
+@@ -179,16 +205,22 @@ async function probeWizard(p) {
+   });
+   s.print4 = await p.locator('[data-step-print=checklist]').count(); s.word4 = await p.locator('[data-step-word=checklist]').count();
+   await step(p, 5);
+-  s.step5 = await p.evaluate(() => {
+-    const pass = document.querySelector('form button[title="符合 (Pass)"]');
++  s.step5 = await p.evaluate(OLD => {
++    // AUDIT-GRADES: the four grade buttons of every item (old ! / X buttons are gone)
++    const grades = [...document.querySelectorAll('form table tbody [data-grade-buttons] button[data-grade]')];
++    const firstRow = document.querySelector('form table tbody [data-grade-buttons]');
+     const note = document.querySelector('form table tbody textarea');
+     const findings = document.querySelector('form textarea[name=findings]');
+     const search = document.querySelector('form div.no-print.p-4 input');
+     const chip = document.querySelector('form div.no-print.p-4 button');
+-    return { passDisabled: pass ? pass.matches(':disabled') : null, noteDisabled: note ? note.matches(':disabled') : null,
++    return { gradesDisabled: grades.length ? (grades.every(b => b.matches(':disabled')) ? true : grades.some(b => b.matches(':disabled')) ? 'mixed' : false) : null,
++      firstRowGrades: firstRow ? [...firstRow.querySelectorAll('button[data-grade]')].map(b => `${b.dataset.grade}|${b.title}`) : null,
++      oldButtons: OLD.reduce((n, t) => n + document.querySelectorAll(`form button[title="${t}"]`).length, 0),
++      noteDisabled: note ? note.matches(':disabled') : null,
+       findingsDisabled: findings?.matches(':disabled'), searchDisabled: search?.matches(':disabled'), chipDisabled: chip?.matches(':disabled'),
+-      passCursor: pass ? getComputedStyle(pass).cursor : null };
+-  });
++      gradeCursor: grades[0] ? getComputedStyle(grades[0]).cursor : null };
++  }, OLD_RESULT_TITLES);
++  s.display5 = await step5Display(p);
+   s.next5 = await foot(p, /下一步/).count();
+   s.submit = await foot(p, /完成並建立計畫/).count();
+   s.print5 = await p.locator('[data-step-print=report]').count(); s.word5 = await p.locator('[data-step-word=report]').count();
+@@ -206,7 +238,7 @@ const SEEDED = ['AHB-DRAFT-1', 'AHB-VOID-1', 'AHB-CLOSED-1', 'AHB-LEGACY-1', 'AH
+ {
+   const nos = await dtNos(full);
+   if (nos.length !== 7 || !SEEDED.every(n => nos.includes(n))) {
+-    console.error('refusing: stack is not freshly seeded (run /tmp/claude-501/reset-r2-3323.sh first): ' + JSON.stringify(nos));
++    console.error('refusing: stack is not freshly seeded (run /tmp/claude-501/reset-grades-3323.sh first): ' + JSON.stringify(nos));
+     process.exit(3);
+   }
+   rec('清單', '頁面載入', '列出 7 筆種子稽核', nos, true, await shot(full, 'A01-list', true));
+@@ -764,33 +796,58 @@ await guard('第4步', async () => {
+   const tags = saved.custom_check_items.map(i => i.templateItemId || null);
+   rec('第4步', '模板題目來源標記（存檔）', '7.2 / 8.5.4 兩題帶 templateId + templateItemId；自訂題 C-1 不帶', tags,
+     tags[0] === 'iso9001-7.2-1' && tags[1] === 'iso9001-8.5.4-1' && tags[2] === null && saved.custom_check_items[0].templateId != null && saved.custom_check_items[2].templateId == null);
++  // AUDIT-GRADES: the blank result boxes are the four grades; separate 條文內容 / 查檢重點 columns
++  const boxes = ['☐ 符合 Pass', '☐ 正面發現 Positive', '☐ 主要不符合 Major', '☐ 次要不符合 Minor'];
+   const pr = await printCheck(full, 'checklist');
+-  rec('第4步', '列印查檢表', '列印一次、kind=checklist、含查檢項', { calls: pr.calls, kind: pr.kind, hasItem: pr.text.includes('是否配戴安全帽') }, pr.calls === 1 && pr.kind === 'checklist' && pr.text.includes('是否配戴安全帽'));
++  const prG = { boxes: has(pr.text, ...boxes), cols: has(pr.text, '條文內容', '查檢重點'), oldBoxes: /☐\s*不符合\s*Fail|☐\s*注意/.test(pr.text) };
++  rec('第4步', '列印查檢表', '列印一次、kind=checklist、含查檢項；空白結果框為 符合/正面發現/主要不符合/次要不符合 四格；條文內容與查檢重點分欄', { calls: pr.calls, kind: pr.kind, hasItem: pr.text.includes('是否配戴安全帽'), ...prG },
++    pr.calls === 1 && pr.kind === 'checklist' && pr.text.includes('是否配戴安全帽') && prG.boxes && prG.cols && !prG.oldBoxes);
+   const w = await wordDownload(full, 'checklist');
+-  rec('第4步', '匯出 Word（查檢表）', `下載 ${newNo}-Checklist.docx（docx、標題 稽核查檢表）`, { file: w.file, kind: w.kind, zip: w.zip, title: w.text.includes('稽核查檢表'), hasItem: w.text.includes('是否配戴安全帽') },
+-    w.file === `${newNo}-Checklist.docx` && w.kind === 'checklist' && w.zip && w.text.includes('稽核查檢表') && w.text.includes('是否配戴安全帽'), w.ev);
++  const wG = { boxes: has(w.text, ...boxes), cols: has(w.text, '條文內容', '查檢重點'), oldBoxes: /☐\s*不符合\s*Fail|☐\s*注意/.test(w.text) };
++  rec('第4步', '匯出 Word（查檢表）', `下載 ${newNo}-Checklist.docx（docx、標題 稽核查檢表、四個評等空白框、條文內容／查檢重點分欄）`, { file: w.file, kind: w.kind, zip: w.zip, title: w.text.includes('稽核查檢表'), hasItem: w.text.includes('是否配戴安全帽'), ...wG },
++    w.file === `${newNo}-Checklist.docx` && w.kind === 'checklist' && w.zip && w.text.includes('稽核查檢表') && w.text.includes('是否配戴安全帽') && wG.boxes && wG.cols && !wG.oldBoxes, w.ev);
+ });
+ 
+ await guard('第5步', async () => {
+   await step(full, 5);
+-  const stats = () => full.locator('form div.grid-cols-4 > div').evaluateAll(cs => cs.map(c => c.querySelector('p.text-2xl').innerText.trim()));
+-  const s0 = await stats();
+-  rec('第5步', '統計卡', '總數 3、進度 0%、符合 0、不符合 0', s0, JSON.stringify(s0) === '["3","0%","0","0"]');
++  // AUDIT-GRADES: 6 stats cards (總查核項目 / 查核進度 + 「已評 N」 / [data-stat=pass|positive|major|minor]) and the legend
++  const disp = () => step5Display(full);
++  const LEG = (pa, po, ma, mi, no) => `符合: ${pa} / 正面發現: ${po} / 主要不符合: ${ma} / 次要不符合: ${mi} / 未評: ${no}`;
++  const d0 = await disp();
++  rec('第5步', '統計卡', '6 張卡：總數 3、進度 0%（已評 0）、符合 0、正面發現 0、主要不符合 0、次要不符合 0；圖例全 0、未評 3', d0,
++    JSON.stringify(d0.stats) === '["3","0%","0","0","0","0"]' && JSON.stringify(d0.statKeys) === '[null,null,"pass","positive","major","minor"]'
++    && d0.graded === '0' && d0.legend === LEG(0, 0, 0, 0, 3) && d0.ungradedBadges.length === 0);
+   const rowsL = () => full.locator('form table tbody tr');
+-  const btn = (i, title) => rowsL().nth(i).locator(`button[title="${title}"]`);
+-  const PASS = '符合 (Pass)', WARN = '注意/待改善 (!)', FAIL = '不符合 (X)';
+-  const active = async (i, title, cls) => (await btn(i, title).getAttribute('class')).includes(cls);
+-  const defaultWarn = await active(0, WARN, 'text-amber-500');
+-  await btn(0, PASS).click(); await btn(1, FAIL).click(); await btn(2, PASS).click(); await btn(2, WARN).click(); await full.waitForTimeout(200);
+-  const st = { r0pass: await active(0, PASS, 'text-green-600'), r1fail: await active(1, FAIL, 'text-red-600'), r2warn: await active(2, WARN, 'text-amber-500'), r2passOff: !(await active(2, PASS, 'text-green-600')) };
+-  const s1 = await stats();
+-  const upd = await rowsL().nth(0).locator('td').nth(4).innerText();
+-  rec('第5步', '未評估項目預設', '預設亮起「!」（待改善）', defaultWarn, defaultWarn);
+-  rec('第5步', 'Pass ✓ 按鈕', '第 1 列變綠色符合', st.r0pass, st.r0pass);
+-  rec('第5步', 'Fail ✕ 按鈕', '第 2 列變紅色不符合', st.r1fail, st.r1fail);
+-  rec('第5步', 'Warning ! 按鈕', '第 3 列由符合切回「!」', { warn: st.r2warn, passOff: st.r2passOff }, st.r2warn && st.r2passOff);
+-  rec('第5步', '統計即時更新', '符合 1、不符合 1、進度 67%', s1, s1[2] === '1' && s1[3] === '1' && s1[1] === '67%');
+-  rec('第5步', '更新日期欄', `改狀態後記錄今天 ${TODAY}`, upd.trim(), upd.trim() === TODAY, await shot(full, 'B11-step5-status'));
++  const g = (i, grade) => rowsL().nth(i).locator(`[data-grade-buttons] button[data-grade=${grade}]`);
++  const pressed = i => rowsL().nth(i).locator('[data-grade-buttons] button[aria-pressed=true]').evaluateAll(bs => bs.map(b => b.dataset.grade));
++  const allPressed = async () => [await pressed(0), await pressed(1), await pressed(2)];
++  const activeCls = async (i, grade, cls) => (await g(i, grade).getAttribute('class')).includes(cls);
++  const btnSet = await rowsL().nth(0).locator('[data-grade-buttons] button').evaluateAll(bs => bs.map(b => `${b.dataset.grade}|${b.title}|${b.innerText.trim()}`));
++  const oldBtns = await full.locator(OLD_RESULT_TITLES.map(t => `form button[title="${t}"]`).join(', ')).count();
++  const p0 = await allPressed();
++  rec('第5步', '評等按鈕組', '每列 4 個文字按鈕：符合 (Pass) / 正面發現 (Positive) / 主要不符合 (Major) / 次要不符合 (Minor)；舊的「注意/待改善 (!)」「不符合 (X)」不存在', { btnSet, oldBtns },
++    JSON.stringify(btnSet.map(b => b.split('|').slice(0, 2).join('|'))) === JSON.stringify(['pass|符合 (Pass)', 'positive|正面發現 (Positive)', 'major|主要不符合 (Major)', 'minor|次要不符合 (Minor)'])
++    && btnSet.every(b => b.split('|')[2] !== '') && oldBtns === 0);
++  rec('第5步', '未評估項目預設', '沒有任何評等按下（未評），不再預設「!」待改善', p0, p0.every(x => x.length === 0));
++  await g(0, 'pass').click(); await g(1, 'major').click(); await g(2, 'positive').click(); await full.waitForTimeout(200);
++  const pA = await allPressed();
++  const clsA = { pass: await activeCls(0, 'pass', 'text-green-600'), major: await activeCls(1, 'major', 'text-red-600'), positive: await activeCls(2, 'positive', 'text-sky-600') };
++  const dA = await disp();
++  await g(2, 'minor').click(); await full.waitForTimeout(200);
++  const pB = await allPressed(); const minorCls = await activeCls(2, 'minor', 'text-amber-600'); const dB = await disp();
++  await g(2, 'minor').click(); await full.waitForTimeout(200);
++  const pC = await allPressed(); const dC = await disp();
++  const upd = (await rowsL().nth(0).locator('td').nth(4).innerText()).trim();
++  const upd2 = (await rowsL().nth(2).locator('td').nth(4).innerText()).trim();
++  rec('第5步', '符合 (Pass) 按鈕', '第 1 列「符合」按下（aria-pressed、綠色）', { pressed: pA[0], cls: clsA.pass }, JSON.stringify(pA[0]) === '["pass"]' && clsA.pass);
++  rec('第5步', '主要不符合 (Major) 按鈕', '第 2 列「主要不符合」按下（紅色）', { pressed: pA[1], cls: clsA.major }, JSON.stringify(pA[1]) === '["major"]' && clsA.major);
++  rec('第5步', '正面發現 (Positive) 按鈕', '第 3 列「正面發現」按下（藍色）', { pressed: pA[2], cls: clsA.positive }, JSON.stringify(pA[2]) === '["positive"]' && clsA.positive);
++  rec('第5步', '次要不符合 (Minor) 按鈕', '第 3 列由「正面發現」換成「次要不符合」（同列只亮一個，琥珀色）', { pressed: pB[2], cls: minorCls }, JSON.stringify(pB[2]) === '["minor"]' && minorCls);
++  rec('第5步', '再點已按下的評等（清除）', '第 3 列再點「次要不符合」→ 取消，回到未評（4 鈕皆未按下）', pC[2], pC[2].length === 0 && JSON.stringify(pC[0]) === '["pass"]' && JSON.stringify(pC[1]) === '["major"]');
++  rec('第5步', '統計即時更新', '3 列評完：進度 100%、符合/正面/主要 各 1；換成次要：正面 0、次要 1；清除後：進度 67%（已評 2）、次要 0、圖例 未評 1', { A: dA.stats, B: dB.stats, C: dC.stats, gradedC: dC.graded, legendC: dC.legend },
++    JSON.stringify(dA.stats) === '["3","100%","1","1","1","0"]' && dA.graded === '3' && JSON.stringify(dB.stats) === '["3","100%","1","0","1","1"]'
++    && JSON.stringify(dC.stats) === '["3","67%","1","0","1","0"]' && dC.graded === '2' && dC.legend === LEG(1, 0, 1, 0, 1));
++  rec('第5步', '更新日期欄', `改評等（含清除）後記錄今天 ${TODAY}`, { row1: upd, row3: upd2 }, upd === TODAY && upd2 === TODAY, await shot(full, 'B11-step5-status'));
+   const chips = full.locator('form div.no-print.p-4 button');
+   const chipTexts = await chips.allInnerTexts();
+   await chips.filter({ hasText: /^9\.1$/ }).click(); await full.waitForTimeout(200);
+@@ -818,13 +875,20 @@ await guard('第5步', async () => {
+   const evid = await full.locator('form input[type=file]').count();
+   rec('第5步', '證據／附件輸入', '（任務：有則測）', `第 5 步沒有任何檔案／證據上傳欄（input[type=file] = ${evid}），只有備註與稽核發現文字欄`, evid === 0 ? '待確認' : '未測');
+   const pr = await printCheck(full, 'report');
+-  rec('第5步', '列印報告', '列印一次、kind=report、含備註與稽核發現（未儲存內容也印出）', { calls: pr.calls, kind: pr.kind, note: pr.text.includes('Remark A'), findings: pr.text.includes('整體符合') },
+-    pr.calls === 1 && pr.kind === 'report' && pr.text.includes('Remark A') && pr.text.includes('整體符合'));
++  // AUDIT-GRADES: results 符合 Pass / 主要不符合 Major / 未評 Not graded; summary rows Pass / Positive / Major / Minor / Not graded,
++  // no Fail (ungraded) row (no legacy fail here) and none of the old result texts
++  const gradeOk = text => ({ results: has(text, GRADE_TEXT.pass, GRADE_TEXT.major, GRADE_TEXT.none),
++    summary: has(text, '符合Pass', '正面發現Positive', '主要不符合Major', '次要不符合Minor', '未評Notgraded'),
++    noUngraded: !nows(text).includes('未分級'), noOld: !/不符合Fail|注意／待改善|Attention/.test(nows(text)) });
++  const prG = gradeOk(pr.text);
++  rec('第5步', '列印報告', '列印一次、kind=report、含備註與稽核發現（未儲存內容也印出）；結果文字與摘要列為新評等（符合 Pass／主要不符合 Major／未評 Not graded），無未分級列、無舊文字', { calls: pr.calls, kind: pr.kind, note: pr.text.includes('Remark A'), findings: pr.text.includes('整體符合'), ...prG },
++    pr.calls === 1 && pr.kind === 'report' && pr.text.includes('Remark A') && pr.text.includes('整體符合') && Object.values(prG).every(Boolean));
+   const t2 = track(full);
+   await foot(full, /儲存草稿/).click(); await full.waitForTimeout(1500); t2.stop();
+   const w = await wordDownload(full, 'report');
+-  rec('第5步', '匯出 Word（報告）', `下載 ${newNo}.docx（docx、標題 內部稽核報告、含備註與發現）`, { file: w.file, kind: w.kind, zip: w.zip, title: w.text.includes('內部稽核報告'), note: w.text.includes('Remark A'), findings: w.text.includes('整體符合') },
+-    w.file === `${newNo}.docx` && w.kind === 'report' && w.zip && w.text.includes('內部稽核報告') && w.text.includes('Remark A') && w.text.includes('整體符合'), w.ev);
++  const wG = gradeOk(w.text);
++  rec('第5步', '匯出 Word（報告）', `下載 ${newNo}.docx（docx、標題 內部稽核報告、含備註與發現、新評等結果文字與摘要列）`, { file: w.file, kind: w.kind, zip: w.zip, title: w.text.includes('內部稽核報告'), note: w.text.includes('Remark A'), findings: w.text.includes('整體符合'), ...wG },
++    w.file === `${newNo}.docx` && w.kind === 'report' && w.zip && w.text.includes('內部稽核報告') && w.text.includes('Remark A') && w.text.includes('整體符合') && Object.values(wG).every(Boolean), w.ev);
+   // final submit
+   await rowsL().nth(1).locator('textarea').fill('兩份資格證明過期');
+   const t3 = track(full);
+@@ -834,9 +898,9 @@ await guard('第5步', async () => {
+   await full.fill(SEARCH, newNo); await full.waitForTimeout(400);
+   const listStatus = await dtRow(full, newNo).locator('td').nth(7).innerText().catch(() => null);
+   await full.fill(SEARCH, ''); await full.waitForTimeout(300);
+-  rec('頁尾', '完成並建立計畫（第 5 步）', 'PUT 儲存並關閉精靈；狀態維持 In Progress；評估結果、備註、發現已存', { put: t3.c.PUT, closed, status: saved.status,
++  rec('頁尾', '完成並建立計畫（第 5 步）', 'PUT 儲存並關閉精靈；狀態維持 In Progress；評等結果 ["pass","major",""]（第 3 列已清除）、備註、發現已存', { put: t3.c.PUT, closed, status: saved.status,
+     statuses: saved.custom_check_items.map(i => i.status), notes: saved.custom_check_items.map(i => i.note || ''), findings: saved.findings, listStatus },
+-    t3.c.PUT === 1 && closed && saved.status === 'In Progress' && JSON.stringify(saved.custom_check_items.map(i => i.status)) === '["pass","fail","pending"]'
++    t3.c.PUT === 1 && closed && saved.status === 'In Progress' && JSON.stringify(saved.custom_check_items.map(i => i.status)) === '["pass","major",""]'
+     && saved.custom_check_items[1].note === '兩份資格證明過期' && saved.findings === '整體符合，一項待改善。' && listStatus?.trim() === 'In Progress', await shot(full, 'B13-after-submit'));
+ });
+ 
+@@ -916,18 +980,32 @@ for (const user of ['audit_full', 'audit_viewer']) {
+       const editable = user === 'audit_full' && (status === 'Draft' || status === 'In Progress');
+       const lockedOk = s.step1.title && s.step1.project && s.step1.status && s.step2 && !s.step3.addRow && s.step3.rowDelete === 0
+         && s.step4.chipDisabled && s.step4.clausePickDisabled && s.step4.taskDisabled && s.step4.plusDisabled && s.step4.batchPick === 0 && (s.step4.itemBtnsDisabled !== false)
+-        && (s.step5.passDisabled !== false) && (s.step5.noteDisabled !== false) && s.step5.findingsDisabled && s.saveDraft === 0 && s.submit === 0;
++        && (s.step5.gradesDisabled === true || s.step5.gradesDisabled === null) && (s.step5.noteDisabled !== false) && s.step5.findingsDisabled && s.saveDraft === 0 && s.submit === 0;
+       const editOk = !s.step1.title && !s.step1.project && !s.step1.status && !s.step2 && s.step3.addRow && !s.step4.chipDisabled && !s.step4.clausePickDisabled && !s.step4.taskDisabled
+-        && !s.step4.plusDisabled && s.step4.itemBtnsDisabled === false && s.step5.passDisabled === false && s.step5.noteDisabled === false && !s.step5.findingsDisabled
++        && !s.step4.plusDisabled && s.step4.itemBtnsDisabled === false && s.step5.gradesDisabled === false && s.step5.noteDisabled === false && !s.step5.findingsDisabled
+         && s.saveDraft === 1 && s.submit === 1;
+       const loc = `${user}／${status}（${no}）`;
+-      rec(loc, '編輯控制項（第 1–5 步欄位、Agenda 新增/刪除、模板、查檢項、Pass/Fail/!、備註、發現）', editable ? '全部可用' : '全部停用／隱藏（唯讀）',
++      rec(loc, '編輯控制項（第 1–5 步欄位、Agenda 新增/刪除、模板、查檢項、四個評等按鈕、備註、發現）', editable ? '全部可用' : '全部停用／隱藏（唯讀）',
+         { step1: s.step1, step2AllDisabled: s.step2, step3: s.step3, step4: s.step4, step5: s.step5 }, editable ? editOk : lockedOk, ev4);
+       rec(loc, '儲存草稿／完成並建立計畫', editable ? '顯示' : '隱藏', { saveDraft: s.saveDraft, submit: s.submit }, editable ? (s.saveDraft === 1 && s.submit === 1) : (s.saveDraft === 0 && s.submit === 0));
+       rec(loc, '下一步／上一步／步驟列', '唯讀時仍可瀏覽各步', { back1: s.back1, next1: s.next1, afterNext: s.afterNext, afterBack: s.afterBack, next5: s.next5 },
+         s.back1 === 0 && s.next1 === 1 && s.afterNext === 2 && s.afterBack === 1 && s.next5 === 0);
+       rec(loc, '列印（第 3/4/5 步）＋匯出 Word', '三步皆有列印與 Word', [s.print3, s.word3, s.print4, s.word4, s.print5, s.word5], [s.print3, s.word3, s.print4, s.word4, s.print5, s.word5].every(x => x === 1), ev);
+       rec(loc, '第 5 步分類篩選／搜尋', '仍可使用（只是瀏覽）', { chipDisabled: s.step5.chipDisabled, searchDisabled: s.step5.searchDisabled }, s.step5.chipDisabled === false && s.step5.searchDisabled === false);
++      // AUDIT-GRADES: the four grade buttons (no old ! / X), and the step-5 display; AHB-EXPORT-1 carries an older 'fail'
++      rec(loc, '第 5 步評等按鈕組', '4 個：pass 符合 / positive 正面發現 / major 主要不符合 / minor 次要不符合；沒有舊的 ! / X 鈕', { grades: s.step5.firstRowGrades, old: s.step5.oldButtons },
++        JSON.stringify(s.step5.firstRowGrades) === JSON.stringify(['pass|符合 (Pass)', 'positive|正面發現 (Positive)', 'major|主要不符合 (Major)', 'minor|次要不符合 (Minor)']) && s.step5.oldButtons === 0);
++      const legacy = no === 'AHB-EXPORT-1';
++      const d5 = s.display5;
++      if (legacy) {
++        rec(loc, '第 5 步統計／圖例（含舊資料 fail）', '5 項 pass/fail/pending/(無狀態)/pass：總數 5、進度 60%（已評 3，fail 算已評、pending 與無狀態為未評）、符合 2、其餘 0；第 2 列（8.4，fail）顯示「不符合（未分級）」；圖例含「不符合（未分級）: 1」與「未評: 2」', d5,
++          JSON.stringify(d5.stats) === '["5","60%","2","0","0","0"]' && d5.graded === '3' && JSON.stringify(d5.ungradedBadges) === '["1:不符合（未分級）"]'
++          && d5.legend === '符合: 2 / 正面發現: 0 / 主要不符合: 0 / 次要不符合: 0 / 不符合（未分級）: 1 / 未評: 2');
++      } else {
++        rec(loc, '第 5 步統計／圖例', '1 個未評項目：總數 1、進度 0%（已評 0）、四個評等 0；無「不符合（未分級）」；圖例 未評 1', d5,
++          JSON.stringify(d5.stats) === '["1","0%","0","0","0","0"]' && d5.graded === '0' && d5.ungradedBadges.length === 0
++          && d5.legend === '符合: 0 / 正面發現: 0 / 主要不符合: 0 / 次要不符合: 0 / 未評: 1');
++      }
+       if (editable) rec(loc, '唯讀提示橫幅', '可編輯時不顯示唯讀橫幅', s.banner || '無橫幅', s.banner === null);
+       if (status === 'Draft' && user === 'audit_full') {
+         rec(loc, '狀態下拉選項', 'Draft / Planned / Void', s.step1.statusOptions, JSON.stringify(s.step1.statusOptions) === '["Draft","Planned","Void"]');
+@@ -938,17 +1016,29 @@ for (const user of ['audit_full', 'audit_viewer']) {
+       if (!editable) {
+         // clicking a locked control does nothing
+         await step(p, 5);
+-        const before = await p.locator('form table tbody tr').first().locator('button[title="不符合 (X)"]').getAttribute('class');
+-        await p.locator('form table tbody tr').first().locator('button[title="不符合 (X)"]').click({ force: true }).catch(() => {});
++        // AUDIT-GRADES: the first row's 主要不符合 (Major) button (a 'pass' row on AHB-EXPORT-1, an ungraded one elsewhere)
++        const major = p.locator('form table tbody tr').first().locator('[data-grade-buttons] button[data-grade=major]');
++        const snap = async () => ({ cls: await major.getAttribute('class'), pressed: await p.locator('form table tbody tr').first().locator('[data-grade-buttons] button[aria-pressed=true]').evaluateAll(bs => bs.map(b => b.dataset.grade)),
++          stats: (await step5Display(p)).stats, disabled: await isDis(major) });
++        const before = await snap();
++        await major.click({ force: true }).catch(() => {});
+         await p.waitForTimeout(200);
+-        const after = await p.locator('form table tbody tr').first().locator('button[title="不符合 (X)"]').getAttribute('class');
+-        rec(loc, '點擊鎖定中的 Fail ✕', '沒有反應（狀態不變）', before === after ? '無變化' : '狀態被改變', before === after);
++        const after = await snap();
++        const same = JSON.stringify({ ...before, disabled: 0 }) === JSON.stringify({ ...after, disabled: 0 });
++        rec(loc, '點擊鎖定中的 主要不符合 (Major)', '按鈕停用、沒有反應（評等與統計不變）', { disabled: before.disabled, changed: !same, before: before.pressed, after: after.pressed }, same && before.disabled);
+         const expKey = status === 'Closed' ? 'audit.wizard.readOnlyClosed' : status === 'Void' ? 'audit.wizard.readOnlyVoid' : 'audit.wizard.readOnlyNoPermission';
+         rec(loc, '唯讀提示橫幅', `顯示唯讀橫幅（${expKey}）並說明原因`, s.banner || '畫面沒有唯讀橫幅', !!s.banner && s.banner.key === expKey && s.banner.text.length > 0);
+         // the print + Word still work when read-only
+         const pr = await printCheck(p, 'report');
+         const w = await wordDownload(p, 'report');
+-        rec(loc, '列印報告＋匯出 Word（唯讀）', `列印 kind=report；下載 ${no}.docx`, { print: pr.kind, calls: pr.calls, file: w.file, zip: w.zip }, pr.calls === 1 && pr.kind === 'report' && w.file === `${no}.docx` && w.zip, w.ev);
++        // AUDIT-GRADES: AHB-EXPORT-1's older 'fail' prints as 「不符合（未分級） Fail」 with a Fail (ungraded) summary row; the others are 未評
++        const gr = text => legacy
++          ? { results: has(text, GRADE_TEXT.pass, GRADE_TEXT.fail, GRADE_TEXT.none), ungradedRow: has(text, 'Fail(ungraded)') }
++          : { results: has(text, GRADE_TEXT.none), ungradedRow: !nows(text).includes('未分級') };
++        const prG = gr(pr.text), wG = gr(w.text);
++        rec(loc, '列印報告＋匯出 Word（唯讀）', `列印 kind=report；下載 ${no}.docx；結果文字為新評等（${legacy ? '含「不符合（未分級） Fail」與 Fail (ungraded) 摘要列' : '未評 Not graded，無未分級列'}）`,
++          { print: pr.kind, calls: pr.calls, file: w.file, zip: w.zip, printGrades: prG, wordGrades: wG },
++          pr.calls === 1 && pr.kind === 'report' && w.file === `${no}.docx` && w.zip && Object.values(prG).every(Boolean) && Object.values(wG).every(Boolean), w.ev);
+       }
+       await closeX(p).click(); await p.waitForTimeout(400);
+       if (await modal(p).count()) {
+diff --git a/react-app/tests-browser/audit-grades-check.mjs b/react-app/tests-browser/audit-grades-check.mjs
+new file mode 100644
+index 00000000..e2f19171
+--- /dev/null
++++ b/react-app/tests-browser/audit-grades-check.mjs
+@@ -0,0 +1,180 @@
++// AUDIT-GRADES-2026-001 browser checks (isolated stack only; seeds: seed_audit_hardening_b_review.py,
++// seed_audit_grades_review.py). Usage: node audit-grades-check.mjs <stack.json> <outDir>
++// Results are 符合 Pass / 正面發現 Positive / 主要不符合 Major / 次要不符合 Minor; an older 'fail' shows as 不符合（未分級）
++// and counts as graded; 'pending' / none = 未評. Progress = graded / total. Printouts and Word: separate clause / question
++// columns. window.print is stubbed.
++import { chromium } from '/Users/nook/Documents/Qualitas/react-app/node_modules/playwright/index.mjs';
++import { readFileSync, mkdirSync } from 'node:fs';
++const stack = JSON.parse(readFileSync(process.argv[2], 'utf8'));
++const out = process.argv[3]; mkdirSync(out, { recursive: true });
++const UI = `http://127.0.0.1:${stack.vite_port}`, PW = 'Accept-Test-1234';
++let failures = 0;
++const result = (name, ok, extra = '') => { if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${extra ? '  -> ' + String(extra).replace(/\s+/g, ' ').slice(0, 400) : ''}`); };
++const browser = await chromium.launch({ headless: true });
++
++async function login(user, language = 'zh') {
++  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
++  await ctx.addInitScript(lang => { localStorage.setItem('language', lang); window.__printed = 0; window.print = () => { window.__printed++; }; }, language);
++  const p = await ctx.newPage();
++  await p.goto(UI + '/login'); await p.fill('#email', user); await p.fill('#password', PW); await p.click('button[type=submit]');
++  await p.waitForURL(u => !u.pathname.startsWith('/login'), { timeout: 15000 });
++  return p;
++}
++const api = (p, path) => p.evaluate(async u => (await fetch('/api' + u, { credentials: 'include' })).json(), path);
++const open = async (p, id) => { await p.goto(UI + `/audit?openId=${id}`); await p.waitForSelector('input[name=auditDocNo]', { timeout: 15000 }); };
++const step = async (p, n) => { await p.locator('.max-w-4xl button').nth(n - 1).click(); await p.waitForTimeout(400); };
++const stats = p => p.evaluate(() => {
++  const card = s => document.querySelector(`[data-stat="${s}"] p.text-2xl`)?.innerText.trim();
++  const cards = [...(document.querySelector('form [data-stat=pass]')?.parentElement?.children || [])];
++  return { total: cards[0]?.querySelector('p.text-2xl')?.innerText.trim(), progress: cards[1]?.querySelector('p.text-2xl')?.innerText.trim(),
++    graded: cards[1]?.querySelector('p.text-xs')?.innerText.trim(), pass: card('pass'), positive: card('positive'), major: card('major'), minor: card('minor'),
++    legend: [...document.querySelectorAll('form span.text-xs.text-slate-500')].map(e => e.innerText.trim()).filter(t => /: \d+$/.test(t)) };
++});
++const rowOf = (p, task) => p.locator('form table tbody tr', { hasText: task });
++const pressed = (p, task) => rowOf(p, task).locator('[data-grade][aria-pressed=true]').getAttribute('data-grade').catch(() => null);
++const printText = async (p, kind) => {
++  await p.locator(`[data-step-print=${kind}]`).click(); await p.waitForTimeout(600);
++  const t = await p.evaluate(() => document.querySelector('.audit-print-root')?.innerText || '');
++  // the report's summary table as {English label: value} (label cells hold "中文" + <small>English</small>)
++  const summary = await p.evaluate(() => {
++    const out = {};
++    for (const td of document.querySelectorAll('.audit-print-root td.lbl')) {
++      const en = td.querySelector('small')?.innerText.trim(); const v = td.nextElementSibling?.innerText.trim();
++      if (en && v !== undefined) out[en] = v;
++    }
++    return out;
++  });
++  await p.evaluate(() => dispatchEvent(new Event('afterprint'))); await p.waitForTimeout(200);
++  return Object.assign(new String(t), { summary });
++};
++const wordXml = (p, id, kind) => p.evaluate(async ([id, k]) => {
++  const r = await fetch(`/api/audit/${id}/export-docx?kind=${k}`, { credentials: 'include' });
++  const bin = new Uint8Array(await r.arrayBuffer()); const dv = new DataView(bin.buffer); let off = 0;
++  while (off < bin.length - 30 && dv.getUint32(off, true) === 0x04034b50) {
++    const method = dv.getUint16(off + 8, true), csize = dv.getUint32(off + 18, true), nlen = dv.getUint16(off + 26, true), elen = dv.getUint16(off + 28, true);
++    const name = new TextDecoder().decode(bin.subarray(off + 30, off + 30 + nlen)); const start = off + 30 + nlen + elen;
++    if (name === 'word/document.xml') {
++      const data = bin.subarray(start, start + csize);
++      const xml = method === 8 ? await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text() : new TextDecoder().decode(data);
++      return xml.replace(/<w:tab\/>/g, '\t').replace(/<w:br\/>/g, '\n').replace(/<\/w:p>/g, '\n').replace(/<[^>]+>/g, '');
++    }
++    off = start + csize;
++  }
++  return '';
++}, [id, kind]);
++// the Word summary grid as {label: value}: each label cell is "中文\nEnglish", its value is the next line
++const wordSummary = (text) => Object.fromEntries(['Total Items', 'Progress', 'Pass', 'Positive', 'Major', 'Minor', 'Not graded', 'Fail (ungraded)']
++  .map(k => [k, (text.match(new RegExp(`(?<=\\n)${k.replace(/[()]/g, '\\$&')}\\n+(\\d+%?)`)) || [])[1]]).filter(([, v]) => v !== undefined));
++
++// 1. step 5 of a seeded audit: one of each grade, an older ungraded fail, two not graded
++{
++  const p = await login('audit_full');
++  await open(p, 'ahb-grades-1'); await step(p, 5);
++  const s = await stats(p);
++  result('stats cards: 7 items, progress 5/7 = 71% (已評 5), one of each grade', s.total === '7' && s.progress === '71%' && /已評 5/.test(s.graded)
++    && s.pass === '1' && s.positive === '1' && s.major === '1' && s.minor === '1', JSON.stringify(s));
++  result('legend: the four grades, 不符合（未分級） 1, 未評 2', ['符合: 1', '正面發現: 1', '主要不符合: 1', '次要不符合: 1', '不符合（未分級）: 1', '未評: 2'].every(x => s.legend.includes(x)), JSON.stringify(s.legend));
++  const titles = await rowOf(p, 'How are resources provided?').locator('[data-grade]').evaluateAll(bs => bs.map(b => b.title));
++  result('each item has the four grade buttons (titles bilingual)', JSON.stringify(titles) === '["符合 (Pass)","正面發現 (Positive)","主要不符合 (Major)","次要不符合 (Minor)"]', JSON.stringify(titles));
++  const grades = [];
++  for (const task of ['How are resources provided?', 'Training records?', 'How are suppliers controlled?', 'Document control?', 'Segregation?', 'Audit programme?', 'Corrective actions?']) grades.push(await pressed(p, task));
++  result('the stored grades show as the pressed button; fail / pending / none press nothing', JSON.stringify(grades) === '["pass","positive","major","minor",null,null,null]', JSON.stringify(grades));
++  result('the older fail shows the 不符合（未分級） badge', await rowOf(p, 'Segregation?').locator('[data-ungraded-fail]').count() === 1);
++  await p.screenshot({ path: `${out}/step5-grades.png` });
++
++  // regrade the old fail, grade a pending one, clear one by clicking its active grade again
++  await rowOf(p, 'Segregation?').locator('[data-grade=major]').click(); await p.waitForTimeout(200);
++  const s2 = await stats(p);
++  result('regrading the old fail as Major: badge gone, Major 2, no ungraded line, progress unchanged (71%)',
++    await rowOf(p, 'Segregation?').locator('[data-ungraded-fail]').count() === 0 && s2.major === '2' && !s2.legend.some(x => x.startsWith('不符合（未分級）')) && s2.progress === '71%', JSON.stringify(s2));
++  await rowOf(p, 'Audit programme?').locator('[data-grade=positive]').click(); await p.waitForTimeout(200);
++  const s3 = await stats(p);
++  result('grading an ungraded item: Positive 2, progress 6/7 = 86%', s3.positive === '2' && s3.progress === '86%', JSON.stringify(s3));
++  await rowOf(p, 'How are resources provided?').locator('[data-grade=pass]').click(); await p.waitForTimeout(200);
++  const s4 = await stats(p);
++  result('clicking the active grade again clears it: Pass 0, progress back to 5/7 = 71%', s4.pass === '0' && s4.progress === '71%' && await pressed(p, 'How are resources provided?') === null, JSON.stringify(s4));
++  await p.locator('button', { hasText: /儲存草稿/ }).first().click(); await p.waitForTimeout(1500);
++  const savedItems = (await api(p, '/audit/ahb-grades-1')).custom_check_items;
++  const saved = savedItems.map(i => i.status ?? null);
++  result('saved statuses', JSON.stringify(saved) === '["","positive","major","minor","major","positive",null]', JSON.stringify(saved));
++  // the browser's local date, as the wizard's localToday() writes it
++  const today = await p.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
++  result('clearing a grade stamps the item with today (updatedAt), untouched items keep theirs', savedItems[0].updatedAt === today && savedItems[1].updatedAt === '2026-10-02',
++    JSON.stringify(savedItems.map(i => i.updatedAt ?? null)));
++
++  // printouts: report summary + items; checklist blank boxes; separate clause / question columns
++  const report = await printText(p, 'report');
++  const sm = report.summary;
++  const reportOk = sm['Total Items'] === '7' && sm.Progress === '71%' && sm.Pass === '0' && sm.Positive === '2' && sm.Major === '2' && sm.Minor === '1'
++    && sm['Not graded'] === '2' && !('Fail (ungraded)' in sm) && !('Attention / Pending' in sm)
++    && report.includes('條文內容') && report.includes('查檢重點') && report.includes('正面發現 Positive') && report.includes('未評 Not graded') && !report.includes('Attention');
++  result('report printout: grade summary (Pass 0 / Positive 2 / Major 2 / Minor 1 / Not graded 2, 71%), results in the item table, separate 條文內容 / 查檢重點 columns', reportOk, JSON.stringify(sm));
++  await step(p, 4);
++  const checklist = await printText(p, 'checklist');
++  result('checklist printout: four blank grade boxes per item, separate clause / question columns', (checklist.match(/☐ 正面發現 Positive/g) || []).length === 7
++    && (checklist.match(/☐ 主要不符合 Major/g) || []).length === 7 && checklist.includes('條文內容') && checklist.includes('查檢重點') && !checklist.includes('☐ 不符合 Fail') && !checklist.includes('Attention'),
++    checklist.slice(0, 200));
++
++  // Word report / checklist
++  const word = await wordXml(p, 'ahb-grades-1', 'report');
++  const ws = wordSummary(word);
++  result('Word report: grade summary numbers (Total 7, 71%, Pass 0 / Positive 2 / Major 2 / Minor 1 / Not graded 2), results, separate clause / question columns, no Attention',
++    JSON.stringify(ws) === JSON.stringify({ 'Total Items': '7', Progress: '71%', Pass: '0', Positive: '2', Major: '2', Minor: '1', 'Not graded': '2' })
++    && ['正面發現 Positive', '主要不符合 Major', '條文內容', '查檢重點'].every(x => word.includes(x)) && !word.includes('Attention'), JSON.stringify(ws));
++  const wordC = await wordXml(p, 'ahb-grades-1', 'checklist');
++  result('Word checklist: the four grade boxes', (wordC.match(/☐ 次要不符合 Minor/g) || []).length === 7 && !wordC.includes('Attention'));
++  await p.context().close();
++}
++
++// 2. the older audit's ungraded fail in the Word / printout summary; a Closed audit cannot be regraded
++{
++  const p = await login('audit_full');
++  const word = await (async () => { await p.goto(UI + '/audit'); return wordXml(p, 'ahb-grades-closed-1', 'report'); })();
++  const ws = wordSummary(word);
++  result('Word report of an audit still holding an older fail: full summary incl. Fail (ungraded) 1, row text shows',
++    JSON.stringify(ws) === JSON.stringify({ 'Total Items': '7', Progress: '71%', Pass: '1', Positive: '1', Major: '1', Minor: '1', 'Not graded': '2', 'Fail (ungraded)': '1' })
++    && word.includes('不符合（未分級） Fail'), JSON.stringify(ws));
++  await open(p, 'ahb-grades-closed-1'); await step(p, 5);
++  const disabled = await rowOf(p, 'Training records?').locator('[data-grade=pass]').isDisabled();
++  await rowOf(p, 'Training records?').locator('[data-grade=pass]').click({ force: true }).catch(() => {}); await p.waitForTimeout(200);
++  result('Closed audit: grade buttons disabled, clicking changes nothing', disabled && await pressed(p, 'Training records?') === 'positive');
++  const report = await printText(p, 'report');
++  result('Closed audit printout keeps the 不符合（未分級） line', report.includes('不符合（未分級）') && report.includes('Fail (ungraded)'));
++  await p.context().close();
++}
++
++// 3. English labels
++{
++  const p = await login('audit_full', 'en');
++  await open(p, 'ahb-grades-1'); await step(p, 5);
++  const labels = await p.locator('form table tbody tr').first().locator('[data-grade]').allInnerTexts();
++  const s = await stats(p);
++  result('English: grade buttons Pass / Positive / Major / Minor, legend Not graded', JSON.stringify(labels.map(x => x.trim())) === '["Pass","Positive","Major","Minor"]' && s.legend.some(x => x.startsWith('Not graded')), JSON.stringify({ labels, legend: s.legend }));
++  await p.context().close();
++}
++
++// 4. the six stats cards fit: 3 × 2 on a ~1024px screen (no sideways scroll), one row of six on a wide one (user 2026-10-11)
++{
++  const p = await login('audit_full');
++  await open(p, 'ahb-grades-1'); await step(p, 5);
++  const layout = () => p.evaluate(() => {
++    const grid = document.querySelector('[data-stat=pass]').parentElement;
++    const cards = [...grid.children].filter(c => c.offsetParent);
++    const rows = new Set(cards.map(c => Math.round(c.getBoundingClientRect().top))).size;
++    const clipped = cards.filter(c => [...c.querySelectorAll('p')].some(x => x.scrollWidth > x.clientWidth + 1)).length;
++    return { cards: cards.length, rows, overflow: grid.scrollWidth - grid.clientWidth, clipped };
++  });
++  await p.setViewportSize({ width: 1024, height: 768 }); await p.waitForTimeout(300);
++  const narrow = await layout();
++  // 1280 = the narrowest width that puts all six in one row (xl), so the tightest cards
++  await p.setViewportSize({ width: 1280, height: 900 }); await p.waitForTimeout(300);
++  const wide = await layout();
++  await p.setViewportSize({ width: 1400, height: 900 }); await p.waitForTimeout(300);
++  result('stats cards: 3 × 2 at 1024px, one row of six at 1280px, neither with sideways scroll or cut labels',
++    narrow.cards === 6 && narrow.rows === 2 && narrow.overflow <= 0 && narrow.clipped === 0 && wide.cards === 6 && wide.rows === 1 && wide.overflow <= 0 && wide.clipped === 0, JSON.stringify({ narrow, wide }));
++  await p.context().close();
++}
++
++await browser.close();
++console.log(failures ? `${failures} FAILED` : 'ALL PASS');
++process.exit(failures ? 1 : 0);

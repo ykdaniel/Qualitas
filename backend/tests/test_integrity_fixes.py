@@ -88,7 +88,7 @@ class TestReferentialIntegrity:
             description="Test ITR",
             rev="1",
             submit="test",
-            status="Draft",
+            status="In Progress",  # a real ITR status: 'Draft' is not one, and create now refuses it first
             noiNumber="NOI-NONEXISTENT"  # This NOI doesn't exist
         )
 

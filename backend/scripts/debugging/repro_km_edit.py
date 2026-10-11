@@ -1,5 +1,15 @@
 
 import requests
+import os
+import sys
+
+
+def _require_env(name):
+    """Credentials come only from the environment; this script has no built-in password."""
+    value = os.environ.get(name)
+    if not value:
+        sys.exit(f"{name} is not set. Export it before running this script (no built-in default).")
+    return value
 
 BASE_URL = "http://localhost:8000/km"
 
@@ -7,7 +17,7 @@ BASE_URL = "http://localhost:8000/km"
 # Wait, backend requires auth. Let me try a simple fetch first.
 try:
     # 1. Login to get token
-    login_data = {"username": "admin", "password": "password"}
+    login_data = {"username": "admin", "password": _require_env("QUALITAS_ADMIN_PASSWORD")}
     login_res = requests.post("http://localhost:8000/auth/login", data=login_data)
     token = login_res.json().get("access_token")
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}

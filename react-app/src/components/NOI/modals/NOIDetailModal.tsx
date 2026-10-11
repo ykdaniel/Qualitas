@@ -5,6 +5,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { FileText, Printer } from 'lucide-react';
 import { useLanguage } from '../../../context/LanguageContext';
 import { useContractorsStore } from '../../../store/contractorsStore';
 import { useITPStore } from '../../../store/itpStore';
@@ -209,7 +210,7 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
                 updated.itpNo = '';
             }
             if (field === 'issueDate' || field === 'inspectionDate') {
-                const check = checkDateOrder(updated.issueDate, updated.inspectionDate, t('noi.issueDate') || 'Issue Date', t('noi.inspectionDate') || 'Inspection Date');
+                const check = checkDateOrder(updated.issueDate, updated.inspectionDate, t('noi.issueDate') || 'Issue Date', t('noi.inspectionDate') || 'Inspection Date', t);
                 if (!check.valid) toast.warning(check.message);
             }
             return updated;
@@ -259,6 +260,20 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
     };
     const leaveGuard = useDraftGuard({ formData: guardedFormData, pendingFiles, deletedFileIds }, saving, !readOnly);
     const requestClose = () => leaveGuard.requestClose(onClose);
+    // Word export: show a message when it fails, and block repeat clicks while the file is being built.
+    const [exportingDocx, setExportingDocx] = useState(false);
+    const handleExportDocx = async () => {
+        if (!existingItem?.id || exportingDocx || saving) return;
+        setExportingDocx(true);
+        try {
+            await exportNoiDocx(existingItem.id, formData.referenceNo || 'NOI');
+        } catch (err) {
+            console.error('NOI Word export failed:', err);
+            toast.error(t('common.exportFailed') || 'Export failed. Please try again.');
+        } finally {
+            setExportingDocx(false);
+        }
+    };
     // Bumped once the pending files are stored on the server, so FileAttachment forgets them (a retry must not upload them twice).
     const [syncToken, setSyncToken] = useState(0);
 
@@ -605,16 +620,17 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
                             <button className={actionStyles.secondary}
                                 onClick={() => onPrint(formData)} // Push to left
                             >
-                                {t('common.print')}
+                                <Printer size={16} /> {t('common.print')}
                             </button>
                         )}
                         {/* Needs a real saved record id to call the export endpoint — same
                             existingItem?.id gate ITR's "Export Word" button uses. */}
                         {existingItem?.id && (
                             <button className={actionStyles.secondary}
-                                onClick={() => exportNoiDocx(existingItem.id, formData.referenceNo || 'NOI')}
+                                onClick={handleExportDocx}
+                                disabled={saving || exportingDocx}
                             >
-                                {t('itr.exportWord') || 'Export Word'}
+                                <FileText size={16} /> {exportingDocx ? (t('common.exporting') || 'Exporting...') : (t('itr.exportWord') || 'Export Word')}
                             </button>
                         )}
                     </>}

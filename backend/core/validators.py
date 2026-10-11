@@ -8,6 +8,7 @@ This module provides reusable validation logic for:
 """
 
 from typing import List, Tuple
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 import models
 from core import error_messages
@@ -229,7 +230,8 @@ def check_project_references(db: Session, project_id: str, project_name: str) ->
 
 def check_noi_references(db: Session, noi_reference_no: str) -> None:
     """
-    Check if NOI is referenced before deletion.
+    Check if NOI is referenced before deletion: by an NCR / ITR / Observation / Checklist (noiNumber) or by a
+    Follow-up whose source is this NOI.
 
     Note: QWorkflow is deliberately NOT checked here — it's a 1:1 tracker
     row auto-created alongside every NOI (not independent user work like
@@ -244,14 +246,22 @@ def check_noi_references(db: Session, noi_reference_no: str) -> None:
     Raises:
         ValueError: If NOI has references
     """
-    check_references_before_delete(
-        db, noi_reference_no, 'NOI',
-        [
-            (models.NCR, 'noiNumber', noi_reference_no, 'NCR'),
-            (models.ITR, 'noiNumber', noi_reference_no, 'ITR'),
-            (models.Checklist, 'noiNumber', noi_reference_no, 'Checklist'),
-        ]
-    )
+    references = []
+    for model_class, display_name in ((models.NCR, 'NCR'), (models.ITR, 'ITR'), (models.OBS, 'Observation'),
+                                      (models.Checklist, 'Checklist')):
+        count = db.query(model_class).filter(model_class.noiNumber == noi_reference_no).count()
+        if count > 0:
+            references.append(f"{count} {display_name} record(s)")
+    # A Follow-up names its source as module + number (business decision 2026-10-11: it blocks deletion too, the same
+    # documents that lock the NOI's contractor in noi_service._documents_citing).
+    count = db.query(models.FollowUp).filter(
+        func.upper(func.trim(models.FollowUp.sourceModule)) == 'NOI',
+        models.FollowUp.sourceReferenceNo == noi_reference_no,
+    ).count()
+    if count > 0:
+        references.append(f"{count} Follow-up record(s)")
+    if references:
+        raise ValueError(error_messages.cannot_delete_has_references('NOI', noi_reference_no, references))
 
 
 def check_role_references(db: Session, role_id: int, role_name: str) -> None:

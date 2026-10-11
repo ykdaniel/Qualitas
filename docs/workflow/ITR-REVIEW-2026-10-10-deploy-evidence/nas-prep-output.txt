@@ -1,0 +1,14 @@
+== 1. live state
+OK live backend = 688d87b3 for the 4 files
+frontend index now: cd426c4f2b986d9be0b4f8265dfeb1fc4da4dea00ad018c07f37eb0531b325a6
+OK live frontend = AUDIT-EXPORT-DOCX index
+== 2. backups
+integrity: ok
+5da6bdc27a44cd37206579d5f908ddb71ed70813ba1a99d5cc9cf51d22b1b949  qualitas-pre-itr-review.db
+OK backend-old copy
+== 3. staging
+OK uploads
+OK backend staging (4 files)
+OK frontend staging (106 files)
+OK no AppleDouble files
+PREP DONE

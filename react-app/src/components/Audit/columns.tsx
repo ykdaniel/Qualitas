@@ -52,9 +52,9 @@ export const createColumns = (
                 />
             ),
             cell: ({ row }) => <div className="text-center">{row.getValue("contractor") || '-'}</div>,
-            filterFn: (row, id, value) => {
-                return value.includes(row.getValue(id));
-            },
+            // the header filter sends one option's value (or "" for All): match that value exactly — `value.includes(cell)` on a
+            // string matched every audit without a contractor ("" is in every string) and any partial name (AUDIT-BTNFIX-2026-001)
+            filterFn: (row, id, value) => !value || row.getValue(id) === value,
         },
         {
             accessorKey: "location",
@@ -102,9 +102,8 @@ export const createColumns = (
                     </div>
                 );
             },
-            filterFn: (row, id, value) => {
-                return value.includes(row.getValue(id));
-            },
+            // exact match like the contractor column (AUDIT-BTNFIX-2026-001); "" (All) never reaches here — TanStack drops the filter
+            filterFn: (row, id, value) => !value || row.getValue(id) === value,
         },
         {
             id: "actions",
@@ -118,7 +117,11 @@ export const createColumns = (
                 const canDelete = canDeletePermission && item.status === 'Void';
                 const hint = !canDeletePermission ? t('audit.deleteNoPermissionHint') : t('audit.deleteVoidOnlyHint');
                 return (
-                    <div className="flex items-center justify-center gap-2">
+                    // a disabled button gets no pointer events (the shared Button has disabled:pointer-events-none), so its own
+                    // stopPropagation never ran and the click reached the row, which opened the audit; its title never showed
+                    // either. Both now sit on this wrapper (AUDIT-BTNFIX-2026-001; tooltip: user's choice 2026-10-11).
+                    <div className="flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}
+                        title={canDelete ? undefined : hint} data-delete-hint={canDelete ? undefined : hint}>
                         <Button
                             variant="ghost"
                             size="sm"

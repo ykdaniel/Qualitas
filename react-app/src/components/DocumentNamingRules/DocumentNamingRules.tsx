@@ -6,81 +6,67 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { materialText } from '../MaterialSubmittal/materialText';
 import { getNamingRules, updateNamingRules, NamingRuleApi } from '../../services/api';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { changedRules, exampleNumber, mergeRules, NamingRuleChange, NamingRuleValue } from './namingRules';
 import styles from './DocumentNamingRules.module.css';
-import { DataTable } from '@/components/Shared/DataTable/DataTable';
-import { createColumns, NamingRuleItem } from './columns';
 
+interface RuleDef extends NamingRuleValue {
+  moduleName: string;
+  /** Translated module name; acronyms (ITP, NCR, ...) read the same in both languages and have none. */
+  nameKey?: string;
+  /** Shown in the Notes column, only where there is something to say. */
+  noteKey?: string;
+  /** The rule exists but no module numbers anything with it: shown, not editable. */
+  unused?: boolean;
+}
 
-const DEFAULT_RULE_DEFS = [
-  { id: 'itp',       moduleName: 'ITP',              prefix: 'QTS-RKS-[ABBREV]-ITP-', sequenceDigits: 6, descKey: 'namingRules.desc.itp' },
-  { id: 'noi',       moduleName: 'NOI',              prefix: 'QTS-RKS-[ABBREV]-NOI-', sequenceDigits: 6, descKey: 'namingRules.desc.noi' },
-  { id: 'itr',       moduleName: 'ITR',              prefix: 'QTS-RKS-[ABBREV]-ITR-', sequenceDigits: 6, descKey: 'namingRules.desc.itr' },
-  { id: 'ncr',       moduleName: 'NCR',              prefix: 'QTS-RKS-[ABBREV]-NCR-', sequenceDigits: 6, descKey: 'namingRules.desc.ncr' },
-  { id: 'obs',       moduleName: 'OBS',              prefix: 'QTS-RKS-[ABBREV]-OBS-', sequenceDigits: 6, descKey: 'namingRules.desc.obs' },
-  { id: 'pqp',       moduleName: 'PQP',              prefix: 'QTS-RKS-[ABBREV]-PQP-', sequenceDigits: 6, descKey: 'namingRules.desc.pqp' },
-  { id: 'followup',  moduleName: 'Follow up Issue',  prefix: 'QTS-RKS-[ABBREV]-FUI-', sequenceDigits: 6, descKey: 'namingRules.desc.followup' },
-  { id: 'fat',       moduleName: 'FAT',              prefix: 'QTS-RKS-[ABBREV]-FAT-', sequenceDigits: 6, descKey: 'namingRules.desc.fat' },
-  { id: 'audit',     moduleName: 'Audit',            prefix: 'QTS-RKS-[ABBREV]-AUD-', sequenceDigits: 6, descKey: 'namingRules.desc.audit' },
-  { id: 'checklist', moduleName: 'Checklist',        prefix: 'QTS-RKS-[ABBREV]-CHK-', sequenceDigits: 6, descKey: 'namingRules.desc.checklist' },
-  { id: 'osd',       moduleName: 'OSD',              prefix: 'QTS-RKS-[ABBREV]-OSD-', sequenceDigits: 6, descKey: 'namingRules.desc.osd' },
-  // MATERIAL-SUBMITTAL: its description comes from the module's own text file, not from LanguageContext (see materialText.ts)
-  { id: 'msa',       moduleName: 'Material', prefix: 'QTS-RKS-[ABBREV]-MSA-', sequenceDigits: 6, descKey: 'namingRules.desc.msa' },
+type NamingRuleItem = RuleDef;
+
+// Known doc types, in page order, with their names and notes. The backend seeds its own list (routers/settings.py
+// DEFAULT_NAMING_RULES); a type it has that is missing here is still shown, after these, under its code (see mergeRules).
+const DEFAULT_RULE_DEFS: RuleDef[] = [
+  { id: 'itp',       moduleName: 'ITP',              prefix: 'QTS-RKS-[ABBREV]-ITP-', sequenceDigits: 6 },
+  { id: 'noi',       moduleName: 'NOI',              prefix: 'QTS-RKS-[ABBREV]-NOI-', sequenceDigits: 6 },
+  { id: 'itr',       moduleName: 'ITR',              prefix: 'QTS-RKS-[ABBREV]-ITR-', sequenceDigits: 6 },
+  { id: 'ncr',       moduleName: 'NCR',              prefix: 'QTS-RKS-[ABBREV]-NCR-', sequenceDigits: 6 },
+  { id: 'obs',       moduleName: 'OBS',              prefix: 'QTS-RKS-[ABBREV]-OBS-', sequenceDigits: 6 },
+  { id: 'pqp',       moduleName: 'PQP',              prefix: 'QTS-RKS-[ABBREV]-PQP-', sequenceDigits: 6 },
+  { id: 'followup',  moduleName: 'Follow up Issue',  prefix: 'QTS-RKS-[ABBREV]-FUI-', sequenceDigits: 6, nameKey: 'followup.title' },
+  { id: 'fat',       moduleName: 'FAT',              prefix: 'QTS-RKS-[ABBREV]-FAT-', sequenceDigits: 6, noteKey: 'namingRules.note.fat', unused: true },
+  { id: 'audit',     moduleName: 'Audit',            prefix: 'QTS-RKS-[ABBREV]-AUD-', sequenceDigits: 6, nameKey: 'audit.title' },
+  { id: 'checklist', moduleName: 'Checklist',        prefix: 'QTS-RKS-[ABBREV]-CHK-', sequenceDigits: 6 },
+  { id: 'osd',       moduleName: 'OSD',              prefix: 'QTS-RKS-[ABBREV]-OSD-', sequenceDigits: 6 },
+  { id: 'meeting',   moduleName: 'Meeting Minutes',  prefix: 'QTS-RKS-[ABBREV]-MOM-', sequenceDigits: 6, nameKey: 'meetingMinutes.title', noteKey: 'namingRules.note.meeting' },
+  // MATERIAL-SUBMITTAL: its name comes from the module's own text file, not from LanguageContext (see materialText.ts)
+  { id: 'msa',       moduleName: 'Material',         prefix: 'QTS-RKS-[ABBREV]-MSA-', sequenceDigits: 6 },
 ];
 
-
+const toValues = (rules: NamingRuleValue[]): NamingRuleValue[] =>
+  rules.map(({ id, prefix, sequenceDigits }) => ({ id, prefix, sequenceDigits }));
 
 const DocumentNamingRules: React.FC = () => {
   const { t, language } = useLanguage();
   const { hasPermission } = useAuth();
-  const describe = (descKey: string) => (descKey === 'namingRules.desc.msa' ? materialText(language, 'namingDesc') : t(descKey));
+  const canEdit = hasPermission('settings:manage:all');
 
-  const buildDefaultRules = (): NamingRuleItem[] =>
-    DEFAULT_RULE_DEFS.map((def) => ({ ...def, description: describe(def.descKey) }));
-
-  const [rules, setRules] = useState<NamingRuleItem[]>(buildDefaultRules);
+  const [rules, setRules] = useState<NamingRuleItem[]>(DEFAULT_RULE_DEFS);
+  const [savedRules, setSavedRules] = useState<NamingRuleValue[] | null>(null);
   const [saved, setSaved] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [loadError, setLoadError] = useState('');
   const [saveError, setSaveError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [baseline, setBaseline] = useState<string | null>(null);
-  const rulesKey = JSON.stringify(rules.map(({ id, prefix, sequenceDigits }) => ({ id, prefix, sequenceDigits })));
-  useLeaveGuard(baseline !== null && rulesKey !== baseline, saving);
-
-  const rulesWithDescription = rules.map((rule) => {
-    const def = DEFAULT_RULE_DEFS.find((item) => item.id === rule.id);
-    return {
-      ...rule,
-      description: def ? describe(def.descKey) : rule.description,
-    };
-  });
-
-  const filteredRules = rulesWithDescription.filter(rule =>
-    rule.moduleName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    rule.prefix.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    rule.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const [pendingChanges, setPendingChanges] = useState<NamingRuleChange<NamingRuleItem>[] | null>(null);
+  const changes = savedRules ? changedRules(savedRules, rules) : [];
+  useLeaveGuard(changes.length > 0, saving);
 
   useEffect(() => {
     const fetchRules = async () => {
       try {
         setLoadError('');
         const apiRules: NamingRuleApi[] = await getNamingRules();
-        const map = new Map<string, NamingRuleApi>();
-        apiRules.forEach((r) => {
-          map.set(r.doc_type.toLowerCase(), r);
-        });
-        const loadedRules = DEFAULT_RULE_DEFS.map((def) => {
-            const apiRule = map.get(def.id.toLowerCase());
-            return {
-              ...def,
-              description: '',
-              prefix: apiRule ? apiRule.prefix : def.prefix,
-              sequenceDigits: apiRule ? apiRule.sequence_digits : def.sequenceDigits,
-            };
-          });
+        const loadedRules = mergeRules(DEFAULT_RULE_DEFS, apiRules, (rule) => ({ ...rule, moduleName: rule.id.toUpperCase() }));
         setRules(loadedRules);
-        setBaseline(JSON.stringify(loadedRules.map(({ id, prefix, sequenceDigits }) => ({ id, prefix, sequenceDigits }))));
+        setSavedRules(toValues(loadedRules));
       } catch (e) {
         const err = e as { response?: { data?: { detail?: string } }; message?: string };
         const msg = err.response?.data?.detail ?? err.message ?? 'Failed to load document naming rules.';
@@ -90,6 +76,11 @@ const DocumentNamingRules: React.FC = () => {
 
     fetchRules();
   }, []);
+
+  const moduleLabel = (rule: RuleDef): string => {
+    if (rule.id === 'msa') return materialText(language, 'title');
+    return rule.nameKey ? t(rule.nameKey) : rule.moduleName;
+  };
 
   const handlePrefixChange = (id: string, value: string) => {
     setRules(prev => prev.map(r => r.id === id ? { ...r, prefix: value } : r));
@@ -102,44 +93,54 @@ const DocumentNamingRules: React.FC = () => {
     setSaved(false);
   };
 
-  const handleSave = async () => {
-    if (saving || baseline === null) return;
+  // Validates, then asks for confirmation: a naming change has a wide blast radius (every module's document
+  // numbering reads it) and its effect is easy to misread, so the dialog spells out before → after and the impact.
+  const handleSave = () => {
+    if (saving || savedRules === null || changes.length === 0) return;
     setSaveError('');
 
-    // Basic sanity checks before hitting the API — a bad prefix here has a wide
-    // blast radius (every module's document numbering reads it), and the
-    // backend didn't validate any of this until now.
-    const emptyRule = rules.find((r) => !r.prefix || !r.prefix.trim());
+    // An unused rule cannot be edited here, so its stored value must not be able to block saving the others.
+    const editable = rules.filter((r) => !r.unused);
+    const emptyRule = editable.find((r) => !r.prefix || !r.prefix.trim());
     if (emptyRule) {
-      setSaveError(`${emptyRule.moduleName}: ${t('namingRules.errorEmptyPrefix') || 'Prefix cannot be empty.'}`);
+      setSaveError(`${moduleLabel(emptyRule)}: ${t('namingRules.errorEmptyPrefix') || 'Prefix cannot be empty.'}`);
       return;
     }
-    const missingAbbrev = rules.find((r) => !r.prefix.includes('[ABBREV]'));
+    const missingAbbrev = editable.find((r) => !r.prefix.includes('[ABBREV]'));
     if (missingAbbrev) {
-      setSaveError(`${missingAbbrev.moduleName}: ${t('namingRules.errorMissingAbbrev') || 'Prefix must include the [ABBREV] placeholder.'}`);
+      setSaveError(`${moduleLabel(missingAbbrev)}: ${t('namingRules.errorMissingAbbrev') || 'Prefix must include the [ABBREV] placeholder.'}`);
       return;
     }
     const seenPrefixes = new Map<string, string>();
     for (const rule of rules) {
-      const existing = seenPrefixes.get(rule.prefix);
+      const prefix = rule.prefix.trim();  // the backend compares trimmed prefixes too
+      const existing = seenPrefixes.get(prefix);
       if (existing) {
         setSaveError(
-          `${existing} ${t('namingRules.errorDuplicatePrefix') || 'and'} ${rule.moduleName} ${t('namingRules.errorDuplicatePrefixSuffix') || 'have the same prefix — document numbers would collide.'}`
+          `${existing} ${t('namingRules.errorDuplicatePrefix') || 'and'} ${moduleLabel(rule)} ${t('namingRules.errorDuplicatePrefixSuffix') || 'have the same prefix — document numbers would collide.'}`
         );
         return;
       }
-      seenPrefixes.set(rule.prefix, rule.moduleName);
+      seenPrefixes.set(prefix, moduleLabel(rule));
     }
 
+    setPendingChanges(changes);
+  };
+
+  // The dialog closes before the request goes out, so nothing covers the page while saving: the leave guard can
+  // then block an in-app navigation during the save and let it continue once the save has finished.
+  const handleConfirmSave = async () => {
+    setPendingChanges(null);
     setSaving(true);
     try {
-      const payload = rules.map((rule) => ({
+      // Unused rules are left out: they cannot be edited here, and the backend validates every rule it receives.
+      const payload = rules.filter((rule) => !rule.unused).map((rule) => ({
         doc_type: rule.id,
         prefix: rule.prefix ?? '',
         sequence_digits: Math.min(6, Math.max(1, Number(rule.sequenceDigits) || 6)),
       }));
       await updateNamingRules(payload);
-      setBaseline(rulesKey);
+      setSavedRules(toValues(rules));
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e: unknown) {
@@ -154,11 +155,6 @@ const DocumentNamingRules: React.FC = () => {
     } finally { setSaving(false); }
   };
 
-  const getExample = (rule: NamingRuleItem): string => {
-    const seq = String(1).padStart(rule.sequenceDigits, '0');
-    return rule.prefix.replace('[ABBREV]', 'A') + seq;
-  };
-
   return (
     <div className={styles.container}>
       <div className={styles.header}>
@@ -166,38 +162,99 @@ const DocumentNamingRules: React.FC = () => {
           <h1 className={styles.title}>{t('namingRules.title')}</h1>
           <p className={styles.subtitle}>{t('namingRules.subtitle')}</p>
         </div>
-        <div className={styles.headerRight}>
-          <input
-            type="text"
-            className={styles.searchInput}
-            placeholder={t('common.search')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
       </div>
 
       <div className={styles.card}>
         {loadError && <p className={styles.errorText}>{loadError}</p>}
         {saveError && <p className={styles.errorText}>{saveError}</p>}
-        <fieldset disabled={saving || baseline === null || !hasPermission('settings:manage:all')} className={styles.tableWrap} style={{ border: 0, padding: 0 }}>
-          <DataTable
-            title={t('namingRules.title')}
-            columns={createColumns(handlePrefixChange, handleSequenceDigitsChange, getExample, t)}
-            data={filteredRules}
-            searchKey=""
-            getRowId={(row) => row.id}
-          />
+        <p className={styles.infoText}>{t('namingRules.autoAdded')}</p>
+        {!canEdit && <p className={styles.readOnlyText}>{t('namingRules.readOnly')}</p>}
+        <fieldset disabled={saving || savedRules === null || !canEdit || pendingChanges !== null} className={styles.tableWrap}>
+          <div className={styles.tableBorder}>
+            <Table className={styles.table}>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className={styles.colModule}>{t('namingRules.module')}</TableHead>
+                  <TableHead className={styles.colPrefix}>{t('namingRules.prefixFormat')}</TableHead>
+                  <TableHead className={styles.colDigits}>{t('namingRules.sequenceDigits')}</TableHead>
+                  <TableHead className={styles.colExample}>{t('namingRules.example')}</TableHead>
+                  <TableHead>{t('namingRules.description')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rules.map((rule) => (
+                  <TableRow key={rule.id} className={rule.unused ? styles.unusedRow : undefined}>
+                    <TableCell className={styles.moduleCell}>{moduleLabel(rule)}</TableCell>
+                    <TableCell>
+                      <input
+                        type="text"
+                        className={styles.prefixInput}
+                        value={rule.prefix}
+                        disabled={rule.unused}
+                        onChange={(e) => handlePrefixChange(rule.id, e.target.value)}
+                        placeholder="e.g. QTS-RKS-[ABBREV]-NCR-"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <input
+                        type="number"
+                        className={styles.digitsInput}
+                        min={1}
+                        max={6}
+                        value={rule.sequenceDigits}
+                        disabled={rule.unused}
+                        onChange={(e) => handleSequenceDigitsChange(rule.id, Number(e.target.value))}
+                      />
+                    </TableCell>
+                    <TableCell><span className={styles.example}>{exampleNumber(rule.prefix, rule.sequenceDigits)}</span></TableCell>
+                    <TableCell className={styles.noteCell}>{rule.noteKey ? t(rule.noteKey) : ''}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </fieldset>
-              <FormActions primary={hasPermission('settings:manage:all') ? (
-                  <button className={actionStyles.primary} onClick={handleSave} disabled={saving || baseline === null}>
-                      {saved ? t('namingRules.saved') : t('namingRules.save')}
-                  </button>
-              ) : null} />
+        <FormActions primary={canEdit ? (
+          <button className={actionStyles.primary} onClick={handleSave} disabled={saving || savedRules === null || changes.length === 0}>
+            {saved ? t('namingRules.saved') : t('namingRules.save')}
+          </button>
+        ) : null} />
         <p className={styles.hint}>
           <strong>{t('namingRules.hint')}：</strong> {t('namingRules.hintContent')}
         </p>
       </div>
+
+      {pendingChanges && (
+        <div className={styles.modalOverlay} onClick={() => setPendingChanges(null)} onKeyDown={(e) => { if (e.key === 'Escape') setPendingChanges(null); }}>
+          <div className={styles.modal} role="dialog" aria-modal="true" tabIndex={-1} aria-labelledby="naming-confirm-title" onClick={(e) => e.stopPropagation()}>
+            <h2 id="naming-confirm-title" className={styles.modalTitle}>{t('namingRules.confirmTitle')}</h2>
+            <p className={styles.modalText}>{t('namingRules.confirmIntro')}</p>
+            <ul className={styles.changeList}>
+              {pendingChanges.map(({ rule, before }) => (
+                <li key={rule.id}>
+                  <strong>{moduleLabel(rule)}</strong>
+                  <span className={styles.example}>{exampleNumber(before.prefix, before.sequenceDigits)}</span>
+                  →
+                  <span className={styles.example}>{exampleNumber(rule.prefix, rule.sequenceDigits)}</span>
+                </li>
+              ))}
+            </ul>
+            <p className={styles.modalText}>{t('namingRules.confirmImpact')}</p>
+            <FormActions
+              cancel={
+                <button type="button" className={actionStyles.secondary} autoFocus onClick={() => setPendingChanges(null)}>
+                  {t('common.cancel')}
+                </button>
+              }
+              primary={
+                <button type="button" className={actionStyles.primary} onClick={handleConfirmSave}>
+                  {t('namingRules.confirmSave')}
+                </button>
+              }
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

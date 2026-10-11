@@ -1,6 +1,7 @@
 import React from 'react';
 import { val, SignCell } from '../Shared/PrintPrimitives';
 import type { Attendee, DiscussionLogEntry } from '../../store/meetingMinutesStore';
+import { displayNo, formatMinutesDate, isItem, normalizeDiscussionLog, toneOf, updatesByDate } from './discussionLog';
 
 /**
  * Meeting Minutes print report — bilingual, lightweight sibling of the
@@ -17,6 +18,7 @@ interface MeetingMinutesPrintData {
     meetingType?: string;
     meetingDate?: string;
     meetingTime?: string;
+    meetingEndTime?: string;
     location?: string;
     organizer?: string;
 }
@@ -25,12 +27,19 @@ interface MeetingMinutesPrintTemplateProps {
     data: MeetingMinutesPrintData;
     attendees?: Attendee[];
     discussionLog?: DiscussionLogEntry[];
-    attachmentFiles?: { name: string; url: string }[];
+    /** every stored attachment; the images among them are also printed on the landscape photo pages */
+    attachmentFiles?: { name: string; url: string; isImage?: boolean }[];
 }
 
 const MeetingMinutesPrintTemplate: React.FC<MeetingMinutesPrintTemplateProps> = ({
     data, attendees = [], discussionLog = [], attachmentFiles = [],
 }) => {
+    const register = normalizeDiscussionLog(discussionLog);
+    const timeRange = [data.meetingTime, data.meetingEndTime].filter(Boolean).join(' ~ ');
+    const photos = attachmentFiles.filter(f => f.isImage);
+    const photoPages: (typeof photos)[] = [];
+    for (let i = 0; i < photos.length; i += 4) photoPages.push(photos.slice(i, i + 4));
+    const docRef = `${data.documentNumber || ''}${data.rev ? ` (${data.rev})` : ''}`;
     return (
         <div className="mom-print-root">
             <table className="mom-report">
@@ -55,85 +64,96 @@ const MeetingMinutesPrintTemplate: React.FC<MeetingMinutesPrintTemplateProps> = 
                 <tbody>
                     <tr>
                         <td className="body-cell">
-                            {/* ===== 1 基本資料 ===== */}
+                            {/* ===== 1 基本資料：版面同公司會議記錄（SUBJECT / VENUE & TIME / RECORDED BY / Attendees） ===== */}
                             <div className="sec-head">1. 基本資料 <span className="en">Basic Information</span></div>
-                            <table>
+                            <table className="mom-header">
                                 <tbody>
                                     <tr>
-                                        <td className="lbl">主旨<small>Title</small></td><td className="val" colSpan={3}>{val(data.title)}</td>
+                                        <td className="lbl">主題<small>SUBJECT</small></td>
+                                        <td className="val center" colSpan={4}>{val(data.title)}</td>
                                     </tr>
                                     <tr>
-                                        <td className="lbl">廠商<small>Contractor</small></td><td className="val">{val(data.vendor)}</td>
-                                        <td className="lbl">會議類型<small>Meeting Type</small></td><td className="val">{val(data.meetingType)}</td>
+                                        <td className="lbl">日期／類型<small>DATE / TYPE</small></td>
+                                        <td className="val center" colSpan={2}>{val([formatMinutesDate(data.meetingDate), data.meetingType].filter(Boolean).join('　'))}</td>
+                                        <td className="lbl">廠商<small>CONTRACTOR</small></td>
+                                        <td className="val center">{val(data.vendor)}</td>
                                     </tr>
                                     <tr>
-                                        <td className="lbl">會議日期<small>Date</small></td><td className="val">{val(data.meetingDate)}</td>
-                                        <td className="lbl">時間<small>Time</small></td><td className="val">{val(data.meetingTime)}</td>
+                                        <td className="lbl">地點與時間<small>VENUE &amp; TIME</small></td>
+                                        <td className="val center" colSpan={2}>
+                                            {val(data.location)}
+                                            {timeRange && <div>{timeRange}</div>}
+                                        </td>
+                                        <td className="lbl">記錄人<small>RECORDED BY</small></td>
+                                        <td className="val center">{val(data.organizer)}</td>
                                     </tr>
                                     <tr>
-                                        <td className="lbl">地點<small>Location</small></td><td className="val">{val(data.location)}</td>
-                                        <td className="lbl">主持人<small>Organizer</small></td><td className="val">{val(data.organizer)}</td>
+                                        <td className="lbl" rowSpan={Math.max(attendees.length, 1) + 1}>出席人員<small>ATTENDEES</small></td>
+                                        <th>公司 Company</th>
+                                        <th colSpan={2}>姓名 Name</th>
+                                        <th>職稱 Position</th>
                                     </tr>
-                                </tbody>
-                            </table>
-
-                            {/* ===== 2 出席人員 ===== */}
-                            <div className="sec-head">2. 出席人員 <span className="en">Attendees</span></div>
-                            <table className="list-table">
-                                <tbody>
-                                    <tr><th style={{ width: '34%' }}>姓名 Name</th><th style={{ width: '33%' }}>公司 Company</th><th>職稱／角色 Role</th></tr>
                                     {attendees.length === 0
-                                        ? <tr><td colSpan={3}><span className="blank">（無資料 No attendees）</span></td></tr>
+                                        ? <tr><td colSpan={4}><span className="blank">（無資料 No attendees）</span></td></tr>
                                         : attendees.map((a, i) => (
                                             <tr key={i}>
-                                                <td>{val(a.name)}</td>
-                                                <td>{val(a.company)}</td>
-                                                <td>{val(a.role)}</td>
+                                                <td className="center">{val(a.company)}</td>
+                                                <td className="center" colSpan={2}>{val(a.name)}</td>
+                                                <td className="center">{val(a.role)}</td>
                                             </tr>
                                         ))}
                                 </tbody>
                             </table>
 
-                            {/* ===== 3 討論與決議 ===== */}
-                            <div className="sec-head">3. 討論與決議 <span className="en">Discussion &amp; Decisions</span></div>
-                            <table className="list-table">
+                            {/* ===== 2/3 討論事項：# / DISCUSSIONS / ACTIONS / Action by / Target Date / Status ===== */}
+                            <div className="sec-head">2. 討論事項 <span className="en">Discussions / Actions</span></div>
+                            <table className="list-table register">
                                 <tbody>
                                     <tr>
-                                        <th style={{ width: '6%' }}>項次 No.</th>
-                                        <th style={{ width: '76%' }}>議題討論 Topic / Discussion</th>
-                                        <th style={{ width: '10%' }}>負責人<span className="en">Owner</span></th>
-                                        <th style={{ width: '8%' }}>狀態<span className="en">Status</span></th>
+                                        <th style={{ width: '8%' }}>#</th>
+                                        <th style={{ width: '62%', textAlign: 'center' }}>DISCUSSIONS / ACTIONS</th>
+                                        <th style={{ width: '14%' }}>Action by</th>
+                                        <th style={{ width: '16%' }}>Target Date / Status</th>
                                     </tr>
-                                    {discussionLog.length === 0
+                                    {register.length === 0
                                         ? <tr><td colSpan={4}><span className="blank">（無資料 No discussion items）</span></td></tr>
-                                        : discussionLog.filter(d => (d.level ?? 0) === 0).map((major) => {
-                                            const subs = discussionLog.filter(d => d.level === 1 && d.no.startsWith(`${major.no}.`));
-                                            const openSubs = subs.filter(d => d.status !== 'Closed');
-                                            const closedSubs = subs.filter(d => d.status === 'Closed');
-                                            return (
-                                                <React.Fragment key={major.no}>
-                                                    <tr>
-                                                        <td colSpan={4} className="topic-row">{major.no}. {major.content || [major.topic, major.discussion, major.decision].filter(Boolean).join(' / ')}</td>
-                                                    </tr>
-                                                    {[...openSubs, ...closedSubs].map(sub => (
-                                                        <tr key={sub.no}>
-                                                            <td>{val(sub.no)}</td>
-                                                            <td style={{ whiteSpace: 'pre-wrap' }}>{val(sub.content)}</td>
-                                                            <td>{val(sub.owner)}</td>
-                                                            <td>{sub.status === 'Closed' ? '已完成 Closed' : '待辦 Open'}</td>
-                                                        </tr>
+                                        : register.map(e => isItem(e) ? (
+                                            <tr key={e.no}>
+                                                <td>{e.no}</td>
+                                                <td>
+                                                    {e.raisedDate && <div className={`raised-date tone-${toneOf(e)}`}>{formatMinutesDate(e.raisedDate)}</div>}
+                                                    <div className={`item-text tone-${toneOf(e)}${e.raisedDate ? ' update-text' : ''}`} style={{ whiteSpace: 'pre-wrap' }}>{val(e.content)}</div>
+                                                    {updatesByDate(e).map(({ u, i }) => (
+                                                        <div key={i} className={`update tone-${toneOf(u)}`}>
+                                                            {u.date && <div className="update-date">{formatMinutesDate(u.date)}</div>}
+                                                            <div className="update-text">{u.content}</div>
+                                                        </div>
                                                     ))}
-                                                    {subs.length === 0 && (
-                                                        <tr><td colSpan={4}><span className="blank">（無次項目 No sub-items）</span></td></tr>
-                                                    )}
-                                                </React.Fragment>
-                                            );
-                                        })}
+                                                </td>
+                                                <td>{val(e.owner)}</td>
+                                                <td>
+                                                    {e.targetDate && <div>{formatMinutesDate(e.targetDate)}</div>}
+                                                    <div>{e.status === 'Closed' ? 'Closed' : 'Open'}</div>
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            <tr key={e.no} className={e.kind === 'subcategory' ? 'sub-row' : 'cat-row'}>
+                                                <td>{displayNo(e)}</td>
+                                                <td>{e.content}</td>
+                                                <td></td>
+                                                <td></td>
+                                            </tr>
+                                        ))}
                                 </tbody>
                             </table>
 
-                            {/* ===== 4 附件 ===== */}
-                            <div className="sec-head">4. 附件 <span className="en">Attachments</span></div>
+                            <div className="tone-legend">
+                                <span className="key">紅＝本次新增或重點 Red = this meeting or key point</span>{'\u3000'}
+                                <span className="last">藍＝上次會議 Blue = last meeting</span>{'\u3000'}<span className="old">灰＝更早 Grey = earlier</span>
+                            </div>
+
+                            {/* ===== 3 附件 ===== */}
+                            <div className="sec-head">3. 附件 <span className="en">Attachments</span></div>
                             <table>
                                 <tbody>
                                     <tr><th className="lbl" style={{ width: 40, textAlign: 'left' }}>項次</th>
@@ -143,17 +163,20 @@ const MeetingMinutesPrintTemplate: React.FC<MeetingMinutesPrintTemplateProps> = 
                                         : attachmentFiles.map((f, i) => (
                                             <tr key={i}>
                                                 <td>{i + 1}</td>
-                                                <td><a href={f.url} target="_blank" rel="noreferrer">{f.name}</a></td>
+                                                <td>
+                                                    <a href={f.url} target="_blank" rel="noreferrer">{f.name}</a>
+                                                    {f.isImage && <span className="blank">{'\u3000'}（照片 {photos.indexOf(f) + 1}，見照片附頁 See photo pages）</span>}
+                                                </td>
                                             </tr>
                                         ))}
                                 </tbody>
                             </table>
 
-                            {/* ===== 5 簽核 ===== */}
-                            <div className="sec-head">5. 簽核 <span className="en">Sign-off</span></div>
+                            {/* ===== 4 簽核 ===== */}
+                            <div className="sec-head">4. 簽核 <span className="en">Sign-off</span></div>
                             <div className="sign-grid">
-                                <SignCell num="5.1" zh="主持人" en="Organizer" name={data.organizer} date={data.meetingDate} />
-                                <SignCell num="5.2" zh="廠商代表" en="Contractor Rep." name={data.vendor} />
+                                <SignCell num="4.1" zh="記錄人" en="Recorded By" name={data.organizer} date={formatMinutesDate(data.meetingDate)} />
+                                <SignCell num="4.2" zh="廠商代表" en="Contractor Rep." name={data.vendor} />
                             </div>
 
                             <div className="foot">
@@ -164,6 +187,24 @@ const MeetingMinutesPrintTemplate: React.FC<MeetingMinutesPrintTemplateProps> = 
                     </tr>
                 </tbody>
             </table>
+
+            {/* Photo pages: landscape A4, four photos (2 × 2) per page — the rest of the minutes is portrait. */}
+            {photoPages.map((group, pi) => (
+                <div className="photo-page" key={pi}>
+                    <div className="photo-head">
+                        <span>照片 Photos — {docRef}</span>
+                        <span>{pi + 1} / {photoPages.length}</span>
+                    </div>
+                    <div className="photo-grid-2x2">
+                        {group.map((f, i) => (
+                            <figure className="photo-cell" key={i}>
+                                <img src={f.url} alt={f.name} />
+                                <figcaption>照片 Photo {pi * 4 + i + 1}{'\u3000'}{f.name}</figcaption>
+                            </figure>
+                        ))}
+                    </div>
+                </div>
+            ))}
         </div>
     );
 };

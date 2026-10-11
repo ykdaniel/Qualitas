@@ -33,6 +33,13 @@ await page.click('button[type=submit]');
 await page.waitForURL(u => !u.pathname.includes('/login'));
 log('LOGIN OK');
 
+// NAMING-RULES-MEETING-2026-001: Save first opens a confirmation dialog (before → after examples and the impact); the
+// request only goes out from its "Save changes" button, and the dialog closes before the request is sent.
+const confirmSave = async () => {
+    const dialog = page.getByRole('dialog', { name: 'Confirm naming rule changes' });
+    await dialog.waitFor({ state: 'visible' });
+    await dialog.getByRole('button', { name: 'Save changes' }).click();
+};
 const osdPrefixField = () => page.locator('table tbody tr').filter({ hasText: 'PQP' }).locator('input[type="text"]');
 
 // ── 1. Load unmodified, navigate away in-app (no Cancel exists — full-page editor) -> no false prompt ──
@@ -91,6 +98,14 @@ page.on('response', async (r) => {
 await osdPrefixField().fill('QTS-RKS-[ABBREV]-OSDSAVED-');
 apiCalls.length = 0;
 await page.getByRole('button', { name: /^(Save|Saved)$/ }).click();
+await page.getByRole('dialog', { name: 'Confirm naming rule changes' }).waitFor({ state: 'visible' });
+await page.waitForTimeout(300);
+check(apiCalls.length === 0, 'NamingRules: Save alone sends nothing (confirmation dialog first)');
+await page.keyboard.press('Escape');
+await page.waitForTimeout(200);
+check(await page.getByRole('dialog').count() === 0 && apiCalls.length === 0, 'NamingRules: Escape closes the confirmation dialog without saving');
+await page.getByRole('button', { name: /^(Save|Saved)$/ }).click();
+await confirmSave();
 await page.waitForTimeout(1000);
 check(apiCalls.length === 1, `NamingRules: exactly one save request sent (got ${apiCalls.length})`);
 check(apiCalls[0].postData?.includes('OSDSAVED'), 'NamingRules: save request body contains new value');
@@ -127,6 +142,7 @@ await page.route('**/api/settings/naming-rules', async (route) => {
 });
 await osdPrefixField().fill('QTS-RKS-[ABBREV]-PENDINGNAV-');
 await page.getByRole('button', { name: /^(Save|Saved)$/ }).click();
+await confirmSave();
 await page.waitForTimeout(200); // the PUT is now in flight, held by delayPromise — genuinely pending
 const urlBeforePendingNav = page.url();
 check(urlBeforePendingNav.includes('/document-naming-rules'), 'NamingRules pending-nav: still on the page right before clicking nav (save genuinely in flight)');
@@ -179,6 +195,7 @@ await page.route('**/api/settings/naming-rules', async (route) => {
 await osdPrefixField().fill('QTS-RKS-[ABBREV]-OSDFAIL-');
 const saveBtn = page.getByRole('button', { name: /^Save$/ });
 await saveBtn.click();
+await confirmSave();
 await page.waitForTimeout(1000);
 await page.screenshot({ path: `${OUT}/naming-05-save-failure.png` });
 check((await osdPrefixField().inputValue()) === 'QTS-RKS-[ABBREV]-OSDFAIL-', 'NamingRules: input preserved after failed save');
@@ -195,6 +212,7 @@ check(errorText === expectedErrorText, `NamingRules: the inline error message ma
 await osdPrefixField().fill('QTS-RKS-[ABBREV]-OSDRETRY-');
 apiCalls.length = 0;
 await saveBtn.click();
+await confirmSave();
 await page.waitForTimeout(1000);
 await page.unroute('**/api/settings/naming-rules');
 check(apiCalls.length === 1, `NamingRules retry: exactly one request on retry (got ${apiCalls.length})`);
@@ -226,6 +244,7 @@ const readOnlyPrefixField = page2.locator('table tbody tr').filter({ hasText: 'P
 await readOnlyPrefixField.waitFor({ state: 'visible' });
 check(await page2.getByRole('button', { name: /^Save$/ }).count() === 0, 'NamingRules readOnly: no Save button rendered for an account without settings:manage:all');
 check(await readOnlyPrefixField.isDisabled(), 'NamingRules readOnly: prefix input is disabled (fieldset disabled)');
+check(await page2.getByText(/^View only: changing naming rules requires/).count() === 1, 'NamingRules readOnly: the view-only notice is shown');
 await page2.screenshot({ path: `${OUT}/naming-07-readonly.png` });
 await browser2.close();
 

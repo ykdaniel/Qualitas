@@ -1,5 +1,15 @@
 
 import requests
+import os
+import sys
+
+
+def _require_env(name):
+    """Credentials come only from the environment; this script has no built-in password."""
+    value = os.environ.get(name)
+    if not value:
+        sys.exit(f"{name} is not set. Export it before running this script (no built-in default).")
+    return value
 
 BASE_URL = "http://127.0.0.1:3001/api"
 TOKEN = None
@@ -9,7 +19,7 @@ def login():
     url = f"{BASE_URL}/auth/login"
     payload = {
         "username": "admin@example.com",
-        "password": "admin"
+        "password": _require_env("QUALITAS_ADMIN_PASSWORD")
     }
     response = requests.post(url, json=payload)
     if response.status_code == 200:

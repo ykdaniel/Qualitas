@@ -1,0 +1,14 @@
+== live backend 4 files
+95914d3eed1a284d1ac32daa9d5eb8f9b375d8148f77b4e5a34655c047e796b8  services/itr_service.py
+a465ea04da4672683b3033e59242d373ea6f906dc92a880c7108d209755b8d60  routers/itr.py
+b1bd390adbd6d03a843e7f5a09713d23e43d3ec331ad5dc1972cae16e5fa358a  routers/noi.py
+ccf5de9abc0dc97df6f13f34dff81e626eb718db35e4daedcdaa7e59dd040ac2  routers/itp.py
+== live index
+cd426c4f2b986d9be0b4f8265dfeb1fc4da4dea00ad018c07f37eb0531b325a6  /volume1/docker/Qualitas/react-app/dist/index.html
+dist inode 376368
+== other deploy dirs (newest)
+/var/services/homes/ykdaniel/deploy-audit-print-20261010T110620Z
+/var/services/homes/ykdaniel/deploy-audit-export-docx-20261010T052217Z
+/var/services/homes/ykdaniel/deploy-material-api-close-20261010T034328Z
+/var/services/homes/ykdaniel/deploy-audit-endpoint-cleanup-20261010T024722Z
+2026-10-10T15:40:15Z

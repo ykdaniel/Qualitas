@@ -4,6 +4,7 @@ import FormActions from '../Shared/FormActions';
 import actionStyles from '../Shared/FormActions.module.css';
 import React, { useState, useEffect } from 'react';
 import styles from './ContractorModal.module.css';
+import ContractorPersonnel from './ContractorPersonnel';
 
 interface ContractorModalProps {
   existingId: string | null;
@@ -119,6 +120,9 @@ const ContractorModal: React.FC<ContractorModalProps> = ({ existingId, initialDa
             <label>{t('contractors.address')} <span className={styles.required}>*</span></label>
             <textarea value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} required rows={2} />
           </div>
+
+          {/* a saved company's people (CONTRACTOR-PERSONNEL-2026-001); saved at once, not with this form's Save */}
+          {existingId && <ContractorPersonnel contractorId={existingId} />}
 
                   <FormActions
                       cancel={<>

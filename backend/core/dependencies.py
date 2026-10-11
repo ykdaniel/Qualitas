@@ -40,6 +40,7 @@ from services.followup_service import FollowUpService
 from services.checklist_service import ChecklistService
 from services.contractor_service import ContractorService
 from services.audit_service import AuditService
+from services.audit_template_service import AuditTemplateService
 from services.fat_service import FATService
 from services.kpi_service import KPIService
 from services.related_service import RelatedService
@@ -102,6 +103,9 @@ def get_contractor_service(db: Session = Depends(get_db)) -> ContractorService:
 def get_audit_service(db: Session = Depends(get_db)) -> AuditService:
     repo = AuditRepository(db)
     return AuditService(repo)
+
+def get_audit_template_service(db: Session = Depends(get_db)) -> AuditTemplateService:
+    return AuditTemplateService(db)
 
 def get_fat_service(db: Session = Depends(get_db)) -> FATService:
     repo = FATRepository(db)

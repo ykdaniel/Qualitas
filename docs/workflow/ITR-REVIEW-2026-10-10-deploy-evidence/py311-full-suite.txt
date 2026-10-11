@@ -1,0 +1,9 @@
+# run(UTC) start: 2026-10-10T15:39:10Z  repo layout /q/backend + /q/react-app; candidate = git archive 4bdc49ec (3665860e+5b2c67e3+4bdc49ec on 688d87b3)
+# image: sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce arm64
+Python 3.11.17
+pip_exit=0
+pytest_exit=0
+.................................................s...................... [ 97%]
+...................................................                      [100%]
+2411 passed, 16 skipped in 3328.40s (0:55:28)
+# end: 2026-10-10T16:34:59Z

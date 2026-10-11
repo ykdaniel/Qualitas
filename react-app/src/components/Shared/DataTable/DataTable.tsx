@@ -26,6 +26,7 @@ import {
 
 import { DataTablePagination } from "./DataTablePagination"
 import { DataTableViewOptions } from "./DataTableViewOptions"
+import { useDataTableText } from "./useDataTableText"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 
@@ -50,7 +51,7 @@ const DataTableInner = <TData, TValue>({
     columns,
     data,
     searchKey,
-    searchPlaceholder = "Filter...",
+    searchPlaceholder,
     topRightContent,
     title,
     actions,
@@ -60,6 +61,7 @@ const DataTableInner = <TData, TValue>({
     ...props
 }: DataTableProps<TData, TValue>) => {
     const { t } = useLanguage()
+    const text = useDataTableText()
     const [sorting, setSorting] = React.useState<SortingState>([])
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
         []
@@ -102,7 +104,7 @@ const DataTableInner = <TData, TValue>({
                     {searchKey && (
                         <div className="flex items-center py-4">
                             <Input
-                                placeholder={searchPlaceholder}
+                                placeholder={searchPlaceholder ?? text("filterPlaceholder")}
                                 value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ""}
                                 onChange={(event) =>
                                     table.getColumn(searchKey)?.setFilterValue(event.target.value)

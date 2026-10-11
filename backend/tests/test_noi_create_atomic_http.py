@@ -48,12 +48,13 @@ def noi_env(tmp_path):
         finally:
             s.close()
     app.dependency_overrides[get_db] = _db
-    orig = (database_module.engine, database_module.SessionLocal, db_migrations.engine)
-    database_module.engine, database_module.SessionLocal, db_migrations.engine = engine, S, engine
+    import core.security as security_module   # binds SessionLocal at import: swap it too (token blacklist)
+    orig = (database_module.engine, database_module.SessionLocal, db_migrations.engine, security_module.SessionLocal)
+    database_module.engine, database_module.SessionLocal, db_migrations.engine, security_module.SessionLocal = engine, S, engine, S
     try:
         yield Env(app, S), engine
     finally:
-        database_module.engine, database_module.SessionLocal, db_migrations.engine = orig
+        database_module.engine, database_module.SessionLocal, db_migrations.engine, security_module.SessionLocal = orig
         Base.metadata.drop_all(engine)
         engine.dispose()
 
@@ -367,7 +368,7 @@ def test_two_simultaneous_creates_both_succeed_with_distinct_numbers(noi_env):
     # read the stale one and collide on the reference number.
     window = _Window(engine, "insert into audit_logs")
     try:
-        out = _run_pair(lambda: _create(a, package="FIRST").status_code, lambda: _create(b, package="SECOND").status_code)
+        out = _run_pair(lambda: _create(a, package="FIRST").status_code, lambda: _create(b, package="SECOND").status_code, window=window)
     finally:
         window.close()
     assert window.fired and out == {"first": 200, "second": 200}

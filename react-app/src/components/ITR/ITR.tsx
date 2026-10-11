@@ -181,11 +181,13 @@ const ITR: React.FC = () => {
 
         try {
             let targetId = currentItrId;
+            let createdNumber = '';
             if (currentItrId) {
                 await updateITR(currentItrId, itemData);
             } else {
                 const newITR = await addITR(itemData);
                 targetId = newITR.id;
+                createdNumber = newITR.documentNumber || '';
             }
 
             if (deletedFileIds && deletedFileIds.length > 0) {
@@ -212,6 +214,15 @@ const ITR: React.FC = () => {
             }
 
             await refetch();
+
+            // A new ITR stays open on the record just created (2026-10-10): checklists can only be linked to a
+            // saved ITR, and closing here sent the user back to the list to find it before they could go on.
+            // The modal is keyed on the id, so it reopens fresh from the stored record. Existing ITRs still close.
+            if (!currentItrId && targetId && useITRStore.getState().itrList.some(i => i.id === targetId)) {
+                setCurrentItrId(targetId);
+                toast.success(t('itr.createdKeepOpen', { number: createdNumber }));
+                return { keptOpen: true as const };
+            }
 
             setIsEditModalOpen(false);
             setCurrentItrId(null);
@@ -378,6 +389,7 @@ const ITR: React.FC = () => {
 
             {isEditModalOpen && (
                 <ITRDetailModal
+                    key={currentItrId || 'new'}
                     itrId={currentItrId || 'new'}
                     existingItem={currentItrId ? itrList.find(i => i.id === currentItrId) : undefined}
                     itrList={itrList}

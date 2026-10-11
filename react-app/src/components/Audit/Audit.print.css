@@ -1,0 +1,156 @@
+/* Audit printouts (AUDIT-PRINT-2026-001) — report / plan / checklist in the formal NCR-style layout, mirroring the
+   OSD/NCR print CSS. Portal-mounted into <body> (sibling of #root) and shown only while printing; every rule is scoped
+   under .audit-print-root so the generic table/td/th selectors never leak into the app. The masthead lives in the
+   outer table's <thead> so the browser repeats it on every printed page.
+
+   Unlike the other modules' print CSS, the rest of <body> (#root, and the empty #itr-single-print-root index.html keeps
+   in front of us) is hidden only while an Audit printout is mounted (body:has(...)), so this file never blanks a plain
+   browser print of another page. Hiding the empty sibling matters: with a named page it would otherwise get a page of
+   its own (a blank first page); ITR's print CSS shows that container with an id selector, so it gets its own rule below.
+   The page size / margins are a named page (@page audit); !important because another
+   module's unnamed @page (ITP landscape Letter, Checklist zero margins), once loaded, otherwise still wins the size. */
+
+:root {
+    --audit-ink: #1c1f24;
+    --audit-muted: #5b6068;
+    --audit-line: #9aa0a8;
+    --audit-line-soft: #c9ced4;
+    --audit-fill: #eef1f4;
+    --audit-fill-head: #dfe4ea;
+    --audit-accent: #0f766e;
+    --audit-status: #1f6f8b;
+    --audit-note: #7a818a;
+}
+
+.audit-print-root { display: none; }
+
+.audit-print-root {
+    page: audit;
+    font-family: "Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    color: var(--audit-ink);
+    font-size: 9.3px;
+    line-height: 1.5;
+    background: #fff;
+}
+.audit-print-root * { box-sizing: border-box; }
+
+.audit-print-root .audit-report { width: 100%; border-collapse: collapse; }
+.audit-print-root .head-cell,
+.audit-print-root .body-cell { border: none; padding: 0; text-align: left; font-weight: 400; }
+
+.audit-print-root .doc-head {
+    display: flex; align-items: stretch;
+    border-bottom: 2.2px solid var(--audit-ink);
+    padding-bottom: 6px; margin-bottom: 10px;
+}
+.audit-print-root .logo-box {
+    width: 78px; min-height: 46px;
+    border: 1px dashed var(--audit-line-soft);
+    display: flex; align-items: center; justify-content: center;
+    color: #b8bdc4; font-size: 9px; letter-spacing: 1px;
+}
+.audit-print-root .head-mid { flex: 1; padding: 2px 14px; }
+.audit-print-root .head-mid .co { font-size: 14px; font-weight: 700; letter-spacing: .5px; }
+.audit-print-root .head-mid .sub { font-size: 9.5px; color: var(--audit-muted); margin-top: 2px; }
+.audit-print-root .head-right { text-align: right; font-size: 9px; line-height: 1.6; min-width: 120px; }
+.audit-print-root .head-right .docno { font-weight: 700; font-size: 10px; letter-spacing: .3px; }
+.audit-print-root .head-right .unsaved { color: #b45309; font-weight: 700; font-size: 8.4px; }
+
+.audit-print-root .badge {
+    display: inline-block; padding: 1px 7px; border-radius: 2px;
+    font-weight: 700; font-size: 8.6px; letter-spacing: .4px; color: #fff;
+}
+.audit-print-root .b-status { background: var(--audit-status); }
+
+.audit-print-root .title {
+    text-align: center; font-size: 16px; font-weight: 700;
+    letter-spacing: 3px; margin: 4px 0 12px;
+}
+.audit-print-root .title .en {
+    font-size: 9px; font-weight: 500; letter-spacing: 2px;
+    color: var(--audit-muted); display: block; margin-top: 2px;
+}
+
+.audit-print-root .sec-head {
+    background: var(--audit-fill-head);
+    border-left: 3px solid var(--audit-accent);
+    padding: 3px 9px; font-weight: 700; font-size: 10px;
+    letter-spacing: .5px; margin: 11px 0 0;
+}
+.audit-print-root .sec-head.sec-head-sub { margin-top: 6px; }
+.audit-print-root .sec-head .en { font-weight: 500; color: var(--audit-muted); font-size: 8.6px; letter-spacing: .5px; }
+
+/* label / value grids: fixed layout so the value columns split the width evenly */
+.audit-print-root table { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: -1px; }
+.audit-print-root td, .audit-print-root th { border: 1px solid var(--audit-line); padding: 3px 6px; vertical-align: top; }
+.audit-print-root .val { word-break: break-word; white-space: pre-wrap; min-height: 14px; }
+.audit-print-root td.lbl {
+    background: var(--audit-fill); font-weight: 600;
+    width: 96px; color: #2a2e34;
+}
+.audit-print-root td.lbl small,
+.audit-print-root .items th small { display: block; color: var(--audit-note); font-weight: 500; font-size: 7.6px; letter-spacing: .2px; }
+.audit-print-root .blank { color: #aeb3ba; }
+
+/* checklist items: clause text and audit question in their own columns (AUDIT-GRADES-2026-001) — the same proportions
+   as the Word export (report 0.8 / 1.4 / 4.4 / 3.8 / 2.2 / 3.0 / 1.8 cm, checklist 0.8 / 1.4 / 5.0 / 4.4 / 2.8 / 3.0 cm) */
+.audit-print-root .items th { background: var(--audit-fill); font-weight: 600; text-align: left; }
+.audit-print-root .items td { white-space: pre-wrap; word-break: break-word; }
+.audit-print-root .items .c-n { width: 5%; text-align: center; }
+.audit-print-root .items .c-no { width: 8%; }
+.audit-print-root .items .c-c { width: 25%; }
+.audit-print-root .items .c-q { width: 22%; }
+.audit-print-root .items .c-r { width: 13%; }
+.audit-print-root .items .c-m { width: 17%; }
+.audit-print-root .items .c-d { width: 10%; }
+.audit-print-root .checklist-items .c-c { width: 29%; }
+.audit-print-root .checklist-items .c-q { width: 25%; }
+.audit-print-root .checklist-items .c-r { width: 16%; }
+.audit-print-root .checklist-items .c-m { width: 17%; }
+.audit-print-root .checklist-items td { height: 46px; }
+.audit-print-root .checklist-items .boxes { white-space: nowrap; font-size: 8.6px; line-height: 1.7; }
+/* agenda (AUDIT-AGENDA-2026-001): same proportions as the Word export's agenda table */
+.audit-print-root .agenda-items .a-date { width: 13%; }
+.audit-print-root .agenda-items .a-time { width: 14%; white-space: nowrap; }
+.audit-print-root .agenda-items .a-item { width: 29%; }
+.audit-print-root .agenda-items .a-who { width: 18%; }
+.audit-print-root .agenda-items .a-aud { width: 12%; }
+.audit-print-root .agenda-items .a-rem { width: 14%; }
+/* lunch rows (kind "lunch", AUDIT-BUTTONS-2026-001): grey, like the Word export */
+.audit-print-root .agenda-items tr.lunch td { background: #e5e7eb; }
+
+.audit-print-root .field-box { border: 1px solid var(--audit-line); min-height: 34px; padding: 4px 6px; white-space: pre-wrap; word-break: break-word; }
+.audit-print-root .field-box.fb-tall { min-height: 70px; }
+.audit-print-root .guide { color: #aeb3ba; font-style: italic; }
+
+/* sign-off (mirrors the NCR/OSD reports) */
+.audit-print-root .sign-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 4px; }
+.audit-print-root .sign-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+.audit-print-root .sign-cell { border: 1px solid var(--audit-line); padding: 6px 8px 7px; }
+.audit-print-root .sign-cell .role { font-weight: 700; font-size: 9px; }
+.audit-print-root .sign-cell .role .en { color: var(--audit-muted); font-weight: 500; font-size: 7.6px; }
+.audit-print-root .sign-line { border-bottom: 1px solid var(--audit-ink); height: 24px; margin: 6px 0 4px; }
+.audit-print-root .sign-meta { display: flex; justify-content: space-between; font-size: 8px; color: var(--audit-muted); }
+.audit-print-root .sign-meta span { flex: 1; }
+
+/* keep rows / boxes intact across page breaks */
+.audit-print-root tr,
+.audit-print-root .sign-cell,
+.audit-print-root .field-box { break-inside: avoid; page-break-inside: avoid; }
+.audit-print-root .sec-head { break-after: avoid; page-break-after: avoid; }
+
+@page audit { size: A4 portrait !important; margin: 13mm 12mm !important; }
+
+@media print {
+    body:has(> .audit-print-root) > :not(.audit-print-root) { display: none !important; }
+    /* ITR.module.css forces this always-present index.html container visible with an id selector (it outranks the rule
+       above), so it is named here too — otherwise, once ITR has been opened, it takes a blank first page again. */
+    body:has(> .audit-print-root) > #itr-single-print-root { display: none !important; }
+    .audit-print-root { display: block !important; }
+    .audit-print-root .audit-report > thead,
+    .audit-print-root .items > thead { display: table-header-group; }
+    .audit-print-root * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+}

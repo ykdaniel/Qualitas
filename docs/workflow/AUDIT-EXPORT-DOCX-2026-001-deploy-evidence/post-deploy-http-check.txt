@@ -1,0 +1,12 @@
+# 2026-10-10T07:25:14Z external checks
+/ 200
+/index.html 200
+/api/user/profile 401
+/api/audit/ahb-x/export-docx 401
+index cd426c4f2b986d9be0b4f8265dfeb1fc4da4dea00ad018c07f37eb0531b325a6 (expected cd426c4f…25a6)
+main bundle assets/index-J3E3Hm0Z.js 200
+audit chunk assets/Audit-BeWNJAHj.js 200 contains export-docx: 0
+api bundle has /audit/ export: 1
+previous index asset still served: 200
+main bundle mentions export-docx: 4 (NCR/ITR/NOI/Audit wrappers live in api.ts → main bundle; the Audit chunk only calls exportAuditDocx)
+note: /api/audit/<id>/export-docx answers 401 (auth) rather than 404 — the route is registered on the live backend

@@ -53,7 +53,7 @@ export const createColumns = (
                 return <div className="text-center">{t(statusKeyMap[s] || '') || status}</div>;
             },
             filterFn: (row, id, value) => {
-                return value.includes(row.getValue(id));
+                return !value || row.getValue(id) === value;
             },
         },
         {

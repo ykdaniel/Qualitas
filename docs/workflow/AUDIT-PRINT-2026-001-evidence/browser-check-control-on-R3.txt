@@ -1,0 +1,7 @@
+# 2026-10-10T16:19:06Z CONTROL: the R4 check script run against the R3 candidate (688d87b3 + G-R3.patch) — shows the checks catch the R3 defect (ITR opened first)
+PASS setup: another module's unconditional #root print rule is loaded (old blank-page condition)
+PASS setup: ITR's forced-visible #itr-single-print-root rule and other modules' unnamed @page rules are loaded  -> {"itrForcedVisible":true,"unnamedPageRules":12,"container":true}
+FAIL plan PDF: 2 page(s), every page has text, all A4 portrait  -> [{"w":595,"h":842,"text":false},{"w":595,"h":842,"text":true}]
+FAIL checklist PDF: 2 page(s), every page has text, all A4 portrait  -> [{"w":595,"h":842,"text":false},{"w":595,"h":842,"text":true}]
+FAIL report PDF: 3 page(s), every page has text, all A4 portrait  -> [{"w":595,"h":842,"text":false},{"w":595,"h":842,"text":true},{"w":595,"h":842,"text":true}]
+3 FAILED

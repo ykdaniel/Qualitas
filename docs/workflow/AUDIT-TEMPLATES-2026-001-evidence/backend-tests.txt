@@ -1,0 +1,9 @@
+# 2026-10-11T09:09:37Z R3 candidate tree (HEAD 1dc87c2a + G.patch), local Python 3.14.6, DATABASE_URL=sqlite:///:memory:
+# files: tests/test_audit_templates_http.py tests/test_audit_templates_migration.py tests/test_audit_hardening_http.py tests/test_audit_agenda_http.py tests/test_audit_export_docx_http.py tests/test_audit_service.py tests/test_audit_contractor_scope_http.py tests/test_audit_void_lock_http.py tests/test_seeder_permission_persistence.py tests/test_seeder_admin_initialisation.py tests/test_permission_remap_migration.py tests/test_checklist_template_cleanup.py tests/test_material_schema_migration.py tests/test_startup_isolation_guard.py tests/test_iam_role_audit_http.py tests/test_iam_router.py
+.....                                                                    [100%]
+207 passed, 14 skipped in 138.69s (0:02:18)
+pytest_exit=0
+
+# 2026-10-11T09:11:56Z old-code (git archive) tests in the repo working tree (template backend files identical to the candidate; models.py also carries another session's uncommitted IAM hunk)
+33 passed in 49.81s
+pytest_exit=0

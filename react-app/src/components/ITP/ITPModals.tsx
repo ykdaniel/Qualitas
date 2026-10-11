@@ -28,6 +28,7 @@ import { getErrorMessage, getErrorStatusCode } from '../../utils/errorUtils';
 import { isUnchangedSincePriorWrite } from '../../utils/attachmentOutcome';
 import { preferEnglishText } from '../../utils/itpItemValidation';
 import api from '../../services/api';
+import { checklistFromItpPath } from '../../utils/itpReturnLink';
 
 // Mirrors backend/core/utils.py::WorkflowEngine.TRANSITIONS["ITP"] exactly — the ONLY source of
 // truth for which status transitions the backend will actually accept. "Rejected" and "No submit"
@@ -118,9 +119,12 @@ export interface ITPDetailModalProps {
      * save-status indicator can reflect the real outcome instead of assuming success. */
     onApplyItems?: (detailPayload: any) => Promise<boolean>;
     onClose: () => void;
+    /** Tab shown when the window opens. 'plan' when returning from a Checklist that was opened
+     * from this window's Inspection Plan tab (see utils/itpReturnLink). Default 'general'. */
+    initialTab?: 'general' | 'plan';
 }
 
-export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingItem, defaultVendor, canApprove = false, canVoid = false, canCreate = false, canUpdate = false, canCreateChecklist = false, onSave, onApplyItems, onClose }) => {
+export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingItem, defaultVendor, canApprove = false, canVoid = false, canCreate = false, canUpdate = false, canCreateChecklist = false, onSave, onApplyItems, onClose, initialTab = 'general' }) => {
     // New record (no existingItem yet): editable only with itp:create:all. Existing record:
     // editable only with itp:update:all. Attachment controls are separate (see attachmentReadOnly
     // below) because upload/delete always requires itp:update:all, even for a brand-new record.
@@ -133,11 +137,14 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
     const { getActiveContractors } = useContractorsStore();
     const REV_OPTIONS = ['Rev1.0', 'Rev2.0', 'Rev3.0', 'Rev4.0'];
 
-    const [activeTab, setActiveTab] = useState<'general' | 'plan'>('general');
+    const [activeTab, setActiveTab] = useState<'general' | 'plan'>(initialTab);
 
 
 
     const [saving, setSaving] = useState(false);
+    // Immediate item saves still in flight: closing waits for them, so a write that then fails
+    // is never dropped silently after the window is gone.
+    const [applyingCount, setApplyingCount] = useState(0);
     const [isPrinting, setIsPrinting] = useState(false);
     const [isDirty, setIsDirty] = useState(false);
 
@@ -256,15 +263,26 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
 
     const handleItemsChange = async (newItems: InspectionItem[]) => {
         setAdvancedItems(newItems);
-        setIsDirty(true);
         setPlanStatus('unsaved');
         if (onApplyItems && itpId) {
             // This is an immediate save, separate from the main Save/Publish flow (unchanged,
             // existing behavior) — reflect its real result rather than assuming success, since
             // onApplyItems shows its own error toast and never throws.
-            const applied = await onApplyItems(prepareDetailPayload(newItems));
+            setApplyingCount(c => c + 1);
+            let applied = false;
+            try {
+                applied = await onApplyItems(prepareDetailPayload(newItems));
+            } finally {
+                setApplyingCount(c => c - 1);
+            }
             setPlanStatus(applied ? 'saved' : 'failed');
+            // A plan that reached the server is not an unsaved edit, so closing must not warn
+            // that it will be lost; a failed one still needs the main Save (which always resends
+            // the plan for an existing record), so the leave guard stays on for it.
+            if (!applied) setIsDirty(true);
+            return;
         }
+        setIsDirty(true);
     };
 
 
@@ -498,7 +516,7 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
 
             const newRecordNo = res.data.recordsNo || res.data.records_no;
             toast.success(`Checklist ${newRecordNo} created successfully`);
-            navigate(`/checklist?openId=${newRecordNo}&from=itp`);
+            navigate(checklistFromItpPath(newRecordNo, itpId));
         } catch (err) {
             // A 403 here means checklist:create:all was revoked between the button rendering and
             // this click — the raw backend detail string names the required permission code
@@ -518,7 +536,7 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
 
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
     const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
-    const navigationGuard = useLeaveGuard(isDirty || pendingFiles.length > 0 || deletedFileIds.length > 0, saving);
+    const navigationGuard = useLeaveGuard(isDirty || pendingFiles.length > 0 || deletedFileIds.length > 0, saving || applyingCount > 0);
     // Bumped after a successful upload/delete so FileAttachment's entityType/entityId auto-fetch
     // re-queries the live attachment list (the actual source of truth for real attachments —
     // see the FileAttachment usage below) instead of showing stale data from before the save.
@@ -878,6 +896,8 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                                 items={advancedItems}
                                 onItemsChange={handleItemsChange}
                                 readOnly={formReadOnly}
+                                savesImmediately={!!(onApplyItems && itpId)}
+                                itpId={itpId}
                                 onViewRecord={() => {
                                     navigate('/itr');
                                 }}

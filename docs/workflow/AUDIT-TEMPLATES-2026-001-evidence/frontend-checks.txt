@@ -1,0 +1,5 @@
+# 2026-10-11T09:09:22Z R3 candidate = git archive HEAD 1dc87c2a + G.patch 37a590e2
+tsc exit=0
+eslint --max-warnings 0 (7 files) exit=0
+npm test exit=0 (ℹ tests 169 ℹ pass 169 ℹ fail 0 )
+npm run build exit=0

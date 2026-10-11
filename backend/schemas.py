@@ -992,6 +992,7 @@ class MeetingMinutesBase(BaseModel):
     meetingType: str | None = None
     meetingDate: str | None = None
     meetingTime: str | None = None
+    meetingEndTime: str | None = None
     location: str | None = None
     organizer: str | None = None
     attendees: Any | None = None
@@ -1030,6 +1031,7 @@ class MeetingMinutesUpdate(BaseModel):
     meetingType: str | None = None
     meetingDate: str | None = None
     meetingTime: str | None = None
+    meetingEndTime: str | None = None
     location: str | None = None
     organizer: str | None = None
     attendees: Any | None = None
@@ -1102,6 +1104,59 @@ class ContractorContact(BaseModel):
     contactPerson: str | None = None
     phone: str | None = None
     email: str | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ContractorPersonnelCreate(BaseModel):
+    """A person on a company's list (CONTRACTOR-PERSONNEL-2026-001). Not a system account."""
+    name: str = Field(max_length=120)
+    position: str | None = Field(default=None, max_length=120)
+    email: str | None = Field(default=None, max_length=200)
+    phone: str | None = Field(default=None, max_length=60)
+
+    @field_validator('name')
+    @classmethod
+    def name_not_blank(cls, v):
+        if not v or not v.strip():
+            raise ValueError('name is required')
+        return v.strip()
+
+
+class ContractorPersonnelUpdate(BaseModel):
+    name: str | None = Field(default=None, max_length=120)
+    position: str | None = Field(default=None, max_length=120)
+    email: str | None = Field(default=None, max_length=200)
+    phone: str | None = Field(default=None, max_length=60)
+    is_active: bool | None = None
+
+    @field_validator('name')
+    @classmethod
+    def name_not_blank(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError('name cannot be blank')
+        return v.strip() if v is not None else v
+
+
+class ContractorPersonnel(BaseModel):
+    id: str
+    contractor_id: str
+    name: str
+    position: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    is_active: bool
+    created_at: str | None = None
+    updated_at: str | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ContractorPersonnelOption(BaseModel):
+    """What the meeting attendee picker needs (GET /contractors/personnel/options): served to any signed-in user, so no
+    email / phone."""
+    id: str
+    contractor_id: str
+    name: str
+    position: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -1305,10 +1360,9 @@ class UserBase(BaseModel):
     full_name: str | None = None
     is_active: bool | None = True
     role_id: int | None = None
-    # Cosmetic-only "Name / Company" label for internal staff with no
-    # vendor_id (contractor-scoped users show their real vendor name
-    # instead — see User.display_company). Never affects data-isolation
-    # scope, unlike vendor_id.
+    # The person's company for "Name / Company" labels — required when an
+    # account is created (IAM-USER-COMPANY-LABEL-2026-001, enforced in
+    # UserService). Never affects data-isolation scope, unlike vendor_id.
     company_name: str | None = None
 
 class UserCreate(UserBase):
@@ -1330,8 +1384,9 @@ class User(UserBase):
     role_name: str | None = None
     permissions: list[str] = []
     created_at: str | None = None
-    # Resolved company label: the user's real vendor name if
-    # contractor-scoped, else their cosmetic company_name.
+    # Resolved company label: the company's abbreviation from the company
+    # list (bound vendor if contractor-scoped, else company_name), or the
+    # full name / typed text when there is none — see User.display_company.
     display_company: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -1349,6 +1404,64 @@ class UserScope(BaseModel):
 
 
 # --- Audit Schemas ---
+_AGENDA_TIME = re.compile(r'([01][0-9]|2[0-3]):[0-5][0-9]')  # ASCII digits only (\d also matches e.g. Arabic-Indic digits)
+
+
+class AuditAgendaEntry(BaseModel):
+    """One row of an audit's daily schedule (AUDIT-AGENDA-2026-001). Every field is optional text; `date` is a strict
+    YYYY-MM-DD date and `start` / `end` are HH:MM (24 h) when given, and a row may not end before it starts."""
+    model_config = ConfigDict(extra='ignore')
+
+    id: StrictInt | str | None = None  # the wizard's row key, kept so a resave of a locked audit compares equal
+    # '' = a session; 'lunch' = the 12:00-13:00 Lunch Time default the wizard adds for each new day (AUDIT-BUTTONS-2026-001),
+    # editable / deletable like any row and shaded in the printouts and Word
+    kind: str = ''
+    date: str = ''
+    start: str = ''
+    end: str = ''
+    item: str = ''
+    auditee: str = ''
+    auditor: str = ''
+    remarks: str = ''
+
+    @field_validator('kind', 'date', 'start', 'end', 'item', 'auditee', 'auditor', 'remarks', mode='before')
+    @classmethod
+    def blank_for_null(cls, v):
+        return '' if v is None else v
+
+    @field_validator('kind')
+    @classmethod
+    def check_kind(cls, v):
+        if v not in ('', 'lunch'):
+            raise ValueError(f"agenda row kind must be '' or 'lunch', got {v!r}")
+        return v
+
+    @field_validator('date')
+    @classmethod
+    def check_date(cls, v):
+        return strict_dates.strict_date_input(v)
+
+    @field_validator('start', 'end')
+    @classmethod
+    def check_time(cls, v):
+        if v and not _AGENDA_TIME.fullmatch(v):
+            raise ValueError(f'time must be HH:MM (24 h), got {v!r}')
+        return v
+
+    @model_validator(mode='after')
+    def check_order(self):
+        if self.start and self.end and self.end < self.start:
+            raise ValueError(f'end time {self.end} is before start time {self.start}')
+        return self
+
+
+def _sorted_agenda(entries):
+    """By date, then start time; rows without a date / time after the dated / timed ones, otherwise in entry order."""
+    if entries is None:
+        return None
+    return sorted(entries, key=lambda e: (e.date == '', e.date, e.start == '', e.start))
+
+
 class AuditBase(BaseModel):
     project_id: str | None = None
     auditNo: str
@@ -1368,12 +1481,15 @@ class AuditBase(BaseModel):
     audit_criteria: str | None = None
     selected_templates: list[str] | None = []
     custom_check_items: Any | None = []
+    # Lenient on the base (the READ schema derives from it, so one odd stored row must not break the list); writes are
+    # validated and sorted by AuditCreate / AuditUpdate.
+    agenda: Any | None = []
 
     # Date fields: no validator on the base (the READ schema Audit derives from it and must return stored dates untouched —
     # the old lenient check + start-before-end rule here turned one bad row into a 500 for the whole list). Strict checking
     # of new writes: AuditCreate (field level) and AuditService (create + update, final content, incl. the order rule).
 
-    @field_validator('selected_templates', 'custom_check_items', mode='before')
+    @field_validator('selected_templates', 'custom_check_items', 'agenda', mode='before')
     @classmethod
     def parse_json_fields(cls, v):
         if isinstance(v, str):
@@ -1383,9 +1499,21 @@ class AuditBase(BaseModel):
                 return []
         return v
 
+    @field_validator('agenda', mode='after')
+    @classmethod
+    def agenda_list(cls, v):
+        # audits saved before the agenda existed hold NULL: read as an empty schedule, never null
+        return [] if v is None else v
+
 class AuditCreate(AuditBase):
     # Accepted for compatibility with existing callers but ignored: the server always assigns id and auditNo.
     id: str | None = None
+    agenda: list[AuditAgendaEntry] | None = []
+
+    @field_validator('agenda', mode='after')
+    @classmethod
+    def sort_agenda(cls, v):
+        return _sorted_agenda(v)
 
     @field_validator(*strict_dates.AUDIT_DATE_FIELDS, mode='before')
     @classmethod
@@ -1412,8 +1540,9 @@ class AuditUpdate(BaseModel):
     audit_criteria: str | None = None
     selected_templates: list[str] | None = None
     custom_check_items: Any | None = None
+    agenda: list[AuditAgendaEntry] | None = None
 
-    @field_validator('selected_templates', 'custom_check_items', mode='before')
+    @field_validator('selected_templates', 'custom_check_items', 'agenda', mode='before')
     @classmethod
     def parse_json_fields(cls, v):
         if isinstance(v, str):
@@ -1423,11 +1552,109 @@ class AuditUpdate(BaseModel):
                 return []
         return v
 
+    @field_validator('agenda', mode='after')
+    @classmethod
+    def sort_agenda(cls, v):
+        return _sorted_agenda(v)
+
 class Audit(AuditBase):
     id: str
     vendor_id: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# --- Audit template library (AUDIT-TEMPLATES-2026-001) ---
+class AuditTemplateItem(BaseModel):
+    """One check item of a template — {no, title, clause, task}; no / clause / task are what an audit's custom_check_items
+    hold (title only labels the clause in the wizard's dropdown). `id` is a
+    stable key the server assigns (a new one for each new item, never reused), copied into the audit as templateItemId
+    so selecting the template again adds only the items the audit does not have yet."""
+    model_config = ConfigDict(extra='ignore')
+
+    id: str | None = None
+    no: str = Field('', max_length=50)
+    # the clause heading, e.g. "Understanding the organization and its context": what the wizard's clause dropdown shows
+    title: str = Field('', max_length=200)
+    clause: str = Field('', max_length=2000)  # the requirement text — the longest ISO 9001 one is ~1,030 characters
+    task: str = Field(..., max_length=2000)
+
+    @field_validator('id', 'no', 'title', 'clause', 'task', mode='before')
+    @classmethod
+    def strip_text(cls, v):
+        if v is None:
+            return v
+        if not isinstance(v, (str, int)):   # a number id / clause no is fine as text; a list or object is not (R2 review)
+            raise ValueError('template item fields must be text')
+        return str(v).strip()
+
+    @field_validator('task')
+    @classmethod
+    def task_required(cls, v):
+        if not v:
+            raise ValueError('every template item needs an audit question (task)')
+        return v
+
+
+def _template_name(v):
+    if v is not None and not isinstance(v, str):
+        raise ValueError('template name must be text')
+    v = (v or '').strip()
+    if not v:
+        raise ValueError('template name is required')
+    if len(v) > 100:
+        raise ValueError('template name must be at most 100 characters')
+    return v
+
+
+class AuditTemplateCreate(BaseModel):
+    name: str
+    description: str | None = ''
+    version: str | None = Field('', max_length=50)
+    is_active: bool = True
+    items: list[AuditTemplateItem] = []
+
+    @field_validator('name', mode='before')
+    @classmethod
+    def check_name(cls, v):
+        return _template_name(v)
+
+
+class AuditTemplateUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    version: str | None = Field(None, max_length=50)
+    is_active: bool | None = None
+    items: list[AuditTemplateItem] | None = None
+
+    @field_validator('name', mode='before')
+    @classmethod
+    def check_name(cls, v):
+        return None if v is None else _template_name(v)
+
+
+class AuditTemplate(BaseModel):
+    id: int
+    name: str
+    description: str | None = ''
+    version: str | None = ''
+    is_active: bool = True
+    # lenient on read: one hand-edited row must not break the list
+    items: Any | None = []
+    created_at: str | None = None
+    updated_at: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator('items', mode='before')
+    @classmethod
+    def parse_items(cls, v):
+        if isinstance(v, str):
+            try:
+                v = json.loads(v)
+            except Exception:
+                return []
+        return [i for i in v if isinstance(i, dict)] if isinstance(v, list) else []   # only item objects (hand-edited rows)
 
 
 # --- KPI & Performance Schemas ---

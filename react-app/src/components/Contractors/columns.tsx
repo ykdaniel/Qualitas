@@ -97,8 +97,9 @@ export const createColumns = (
                     </div>
                 );
             },
+            // single-select filter (a string): exact match — includes() matched substrings and let empty values through
             filterFn: (row, id, value) => {
-                return value.includes(row.getValue(id));
+                return !value || row.getValue(id) === value;
             },
         },
         {

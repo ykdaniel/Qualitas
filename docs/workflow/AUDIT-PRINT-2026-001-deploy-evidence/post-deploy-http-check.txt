@@ -1,0 +1,11 @@
+# 2026-10-10T18:43:17Z external checks
+/ 200
+/index.html 200
+/api/user/profile 401
+/api/audit/x/export-docx 401
+index a9ddbeffc3e1a3ff253cb762632d5b39dfecf123729006bcf7185d62a27159e2 (candidate a9ddbeff…59e2)
+main bundle assets/index-i_u7QvXW.js 200
+main css assets/index-CvQPfBqp.css 200 (the Audit print CSS is not in the main CSS: it ships in the lazily loaded Audit chunk, checked below)
+previous (ITR deploy) main bundle still served: 200
+assets/Audit-B5dnwifs.css 200 audit-print-root:1 page-audit:1
+assets/Audit-B_5GGpYe.js 200 audit-print-root:1 page-audit:0

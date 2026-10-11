@@ -1,0 +1,13 @@
+2026-10-10 17:06:48,412 - main - INFO - 日誌系統已啟動 - 級別: INFO, 目錄: logs
+2026-10-10 17:06:48,952 - main - INFO - Database backed up to /app/backups/qualitas_20261010_170648.db
+2026-10-10 17:06:48,975 - main - INFO - Removed old backup: qualitas_20261009_121409.db
+2026-10-10 17:06:48,999 - db_migrations - INFO - Running database migrations...
+2026-10-10 17:06:49,237 - db_migrations - INFO - 1 pre-existing Checklist instance(s) have source_template_version=NULL ('historical version unknown') — expected, no action needed.
+2026-10-10 17:06:49,256 - db_migrations - INFO - Migrations completed.
+2026-10-10 17:06:49,256 - db_seeder - INFO - Running database seeding...
+2026-10-10 17:06:49,425 - db_seeder - INFO - Seeding permissions...
+2026-10-10 17:06:49,470 - db_seeder - INFO - Synced admin role permissions (72 perms).
+2026-10-10 17:06:49,839 - db_seeder - INFO - Rebar ITP already exists, skipping seed: QTS-RKS-HL-ITP-000001
+2026-10-10 17:06:49,840 - db_seeder - INFO - Rebar ITP seeded successfully.
+2026-10-10 17:06:49,842 - db_seeder - INFO - Formwork ITP already exists, skipping seed: QTS-RKS-HL-ITP-000002
+starts=162 (before 161); container 8c348e36d7c8; image sha256:6038a80b52a2…; rollback image qualitas-backend:pre-itr-review-20261010T163551Z

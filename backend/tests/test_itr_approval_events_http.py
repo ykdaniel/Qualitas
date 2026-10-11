@@ -481,6 +481,7 @@ def file_env(tmp_path):
     from database import Base, get_db
     from routers import auth as auth_router, itr as itr_router, checklist as checklist_router
     import database as database_module
+    import core.security as security_module   # binds SessionLocal at import: swap it too (token blacklist)
     engine = create_engine(f"sqlite:///{tmp_path / 'race.db'}", connect_args={"check_same_thread": False, "timeout": 20})
     Base.metadata.create_all(engine)
     Session_ = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -497,12 +498,12 @@ def file_env(tmp_path):
             s.close()
 
     app.dependency_overrides[get_db] = _db
-    orig = (database_module.engine, database_module.SessionLocal)
-    database_module.engine, database_module.SessionLocal = engine, Session_
+    orig = (database_module.engine, database_module.SessionLocal, security_module.SessionLocal)
+    database_module.engine, database_module.SessionLocal, security_module.SessionLocal = engine, Session_, Session_
     try:
         yield Env(app, Session_), engine
     finally:
-        database_module.engine, database_module.SessionLocal = orig
+        database_module.engine, database_module.SessionLocal, security_module.SessionLocal = orig
         Base.metadata.drop_all(engine)
         engine.dispose()
 
@@ -514,6 +515,7 @@ class _Window:
 
     def __init__(self, engine, needle, seconds=0.9):
         self.engine, self.needle, self.seconds, self.fired = engine, needle, seconds, False
+        self.entered = threading.Event()          # set the moment the held request is inside the window
         self._lock = threading.Lock()
         event.listen(engine, "after_cursor_execute", self._listener)
 
@@ -523,13 +525,22 @@ class _Window:
                 first = not self.fired
                 self.fired = True
             if first:
+                self.entered.set()
                 time.sleep(self.seconds)
 
     def close(self):
         event.remove(self.engine, "after_cursor_execute", self._listener)
 
 
-def _run_pair(first, second, gap=0.25):
+def _run_pair(first, second, gap=0.25, window=None):
+    """Run `first`, then `second` while `first` is still in flight.
+
+    With `window` (a _Window armed on a statement `first` issues inside its transaction), `second` starts only once
+    `first` is really held there — so `first` already owns the write lock and `second` must wait for its commit. The
+    old fixed `gap` was only an assumption: under machine load `first` could still be on its way when `second` ran,
+    and the pair raced in the opposite order (seen 2026-10-10 under two parallel full suites, e.g. the approval
+    reaching an ITR with no checklists before the delete and correctly getting 400). Without `window`, `gap` is
+    used as before."""
     out = {}
 
     def call(name, fn):
@@ -537,7 +548,14 @@ def _run_pair(first, second, gap=0.25):
 
     t1 = threading.Thread(target=call, args=("first", first), name="first")
     t2 = threading.Thread(target=call, args=("second", second), name="second")
-    t1.start(); time.sleep(gap); t2.start(); t1.join(60); t2.join(60)
+    t1.start()
+    if window is not None:
+        if not window.entered.wait(30):                # not an assert: the wait must also run under `python -O`
+            t1.join(60)                                # never leave the first request running into fixture teardown
+            raise AssertionError(f"the first request never reached its race window ({window.needle!r})")
+    else:
+        time.sleep(gap)
+    t2.start(); t1.join(60); t2.join(60)
     return out
 
 
@@ -549,7 +567,7 @@ def test_a_checklist_edit_racing_an_approval_cannot_leave_a_snapshot_that_differ
     try:
         out = _run_pair(
             lambda: approver.put(f"/api/itr/{itr_id}", json={"status": "Approved"}).status_code,
-            lambda: closer.put(f"/api/checklist/{inst_id}/", json={"location": "SNEAKED IN AFTER THE CHECK"}).status_code)   # a field the Pass lock does not cover
+            lambda: closer.put(f"/api/checklist/{inst_id}/", json={"location": "SNEAKED IN AFTER THE CHECK"}).status_code, window=window)   # a field the Pass lock does not cover
     finally:
         window.close()
     assert window.fired                                                             # the race window really opened
@@ -573,7 +591,7 @@ def test_a_link_racing_an_approval_cannot_add_an_instance_the_snapshot_never_saw
     try:
         out = _run_pair(
             lambda: approver.put(f"/api/itr/{itr_id}", json={"status": "Approved"}).status_code,
-            lambda: editor.post(f"/api/itr/{itr_id}/link-checklist", params={"checklist_id": tpl["id"]}).status_code)
+            lambda: editor.post(f"/api/itr/{itr_id}/link-checklist", params={"checklist_id": tpl["id"]}).status_code, window=window)
     finally:
         window.close()
     assert window.fired                                                             # the race window really opened
@@ -593,7 +611,7 @@ def test_a_checklist_change_committed_first_is_seen_by_the_approval_check(file_e
     try:
         out = _run_pair(
             lambda: closer.put(f"/api/checklist/{inst_id}/", json={"status": "Ongoing"}).status_code,
-            lambda: approver.put(f"/api/itr/{itr_id}", json={"status": "Approved"}).status_code)
+            lambda: approver.put(f"/api/itr/{itr_id}", json={"status": "Approved"}).status_code, window=window)
     finally:
         window.close()
     assert window.fired                                                             # the race window really opened

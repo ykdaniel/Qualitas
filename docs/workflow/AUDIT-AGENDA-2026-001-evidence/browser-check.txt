@@ -1,0 +1,113 @@
+# 2026-10-10T17:41:48Z R2 candidate = git archive HEAD fcc83c62 + G.patch 9d3a1c56; every script on a fresh isolated stack (8320/3320); exit = the script's own exit code (no pipe)
+## audit-agenda-check.mjs (fresh stack, seeds: seed_audit_hardening_b_review.py seed_audit_agenda_review.py) 2026-10-10T17:41:52Z
+PASS five steps with 稽核行程 third  -> ["專案資訊","人員與範圍","稽核行程","配置查檢表","執行與評估"]
+PASS print plan button only on the Agenda step; empty agenda shows the hint  -> 0/1
+PASS a new row starts on the audit start date with the lead auditor  -> ["2026-10-01","","","","","王稽核",""]
+PASS the next row continues the last row's date and end time  -> ["2026-10-02","15:30","","","","王稽核",""]
+PASS end before start: row flagged, save refused with a message, nothing sent  -> 1 0 有時段的結束時間早於開始時間，請修正後再儲存。
+PASS saved in time order, blank row dropped  -> [{"id":1791654116854,"date":"2026-10-01","start":"09:00","end":"09:30","item":"起始會議","auditee":"全體","auditor":"王稽核","remarks":"會議室 A"},{"id":1791654116894,"date":"2026-10-01","start":"09:30","end":"12:00","item":"8.4 外部供應管理","auditee":"採購部 / 陳","auditor":"王稽核","remarks":""},{"id":1791654116814,"date":"2026-10-02","start":"15:00","end":"15:30","item":"結束會議","auditee":"全體","auditor":"王稽核","remarks":
+PASS after Save Draft the table shows the saved order (blank row gone) and is not "unsaved"  -> ["起始會議","8.4 外部供應管理","結束會議"]
+PASS outside the audit period: notice shown, row still saved  -> ["2026-10-01","2026-10-01","2026-10-02","2026-10-05"]
+PASS reopened in time order  -> ["起始會議","8.4 外部供應管理","結束會議","補充訪談"]
+PASS plan printout: section 4 稽核行程 with the rows in order  -> [["2026-10-01","09:00–09:30","起始會議","全體","王稽核","會議室 A"],["2026-10-01","09:30–12:00","8.4 外部供應管理","採購部 / 陳","王稽核","—"],["2026-10-02","15:00–15:30","結束會議","全體","王稽核","—"],["2026-10-05","10:00–11:00","補充訪談","品保部","王稽核","—"]]
+PASS report printout: same agenda as section 4  -> [["2026-10-01","09:00–09:30","起始會議","全體","王稽核","會議室 A"],["2026-10-01","09:30–12:00","8.4 外部供應管理","採購部 / 陳","王稽核","—"],["2026-10-02","15:00–15:30","結束會議","全體","王稽核","—"],["2026-10-05","10:00–11:00","補充訪談","品保部","王稽核","—"]]
+PASS Word export: the same agenda rows  -> [["2026-10-01","09:00–09:30","起始會議","全體","王稽核","會議室 A"],["2026-10-01","09:30–12:00","8.4 外部供應管理","採購部 / 陳","王稽核","—"],["2026-10-02","15:00–15:30","結束會議","全體","王稽核","—"],["2026-10-05","10:00–11:00","補充訪談","品保部","王稽核","—"]]
+PASS edit during an in-flight save: still on screen, not in the database, flagged unsaved  -> {"onScreen":"EDITED-DURING-SAVE","storedLocation":"","firstRow":"事前文件審查","unsavedFlag":true}
+PASS control: saving again stores the edit and clears the unsaved flag  -> {"storedLocation":"EDITED-DURING-SAVE"}
+PASS view-only user: agenda shown read-only, no add/delete, print still available  -> {"rows":5,"disabled":true,"add":false,"remove":0,"print":true}
+PASS Closed audit: agenda shown read-only, no add/delete, print still available  -> {"rows":3,"disabled":true,"add":false,"remove":0,"print":true}
+PASS English: step title and column headers  -> Date Start End Audit Item / Process Auditee Auditor Remarks 
+ALL PASS
+exit=0
+## audit-print-template-check.mjs (fresh stack, seeds: seed_audit_hardening_b_review.py seed_audit_export_docx_review.py) 2026-10-10T17:42:21Z
+PASS setup: another module's unconditional #root print rule is loaded (old blank-page condition)
+PASS setup: ITR's forced-visible #itr-single-print-root rule and other modules' unnamed @page rules are loaded  -> {"itrForcedVisible":true,"unnamedPageRules":12,"container":true}
+PASS plan: print called once, printout in <body>, #root hidden, printout visible, no buttons/icons, removed after print  -> {"printed":1,"kind":"plan","inBody":true,"rootHidden":true,"shown":"block","buttons":0,"k":"plan","pdf":[{"w":595,"h":842,"text":true}],"before":0,"unmounted":true}
+PASS checklist: print called once, printout in <body>, #root hidden, printout visible, no buttons/icons, removed after print  -> {"printed":2,"kind":"checklist","inBody":true,"rootHidden":true,"shown":"block","buttons":0,"k":"checklist","pdf":[{"w":595,"h":842,"text":true}],"before":1,"unmounted":true}
+PASS report: print called once, printout in <body>, #root hidden, printout visible, no buttons/icons, removed after print  -> {"printed":3,"kind":"report","inBody":true,"rootHidden":true,"shown":"block","buttons":0,"k":"report","pdf":[{"w":595,"h":842,"text":true},{"w":595,"h":842,"text":true}],"before":2,"unmounted":true}
+PASS plan PDF: 1 page(s), every page has text, all A4 portrait  -> [{"w":595,"h":842,"text":true}]
+PASS checklist PDF: 1 page(s), every page has text, all A4 portrait  -> [{"w":595,"h":842,"text":true}]
+PASS report PDF: 2 page(s), every page has text, all A4 portrait  -> [{"w":595,"h":842,"text":true},{"w":595,"h":842,"text":true}]
+PASS plan: title + sections 1-4 (incl. agenda) + plan sign-off, no results  -> LOGO ［ 公司名稱 Company Name ］ 品質管理 — Quality Management AHB-EXPORT-1 版次 Rev：— 狀態 IN PROGRESS 內部稽核計畫 INTERNAL AUDIT PLAN 1. 稽核資訊 Audit Information 稽核編號 Audit No. AHB-EXPORT-1 狀態 Status 進行中 In Progress 稽核標題 Audit Title 第四季供應商品質稽核 Q4 Supplier Audit 專案 Project [AHB1] Audit Review P1 受稽核廠商 Auditee / C
+PASS checklist: title, 5 items with blank result boxes, no recorded results or remarks  -> LOGO ［ 公司名稱 Company Name ］ 品質管理 — Quality Management AHB-EXPORT-1 版次 Rev：— 狀態 IN PROGRESS 稽核查檢表 AUDIT CHECKLIST 1. 稽核資訊 Audit Information 稽核編號 Audit No. AHB-EXPORT-1 專案 Project [AHB1] Audit Review P1 受稽核廠商 Auditee / Contractor Review Vendor 稽核地點 Location 三號料場 Yard 3 稽核日期 Audit Date 2026-10-01
+PASS report printout contains every text of the Word export (108 paragraphs, 10 wording-only lines skipped)  -> []
+PASS report sections in the same order as Word  -> [121,408,549,724,756,874,1528,1636]
+PASS unsaved changes: printout shows the screen content and flags it  -> LOGO［ 公司名稱 Company Name ］品質管理 — Quality ManagementAHB-EXPORT-1版次 Rev：—狀態 IN PROGRESS含未儲存的修改 Unsaved changes內部稽核報告INTERNAL AUDIT REPORT1. 稽核資訊 Audit Information稽核編號Audit No.AHB-EXPORT-1狀態Status進行中 In P
+PASS two clicks without afterprint print twice (one printout mounted)  -> {"n0":4,"printed":6,"mounted":1}
+PASS Audit.print.css: named @page audit (A4) used by .audit-print-root, no unnamed @page  -> {"named":["@page audit { size: a4 !important; margin: 13mm 12mm !important; }"],"unnamed":[],"pageProp":1}
+PASS progress eight: wizard card, printout and Word all 13%  -> {"card":"13%","printed":"13%","word":"13%"}
+PASS progress forty: wizard card, printout and Word all 58%  -> {"card":"58%","printed":"58%","word":"58%"}
+PASS clause-only item: clause printed, no extra dash line (as in Word)  -> ["Clause only"]
+ALL PASS
+exit=0
+## audit-export-docx-check.mjs (fresh stack, seeds: seed_audit_hardening_b_review.py seed_audit_export_docx_review.py) 2026-10-10T17:43:02Z
+PASS export button only on step 4, next to Print Report  -> 0 | 列印報告 匯出 Word
+PASS download is AHB-EXPORT-1.docx (a real docx/zip)  -> {"file":"AHB-EXPORT-1.docx","size":39281,"zip":true}
+PASS unsaved changes: asks to save first, no download  -> 有尚未儲存的修改。請先按「儲存草稿」再匯出，Word 檔的內容是已儲存的資料。
+PASS new audit: no button before saving, exports after Save Draft  -> 0 | QTS-NA-AUDIT-000001 | {"file":"QTS-NA-AUDIT-000001.docx","size":38447,"zip":true}
+PASS view-only user can export  -> {"file":"AHB-EXPORT-1.docx","size":39281,"zip":true}
+PASS locked Void record can export  -> {"file":"AHB-VOID-1.docx","size":38672,"zip":true}
+PASS English label, hidden when printing  -> Export Word | visible in print: false
+ALL PASS
+exit=0
+## audit-layout-check.mjs (fresh stack, seeds: seed_audit_hardening_b_review.py seed_audit_export_docx_review.py) 2026-10-10T17:43:25Z
+PASS desktop 1440: step 1 has 3 column(s)  -> {"cols":3,"tops":[302,302,302]}
+PASS desktop 1440: no horizontal overflow (wizard overlay and page)  -> overlay=0px page=0px
+PASS desktop 1440: every visible progress label inside the viewport  -> [{"text":"Project Info","left":299,"right":365},{"text":"Personnel & Scope","left":472,"right":580},{"text":"Agenda","left":698,"right":742},{"text":"Checklist Setup","left":869,"right":959},{"text":"Execution & Review","left":1052,"right":1164}]
+PASS progress bar has 5 steps (Agenda added, AUDIT-AGENDA-2026-001)  -> ["1","2","3","4","5"]
+PASS desktop 1440: step 2 holds personnel + scope fields (print-plan button now on the Agenda step)  -> {"personnel":true,"scope":true,"printPlan":false}
+PASS desktop 1440: Agenda step has the table and the print-plan button, no wizard/page overflow  -> {"printPlan":true,"table":true,"overlayOverflow":0,"pageOverflow":0}
+PASS laptop 1024: step 1 has 2 column(s)  -> {"cols":2,"tops":[302,302,400]}
+PASS laptop 1024: no horizontal overflow (wizard overlay and page)  -> overlay=0px page=0px
+PASS laptop 1024: every visible progress label inside the viewport  -> [{"text":"Project Info","left":91,"right":157},{"text":"Personnel & Scope","left":264,"right":372},{"text":"Agenda","left":490,"right":534},{"text":"Checklist Setup","left":661,"right":751},{"text":"Execution & Review","left":844,"right":956}]
+PASS laptop 1024: step 2 holds personnel + scope fields (print-plan button now on the Agenda step)  -> {"personnel":true,"scope":true,"printPlan":false}
+PASS laptop 1024: Agenda step has the table and the print-plan button, no wizard/page overflow  -> {"printPlan":true,"table":true,"overlayOverflow":0,"pageOverflow":0}
+PASS phone 390: step 1 has 1 column(s)  -> {"cols":1,"tops":[294,392,490]}
+PASS phone 390: no horizontal overflow (wizard overlay and page)  -> overlay=0px page=0px
+PASS phone 390: every visible progress label inside the viewport  -> labels hidden at this width (numbers only)
+PASS phone 390: step 2 holds personnel + scope fields (print-plan button now on the Agenda step)  -> {"personnel":true,"scope":true,"printPlan":false}
+PASS phone 390: Agenda step has the table and the print-plan button, no wizard/page overflow  -> {"printPlan":true,"table":true,"overlayOverflow":0,"pageOverflow":0}
+ALL PASS
+exit=0
+## audit-smoke-all.mjs (fresh stack, seeds: seed_audit_hardening_b_review.py seed_audit_polish_review.py) 2026-10-10T17:43:37Z
+PASS A1 list shows every seeded audit  -> ["AHB-CLOSED-1","AHB-DRAFT-1","AHB-LEGACY-1","AHB-RETIRED-1","AHB-VOID-1","AHB-VOIDONLY-1"]
+PASS A2 contractor panel filled without contractors permission  -> contractorsApi=403 {"All":false,"Review Vendor":true,"Void Only Co":false}
+PASS A3 overdue flag: past Draft yes, Void-only no  -> {"All":false,"Review Vendor":true,"Void Only Co":false}
+PASS A4 schedule has contractor rows  -> rows=2
+PASS A5 project switch re-fetches the list  -> P1=AHB-DRAFT-1,AHB-RETIRED-1,AHB-VOID-1,AHB-VOIDONLY-1 P2=AHB-CLOSED-1
+PASS A6 new audit: header project preselected, create statuses only  -> {"docNo":"","project":"AHB-P1","statusOptions":["Draft","Planned","In Progress","Completed"],"locked":false,"saveVisible":true,"notice":"","error":""}
+PASS A7 wizard contractor picker lists active contractors (not the inactive one)  -> ["-- Select Contractor --","Review Vendor","Void Only Co","廠商A","廠商B","廠商C"]
+PASS A8 first Save Draft fills Audit No with the contractor prefix  -> {"docNo":"QTS-RV-AUDIT-000001","project":"AHB-P1","statusOptions":["Draft","Planned","Void"],"locked":false,"saveVisible":true,"notice":"","error":""}
+PASS A9 Enter in the last-step search: wizard stays open, nothing saved  -> []
+PASS A10 submit keeps the number, saves project + status  -> {"project_id":"AHB-P1","auditNo":"QTS-RV-AUDIT-000001","title":"smoke create","date":"2026-10-20","end_date":"","auditor":"","status":"Planned","location":"","findings":"","contractor":"Review Vendor","project_name":"Audit Review P1","project_director":"","sup
+PASS A11 delete enabled only for Void audits  -> {"AHB-DRAFT-1":true,"AHB-VOID-1":false,"AHB-CLOSED-1":true,"AHB-LEGACY-1":true,"AHB-VOIDONLY-1":false,"AHB-RETIRED-1":true,"undefined":true}
+PASS A12 Void audit is read-only  -> {"docNo":"AHB-VOID-1","project":"AHB-P1","statusOptions":["Void"],"locked":true,"saveVisible":false,"notice":"","error":""}
+PASS A13 Closed audit is read-only  -> {"docNo":"AHB-CLOSED-1","project":"AHB-P2","statusOptions":["Closed"],"locked":true,"saveVisible":false,"notice":"","error":""}
+PASS A14 saving Draft as Void locks it immediately  -> {"docNo":"AHB-DRAFT-1","project":"AHB-P1","statusOptions":["Void"],"locked":true,"saveVisible":false,"notice":"","error":""}
+PASS A15 trash opens only the confirm dialog; delete removes the Void audit
+PASS A16 legacy name-only audit shows + links its project on save  -> AHB-P1 {"project_id":"AHB-P1","auditNo":"AHB-LEGACY-1"}
+PASS A17 inactive contractor stays selected in its own audit  -> {"value":"retired","text":"Retired Co"}
+PASS A18 refused save shows the backend reason  -> Could not save: end_date: Start date must be before or equal to end date
+PASS A19 ?openId= opens the audit and drops the parameter  -> http://127.0.0.1:3320/audit
+PASS B1 no delete permission: every trash disabled with the reason  -> ["true|You do not have permission to delete audits"]
+PASS B2 no update permission: existing audit read-only  -> {"docNo":"AHB-RETIRED-1","project":"AHB-P1","statusOptions":["Draft","Planned","Void"],"locked":true,"saveVisible":false,"notice":"","error":""}
+PASS B3 create-only user: created, then read-only with a notice  -> {"docNo":"QTS-NA-AUDIT-000001","project":"","statusOptions":["Draft","Planned","Void"],"locked":true,"saveVisible":false,"notice":"The audit has been created. You do not have permission to update audits, so it is now read-only; ask someone with update permissi
+PASS C1 multi-project user can create (project sent)  -> {"docNo":"QTS-NA-AUDIT-000002","error":"","project":"AHB-P2"}
+ALL PASS
+exit=0
+## audit-polish-check.mjs (fresh stack, seeds: seed_audit_hardening_b_review.py seed_audit_polish_review.py) 2026-10-10T17:44:13Z
+PASS void-only contractor not flagged overdue  -> {"全部":false,"Review Vendor":true,"Void Only Co":false}
+PASS contractor with a past Draft still flagged  -> {"全部":false,"Review Vendor":true,"Void Only Co":false}
+PASS zh vendor hint  -> 選擇承包商以篩選稽核
+PASS zh month label  -> 2026年10月
+PASS title placeholder translated (no raw key)  -> 輸入稽核主旨
+PASS inactive contractor kept in its audit picker  -> {"value":"retired","text":"Retired Co","options":["-- 請選擇受稽核廠商 --","Review Vendor","Void Only Co","廠商A","廠商B","廠商C","Retired Co"]}
+PASS save error shows the reason  -> 無法儲存：end_date: Start date must be before or equal to end date
+PASS create-only user: created then read-only with notice  -> {"docNo":"QTS-NA-AUDIT-000001","notice":"稽核已建立。您沒有「更新稽核」權限，所以現在改為唯讀；後續修改請由具更新權限的人處理。","disabled":true,"saveVisible":false}
+PASS last-step search ignores case  -> rows=1
+exit=0
+## audit-ime-enter-check.mjs (fresh stack, seeds: seed_audit_hardening_b_review.py seed_audit_polish_review.py) 2026-10-10T17:44:29Z
+PASS Safari IME confirm (keyCode 229, isComposing false) adds nothing, text kept
+PASS Chrome IME confirm (isComposing true) adds nothing
+PASS plain Enter adds the item and clears the field (items=1)
+exit=0

@@ -100,7 +100,8 @@ export default function ComponentName({ prop1, prop2 }: Props) {
 **錯誤處理：**
 - API 呼叫一律用 `try/catch`，不可忽略 error
 - 使用者看得到的錯誤必須顯示友善訊息，不可直接 expose 原始錯誤
-- 禁止使用 `console.log`，改用 `logger` utility
+- 禁止使用 `console.log`；錯誤記錄用 `console.error`，警告用 `console.warn`（與 `.eslintrc.json` 的 `no-console` 設定一致；前端沒有 logger utility）
+- 記錄內容只放錯誤物件與簡短說明，不得記錄 token、密碼或個資
 
 ### 後端
 

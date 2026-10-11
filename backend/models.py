@@ -1,5 +1,5 @@
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, event, text
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import object_session, relationship
 
 from database import Base
 
@@ -540,6 +540,7 @@ class MeetingMinutes(Base):
     meetingType = Column(String, nullable=True)
     meetingDate = Column(String, nullable=True)
     meetingTime = Column(String, nullable=True)
+    meetingEndTime = Column(String, nullable=True)  # MEETING-TABS-2026-001: time range start ~ end
     location = Column(String, nullable=True)
     organizer = Column(String, nullable=True)
     attendees = Column(Text, nullable=True)       # JSON: [{name, company, role}]
@@ -594,6 +595,30 @@ class Contractor(Base):
                              cascade="save-update, merge", passive_deletes=True)
     meeting_minutes = relationship("MeetingMinutes", back_populates="vendor_ref",
                              cascade="save-update, merge", passive_deletes=True)
+
+
+class ContractorPersonnel(Base):
+    """A company's people — contractor, owner or our own (CONTRACTOR-PERSONNEL-2026-001, user 2026-10-11: "contractor 有人員
+    但不一定能進系統"): not system accounts. The meeting attendee picker offers the active ones; a meeting stores a text
+    snapshot (company / name / position) next to the id, so renaming or deactivating someone never changes old minutes.
+    Never hard-deleted (is_active=False instead); a contractor that still has people cannot be deleted."""
+    __tablename__ = "contractor_personnel"
+
+    id = Column(String, primary_key=True, index=True)
+    contractor_id = Column(String, ForeignKey("contractors.id", ondelete="RESTRICT"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    position = Column(String, nullable=True)
+    email = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(String, nullable=True)
+    updated_at = Column(String, nullable=True)
+
+    __table_args__ = (
+        Index("ix_contractor_personnel_contractor_active", "contractor_id", "is_active"),
+        # one name per company, whatever the case (the service says so first; this stops two requests at once)
+        Index("uq_contractor_personnel_name", "contractor_id", text("lower(name)"), unique=True),
+    )
 
 
 class ReferenceSequence(Base):
@@ -669,9 +694,9 @@ class User(Base):
     # have no vendor_id — deliberately NOT the same mechanism as vendor_id,
     # which drives P0 data-isolation scope. Setting this never changes what
     # data a user can see; it only supplies a "Name / Company" display label
-    # for staff who aren't tied to a contractor. For contractor-scoped users,
-    # the company shown is derived from vendor_id -> Contractor.name instead
-    # (see `display_company` below), so this stays unset/ignored for them.
+    # for the person. Required for new accounts (IAM-USER-COMPANY-LABEL-2026-001);
+    # for contractor-scoped users the label comes from the bound vendor instead
+    # (see `display_company` below).
     company_name = Column(String, nullable=True)
 
     # Account-lockout fields. Reset on successful login.
@@ -704,12 +729,20 @@ class User(Base):
 
     @property
     def display_company(self):
-        """"Name / Company" label source. Contractor-scoped users show their
-        real vendor name (already the source of truth for who they are);
-        internal staff fall back to the cosmetic `company_name` field."""
+        """"Name / Company" label source (IAM-USER-COMPANY-LABEL-2026-001): the
+        company's abbreviation from the Contractors list, its full name when it
+        has none. Contractor-scoped users use their bound vendor; everyone else
+        uses the cosmetic `company_name`, looked up by name in the same list —
+        a name not on the list (typed by hand) is shown as typed."""
         if self.vendor_ref:
-            return self.vendor_ref.name
-        return self.company_name
+            return (self.vendor_ref.abbreviation or "").strip() or self.vendor_ref.name
+        name = (self.company_name or "").strip()
+        if not name:
+            return None
+        session = object_session(self)
+        listed = session.query(Contractor).filter(Contractor.name == name).first() if session is not None else None
+        abbreviation = (listed.abbreviation or "").strip() if listed is not None else ""
+        return abbreviation or name
 
 
 class UserProject(Base):
@@ -777,11 +810,29 @@ class Audit(Base):
     audit_criteria = Column(String, nullable=True)
     selected_templates = Column(String, nullable=True)
     custom_check_items = Column(String, nullable=True)
+    agenda = Column(Text, nullable=True)  # JSON list of daily schedule rows (AUDIT-AGENDA-2026-001)
     vendor_id = Column(String, ForeignKey("contractors.id", ondelete="SET NULL"), nullable=True, index=True)
     contractor = Column(String, nullable=True)  # NOTE: 保留純文字欄位以相容舊資料
 
     # Relationships
     vendor_ref = relationship("Contractor")
+
+
+class AuditTemplate(Base):
+    """A reusable set of audit check items (AUDIT-TEMPLATES-2026-001), offered in the wizard as an audit type. The
+    questions the auditor picks are COPIED into the audit's custom_check_items (each copy tagged templateId /
+    templateItemId), so editing a template later never changes an existing audit. Never hard-deleted: audits keep its
+    name in selected_templates; is_active=False hides it from the wizard."""
+    __tablename__ = "audit_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False)
+    description = Column(Text, nullable=True)
+    version = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    items = Column(Text, nullable=True)  # JSON list of {id, no, clause, task}; id is a stable string key
+    created_at = Column(String, nullable=True)
+    updated_at = Column(String, nullable=True)
 
 
 class Checklist(Base):

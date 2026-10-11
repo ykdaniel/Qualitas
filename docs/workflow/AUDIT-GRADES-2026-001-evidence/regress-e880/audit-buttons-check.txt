@@ -1,0 +1,32 @@
+PASS step 1: footer left = [], none in the card, icons on all  -> {"tools":[],"card":[],"icons":[]}
+PASS step 2: footer left = [], none in the card, icons on all  -> {"tools":["上一步"],"card":[],"icons":[]}
+PASS step 3: footer left = ["列印稽核計畫","匯出 Word"], none in the card, icons on all  -> {"tools":["上一步","列印稽核計畫","匯出 Word"],"card":[],"icons":[true,true]}
+PASS step 4: footer left = ["列印查檢表","匯出 Word"], none in the card, icons on all  -> {"tools":["上一步","列印查檢表","匯出 Word"],"card":[],"icons":[true,true]}
+PASS step 5: footer left = ["列印報告","匯出 Word"], none in the card, icons on all  -> {"tools":["上一步","列印報告","匯出 Word"],"card":[],"icons":[true,true]}
+PASS step 3: footer print button prints the plan  -> {"printed":1,"kind":"plan"}
+PASS step 4: footer print button prints the checklist  -> {"printed":2,"kind":"checklist"}
+PASS step 5: footer print button prints the report  -> {"printed":3,"kind":"report"}
+PASS step 3: Word = AHB-EXPORT-1-Plan.docx (kind=plan, "內部稽核計畫")  -> {"file":"AHB-EXPORT-1-Plan.docx","kind":"plan","zip":true,"docTitle":"內部稽核計畫"}
+PASS step 4: Word = AHB-EXPORT-1-Checklist.docx (kind=checklist, "稽核查檢表")  -> {"file":"AHB-EXPORT-1-Checklist.docx","kind":"checklist","zip":true,"docTitle":"稽核查檢表"}
+PASS step 5: Word = AHB-EXPORT-1.docx (kind=report, "內部稽核報告")  -> {"file":"AHB-EXPORT-1.docx","kind":"report","zip":true,"docTitle":"內部稽核報告"}
+PASS new audit: print shown, Word only after the first Save Draft  -> {"before":["上一步","列印稽核計畫"],"after":["上一步","列印稽核計畫","匯出 Word"]}
+PASS view-only user on a Closed audit: print + Word in the footer  -> ["上一步","列印報告","匯出 Word"]
+PASS English: step 3 "Audit Plan", footer Print Audit Plan + Export Word  -> ["Back","Print Audit Plan","Export Word"]
+PASS phone 390: footer buttons inside the screen, no overflow  -> {"overlayOverflow":0,"outside":0}
+PASS an existing agenda gets no lunch row on its own  -> ["session","session","session"]
+PASS first row of a day adds a grey 12:00-13:00 "Lunch Time" row for that day  -> [{"kind":"session","date":"2026-10-01","start":"","end":"","item":"","grey":"rgba(0, 0, 0, 0)"},{"kind":"lunch","date":"2026-10-01","start":"12:00","end":"13:00","item":"Lunch Time","grey":"oklch(0.968 0.007 247.896)"}]
+PASS another row on the same day: no second lunch  -> [{"kind":"session","date":"2026-10-01","start":"09:00","end":"11:30","item":"文件審查","grey":"rgba(0, 0, 0, 0)"},{"kind":"lunch","date":"2026-10-01","start":"12:00","end":"13:00","item":"Lunch Time","grey":"oklch(0.968 0.007 247.896)"},{"kind":"session","date":"2026-10-01","start":"13:00","end":"","item":"","grey":"rgba(0, 0, 0, 0)"}]
+PASS moving a row to a new day adds that day's lunch  -> [{"kind":"session","date":"2026-10-01","start":"09:00","end":"11:30","item":"文件審查","grey":"rgba(0, 0, 0, 0)"},{"kind":"lunch","date":"2026-10-01","start":"12:00","end":"13:00","item":"Lunch Time","grey":"oklch(0.968 0.007 247.896)"},{"kind":"session","date":"2026-10-02","start":"09:00","end":"10:00","item":"現場查核","grey":"rgba(0, 0, 0, 0)"},{"kind":"lunch","date":"2026-10-02","start":"12:00","end":
+PASS a deleted lunch is not added back for a day that has rows  -> [{"kind":"session","date":"2026-10-01","start":"09:00","end":"11:30","item":"文件審查","grey":"rgba(0, 0, 0, 0)"},{"kind":"lunch","date":"2026-10-01","start":"12:00","end":"13:00","item":"Lunch Time","grey":"oklch(0.968 0.007 247.896)"},{"kind":"session","date":"2026-10-02","start":"09:00","end":"10:00","item":"現場查核","grey":"rgba(0, 0, 0, 0)"},{"kind":"session","date":"2026-10-02","start":"10:00","end
+PASS stored: one lunch (kind lunch, edited), sorted with the sessions  -> [{"id":1791717314704,"kind":"","date":"2026-10-01","start":"09:00","end":"11:30","item":"文件審查","auditee":"","auditor":"王稽核","remarks":""},{"id":"lunch-1791717314704-0","kind":"lunch","date":"2026-10-01","start":"12:30","end":"13:30","item":"Lunch (late)","auditee":"","auditor":"","remarks":""},{"id":1791717314731,"kind":"","date":"2026-10-02","start":"09:00","end":"10:00","item":"現場查核","auditee":"
+PASS plan printout and Word shade only the lunch row  -> {"printed":[{"lunch":false,"bg":"rgba(0, 0, 0, 0)"},{"lunch":true,"bg":"rgb(229, 231, 235)"},{"lunch":false,"bg":"rgba(0, 0, 0, 0)"},{"lunch":false,"bg":"rgba(0, 0, 0, 0)"}],"wordFill":[null,"E5E7EB",null,null]}
+PASS keyboard-typed date: one lunch for the final day while still in the field, nothing left by the intermediate dates, unchanged on leaving  -> {"noLunchYet":0,"inField":[["2026-10-01","12:00","13:00","Lunch Time","","",""]],"typed":[["2026-10-01","12:00","13:00","Lunch Time","","",""]]}
+PASS arrow keys: one lunch, for the final day; the left day's untouched default lunch is removed with its only session  -> {"d1":"2026-12-01","arrowed":[["2026-12-01","12:00","13:00","Lunch Time","","",""]]}
+PASS an edited lunch stays when its day's last session moves; the new day gets its own lunch  -> {"d2":"2026-11-15","kept":[["2026-12-01","12:00","13:00","Lunch Time","","","keep"],["2026-11-15","12:00","13:00","Lunch Time","","",""]]}
+PASS typed a new day, then one click on Save Draft: saved on the first click (with the lunch row)  -> {"footerAtBottom":false,"writes":1,"savedLunch":1,"docNo":null}
+PASS typed a new day (table grows by its lunch), then one click on Add row: the row is added  -> {"sessionsBefore":2,"sessionsAfter":3,"lunchDays":["2026-10-01","2026-10-05"]}
+PASS 1400px: audit item column is the widest (>= 230px); start / end >= 128px (a full "下午12:00" + clock icon); no wizard overflow  -> {"date":126,"start":132,"end":132,"item":310,"auditee":126,"auditor":96,"remarks":126,"tableScrolls":false,"wizardOverflow":0}
+PASS 800px: audit item column is the widest (>= 230px); start / end >= 128px (a full "下午12:00" + clock icon); no wizard overflow  -> {"date":126,"start":132,"end":132,"item":252,"auditee":126,"auditor":96,"remarks":126,"tableScrolls":true,"wizardOverflow":0}
+PASS desktop 1400x700: after scrolling, title/step bar at the top and footer at the bottom; step bar has no transition / hover zoom  -> {"scrollable":795,"scrollTop":748,"headerTop":0,"footerBottom":700,"viewport":700,"transition":"0s","card":"clip","hovered":"none"}
+PASS phone 390x700: after scrolling, title/step bar at the top and footer at the bottom; step bar has no transition / hover zoom  -> {"scrollable":1792,"scrollTop":1246,"headerTop":0,"footerBottom":700,"viewport":700,"transition":"0s","card":"clip","hovered":"none"}
+ALL PASS

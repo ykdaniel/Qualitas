@@ -1,0 +1,1078 @@
+diff --git a/backend/routers/audit.py b/backend/routers/audit.py
+index 677a40f9..5e4aae91 100755
+--- a/backend/routers/audit.py
++++ b/backend/routers/audit.py
+@@ -1,4 +1,4 @@
+-from fastapi import APIRouter, Depends, HTTPException
++from fastapi import APIRouter, Depends, HTTPException, Query
+ from fastapi.responses import StreamingResponse
+ 
+ import schemas
+@@ -6,7 +6,7 @@ from core.dependencies import RoleChecker, get_audit_service
+ from core.perms import AUDIT_VIEW, AUDIT_CREATE, AUDIT_UPDATE, AUDIT_DELETE
+ from core.scope import Scope, ScopeForbidden, get_scope
+ from core.strict_dates import DateValidationError
+-from services.audit_service import AuditConflict, AuditService
++from services.audit_service import AUDIT_DOCX_KINDS, AuditConflict, AuditService
+ 
+ router = APIRouter(
+     prefix="/audit",
+@@ -42,12 +42,16 @@ def read_audit(
+ @router.get("/{audit_id}/export-docx", response_class=StreamingResponse)
+ def export_audit_docx(
+     audit_id: str,
++    kind: str = Query("report"),
+     service: AuditService = Depends(get_audit_service),
+     scope: Scope = Depends(get_scope),
+     current_user: schemas.User = Depends(RoleChecker(AUDIT_VIEW))
+ ):
+-    """Formal .docx export of the whole audit report (AUDIT-EXPORT-DOCX-2026-001)."""
+-    response = service.export_docx(audit_id, scope=scope)
++    """Formal .docx export: the whole audit report (default, AUDIT-EXPORT-DOCX-2026-001), or the audit plan / the
++    on-site checklist (kind=plan / checklist, AUDIT-BUTTONS-2026-001) — the same three documents as the wizard's printouts."""
++    if kind not in AUDIT_DOCX_KINDS:  # whitelist: an unknown kind is a bad request, never a guess
++        raise HTTPException(status_code=400, detail=f"Unknown export kind '{kind}'. Allowed: {', '.join(AUDIT_DOCX_KINDS)}.")
++    response = service.export_docx(audit_id, scope=scope, kind=kind)
+     if response is None:
+         raise HTTPException(status_code=404, detail="Audit not found")
+     return response
+diff --git a/backend/schemas.py b/backend/schemas.py
+index 40fce593..422a1b06 100644
+--- a/backend/schemas.py
++++ b/backend/schemas.py
+@@ -1360,6 +1360,9 @@ class AuditAgendaEntry(BaseModel):
+     model_config = ConfigDict(extra='ignore')
+ 
+     id: StrictInt | str | None = None  # the wizard's row key, kept so a resave of a locked audit compares equal
++    # '' = a session; 'lunch' = the 12:00-13:00 Lunch Time default the wizard adds for each new day (AUDIT-BUTTONS-2026-001),
++    # editable / deletable like any row and shaded in the printouts and Word
++    kind: str = ''
+     date: str = ''
+     start: str = ''
+     end: str = ''
+@@ -1368,11 +1371,18 @@ class AuditAgendaEntry(BaseModel):
+     auditor: str = ''
+     remarks: str = ''
+ 
+-    @field_validator('date', 'start', 'end', 'item', 'auditee', 'auditor', 'remarks', mode='before')
++    @field_validator('kind', 'date', 'start', 'end', 'item', 'auditee', 'auditor', 'remarks', mode='before')
+     @classmethod
+     def blank_for_null(cls, v):
+         return '' if v is None else v
+ 
++    @field_validator('kind')
++    @classmethod
++    def check_kind(cls, v):
++        if v not in ('', 'lunch'):
++            raise ValueError(f"agenda row kind must be '' or 'lunch', got {v!r}")
++        return v
++
+     @field_validator('date')
+     @classmethod
+     def check_date(cls, v):
+diff --git a/backend/services/audit_service.py b/backend/services/audit_service.py
+index 9b8f4897..6634da1b 100755
+--- a/backend/services/audit_service.py
++++ b/backend/services/audit_service.py
+@@ -41,6 +41,33 @@ _RESULT_TEXT = {'pass': '符合 Pass', 'fail': '不符合 Fail', 'pending': '注
+ _ITEM_COLUMN_WIDTHS_CM = (0.9, 1.7, 6.2, 2.3, 4.3, 2.0)
+ # Agenda table (AUDIT-AGENDA-2026-001): date, time, audit item / process, auditee, auditor, remarks — also 17.4 cm.
+ _AGENDA_COLUMN_WIDTHS_CM = (2.2, 2.4, 5.0, 3.2, 2.2, 2.4)
++# Agenda lunch rows (AUDIT-BUTTONS-2026-001): kind "lunch" — a default the wizard adds for each new day, editable and
++# deletable like any row — are shaded in the Word export as in the printouts.
++_LUNCH_SHADE = "E5E7EB"
++
++
++def _shade(cell, hex_color):
++    from docx.oxml import OxmlElement
++    from docx.oxml.ns import qn
++    tc_pr = cell._element.get_or_add_tcPr()
++    for old in tc_pr.findall(qn('w:shd')):
++        tc_pr.remove(old)
++    shd = OxmlElement('w:shd')
++    shd.set(qn('w:val'), 'clear')
++    shd.set(qn('w:color'), 'auto')
++    shd.set(qn('w:fill'), hex_color)
++    tc_pr.append(shd)
++
++
++# On-site checklist (AUDIT-BUTTONS-2026-001): #, clause no., clause & question, result boxes, blank remarks — 17.4 cm.
++_CHECKLIST_COLUMN_WIDTHS_CM = (0.9, 1.7, 7.4, 3.0, 4.4)
++# Word export kinds: title (zh, en) and the file-name suffix after the audit number; same titles as the printouts.
++_DOCX_KINDS = {
++    "report": ("內部稽核報告", "INTERNAL AUDIT REPORT", ""),
++    "plan": ("內部稽核計畫", "INTERNAL AUDIT PLAN", "-Plan"),
++    "checklist": ("稽核查檢表", "AUDIT CHECKLIST", "-Checklist"),
++}
++AUDIT_DOCX_KINDS = tuple(_DOCX_KINDS)  # the router's whitelist for ?kind=
+ # Characters an XML 1.0 document cannot contain (python-docx raises ValueError on them).
+ _XML_UNSAFE = re.compile('[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]')
+ 
+@@ -58,6 +85,10 @@ def _comparable(key, value):
+                 value = json.loads(value)
+             except ValueError:
+                 return value
++        if key == "agenda" and isinstance(value, list):
++            # rows saved before agenda rows had a `kind` (AUDIT-AGENDA, live 2026-10-10) mean kind '' — the wizard now
++            # resends them with it, which is no change
++            value = [{"kind": "", **row} if isinstance(row, dict) else row for row in value]
+         return value if value is not None else []
+     return value if value is not None else ''
+ 
+@@ -356,12 +387,14 @@ class AuditService:
+         self.repo.db.commit()
+         return success
+ 
+-    def export_docx(self, audit_id: str, scope=None):
++    def export_docx(self, audit_id: str, scope=None, kind: str = "report"):
+         """
+-        Formal .docx report for one Audit (AUDIT-EXPORT-DOCX-2026-001): the whole audit in one file — plan (information,
+-        team, scope & criteria, agenda — AUDIT-AGENDA-2026-001), checklist results, findings, sign-off — in the NCR report
+-        layout, built with the shared core/docx_builder.py primitives. The wizard's report printout (AuditPrintTemplate)
+-        carries the same sections; keep the two in step.
++        Formal .docx for one Audit in the NCR report layout, built with the shared core/docx_builder.py primitives. `kind`
++        matches the wizard's printouts (AuditPrintTemplate) — keep the two in step:
++        - "report" (AUDIT-EXPORT-DOCX-2026-001): the whole audit — information, team, scope & criteria, agenda
++          (AUDIT-AGENDA-2026-001), checklist results, findings, sign-off;
++        - "plan" (AUDIT-BUTTONS-2026-001): sections 1-4 of the report plus a plan sign-off;
++        - "checklist" (AUDIT-BUTTONS-2026-001): audit identity and the items with blank result / remarks, for use on site.
+ 
+         Returns a StreamingResponse, or None when the audit does not exist or is outside the caller's scope (→ 404).
+         """
+@@ -416,8 +449,43 @@ class AuditService:
+         # (AUDIT-PRINT-2026-001): Python's round() rounds half to even, and in JavaScript a float product can land just under .5.
+         progress = 0 if total == 0 else (200 * (total - pending) + total) // (2 * total)
+ 
++        title_zh, title_en, suffix = _DOCX_KINDS[kind]
++        file_name = (txt(audit.auditNo) or "Audit") + suffix
+         doc = db.new_document()
+-        db.add_masthead(doc, "內部稽核報告", "INTERNAL AUDIT REPORT", doc_no=txt(audit.auditNo), status=txt(audit.status))
++        db.add_masthead(doc, title_zh, title_en, doc_no=txt(audit.auditNo), status=txt(audit.status))
++
++        if kind == "checklist":
++            # 1. Audit information (what the auditor needs on site)
++            db.add_section_heading(doc, "1", "稽核資訊", "Audit Information")
++            db.add_field_grid(doc, [
++                [("稽核編號", "Audit No.", txt(audit.auditNo)), ("專案", "Project", txt(project_label))],
++                [("受稽核廠商", "Auditee / Contractor", txt(contractor)), ("稽核地點", "Location", txt(audit.location))],
++                [("稽核日期", "Audit Date", " ~ ".join(filter(None, [txt(audit.date), txt(audit.end_date)])) or None),
++                 ("主任稽核員", "Lead Auditor", txt(audit.auditor))],
++            ])
++            # 2. Audit items with blank result boxes and remarks
++            db.add_section_heading(doc, "2", "查檢項目", "Audit Items")
++            if items:
++                rows = []
++                for n, item in enumerate(items, start=1):
++                    content = "\n".join(filter(None, [txt(item.get('clause')), txt(item.get('task'))]))
++                    rows.append([str(n), txt(item.get('no')) or db.DASH, content or db.DASH,
++                                 "☐ 符合 Pass\n☐ 不符合 Fail\n☐ 注意 Attention", ""])
++                table = db.add_data_table(doc, ["#", "條文編號\nClause No.", "條文與查檢重點\nClause & Audit Question",
++                                                "結果\nResult", "備註\nRemarks"], rows)
++                table.autofit = False
++                for row in table.rows:
++                    for cell, width in zip(row.cells, _CHECKLIST_COLUMN_WIDTHS_CM):
++                        cell.width = Cm(width)
++            else:
++                db.add_paragraph(doc, "（尚無查檢項目 No audit items）", size=9, italic=True)
++            # 3. Sign-off
++            db.add_section_heading(doc, "3", "簽核", "Sign-off")
++            db.add_sign_off_grid(doc, [
++                {"num": "3.1", "zh": "主任稽核員", "en": "Lead Auditor", "name": txt(audit.auditor)},
++                {"num": "3.2", "zh": "受稽核方代表", "en": "Auditee Representative"},
++            ])
++            return db.finalize_response(doc, file_name)
+ 
+         # 1. Audit information
+         db.add_section_heading(doc, "1", "稽核資訊", "Audit Information")
+@@ -448,7 +516,8 @@ class AuditService:
+         db.add_subsection_heading(doc, "3.1 範圍描述", "Audit Scope")
+         db.add_field_box(doc, txt(audit.scope_description), guide="說明本次稽核涵蓋之部門、流程、作業與地點")
+ 
+-        # 4. Agenda (stored already sorted by date / start time on every write)
++        # 4. Agenda (stored already sorted by date / start time on every write); lunch rows (kind "lunch", added by the
++        # wizard as an editable default) are shaded grey like in the printouts
+         db.add_section_heading(doc, "4", "稽核行程", "Agenda")
+         if agenda:
+             rows = []
+@@ -468,9 +537,22 @@ class AuditService:
+             for row in table.rows:
+                 for cell, width in zip(row.cells, _AGENDA_COLUMN_WIDTHS_CM):
+                     cell.width = Cm(width)
++            for row, entry in zip(table.rows[1:], agenda):
++                if entry.get('kind') == 'lunch':
++                    for cell in row.cells:
++                        _shade(cell, _LUNCH_SHADE)
+         else:
+             db.add_paragraph(doc, "（尚無行程 No agenda）", size=9, italic=True)
+ 
++        if kind == "plan":
++            # 5. Plan sign-off
++            db.add_section_heading(doc, "5", "計畫簽核", "Plan Sign-off")
++            db.add_sign_off_grid(doc, [
++                {"num": "5.1", "zh": "主任稽核員", "en": "Lead Auditor", "name": txt(audit.auditor)},
++                {"num": "5.2", "zh": "專案經理", "en": "Project Director", "name": txt(audit.project_director)},
++            ])
++            return db.finalize_response(doc, file_name)
++
+         # 5. Checklist results
+         db.add_section_heading(doc, "5", "查檢結果", "Checklist Results")
+         db.add_field_grid(doc, [
+@@ -513,7 +595,7 @@ class AuditService:
+             {"num": "7.3", "zh": "專案經理", "en": "Project Director", "name": txt(audit.project_director)},
+         ])
+ 
+-        return db.finalize_response(doc, txt(audit.auditNo) or "Audit")
++        return db.finalize_response(doc, file_name)
+ 
+     def _resolve_vendor_id(self, vendor_name: Optional[str]) -> Optional[str]:
+         """
+diff --git a/backend/tests/test_audit_agenda_http.py b/backend/tests/test_audit_agenda_http.py
+index 894117b2..8576bd83 100644
+--- a/backend/tests/test_audit_agenda_http.py
++++ b/backend/tests/test_audit_agenda_http.py
+@@ -33,7 +33,7 @@ def test_agenda_is_saved_sorted_and_returned(env):
+     assert response.status_code == 200, response.text
+     body = response.json()
+     assert [r['id'] for r in body['agenda']] == [1, 2, 3, 4]  # by date, then start; the undated row last
+-    assert body['agenda'][0] == {'id': 1, 'date': '2026-10-01', 'start': '09:00', 'end': '09:30', 'item': 'Opening meeting',
++    assert body['agenda'][0] == {'id': 1, 'kind': '', 'date': '2026-10-01', 'start': '09:00', 'end': '09:30', 'item': 'Opening meeting',
+                                  'auditee': 'All', 'auditor': 'Wang', 'remarks': 'Room A'}
+     assert env.client.get(f"/api/audit/{body['id']}").json()['agenda'] == body['agenda']
+     # update replaces the list (and sorts it again)
+@@ -103,3 +103,45 @@ def test_word_export_without_agenda_and_with_odd_stored_rows(env):
+     response = env.client.get(f'/api/audit/{odd}/export-docx')
+     assert response.status_code == 200, response.text
+     assert agenda_rows(response) == [['2026-10-01', '08:00', 'Only start', '—', '—', '—']]
++
++
++# ── AUDIT-BUTTONS-2026-001: lunch rows are real, editable agenda rows with kind "lunch" ─────────────────────────────────
++LUNCH = {'id': 9, 'kind': 'lunch', 'date': '2026-10-01', 'start': '12:00', 'end': '13:00', 'item': 'Lunch Time'}
++
++
++def test_lunch_rows_are_stored_sorted_and_editable(env):
++    created = create(env, agenda=ROWS + [LUNCH])
++    assert created.status_code == 200, created.text
++    agenda = created.json()['agenda']
++    assert [(r['id'], r['kind']) for r in agenda] == [(1, ''), (2, ''), (9, 'lunch'), (3, ''), (4, '')]  # sorts at 12:00
++    moved = dict(LUNCH, start='12:30', end='13:30', item='Lunch (late)')
++    updated = env.client.put(f"/api/audit/{created.json()['id']}", json={'agenda': ROWS + [moved]}).json()['agenda']
++    assert [r for r in updated if r['kind'] == 'lunch'] == [dict(moved, auditee='', auditor='', remarks='')]
++    removed = env.client.put(f"/api/audit/{created.json()['id']}", json={'agenda': ROWS}).json()['agenda']
++    assert all(r['kind'] == '' for r in removed)  # deletable like any row
++    assert create(env, agenda=[dict(LUNCH, kind='break')]).status_code == 422
++
++
++def test_closed_audit_saved_before_rows_had_a_kind_still_resaves_unchanged(env):
++    # rows stored by the AUDIT-AGENDA release (no "kind" key); the wizard now resends them with kind ''
++    legacy = '[{"id": 1, "date": "2026-10-01", "start": "09:00", "end": "09:30", "item": "Opening", "auditee": "", "auditor": "", "remarks": ""}]'
++    audit_id = insert_raw(env, status='Closed', agenda=legacy)
++    resave = env.client.put(f'/api/audit/{audit_id}', json={'agenda': [{'id': 1, 'date': '2026-10-01', 'start': '09:00', 'end': '09:30',
++                                                                         'item': 'Opening'}], 'status': 'Closed'})
++    assert resave.status_code == 200, resave.text
++    changed = env.client.put(f'/api/audit/{audit_id}', json={'agenda': [{'id': 1, 'kind': 'lunch', 'date': '2026-10-01'}], 'status': 'Closed'})
++    assert changed.status_code == 400, changed.text
++
++
++def test_word_export_shades_lunch_rows(env):
++    from docx.oxml.ns import qn
++    created = create(env, agenda=ROWS + [LUNCH]).json()
++    response = env.client.get(f"/api/audit/{created['id']}/export-docx")
++    doc = Document(BytesIO(response.content))
++    table = next(t for t in doc.tables if t.rows[0].cells[0].text.startswith('日期'))
++    fills = []
++    for row in table.rows[1:]:
++        shd = row.cells[0]._element.tcPr.find(qn('w:shd')) if row.cells[0]._element.tcPr is not None else None
++        fills.append((row.cells[2].text, shd.get(qn('w:fill')) if shd is not None else None))
++    assert fills[2] == ('Lunch Time', 'E5E7EB')
++    assert all(fill is None for text, fill in fills if text != 'Lunch Time')
+diff --git a/backend/tests/test_audit_export_docx_http.py b/backend/tests/test_audit_export_docx_http.py
+index db55a484..4f5677df 100644
+--- a/backend/tests/test_audit_export_docx_http.py
++++ b/backend/tests/test_audit_export_docx_http.py
+@@ -216,3 +216,56 @@ def test_without_audit_view_or_signed_out_is_refused(env):
+     assert export(env, created['id']).status_code == 403
+     env.client.cookies.clear()
+     assert export(env, created['id']).status_code == 401
++
++
++# ── AUDIT-BUTTONS-2026-001: the plan and the on-site checklist as Word, like the step printouts ───────────────────────
++def section_headings(response):
++    doc = Document(BytesIO(response.content))
++    return [t.rows[0].cells[0].text for t in doc.tables if len(t.columns) == 1 and t.rows[0].cells[0].text[:2].rstrip('.').isdigit()]
++
++
++def test_kind_plan_is_sections_1_to_4_plus_a_plan_sign_off(env):
++    created = create(env, title='Plan export', agenda=[{'date': '2026-10-01', 'start': '09:00', 'end': '09:30', 'item': 'Opening'}],
++                     custom_check_items=ITEMS).json()
++    response = env.client.get(f"/api/audit/{created['id']}/export-docx?kind=plan")
++    assert response.status_code == 200, response.text
++    assert unquote(response.headers['content-disposition'].split("filename*=UTF-8''")[1]) == f"{created['auditNo']}-Plan.docx"
++    text = docx_text(response)
++    assert '內部稽核計畫 INTERNAL AUDIT PLAN' in text and 'Plan export' in text and 'Opening' in text
++    assert section_headings(response) == ['1. 稽核資訊  Audit Information', '2. 稽核團隊  Audit Team', '3. 稽核範圍與準則  Scope & Criteria',
++                                          '4. 稽核行程  Agenda', '5. 計畫簽核  Plan Sign-off']
++    assert '查檢結果' not in text and 'Budget approved' not in text  # no results in a plan
++    assert '5.1 主任稽核員 Lead Auditor' in text and '5.2 專案經理 Project Director' in text
++
++
++def test_kind_checklist_has_blank_result_boxes_and_no_recorded_results(env):
++    created = create(env, custom_check_items=ITEMS, location='Yard 3').json()
++    response = env.client.get(f"/api/audit/{created['id']}/export-docx?kind=checklist")
++    assert response.status_code == 200, response.text
++    assert unquote(response.headers['content-disposition'].split("filename*=UTF-8''")[1]) == f"{created['auditNo']}-Checklist.docx"
++    text = docx_text(response)
++    assert '稽核查檢表 AUDIT CHECKLIST' in text and 'Yard 3' in text and '2026-10-01 ~ 2026-10-02' in text
++    assert section_headings(response) == ['1. 稽核資訊  Audit Information', '2. 查檢項目  Audit Items', '3. 簽核  Sign-off']
++    rows = item_rows(response)
++    assert [r[0] for r in rows] == ['1', '2', '3', '4']
++    assert rows[0][1:] == ['7.1', 'Resources\nHow are resources provided?', '☐ 符合 Pass\n☐ 不符合 Fail\n☐ 注意 Attention', '']
++    assert 'Budget approved' not in text and '符合 Pass\n' not in text.replace('☐ 符合 Pass', '')  # recorded results / notes are not printed
++    table = next(t for t in Document(BytesIO(response.content)).tables if t.rows[0].cells[0].text == '#')
++    assert [round(c.width.cm, 1) for c in table.rows[1].cells] == [0.9, 1.7, 7.4, 3.0, 4.4]
++    empty = create(env, custom_check_items=[]).json()
++    assert '（尚無查檢項目 No audit items）' in docx_text(env.client.get(f"/api/audit/{empty['id']}/export-docx?kind=checklist"))
++
++
++def test_kind_report_is_the_default_and_unknown_kinds_are_refused(env):
++    created = create(env, custom_check_items=ITEMS).json()
++    default = env.client.get(f"/api/audit/{created['id']}/export-docx")
++    explicit = env.client.get(f"/api/audit/{created['id']}/export-docx?kind=report")
++    assert default.status_code == explicit.status_code == 200
++    assert section_headings(default) == section_headings(explicit)
++    assert section_headings(default)[-1] == '7. 簽核  Sign-off'
++    for bad in ['summary', 'REPORT', '', '../plan']:
++        response = env.client.get(f"/api/audit/{created['id']}/export-docx", params={'kind': bad})
++        assert response.status_code == 400, (bad, response.text)
++        assert 'Unknown export kind' in response.json()['detail']
++    # scope / not-found still answer before the kind matters for an existing kind
++    assert env.client.get('/api/audit/no-such/export-docx?kind=plan').status_code == 404
+diff --git a/react-app/src/components/Audit/Audit.print.css b/react-app/src/components/Audit/Audit.print.css
+index b492b598..78add057 100644
+--- a/react-app/src/components/Audit/Audit.print.css
++++ b/react-app/src/components/Audit/Audit.print.css
+@@ -114,6 +114,8 @@
+ .audit-print-root .agenda-items .a-who { width: 18%; }
+ .audit-print-root .agenda-items .a-aud { width: 12%; }
+ .audit-print-root .agenda-items .a-rem { width: 14%; }
++/* lunch rows (kind "lunch", AUDIT-BUTTONS-2026-001): grey, like the Word export */
++.audit-print-root .agenda-items tr.lunch td { background: #e5e7eb; }
+ 
+ .audit-print-root .field-box { border: 1px solid var(--audit-line); min-height: 34px; padding: 4px 6px; white-space: pre-wrap; word-break: break-word; }
+ .audit-print-root .field-box.fb-tall { min-height: 70px; }
+diff --git a/react-app/src/components/Audit/AuditAgendaEditor.tsx b/react-app/src/components/Audit/AuditAgendaEditor.tsx
+index 24c6a57f..98b2080e 100644
+--- a/react-app/src/components/Audit/AuditAgendaEditor.tsx
++++ b/react-app/src/components/Audit/AuditAgendaEditor.tsx
+@@ -9,6 +9,10 @@ import type { AuditAgendaEntry } from '../../store/auditStore';
+  * auditee, auditor, remarks — edited in place. Rows are sorted by date and start time when the audit is saved
+  * (sortAgenda, the same order the backend stores); a row that ends before it starts blocks the save, a date outside the
+  * audit period only shows a notice (audits get rescheduled).
++ *
++ * Lunch (AUDIT-BUTTONS-2026-001): when a date first appears in the agenda (the first row of a new day is added, or a row
++ * is moved to a day that had none), a 12:00-13:00 "Lunch Time" row (kind 'lunch') is added for that day. It is a default,
++ * stored like any row: it can be edited or deleted, and is not added again for a day that already has rows.
+  */
+ interface AuditAgendaEditorProps {
+     rows: AuditAgendaEntry[];
+@@ -21,6 +25,11 @@ interface AuditAgendaEditorProps {
+ 
+ const TEXT_FIELDS: (keyof AuditAgendaEntry)[] = ['date', 'start', 'end', 'item', 'auditee', 'auditor', 'remarks'];
+ 
++let nextLunchId = 0;
++const lunchRow = (date: string): AuditAgendaEntry => ({
++    id: `lunch-${Date.now()}-${nextLunchId++}`, kind: 'lunch', date, start: '12:00', end: '13:00', item: 'Lunch Time', auditee: '', auditor: '', remarks: '',
++});
++
+ // A row with nothing filled in is dropped on save.
+ export const isBlankAgendaRow = (row: AuditAgendaEntry) => TEXT_FIELDS.every(f => !String(row[f] ?? '').trim());
+ 
+@@ -45,12 +54,17 @@ export default function AuditAgendaEditor({ rows, onChange, readOnly, startDate,
+ 
+     const outOfPeriod = rows.filter(r => r.date && ((startDate && r.date < startDate) || (endDate && r.date > endDate)));
+ 
+-    const update = (id: AuditAgendaEntry['id'], field: keyof AuditAgendaEntry, value: string) =>
+-        onChange(rows.map(r => (r.id === id ? { ...r, [field]: value } : r)));
++    const update = (id: AuditAgendaEntry['id'], field: keyof AuditAgendaEntry, value: string) => {
++        const next = rows.map(r => (r.id === id ? { ...r, [field]: value } : r));
++        // moving a session to a day the agenda did not have yet brings that day's default lunch
++        const moved = rows.find(r => r.id === id);
++        const isNewDay = field === 'date' && !!value && moved?.kind !== 'lunch' && !rows.some(r => r.id !== id && r.date === value);
++        onChange(isNewDay ? [...next, lunchRow(value)] : next);
++    };
+ 
+     const addRow = () => {
+         const last = rows[rows.length - 1];
+-        onChange([...rows, {
++        const row: AuditAgendaEntry = {
+             id: Date.now(),
+             // continue the day of the last row (or start on the audit's first day), carry the time on from where it ended
+             date: last?.date || startDate || '',
+@@ -60,7 +74,10 @@ export default function AuditAgendaEditor({ rows, onChange, readOnly, startDate,
+             auditee: '',
+             auditor: last?.auditor || defaultAuditor || '',
+             remarks: '',
+-        }]);
++        };
++        // the first row of a new day also brings that day's default lunch
++        const isNewDay = !!row.date && !rows.some(r => r.date === row.date);
++        onChange(isNewDay ? [...rows, row, lunchRow(row.date)] : [...rows, row]);
+     };
+ 
+     const removeRow = (id: AuditAgendaEntry['id']) => onChange(rows.filter(r => r.id !== id));
+@@ -68,17 +85,20 @@ export default function AuditAgendaEditor({ rows, onChange, readOnly, startDate,
+     return (
+         <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="space-y-3">
+             <div className="overflow-x-auto border border-slate-200 rounded-xl">
+-                <table className="w-full min-w-[920px] text-left border-collapse" data-agenda-table>
++                {/* Fixed layout: the audit item takes all the width the other columns leave (at least ~240px — below that the
++                    table scrolls sideways inside this box instead of squeezing it); start / end wide enough for a full
++                    "下午12:00" plus the clock icon (AUDIT-BUTTONS-2026-001). */}
++                <table className="w-full min-w-[1210px] table-fixed text-left border-collapse" data-agenda-table>
+                     <thead>
+                         <tr className="bg-slate-50 border-b border-slate-200">
+-                            <th className="px-3 py-3 text-xs font-bold text-slate-500 w-40">{t('audit.agenda.colDate')}</th>
+-                            <th className="px-3 py-3 text-xs font-bold text-slate-500 w-28">{t('audit.agenda.colStart')}</th>
+-                            <th className="px-3 py-3 text-xs font-bold text-slate-500 w-28">{t('audit.agenda.colEnd')}</th>
++                            <th className="px-3 py-3 text-xs font-bold text-slate-500 w-[150px]">{t('audit.agenda.colDate')}</th>
++                            <th className="px-3 py-3 text-xs font-bold text-slate-500 w-[156px]">{t('audit.agenda.colStart')}</th>
++                            <th className="px-3 py-3 text-xs font-bold text-slate-500 w-[156px]">{t('audit.agenda.colEnd')}</th>
+                             <th className="px-3 py-3 text-xs font-bold text-slate-500">{t('audit.agenda.colItem')}</th>
+-                            <th className="px-3 py-3 text-xs font-bold text-slate-500 w-44">{t('audit.agenda.colAuditee')}</th>
+-                            <th className="px-3 py-3 text-xs font-bold text-slate-500 w-32">{t('audit.agenda.colAuditor')}</th>
+-                            <th className="px-3 py-3 text-xs font-bold text-slate-500 w-40">{t('audit.agenda.colRemarks')}</th>
+-                            <th className="px-2 py-3 w-12" />
++                            <th className="px-3 py-3 text-xs font-bold text-slate-500 w-[150px]">{t('audit.agenda.colAuditee')}</th>
++                            <th className="px-3 py-3 text-xs font-bold text-slate-500 w-[120px]">{t('audit.agenda.colAuditor')}</th>
++                            <th className="px-3 py-3 text-xs font-bold text-slate-500 w-[150px]">{t('audit.agenda.colRemarks')}</th>
++                            <th className="px-2 py-3 w-[52px]" />
+                         </tr>
+                     </thead>
+                     <tbody className="divide-y divide-slate-100">
+@@ -86,7 +106,7 @@ export default function AuditAgendaEditor({ rows, onChange, readOnly, startDate,
+                             const badTime = agendaRowTimeInvalid(row);
+                             const outside = outOfPeriod.includes(row);
+                             return (
+-                                <tr key={row.id} data-agenda-row>
++                                <tr key={row.id} data-agenda-row data-agenda-kind={row.kind || 'session'} className={row.kind === 'lunch' ? 'bg-slate-100' : undefined}>
+                                     <td className="px-3 py-2">
+                                         <input type="date" aria-label={t('audit.agenda.colDate')} value={row.date || ''} onChange={e => update(row.id, 'date', e.target.value)}
+                                             className={`${INPUT} ${outside ? 'border-amber-400 bg-amber-50' : ''}`} />
+diff --git a/react-app/src/components/Audit/AuditPrintTemplate.tsx b/react-app/src/components/Audit/AuditPrintTemplate.tsx
+index 0cf18c09..e0656481 100644
+--- a/react-app/src/components/Audit/AuditPrintTemplate.tsx
++++ b/react-app/src/components/Audit/AuditPrintTemplate.tsx
+@@ -60,7 +60,7 @@ const RESULT_TEXT: Record<string, string> = { pass: '符合 Pass', fail: '不符
+ export const auditProgress = (total: number, pending: number) =>
+     total === 0 ? 0 : Math.floor((200 * (total - pending) + total) / (2 * total));
+ 
+-type AgendaRow = { date?: unknown; start?: unknown; end?: unknown; item?: unknown; auditee?: unknown; auditor?: unknown; remarks?: unknown };
++type AgendaRow = { kind?: unknown; date?: unknown; start?: unknown; end?: unknown; item?: unknown; auditee?: unknown; auditor?: unknown; remarks?: unknown };
+ 
+ type CheckItem = { no?: unknown; clause?: unknown; task?: unknown; status?: unknown; note?: unknown; updatedAt?: unknown };
+ 
+@@ -172,7 +172,7 @@ const AuditPrintTemplate: React.FC<AuditPrintTemplateProps> = ({ kind, data, uns
+                         {agenda.map((row, n) => {
+                             const start = clean(row.start), end = clean(row.end);
+                             return (
+-                                <tr key={n}>
++                                <tr key={n} className={row.kind === 'lunch' ? 'lunch' : undefined}>
+                                     <td className="a-date">{clean(row.date) || DASH}</td>
+                                     <td className="a-time">{start && end ? `${start}–${end}` : (start || end || DASH)}</td>
+                                     <td className="a-item">{clean(row.item) || DASH}</td>
+diff --git a/react-app/src/components/Audit/AuditWizard.tsx b/react-app/src/components/Audit/AuditWizard.tsx
+index e40743b3..872abe93 100755
+--- a/react-app/src/components/Audit/AuditWizard.tsx
++++ b/react-app/src/components/Audit/AuditWizard.tsx
+@@ -36,6 +36,15 @@ const isPlainEnter = (e: React.KeyboardEvent) => e.key === 'Enter' && !e.nativeE
+ const WIZARD_STEPS = ['audit.wizard.step1', 'audit.wizard.stepPersonnelScope', 'audit.wizard.stepAgenda', 'audit.wizard.step4', 'audit.wizard.step5'];
+ const LAST_STEP = WIZARD_STEPS.length;
+ 
++// Steps with a document (AUDIT-BUTTONS-2026-001): which printout / Word kind, and the print button label.
++const STEP_DOCUMENTS: Record<number, { kind: AuditPrintKind; printLabel: string }> = {
++  3: { kind: 'plan', printLabel: 'audit.wizard.printPlan' },
++  4: { kind: 'checklist', printLabel: 'audit.wizard.printChecklist' },
++  5: { kind: 'report', printLabel: 'audit.wizard.printReport' },
++};
++// Same file names as the backend (_DOCX_KINDS suffixes).
++const DOCX_SUFFIX: Record<AuditPrintKind, string> = { report: '', plan: '-Plan', checklist: '-Checklist' };
++
+ const ALL_CATEGORY = '__ALL__';
+ const UNCATEGORIZED = '__UNCATEGORIZED__';
+ 
+@@ -478,7 +487,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+ 
+   // Word export (AUDIT-EXPORT-DOCX-2026-001): the server builds the report from the SAVED record, so unsaved edits would
+   // silently be missing from the file — ask for a save first instead.
+-  const handleExportDocx = async () => {
++  const handleExportDocx = async (kind: AuditPrintKind) => {
+     if (!recordId || exportingDocx) return;
+     if (leaveGuard.dirty) {
+       toast.warning(t('audit.wizard.exportSaveFirst'));
+@@ -486,7 +495,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+     }
+     setExportingDocx(true);
+     try {
+-      await exportAuditDocx(recordId, auditNo || 'Audit');
++      await exportAuditDocx(recordId, `${auditNo || 'Audit'}${DOCX_SUFFIX[kind]}`, kind);
+     } catch (err) {
+       console.error('Word 匯出失敗: ', err);
+       toast.error(t('audit.wizard.exportFailed'));
+@@ -523,6 +532,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+     findings: formData.findings,
+   };
+ 
++  // The document that belongs to the current step: its print button and its Word export sit in the footer.
++  const stepDocument = STEP_DOCUMENTS[step];
++
+   const renderProgressBar = () => (
+     // px-10: each label is centred under its circle and wider than it, so the first and last labels hang ~36px past the
+     // circles — the padding keeps them inside the wizard at every width (AUDIT-LAYOUT R2).
+@@ -533,7 +545,8 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+             <button
+               type="button"
+               onClick={() => setStep(i)}
+-              className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 z-10 cursor-pointer hover:scale-110 ${
++              // no motion on the step bar: no hover zoom, no transitions (AUDIT-BUTTONS-2026-001)
++              className={`w-10 h-10 rounded-full flex items-center justify-center border-2 z-10 cursor-pointer ${
+                 step >= i ? 'bg-teal-600 border-teal-600 text-white shadow-lg' : 'bg-white border-gray-300 text-gray-400 hover:border-teal-400'
+               }`}
+             >
+@@ -547,7 +560,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+             </span>
+           </div>
+           {i < LAST_STEP && (
+-            <div className={`flex-1 h-1 mx-2 rounded-full transition-colors duration-300 drop-shadow-sm ${
++            <div className={`flex-1 h-1 mx-2 rounded-full drop-shadow-sm ${
+               step > i ? 'bg-teal-500' : 'bg-slate-600/50'
+             }`} />
+           )}
+@@ -561,9 +574,12 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+     {/* print: the wizard is a fixed, internally scrolling overlay — printed as is (browser print menu, no printout
+         mounted), only the first screenful came out. In print it becomes normal flow so the browser paginates it;
+         Audit.tsx hides the page behind. */}
+-    <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto py-8 px-4 md:px-8 flex justify-center items-start pt-10 print:static print:overflow-visible print:block print:p-0 print:bg-white">
+-      <div className="w-full max-w-[1400px]">
+-        <div className="flex justify-between items-center mb-6 no-print">
++    <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto px-4 md:px-8 flex justify-center items-start print:static print:overflow-visible print:block print:p-0 print:bg-white">
++      {/* vertical padding lives here, not on the scroll container, so the sticky header / footer sit flush with its edges */}
++      <div className="w-full max-w-[1400px] pt-8 pb-8 print:p-0">
++        {/* Title and step bar stay put while the step scrolls (AUDIT-BUTTONS-2026-001: "要固定不要轉動"). */}
++        <div className="sticky top-0 z-20 bg-slate-50 pt-2 pb-2 no-print" data-wizard-header>
++        <div className="flex justify-between items-center mb-6">
+             <div className="text-left flex items-center gap-4">
+                 <div className="inline-flex items-center justify-center p-2.5 bg-emerald-50 text-teal-700 rounded-2xl">
+                     <ClipboardList size={24} />
+@@ -578,7 +594,6 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+             </button>
+         </div>
+ 
+-        <div className="no-print">
+           {renderProgressBar()}
+         </div>
+ 
+@@ -593,7 +608,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+           </div>
+         )}
+ 
+-        <div className="bg-white rounded-4xl shadow-xl shadow-slate-900/10 overflow-hidden relative border border-slate-100/50 print-modal-content">
++        {/* overflow-clip (not -hidden) keeps the rounded corners without making the card a scroll container, so the sticky
++            footer below sticks to the wizard's own scroll area */}
++        <div className="bg-white rounded-4xl shadow-xl shadow-slate-900/10 overflow-clip relative border border-slate-100/50 print-modal-content">
+           <form onSubmit={handleSubmit}>
+             
+             {/* Step 1: Project Info */}
+@@ -805,17 +822,12 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+               </div>
+             )}
+ 
+-            {/* Step 3: Agenda — the daily schedule (AUDIT-AGENDA-2026-001); "Print Audit Plan" lives here (plan = steps 1-3) */}
++            {/* Step 3: Audit Plan — the daily schedule (AUDIT-AGENDA-2026-001); its print / Word buttons are in the footer */}
+             {step === 3 && (
+               <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4">
+-                <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+-                  <div className="flex items-center gap-3">
+-                    <CalendarDays className="text-teal-600" size={24} />
+-                    <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.stepAgenda')}</h2>
+-                  </div>
+-                  <button className={actionStyles.secondary} type="button" onClick={() => requestPrint('plan')}>
+-                    <Printer className="w-4 h-4" /> {t('audit.wizard.printPlan')}
+-                  </button>
++                <div className="flex items-center gap-3 border-b border-slate-100 pb-3 mb-4">
++                  <CalendarDays className="text-teal-600" size={24} />
++                  <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.stepAgenda')}</h2>
+                 </div>
+                 <AuditAgendaEditor
+                   rows={formData.agenda}
+@@ -831,14 +843,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+             {/* Step 4: Checklist Configuration */}
+             {step === 4 && (
+               <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4">
+-                <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+-                  <div className="flex items-center gap-3">
+-                    <CheckSquare className="text-teal-600" size={24} />
+-                    <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.step4')} Checklist</h2>
+-                  </div>
+-                  <button className={actionStyles.secondary} type="button" onClick={() => requestPrint('checklist')}>
+-                    <Printer className="w-4 h-4" /> {t('audit.wizard.printChecklist')}
+-                  </button>
++                <div className="flex items-center gap-3 border-b border-slate-100 pb-3 mb-4">
++                  <CheckSquare className="text-teal-600" size={24} />
++                  <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.step4')}</h2>
+                 </div>
+ 
+                 {/* Template Selection */}
+@@ -965,26 +972,12 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+               <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 bg-slate-50 min-h-[500px]">
+                 
+                 {/* Header Section */}
+-                <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+-                  <div>
+-                    <div className="flex items-center gap-2 mb-1">
+-                      <ShieldCheck className="w-8 h-8 text-indigo-600" />
+-                      <h1 className="text-2xl font-bold text-slate-800">{t('audit.wizard.executionTitle')}</h1>
+-                    </div>
+-                    <p className="text-slate-500">{formData.projectName ? `${formData.projectName} - ${t('audit.wizard.regularAudit')}` : t('audit.wizard.configureFirst')}</p>
+-                  </div>
+-                  
+-                  <div className="flex items-center gap-3 no-print">
+-                    <button className={actionStyles.secondary} type="button" onClick={() => requestPrint('report')}>
+-                      <Printer className="w-4 h-4" /> {t('audit.wizard.printReport')}
+-                    </button>
+-                    {/* Needs a saved record (the export reads it from the server). */}
+-                    {recordId && (
+-                      <button className={actionStyles.secondary} type="button" onClick={handleExportDocx} disabled={exportingDocx}>
+-                        <FileText className="w-4 h-4" /> {exportingDocx ? t('audit.wizard.exporting') : t('common.exportWord')}
+-                      </button>
+-                    )}
++                <header>
++                  <div className="flex items-center gap-2 mb-1">
++                    <ShieldCheck className="w-8 h-8 text-indigo-600" />
++                    <h1 className="text-2xl font-bold text-slate-800">{t('audit.wizard.executionTitle')}</h1>
+                   </div>
++                  <p className="text-slate-500">{formData.projectName ? `${formData.projectName} - ${t('audit.wizard.regularAudit')}` : t('audit.wizard.configureFirst')}</p>
+                 </header>
+ 
+                 {/* Statistics Cards */}
+@@ -1197,14 +1190,28 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+               </div>
+             )}
+ 
+-            {/* Footer Navigation */}
++            {/* Footer Navigation — sticky at the bottom so Back / Print / Word / Save / Next stay reachable on long steps */}
++                      <div className="sticky bottom-0 z-10" data-wizard-footer>
+                       <FormActions tools={<>{step > 1 && (
+                           <button className={actionStyles.secondary}
+                               type="button" onClick={prevStep}
+                           >
+                               <ChevronLeft size={20} /> {t('audit.wizard.prevStep')}
+                           </button>
+-                      )}</>} secondary={<>{/* 儲存進度按鈕 (Ghost Style) — hidden entirely once Closed:
++                      )}
++                      {/* This step's printout and Word document, bottom-left like every other module's Print / Export Word
++                          (AUDIT-BUTTONS-2026-001): step 3 the audit plan, step 4 the on-site checklist, step 5 the report.
++                          Word needs a saved record (the server builds it from the saved audit). */}
++                      {stepDocument && (<>
++                          <button className={actionStyles.secondary} type="button" onClick={() => requestPrint(stepDocument.kind)} data-step-print={stepDocument.kind}>
++                              <Printer size={16} /> {t(stepDocument.printLabel)}
++                          </button>
++                          {recordId && (
++                              <button className={actionStyles.secondary} type="button" onClick={() => handleExportDocx(stepDocument.kind)} disabled={exportingDocx} data-step-word={stepDocument.kind}>
++                                  <FileText size={16} /> {exportingDocx ? t('audit.wizard.exporting') : t('common.exportWord')}
++                              </button>
++                          )}
++                      </>)}</>} secondary={<>{/* 儲存進度按鈕 (Ghost Style) — hidden entirely once Closed:
+                     a true dead end (WorkflowEngine "Closed": []), so there's
+                     nothing left to save, matching the backend's unconditional
+                     lock in audit_service.py. */}
+@@ -1234,6 +1241,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                                   {isSaving ? t('audit.wizard.submitting') : t('audit.wizard.submit')} <CheckCircle size={20} />
+                               </button>
+                           ) : null}</>} />
++                      </div>
+           </form>
+         </div>
+       </div>
+diff --git a/react-app/src/context/LanguageContext.tsx b/react-app/src/context/LanguageContext.tsx
+old mode 100644
+new mode 100755
+index c088aea4..c1cae5e6
+--- a/react-app/src/context/LanguageContext.tsx
++++ b/react-app/src/context/LanguageContext.tsx
+@@ -909,7 +909,7 @@ const translations: Record<Language, Record<string, string>> = {
+     'audit.wizard.step4': 'Checklist Setup',
+     'audit.wizard.step5': 'Execution & Review',
+     'audit.wizard.stepPersonnelScope': 'Personnel & Scope',
+-    'audit.wizard.stepAgenda': 'Agenda',
++    'audit.wizard.stepAgenda': 'Audit Plan',
+     'audit.agenda.colDate': 'Date',
+     'audit.agenda.colStart': 'Start',
+     'audit.agenda.colEnd': 'End',
+@@ -2436,7 +2436,7 @@ const translations: Record<Language, Record<string, string>> = {
+     'audit.wizard.step4': '配置查檢表',
+     'audit.wizard.step5': '執行與評估',
+     'audit.wizard.stepPersonnelScope': '人員與範圍',
+-    'audit.wizard.stepAgenda': '稽核行程',
++    'audit.wizard.stepAgenda': '稽核計畫',
+     'audit.agenda.colDate': '日期',
+     'audit.agenda.colStart': '開始',
+     'audit.agenda.colEnd': '結束',
+diff --git a/react-app/src/services/api.ts b/react-app/src/services/api.ts
+index 84300ff5..16fa50ed 100755
+--- a/react-app/src/services/api.ts
++++ b/react-app/src/services/api.ts
+@@ -597,10 +597,10 @@ export const exportNoiDocx = async (noiId: string, filename: string): Promise<vo
+   URL.revokeObjectURL(url);
+ };
+ 
+-// Formal .docx export of the whole Audit report (AUDIT-EXPORT-DOCX-2026-001) — mirrors
+-// exportNcrDocx's blob-download pattern.
+-export const exportAuditDocx = async (auditId: string, filename: string): Promise<void> => {
+-  const response = await api.get(`/audit/${auditId}/export-docx`, { responseType: 'blob' });
++// Formal .docx export of an Audit — the whole report (default, AUDIT-EXPORT-DOCX-2026-001), or the audit plan / the
++// on-site checklist (AUDIT-BUTTONS-2026-001) — mirrors exportNcrDocx's blob-download pattern.
++export const exportAuditDocx = async (auditId: string, filename: string, kind: 'report' | 'plan' | 'checklist' = 'report'): Promise<void> => {
++  const response = await api.get(`/audit/${auditId}/export-docx`, { params: { kind }, responseType: 'blob' });
+   const url = URL.createObjectURL(new Blob([response.data]));
+   const a = document.createElement('a');
+   a.href = url;
+diff --git a/react-app/src/store/auditStore.ts b/react-app/src/store/auditStore.ts
+index b7b4a0d5..4665a8ab 100755
+--- a/react-app/src/store/auditStore.ts
++++ b/react-app/src/store/auditStore.ts
+@@ -6,6 +6,8 @@ import { getProjectFilterParams } from '../utils/projectFilter';
+ // One row of the audit's daily schedule (AUDIT-AGENDA-2026-001); the backend validates and sorts them.
+ export interface AuditAgendaEntry {
+     id: number | string;
++    // '' = a session; 'lunch' = the 12:00-13:00 Lunch Time default added for each new day (AUDIT-BUTTONS-2026-001)
++    kind?: '' | 'lunch';
+     date: string;
+     start: string;
+     end: string;
+diff --git a/react-app/tests-browser/audit-agenda-check.mjs b/react-app/tests-browser/audit-agenda-check.mjs
+index 0884ab3d..760f0260 100644
+--- a/react-app/tests-browser/audit-agenda-check.mjs
++++ b/react-app/tests-browser/audit-agenda-check.mjs
+@@ -27,6 +27,13 @@ const fillRow = async (p, i, [date, start, end, item, auditee, auditor, remarks]
+     if (v !== undefined) await inputs.nth(k).fill(v);
+   }
+ };
++// Since AUDIT-BUTTONS-2026-001 the first row of a new day brings a default "Lunch Time" row (kind lunch). This script is
++// about the agenda itself, so it deletes those defaults as they appear (lunch behaviour: audit-buttons-check.mjs).
++const dropLunch = async p => {
++  while (await p.locator('[data-agenda-row][data-agenda-kind=lunch]').count()) {
++    await p.locator('[data-agenda-row][data-agenda-kind=lunch] button').first().click(); await p.waitForTimeout(100);
++  }
++};
+ const api = (p, path) => p.evaluate(async u => (await fetch(u, { credentials: 'include' })).json(), path);
+ const printText = async (p, label) => {
+   await p.locator('button', { hasText: label }).first().click(); await p.waitForTimeout(500);
+@@ -41,7 +48,8 @@ const printText = async (p, label) => {
+   const p = await login('audit_full');
+   await open(p, 'ahb-agenda-1');
+   const labels = await p.evaluate(() => [...document.querySelectorAll('.max-w-4xl span')].map(s => s.innerText.trim()).filter(Boolean));
+-  result('five steps with 稽核行程 third', JSON.stringify(labels) === JSON.stringify(['專案資訊', '人員與範圍', '稽核行程', '配置查檢表', '執行與評估']), JSON.stringify(labels));
++  // step 3 renamed "稽核計畫 Audit Plan" in AUDIT-BUTTONS-2026-001 (the printouts keep their "4. 稽核行程 Agenda" section)
++  result('five steps with 稽核計畫 third', JSON.stringify(labels) === JSON.stringify(['專案資訊', '人員與範圍', '稽核計畫', '配置查檢表', '執行與評估']), JSON.stringify(labels));
+   await step(p, 2);
+   const printOn2 = await p.locator('button', { hasText: /列印稽核計畫/ }).count();
+   await step(p, 3);
+@@ -51,13 +59,16 @@ const printText = async (p, label) => {
+ 
+   // 2. add rows (out of order); new rows continue the last row's date / end time and auditor
+   await p.locator('button', { hasText: /新增一列/ }).click();
++  await dropLunch(p);
+   const first = await rowInputs(p, 0).evaluateAll(els => els.map(e => e.value));
+   result('a new row starts on the audit start date with the lead auditor', first[0] === '2026-10-01' && first[5] === '王稽核', JSON.stringify(first));
+   await fillRow(p, 0, ['2026-10-02', '15:00', '15:30', '結束會議', '全體', undefined, '']);
++  await dropLunch(p);
+   await p.locator('button', { hasText: /新增一列/ }).click();
+   const second = await rowInputs(p, 1).evaluateAll(els => els.map(e => e.value));
+   result('the next row continues the last row\'s date and end time', second[0] === '2026-10-02' && second[1] === '15:30', JSON.stringify(second));
+   await fillRow(p, 1, ['2026-10-01', '09:00', '09:30', '起始會議', '全體', undefined, '會議室 A']);
++  await dropLunch(p);
+   await p.locator('button', { hasText: /新增一列/ }).click();
+   await fillRow(p, 2, ['2026-10-01', '12:00', '09:30', '8.4 外部供應管理', '採購部 / 陳', undefined, '']);  // end before start
+   await p.locator('button', { hasText: /新增一列/ }).click();  // a blank row: dropped on save
+@@ -86,6 +97,7 @@ const printText = async (p, label) => {
+   // 4. a date outside the audit period: notice only, still saved
+   await p.locator('button', { hasText: /新增一列/ }).click();
+   await fillRow(p, 3, ['2026-10-05', '10:00', '11:00', '補充訪談', '品保部', undefined, '']);  // row 4 (index 3) now that the blank row is gone
++  await dropLunch(p);
+   const notice = await p.locator('text=不在稽核期間').count();
+   await p.locator('button', { hasText: /儲存草稿/ }).first().click(); await p.waitForTimeout(1500);
+   const saved2 = (await api(p, '/api/audit/ahb-agenda-1')).agenda;
+@@ -178,7 +190,7 @@ for (const [user, id, label] of [['audit_viewer', 'ahb-agenda-1', 'view-only use
+   const p = await login('audit_full', 'en');
+   await open(p, 'ahb-agenda-closed-1'); await step(p, 3);
+   const head = await p.locator('[data-agenda-table] thead').innerText();
+-  const title = await p.locator('h2', { hasText: 'Agenda' }).count();
++  const title = await p.locator('h2', { hasText: 'Audit Plan' }).count();
+   result('English: step title and column headers', title === 1 && /Date/.test(head) && /Audit Item \/ Process/.test(head) && /Auditee/.test(head), head);
+   await p.context().close();
+ }
+diff --git a/react-app/tests-browser/audit-buttons-check.mjs b/react-app/tests-browser/audit-buttons-check.mjs
+new file mode 100644
+index 00000000..e298ed97
+--- /dev/null
++++ b/react-app/tests-browser/audit-buttons-check.mjs
+@@ -0,0 +1,244 @@
++// AUDIT-BUTTONS-2026-001 browser checks (isolated stack only; seeds: seed_audit_hardening_b_review.py,
++// seed_audit_export_docx_review.py, seed_audit_agenda_review.py). Usage: node audit-buttons-check.mjs <stack.json> <outDir>
++// window.print is stubbed (counted, never opened); Word downloads are saved to <outDir>.
++import { chromium } from '/Users/nook/Documents/Qualitas/react-app/node_modules/playwright/index.mjs';
++import { readFileSync, mkdirSync } from 'node:fs';
++const stack = JSON.parse(readFileSync(process.argv[2], 'utf8'));
++const out = process.argv[3]; mkdirSync(out, { recursive: true });
++const UI = `http://127.0.0.1:${stack.vite_port}`, PW = 'Accept-Test-1234';
++let failures = 0;
++const result = (name, ok, extra = '') => { if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${extra ? '  -> ' + String(extra).replace(/\s+/g, ' ').slice(0, 400) : ''}`); };
++const browser = await chromium.launch({ headless: true });
++
++async function login(user, language = 'zh', width = 1400) {
++  const ctx = await browser.newContext({ viewport: { width, height: 900 }, acceptDownloads: true });
++  await ctx.addInitScript(lang => { localStorage.setItem('language', lang); window.__printed = 0; window.print = () => { window.__printed++; }; }, language);
++  const p = await ctx.newPage();
++  await p.goto(UI + '/login'); await p.fill('#email', user); await p.fill('#password', PW); await p.click('button[type=submit]');
++  await p.waitForURL(u => !u.pathname.startsWith('/login'), { timeout: 15000 });
++  return p;
++}
++const open = async (p, id) => { await p.goto(UI + `/audit?openId=${id}`); await p.waitForSelector('input[name=auditDocNo]', { timeout: 15000 }); };
++const step = async (p, n) => { await p.locator('.max-w-4xl button').nth(n - 1).click(); await p.waitForTimeout(400); };
++// buttons of the footer's left group (FormActions tools) and of the step card (everything inside the form above the footer)
++const layout = p => p.evaluate(() => {
++  const bar = document.querySelector('[data-form-actions]');
++  const tools = bar?.firstElementChild?.matches('div') && bar.children.length > 1 ? bar.firstElementChild : null;
++  const texts = el => el ? [...el.querySelectorAll('button')].map(b => b.innerText.trim()) : [];
++  const card = [...document.querySelectorAll('form button')].filter(b => !bar.contains(b)).map(b => b.innerText.trim())
++    .filter(t => /列印|匯出 Word|Print|Export Word/.test(t));
++  const icons = tools ? [...tools.querySelectorAll('button')].filter(b => /列印|匯出 Word|Print|Export Word/.test(b.innerText)).map(b => !!b.querySelector('svg')) : [];
++  return { tools: texts(tools), card, icons };
++});
++
++// 1. full user on a saved audit: per step, the step's print + Word in the footer's left group, nothing in the card
++{
++  const p = await login('audit_full');
++  await open(p, 'ahb-export-1');
++  const expected = {
++    1: [], 2: [],
++    3: ['列印稽核計畫', '匯出 Word'], 4: ['列印查檢表', '匯出 Word'], 5: ['列印報告', '匯出 Word'],
++  };
++  for (const n of [1, 2, 3, 4, 5]) {
++    await step(p, n);
++    const l = await layout(p);
++    const docButtons = l.tools.filter(t => /列印|匯出 Word/.test(t));
++    result(`step ${n}: footer left = ${JSON.stringify(expected[n])}, none in the card, icons on all`,
++      JSON.stringify(docButtons) === JSON.stringify(expected[n]) && l.card.length === 0 && l.icons.every(Boolean)
++      && (n === 1 || l.tools[0].includes('上一步')), JSON.stringify(l));
++    if (n >= 3) await p.screenshot({ path: `${out}/step${n}-footer.png`, fullPage: false });
++  }
++
++  // 2. each print button prints its own printout
++  for (const [n, kind] of [[3, 'plan'], [4, 'checklist'], [5, 'report']]) {
++    await step(p, n);
++    const before = await p.evaluate(() => window.__printed);
++    await p.locator(`[data-step-print=${kind}]`).click(); await p.waitForTimeout(500);
++    const got = await p.evaluate(() => ({ printed: window.__printed, kind: document.querySelector('.audit-print-root')?.dataset.printKind }));
++    await p.evaluate(() => dispatchEvent(new Event('afterprint')));
++    result(`step ${n}: footer print button prints the ${kind}`, got.printed === before + 1 && got.kind === kind, JSON.stringify(got));
++  }
++
++  // 3. each Word button downloads that step's document (?kind=…, file name, title inside the docx)
++  for (const [n, kind, file, title] of [[3, 'plan', 'AHB-EXPORT-1-Plan.docx', '內部稽核計畫'], [4, 'checklist', 'AHB-EXPORT-1-Checklist.docx', '稽核查檢表'],
++    [5, 'report', 'AHB-EXPORT-1.docx', '內部稽核報告']]) {
++    await step(p, n);
++    let url = '';
++    const onReq = r => { if (/export-docx/.test(r.url())) url = r.url(); };
++    p.on('request', onReq);
++    const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 10000 }), p.locator(`[data-step-word=${kind}]`).click()]);
++    p.off('request', onReq);
++    const path = `${out}/${dl.suggestedFilename()}`; await dl.saveAs(path);
++    const zip = readFileSync(path).subarray(0, 2).toString() === 'PK';
++    const docTitle = await p.evaluate(async k => {
++      const r = await fetch(`/api/audit/ahb-export-1/export-docx?kind=${k}`, { credentials: 'include' });
++      const bin = new Uint8Array(await r.arrayBuffer()); const dv = new DataView(bin.buffer); let off = 0, xml = '';
++      while (off < bin.length - 30 && dv.getUint32(off, true) === 0x04034b50) {
++        const method = dv.getUint16(off + 8, true), csize = dv.getUint32(off + 18, true), nlen = dv.getUint16(off + 26, true), elen = dv.getUint16(off + 28, true);
++        const name = new TextDecoder().decode(bin.subarray(off + 30, off + 30 + nlen)); const start = off + 30 + nlen + elen;
++        if (name === 'word/document.xml') { const data = bin.subarray(start, start + csize); xml = method === 8 ? await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text() : new TextDecoder().decode(data); break; }
++        off = start + csize;
++      }
++      return (xml.match(/(內部稽核報告|內部稽核計畫|稽核查檢表)/) || [])[1];
++    }, kind);
++    result(`step ${n}: Word = ${file} (kind=${kind}, "${title}")`, dl.suggestedFilename() === file && new URL(url).searchParams.get('kind') === kind && zip && docTitle === title,
++      JSON.stringify({ file: dl.suggestedFilename(), kind: url && new URL(url).searchParams.get('kind'), zip, docTitle }));
++  }
++  await p.context().close();
++}
++
++// 4. a new audit: print buttons there, Word only after the first Save Draft
++{
++  const p = await login('audit_full');
++  await p.goto(UI + '/audit'); await p.waitForSelector('table tbody tr', { timeout: 15000 });
++  await p.locator('button', { hasText: /新增|Add/ }).first().click();
++  await p.waitForSelector('input[name=auditTitle]');
++  await step(p, 3);
++  const before = await layout(p);
++  await step(p, 1);
++  await p.fill('input[name=auditTitle]', 'buttons check new');
++  await p.locator('button', { hasText: /儲存草稿/ }).first().click(); await p.waitForTimeout(1500);
++  await step(p, 3);
++  const after = await layout(p);
++  result('new audit: print shown, Word only after the first Save Draft',
++    JSON.stringify(before.tools.filter(t => /列印|匯出/.test(t))) === '["列印稽核計畫"]' && JSON.stringify(after.tools.filter(t => /列印|匯出/.test(t))) === '["列印稽核計畫","匯出 Word"]',
++    JSON.stringify({ before: before.tools, after: after.tools }));
++  await p.context().close();
++}
++
++// 5. read-only users keep both (view-only user; Closed audit); English labels; phone width keeps the footer inside
++{
++  const p = await login('audit_viewer');
++  await open(p, 'ahb-agenda-closed-1'); await step(p, 5);
++  const l = await layout(p);
++  result('view-only user on a Closed audit: print + Word in the footer', JSON.stringify(l.tools.filter(t => /列印|匯出/.test(t))) === '["列印報告","匯出 Word"]', JSON.stringify(l.tools));
++  await p.context().close();
++  const q = await login('audit_full', 'en');
++  await open(q, 'ahb-export-1'); await step(q, 3);
++  const en = await layout(q);
++  const title = await q.locator('h2', { hasText: 'Audit Plan' }).count();
++  result('English: step 3 "Audit Plan", footer Print Audit Plan + Export Word', title === 1 && JSON.stringify(en.tools.filter(t => /Print|Export/.test(t))) === '["Print Audit Plan","Export Word"]', JSON.stringify(en.tools));
++  await q.context().close();
++  const m = await login('audit_full', 'zh', 390);
++  await open(m, 'ahb-export-1'); await step(m, 5);
++  const fit = await m.evaluate(() => {
++    const overlay = document.querySelector('[data-form-actions]').closest('.fixed');
++    const outside = [...document.querySelectorAll('[data-form-actions] button')].filter(b => { const r = b.getBoundingClientRect(); return r.left < 0 || r.right > window.innerWidth; }).length;
++    return { overlayOverflow: overlay.scrollWidth - overlay.clientWidth, outside };
++  });
++  result('phone 390: footer buttons inside the screen, no overflow', fit.overlayOverflow <= 0 && fit.outside === 0, JSON.stringify(fit));
++  await m.screenshot({ path: `${out}/phone-step5.png`, fullPage: true });
++  await m.context().close();
++}
++
++// 7. Lunch Time default: the first row of a new day brings a grey 12:00-13:00 "Lunch Time" row, stored, editable,
++//    deletable, not re-added for a day that has rows, not inserted into existing agendas; printouts and Word shade it
++{
++  const p = await login('audit_full');
++  const rowsNow = () => p.locator('[data-agenda-row]').evaluateAll(rows => rows.map(r => {
++    const v = [...r.querySelectorAll('input')].map(i => i.value);
++    return { kind: r.dataset.agendaKind, date: v[0], start: v[1], end: v[2], item: v[3], grey: getComputedStyle(r).backgroundColor };
++  }));
++  const fill = async (i, values) => { const inputs = p.locator('[data-agenda-row]').nth(i).locator('input'); for (const [k, v] of values) await inputs.nth(k).fill(v); };
++  await open(p, 'ahb-agenda-closed-1'); await step(p, 3);
++  const old = await rowsNow();
++  result('an existing agenda gets no lunch row on its own', old.length === 3 && old.every(r => r.kind === 'session'), JSON.stringify(old.map(r => r.kind)));
++  await open(p, 'ahb-agenda-1'); await step(p, 3);
++  await p.locator('button', { hasText: /新增一列/ }).click();
++  const a = await rowsNow();
++  result('first row of a day adds a grey 12:00-13:00 "Lunch Time" row for that day',
++    a.length === 2 && a[1].kind === 'lunch' && a[1].date === '2026-10-01' && a[1].start === '12:00' && a[1].end === '13:00' && a[1].item === 'Lunch Time'
++    && a[1].grey !== a[0].grey, JSON.stringify(a));
++  await fill(0, [[1, '09:00'], [2, '11:30'], [3, '文件審查']]);
++  await p.locator('button', { hasText: /新增一列/ }).click();  // continues 10/01 (from the lunch row): no second lunch
++  const b = await rowsNow();
++  result('another row on the same day: no second lunch', b.filter(r => r.kind === 'lunch').length === 1 && b[2].date === '2026-10-01' && b[2].start === '13:00', JSON.stringify(b));
++  await fill(2, [[0, '2026-10-02'], [1, '09:00'], [2, '10:00'], [3, '現場查核']]);  // moved to a new day
++  const c = await rowsNow();
++  result('moving a row to a new day adds that day\'s lunch', c.filter(r => r.kind === 'lunch').map(r => r.date).join() === '2026-10-01,2026-10-02', JSON.stringify(c));
++  await p.locator('[data-agenda-row][data-agenda-kind=lunch]').nth(1).locator('button').click();  // delete 10/02 lunch
++  await p.locator('button', { hasText: /新增一列/ }).click();
++  const d = await rowsNow();
++  result('a deleted lunch is not added back for a day that has rows', d.filter(r => r.kind === 'lunch').map(r => r.date).join() === '2026-10-01', JSON.stringify(d));
++  await fill(d.length - 1, [[1, '10:00'], [2, '11:00'], [3, '訪談']]);
++  const lunchIdx = d.findIndex(r => r.kind === 'lunch');
++  await fill(lunchIdx, [[1, '12:30'], [2, '13:30'], [3, 'Lunch (late)']]);  // editable
++  await p.locator('button', { hasText: /儲存草稿/ }).first().click(); await p.waitForTimeout(1500);
++  const stored = (await p.evaluate(async () => (await (await fetch('/api/audit/ahb-agenda-1', { credentials: 'include' })).json()).agenda));
++  result('stored: one lunch (kind lunch, edited), sorted with the sessions', JSON.stringify(stored.map(r => [r.kind, r.date, r.start, r.item])) === JSON.stringify([
++    ['', '2026-10-01', '09:00', '文件審查'], ['lunch', '2026-10-01', '12:30', 'Lunch (late)'], ['', '2026-10-02', '09:00', '現場查核'], ['', '2026-10-02', '10:00', '訪談']]),
++    JSON.stringify(stored));
++  await p.locator('[data-step-print=plan]').click(); await p.waitForTimeout(500);
++  const printed = await p.evaluate(() => [...document.querySelectorAll('.audit-print-root .agenda-items tbody tr')].map(r => ({ lunch: r.classList.contains('lunch'), bg: getComputedStyle(r.cells[0]).backgroundColor })));
++  await p.evaluate(() => dispatchEvent(new Event('afterprint')));
++  const wordFill = await p.evaluate(async () => {
++    const r = await fetch('/api/audit/ahb-agenda-1/export-docx?kind=plan', { credentials: 'include' });
++    const bin = new Uint8Array(await r.arrayBuffer()); const dv = new DataView(bin.buffer); let off = 0, xml = '';
++    while (off < bin.length - 30 && dv.getUint32(off, true) === 0x04034b50) {
++      const method = dv.getUint16(off + 8, true), csize = dv.getUint32(off + 18, true), nlen = dv.getUint16(off + 26, true), elen = dv.getUint16(off + 28, true);
++      const name = new TextDecoder().decode(bin.subarray(off + 30, off + 30 + nlen)); const start = off + 30 + nlen + elen;
++      if (name === 'word/document.xml') { const data = bin.subarray(start, start + csize); xml = method === 8 ? await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text() : new TextDecoder().decode(data); break; }
++      off = start + csize;
++    }
++    const doc = new DOMParser().parseFromString(xml, 'application/xml'); const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
++    const text = c => [...c.getElementsByTagNameNS(W, 't')].map(t => t.textContent).join('');
++    const tbl = [...doc.getElementsByTagNameNS(W, 'tbl')].find(t => text(t.getElementsByTagNameNS(W, 'tc')[0]).startsWith('日期'));
++    return [...tbl.getElementsByTagNameNS(W, 'tr')].slice(1).map(tr => { const tc = tr.getElementsByTagNameNS(W, 'tc')[0]; const shd = tc.getElementsByTagNameNS(W, 'shd')[0]; return shd ? shd.getAttributeNS(W, 'fill') : null; });
++  });
++  result('plan printout and Word shade only the lunch row', JSON.stringify(printed.map(r => r.lunch)) === '[false,true,false,false]' && printed[1].bg !== printed[0].bg
++    && JSON.stringify(wordFill) === JSON.stringify([null, 'E5E7EB', null, null]), JSON.stringify({ printed, wordFill }));
++  await p.screenshot({ path: `${out}/lunch-step3.png`, fullPage: true });
++  await p.context().close();
++}
++
++// 8. the audit item / process column is the widest agenda column at 1400 and 800 wide (narrow screens scroll the table)
++for (const width of [1400, 800]) {
++  const p = await login('audit_full', 'zh', width);
++  await open(p, 'ahb-agenda-closed-1'); await step(p, 3);
++  const w = await p.evaluate(() => {
++    const inputs = [...document.querySelector('[data-agenda-row]').querySelectorAll('input')].map(i => Math.round(i.getBoundingClientRect().width));
++    const box = document.querySelector('[data-agenda-table]').parentElement;
++    const overlay = box.closest('.fixed');
++    return { date: inputs[0], start: inputs[1], end: inputs[2], item: inputs[3], auditee: inputs[4], auditor: inputs[5], remarks: inputs[6],
++             tableScrolls: box.scrollWidth > box.clientWidth, wizardOverflow: overlay.scrollWidth - overlay.clientWidth };
++  });
++  result(`${width}px: audit item column is the widest (>= 230px); start / end >= 128px (a full "下午12:00" + clock icon); no wizard overflow`,
++    w.item >= 230 && w.item > Math.max(w.date, w.start, w.end, w.auditee, w.auditor, w.remarks) && w.start >= 128 && w.end >= 128
++    && w.wizardOverflow <= 0, JSON.stringify(w));
++  await p.screenshot({ path: `${out}/agenda-width-${width}.png` });
++  await p.context().close();
++}
++
++// 6. the title / step bar and the footer stay in place while a long step scrolls; the step bar does not move
++for (const [label, width, height] of [['desktop 1400x700', 1400, 700], ['phone 390x700', 390, 700]]) {
++  const p = await login('audit_full', 'zh', width);
++  await p.setViewportSize({ width, height });
++  await open(p, 'ahb-export-1'); await step(p, 5);
++  const before = await p.evaluate(() => {
++    const overlay = document.querySelector('[data-wizard-header]').closest('.fixed');
++    return { scrollable: overlay.scrollHeight - overlay.clientHeight };
++  });
++  const geo = await p.evaluate(async () => {
++    const overlay = document.querySelector('[data-wizard-header]').closest('.fixed');
++    overlay.scrollTop = overlay.scrollHeight / 2;
++    await new Promise(r => setTimeout(r, 300));
++    const h = document.querySelector('[data-wizard-header]').getBoundingClientRect();
++    const f = document.querySelector('[data-wizard-footer]').getBoundingClientRect();
++    const circle = document.querySelector('[data-wizard-header] .max-w-4xl button');
++    const cs = getComputedStyle(circle);
++    return { scrollTop: Math.round(overlay.scrollTop), headerTop: Math.round(h.top), footerBottom: Math.round(f.bottom), viewport: window.innerHeight,
++             transition: cs.transitionDuration, card: getComputedStyle(document.querySelector('.print-modal-content')).overflow };
++  });
++  await p.locator('[data-wizard-header] .max-w-4xl button').first().hover(); await p.waitForTimeout(200);
++  const hovered = await p.evaluate(() => getComputedStyle(document.querySelector('[data-wizard-header] .max-w-4xl button')).transform);
++  await p.screenshot({ path: `${out}/sticky-${width}.png` });
++  result(`${label}: after scrolling, title/step bar at the top and footer at the bottom; step bar has no transition / hover zoom`,
++    before.scrollable > 0 && geo.scrollTop > 0 && Math.abs(geo.headerTop) <= 1 && Math.abs(geo.footerBottom - geo.viewport) <= 1
++    && ['0s', '0s, 0s'].includes(geo.transition) && (hovered === 'none' || hovered === 'matrix(1, 0, 0, 1, 0, 0)') && geo.card === 'clip',
++    JSON.stringify({ ...before, ...geo, hovered }));
++  await p.context().close();
++}
++
++await browser.close();
++console.log(failures ? `${failures} FAILED` : 'ALL PASS');
++process.exit(failures ? 1 : 0);
+diff --git a/react-app/tests-browser/audit-export-docx-check.mjs b/react-app/tests-browser/audit-export-docx-check.mjs
+index d6d832f9..b741b8b6 100644
+--- a/react-app/tests-browser/audit-export-docx-check.mjs
++++ b/react-app/tests-browser/audit-export-docx-check.mjs
+@@ -42,8 +42,9 @@ const download = async (p, name) => {
+   await openAudit(p, 'AHB-EXPORT-1');
+   const early = await exportButton(p).count();
+   await toStep4(p);
+-  const header = await p.locator('header .no-print').first().innerText();
+-  result('export button only on step 4, next to Print Report', early === 0 && /列印報告/.test(header) && EXPORT.test(header), `${early} | ${header}`);
++  // since AUDIT-BUTTONS-2026-001 the step's Print / Export Word sit in the footer's left group, like the other modules
++  const header = await p.locator('[data-form-actions] > div').first().innerText();
++  result('export button not on step 1; on the last step it sits in the footer beside Print Report', early === 0 && /列印報告/.test(header) && EXPORT.test(header), `${early} | ${header}`);
+   const got = await download(p, 'full');
+   result('download is AHB-EXPORT-1.docx (a real docx/zip)', got.file === 'AHB-EXPORT-1.docx' && got.zip && got.size > 10000, JSON.stringify(got));
+   await p.screenshot({ path: `${out}/step4-export-button.png` });

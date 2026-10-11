@@ -5,7 +5,7 @@ import { useCreationProjects } from '../../hooks/useCreationProjects';
 import { CreationProjectField } from '../Shared/CreationProjectField';
 import React, { useState, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
-import { BarChart3, FileCheck, TrendingUp, Search } from 'lucide-react';
+import { BarChart3, FileCheck, TrendingUp, Search, Printer } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
@@ -588,11 +588,11 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
     setFormData(prev => {
       const updated = { ...prev, [field]: value };
       if (field === 'startDate' || field === 'endDate') {
-        const check = checkDateOrder(updated.startDate, updated.endDate, t('fat.startDate') || 'Start Date', t('fat.endDate') || 'End Date');
+        const check = checkDateOrder(updated.startDate, updated.endDate, t('fat.startDate') || 'Start Date', t('fat.endDate') || 'End Date', t);
         if (!check.valid) toast.warning(check.message);
       }
       if (field === 'endDate' || field === 'moveInDate') {
-        const check = checkDateOrder(updated.endDate, updated.moveInDate, t('fat.endDate') || 'End Date', t('fat.moveInDate') || 'Move-in Date');
+        const check = checkDateOrder(updated.endDate, updated.moveInDate, t('fat.endDate') || 'End Date', t('fat.moveInDate') || 'Move-in Date', t);
         if (!check.valid) toast.warning(check.message);
       }
       return updated;
@@ -905,7 +905,7 @@ const FATDetailsViewModal: React.FC<FATDetailsViewModalProps> = ({ fatId: _fatId
               <FormActions
                   tools={<>
                       <button className={actionStyles.secondary} onClick={() => setIsPrinting(true)}>
-                          {t('common.print')}
+                          <Printer size={16} /> {t('common.print')}
                       </button>
                   </>}
                   cancel={<>

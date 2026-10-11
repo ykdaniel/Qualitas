@@ -51,12 +51,13 @@ def denv(tmp_path):
         finally:
             s.close()
     app.dependency_overrides[get_db] = _db
-    orig = (database_module.engine, database_module.SessionLocal, db_migrations.engine)
-    database_module.engine, database_module.SessionLocal, db_migrations.engine = engine, S, engine
+    import core.security as security_module   # binds SessionLocal at import: swap it too (token blacklist)
+    orig = (database_module.engine, database_module.SessionLocal, db_migrations.engine, security_module.SessionLocal)
+    database_module.engine, database_module.SessionLocal, db_migrations.engine, security_module.SessionLocal = engine, S, engine, S
     try:
         yield Env(app, S)
     finally:
-        database_module.engine, database_module.SessionLocal, db_migrations.engine = orig
+        database_module.engine, database_module.SessionLocal, db_migrations.engine, security_module.SessionLocal = orig
         Base.metadata.drop_all(engine)
         engine.dispose()
 

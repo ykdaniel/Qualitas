@@ -2,18 +2,25 @@ import { useDraftGuard, useItemDraftGuard } from '../Shared/LeaveGuard';
 import FormActions from '../Shared/FormActions';
 import actionStyles from '../Shared/FormActions.module.css';
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import {
   MapPin, ClipboardList, CheckCircle, ChevronRight, ChevronLeft,
   Save, FileText, Users, CheckSquare, Plus, Trash2, Edit2, Check, X,
-  AlertCircle, Search, ShieldCheck, Printer
+  Search, ShieldCheck, Printer, CalendarDays, Lock, ListChecks
 } from 'lucide-react';
-import { useAuditStore, AuditItem } from '../../store/auditStore';
+import { useAuditStore, AuditItem, AuditAgendaEntry } from '../../store/auditStore';
+import { useAuditTemplateStore, AuditTemplate } from '../../store/auditTemplateStore';
+import AuditTemplatePicker from './AuditTemplatePicker';
+import AutoGrowTextarea from './AutoGrowTextarea';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useProjectStore } from '../../store/projectStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { checkDateOrder } from '../../utils/dateValidation';
 import { exportAuditDocx } from '../../services/api';
+import AuditPrintTemplate, { AuditPrintKind, AuditPrintData, auditProgress } from './AuditPrintTemplate';
+import AuditAgendaEditor, { agendaRowTimeInvalid, isBlankAgendaRow, sortAgenda } from './AuditAgendaEditor';
+import './Audit.print.css';
 
 // Today as YYYY-MM-DD in the browser's time zone (toISOString() is UTC: the previous day before 08:00 in Taiwan).
 const localToday = () => {
@@ -27,9 +34,19 @@ const localToday = () => {
 const isPlainEnter = (e: React.KeyboardEvent) => e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229;
 
 // Wizard steps (label keys). Personnel and Scope & Location share one step (AUDIT-LAYOUT-2026-001): both are plan data,
-// a handful of fields each, and "Print Audit Plan" prints them together with step 1 anyway.
-const WIZARD_STEPS = ['audit.wizard.step1', 'audit.wizard.stepPersonnelScope', 'audit.wizard.step4', 'audit.wizard.step5'];
+// a handful of fields each.
+// The Agenda (daily schedule, AUDIT-AGENDA-2026-001) sits between them and the checklist and carries "Print Audit Plan".
+const WIZARD_STEPS = ['audit.wizard.step1', 'audit.wizard.stepPersonnelScope', 'audit.wizard.stepAgenda', 'audit.wizard.step4', 'audit.wizard.step5'];
 const LAST_STEP = WIZARD_STEPS.length;
+
+// Steps with a document (AUDIT-BUTTONS-2026-001): which printout / Word kind, and the print button label.
+const STEP_DOCUMENTS: Record<number, { kind: AuditPrintKind; printLabel: string }> = {
+  3: { kind: 'plan', printLabel: 'audit.wizard.printPlan' },
+  4: { kind: 'checklist', printLabel: 'audit.wizard.printChecklist' },
+  5: { kind: 'report', printLabel: 'audit.wizard.printReport' },
+};
+// Same file names as the backend (_DOCX_KINDS suffixes).
+const DOCX_SUFFIX: Record<AuditPrintKind, string> = { report: '', plan: '-Plan', checklist: '-Checklist' };
 
 const ALL_CATEGORY = '__ALL__';
 const UNCATEGORIZED = '__UNCATEGORIZED__';
@@ -50,6 +67,15 @@ const AUDIT_STATUS_TRANSITIONS: Record<string, string[]> = {
 const AUDIT_CREATE_STATUSES = ['Draft', 'Planned', 'In Progress', 'Completed'];
 // Closed and Void are dead ends ("Closed": [] / "Void": []): read-only here and in the backend.
 const AUDIT_LOCKED_STATUSES = new Set(['Closed', 'Void']);
+// Checklist results (AUDIT-GRADES-2026-001, user's choice 2026-10-11): 符合 Pass, 正面發現 Positive, 主要不符合 Major,
+// 次要不符合 Minor. An older audit's 'fail' still counts as graded (shown as 不符合（未分級）) until the auditor regrades it.
+const GRADE_BUTTONS = [
+  { value: 'pass', label: 'audit.grades.passShort', title: '符合 (Pass)', active: 'text-green-600' },
+  { value: 'positive', label: 'audit.grades.positiveShort', title: '正面發現 (Positive)', active: 'text-sky-600' },
+  { value: 'major', label: 'audit.grades.majorShort', title: '主要不符合 (Major)', active: 'text-red-600' },
+  { value: 'minor', label: 'audit.grades.minorShort', title: '次要不符合 (Minor)', active: 'text-amber-600' },
+];
+const GRADED_STATUSES = new Set(['pass', 'positive', 'major', 'minor', 'fail']);
 const AUDIT_STATUS_LABELS: Record<string, string> = {
   'Draft': '✏️ Draft（草稿）',
   'Planned': '📅 Planned（計畫中）',
@@ -59,29 +85,6 @@ const AUDIT_STATUS_LABELS: Record<string, string> = {
   'Void': '⛔ Void（作廢）',
 };
 
-// 內建 ISO 9001:2015 條文資料庫
-const ISO_CLAUSES = [
-  { no: '4.1', clause: 'Understanding the organization and its context', task: 'How has the organization determined external and internal issues relevant to its purpose and strategic direction?' },
-  { no: '4.2', clause: 'Understanding the needs and expectations of interested parties', task: 'How do you monitor and review information about these interested parties and their relevant requirements?' },
-  { no: '4.3', clause: 'Determining the scope of the quality management system', task: 'Has the organization determined the boundaries and applicability of the QMS to establish its scope?' },
-  { no: '4.4', clause: 'Quality management system and its processes', task: 'How has the organization determined the processes needed for the QMS and their application?' },
-  { no: '5.1', clause: 'Leadership and commitment', task: 'How does top management demonstrate leadership and commitment with respect to the QMS?' },
-  { no: '5.2', clause: 'Policy', task: 'Has top management established, implemented and maintained a quality policy?' },
-  { no: '6.1', clause: 'Actions to address risks and opportunities', task: 'How are risks and opportunities determined and addressed?' },
-  { no: '6.2', clause: 'Quality objectives and planning to achieve them', task: 'Are quality objectives established at relevant functions, levels and processes?' },
-  { no: '7.1', clause: 'Resources', task: 'How does the organization determine and provide the resources needed for the QMS?' },
-  { no: '7.2', clause: 'Competence', task: 'How do you determine the necessary competence of person(s) doing work under your control?' },
-  { no: '7.5', clause: 'Documented information', task: 'Does the QMS include documented information required by ISO 9001?' },
-  { no: '8.1', clause: 'Operational planning and control', task: 'How does the organization plan, implement and control the processes needed to meet requirements?' },
-  { no: '8.2', clause: 'Requirements for products and services', task: 'How do you determine the requirements for the products and services to be offered?' },
-  { no: '8.4', clause: 'Control of externally provided processes, products and services', task: 'How do you ensure that externally provided processes, products and services conform to requirements?' },
-  { no: '8.5', clause: 'Production and service provision', task: 'Are production and service provision implemented under controlled conditions?' },
-  { no: '9.1', clause: 'Monitoring, measurement, analysis and evaluation', task: 'How do you determine what needs to be monitored and measured?' },
-  { no: '9.2', clause: 'Internal audit', task: 'Are internal audits conducted at planned intervals?' },
-  { no: '9.3', clause: 'Management review', task: 'Does top management review the organization\'s QMS at planned intervals?' },
-  { no: '10.2', clause: 'Nonconformity and corrective action', task: 'When a nonconformity occurs, how does the organization react to it?' },
-  { no: '10.3', clause: 'Continual improvement', task: 'How does the organization continually improve the QMS?' }
-];
 
 interface AuditWizardProps {
   existingItem?: AuditItem;
@@ -101,12 +104,29 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
   const activeContractors = useMemo(() => contractorOptions.filter(c => c.status === 'active'), [contractorOptions]);
   const { projectList, fetchProjects, currentProject } = useProjectStore();
   React.useEffect(() => { fetchProjects(); }, [fetchProjects]);
+  // The audit template library (AUDIT-TEMPLATES-2026-001), every template incl. inactive ones (see templateChips).
+  const { templates: libraryTemplates, loaded: templatesLoaded, error: templatesError, fetchTemplates } = useAuditTemplateStore();
+  React.useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [isDraftSaving, setIsDraftSaving] = useState(false);
   const [draftMessage, setDraftMessage] = useState('');
   const [exportingDocx, setExportingDocx] = useState(false);
+  // The form a Save Draft re-ordered the agenda into (see handleSaveDraft); null when there is nothing to confirm.
+  const [agendaResyncTarget, setAgendaResyncTarget] = useState<typeof formData | null>(null);
+  // The three print buttons render a formal printout (AuditPrintTemplate) into <body> and print that, instead of the
+  // wizard itself (AUDIT-PRINT-2026-001); cleared again after the print dialog closes. `n` makes every click a new job, so
+  // a button still works if a browser never fired afterprint for the previous one.
+  const [printJob, setPrintJob] = useState<{ kind: AuditPrintKind; n: number } | null>(null);
+  const requestPrint = (kind: AuditPrintKind) => setPrintJob(prev => ({ kind, n: (prev?.n ?? 0) + 1 }));
+  React.useEffect(() => {
+    if (!printJob) return;
+    const timer = setTimeout(() => window.print(), 200);
+    const onAfterPrint = () => setPrintJob(null);
+    window.addEventListener('afterprint', onAfterPrint);
+    return () => { clearTimeout(timer); window.removeEventListener('afterprint', onAfterPrint); };
+  }, [printJob]);
 
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
@@ -127,6 +147,11 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     scopeDescription: existingItem?.scope_description || '',
     selectedTemplates: existingItem?.selected_templates || [],
     customCheckItems: existingItem?.custom_check_items || [],
+    // only object rows (a hand-edited database value must not crash the wizard), each with its own id for the editor
+    agenda: (Array.isArray(existingItem?.agenda) ? existingItem.agenda : [])
+      .filter((row): row is AuditAgendaEntry => !!row && typeof row === 'object' && !Array.isArray(row))
+      .map((row, i, rows) => (row.id === null || row.id === undefined || rows.findIndex(r => r.id === row.id) !== i
+        ? { ...row, id: `loaded-${i}` } : row)),
     contractor: existingItem?.contractor || '',
     vendorId: existingItem?.vendor_id || '',
     status: existingItem?.status || 'Draft',
@@ -154,7 +179,12 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     || projectList.find(p => p.name === formData.projectName)?.id
     || '';
 
-  const [newItem, setNewItem] = useState({ no: '', clause: '', task: '' });
+  const BLANK_NEW_ITEM = { no: '', clause: '', task: '', templateId: undefined as number | undefined, templateItemId: undefined as string | undefined };
+  const [newItem, setNewItem] = useState(BLANK_NEW_ITEM);
+  // the add form (user's design 2026-10-11), four rows: clause dropdown = '' | 'custom' | `${templateId}::${clauseNo}`;
+  // question dropdown = 'all' (every question of that clause) or one templateItemId; then clause text and question
+  const [newClause, setNewClause] = useState('');
+  const [newQ, setNewQ] = useState('all');
   const [isCustomNew, setIsCustomNew] = useState(false);
   // Audit.tsx never promotes its own currentAuditId after a mid-session "Save Draft" (Save
   // Draft deliberately keeps the wizard open without calling onSaveSuccess, so the parent
@@ -173,10 +203,23 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
   const createdWithoutUpdate = createdId !== null && !canUpdate;
   const readOnly = readOnlyProp || createdWithoutUpdate
     || (savedStatus !== undefined && AUDIT_LOCKED_STATUSES.has(savedStatus));
+  // Why the wizard is read-only, shown as a banner under the step bar (AUDIT-BTNFIX-2026-001): the controls are disabled
+  // either way, but without it a locked audit looked editable and clicks just did nothing.
+  const readOnlyReason = savedStatus === 'Closed' ? 'audit.wizard.readOnlyClosed'
+    : savedStatus === 'Void' ? 'audit.wizard.readOnlyVoid'
+    : createdWithoutUpdate ? 'audit.wizard.createdNoUpdateNotice'
+    : readOnlyProp ? 'audit.wizard.readOnlyNoPermission'
+    : null;
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const [editFormData, setEditFormData] = useState({ no: '', clause: '', task: '' });
-  const [isCustomEdit, setIsCustomEdit] = useState(false);
   const leaveGuard = useDraftGuard(formData, isSaving || isDraftSaving, !readOnly);
+  // After a Save Draft re-ordered the agenda on screen (handleSaveDraft), that re-ordered form is the saved state — but
+  // only if it is still the form on screen: an edit made while the save was in flight kept the old form (and is unsaved).
+  React.useEffect(() => {
+    if (!agendaResyncTarget) return;
+    if (formData === agendaResyncTarget) leaveGuard.markSaved();
+    setAgendaResyncTarget(null);
+  }, [agendaResyncTarget, formData, leaveGuard]);
   useDraftGuard(newItem, false, !readOnly);
   useItemDraftGuard(editingItemId !== null ? editFormData : null);
   const requestClose = () => leaveGuard.requestClose(onClose, true);
@@ -184,14 +227,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
   const startEdit = (item: any) => {
     setEditingItemId(item.id);
     setEditFormData({ no: item.no, clause: item.clause, task: item.task });
-    if (item.no && !ISO_CLAUSES.some(c => c.no === item.no)) {
-      setIsCustomEdit(true);
-    } else {
-      setIsCustomEdit(false);
-    }
   };
 
-  const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setEditFormData(prev => ({ ...prev, [name]: value }));
   };
@@ -216,13 +254,100 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     return [ALL_CATEGORY, ...Array.from(new Set(cats))] as string[];
   }, [formData.customCheckItems]);
 
+  // Step 4 template chips (AUDIT-TEMPLATES-2026-001). A library template counts as selected when its name is in
+  // selected_templates (what the audit records and prints) or the audit holds questions copied from it (by templateId —
+  // so a template renamed since is still recognised; R2 review). Shown: the library's active templates, a deactivated one
+  // this audit still uses, and a selected name the library no longer has (an audit from before the library, or the old
+  // name of a renamed template) — that last kind can only be unselected, which removes just the name.
+  const templateChips = useMemo(() => {
+    const usedIds = new Set(formData.customCheckItems.map((i: any) => i?.templateId).filter((id: any) => id !== undefined && id !== null));
+    const chips: { key: string; name: string; template: AuditTemplate | null; selected: boolean }[] = [];
+    for (const tpl of libraryTemplates) {
+      const selected = formData.selectedTemplates.includes(tpl.name) || usedIds.has(tpl.id);
+      if (tpl.is_active || selected) chips.push({ key: `t-${tpl.id}`, name: tpl.name, template: tpl, selected });
+    }
+    for (const name of formData.selectedTemplates) {
+      if (!libraryTemplates.some(tpl => tpl.name === name)) chips.push({ key: `n-${name}`, name, template: null, selected: true });
+    }
+    return chips;
+  }, [libraryTemplates, formData.selectedTemplates, formData.customCheckItems]);
+  const templateNames = useMemo(() => new Map(libraryTemplates.map(tpl => [tpl.id, tpl.name])), [libraryTemplates]);
+  const [pickerTemplate, setPickerTemplate] = useState<AuditTemplate | null>(null);
+
+  // A copied question counts as filled once it has a result (one of the four grades, or an older 'fail') or a note: those are never removed.
+  const isFilledItem = (item: any) => GRADED_STATUSES.has(item?.status) || !!String(item?.note ?? '').trim();
+
+  // Clicking a chip ticks / unticks an audit type (user's design 2026-10-11): ticking only records the name — its questions
+  // become available in the add form's dropdown and the batch picker; unticking removes the unfilled questions that came
+  // from it (deselectTemplate). A name the library no longer has can only be unticked, which removes just the name.
+  const handleTemplateChip = (chip: typeof templateChips[number]) => {
+    const tpl = chip.template;
+    if (!tpl) {
+      setFormData(prev => ({ ...prev, selectedTemplates: prev.selectedTemplates.filter((n: string) => n !== chip.name) }));
+      return;
+    }
+    if (chip.selected) { deselectTemplate(tpl); return; }
+    setFormData(prev => ({ ...prev, selectedTemplates: prev.selectedTemplates.includes(tpl.name) ? prev.selectedTemplates : [...prev.selectedTemplates, tpl.name] }));
+    if (!(tpl.items || []).length) toast.info(t('audit.templates.nothingToAdd', { name: tpl.name }));
+  };
+  const selectedTypes = templateChips.filter(c => c.selected && c.template && (c.template.items || []).length).map(c => c.template as AuditTemplate);
+
+  // The batch picker's result: copy the checked questions the audit does not have yet (each tagged templateId /
+  // templateItemId), remove the unchecked ones it has — only unfilled ones (filled ones are locked in the picker, and are
+  // kept here as well).
+  const applyTemplatePick = (tpl: AuditTemplate, checked: Set<string>) => {
+    const items: any[] = formData.customCheckItems;
+    const present = new Set(items.filter(i => i?.templateId === tpl.id).map(i => String(i.templateItemId)));
+    const adds = (tpl.items || []).filter(it => it.id && checked.has(it.id) && !present.has(it.id));
+    // only questions the picker shows can be unticked: a copy of a question the template has since dropped (not in the
+    // picker) always stays — editing a template never changes an audit (R2 review)
+    const currentIds = new Set((tpl.items || []).map(it => String(it.id)));
+    const removable = (i: any) => i?.templateId === tpl.id && currentIds.has(String(i.templateItemId)) && !checked.has(String(i.templateItemId)) && !isFilledItem(i);
+    const removes = items.filter(removable).length;
+    setFormData(prev => {
+      let nextId = Math.max(Date.now(), ...prev.customCheckItems.map((i: any) => (typeof i?.id === 'number' ? i.id : 0))) + 1;
+      const kept = prev.customCheckItems.filter((i: any) => !removable(i));
+      const copies = adds.map(it => ({ id: nextId++, no: it.no || '', clause: it.clause || '', task: it.task || '', templateId: tpl.id, templateItemId: it.id }));
+      const customCheckItems = [...kept, ...copies];
+      // the batch picker is opened for a ticked audit type: the type stays ticked whatever was picked
+      const names = prev.selectedTemplates.includes(tpl.name) ? prev.selectedTemplates : [...prev.selectedTemplates, tpl.name];
+      return { ...prev, customCheckItems, selectedTemplates: names };
+    });
+    if (adds.length) toast.success(t('audit.templates.added', { n: adds.length, name: tpl.name }));
+    if (removes) toast.info(t('audit.templates.removed', { n: removes, name: tpl.name }));
+    setPickerTemplate(null);
+  };
+
+  // Unticking a type (or 「取消選用此模板」 in the picker): every unfilled copy goes; filled ones stay, with a notice. The
+  // type's name leaves selected_templates only when nothing from it remains — so the chip, the printouts (which list the
+  // names) and the questions left in the audit always agree.
+  const deselectTemplate = (tpl: AuditTemplate) => {
+    const copied = formData.customCheckItems.filter((i: any) => i?.templateId === tpl.id);
+    const kept = copied.filter(isFilledItem).length;
+    setFormData(prev => ({
+      ...prev,
+      selectedTemplates: kept ? prev.selectedTemplates : prev.selectedTemplates.filter((n: string) => n !== tpl.name),
+      customCheckItems: prev.customCheckItems.filter((i: any) => i?.templateId !== tpl.id || isFilledItem(i)),
+    }));
+    if (newClause.startsWith(`${tpl.id}::`) || newItem.templateId === tpl.id) {   // the add form showed this type's clause (R2 review)
+      setNewClause(''); setNewQ('all'); setNewItem(BLANK_NEW_ITEM);
+    }
+    if (copied.length > kept) toast.info(t('audit.templates.removed', { n: copied.length - kept, name: tpl.name }));
+    if (kept) toast.warning(t('audit.templates.keptFilled', { n: kept, name: tpl.name }));
+    setPickerTemplate(null);
+  };
+
+  // Results (AUDIT-GRADES-2026-001): the four grades and an older audit's 'fail' (不符合（未分級）) are graded; anything
+  // else (no status, the old 'pending') is not graded. Progress = graded / total, as in the printouts and the Word export.
   const stats = useMemo(() => {
-    const total = formData.customCheckItems.length;
-    const passed = formData.customCheckItems.filter((i: any) => i.status === 'pass').length;
-    const failed = formData.customCheckItems.filter((i: any) => i.status === 'fail').length;
-    const pending = total - passed - failed; // The "!" status is treated as pending or warning
-    const progress = total === 0 ? 0 : Math.round(((total - pending) / total) * 100);
-    return { total, passed, failed, pending, progress };
+    // only object items count, the same filter as the printouts and the Word export (R1 review)
+    const items: any[] = formData.customCheckItems.filter((i: any) => !!i && typeof i === 'object' && !Array.isArray(i));
+    const total = items.length;
+    const count = (s: string) => items.filter(i => i?.status === s).length;
+    const byGrade = { pass: count('pass'), positive: count('positive'), major: count('major'), minor: count('minor'), fail: count('fail') };
+    const pending = total - Object.values(byGrade).reduce((a, b) => a + b, 0);
+    const progress = auditProgress(total, pending);
+    return { total, ...byGrade, pending, progress };
   }, [formData.customCheckItems]);
 
   const filteredItems = useMemo(() => {
@@ -234,11 +359,12 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     });
   }, [formData.customCheckItems, searchTerm, activeCategory]);
 
+  // Clicking the grade an item already has clears it (back to not graded).
   const updateItemStatus = (id: number, newStatus: string) => {
     setFormData(prev => ({
       ...prev,
-      customCheckItems: prev.customCheckItems.map((item: any) => 
-        item.id === id ? { ...item, status: newStatus, updatedAt: localToday() } : item
+      customCheckItems: prev.customCheckItems.map((item: any) =>
+        item.id === id ? { ...item, status: item.status === newStatus ? '' : newStatus, updatedAt: localToday() } : item
       )
     }));
   };
@@ -252,26 +378,32 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     }));
   };
 
-  const handleNewClauseSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  // The add form lists the clauses of the audit types (templates) ticked above (number + title); the second dropdown picks
+  // all of the clause's questions or one of them. One question fills the clause text and question (still editable) and
+  // the new item is tagged templateId / templateItemId; "all" adds every question of the clause the audit does not have.
+  const pickedClause = useMemo(() => {
+    if (!newClause || newClause === 'custom') return null;
+    const [tplId, no] = newClause.split('::');
+    // only a clause of a type that is still ticked (R2 review: an unticked type's clause must not stay addable)
+    const tpl = selectedTypes.find(x => String(x.id) === tplId);
+    if (!tpl) return null;
+    const items = (tpl.items || []).filter(it => it.id && (it.no || '') === no);
+    const have = new Set(formData.customCheckItems.filter((i: any) => i?.templateId === tpl.id).map((i: any) => String(i.templateItemId)));
+    return { tpl, no, items, have };
+  }, [newClause, selectedTypes, formData.customCheckItems]);
+  const handleClausePick = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
-    if (val === 'custom') {
-      setIsCustomNew(true);
-      setNewItem(prev => ({ ...prev, no: '' }));
-    } else {
-      const found = ISO_CLAUSES.find(c => c.no === val);
-      if (found) setNewItem({ no: found.no, clause: found.clause, task: found.task });
-    }
+    setNewClause(val);
+    setNewQ('all');
+    setNewItem(BLANK_NEW_ITEM);
+    if (val === 'custom') setIsCustomNew(true);
   };
-
-  const handleEditClauseSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleQuestionPick = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
-    if (val === 'custom') {
-      setIsCustomEdit(true);
-      setEditFormData(prev => ({ ...prev, no: '' }));
-    } else {
-      const found = ISO_CLAUSES.find(c => c.no === val);
-      if (found) setEditFormData({ no: found.no, clause: found.clause, task: found.task });
-    }
+    setNewQ(val);
+    const it = pickedClause?.items.find(x => x.id === val);
+    setNewItem(it && pickedClause ? { no: it.no || '', clause: it.clause || '', task: it.task || '', templateId: pickedClause.tpl.id, templateItemId: it.id }
+      : BLANK_NEW_ITEM);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -280,7 +412,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     // Outside the state updater (StrictMode runs updaters twice, which showed the toast twice).
     if (name === 'auditStartDate' || name === 'auditEndDate') {
       const next = { ...formData, [name]: value };
-      const check = checkDateOrder(next.auditStartDate, next.auditEndDate, t('audit.wizard.startDateLabel'), t('audit.wizard.endDateLabel'));
+      const check = checkDateOrder(next.auditStartDate, next.auditEndDate, t('audit.wizard.startDateLabel'), t('audit.wizard.endDateLabel'), t);
       if (!check.valid) toast.warning(check.message);
     }
   };
@@ -301,19 +433,44 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     }));
   };
 
-  const handleNewItemChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleNewItemChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setNewItem(prev => ({ ...prev, [name]: value }));
   };
 
   const addCustomItem = () => {
+    if (pickedClause && newQ === 'all') {
+      const { tpl } = pickedClause;
+      const adds = pickedClause.items.filter(it => !pickedClause.have.has(it.id as string));
+      if (!adds.length) { toast.info(t('audit.templates.alreadyAdded')); return; }
+      setFormData(prev => {
+        let nextId = Math.max(Date.now(), ...prev.customCheckItems.map((i: any) => (typeof i?.id === 'number' ? i.id : 0))) + 1;
+        const copies = adds.map(it => ({ id: nextId++, no: it.no || '', clause: it.clause || '', task: it.task || '', templateId: tpl.id, templateItemId: it.id }));
+        const names = prev.selectedTemplates.includes(tpl.name) ? prev.selectedTemplates : [...prev.selectedTemplates, tpl.name];
+        return { ...prev, customCheckItems: [...prev.customCheckItems, ...copies], selectedTemplates: names };
+      });
+      toast.success(t('audit.templates.added', { n: adds.length, name: tpl.name }));
+      setNewClause(''); setNewQ('all'); setNewItem(BLANK_NEW_ITEM);
+      return;
+    }
     if (!newItem.task.trim()) return;
-    const itemToAdd = { id: Date.now(), ...newItem };
+    if (newItem.templateItemId && formData.customCheckItems.some((i: any) => i?.templateId === newItem.templateId && i?.templateItemId === newItem.templateItemId)) {
+      toast.info(t('audit.templates.alreadyAdded'));
+      return;
+    }
+    // one above the largest id in use: copied template questions are numbered from Date.now() upwards, so a plain
+    // Date.now() here could repeat one of them (R1 review)
+    const { templateId, templateItemId, ...fields } = newItem;
+    const itemToAdd = { id: Math.max(Date.now(), ...formData.customCheckItems.map((i: any) => (typeof i?.id === 'number' ? i.id : 0))) + 1, ...fields,
+      ...(templateItemId ? { templateId, templateItemId } : {}) };
+    const fromTpl = templateItemId ? libraryTemplates.find(x => x.id === templateId) : undefined;
     setFormData(prev => ({
       ...prev,
-      customCheckItems: [...prev.customCheckItems, itemToAdd]
+      customCheckItems: [...prev.customCheckItems, itemToAdd],
+      selectedTemplates: fromTpl && !prev.selectedTemplates.includes(fromTpl.name) ? [...prev.selectedTemplates, fromTpl.name] : prev.selectedTemplates,
     }));
-    setNewItem({ no: '', clause: '', task: '' });
+    setNewItem(BLANK_NEW_ITEM);
+    setNewClause(''); setNewQ('all');
     setIsCustomNew(false);
   };
 
@@ -347,6 +504,8 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
       scope_description: formData.scopeDescription || '',
       selected_templates: formData.selectedTemplates,
       custom_check_items: formData.customCheckItems,
+      // blank rows dropped, in time order — the order the backend stores (and checks a Closed resave against)
+      agenda: sortAgenda(formData.agenda.filter(row => !isBlankAgendaRow(row))),
       contractor: formData.contractor || '',
       vendor_id: formData.vendorId || undefined,
       status: status,
@@ -362,6 +521,10 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
   // was just typed in the inline edit row.
   const hasUnconfirmedNewItem = () => newItem.no.trim() || newItem.clause.trim() || newItem.task.trim();
   const blockSaveForUnconfirmedNewItem = () => {
+    if (formData.agenda.some(agendaRowTimeInvalid)) {
+      toast.error(t('audit.agenda.timeOrder'));
+      return true;
+    }
     if (editingItemId !== null) {
       toast.error(t('audit.wizard.unconfirmedEditItem'));
       return true;
@@ -377,6 +540,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     setIsDraftSaving(true);
     setSaveError('');
     setDraftMessage('');
+    const formAtSave = formData;
 
     try {
       const updates = prepareAuditData(formData.status);
@@ -391,6 +555,13 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
       }
 
       leaveGuard.markSaved();
+      // Show the agenda as it was saved (time order, blank rows dropped) — only when nothing was edited meanwhile, and
+      // then take that re-ordered form as the saved state once it has rendered.
+      if (updates.agenda && JSON.stringify(updates.agenda) !== JSON.stringify(formAtSave.agenda)) {
+        const resynced = { ...formAtSave, agenda: updates.agenda as AuditAgendaEntry[] };
+        setFormData(prev => (prev === formAtSave ? resynced : prev));
+        setAgendaResyncTarget(resynced);
+      }
       const time = new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       setDraftMessage(`${t('audit.wizard.draftSaved')} ${time}`);
       setTimeout(() => setDraftMessage(''), 4000);
@@ -433,7 +604,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
 
   // Word export (AUDIT-EXPORT-DOCX-2026-001): the server builds the report from the SAVED record, so unsaved edits would
   // silently be missing from the file — ask for a save first instead.
-  const handleExportDocx = async () => {
+  const handleExportDocx = async (kind: AuditPrintKind) => {
     if (!recordId || exportingDocx) return;
     if (leaveGuard.dirty) {
       toast.warning(t('audit.wizard.exportSaveFirst'));
@@ -441,7 +612,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     }
     setExportingDocx(true);
     try {
-      await exportAuditDocx(recordId, auditNo || 'Audit');
+      await exportAuditDocx(recordId, `${auditNo || 'Audit'}${DOCX_SUFFIX[kind]}`, kind);
     } catch (err) {
       console.error('Word 匯出失敗: ', err);
       toast.error(t('audit.wizard.exportFailed'));
@@ -449,6 +620,37 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
       setExportingDocx(false);
     }
   };
+
+  // What the printouts show: the form as it is on screen (the Word export reads the saved record instead).
+  const printData: AuditPrintData = {
+    auditNo,
+    status: formData.status,
+    title: formData.auditTitle,
+    // Same label as the Word export and the project picker: "[code] name", or the legacy name when no project is linked.
+    projectLabel: (() => {
+      const project = projectList.find(p => p.id === selectedProjectId);
+      return project ? (project.code ? `[${project.code}] ${project.name}` : project.name) : formData.projectName;
+    })(),
+    // Legacy rows may hold only the contractor id; the Word export then falls back to the contractor's name too.
+    contractor: formData.contractor || contractorOptions.find(c => c.id === formData.vendorId)?.name || '',
+    startDate: formData.auditStartDate,
+    endDate: formData.auditEndDate,
+    location: formData.location,
+    projectDirector: formData.projectDirector,
+    techLead: formData.techLead,
+    leadAuditor: formData.leadAuditor,
+    supportAuditors: formData.supportAuditors,
+    auditCriteria: formData.auditCriteria,
+    scopeDescription: formData.scopeDescription,
+    selectedTemplates: formData.selectedTemplates,
+    customCheckItems: formData.customCheckItems,
+    // what will be saved: blank rows dropped, in time order
+    agenda: sortAgenda(formData.agenda.filter(row => !isBlankAgendaRow(row))),
+    findings: formData.findings,
+  };
+
+  // The document that belongs to the current step: its print button and its Word export sit in the footer.
+  const stepDocument = STEP_DOCUMENTS[step];
 
   const renderProgressBar = () => (
     // px-10: each label is centred under its circle and wider than it, so the first and last labels hang ~36px past the
@@ -460,7 +662,8 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
             <button
               type="button"
               onClick={() => setStep(i)}
-              className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 z-10 cursor-pointer hover:scale-110 ${
+              // no motion on the step bar: no hover zoom, no transitions (AUDIT-BUTTONS-2026-001)
+              className={`w-10 h-10 rounded-full flex items-center justify-center border-2 z-10 cursor-pointer ${
                 step >= i ? 'bg-teal-600 border-teal-600 text-white shadow-lg' : 'bg-white border-gray-300 text-gray-400 hover:border-teal-400'
               }`}
             >
@@ -474,7 +677,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
             </span>
           </div>
           {i < LAST_STEP && (
-            <div className={`flex-1 h-1 mx-2 rounded-full transition-colors duration-300 drop-shadow-sm ${
+            <div className={`flex-1 h-1 mx-2 rounded-full drop-shadow-sm ${
               step > i ? 'bg-teal-500' : 'bg-slate-600/50'
             }`} />
           )}
@@ -484,11 +687,16 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
   );
 
   return (
-    // print: the wizard is a fixed, internally scrolling overlay — printed as is, only the first screenful came out (one
-    // page, the rest cut off). In print it becomes normal flow so the browser paginates it; Audit.tsx hides the page behind.
-    <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto py-8 px-4 md:px-8 flex justify-center items-start pt-10 print:static print:overflow-visible print:block print:p-0 print:bg-white">
-      <div className="w-full max-w-[1400px]">
-        <div className="flex justify-between items-center mb-6 no-print">
+    <>
+    {/* print: the wizard is a fixed, internally scrolling overlay — printed as is (browser print menu, no printout
+        mounted), only the first screenful came out. In print it becomes normal flow so the browser paginates it;
+        Audit.tsx hides the page behind. */}
+    <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto px-4 md:px-8 flex justify-center items-start print:static print:overflow-visible print:block print:p-0 print:bg-white">
+      {/* vertical padding lives here, not on the scroll container, so the sticky header / footer sit flush with its edges */}
+      <div className="w-full max-w-[1400px] pt-8 pb-8 print:p-0">
+        {/* Title and step bar stay put while the step scrolls (AUDIT-BUTTONS-2026-001: "要固定不要轉動"). */}
+        <div className="sticky top-0 z-20 bg-slate-50 pt-2 pb-2 no-print" data-wizard-header>
+        <div className="flex justify-between items-center mb-6">
             <div className="text-left flex items-center gap-4">
                 <div className="inline-flex items-center justify-center p-2.5 bg-emerald-50 text-teal-700 rounded-2xl">
                     <ClipboardList size={24} />
@@ -503,13 +711,13 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
             </button>
         </div>
 
-        <div className="no-print">
           {renderProgressBar()}
         </div>
 
-        {createdWithoutUpdate && (
-          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-center font-medium shadow-sm no-print">
-            {t('audit.wizard.createdNoUpdateNotice')}
+        {readOnlyReason && (
+          <div role="status" data-readonly-banner={readOnlyReason} className="mb-6 p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl font-medium shadow-sm no-print flex items-center justify-center gap-2 text-center">
+            <Lock size={18} className="shrink-0" />
+            <span>{t(readOnlyReason)}</span>
           </div>
         )}
         {saveError && (
@@ -518,7 +726,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
           </div>
         )}
 
-        <div className="bg-white rounded-4xl shadow-xl shadow-slate-900/10 overflow-hidden relative border border-slate-100/50 print-modal-content">
+        {/* overflow-clip (not -hidden) keeps the rounded corners without making the card a scroll container, so the sticky
+            footer below sticks to the wizard's own scroll area */}
+        <div className="bg-white rounded-4xl shadow-xl shadow-slate-900/10 overflow-clip relative border border-slate-100/50 print-modal-content">
           <form onSubmit={handleSubmit}>
             
             {/* Step 1: Project Info */}
@@ -604,14 +814,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
             {/* Step 2: Personnel + Scope & Location (merged, AUDIT-LAYOUT-2026-001) */}
             {step === 2 && (
               <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-                  <div className="flex items-center gap-3">
-                    <Users className="text-teal-600" size={24} />
-                    <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.stepPersonnelScope')}</h2>
-                  </div>
-                  <button className={actionStyles.secondary} type="button" onClick={() => window.print()}>
-                    <Printer className="w-4 h-4" /> {t('audit.wizard.printPlan')}
-                  </button>
+                <div className="flex items-center gap-3 border-b border-slate-100 pb-3 mb-4">
+                  <Users className="text-teal-600" size={24} />
+                  <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.stepPersonnelScope')}</h2>
                 </div>
 
                 <h3 className="flex items-center gap-2 text-sm font-bold text-slate-500 uppercase tracking-wide no-print">
@@ -735,17 +940,30 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
               </div>
             )}
 
-            {/* Step 3: Checklist Configuration */}
+            {/* Step 3: Audit Plan — the daily schedule (AUDIT-AGENDA-2026-001); its print / Word buttons are in the footer */}
             {step === 3 && (
               <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-                  <div className="flex items-center gap-3">
-                    <CheckSquare className="text-teal-600" size={24} />
-                    <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.step4')} Checklist</h2>
-                  </div>
-                  <button className={actionStyles.secondary} type="button" onClick={() => window.print()}>
-                    <Printer className="w-4 h-4" /> {t('audit.wizard.printChecklist')}
-                  </button>
+                <div className="flex items-center gap-3 border-b border-slate-100 pb-3 mb-4">
+                  <CalendarDays className="text-teal-600" size={24} />
+                  <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.stepAgenda')}</h2>
+                </div>
+                <AuditAgendaEditor
+                  rows={formData.agenda}
+                  onChange={agenda => setFormData(prev => ({ ...prev, agenda }))}
+                  readOnly={readOnly}
+                  startDate={formData.auditStartDate}
+                  endDate={formData.auditEndDate}
+                  defaultAuditor={formData.leadAuditor}
+                />
+              </div>
+            )}
+
+            {/* Step 4: Checklist Configuration */}
+            {step === 4 && (
+              <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                <div className="flex items-center gap-3 border-b border-slate-100 pb-3 mb-4">
+                  <CheckSquare className="text-teal-600" size={24} />
+                  <h2 className="text-xl font-bold text-slate-800">{t('audit.wizard.step4')}</h2>
                 </div>
 
                 {/* Template Selection */}
@@ -755,24 +973,46 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                        <span className="text-xs font-medium text-slate-400">(選用標準模板)</span>
                   </label>
                   <div className="flex flex-wrap gap-3">
-                    {['ISO 9001:2015', 'ISO 45001', '品質管理程序書', '供應商評鑑表'].map((template) => (
+                    {templateChips.map((chip) => (
                       <button
-                        key={template} type="button"
-                        onClick={() => {
-                          const exists = formData.selectedTemplates.includes(template);
-                          setFormData((prev: any) => ({
-                            ...prev,
-                            selectedTemplates: exists ? prev.selectedTemplates.filter((t: string) => t !== template) : [...prev.selectedTemplates, template]
-                          }));
-                        }}
+                        key={chip.key} type="button" data-template-chip={chip.name} aria-pressed={chip.selected}
+                        title={chip.template ? (chip.template.description || undefined) : t('audit.templates.legacyHint')}
+                        onClick={() => handleTemplateChip(chip)} disabled={!templatesLoaded}
                         className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all border ${
-                          formData.selectedTemplates.includes(template) ? 'bg-teal-600 border-teal-600 text-white shadow-md' : 'bg-transparent border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                          chip.selected ? 'bg-teal-600 border-teal-600 text-white shadow-md' : 'bg-transparent border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
                         }`}
                       >
-                        {template}
+                        {chip.name}
+                        {chip.template && !chip.template.is_active && <span className="ml-1 font-medium opacity-80">{t('audit.templates.inactiveSuffix')}</span>}
                       </button>
                     ))}
+                    {templateChips.length === 0 && (templatesLoaded || templatesError) && (
+                      <span className="text-sm text-slate-400">{t(templatesError ? 'audit.templates.loadFailed' : 'audit.templates.noneAvailable')}</span>
+                    )}
                   </div>
+                  {!readOnly && selectedTypes.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {selectedTypes.map(tpl => (
+                        <button key={tpl.id} type="button" className={actionStyles.secondary} onClick={() => setPickerTemplate(tpl)} data-batch-pick={tpl.name}>
+                          <ListChecks size={16} /> {t('audit.templates.batchPick', { name: tpl.name })}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {pickerTemplate && (() => {
+                    const copies = formData.customCheckItems.filter((i: any) => i?.templateId === pickerTemplate.id);
+                    return (
+                      <AuditTemplatePicker
+                        template={pickerTemplate}
+                        present={new Set(copies.map((i: any) => String(i.templateItemId)))}
+                        filled={new Set(copies.filter(isFilledItem).map((i: any) => String(i.templateItemId)))}
+                        selected={templateChips.some(c => c.template?.id === pickerTemplate.id && c.selected)}
+                        onApply={checked => applyTemplatePick(pickerTemplate, checked)}
+                        onDeselect={() => deselectTemplate(pickerTemplate)}
+                        onCancel={() => setPickerTemplate(null)}
+                      />
+                    );
+                  })()}
                 </fieldset>
 
                 {/* Custom Checklist Items */}
@@ -783,26 +1023,101 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                   </label>
                   
                   {/* Add Input Form */}
-                  <div className="p-5 border border-slate-200 rounded-2xl flex flex-col gap-3 no-print">
-                    <div className="flex items-start gap-3">
-                      {isCustomNew ? (
-                        <div className="flex gap-2 w-1/3 shrink-0">
-                          <input type="text" name="no" value={newItem.no} onChange={handleNewItemChange} placeholder="自訂編號 (例: 4.1)" className="w-full p-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all text-sm font-medium text-slate-800" />
-                          <button type="button" onClick={() => {setIsCustomNew(false); setNewItem({no:'', clause:'', task:''})}} className="text-slate-400 hover:text-red-500 p-2 shrink-0"><X size={18} /></button>
+                  <div className="p-5 border border-slate-200 rounded-2xl flex flex-col gap-3 no-print" data-add-form>
+                    {/* row 1: clause (or, for a custom question, its clause number) and, beside it, the question number (user's
+                        layout 2026-10-11); each field has the same small caption as the cards below */}
+                    <div className="flex gap-3 items-end">
+                    <div className="flex-1 min-w-0">
+                    <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block mb-1">{isCustomNew ? '條文編號 Clause No.' : '條文 Clause'}</span>
+                    {isCustomNew ? (
+                      <div className="flex gap-2">
+                        <input type="text" name="no" value={newItem.no} onChange={handleNewItemChange} placeholder={t('audit.templates.customNoPlaceholder')} className="w-full p-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all text-sm text-slate-800 font-medium" />
+                        <button type="button" onClick={() => { setIsCustomNew(false); setNewClause(''); setNewItem(BLANK_NEW_ITEM); }} className="text-slate-400 hover:text-red-500 p-2 shrink-0"><X size={18} /></button>
+                      </div>
+                    ) : (
+                      <select name="clausePick" value={newClause} onChange={handleClausePick} data-clause-pick className="w-full p-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all text-sm text-slate-800 font-bold">
+                        <option value="" disabled>{t(selectedTypes.length ? 'audit.templates.pickClause' : 'audit.templates.pickTypeFirst')}</option>
+                        {selectedTypes.map(tpl => {
+                          const have = new Set(formData.customCheckItems.filter((i: any) => i?.templateId === tpl.id).map((i: any) => String(i.templateItemId)));
+                          const clauses: { no: string; label: string; ids: string[] }[] = [];
+                          for (const it of (tpl.items || [])) {
+                            if (!it.id) continue;
+                            let c = clauses.find(x => x.no === (it.no || ''));
+                            if (!c) {
+                              const title = (it.title || '').trim() || (it.clause || '').split('\n')[0];
+                              c = { no: it.no || '', label: `${it.no || '-'}  ${title.length > 90 ? title.slice(0, 90) + '…' : title}`, ids: [] };
+                              clauses.push(c);
+                            }
+                            c.ids.push(it.id);
+                          }
+                          return (
+                            <optgroup key={tpl.id} label={tpl.name}>
+                              {clauses.map(c => (
+                                <option key={c.no} value={`${tpl.id}::${c.no}`}>
+                                  {`${c.label}${c.ids.length > 1 ? `（${c.ids.length}）` : ''}${c.ids.every(id => have.has(id)) ? `  ${t('audit.templates.alreadyAddedTag')}` : ''}`}
+                                </option>
+                              ))}
+                            </optgroup>
+                          );
+                        })}
+                        <option value="custom">✎ {t('audit.templates.customQuestion')}</option>
+                      </select>
+                    )}
+                    </div>
+                    {/* all of the clause's questions, or one of them */}
+                    {pickedClause && (
+                      <div className="w-52 shrink-0">
+                      <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block mb-1">題目 Question</span>
+                      <select name="questionPick" value={newQ} onChange={handleQuestionPick} data-question-pick className="w-full p-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all text-sm text-slate-800">
+                        <option value="all">{t('audit.templates.allQuestions', { n: pickedClause.items.length })}</option>
+                        {/* question numbers only: the full question shows (editable) in the last row (user's choice 2026-10-11) */}
+                        {pickedClause.items.map((it, idx) => (
+                          <option key={it.id} value={it.id}>
+                            {`${t('audit.templates.questionN', { n: idx + 1 })}${pickedClause.have.has(it.id as string) ? `  ${t('audit.templates.alreadyAddedTag')}` : ''}`}
+                          </option>
+                        ))}
+                      </select>
+                      </div>
+                    )}
+                    </div>
+                    {pickedClause && newQ === 'all' ? (
+                      <div className="flex gap-2 items-start">
+                        <div className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700" data-all-preview>
+                          <p className="font-semibold mb-1">{t('audit.templates.allQuestionsHint', { n: pickedClause.items.length })}</p>
+                          {/* every question with its own clause text — they differ per question (user 2026-10-11) */}
+                          <div className="space-y-3">
+                            {pickedClause.items.map((it, idx) => {
+                              const added = pickedClause.have.has(it.id as string);
+                              return (
+                                <div key={it.id} className={`border-t border-slate-200 pt-2 first:border-0 first:pt-0 ${added ? 'text-slate-400' : 'text-slate-700'}`} data-all-item>
+                                  <p className="font-semibold text-xs mb-1">{t('audit.templates.questionN', { n: idx + 1 })}{added ? `  ${t('audit.templates.alreadyAddedTag')}` : ''}</p>
+                                  <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">條文內容 Clause Description</span>
+                                  <p className="whitespace-pre-line mb-1.5">{it.clause || '-'}</p>
+                                  <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">查檢重點 Audit Question</span>
+                                  <p className="whitespace-pre-line">{it.task}</p>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
-                      ) : (
-                        <select name="no" value={newItem.no || ''} onChange={handleNewClauseSelect} className="w-1/3 shrink-0 p-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all text-sm text-slate-800 font-bold appearance-none">
-                          <option value="" disabled>{t('audit.wizard.selectISOClause')}</option>
-                          {ISO_CLAUSES.map(c => <option key={c.no} value={c.no}>{c.no} - {c.clause}</option>)}
-                          <option value="custom">✎ {t('audit.wizard.customClause')}</option>
-                        </select>
-                      )}
-                      <input type="text" name="clause" value={newItem.clause} onChange={handleNewItemChange} placeholder="ISO 9001:2015 Clause 內容..." className="flex-1 p-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all text-sm font-medium text-slate-800" />
-                    </div>
-                    <div className="flex gap-2">
-                      <input type="text" name="task" value={newItem.task} onChange={handleNewItemChange} onKeyDown={(e) => { if (isPlainEnter(e)) { e.preventDefault(); addCustomItem(); } }} placeholder="輸入稽核查檢重點 (Audit Question)..." className="flex-1 p-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all text-sm font-medium text-slate-800" />
-                      <button className={actionStyles.icon} type="button" onClick={addCustomItem}><Plus size={20} /></button>
-                    </div>
+                        <button className={actionStyles.icon} type="button" onClick={addCustomItem} data-add-item><Plus size={20} /></button>
+                      </div>
+                    ) : (
+                      <>
+                        {/* row 3: clause text; row 4: question + add */}
+                        <div>
+                        <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block mb-1">條文內容 Clause Description</span>
+                        <AutoGrowTextarea name="clause" rows={2} value={newItem.clause} onChange={handleNewItemChange} placeholder={t('audit.templates.clausePlaceholder')} data-new-clause className="w-full p-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all text-sm text-slate-800 font-medium resize-y" />
+                        </div>
+                        <div>
+                        <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block mb-1">查檢重點 Audit Question</span>
+                        <div className="flex gap-2 items-start">
+                          <AutoGrowTextarea name="task" rows={2} value={newItem.task} onChange={handleNewItemChange} onKeyDown={(e) => { if (isPlainEnter(e) && !e.shiftKey) { e.preventDefault(); addCustomItem(); } }} placeholder={t('audit.templates.taskPlaceholder')} className="flex-1 p-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all text-sm text-slate-800 font-medium resize-y" />
+                          <button className={actionStyles.icon} type="button" onClick={addCustomItem} data-add-item><Plus size={20} /></button>
+                        </div>
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   {/* Items List */}
@@ -813,21 +1128,10 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                         {editingItemId === item.id ? (
                           <div className="flex-1 flex flex-col gap-3">
                             <div className="flex items-start gap-3">
-                              {isCustomEdit ? (
-                                <div className="flex gap-2 w-1/3 shrink-0">
-                                  <input type="text" name="no" value={editFormData.no} onChange={handleEditChange} placeholder="自訂編號" className="w-full p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm" />
-                                  <button type="button" onClick={() => {setIsCustomEdit(false); setEditFormData({no:'', clause:'', task:''})}} className="text-slate-400 hover:text-red-500 p-2 shrink-0"><X size={18} /></button>
-                                </div>
-                              ) : (
-                                <select name="no" value={editFormData.no || ''} onChange={handleEditClauseSelect} className="w-1/3 shrink-0 p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm font-bold text-slate-700">
-                                  <option value="" disabled>{t('audit.wizard.selectISOClause')}</option>
-                                  {ISO_CLAUSES.map(c => <option key={c.no} value={c.no}>{c.no} - {c.clause}</option>)}
-                                  <option value="custom">✎ {t('audit.wizard.customClause')}</option>
-                                </select>
-                              )}
-                              <input type="text" name="clause" value={editFormData.clause} onChange={handleEditChange} onKeyDown={(e) => { if (isPlainEnter(e)) e.preventDefault(); }} placeholder="ISO 9001:2015 Clause 內容..." className="flex-1 p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm" />
+                              <input type="text" name="no" value={editFormData.no} onChange={handleEditChange} placeholder={t('audit.templates.customNoPlaceholder')} className="w-1/3 shrink-0 p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm" />
+                              <AutoGrowTextarea name="clause" rows={3} value={editFormData.clause} onChange={handleEditChange} placeholder="ISO 9001:2015 Clause 內容..." className="flex-1 p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm resize-y" />
                             </div>
-                            <input type="text" name="task" value={editFormData.task} onChange={handleEditChange} onKeyDown={(e) => { if (isPlainEnter(e)) { e.preventDefault(); saveEdit(); } }} placeholder="輸入稽核查檢重點 (Audit Question)..." className="w-full p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm" />
+                            <AutoGrowTextarea name="task" rows={3} value={editFormData.task} onChange={handleEditChange} placeholder="輸入稽核查檢重點 (Audit Question)..." className="w-full p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 text-sm resize-y" />
                             <div className="flex justify-end gap-2 mt-1">
                               <button className={actionStyles.secondary} type="button" onClick={cancelEdit}><X size={16} /> {t('common.cancel')}</button>
                               <button className={actionStyles.primary} type="button" onClick={saveEdit}><Check size={16} /> {t('common.save')}</button>
@@ -840,15 +1144,20 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                                 <div className="w-1/3 shrink-0">
                                   <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block mb-1">條文編號 Clause No.</span>
                                   <p className="text-sm font-semibold text-teal-700 bg-teal-50 inline-block px-2 py-1 rounded">{item.no || '-'}</p>
+                                  {item.templateId != null && (
+                                    <span className="block mt-1 text-[11px] text-slate-400" data-item-template>
+                                      {templateNames.has(item.templateId) ? t('audit.templates.fromTemplateNamed', { name: templateNames.get(item.templateId) as string }) : t('audit.templates.fromTemplate')}
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="flex-1">
                                   <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Clause Description</span>
-                                  <p className="text-sm text-slate-600 mt-1">{item.clause || '-'}</p>
+                                  <p className="text-sm text-slate-600 mt-1 whitespace-pre-line">{item.clause || '-'}</p>
                                 </div>
                               </div>
                               <div className="pt-2 border-t border-slate-100">
                                 <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Audit Question</span>
-                                <p className="text-sm font-medium text-slate-800">{item.task}</p>
+                                <p className="text-sm font-medium text-slate-800 whitespace-pre-line">{item.task}</p>
                               </div>
                             </div>
                             <div className="flex flex-col gap-2 shrink-0">
@@ -867,35 +1176,22 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
               </div>
             )}
 
-            {/* Step 4: Execution & Evaluation */}
-            {step === 4 && (
+            {/* Step 5: Execution & Evaluation */}
+            {step === 5 && (
               <div className="p-6 md:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 bg-slate-50 min-h-[500px]">
                 
                 {/* Header Section */}
-                <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <ShieldCheck className="w-8 h-8 text-indigo-600" />
-                      <h1 className="text-2xl font-bold text-slate-800">{t('audit.wizard.executionTitle')}</h1>
-                    </div>
-                    <p className="text-slate-500">{formData.projectName ? `${formData.projectName} - ${t('audit.wizard.regularAudit')}` : t('audit.wizard.configureFirst')}</p>
+                <header>
+                  <div className="flex items-center gap-2 mb-1">
+                    <ShieldCheck className="w-8 h-8 text-indigo-600" />
+                    <h1 className="text-2xl font-bold text-slate-800">{t('audit.wizard.executionTitle')}</h1>
                   </div>
-                  
-                  <div className="flex items-center gap-3 no-print">
-                    <button className={actionStyles.secondary} type="button" onClick={() => window.print()}>
-                      <Printer className="w-4 h-4" /> {t('audit.wizard.printReport')}
-                    </button>
-                    {/* Needs a saved record (the export reads it from the server). */}
-                    {recordId && (
-                      <button className={actionStyles.secondary} type="button" onClick={handleExportDocx} disabled={exportingDocx}>
-                        <FileText className="w-4 h-4" /> {exportingDocx ? t('audit.wizard.exporting') : t('common.exportWord')}
-                      </button>
-                    )}
-                  </div>
+                  <p className="text-slate-500">{formData.projectName ? `${formData.projectName} - ${t('audit.wizard.regularAudit')}` : t('audit.wizard.configureFirst')}</p>
                 </header>
 
                 {/* Statistics Cards */}
-                <div className="grid grid-cols-4 gap-4 overflow-x-auto min-w-full pb-2">
+                {/* six cards: one row from xl, 3 × 2 below it so a ~1024px screen needs no sideways scroll (user 2026-10-11) */}
+                <div className="grid grid-cols-3 xl:grid-cols-6 gap-4 overflow-x-auto min-w-full pb-2">
                   <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]">
                     <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">{t('audit.wizard.statTotal')}</p>
                     <p className="text-2xl font-bold text-slate-800">{stats.total}</p>
@@ -913,18 +1209,32 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                       <div className="bg-blue-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${stats.progress}%` }}></div>
                     </div>
                   </div>
-                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]">
+                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]" data-stat="pass">
                     <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">{t('audit.wizard.statPass')}</p>
-                    <p className="text-2xl font-bold text-green-600">{stats.passed}</p>
+                    <p className="text-2xl font-bold text-green-600">{stats.pass}</p>
                     <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3">
-                      <div className="bg-green-500 h-1.5 rounded-full" style={{ width: stats.total ? `${(stats.passed / stats.total) * 100}%` : '0%' }}></div>
+                      <div className="bg-green-500 h-1.5 rounded-full" style={{ width: stats.total ? `${(stats.pass / stats.total) * 100}%` : '0%' }}></div>
                     </div>
                   </div>
-                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]">
-                    <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">{t('audit.wizard.statFail')}</p>
-                    <p className="text-2xl font-bold text-red-600">{stats.failed}</p>
+                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]" data-stat="positive">
+                    <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">{t('audit.wizard.statPositive')}</p>
+                    <p className="text-2xl font-bold text-sky-600">{stats.positive}</p>
                     <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3">
-                      <div className="bg-red-500 h-1.5 rounded-full" style={{ width: stats.total ? `${(stats.failed / stats.total) * 100}%` : '0%' }}></div>
+                      <div className="bg-sky-500 h-1.5 rounded-full" style={{ width: stats.total ? `${(stats.positive / stats.total) * 100}%` : '0%' }}></div>
+                    </div>
+                  </div>
+                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]" data-stat="major">
+                    <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">{t('audit.wizard.statMajor')}</p>
+                    <p className="text-2xl font-bold text-red-600">{stats.major}</p>
+                    <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3">
+                      <div className="bg-red-500 h-1.5 rounded-full" style={{ width: stats.total ? `${(stats.major / stats.total) * 100}%` : '0%' }}></div>
+                    </div>
+                  </div>
+                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]" data-stat="minor">
+                    <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">{t('audit.wizard.statMinor')}</p>
+                    <p className="text-2xl font-bold text-amber-600">{stats.minor}</p>
+                    <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3">
+                      <div className="bg-amber-500 h-1.5 rounded-full" style={{ width: stats.total ? `${(stats.minor / stats.total) * 100}%` : '0%' }}></div>
                     </div>
                   </div>
                 </div>
@@ -972,7 +1282,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                         <tr className="bg-slate-50 border-b border-slate-100">
                           <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-32">{t('audit.wizard.colCategory')}</th>
                           <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">{t('audit.wizard.colContent')}</th>
-                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-40 text-center">{t('audit.wizard.colStatus')}</th>
+                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-64 text-center">{t('audit.wizard.colStatus')}</th>
                           <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">{t('audit.wizard.colRemarks')}</th>
                           <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-28 text-right">{t('audit.wizard.colUpdated')}</th>
                         </tr>
@@ -987,37 +1297,32 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex flex-col">
-                                <span className="text-sm font-bold text-slate-800 mb-0.5">{item.clause || '-'}</span>
-                                <span className="text-xs text-slate-500 leading-relaxed">{item.task || '-'}</span>
+                                <span className="text-sm font-bold text-slate-800 mb-0.5 whitespace-pre-line">{item.clause || '-'}</span>
+                                <span className="text-xs text-slate-500 leading-relaxed whitespace-pre-line">{item.task || '-'}</span>
                               </div>
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex justify-center">
-                                <div className="flex bg-slate-100 p-1 rounded-lg gap-1 border border-slate-200">
-                                  <button 
-                                    type="button"
-                                    onClick={() => updateItemStatus(item.id, 'pass')}
-                                    className={`p-1.5 rounded transition-all ${item.status === 'pass' ? 'bg-white shadow-sm text-green-600' : 'text-slate-400 hover:text-slate-600'}`}
-                                    title="符合 (Pass)"
-                                  >
-                                    <CheckCircle className="w-4 h-4" />
-                                  </button>
-                                  <button 
-                                    type="button"
-                                    onClick={() => updateItemStatus(item.id, 'pending')}
-                                    className={`p-1.5 rounded transition-all ${(!item.status || item.status === 'pending') ? 'bg-white shadow-sm text-amber-500' : 'text-slate-400 hover:text-slate-600'}`}
-                                    title="注意/待改善 (!)"
-                                  >
-                                    <AlertCircle className="w-4 h-4" />
-                                  </button>
-                                  <button 
-                                    type="button"
-                                    onClick={() => updateItemStatus(item.id, 'fail')}
-                                    className={`p-1.5 rounded transition-all ${item.status === 'fail' ? 'bg-white shadow-sm text-red-600' : 'text-slate-400 hover:text-slate-600'}`}
-                                    title="不符合 (X)"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
+                                <div className="flex flex-col items-center gap-1">
+                                  {/* an older audit's ungraded fail: shown until the auditor picks Major or Minor */}
+                                  {item.status === 'fail' && (
+                                    <span className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-200 rounded px-1.5" data-ungraded-fail>{t('audit.wizard.legendUngraded')}</span>
+                                  )}
+                                  <div className="flex bg-slate-100 p-1 rounded-lg gap-1 border border-slate-200" data-grade-buttons>
+                                    {GRADE_BUTTONS.map(g => (
+                                      <button
+                                        key={g.value}
+                                        type="button"
+                                        onClick={() => updateItemStatus(item.id, g.value)}
+                                        className={`px-2 py-1 rounded text-xs font-bold transition-all whitespace-nowrap ${item.status === g.value ? `bg-white shadow-sm ${g.active}` : 'text-slate-400 hover:text-slate-600'}`}
+                                        title={g.title}
+                                        aria-pressed={item.status === g.value}
+                                        data-grade={g.value}
+                                      >
+                                        {t(g.label)}
+                                      </button>
+                                    ))}
+                                  </div>
                                 </div>
                               </div>
                             </td>
@@ -1066,15 +1371,29 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-1.5">
                         <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                        <span className="text-xs text-slate-500">{t('audit.wizard.legendPass')}: {stats.passed}</span>
+                        <span className="text-xs text-slate-500">{t('audit.wizard.legendPass')}: {stats.pass}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                        <span className="text-xs text-slate-500">{t('audit.wizard.legendWarning')}: {stats.pending}</span>
+                        <div className="w-2 h-2 rounded-full bg-sky-500"></div>
+                        <span className="text-xs text-slate-500">{t('audit.wizard.legendPositive')}: {stats.positive}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                        <span className="text-xs text-slate-500">{t('audit.wizard.legendFail')}: {stats.failed}</span>
+                        <span className="text-xs text-slate-500">{t('audit.wizard.legendMajor')}: {stats.major}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                        <span className="text-xs text-slate-500">{t('audit.wizard.legendMinor')}: {stats.minor}</span>
+                      </div>
+                      {stats.fail > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-2 h-2 rounded-full bg-red-300"></div>
+                          <span className="text-xs text-slate-500">{t('audit.wizard.legendUngraded')}: {stats.fail}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-full bg-slate-300"></div>
+                        <span className="text-xs text-slate-500">{t('audit.wizard.legendNotGraded')}: {stats.pending}</span>
                       </div>
                     </div>
                     <p className="text-xs text-slate-400 font-medium italic">
@@ -1104,14 +1423,28 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
               </div>
             )}
 
-            {/* Footer Navigation */}
+            {/* Footer Navigation — sticky at the bottom so Back / Print / Word / Save / Next stay reachable on long steps */}
+                      <div className="sticky bottom-0 z-10" data-wizard-footer>
                       <FormActions tools={<>{step > 1 && (
                           <button className={actionStyles.secondary}
                               type="button" onClick={prevStep}
                           >
                               <ChevronLeft size={20} /> {t('audit.wizard.prevStep')}
                           </button>
-                      )}</>} secondary={<>{/* 儲存進度按鈕 (Ghost Style) — hidden entirely once Closed:
+                      )}
+                      {/* This step's printout and Word document, bottom-left like every other module's Print / Export Word
+                          (AUDIT-BUTTONS-2026-001): step 3 the audit plan, step 4 the on-site checklist, step 5 the report.
+                          Word needs a saved record (the server builds it from the saved audit). */}
+                      {stepDocument && (<>
+                          <button className={actionStyles.secondary} type="button" onClick={() => requestPrint(stepDocument.kind)} data-step-print={stepDocument.kind}>
+                              <Printer size={16} /> {t(stepDocument.printLabel)}
+                          </button>
+                          {recordId && (
+                              <button className={actionStyles.secondary} type="button" onClick={() => handleExportDocx(stepDocument.kind)} disabled={exportingDocx} data-step-word={stepDocument.kind}>
+                                  <FileText size={16} /> {exportingDocx ? t('audit.wizard.exporting') : t('common.exportWord')}
+                              </button>
+                          )}
+                      </>)}</>} secondary={<>{/* 儲存進度按鈕 (Ghost Style) — hidden entirely once Closed:
                     a true dead end (WorkflowEngine "Closed": []), so there's
                     nothing left to save, matching the backend's unconditional
                     lock in audit_service.py. */}
@@ -1141,10 +1474,13 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                                   {isSaving ? t('audit.wizard.submitting') : t('audit.wizard.submit')} <CheckCircle size={20} />
                               </button>
                           ) : null}</>} />
+                      </div>
           </form>
         </div>
       </div>
     </div>
+    {printJob && createPortal(<AuditPrintTemplate key={printJob.n} kind={printJob.kind} data={printData} unsaved={leaveGuard.dirty} />, document.body)}
+    </>
   );
 };
 

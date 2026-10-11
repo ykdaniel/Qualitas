@@ -1502,7 +1502,13 @@ dies immediately too. That part is solid. Three gaps found beyond it:
 
 ---
 
-## 22. Checklist "bare template must stay clean" rule · CORE RULE DONE, 2 sub-items still open · 【優先度：已完成大半，剩政策決定】
+## 22. Checklist "bare template must stay clean" rule · **2026-10-10 全部決定並實作（CHECKLIST-TEMPLATE-CLEAN-2026-001）** · 【優先度：收尾中】
+
+> **2026-10-10 狀態**：使用者決定（DECISIONS「Checklist 空白範本：清除舊結果、連結時重設檢驗欄位、複檢不限範本」）——
+> 下方子項 1（複檢是否限同一範本）：**不限制，維持現狀**；子項 2（舊資料）：**清除舊結果、留作範本**（db_migrations 第 23 步，一次性、寫稽核）。
+> 另修：連結範本時不再把範本頁首的檢驗日期／簽名／NCR／複檢日期等帶進新檢查單（`blank_inspection_detail_data`）。
+> 正式站唯讀核對（2026-10-10）：共 3 份 Checklist；CHK-000001（Stakeout，Pass，passCount 1，detail 頁首仍有 2024-03-20 與 ITR-000002 參照）、CHK-000006（TESTTTT，Pass，itrNumber 指向 ITR-000001），兩者 items 皆 0 筆；CHK-000002 為 CHK-000001 產生的檢查單（Pass，不動）。以下原文保留。
+
 
 Captured 2026-09-01: `QTS-RKS-HL-CHK-000001` (a pre-§17, unlinked
 "template" record) was found holding real `status='Pass'`/`passCount=1`

@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { ChecklistSnapshotModal } from './ChecklistSnapshotModal';
 import { useChecklistStore } from '../../store/checklistStore';
-import { ShieldCheck, ClipboardCheck, ArrowRight, AlertCircle, Info } from 'lucide-react';
+import { ShieldCheck, ClipboardCheck, ArrowRight, AlertCircle, Info, Printer, FileText } from 'lucide-react';
 import { getNextRevision } from '../../utils/revision';
 import { useLanguage } from '../../context/LanguageContext';
 import ITRApprovalHistoryModal from './ITRApprovalHistoryModal';
@@ -91,7 +91,9 @@ export interface ITRDetailModalProps {
     existingData?: ITRDetailData;
     existingItem?: ITRItem;
     itrList: ITRItem[];
-    onSave: (details: ITRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[], publishOnly?: boolean) => void | Promise<void>;
+    /** Resolves `{ keptOpen: true }` when the parent switched the modal over to the record it just created
+     *  (it stays open on it), so the modal must not close itself. */
+    onSave: (details: ITRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[], publishOnly?: boolean) => void | Promise<void | { keptOpen: true }>;
     onClose: () => void;
     // Plain "close the modal, don't run onClose's deep-link back-navigation" —
     // used when this modal is about to navigate elsewhere itself (Raise
@@ -252,11 +254,27 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
     ]);
     const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
 
+    // Stored files live in the attachment table, so each FileAttachment below fetches its own list
+    // (same as NCR). Passing the record's columns as `attachments` — an empty array for every upload,
+    // since uploads never write those columns — stopped that fetch, and saved files never showed
+    // again on reopen (BACKLOG #23, reproduced 2026-10-10). The columns now only feed legacy strings.
+    const legacyStrings = (arr?: (string | AttachmentInfo)[]) =>
+        (arr || []).filter((a): a is string => typeof a === 'string');
+    // Print preview and collapsing a section unmount FileAttachment; hand it the files still
+    // pending here, and the stored ones queued for deletion, so neither vanishes from view nor
+    // gets dropped when more files are added afterwards.
+    const pendingFilesFor = (category: string) => pendingUploads.find(p => p.category === category)?.files;
+
     // §17: linked checklists are now standalone INSTANCE rows fetched from the
     // backend (Checklist with itrId = this ITR), not snapshots in detail_data.
     const persistedItrId = existingItem?.id || null;
     const [instances, setInstances] = useState<ChecklistRecordApi[]>([]);
     const [expandedInstanceId, setExpandedInstanceId] = useState<string | null>(null);
+    // The open checklist panel's results live on their own row and are saved only by the panel's own Save;
+    // ITR Save/Publish never sent them, so unsaved panel edits were silently lost when the ITR modal
+    // closed (2026-10-10). Save/Publish now stop and say which checklist still needs saving.
+    const [panelDirty, setPanelDirty] = useState(false);
+    const [exportingDocx, setExportingDocx] = useState(false);
 
     const refreshInstances = useCallback(async () => {
         if (!persistedItrId) { setInstances([]); return; }
@@ -504,8 +522,18 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         }));
     };
 
+    // Also guards every other action that unmounts the panel or leaves the modal — Print, collapsing or
+    // switching the checklist row, Raise NCR, Re-inspect — which dropped the panel's edits the same way.
+    const blockedByUnsavedChecklist = (messageKey = 'itr.checklistUnsaved') => {
+        if (!panelDirty) return false;
+        const open = instances.find(i => i.id === expandedInstanceId);
+        toast.warning(t(messageKey, { recordsNo: open?.recordsNo || '' }), { duration: 8000 });
+        return true;
+    };
+
     const handleSave = async () => {
         if (saving) return;
+        if (blockedByUnsavedChecklist()) return;
         if (!formData.noiNumber) {
             toast.warning(t('itr.validation.noiRequired') || 'Please select an NOI Number.');
             return;
@@ -513,15 +541,16 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
 
         try {
             setSaving(true);
-            await onSave(formData, pendingUploads, deletedFileIds);
+            const outcome = (await onSave(formData, pendingUploads, deletedFileIds)) as { keptOpen: true } | undefined;
             leaveGuard.release();
-            onClose();
+            if (!outcome?.keptOpen) onClose();
         } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
             // 錯誤已在父層 handleSaveITRDetails 以 toast 顯示，保持 modal 開啟
         } finally { setSaving(false); }
     };
 
     const handlePublish = () => {
+        if (blockedByUnsavedChecklist()) return;
         const nextRev = getNextRevision(formData.type || 'Rev0.0');
         setPublishConfirm({ show: true, nextRev });
     };
@@ -587,6 +616,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
 
     const handleRaiseNcr = async () => {
         if (!existingItem?.id || spawning) return;
+        if (blockedByUnsavedChecklist('itr.checklistUnsavedAction')) return;
         setSpawning('ncr');
         try {
             const ncr = await createNcrFromItr(existingItem.id);
@@ -620,6 +650,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
 
     const handleReinspect = async () => {
         if (!existingItem?.id || spawning || reinspectBlockedReason) return;
+        if (blockedByUnsavedChecklist('itr.checklistUnsavedAction')) return;
         setSpawning('reinspect');
         try {
             const newItr = await createReinspectionItr(existingItem.id);
@@ -641,8 +672,25 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         // checklist edited elsewhere while this modal stayed open would print stale
         // data even though Export Word (which always queries the DB fresh) shows the
         // current content. Printing now matches export's always-live behavior.
+        if (blockedByUnsavedChecklist('itr.checklistUnsavedAction')) return;
         await refreshInstances();
         setShowPrintPreview(true);
+    };
+
+    // Word export: show a message when it fails, and block repeat clicks while the file is being built.
+    const handleExportDocx = async () => {
+        if (!existingItem?.id || exportingDocx || saving || revoking || spawning !== null) return;
+        // The export reads the saved records, so unsaved checklist panel edits would be missing from the file.
+        if (blockedByUnsavedChecklist('itr.checklistUnsavedAction')) return;
+        setExportingDocx(true);
+        try {
+            await exportItrDocx(existingItem.id, formData.itrNumber || 'ITR');
+        } catch (err) {
+            console.error('ITR Word export failed:', err);
+            toast.error(t('common.exportFailed') || 'Export failed. Please try again.');
+        } finally {
+            setExportingDocx(false);
+        }
     };
 
     if (showPrintPreview) {
@@ -905,7 +953,10 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                             <div key={record.id} className="rounded-lg border border-slate-200 bg-white overflow-hidden">
                                                 <div
                                                     className="group flex items-center justify-between p-3 hover:bg-slate-50 transition-all cursor-pointer"
-                                                    onClick={() => setExpandedInstanceId(expanded ? null : record.id)}
+                                                    onClick={() => {
+                                                        if (blockedByUnsavedChecklist('itr.checklistUnsavedAction')) return;
+                                                        setExpandedInstanceId(expanded ? null : record.id);
+                                                    }}
                                                 >
                                                     <div className="flex flex-col gap-1">
                                                         <div className="flex items-center gap-2">
@@ -981,6 +1032,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                                             initialData={parseInstance(record)}
                                                             onClose={() => setExpandedInstanceId(null)}
                                                             onSave={(snap) => saveInstance(record.id, snap)}
+                                                            onDirtyChange={setPanelDirty}
                                                         />
                                                     </div>
                                                 )}
@@ -1138,7 +1190,9 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                 <div className={styles.photoSection}>
                                     <h3 className={formStyles.sectionTitle}>{t('itr.photo.defect')}</h3>
                                     <FileAttachment
-                                        attachments={formData.defectPhotos || [] as any[]}
+                                        legacyAttachments={legacyStrings(formData.defectPhotos)}
+                                        initialPendingFiles={pendingFilesFor('defectPhoto')}
+                                        hiddenFileIds={deletedFileIds}
                                         onPendingFilesChange={(files) => handlePendingFilesChange('defectPhoto', files)}
                                         onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'defect')}
                                         onDeleteExistingFile={handleDeleteExistingFile}
@@ -1154,7 +1208,9 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                 <div className={styles.photoSection}>
                                     <h3 className={formStyles.sectionTitle}>{t('itr.photo.improvement')}</h3>
                                     <FileAttachment
-                                        attachments={formData.improvementPhotos || [] as any[]}
+                                        legacyAttachments={legacyStrings(formData.improvementPhotos)}
+                                        initialPendingFiles={pendingFilesFor('improvementPhoto')}
+                                        hiddenFileIds={deletedFileIds}
                                         onPendingFilesChange={(files) => handlePendingFilesChange('improvementPhoto', files)}
                                         onRemoveLegacy={(index) => handleRemoveLegacyPhoto(index, 'improvement')}
                                         onDeleteExistingFile={handleDeleteExistingFile}
@@ -1175,7 +1231,9 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                             defaultExpanded={(formData.drawings?.length || 0) > 0}
                         >
                             <FileAttachment
-                                attachments={formData.drawings || [] as any[]}
+                                legacyAttachments={legacyStrings(formData.drawings)}
+                                initialPendingFiles={pendingFilesFor('drawing')}
+                                hiddenFileIds={deletedFileIds}
                                 onPendingFilesChange={(files) => handlePendingFilesChange('drawing', files)}
                                 onRemoveLegacy={(index) => handleRemoveLegacyGeneric(index, 'drawings')}
                                 onDeleteExistingFile={handleDeleteExistingFile}
@@ -1193,7 +1251,9 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                             defaultExpanded={(formData.certificates?.length || 0) > 0}
                         >
                             <FileAttachment
-                                attachments={formData.certificates || [] as any[]}
+                                legacyAttachments={legacyStrings(formData.certificates)}
+                                initialPendingFiles={pendingFilesFor('certificate')}
+                                hiddenFileIds={deletedFileIds}
                                 onPendingFilesChange={(files) => handlePendingFilesChange('certificate', files)}
                                 onRemoveLegacy={(index) => handleRemoveLegacyGeneric(index, 'certificates')}
                                 onDeleteExistingFile={handleDeleteExistingFile}
@@ -1211,7 +1271,9 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                             defaultExpanded={(formData.attachments?.length || 0) > 0}
                         >
                             <FileAttachment
-                                attachments={formData.attachments || [] as any[]}
+                                legacyAttachments={legacyStrings(formData.attachments)}
+                                initialPendingFiles={pendingFilesFor('attachment')}
+                                hiddenFileIds={deletedFileIds}
                                 onPendingFilesChange={(files) => handlePendingFilesChange('attachment', files)}
                                 onRemoveLegacy={handleRemoveLegacyAttachment}
                                 onDeleteExistingFile={handleDeleteExistingFile}
@@ -1232,19 +1294,25 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                     <FormActions
                         tools={<>
                             <button className={actionStyles.secondary} onClick={handlePrint}>
-                                {t('common.print')}
+                                <Printer size={16} /> {t('common.print')}
                             </button>
                             {/* Needs a real saved record id to call the export endpoint — unlike
                                 Print (which only reads already-loaded formData), there is nothing
                                 to export for an unsaved new ITR yet. */}
                             {existingItem?.id && (
-                                <button className={actionStyles.secondary} onClick={() => exportItrDocx(existingItem.id, formData.itrNumber || 'ITR')}>
-                                    {t('itr.exportWord') || 'Export Word'}
+                                <button className={actionStyles.secondary} onClick={handleExportDocx} disabled={saving || exportingDocx || revoking || spawning !== null}>
+                                    <FileText size={16} /> {exportingDocx ? (t('common.exporting') || 'Exporting...') : (t('itr.exportWord') || 'Export Word')}
                                 </button>
                             )}
                             {existingItem?.id && (formData.inspectionResult === 'Fail' || formData.status === 'Reject') && hasPermission('ncr:create:all') && (
                                 <button className={actionStyles.secondary}
-                                    onClick={handleRaiseNcr}
+                                    // Both spawn actions leave this ITR. Unsaved checklist edits stop them first (the
+                                    // toast asks the user to stay and save); only then is the ITR form's own discard
+                                    // confirmed. Raise NCR used to skip that confirmation and drop the form's edits.
+                                    onClick={() => {
+                                        if (blockedByUnsavedChecklist('itr.checklistUnsavedAction')) return;
+                                        leaveGuard.requestAction(handleRaiseNcr);
+                                    }}
                                     disabled={spawning !== null}
                                     title={t('itr.raiseNcrTitle') || 'Create an NCR pre-filled from this failed ITR'}
                                 >
@@ -1254,7 +1322,10 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                             {existingItem?.id && (formData.inspectionResult === 'Fail' || formData.status === 'Reject') && hasPermission('itr:create:all') && (
                                 <div className="flex flex-col items-start gap-1">
                                     <button className={actionStyles.secondary}
-                                        onClick={() => leaveGuard.requestAction(handleReinspect)}
+                                        onClick={() => {
+                                            if (blockedByUnsavedChecklist('itr.checklistUnsavedAction')) return;
+                                            leaveGuard.requestAction(handleReinspect);
+                                        }}
                                         disabled={spawning !== null || !!reinspectBlockedReason}
                                         title={reinspectBlockedReason || t('itr.reinspectTitle') || 'Create a re-inspection ITR pre-filled from this one'}
                                     >
@@ -1543,7 +1614,7 @@ export const ITRPrintPreview: React.FC<ITRPrintPreviewProps> = ({ data: displayD
                     <FormActions
                         tools={<>
                             <button className={actionStyles.secondary} onClick={handlePrint}>
-                                {t('common.print')}
+                                <Printer size={16} /> {t('common.print')}
                             </button>
                         </>}
                         cancel={<>

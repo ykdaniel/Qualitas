@@ -172,4 +172,4 @@ def read_itp_related(
     # Only expose the relation graph for an ITP the caller may actually see.
     if itp_service.get_itp(itp_id=itp_id, scope=scope) is None:
         raise HTTPException(status_code=404, detail="ITP not found")
-    return related_service.get_related("itp", itp_id, max_depth=max_depth)
+    return related_service.get_related("itp", itp_id, max_depth=max_depth, scope=scope)

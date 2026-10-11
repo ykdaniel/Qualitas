@@ -3,6 +3,20 @@ import api from '../services/api';
 import { getErrorMessage } from '../utils/errorUtils';
 import { getProjectFilterParams } from '../utils/projectFilter';
 
+// One row of the audit's daily schedule (AUDIT-AGENDA-2026-001); the backend validates and sorts them.
+export interface AuditAgendaEntry {
+    id: number | string;
+    // '' = a session; 'lunch' = the 12:00-13:00 Lunch Time default added for each new day (AUDIT-BUTTONS-2026-001)
+    kind?: '' | 'lunch';
+    date: string;
+    start: string;
+    end: string;
+    item: string;
+    auditee: string;
+    auditor: string;
+    remarks: string;
+}
+
 export interface AuditItem {
     id: string;
     project_id?: string | null;
@@ -24,6 +38,7 @@ export interface AuditItem {
     audit_criteria?: string;
     selected_templates?: string[];
     custom_check_items?: any[];
+    agenda?: AuditAgendaEntry[];
 }
 
 interface AuditState {

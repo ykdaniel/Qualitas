@@ -138,12 +138,13 @@ def env():
     # auth helpers (token blacklist etc.) may open their own session via
     # database.SessionLocal — point it at this in-memory DB too.
     import database as database_module
-    orig = (database_module.engine, database_module.SessionLocal)
-    database_module.engine, database_module.SessionLocal = engine, Session
+    import core.security as security_module   # binds SessionLocal at import: swap it too (token blacklist)
+    orig = (database_module.engine, database_module.SessionLocal, security_module.SessionLocal)
+    database_module.engine, database_module.SessionLocal, security_module.SessionLocal = engine, Session, Session
     try:
         yield Env(app, Session)
     finally:
-        database_module.engine, database_module.SessionLocal = orig
+        database_module.engine, database_module.SessionLocal, security_module.SessionLocal = orig
         Base.metadata.drop_all(engine)
 
 

@@ -1,0 +1,36 @@
+# CHECKLIST-TEMPLATE-CLEAN-2026-001 candidate = git archive 127d187e7fae2d2927f6e3ea3001423fbe41bcec + 4 files; Python 3.11; 2026-10-10T15:38:12Z (after colima restart)
+# overlay b9d9699f6f1172eff27128657b09946c14d42ecbaf65f9851a820fff7a7cdf1a  db_migrations.py
+# overlay 1e136dbb2569b159c5638f847502b99f787904aa6fd11045c3c25cd430bdbaea  services/checklist_service.py
+# overlay 3e879672091cfc61354afa563d703a33fb3219904774e7e9684aea72ff15abbf  services/itr_service.py
+# overlay 4a6bc04249b7661874e81a4fda26f6af625249d3802668471f8212b8ebcee84f  tests/test_checklist_template_cleanup.py
+Python 3.11.17
+## collect
+2442 tests collected in 1.68s
+## checklist + itr
+.........................                                                [100%]
+25 passed in 1.06s
+EXIT 0
+## start-up path (boots main: run_migrations incl. step 23) + ITR suites
+..........                                                               [100%]
+10 passed, 437 deselected in 13.61s
+EXIT 0
+(the run above: start-up tests only — the -k filter also deselected the ITR / Checklist files, so they run separately below)
+## test_itr*.py + test_checklist*.py
+............................................................             [100%]
+420 passed in 412.87s (0:06:52)
+EXIT 0
+
+=== RE-RUN after the browser findings (date reset on link + db_seeder fix); candidate = git archive 127d187e + 5 files; 2026-10-10T16:13:20Z
+# overlay b9d9699f6f1172eff27128657b09946c14d42ecbaf65f9851a820fff7a7cdf1a  db_migrations.py
+# overlay 225b6c011460b197d5b700bf5a5fe7377d792ef43b141c5f1f41ddf1c56692a9  db_seeder.py
+# overlay 1e136dbb2569b159c5638f847502b99f787904aa6fd11045c3c25cd430bdbaea  services/checklist_service.py
+# overlay 5c2b929044c5b507048b5a1d09f5ebdc4466e3ac464ef9ab9533e564fb539015  services/itr_service.py
+# overlay c9a00471ed52583f0ecefb88df63aa07b6d01ceb849fcb76c2f443b0b2f2061a  tests/test_checklist_template_cleanup.py
+Python 3.11.17
+## collect
+2443 tests collected in 1.94s
+## start-up path
+4 passed, 23 deselected in 7.22s
+## test_itr*.py + test_checklist*.py
+421 passed in 464.16s (0:07:44)
+EXIT 0

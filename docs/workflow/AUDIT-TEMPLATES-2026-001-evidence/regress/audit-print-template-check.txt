@@ -1,0 +1,19 @@
+PASS setup: another module's unconditional #root print rule is loaded (old blank-page condition)
+PASS setup: ITR's forced-visible #itr-single-print-root rule and other modules' unnamed @page rules are loaded  -> {"itrForcedVisible":true,"unnamedPageRules":11,"container":true}
+PASS plan: print called once, printout in <body>, #root hidden, printout visible, no buttons/icons, removed after print  -> {"printed":1,"kind":"plan","inBody":true,"rootHidden":true,"shown":"block","buttons":0,"k":"plan","pdf":[{"w":595,"h":842,"text":true}],"before":0,"unmounted":true}
+PASS checklist: print called once, printout in <body>, #root hidden, printout visible, no buttons/icons, removed after print  -> {"printed":2,"kind":"checklist","inBody":true,"rootHidden":true,"shown":"block","buttons":0,"k":"checklist","pdf":[{"w":595,"h":842,"text":true}],"before":1,"unmounted":true}
+PASS report: print called once, printout in <body>, #root hidden, printout visible, no buttons/icons, removed after print  -> {"printed":3,"kind":"report","inBody":true,"rootHidden":true,"shown":"block","buttons":0,"k":"report","pdf":[{"w":595,"h":842,"text":true},{"w":595,"h":842,"text":true}],"before":2,"unmounted":true}
+PASS plan PDF: 1 page(s), every page has text, all A4 portrait  -> [{"w":595,"h":842,"text":true}]
+PASS checklist PDF: 1 page(s), every page has text, all A4 portrait  -> [{"w":595,"h":842,"text":true}]
+PASS report PDF: 2 page(s), every page has text, all A4 portrait  -> [{"w":595,"h":842,"text":true},{"w":595,"h":842,"text":true}]
+PASS plan: title + sections 1-4 (incl. agenda) + plan sign-off, no results  -> LOGO ［ 公司名稱 Company Name ］ 品質管理 — Quality Management AHB-EXPORT-1 版次 Rev：— 狀態 IN PROGRESS 內部稽核計畫 INTERNAL AUDIT PLAN 1. 稽核資訊 Audit Information 稽核編號 Audit No. AHB-EXPORT-1 狀態 Status 進行中 In Progress 稽核標題 Audit Title 第四季供應商品質稽核 Q4 Supplier Audit 專案 Project [AHB1] Audit Review P1 受稽核廠商 Auditee / C
+PASS checklist: title, 5 items with blank result boxes, no recorded results or remarks  -> LOGO ［ 公司名稱 Company Name ］ 品質管理 — Quality Management AHB-EXPORT-1 版次 Rev：— 狀態 IN PROGRESS 稽核查檢表 AUDIT CHECKLIST 1. 稽核資訊 Audit Information 稽核編號 Audit No. AHB-EXPORT-1 專案 Project [AHB1] Audit Review P1 受稽核廠商 Auditee / Contractor Review Vendor 稽核地點 Location 三號料場 Yard 3 稽核日期 Audit Date 2026-10-01
+PASS report printout contains every text of the Word export (108 paragraphs, 10 wording-only lines skipped)  -> []
+PASS report sections in the same order as Word  -> [121,408,549,724,756,874,1528,1636]
+PASS unsaved changes: printout shows the screen content and flags it  -> LOGO［ 公司名稱 Company Name ］品質管理 — Quality ManagementAHB-EXPORT-1版次 Rev：—狀態 IN PROGRESS含未儲存的修改 Unsaved changes內部稽核報告INTERNAL AUDIT REPORT1. 稽核資訊 Audit Information稽核編號Audit No.AHB-EXPORT-1狀態Status進行中 In P
+PASS two clicks without afterprint print twice (one printout mounted)  -> {"n0":4,"printed":6,"mounted":1}
+PASS Audit.print.css: named @page audit (A4) used by .audit-print-root, no unnamed @page  -> {"named":["@page audit { size: a4 !important; margin: 13mm 12mm !important; }"],"unnamed":[],"pageProp":1}
+PASS progress eight: wizard card, printout and Word all 13%  -> {"card":"13%","printed":"13%","word":"13%"}
+PASS progress forty: wizard card, printout and Word all 58%  -> {"card":"58%","printed":"58%","word":"58%"}
+PASS clause-only item: clause printed, no extra dash line (as in Word)  -> ["Clause only"]
+ALL PASS

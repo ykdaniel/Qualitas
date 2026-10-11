@@ -1,0 +1,44 @@
+/* Discussion register controls (MEETING-TABS-2026-001, user 2026-10-11: "鉛筆也太大" — option B: keep ✏️ / 🗑 but small
+   and faint, shown on row hover or keyboard focus; always shown on touch screens, which have no hover). */
+.rowActions {
+    display: flex;
+    gap: 2px;
+    justify-content: flex-end;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+}
+tr:hover .rowActions,
+tr:focus-within .rowActions {
+    opacity: 1;
+}
+@media (hover: none) {
+    .rowActions { opacity: 1; }
+}
+
+.iconBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    border: none;
+    background: none;
+    color: #94a3b8;
+    cursor: pointer;
+    line-height: 0;
+    border-radius: 4px;
+}
+.iconBtn:hover { color: #475569; background: #f1f5f9; }
+.iconBtn.danger:hover { color: #b91c1c; background: #fef2f2; }
+.iconBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+.iconBtn:focus-visible { outline: 2px solid #b8945a; outline-offset: 1px; }
+
+/* text boxes that grow with their content: one line when empty, no fixed height, no scrollbar. Doubled class so it
+   outranks .formTextarea's min-height whatever order the two stylesheets load in. */
+.autoText.autoText {
+    resize: none;
+    overflow: hidden;
+    min-height: 0;
+    line-height: 1.5;
+    padding-top: 6px;
+    padding-bottom: 6px;
+}

@@ -2,10 +2,20 @@
 import time
 
 import requests
+import os
+import sys
+
+
+def _require_env(name):
+    """Credentials come only from the environment; this script has no built-in password."""
+    value = os.environ.get(name)
+    if not value:
+        sys.exit(f"{name} is not set. Export it before running this script (no built-in default).")
+    return value
 
 try:
     # Login
-    r = requests.post('http://localhost:8000/api/auth/login', data={'username': 'admin@example.com', 'password': 'admin'})
+    r = requests.post('http://localhost:8000/api/auth/login', data={'username': 'admin@example.com', 'password': _require_env("QUALITAS_ADMIN_PASSWORD")})
     if r.status_code != 200:
         print('Login failed')
         exit()

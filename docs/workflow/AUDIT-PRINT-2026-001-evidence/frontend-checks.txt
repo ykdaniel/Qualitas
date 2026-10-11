@@ -1,0 +1,8 @@
+# 2026-10-10T16:16:07Z R4 DEPLOY candidate = git archive 688d87b3 (production: AUDIT-EXPORT-DOCX deploy, live index cd426c4f) + G.patch R4; NOT HEAD (other sessions' undeployed ITR/NOI commits)
+tsc --noEmit -p . exit=0
+eslint --max-warnings 0 (AuditWizard.tsx, AuditPrintTemplate.tsx) exit=0
+npm run build (tsc && vite build) exit=0
+dist/assets/mammoth.browser-DBIEffrg.js          499.39 kB │ gzip: 124.65 kB
+✓ built in 5.76s
+dist index.html sha256 f8a81254525b78fdf02c19782dd90dbfc9a210d2afd1ea10f6ac991d46304271
+built CSS: hide-siblings rule 1, ITR container rule 1, @page audit{size:A4 portrait!important;margin:13mm 12mm!important}

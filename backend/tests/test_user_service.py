@@ -19,7 +19,8 @@ def test_create_user_success():
     
     service = UserService(mock_repo)
     user_data = schemas.UserCreate(
-        username="testuser", email="test@test.com", password="password123!", role_id=1, full_name="Test User"
+        username="testuser", email="test@test.com", password="password123!", role_id=1, full_name="Test User",
+        company_name="Qualitas",
     )
     
     # Execute
