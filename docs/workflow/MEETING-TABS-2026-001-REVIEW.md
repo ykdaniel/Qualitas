@@ -57,3 +57,7 @@ headingOf、子類取大類、contextNo 刪除後跟隨、所屬選到被濾掉�
 ## R11：PASS（拿掉子類，只留兩層）
 舊子類仍可 ✏️ 改標題與刪除（canRemove 不變，帶入的不可刪）；nextNo 取大類底下所有直接子列最大號＋1，不撞號；contextNo split('.')[0] 對事項、子類、大類皆正確，無大類時退回最後一個大類；startNew 只剩 category／item，不會產生新子類；移除的鍵無殘留使用。tsc 乾淨、npm test 159 passed。
 資訊：有舊子類的大類，新事項（如 1.3）會排在 1.1.x 之後，看起來像在子類下，但編號已表明直屬大類，不影響資料。
+
+## R12：PASS（工具列常駐、連續新增、操作提示）
+commit() 在 setEdit(null) 後讀閉包的 edit／log 正確，每次只呼叫一次 onChange，startNew 在同一批更新中覆蓋 setEdit(null)；剛新增的大類以 trusted 直接當所屬；rowError 以物件身分判斷，改動即清除；「新增事項」在已填名稱的新大類開著時可按，合理；焦點計數器只由 ✓ 觸發，與新列 autoFocus 不衝突；離開提醒與擋存檔一致，被拒時該列與輸入都保留。tsc 乾淨、npm test 159 passed、新鍵中英齊全且為 CRLF。
+建議（已處理）：✏️ 打開未改就按新增仍跳「已套用」→ 改為未變更時直接關閉、不提示（已加測試）。資訊（未處理，已記 STATUS）：帶入列原內容空白時按新增會一直被拒；被拒聚焦用 document.querySelector（頁面只有一個討論區，目前無虞）。
