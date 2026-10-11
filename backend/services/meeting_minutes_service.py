@@ -397,7 +397,7 @@ class MeetingMinutesService:
         Raises ValueError (-> 404 in the router) when the meeting does not exist or is outside the caller's scope.
         """
         from docx.enum.section import WD_ORIENT, WD_SECTION
-        from docx.shared import Cm
+        from docx.shared import Cm, Pt
         from core import docx_builder as db
         from core.uploads import upload_root as _upload_root
 
@@ -433,38 +433,26 @@ class MeetingMinutesService:
         db.add_masthead(doc, "會議記錄", "MEETING MINUTES", doc_no=meeting.documentNumber, rev=meeting.rev,
                         status=meeting.status or "Draft")
 
-        # 1. Basic information + attendees (SUBJECT / DATE & TYPE / VENUE & TIME / RECORDED BY / ATTENDEES)
-        db.add_section_heading(doc, "1", "基本資料", "Basic Information")
-        time_range = " ~ ".join(t for t in (meeting.meetingTime, meeting.meetingEndTime) if t)
-        db.add_field_grid(doc, [
-            [("主題", "SUBJECT", meeting.title)],
-            [("日期／類型", "DATE / TYPE", "　".join(x for x in (format_minutes_date(meeting.meetingDate), meeting.meetingType) if x)),
-             ("廠商", "CONTRACTOR", meeting.vendor)],
-            [("地點與時間", "VENUE & TIME", "　".join(x for x in (meeting.location, time_range) if x) or None),
-             ("記錄人", "RECORDED BY", meeting.organizer)],
-        ])
-        db.add_subsection_heading(doc, "出席人員", "Attendees")
-        if attendees:
-            db.add_data_table(doc, ["公司 Company", "姓名 Name", "職稱 Position"],
-                              [[a.get("company") or db.DASH, a.get("name") or db.DASH, a.get("role") or db.DASH] for a in attendees])
-        else:
-            db.add_paragraph(doc, "（無資料 No attendees）", size=9, italic=True)
+        # 1. Basic information and attendees in ONE table, the company's minutes layout (user, 2026-10-11, with a sample:
+        #    "出席人員改成這樣跟基本資料合在一起") — the same structure as the print's .mom-header table
+        _section_heading(doc, "1", "基本資料", "Basic Information")
+        _add_basic_info_table(doc, meeting, attendees)
 
         # 2. Discussions / actions
-        db.add_section_heading(doc, "2", "討論事項", "Discussions / Actions")
+        _section_heading(doc, "2", "討論事項", "Discussions / Actions")
         _add_register_table(doc, register)
 
         # 3. Attachments
-        db.add_section_heading(doc, "3", "附件", "Attachments")
+        _section_heading(doc, "3", "附件", "Attachments")
         if files:
             for i, f in enumerate(files, start=1):
                 note = f"　（照片 {photos.index(f) + 1}，見照片附錄 See photo appendix）" if f in photos else ""
-                db.add_paragraph(doc, f"{i}. {f.file_name}{note}", size=9.5)
+                db.add_paragraph(doc, f"{i}. {f.file_name}{note}", size=9.5).paragraph_format.space_after = Pt(2)
         else:
             db.add_paragraph(doc, "（無附件 No attachments）", size=9, italic=True)
 
         # 4. Sign-off
-        db.add_section_heading(doc, "4", "簽核", "Sign-off")
+        _section_heading(doc, "4", "簽核", "Sign-off")
         db.add_sign_off_grid(doc, [
             {"num": "4.1", "zh": "記錄人", "en": "Recorded By", "name": meeting.organizer, "date": format_minutes_date(meeting.meetingDate)},
             {"num": "4.2", "zh": "廠商代表", "en": "Contractor Rep.", "name": meeting.vendor},
@@ -538,6 +526,90 @@ def minutes_register(raw) -> list:
             })
         rows.append(row)
     return sorted(rows, key=lambda r: _no_key(r["no"]))
+
+
+def _section_heading(doc, num: str, zh: str, en: str):
+    """The minutes' main headings (1. 基本資料 …): bold text without the grey band docx_builder.add_section_heading
+    draws (user, 2026-10-11, looking at the Word file: "大項目 不要灰底"). Only this export; the other modules keep theirs."""
+    from docx.shared import Pt
+    from core import docx_builder as db
+
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(10)
+    p.paragraph_format.space_after = Pt(4)
+    p.paragraph_format.keep_with_next = True
+    db._run_font(p.add_run(f"{num}. {zh}  {en}"), Pt(11.5), bold=True)
+    return p
+
+
+def _add_basic_info_table(doc, meeting, attendees: list):
+    """SUBJECT / DATE & TYPE + CONTRACTOR / VENUE & TIME + RECORDED BY / Attendees (Company / Name / Position), one
+    bordered table of five columns: label | company | name | label | value; Position spans the last two."""
+    from docx.enum.table import WD_ALIGN_VERTICAL
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Cm, Pt
+    from core import docx_builder as db
+
+    widths = [Cm(2.9), Cm(3.2), Cm(5.6), Cm(2.4), Cm(3.3)]
+    table = doc.add_table(rows=0, cols=5)
+    table.style = "Table Grid"
+    table.autofit = False
+    for i, w in enumerate(widths):
+        table.columns[i].width = w
+
+    def write(cell, lines, bold=False, size=10):
+        cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+        for n, line in enumerate(lines):
+            p = cell.paragraphs[0] if n == 0 else cell.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p.paragraph_format.space_before = Pt(1)
+            p.paragraph_format.space_after = Pt(1)
+            db._run_font(p.add_run(line), Pt(size), bold=bold)
+        return cell
+
+    def label(cell, zh, en):
+        return write(cell, [zh, en], bold=True, size=9)
+
+    def row():
+        cells = table.add_row().cells
+        for i, c in enumerate(cells):
+            c.width = widths[i]
+            # tight even where nothing is written (the rows under the merged ATTENDEES label)
+            c.paragraphs[0].paragraph_format.space_before = Pt(1)
+            c.paragraphs[0].paragraph_format.space_after = Pt(1)
+        return cells
+
+    time_range = " ~ ".join(t for t in (meeting.meetingTime, meeting.meetingEndTime) if t)
+    date_type = "　".join(x for x in (format_minutes_date(meeting.meetingDate), meeting.meetingType) if x)
+    c = row()
+    label(c[0], "主題", "SUBJECT")
+    write(c[1].merge(c[4]), [meeting.title or db.DASH])
+    c = row()
+    label(c[0], "日期／類型", "DATE / TYPE")
+    write(c[1].merge(c[2]), [date_type or db.DASH])
+    label(c[3], "廠商", "CONTRACTOR")
+    write(c[4], [meeting.vendor or db.DASH])
+    c = row()
+    label(c[0], "地點與時間", "VENUE & TIME")
+    write(c[1].merge(c[2]), [x for x in (meeting.location, time_range) if x] or [db.DASH])
+    label(c[3], "記錄人", "RECORDED BY")
+    write(c[4], [meeting.organizer or db.DASH])
+    head = row()
+    write(head[1], ["公司 Company"], bold=True, size=9)
+    write(head[2], ["姓名 Name"], bold=True, size=9)
+    write(head[3].merge(head[4]), ["職稱 Position"], bold=True, size=9)
+    last = head
+    if attendees:
+        for a in attendees:
+            last = row()
+            write(last[1], [a["company"] or db.DASH])
+            write(last[2], [a["name"] or db.DASH])
+            write(last[3].merge(last[4]), [a["role"] or db.DASH])
+    else:
+        last = row()
+        write(last[1].merge(last[4]), ["（無資料 No attendees）"], size=9)
+    label(head[0].merge(last[0]), "出席人員", "ATTENDEES")
+    return table
 
 
 def _is_image(f) -> bool:

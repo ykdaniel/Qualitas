@@ -123,7 +123,7 @@ def test_draft_export_has_the_printed_minutes_in_order(meeting_env, uploads):
     assert len(doc.sections) == 1                                        # no photos: no appendix
     all_text = "\n".join(texts(r))
     for s in ["會議記錄 MEETING MINUTES", m["documentNumber"], "版次 Rev：1.0", "DRAFT", "Weekly site meeting",
-              "28 Jul 2026　Weekly", "Accept Co", "Site office　15:00 ~ 17:15", "Recorder Lin",
+              "28 Jul 2026　Weekly", "Accept Co", "Site office\n15:00 ~ 17:15", "Recorder Lin",
               "Toby Tseng", "QAQC Manager", "（無附件 No attachments）", "4.1 記錄人 Recorded By"]:
         assert s in all_text, s
     rows = register_rows(r)
@@ -223,3 +223,37 @@ def test_odd_values_in_the_free_json_do_not_break_the_export(meeting_env, upload
     assert r.status_code == 200, r.text
     rows = register_rows(r)
     assert rows[0][1] == "2026" and rows[1][1].startswith("42") and rows[1][2] == "3" and rows[1][3].startswith("20260801")
+
+
+def test_main_headings_have_no_grey_band(meeting_env, uploads):
+    """User 2026-10-11 ("大項目 不要灰底"): 1. 基本資料 / 2. 討論事項 / 3. 附件 / 4. 簽核 are plain bold paragraphs."""
+    c = meeting_env.login("mtg_a")
+    r = c.get(f"/api/meeting-minutes/{create(c)['id']}/export-docx")
+    doc = Document(BytesIO(r.content))
+    headings = [p for p in doc.paragraphs if p.text in ("1. 基本資料  Basic Information", "2. 討論事項  Discussions / Actions",
+                                                         "3. 附件  Attachments", "4. 簽核  Sign-off")]
+    assert len(headings) == 4 and all(run.bold for p in headings for run in p.runs)
+    assert not any(t.rows[0].cells[0].text.startswith(("1. 基本資料", "2. 討論事項", "3. 附件", "4. 簽核")) for t in doc.tables)
+    assert 'w:fill="D9D9D9"' not in "".join(p._p.xml for p in headings)
+
+
+def test_basic_information_and_attendees_are_one_table_like_the_company_minutes(meeting_env, uploads):
+    """User 2026-10-11, with a sample: "出席人員改成這樣跟基本資料合在一起" — SUBJECT / DATE & TYPE + CONTRACTOR /
+    VENUE & TIME + RECORDED BY / Attendees (Company / Name / Position) in one bordered table."""
+    c = meeting_env.login("mtg_a")
+    m = create(c, title="Meeting Minutes - 111", meetingDate="2026-07-28", meetingType="Weekly", location="HL Office Meeting Room",
+               meetingTime="15:00", meetingEndTime="17:15", organizer="Daniel Huang",
+               attendees=[{"company": "TECO", "name": "陳韋向(Mac Chen)", "role": "Project Manager"},
+                          {"company": "HL", "name": "Daniel Huang", "role": "Quality Manager"}])
+    doc = Document(BytesIO(c.get(f"/api/meeting-minutes/{m['id']}/export-docx").content))
+    info = next(t for t in doc.tables if t.rows[0].cells[0].text == "主題\nSUBJECT")
+    grid = [[cell.text for cell in row.cells] for row in info.rows]
+    assert grid[0] == ["主題\nSUBJECT"] + ["Meeting Minutes - 111"] * 4
+    assert grid[1] == ["日期／類型\nDATE / TYPE", "28 Jul 2026　Weekly", "28 Jul 2026　Weekly", "廠商\nCONTRACTOR", "Accept Co"]
+    assert grid[2] == ["地點與時間\nVENUE & TIME", "HL Office Meeting Room\n15:00 ~ 17:15", "HL Office Meeting Room\n15:00 ~ 17:15",
+                       "記錄人\nRECORDED BY", "Daniel Huang"]
+    assert grid[3] == ["出席人員\nATTENDEES", "公司 Company", "姓名 Name", "職稱 Position", "職稱 Position"]
+    assert grid[4] == ["出席人員\nATTENDEES", "TECO", "陳韋向(Mac Chen)", "Project Manager", "Project Manager"]
+    assert grid[5] == ["出席人員\nATTENDEES", "HL", "Daniel Huang", "Quality Manager", "Quality Manager"]
+    assert info.style.name == "Table Grid"
+    assert not any(t.rows[0].cells[0].text.startswith("公司 Company") for t in doc.tables)   # no separate attendee table

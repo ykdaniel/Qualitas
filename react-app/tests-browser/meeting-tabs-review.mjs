@@ -641,6 +641,10 @@ check(await page.locator('.mom-print-root .register .raised-date + .update-text'
 for (const s of ['SUBJECT', 'VENUE & TIME', 'RECORDED BY', 'DISCUSSIONS / ACTIONS', 'Action by', '15:00 ~ 17:15', '1.0', '1.1.1', '21 Jul 2026', '14 Jul 2026', '15 Aug 2026', '4 Aug 2026']) {
     check(printText.includes(s), `6: print contains "${s}"`);
 }
+// R16 (user: "大項目 不要灰底"): main headings bold, no grey band; the register's category rows keep theirs
+const secBg = await page.locator('.mom-print-root .sec-head').first().evaluate(el => getComputedStyle(el).backgroundColor);
+check(secBg === 'rgba(0, 0, 0, 0)' || secBg === 'transparent', `R16: print main heading has no grey band (${secBg})`);
+check(await page.locator('.mom-print-root .register tr.cat-row td').first().evaluate(el => getComputedStyle(el).backgroundColor) !== 'rgba(0, 0, 0, 0)', 'R16: the register category row keeps its grey');
 await page.emulateMedia({ media: 'print' });
 await page.screenshot({ path: `${OUT}/06-print.png`, fullPage: true });
 await page.emulateMedia({ media: 'screen' });
@@ -655,6 +659,7 @@ for (const s of ['MEETING MINUTES', 'MOM-DEMO-002', 'PUBLISHED', 'DISCUSSIONS / 
     check(docText.includes(s), `R15: the .docx contains "${s}"`);
 }
 check(/<w:pgSz[^>]*w:w="11906"[^>]*w:h="16838"/.test(docXml), 'R15: the minutes are portrait A4 (21 × 29.7 cm)');
+check(!/<w:shd [^>]*w:fill="D9D9D9"[^>]*\/>(?:(?!<\/w:tc>).)*?1\. 基本資料/s.test(docXml) && docText.includes('1. 基本資料  Basic Information'), 'R16: the Word main headings have no grey band');
 const btnBox = await modal().getByRole('button', { name: 'Export Word' }).boundingBox();
 const printBox = await modal().getByRole('button', { name: /^Print$/ }).boundingBox();
 check(Math.abs(btnBox.y - printBox.y) < 4 && btnBox.x > printBox.x, 'R15: Export Word sits next to Print in the footer');
