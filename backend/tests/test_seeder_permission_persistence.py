@@ -67,7 +67,8 @@ for op in ops:
         assert r.status_code == 200, r.text
     elif op["op"] == "create_user":
         r = c.post("/api/iam/users/", json={"username": op["username"], "email": op["username"] + "@example.com",
-                                          "password": pw, "full_name": op["username"], "role_id": roles[op["role"]]["id"]})
+                                          "password": pw, "full_name": op["username"], "role_id": roles[op["role"]]["id"],
+                                          "company_name": "Test Co"})
         assert r.status_code == 200, r.text
 import database, models
 db = database.SessionLocal()   # brand-new session: were the role changes really persisted / audited?

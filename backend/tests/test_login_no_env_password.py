@@ -148,7 +148,7 @@ reset_admin()
 
 # 4c. deactivated (a second Admin deactivates the seed admin — the last-admin rule allows it)
 boss_c = admin_client("admin", CHANGED_PW)
-r = boss_c.post("/api/iam/users/", json={"username": "boss", "email": "boss@example.com", "password": "Boss-Pw-123456", "is_active": True,
+r = boss_c.post("/api/iam/users/", json={"username": "boss", "email": "boss@example.com", "password": "Boss-Pw-123456", "is_active": True, "company_name": "Test Co",
                                          "role_id": [x["id"] for x in boss_c.get("/api/iam/roles/").json() if x["name"].lower() == "admin"][0]})
 out["boss_created"] = r.status_code
 time.sleep(1.1)

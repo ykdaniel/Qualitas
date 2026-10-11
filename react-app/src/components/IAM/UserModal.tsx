@@ -42,21 +42,16 @@ const UserModal: React.FC<UserModalProps> = ({ existingUser, readOnly = false, c
     // Create mode only: scope chosen before the user exists, persisted post-create.
     const [pendingScope, setPendingScope] = useState<ScopeValue>({ project_ids: [], vendor_id: null });
 
-    // Company picker reuses the same Contractors list the Contractors
-    // module manages — company_name is still stored as a plain string
-    // (never vendor_id), so picking a name here never touches P0 scope.
-    // If the existing user's saved company_name isn't in the active list
-    // (renamed/deactivated contractor, or a value typed before this
-    // became a picker), it's added as an extra option so it doesn't
-    // silently vanish from the field.
+    // Company: suggested from the same company list the Contractors module manages (our own
+    // company and the owner included), or typed when it isn't on the list yet. Stored as a plain
+    // string (never vendor_id), so it never touches P0 scope. Required for a new account; an
+    // existing one may not be blanked, but an account that predates the rule can still be saved
+    // without one (deactivate, password reset) — IAM-USER-COMPANY-LABEL-2026-001.
     const { getActiveContractors } = useContractorsStore();
-    const contractorNames = useMemo(() => {
-        const names = getActiveContractors().map(c => c.name);
-        if (existingUser?.company_name && !names.includes(existingUser.company_name)) {
-            names.push(existingUser.company_name);
-        }
-        return names;
-    }, [getActiveContractors, existingUser]);
+    const companyOptions = useMemo(() => getActiveContractors().map(c => ({ name: c.name, abbreviation: c.abbreviation })),
+        [getActiveContractors]);
+    const companyMissing = !!existingUser && !existingUser.company_name;
+    const companyRequired = !companyMissing;
 
     const initialForm = useMemo(() => ({
         name: existingUser?.username || '',
@@ -88,12 +83,15 @@ const UserModal: React.FC<UserModalProps> = ({ existingUser, readOnly = false, c
             // No role chosen => role_id is omitted entirely (nothing is granted by default).
             const roleId = selectedRole ? parseInt(selectedRole.id) : (existingUser?.role_id ?? undefined);
 
+            const company = form.company_name.trim();
+            if (companyRequired && !company) throw new Error(t('iam.companyRequired') || 'Company is required.');
+
             const validationData = {
                 name: form.name,
                 email: form.email,
                 role_id: roleId,
                 status: form.status,
-                company_name: form.company_name || null,
+                company_name: company || null,
                 password: (existingUser && !(resetPassword && canSetPassword)) ? undefined : (form.password || undefined),
                 reason: form.reason
             };
@@ -198,21 +196,26 @@ const UserModal: React.FC<UserModalProps> = ({ existingUser, readOnly = false, c
                             </div>
                         </div>
                         <div className={styles.formGroup}>
-                            <label>{t('iam.companyName')}</label>
-                            <div className={styles.selectWrapper}>
-                                <select
-                                    value={form.company_name}
-                                    onChange={e => setForm({ ...form, company_name: e.target.value })}
-                                >
-                                    <option value="">{t('common.selectPlaceholder') || 'Select...'}</option>
-                                    {contractorNames.map(name => (
-                                        <option key={name} value={name}>{name}</option>
-                                    ))}
-                                </select>
-                                <div className={styles.selectArrow}>
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                                </div>
-                            </div>
+                            <label>{t('iam.companyName')} {companyRequired && <span className={styles.required}>*</span>}</label>
+                            <input
+                                type="text"
+                                list="iam-company-options"
+                                value={form.company_name}
+                                onChange={e => setForm({ ...form, company_name: e.target.value })}
+                                required={companyRequired}
+                            />
+                            <datalist id="iam-company-options">
+                                {companyOptions.map(c => (
+                                    <option key={c.name} value={c.name}>{c.abbreviation}</option>
+                                ))}
+                            </datalist>
+                            {companyMissing && !existingUser?.display_company && !readOnly ? (
+                                <p role="note" style={{ margin: '6px 0 0', padding: '6px 10px', background: '#fff7e6', border: '1px solid #ffd591', borderRadius: 6, fontSize: 12 }}>
+                                    {t('iam.companyMissing')}
+                                </p>
+                            ) : (
+                                <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6b7280' }}>{t('iam.companyHint')}</p>
+                            )}
                         </div>
 
                         {!existingUser && !canManageRoles && (

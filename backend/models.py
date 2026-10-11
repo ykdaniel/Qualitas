@@ -1,5 +1,5 @@
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, event, text
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import object_session, relationship
 
 from database import Base
 
@@ -694,9 +694,9 @@ class User(Base):
     # have no vendor_id — deliberately NOT the same mechanism as vendor_id,
     # which drives P0 data-isolation scope. Setting this never changes what
     # data a user can see; it only supplies a "Name / Company" display label
-    # for staff who aren't tied to a contractor. For contractor-scoped users,
-    # the company shown is derived from vendor_id -> Contractor.name instead
-    # (see `display_company` below), so this stays unset/ignored for them.
+    # for the person. Required for new accounts (IAM-USER-COMPANY-LABEL-2026-001);
+    # for contractor-scoped users the label comes from the bound vendor instead
+    # (see `display_company` below).
     company_name = Column(String, nullable=True)
 
     # Account-lockout fields. Reset on successful login.
@@ -729,12 +729,20 @@ class User(Base):
 
     @property
     def display_company(self):
-        """"Name / Company" label source. Contractor-scoped users show their
-        real vendor name (already the source of truth for who they are);
-        internal staff fall back to the cosmetic `company_name` field."""
+        """"Name / Company" label source (IAM-USER-COMPANY-LABEL-2026-001): the
+        company's abbreviation from the Contractors list, its full name when it
+        has none. Contractor-scoped users use their bound vendor; everyone else
+        uses the cosmetic `company_name`, looked up by name in the same list —
+        a name not on the list (typed by hand) is shown as typed."""
         if self.vendor_ref:
-            return self.vendor_ref.name
-        return self.company_name
+            return (self.vendor_ref.abbreviation or "").strip() or self.vendor_ref.name
+        name = (self.company_name or "").strip()
+        if not name:
+            return None
+        session = object_session(self)
+        listed = session.query(Contractor).filter(Contractor.name == name).first() if session is not None else None
+        abbreviation = (listed.abbreviation or "").strip() if listed is not None else ""
+        return abbreviation or name
 
 
 class UserProject(Base):

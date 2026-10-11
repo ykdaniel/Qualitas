@@ -150,7 +150,8 @@ def env(request):
 # ── small helpers ────────────────────────────────────────────────────────
 
 def _new_user_body(env, username="newbie", role="Ordinary", **extra):
-    body = {"username": username, "email": f"{username}@example.com", "password": PW, "is_active": True}
+    body = {"username": username, "email": f"{username}@example.com", "password": PW, "is_active": True,
+            "company_name": "Test Co"}   # required on create (IAM-USER-COMPANY-LABEL-2026-001)
     if role is not None:
         body["role_id"] = env.role_id(role)
     body.update(extra)
