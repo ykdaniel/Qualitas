@@ -1564,6 +1564,99 @@ class Audit(AuditBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+# --- Audit template library (AUDIT-TEMPLATES-2026-001) ---
+class AuditTemplateItem(BaseModel):
+    """One check item of a template — {no, title, clause, task}; no / clause / task are what an audit's custom_check_items
+    hold (title only labels the clause in the wizard's dropdown). `id` is a
+    stable key the server assigns (a new one for each new item, never reused), copied into the audit as templateItemId
+    so selecting the template again adds only the items the audit does not have yet."""
+    model_config = ConfigDict(extra='ignore')
+
+    id: str | None = None
+    no: str = Field('', max_length=50)
+    # the clause heading, e.g. "Understanding the organization and its context": what the wizard's clause dropdown shows
+    title: str = Field('', max_length=200)
+    clause: str = Field('', max_length=2000)  # the requirement text — the longest ISO 9001 one is ~1,030 characters
+    task: str = Field(..., max_length=2000)
+
+    @field_validator('id', 'no', 'title', 'clause', 'task', mode='before')
+    @classmethod
+    def strip_text(cls, v):
+        if v is None:
+            return v
+        if not isinstance(v, (str, int)):   # a number id / clause no is fine as text; a list or object is not (R2 review)
+            raise ValueError('template item fields must be text')
+        return str(v).strip()
+
+    @field_validator('task')
+    @classmethod
+    def task_required(cls, v):
+        if not v:
+            raise ValueError('every template item needs an audit question (task)')
+        return v
+
+
+def _template_name(v):
+    if v is not None and not isinstance(v, str):
+        raise ValueError('template name must be text')
+    v = (v or '').strip()
+    if not v:
+        raise ValueError('template name is required')
+    if len(v) > 100:
+        raise ValueError('template name must be at most 100 characters')
+    return v
+
+
+class AuditTemplateCreate(BaseModel):
+    name: str
+    description: str | None = ''
+    version: str | None = Field('', max_length=50)
+    is_active: bool = True
+    items: list[AuditTemplateItem] = []
+
+    @field_validator('name', mode='before')
+    @classmethod
+    def check_name(cls, v):
+        return _template_name(v)
+
+
+class AuditTemplateUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    version: str | None = Field(None, max_length=50)
+    is_active: bool | None = None
+    items: list[AuditTemplateItem] | None = None
+
+    @field_validator('name', mode='before')
+    @classmethod
+    def check_name(cls, v):
+        return None if v is None else _template_name(v)
+
+
+class AuditTemplate(BaseModel):
+    id: int
+    name: str
+    description: str | None = ''
+    version: str | None = ''
+    is_active: bool = True
+    # lenient on read: one hand-edited row must not break the list
+    items: Any | None = []
+    created_at: str | None = None
+    updated_at: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator('items', mode='before')
+    @classmethod
+    def parse_items(cls, v):
+        if isinstance(v, str):
+            try:
+                v = json.loads(v)
+            except Exception:
+                return []
+        return [i for i in v if isinstance(i, dict)] if isinstance(v, list) else []   # only item objects (hand-edited rows)
+
+
 # --- KPI & Performance Schemas ---
 class KPIWeightBase(BaseModel):
     pqp_weight: int = 25

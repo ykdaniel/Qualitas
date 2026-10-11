@@ -1,6 +1,11 @@
 // AUDIT-BUTTON-TEST-2026-10-11: every button of the Audit module (list page, 5-step wizard, states x permissions).
-// TEST ONLY — isolated stack (vite 3323 / backend 8323), freshly seeded with seed_audit_hardening_b_review.py,
-// seed_audit_export_docx_review.py, seed_audit_agenda_review.py and the scratch seed that adds contractor "Second Vendor".
+// v2 (AUDIT-TEMPLATES-2026-001 regress R2): follows the current UI — the shared DataTable labels in Chinese (AUDIT-BTNFIX),
+// exact contractor / status column filters, the disabled delete button's tooltip on its wrapper, the read-only banner,
+// the default lunch leaving with a day's last session, and step 4's audit types (template library) + clause / question
+// dropdowns instead of the old fixed 20-clause ISO dropdown.
+// TEST ONLY — isolated stack (vite 3323 / backend 8323), freshly reset with /tmp/claude-501/reset-r2-3323.sh (seeds
+// seed_audit_hardening_b_review.py, seed_audit_export_docx_review.py, seed_audit_agenda_review.py and the scratch seed
+// that adds contractor "Second Vendor"; the 4 audit templates come from backend startup).
 // Usage: node audit-all-buttons-check.mjs <stack.json> <outDir>
 // window.print is stubbed (counted, never opened); Word downloads are saved to <outDir>/downloads.
 // Writes <outDir>/results.json (one entry per check) and prints one line per check.
@@ -10,7 +15,7 @@ import { inflateRawSync } from 'node:zlib';
 
 const stack = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 const out = process.argv[3];
-const EV = 'docs/workflow/AUDIT-BUTTON-TEST-2026-10-11-evidence';  // how evidence paths are written in results
+const EV = out;  // evidence paths in results point into the output directory
 mkdirSync(`${out}/downloads`, { recursive: true }); mkdirSync(`${out}/shots`, { recursive: true });
 if (stack.vite_port !== 3323 || stack.backend_port !== 8323) { console.error('refusing: not the 3323/8323 isolated stack'); process.exit(2); }
 const UI = `http://127.0.0.1:${stack.vite_port}`, PW = 'Accept-Test-1234';
@@ -142,7 +147,9 @@ async function probeWizard(p) {
   s.back1 = await foot(p, /上一步/).count();
   s.next1 = await foot(p, /下一步/).count();
   s.saveDraft = await foot(p, /儲存草稿/).count();
-  s.notice = await p.evaluate(() => /唯讀|read-only|已關閉|已作廢|鎖定/.test(document.querySelector('[data-wizard-header]').parentElement.innerText.replace(document.querySelector('form').innerText, '')));
+  // read-only banner (AUDIT-BTNFIX): [data-readonly-banner="<i18n key>"] with the reason
+  s.banner = await p.evaluate(() => { const b = document.querySelector('[data-readonly-banner]'); return b ? { key: b.getAttribute('data-readonly-banner'), text: b.innerText.trim() } : null; });
+  s.notice = !!s.banner;
   await foot(p, /下一步/).click(); await p.waitForTimeout(300);
   s.afterNext = await curStep(p);
   s.step2 = await p.evaluate(() => [...document.querySelectorAll('form input[type=text], form textarea')].every(e => e.matches(':disabled')));
@@ -158,12 +165,15 @@ async function probeWizard(p) {
   s.print3 = await p.locator('[data-step-print=plan]').count(); s.word3 = await p.locator('[data-step-word=plan]').count();
   await step(p, 4);
   s.step4 = await p.evaluate(() => {
-    const chip = [...document.querySelectorAll('form button')].find(b => b.innerText.trim() === 'ISO 9001:2015');
-    const task = document.querySelector('form input[name=task]');
-    const plus = task?.parentElement.querySelector('button');
+    const chip = document.querySelector('form [data-template-chip="ISO 9001:2015"]');
+    const form = document.querySelector('[data-add-form]');
+    const clausePick = form?.querySelector('select[data-clause-pick]');
+    const task = form?.querySelector('textarea[name=task]');
+    const plus = form?.querySelector('[data-add-item]');
     const items = [...document.querySelectorAll('form div[class*="h-[300px]"] > div.group')];
     const itemBtns = items.flatMap(i => [...i.querySelectorAll('button')]);
-    return { chipDisabled: chip?.matches(':disabled'), taskDisabled: task?.matches(':disabled'), plusDisabled: plus?.matches(':disabled'),
+    return { chipDisabled: chip?.matches(':disabled'), clausePickDisabled: clausePick?.matches(':disabled'), taskDisabled: task?.matches(':disabled'), plusDisabled: plus?.matches(':disabled'),
+      batchPick: document.querySelectorAll('form [data-batch-pick]').length,
       items: items.length, itemBtnsDisabled: itemBtns.length ? itemBtns.every(b => b.matches(':disabled')) : null,
       chipCursor: chip ? getComputedStyle(chip).cursor : null };
   });
@@ -196,7 +206,7 @@ const SEEDED = ['AHB-DRAFT-1', 'AHB-VOID-1', 'AHB-CLOSED-1', 'AHB-LEGACY-1', 'AH
 {
   const nos = await dtNos(full);
   if (nos.length !== 7 || !SEEDED.every(n => nos.includes(n))) {
-    console.error('refusing: stack is not freshly seeded (run /tmp/claude-501/btntest/reset.sh first): ' + JSON.stringify(nos));
+    console.error('refusing: stack is not freshly seeded (run /tmp/claude-501/reset-r2-3323.sh first): ' + JSON.stringify(nos));
     process.exit(3);
   }
   rec('清單', '頁面載入', '列出 7 筆種子稽核', nos, true, await shot(full, 'A01-list', true));
@@ -306,59 +316,67 @@ await guard('承包商篩選', async () => {
 });
 
 await guard('分頁', async () => {
-  const pageTxt = () => full.locator('div', { hasText: /^Page \d+ of \d+$/ }).last().innerText();
+  // DataTable labels are translated now (AUDIT-BTNFIX): 「第 x／y 頁」, sr-only 第一頁 / 上一頁 / 下一頁 / 最後一頁
+  const pageTxt = () => full.locator('div', { hasText: /^第 \d+／\d+ 頁$/ }).last().innerText();
+  const pgBtn = name => full.locator('button', { has: full.locator('span.sr-only', { hasText: new RegExp(`^${name}$`) }) });
+  const bar = await full.locator('body').innerText();
+  rec('分頁', '分頁列文字（中文）', '「已選取 0／13 列」「每頁列數」「第 1／2 頁」，無英文殘留', { selected: (bar.match(/已選取 \d+／\d+ 列/) || [null])[0], perPage: bar.includes('每頁列數'), english: /Rows per page|row\(s\) selected|Page \d+ of/.test(bar) },
+    /已選取 0／13 列/.test(bar) && bar.includes('每頁列數') && /第 1／2 頁/.test(bar) && !/Rows per page|row\(s\) selected|Page \d+ of/.test(bar));
   const p1 = { page: await pageTxt(), rows: (await dtNos(full)).length };
-  await full.locator('button', { hasText: 'Go to next page' }).click(); await full.waitForTimeout(300);
+  await pgBtn('下一頁').click(); await full.waitForTimeout(300);
   const p2 = { page: await pageTxt(), rows: (await dtNos(full)).length };
   const ev = await shot(full, 'A07-page2', true);
-  await full.locator('button', { hasText: 'Go to previous page' }).click(); await full.waitForTimeout(300);
+  await pgBtn('上一頁').click(); await full.waitForTimeout(300);
   const p3 = { page: await pageTxt() };
-  await full.locator('button', { hasText: 'Go to last page' }).click(); await full.waitForTimeout(300);
+  await pgBtn('最後一頁').click(); await full.waitForTimeout(300);
   const p4 = { page: await pageTxt() };
-  await full.locator('button', { hasText: 'Go to first page' }).click(); await full.waitForTimeout(300);
-  const p5 = { page: await pageTxt(), prevDisabled: await full.locator('button', { hasText: 'Go to previous page' }).isDisabled() };
-  rec('分頁', '初始', 'Page 1 of 2，10 筆', p1, p1.page === 'Page 1 of 2' && p1.rows === 10);
-  rec('分頁', '下一頁 ›', 'Page 2 of 2，3 筆', p2, p2.page === 'Page 2 of 2' && p2.rows === 3, ev);
-  rec('分頁', '上一頁 ‹', '回到 Page 1', p3, p3.page === 'Page 1 of 2');
-  rec('分頁', '最後一頁 »', 'Page 2 of 2', p4, p4.page === 'Page 2 of 2');
-  rec('分頁', '第一頁 «', 'Page 1，上一頁停用', p5, p5.page === 'Page 1 of 2' && p5.prevDisabled);
+  await pgBtn('第一頁').click(); await full.waitForTimeout(300);
+  const p5 = { page: await pageTxt(), prevDisabled: await pgBtn('上一頁').isDisabled() };
+  rec('分頁', '初始', '第 1／2 頁，10 筆', p1, p1.page === '第 1／2 頁' && p1.rows === 10);
+  rec('分頁', '下一頁 ›', '第 2／2 頁，3 筆', p2, p2.page === '第 2／2 頁' && p2.rows === 3, ev);
+  rec('分頁', '上一頁 ‹', '回到第 1 頁', p3, p3.page === '第 1／2 頁');
+  rec('分頁', '最後一頁 »', '第 2／2 頁', p4, p4.page === '第 2／2 頁');
+  rec('分頁', '第一頁 «', '第 1 頁，上一頁停用', p5, p5.page === '第 1／2 頁' && p5.prevDisabled);
   await full.locator('button[role=combobox]', { hasText: '10' }).click();
   await full.locator('[role=option]', { hasText: '20' }).click(); await full.waitForTimeout(300);
   const p6 = { page: await pageTxt(), rows: (await dtNos(full)).length };
-  rec('分頁', '每頁筆數 10→20', 'Page 1 of 1，13 筆', p6, p6.page === 'Page 1 of 1' && p6.rows === 13);
+  rec('分頁', '每頁列數 10→20', '第 1／1 頁，13 筆', p6, p6.page === '第 1／1 頁' && p6.rows === 13);
 });
 
 await guard('欄位設定 View', async () => {
   const heads = () => full.locator('div.rounded-md.border table thead th').allInnerTexts();
-  await full.locator('button', { hasText: 'View' }).click(); await full.waitForTimeout(300);
+  const viewBtn = () => full.locator('button', { hasText: /^檢視$/ });
+  await viewBtn().click(); await full.waitForTimeout(300);
   const menu = await full.locator('[role=menuitemcheckbox]').allInnerTexts();
+  const menuLabel = (await full.locator('[role=menu]').innerText()).split('\n')[0].trim();
   await full.locator('[role=menuitemcheckbox]', { hasText: 'location' }).click(); await full.waitForTimeout(300);
   await full.keyboard.press('Escape'); await full.waitForTimeout(200);
   const h1 = await heads();
   const ev = await shot(full, 'A08-view-hide-location');
-  await full.locator('button', { hasText: 'View' }).click(); await full.waitForTimeout(300);
+  await viewBtn().click(); await full.waitForTimeout(300);
   await full.locator('[role=menuitemcheckbox]', { hasText: 'location' }).click(); await full.waitForTimeout(300);
   await full.keyboard.press('Escape'); await full.waitForTimeout(200);
   const h2 = await heads();
-  rec('資料表', 'View（欄位清單）', '列出可隱藏欄位', menu, menu.length === 7);
-  rec('資料表', 'View 取消勾選 location', '「地點」欄隱藏', h1, !h1.some(h => h.includes('地點')), ev);
-  rec('資料表', 'View 重新勾選 location', '「地點」欄恢復', h2, h2.some(h => h.includes('地點')));
+  rec('資料表', '檢視（欄位清單）', '按鈕「檢視」、選單標題「顯示欄位」、列出 7 個可隱藏欄位', { menuLabel, menu }, menuLabel === '顯示欄位' && menu.length === 7);
+  rec('資料表', '檢視 取消勾選 location', '「地點」欄隱藏', h1, !h1.some(h => h.includes('地點')), ev);
+  rec('資料表', '檢視 重新勾選 location', '「地點」欄恢復', h2, h2.some(h => h.includes('地點')));
 });
 
 await guard('欄位標題選單', async () => {
   const head = name => full.locator('div.rounded-md.border table thead button', { hasText: name });
   await head('稽核編號').click(); await full.waitForTimeout(300);
   const pop = await full.locator('[role=dialog]').last().innerText();
-  await full.locator('[role=dialog] button', { hasText: 'Sort Desc' }).click(); await full.waitForTimeout(300);
+  await full.locator('[role=dialog] button', { hasText: '降冪排序' }).click(); await full.waitForTimeout(300);
   const desc = await dtNos(full);
-  await full.locator('[role=dialog] button', { hasText: 'Sort Asc' }).click(); await full.waitForTimeout(300);
+  await full.locator('[role=dialog] button', { hasText: '升冪排序' }).click(); await full.waitForTimeout(300);
   const asc = await dtNos(full);
   await full.keyboard.press('Escape'); await full.waitForTimeout(200);
   const cmp = (x, y) => x.localeCompare(y, undefined, { numeric: true });
   const nondecr = asc.every((v, i) => i === 0 || cmp(asc[i - 1], v) <= 0);
-  rec('資料表', '欄標題選單（稽核編號）', '出現 Sort Asc / Sort Desc / Hide Column / Filter', pop.replace(/\s+/g, ' '), /Sort Asc/.test(pop) && /Sort Desc/.test(pop) && /Hide Column/.test(pop) && /Filter/.test(pop));
-  rec('資料表', 'Sort Desc', '依編號遞減', desc.slice(0, 3), JSON.stringify(desc) === JSON.stringify([...asc].reverse()) && desc[0] !== asc[0]);
-  rec('資料表', 'Sort Asc', '依編號遞增', asc.slice(0, 3), nondecr);
+  rec('資料表', '欄標題選單（稽核編號）', '出現 升冪排序 / 降冪排序 / 隱藏此欄 / 篩選（無英文）', pop.replace(/\s+/g, ' '),
+    ['升冪排序', '降冪排序', '隱藏此欄', '篩選'].every(x => pop.includes(x)) && !/Sort Asc|Sort Desc|Hide Column|Filter/.test(pop));
+  rec('資料表', '降冪排序', '依編號遞減', desc.slice(0, 3), JSON.stringify(desc) === JSON.stringify([...asc].reverse()) && desc[0] !== asc[0]);
+  rec('資料表', '升冪排序', '依編號遞增', asc.slice(0, 3), nondecr);
   // status filter
   await head('狀態').click(); await full.waitForTimeout(300);
   await full.locator('[role=dialog] [role=combobox]').click(); await full.waitForTimeout(200);
@@ -368,18 +386,19 @@ await guard('欄位標題選單', async () => {
   const ev = await shot(full, 'A09-status-filter');
   await head('狀態').click(); await full.waitForTimeout(300);
   await full.locator('[role=dialog] [role=combobox]').click(); await full.waitForTimeout(200);
-  await full.locator('[role=option]', { hasText: /^All$/ }).click(); await full.waitForTimeout(400);
+  await full.locator('[role=option]', { hasText: /^全部$/ }).click(); await full.waitForTimeout(400);
   await full.keyboard.press('Escape'); await full.waitForTimeout(200);
   const all = await dtNos(full);
-  rec('資料表', '狀態欄 Filter = Closed', '只剩 2 筆 Closed', closed, closed.length === 2 && closed.includes('AHB-CLOSED-1') && closed.includes('AHB-AGENDA-CLOSED-1'), ev);
-  rec('資料表', '狀態欄 Filter = All', '回到全部', all.length, all.length === 13);
+  rec('資料表', '狀態欄 篩選 = Closed', '只剩 2 筆 Closed', closed, closed.length === 2 && closed.includes('AHB-CLOSED-1') && closed.includes('AHB-AGENDA-CLOSED-1'), ev);
+  rec('資料表', '狀態欄 篩選 = 全部', '回到全部', all.length, all.length === 13);
   // text filter on title
   await head('主旨').click(); await full.waitForTimeout(300);
+  const ph = await full.locator('[role=dialog] input').getAttribute('placeholder');
   await full.locator('[role=dialog] input').fill('Agenda'); await full.waitForTimeout(400);
   const ag = await dtNos(full);
   await full.locator('[role=dialog] input').fill(''); await full.waitForTimeout(300);
   await full.keyboard.press('Escape'); await full.waitForTimeout(200);
-  rec('資料表', '主旨欄 Filter 文字', '輸入 Agenda 只剩 2 筆', ag, ag.length === 2);
+  rec('資料表', '主旨欄 篩選文字', '提示文字「篩選主旨…」；輸入 Agenda 只剩 2 筆', { placeholder: ph, rows: ag }, ph === '篩選主旨…' && ag.length === 2);
   // contractor filter
   await head('承包商').click(); await full.waitForTimeout(300);
   await full.locator('[role=dialog] [role=combobox]').click(); await full.waitForTimeout(200);
@@ -389,18 +408,19 @@ await guard('欄位標題選單', async () => {
   const svEv = await shot(full, 'A09b-contractor-filter', true);
   await head('承包商').click(); await full.waitForTimeout(300);
   await full.locator('[role=dialog] [role=combobox]').click(); await full.waitForTimeout(200);
-  await full.locator('[role=option]', { hasText: /^All$/ }).click(); await full.waitForTimeout(400);
+  await full.locator('[role=option]', { hasText: /^全部$/ }).click(); await full.waitForTimeout(400);
   await full.keyboard.press('Escape'); await full.waitForTimeout(200);
-  rec('資料表', '承包商欄 Filter = Second Vendor', '只剩 Second Vendor 的 1 筆', sv, sv.length === 1, svEv);
+  rec('資料表', '承包商欄 篩選 = Second Vendor', '精確比對：只剩 Second Vendor 的 1 筆（不含沒有承包商的稽核）', sv, sv.length === 1 && sv[0] === created.second?.auditNo, svEv);
   // hide column from header, restore via View
   await head('稽核員').click(); await full.waitForTimeout(300);
-  await full.locator('[role=dialog] button', { hasText: 'Hide Column' }).click(); await full.waitForTimeout(300);
+  await full.locator('[role=dialog] button', { hasText: '隱藏此欄' }).click(); await full.waitForTimeout(300);
   await full.keyboard.press('Escape'); await full.waitForTimeout(200);
   const h = await full.locator('div.rounded-md.border table thead th').allInnerTexts();
-  await full.locator('button', { hasText: 'View' }).click(); await full.waitForTimeout(300);
+  await full.locator('button', { hasText: /^檢視$/ }).click(); await full.waitForTimeout(300);
   await full.locator('[role=menuitemcheckbox]', { hasText: 'auditor' }).click(); await full.waitForTimeout(300);
   await full.keyboard.press('Escape'); await full.waitForTimeout(200);
-  rec('資料表', 'Hide Column（稽核員）', '「稽核員」欄隱藏，可由 View 恢復', h, !h.some(x => x.includes('稽核員')));
+  const hBack = await full.locator('div.rounded-md.border table thead th').allInnerTexts();
+  rec('資料表', '隱藏此欄（稽核員）', '「稽核員」欄隱藏，可由「檢視」恢復', { hidden: h, restored: hBack.some(x => x.includes('稽核員')) }, !h.some(x => x.includes('稽核員')) && hBack.some(x => x.includes('稽核員')));
 });
 
 await guard('開啟列', async () => {
@@ -415,7 +435,11 @@ await guard('開啟列', async () => {
 await guard('刪除', async () => {
   const draftTrash = dtRow(full, 'AHB-DRAFT-1').locator('td:last-child button');
   const dis = { disabled: await draftTrash.isDisabled(), title: await draftTrash.getAttribute('title') };
-  rec('資料表', '刪除鈕（非 Void 列）', '停用，提示「請先將此稽核作廢，才能刪除」', dis, dis.disabled && dis.title === '請先將此稽核作廢，才能刪除');
+  // a disabled button gets no pointer events, so the tooltip that shows is the one on its wrapper div (AUDIT-BTNFIX)
+  await draftTrash.scrollIntoViewIfNeeded();
+  const bb = await draftTrash.boundingBox(); await full.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2);
+  dis.hoverTitle = await full.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('[title]')?.getAttribute('title') || null, [bb.x + bb.width / 2, bb.y + bb.height / 2]);
+  rec('資料表', '刪除鈕（非 Void 列）', '停用，滑鼠移上去提示「請先將此稽核作廢，才能刪除」', dis, dis.disabled && dis.title === '請先將此稽核作廢，才能刪除' && dis.hoverTitle === '請先將此稽核作廢，才能刪除');
   await draftTrash.click({ force: true }); await full.waitForTimeout(500);
   const openedByDisabled = await wizardOpen(full);
   rec('資料表', '點停用的刪除鈕', '不刪除、不開啟精靈', { wizardOpened: openedByDisabled, modal: await modal(full).count() }, !openedByDisabled,
@@ -462,9 +486,9 @@ await guard('第1步', async () => {
   await full.locator('form select:not([name])').first().selectOption('ahb-vendor');
   await full.fill('input[name=auditStartDate]', '2026-10-21');
   await full.fill('input[name=auditEndDate]', '2026-10-20');
-  const warned = await toast(full, /is before|早於|之前/);
-  const tText = warned ? await full.locator('[data-sonner-toast]').last().innerText() : '';
-  rec('第1步', '結束日早於開始日', '跳出日期順序警告 toast', { warned, text: tText }, warned, await shot(full, 'B01-date-warning'));
+  const warned = await toast(full, /早於/);   // Chinese since AUDIT-BTNFIX (it used to be English)
+  const tText = (await full.locator('[data-sonner-toast]').allInnerTexts()).join(' | ');
+  rec('第1步', '結束日早於開始日', '跳出中文日期順序警告 toast（…早於…）', { warned, text: tText }, warned && !/is before/.test(tText), await shot(full, 'B01-date-warning'));
   await full.fill('input[name=auditEndDate]', '2026-10-22');
   await full.locator('select[name=status]').selectOption('In Progress');
   rec('第1步', '狀態下拉（新稽核）', '可選 In Progress', await full.locator('select[name=status]').inputValue(), (await full.locator('select[name=status]').inputValue()) === 'In Progress');
@@ -542,13 +566,26 @@ await guard('第3步 Agenda', async () => {
   await full.locator('[data-agenda-row]').nth(idx).locator('button').click(); await full.waitForTimeout(200);
   const f = await rows();
   const leftover = f.filter(r => r.kind === 'lunch' && r.date === '2026-10-25').length;
-  rec('第3步', '刪除當天唯一時段', '（設計未明）當天未修改的預設午餐是否一併移除', `刪除 10/25 唯一時段後，10/25 的預設午餐${leftover ? '仍留在議程' : '一併移除'}`, leftover ? '待確認' : true);
+  // AUDIT-BTNFIX #68: deleting a day's last session drops that day's untouched default lunch
+  rec('第3步', '刪除當天唯一時段', '當天未修改的預設午餐一併移除', `刪除 10/25 唯一時段後，10/25 的預設午餐${leftover ? '仍留在議程' : '一併移除'}（共 ${f.length} 列）`, !leftover && f.length === 2);
   if (leftover) {
     const li = f.findIndex(r => r.kind === 'lunch' && r.date === '2026-10-25');
     await full.locator('[data-agenda-row]').nth(li).locator('button').click(); await full.waitForTimeout(200);
   }
+  // the lunch row's own delete button: a new day (10/22) brings its lunch; delete the lunch, then the session
+  await add(); await full.waitForTimeout(200);
+  const d2 = inp((await rows()).length - 1).nth(0);
+  await d2.fill('2026-10-22'); await d2.focus(); await d2.blur(); await full.waitForTimeout(200);
+  const g0 = await rows();
+  const lunch22 = g0.findIndex(r => r.kind === 'lunch' && r.date === '2026-10-22');
+  if (lunch22 >= 0) { await full.locator('[data-agenda-row]').nth(lunch22).locator('button').click(); await full.waitForTimeout(200); }
+  const g1 = await rows();
+  rec('第3步', '刪除午餐列', '午餐列可刪除（當天的時段保留）', { before: g0.length, lunch22: lunch22 >= 0, after: g1.length, session22: g1.filter(r => r.kind === 'session' && r.date === '2026-10-22').length },
+    lunch22 >= 0 && g1.length === g0.length - 1 && g1.filter(r => r.kind === 'lunch' && r.date === '2026-10-22').length === 0 && g1.filter(r => r.kind === 'session' && r.date === '2026-10-22').length === 1);
+  const s22 = g1.findIndex(r => r.kind === 'session' && r.date === '2026-10-22');
+  if (s22 >= 0) { await full.locator('[data-agenda-row]').nth(s22).locator('button').click(); await full.waitForTimeout(200); }
   const g = await rows();
-  rec('第3步', '刪除午餐列', '午餐列可刪除', g.length, g.length === 2);
+  rec('第3步', '刪除後回到原議程', '剩 10/21 的時段 + 午餐 2 列', g.map(r => `${r.date} ${r.kind}`), g.length === 2);
 });
 
 await guard('儲存草稿（首次）', async () => {
@@ -582,71 +619,124 @@ await guard('第3步 列印/Word', async () => {
 
 await guard('第4步', async () => {
   await step(full, 4);
+  // AUDIT-TEMPLATES R2: the chips are the template library's audit types; ticking one only marks the type
   const NAMES = ['ISO 9001:2015', 'ISO 45001', '品質管理程序書', '供應商評鑑表'];
-  const chips = await full.locator('form fieldset').first().locator('button').allInnerTexts();
-  rec('第4步', '模板選項', '固定 4 個：ISO 9001:2015 / ISO 45001 / 品質管理程序書 / 供應商評鑑表', chips, JSON.stringify(chips.map(s => s.trim())) === JSON.stringify(NAMES));
-  const chip = n => full.locator('form fieldset').first().locator('button', { hasText: n });
-  const on = async n => (await chip(n).getAttribute('class')).includes('bg-teal-600');
-  for (const n of NAMES) await chip(n).click();
-  const allOn = await Promise.all(NAMES.map(on));
-  await chip('ISO 45001').click();
-  const after = await Promise.all(NAMES.map(on));
-  rec('第4步', '模板 chip 點選', '4 個皆可選取（變色）', allOn, allOn.every(Boolean));
-  rec('第4步', '模板 chip 再點取消', 'ISO 45001 取消選取，其餘保留', after, JSON.stringify(after) === '[true,false,true,true]', await shot(full, 'B08-templates'));
-
-  const sel = full.locator('form select[name=no]').first();
-  const clause = full.locator('form input[name=clause]').first(), task = full.locator('form input[name=task]').first();
-  const plus = task.locator('xpath=following-sibling::button');
+  const chipAll = full.locator('form [data-template-chip]');
+  await chipAll.first().waitFor({ timeout: 10000 });
+  const chips = await chipAll.evaluateAll(es => es.map(e => e.getAttribute('data-template-chip')));
+  rec('第4步', '稽核類型選項（模板庫）', '4 個：ISO 9001:2015 / ISO 45001 / 品質管理程序書 / 供應商評鑑表', chips, JSON.stringify(chips) === JSON.stringify(NAMES));
+  const chip = n => full.locator(`form [data-template-chip="${n}"]`);
+  const on = async n => (await chip(n).getAttribute('aria-pressed')) === 'true' && (await chip(n).getAttribute('class')).includes('bg-teal-600');
+  const sel = full.locator('[data-add-form] select[data-clause-pick]');
+  const qsel = full.locator('[data-add-form] select[data-question-pick]');
+  const clause = full.locator('[data-add-form] textarea[data-new-clause]'), task = full.locator('[data-add-form] textarea[name=task]');
+  const plus = full.locator('[data-add-form] [data-add-item]');
   const items = () => full.locator('form div[class*="h-[300px]"] > div.group');
   const itemTexts = () => items().evaluateAll(es => es.map(e => e.innerText.replace(/\s+/g, ' ')));
-  await sel.selectOption('7.2');
-  const filled = { clause: await clause.inputValue(), task: await task.inputValue() };
-  rec('第4步', 'ISO 條文下拉選 7.2', '自動帶入條文與查檢問題', filled, filled.clause === 'Competence' && filled.task.startsWith('How do you determine'));
+  const clauseOpts = () => sel.locator('option').evaluateAll(os => os.map(o => ({ v: o.value, t: o.textContent.trim(), g: o.parentElement.tagName === 'OPTGROUP' ? o.parentElement.label : null })));
+  const pickClause = async no => {
+    const v = (await clauseOpts()).find(o => o.v.endsWith(`::${no}`) && o.g === 'ISO 9001:2015')?.v;
+    if (!v) throw new Error(`clause ${no} not in the dropdown`);
+    await sel.selectOption(v); await full.waitForTimeout(150);
+  };
+  const o0 = await clauseOpts();
+  rec('第4步', '未勾選類型時的條文下拉', '提示「請先在上方勾選稽核類型…」，只有「✎ 自訂題目」可選', o0.map(o => o.t),
+    o0.length === 2 && o0[0].t.startsWith('請先在上方勾選稽核類型') && o0[1].v === 'custom' && o0[1].t.includes('自訂題目'));
+  for (const n of NAMES) { await chip(n).click(); await full.waitForTimeout(100); }
+  const emptyToast = await toast(full, /目前沒有查檢項目/, 3000);
+  const allOn = await Promise.all(NAMES.map(on));
+  const itemsAfterTick = await items().count();
+  const batch = await full.locator('form [data-batch-pick]').evaluateAll(es => es.map(e => ({ name: e.getAttribute('data-batch-pick'), text: e.innerText.trim() })));
+  await chip('ISO 45001').click(); await full.waitForTimeout(150);
+  const after = await Promise.all(NAMES.map(on));
+  rec('第4步', '稽核類型 chip 點選', '4 個皆可勾選（變色）；勾選只標記類型、不加入任何查檢項；空模板跳「目前沒有查檢項目」', { allOn, itemsAfterTick, emptyToast },
+    allOn.every(Boolean) && itemsAfterTick === 0 && emptyToast);
+  rec('第4步', '批次挑題按鈕', '只有含題目的已勾選類型出現「從 ISO 9001:2015 批次挑題」', batch,
+    batch.length === 1 && batch[0].name === 'ISO 9001:2015' && batch[0].text === '從 ISO 9001:2015 批次挑題');
+  rec('第4步', '稽核類型 chip 再點取消', 'ISO 45001 取消勾選，其餘保留', after, JSON.stringify(after) === '[true,false,true,true]', await shot(full, 'B08-templates'));
+
+  // replaces the old fixed 20-clause ISO dropdown: clause (from the ticked types) + question dropdowns
+  const o1 = await clauseOpts();
+  const isoClauses = o1.filter(o => o.g === 'ISO 9001:2015');
+  rec('第4步', '條文下拉（勾選 ISO 9001:2015 後）', '列出 ISO 9001:2015 的 59 個條文（編號＋標題）與「✎ 自訂題目」，沒有固定 20 條的舊清單', { iso: isoClauses.length, first: isoClauses[0]?.t, custom: o1.some(o => o.v === 'custom'), other: o1.filter(o => o.g && o.g !== 'ISO 9001:2015').length },
+    isoClauses.length === 59 && /^4\.1\s+Understanding/.test(isoClauses[0]?.t || '') && o1.some(o => o.v === 'custom') && o1.filter(o => o.g && o.g !== 'ISO 9001:2015').length === 0);
+  await pickClause('7.2');
+  const q72 = await qsel.locator('option').evaluateAll(os => os.map(o => o.textContent.trim()));
+  await qsel.selectOption({ index: 1 }); await full.waitForTimeout(150);
+  const filled = { questions: q72, clause: (await clause.inputValue()).slice(0, 40), task: (await task.inputValue()).slice(0, 40) };
+  rec('第4步', '條文下拉選 7.2 → 題目選「第 1 題」', '題目下拉有 全部（1 題）／第 1 題；選第 1 題自動帶入條文內容與查檢重點（仍可編輯）', filled,
+    JSON.stringify(q72) === '["全部（1 題）","第 1 題"]' && filled.clause.startsWith('The organization shall:') && filled.task.startsWith('Show me how'));
   await plus.click(); await full.waitForTimeout(200);
   const n1 = await items().count();
-  rec('第4步', '新增（+）', '新增 1 筆、輸入欄清空', { items: n1, task: await task.inputValue() }, n1 === 1 && (await task.inputValue()) === '');
-  await sel.selectOption('8.5'); await task.press('Enter'); await full.waitForTimeout(200);
+  const card1 = (await itemTexts())[0] || '';
+  rec('第4步', '新增（+）', '新增 1 筆（7.2，標示「來自模板：ISO 9001:2015」）、輸入欄清空', { items: n1, task: await task.inputValue(), clausePick: await sel.inputValue(), card: card1.slice(0, 80) },
+    n1 === 1 && (await task.inputValue()) === '' && (await sel.inputValue()) === '' && card1.includes('7.2') && card1.includes('來自模板：ISO 9001:2015'));
+  await pickClause('8.5.4'); await qsel.selectOption({ index: 1 }); await full.waitForTimeout(150);
+  await task.press('Enter'); await full.waitForTimeout(200);
   const n2 = await items().count();
-  rec('第4步', '查檢問題欄按 Enter', '等同新增', n2, n2 === 2);
+  rec('第4步', '查檢重點欄按 Enter', '等同新增（8.5.4 第 1 題）', { items: n2, card: ((await itemTexts())[1] || '').slice(0, 60) }, n2 === 2 && ((await itemTexts())[1] || '').includes('8.5.4'));
   await sel.selectOption('custom'); await full.waitForTimeout(150);
-  const cno = full.locator('form input[placeholder^="自訂編號 (例"]');
+  const cno = full.locator('[data-add-form] input[name=no]');
   const customShown = await cno.count();
   await cno.fill('ZZZ');
   await cno.locator('xpath=following-sibling::button').click(); await full.waitForTimeout(150);
-  const backToSelect = { select: await full.locator('form select[name=no]').count() >= 1 && (await cno.count()) === 0, clause: await clause.inputValue(), task: await task.inputValue() };
-  rec('第4步', '自訂條文 → ✕', '自訂編號欄出現；按 ✕ 回到下拉、欄位清空', { customShown, ...backToSelect }, customShown === 1 && backToSelect.select && backToSelect.clause === '' && backToSelect.task === '');
-  await sel.selectOption('custom'); await cno.fill('C-1'); await clause.fill('現場安全'); await task.fill('是否配戴安全帽？');
+  const backToSelect = { select: (await sel.count()) === 1 && (await cno.count()) === 0, clausePick: await sel.inputValue(), clause: await clause.inputValue(), task: await task.inputValue() };
+  rec('第4步', '✎ 自訂題目 → ✕', '自訂編號欄出現；按 ✕ 回到條文下拉、欄位清空', { customShown, ...backToSelect },
+    customShown === 1 && backToSelect.select && backToSelect.clausePick === '' && backToSelect.clause === '' && backToSelect.task === '');
+  await sel.selectOption('custom'); await full.waitForTimeout(150);
+  await cno.fill('C-1'); await clause.fill('現場安全'); await task.fill('是否配戴安全帽？');
   await plus.click(); await full.waitForTimeout(200);
   const t3 = await itemTexts();
-  rec('第4步', '自訂條文新增', '新增編號 C-1 的項目', t3[2], t3.length === 3 && t3[2].includes('C-1') && t3[2].includes('是否配戴安全帽'), await shot(full, 'B09-custom-items'));
+  rec('第4步', '自訂題目新增', '新增編號 C-1 的項目（不標示來自模板）', t3[2], t3.length === 3 && t3[2].includes('C-1') && t3[2].includes('是否配戴安全帽') && !t3[2].includes('來自模板'), await shot(full, 'B09-custom-items'));
   await plus.click(); await full.waitForTimeout(200);
   rec('第4步', '空白時按 +', '不新增', await items().count(), (await items().count()) === 3);
 
-  // edit / cancel / save / custom-clause edit / clause dropdown in edit
+  // edit / cancel / save / custom-number edit / plain number input in edit mode
   const item = i => items().nth(i);
   await item(0).locator('button').first().click(); await full.waitForTimeout(200);
-  await item(0).locator('input[name=task]').fill('人員資格是否有紀錄？（已修改）');
+  await item(0).locator('textarea[name=task]').fill('人員資格是否有紀錄？（已修改）');
   await item(0).locator('button', { hasText: '儲存' }).click(); await full.waitForTimeout(200);
   const e1 = (await itemTexts())[0];
   rec('第4步', '編輯（筆）→ 儲存', '項目內容更新', e1, e1.includes('已修改'));
   await item(0).locator('button').first().click(); await full.waitForTimeout(200);
-  await item(0).locator('input[name=task]').fill('不應保存的內容');
+  await item(0).locator('textarea[name=task]').fill('不應保存的內容');
   await item(0).locator('button', { hasText: '取消' }).click(); await full.waitForTimeout(200);
   const e2 = (await itemTexts())[0];
   rec('第4步', '編輯 → 取消', '內容不變', e2, e2.includes('已修改') && !e2.includes('不應保存'));
   await item(2).locator('button').first().click(); await full.waitForTimeout(200);
   const customEdit = await item(2).locator('input[name=no]').inputValue().catch(() => null);
   await item(2).locator('button', { hasText: '取消' }).click(); await full.waitForTimeout(200);
-  rec('第4步', '編輯自訂條文項目', '編輯列顯示自訂編號輸入框（C-1）', customEdit, customEdit === 'C-1');
+  rec('第4步', '編輯自訂題目項目', '編輯列顯示編號輸入框（C-1）', customEdit, customEdit === 'C-1');
   await item(1).locator('button').first().click(); await full.waitForTimeout(200);
-  await item(1).locator('select[name=no]').selectOption('9.1');
+  const editRow = { selects: await item(1).locator('select').count(), noType: await item(1).locator('input[name=no]').getAttribute('type'), no: await item(1).locator('input[name=no]').inputValue() };
+  await item(1).locator('input[name=no]').fill('9.1');
+  await item(1).locator('textarea[name=clause]').fill('Monitoring, measurement, analysis and evaluation');
   await item(1).locator('button', { hasText: '儲存' }).click(); await full.waitForTimeout(200);
   const e3 = (await itemTexts())[1];
-  rec('第4步', '編輯中改 ISO 條文下拉', '改為 9.1 並帶入條文', e3, e3.includes('9.1') && e3.includes('Monitoring'));
-  await sel.selectOption('10.3'); await plus.click(); await full.waitForTimeout(200);
+  rec('第4步', '編輯中改條文編號（純文字輸入，取代舊的 ISO 條文下拉）', '編輯列是純文字編號欄（無下拉）；改為 9.1 與新條文內容後儲存', { ...editRow, card: e3.slice(0, 90) },
+    editRow.selects === 0 && editRow.noType === 'text' && editRow.no === '8.5.4' && e3.includes('9.1') && e3.includes('Monitoring') && !e3.includes('8.5.4'));
+  // 「全部」: every question of a clause at once (4.1 has 2), then the duplicate guard, then delete them again
+  await pickClause('4.1');
+  const q41 = await qsel.inputValue();
+  const preview = await full.locator('[data-add-form] [data-all-item]').count();
+  const hideFields = await clause.count();
+  await plus.click(); await full.waitForTimeout(200);
+  const addedToast = await toast(full, /已從 ISO 9001:2015 帶入 2 項/);
+  const n4 = await items().count();
+  const t4 = await itemTexts();
+  rec('第4步', '條文 4.1 → 題目「全部」→ +', '預設「全部（2 題）」、預覽 2 題（不顯示單題輸入欄）；按 + 一次加入 2 題並提示', { q: q41, preview, hideFields, items: n4, addedToast, tags: t4.slice(3).map(x => x.includes('4.1') && x.includes('來自模板：ISO 9001:2015')) },
+    q41 === 'all' && preview === 2 && hideFields === 0 && n4 === 5 && addedToast && t4.slice(3).every(x => x.includes('4.1') && x.includes('來自模板：ISO 9001:2015')), await shot(full, 'B09b-all-questions'));
+  await pickClause('4.1');
+  const tagged = (await clauseOpts()).find(o => o.v.endsWith('::4.1'))?.t || '';
+  await plus.click(); await full.waitForTimeout(200);
+  const dupToast = await toast(full, /這一題已經在稽核中/);
+  rec('第4步', '同一條文再按 +（全部）', '條文選項標示已加入；不重複加入、提示「這一題已經在稽核中」', { option: tagged, dupToast, items: await items().count() }, dupToast && (await items().count()) === 5);
+  // back to an empty add form (the '' option is disabled): ✎ 自訂題目 then ✕
+  await sel.selectOption('custom'); await full.waitForTimeout(100); await cno.locator('xpath=following-sibling::button').click(); await full.waitForTimeout(150);
   const before = await items().count();
   await item(before - 1).locator('button').nth(1).click(); await full.waitForTimeout(200);
   rec('第4步', '刪除項目（垃圾桶）', '項目移除', { before, after: await items().count() }, (await items().count()) === before - 1);
+  await item(3).locator('button').nth(1).click(); await full.waitForTimeout(200);
 
   // save-blocking guards
   await task.fill('還沒按新增的問題');
@@ -668,8 +758,12 @@ await guard('第4步', async () => {
   t = track(full);
   await foot(full, /儲存草稿/).click(); await full.waitForTimeout(1500); t.stop();
   const saved = await getAudit(full, newId);
-  rec('第4步', '儲存草稿', '模板 3 個、查檢項 3 筆（7.2 / 9.1 / C-1）已儲存', { put: t.c.PUT, templates: saved.selected_templates, nos: saved.custom_check_items.map(i => i.no) },
-    t.c.PUT === 1 && JSON.stringify(saved.selected_templates) === '["ISO 9001:2015","品質管理程序書","供應商評鑑表"]' && JSON.stringify(saved.custom_check_items.map(i => i.no)) === '["7.2","9.1","C-1"]');
+  const expTpl = NAMES.filter(n => n !== 'ISO 45001');
+  rec('第4步', '儲存草稿', `類型 3 個（${expTpl.join(' / ')}）、查檢項 3 筆（7.2 / 9.1 / C-1）已儲存`, { put: t.c.PUT, templates: saved.selected_templates, nos: saved.custom_check_items.map(i => i.no) },
+    t.c.PUT === 1 && JSON.stringify(saved.selected_templates) === JSON.stringify(expTpl) && JSON.stringify(saved.custom_check_items.map(i => i.no)) === '["7.2","9.1","C-1"]');
+  const tags = saved.custom_check_items.map(i => i.templateItemId || null);
+  rec('第4步', '模板題目來源標記（存檔）', '7.2 / 8.5.4 兩題帶 templateId + templateItemId；自訂題 C-1 不帶', tags,
+    tags[0] === 'iso9001-7.2-1' && tags[1] === 'iso9001-8.5.4-1' && tags[2] === null && saved.custom_check_items[0].templateId != null && saved.custom_check_items[2].templateId == null);
   const pr = await printCheck(full, 'checklist');
   rec('第4步', '列印查檢表', '列印一次、kind=checklist、含查檢項', { calls: pr.calls, kind: pr.kind, hasItem: pr.text.includes('是否配戴安全帽') }, pr.calls === 1 && pr.kind === 'checklist' && pr.text.includes('是否配戴安全帽'));
   const w = await wordDownload(full, 'checklist');
@@ -765,7 +859,7 @@ await guard('關閉與未儲存提示', async () => {
   rec('精靈', '未儲存視窗「離開」', '精靈關閉、修改未存（標題不變）', leave, !leave.open && leave.title === 'BTN 進行中稽核');
   // unsaved new check item (typed, not added) also guards the close
   await openRow(full, newNo); await step(full, 4);
-  await full.locator('form input[name=task]').first().fill('未新增的問題');
+  await full.locator('[data-add-form] textarea[name=task]').fill('未新增的問題');
   await closeX(full).click(); await full.waitForTimeout(400);
   const m2 = await modal(full).count();
   if (m2) await modal(full).locator('button', { hasText: '離開' }).click();
@@ -821,9 +915,9 @@ for (const user of ['audit_full', 'audit_viewer']) {
       await step(p, 4); const ev4 = await shot(p, `C-${user}-${status.replace(' ', '')}-step4`);
       const editable = user === 'audit_full' && (status === 'Draft' || status === 'In Progress');
       const lockedOk = s.step1.title && s.step1.project && s.step1.status && s.step2 && !s.step3.addRow && s.step3.rowDelete === 0
-        && s.step4.chipDisabled && s.step4.taskDisabled && s.step4.plusDisabled && (s.step4.itemBtnsDisabled !== false)
+        && s.step4.chipDisabled && s.step4.clausePickDisabled && s.step4.taskDisabled && s.step4.plusDisabled && s.step4.batchPick === 0 && (s.step4.itemBtnsDisabled !== false)
         && (s.step5.passDisabled !== false) && (s.step5.noteDisabled !== false) && s.step5.findingsDisabled && s.saveDraft === 0 && s.submit === 0;
-      const editOk = !s.step1.title && !s.step1.project && !s.step1.status && !s.step2 && s.step3.addRow && !s.step4.chipDisabled && !s.step4.taskDisabled
+      const editOk = !s.step1.title && !s.step1.project && !s.step1.status && !s.step2 && s.step3.addRow && !s.step4.chipDisabled && !s.step4.clausePickDisabled && !s.step4.taskDisabled
         && !s.step4.plusDisabled && s.step4.itemBtnsDisabled === false && s.step5.passDisabled === false && s.step5.noteDisabled === false && !s.step5.findingsDisabled
         && s.saveDraft === 1 && s.submit === 1;
       const loc = `${user}／${status}（${no}）`;
@@ -834,6 +928,7 @@ for (const user of ['audit_full', 'audit_viewer']) {
         s.back1 === 0 && s.next1 === 1 && s.afterNext === 2 && s.afterBack === 1 && s.next5 === 0);
       rec(loc, '列印（第 3/4/5 步）＋匯出 Word', '三步皆有列印與 Word', [s.print3, s.word3, s.print4, s.word4, s.print5, s.word5], [s.print3, s.word3, s.print4, s.word4, s.print5, s.word5].every(x => x === 1), ev);
       rec(loc, '第 5 步分類篩選／搜尋', '仍可使用（只是瀏覽）', { chipDisabled: s.step5.chipDisabled, searchDisabled: s.step5.searchDisabled }, s.step5.chipDisabled === false && s.step5.searchDisabled === false);
+      if (editable) rec(loc, '唯讀提示橫幅', '可編輯時不顯示唯讀橫幅', s.banner || '無橫幅', s.banner === null);
       if (status === 'Draft' && user === 'audit_full') {
         rec(loc, '狀態下拉選項', 'Draft / Planned / Void', s.step1.statusOptions, JSON.stringify(s.step1.statusOptions) === '["Draft","Planned","Void"]');
       }
@@ -848,7 +943,8 @@ for (const user of ['audit_full', 'audit_viewer']) {
         await p.waitForTimeout(200);
         const after = await p.locator('form table tbody tr').first().locator('button[title="不符合 (X)"]').getAttribute('class');
         rec(loc, '點擊鎖定中的 Fail ✕', '沒有反應（狀態不變）', before === after ? '無變化' : '狀態被改變', before === after);
-        rec(loc, '唯讀提示', '（UX）唯讀時是否有說明', s.notice ? '有唯讀說明' : '畫面沒有任何唯讀／已鎖定說明', s.notice ? true : '觀察');
+        const expKey = status === 'Closed' ? 'audit.wizard.readOnlyClosed' : status === 'Void' ? 'audit.wizard.readOnlyVoid' : 'audit.wizard.readOnlyNoPermission';
+        rec(loc, '唯讀提示橫幅', `顯示唯讀橫幅（${expKey}）並說明原因`, s.banner || '畫面沒有唯讀橫幅', !!s.banner && s.banner.key === expKey && s.banner.text.length > 0);
         // the print + Word still work when read-only
         const pr = await printCheck(p, 'report');
         const w = await wordDownload(p, 'report');

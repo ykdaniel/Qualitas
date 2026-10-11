@@ -56,6 +56,7 @@ AUDIT_VIEW = "audit:view:all"
 AUDIT_CREATE = "audit:create:all"
 AUDIT_UPDATE = "audit:update:all"
 AUDIT_DELETE = "audit:delete:all"
+AUDIT_TEMPLATE_MANAGE = "audit:template:manage"  # the audit template library (AUDIT-TEMPLATES-2026-001)
 
 # OBS Permissions
 OBS_VIEW = "obs:view:all"
@@ -152,6 +153,7 @@ ALL_PERMISSIONS = [
     {"code": AUDIT_CREATE, "description": "建立 Audit"},
     {"code": AUDIT_UPDATE, "description": "更新 Audit"},
     {"code": AUDIT_DELETE, "description": "刪除 Audit"},
+    {"code": AUDIT_TEMPLATE_MANAGE, "description": "管理稽核模板"},
 
     {"code": OBS_VIEW, "description": "查看 OBS 記錄"},
     {"code": OBS_CREATE, "description": "建立 OBS"},

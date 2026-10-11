@@ -1,0 +1,814 @@
+[
+ {
+  "id": "iso9001-4.1-1",
+  "no": "4.1",
+  "title": "Understanding the organization and its context",
+  "clause": "The organization shall determine external and internal issues that are relevant to its purpose and its strategic direction and that affect its ability to achieve the intended result(s) of its quality management system.",
+  "task": "How has the organization determined external and internal issues relevant to its purpose and strategic direction?\nHow do these affect the ability to achieve the intended result of the QMS?"
+ },
+ {
+  "id": "iso9001-4.1-2",
+  "no": "4.1",
+  "title": "Understanding the organization and its context",
+  "clause": "The organization shall monitor and review the information about these external and internal issues.",
+  "task": "How do you monitor and review information about these internal and external issues?"
+ },
+ {
+  "id": "iso9001-4.2-1",
+  "no": "4.2",
+  "title": "Understanding the needs and expectations of interested parties",
+  "clause": "Due to their impact or potential impact on the organization’s ability to consistently provide products and services that meet customer and applicable statutory and regulatory requirements, the organization shall determine:\na) the interested parties that are relevant to the quality management system;\nb) the requirements of these interested parties that are relevant to the quality management system.",
+  "task": "How have you determined what interested parties are relevant to the QMS?\nHow have you determined what requirements those parties have that are relevant to the QMS?\nHow has impact or potential impact been determined?"
+ },
+ {
+  "id": "iso9001-4.2-2",
+  "no": "4.2",
+  "title": "Understanding the needs and expectations of interested parties",
+  "clause": "The organization shall monitor and review the information about these interested parties and their relevant requirements.",
+  "task": "How do you monitor and review the information about interested parties and their relevant requirements?"
+ },
+ {
+  "id": "iso9001-4.3-1",
+  "no": "4.3",
+  "title": "Determining the scope of the quality management system",
+  "clause": "The organization shall determine the boundaries and applicability of the quality management system to establish its scope.",
+  "task": "How have the boundaries and applicability of the QMS been used to establish the scope of the organization?"
+ },
+ {
+  "id": "iso9001-4.3-2",
+  "no": "4.3",
+  "title": "Determining the scope of the quality management system",
+  "clause": "When determining this scope, the organization shall consider:\na) the external and internal issues referred to in 4.1;\nb) the requirements of relevant interested parties referred to in 4.2;\nc) the products and services of the organization.",
+  "task": "How have:\nThe external and internal issues;\nThe requirements of relevant interested parties and;\nThe products and services of the organization been considered when determining the scope of the organization?"
+ },
+ {
+  "id": "iso9001-4.3-3",
+  "no": "4.3",
+  "title": "Determining the scope of the quality management system",
+  "clause": "Where a requirement of this International Standard within the determined scope can be applied, then it shall be applied by the organization.",
+  "task": "How has the application of the International Standard within the scope been determined, and how has it been applied by the organization?"
+ },
+ {
+  "id": "iso9001-4.3-4",
+  "no": "4.3",
+  "title": "Determining the scope of the quality management system",
+  "clause": "If any requirement(s) of this International Standard cannot be applied, this shall not affect the organization’s ability or responsibility to ensure conformity of products and services.",
+  "task": "How have any requirements of the International Standard been determined as not applicable? Show me how conformity of products and services are not affected by this."
+ },
+ {
+  "id": "iso9001-4.3-5",
+  "no": "4.3",
+  "title": "Determining the scope of the quality management system",
+  "clause": "The scope shall be available and be maintained as documented information stating the:\n-products and services covered by the quality management system;\n-justification for any instance where a requirement of this International Standard cannot be applied.",
+  "task": "Where is the scope available? Where is it maintained as documented information?\nDoes it state what products and services are covered by the QMS?\nDoes it justify how instances of requirements of the QMS cannot be applied?\n應備證據：Scope required as documented information."
+ },
+ {
+  "id": "iso9001-4.4-1",
+  "no": "4.4",
+  "title": "Quality management system and its processes",
+  "clause": "The organization shall establish, implement, maintain and continually improve a quality management system, including the processes needed and their interactions, in accordance with the requirements of this International Standard.",
+  "task": "How has the QMS been established? Show me how this is implemented. How is it maintained and continually improved? How have the processes been determined and how do they interact?"
+ },
+ {
+  "id": "iso9001-4.4-2",
+  "no": "4.4",
+  "title": "Quality management system and its processes",
+  "clause": "The organization shall determine the processes needed for the quality management system and\ntheir application throughout the organization and shall determine:\na) the inputs required and the outputs expected from these processes;\nb) the sequence and interaction of these processes;\nc) the criteria, methods, including measurements and related performance indicators needed to\nensure the effective operation, and control of these processes;\nd) the resources needed and ensure their availability;\ne) the assignment of the responsibilities and authorities for these processes;\nf) the risks and opportunities in accordance with the requirements of 6.1, and plan and implement the appropriate actions to address them;\ng) the methods for monitoring, measuring, as appropriate, and evaluation of processes and, if\nneeded, the changes to processes to ensure that they achieve intended results;\nh) opportunities for improvement of the processes and the quality management system.",
+  "task": "How have the processes been determined for the QMS?\nWhat are the inputs and outputs for those processes?\nWhat is the sequence and interaction of the processes?\nWhat are the criteria, methods, measurement and related performance indicators needed to operate and control those processes?\nWhat resources are needed and how are these made available?\nHow are responsibilities and authorities assigned for those processes?\nHow are risks and opportunities considered and what plans are made to implement actions to address them?\nWhat methods are used to monitor, measure and evaluate processes and, if needed, what changes are made to achieve intended results?\nHow are opportunities to improve the processes and the QMS determined?"
+ },
+ {
+  "id": "iso9001-4.4-3",
+  "no": "4.4",
+  "title": "Quality management system and its processes",
+  "clause": "The organization shall maintain documented information to the extent necessary to support the operation of processes and retain documented information to the extent necessary to have confidence that the processes are being carried out as planned.",
+  "task": "What documented information exists to support the operation of processes?\nHow is this documented information retained?\nHow is confidence that the processes are being carried out as planned determined?\n應備證據：Documented information to support the operation of processes."
+ },
+ {
+  "id": "iso9001-5.1.2-1",
+  "no": "5.1.2",
+  "title": "Customer focus",
+  "clause": "Top management shall demonstrate leadership and commitment with respect to customer focus by ensuring that:\na) customer requirements and applicable statutory and regulatory requirements are determined and met;\nb) the risks and opportunities that can affect conformity of products and services and the ability to enhance customer satisfaction are determined and addressed;\nc) the focus on consistently providing products and services that meet customer and applicable statutory and regulatory requirements is maintained;\nd) the focus on enhancing customer satisfaction is maintained.",
+  "task": "Show me how top management demonstrates leadership and commitment w.r.t. customer focus ensuring requirements and applicable statutory and regulatory requirements are determined and met. How are risks and opportunities that can affect conformity of products and services determined? How is the ability to enhance customer satisfaction determined and addressed? How is the focus on consistently providing products and services that meet customer and applicable statutory and regulatory requirements maintained? How is customer satisfaction maintained?"
+ },
+ {
+  "id": "iso9001-5.2.1-1",
+  "no": "5.2.1",
+  "title": "Quality policy",
+  "clause": "Top management shall establish, review and maintain a quality policy that:\na) is appropriate to the purpose and context of the organization;\nb) provides a framework for setting and reviewing quality objectives;\nc) includes a commitment to satisfy applicable requirements;\nd) includes a commitment to continual improvement of the quality management system.",
+  "task": "How has top management established the quality policy, and how is it reviewed and maintained (how often, by whom, e.g. in management review)?\nIs it appropriate to the purpose and context of the organization?\nDoes it provide a framework for setting and reviewing quality objectives?\nDoes it include a commitment to satisfy applicable requirements?\nDoes it include a commitment to continual improvement of the QMS?"
+ },
+ {
+  "id": "iso9001-5.2.2-1",
+  "no": "5.2.2",
+  "title": "Quality policy",
+  "clause": "The quality policy shall:\na) be available as documented information;\nb) be communicated, understood and applied within the organization;\nc) be available to relevant interested parties, as appropriate.",
+  "task": "Where is the quality policy available as documented information?\nHow is it communicated? Show me how it is understood and applied within the organization.\nHow have you made it available to relevant interested parties?\n應備證據：Quality Policy as document information"
+ },
+ {
+  "id": "iso9001-5.3-1",
+  "no": "5.3",
+  "title": "Organizational roles, responsibility and authorities",
+  "clause": "Top management shall ensure that the responsibilities and authorities for relevant roles are assigned, communicated and understood within the organization.",
+  "task": "How does top management ensure that responsibilities and authorities for relevant roles are assigned, communicated and understood within the organization?"
+ },
+ {
+  "id": "iso9001-5.3-2",
+  "no": "5.3",
+  "title": "Organizational roles, responsibility and authorities",
+  "clause": "Top management shall assign the responsibility and authority for:\na) ensuring that the quality management system conforms to the requirements of this International Standard;\nb) ensuring that the processes are delivering their intended outputs;\nc) reporting on the performance of the quality management system, on opportunities for improvement and on the need for change or innovation, and especially for reporting to top management;\nd) ensuring the promotion of customer focus throughout the organization;\ne) ensuring that the integrity of the quality management system is maintained when changes to the quality management system are planned and implemented.",
+  "task": "How does top management assign the responsibility and authority for:\nEnsuring that the QMS conforms to the International standard?\nEnsuring processes are delivering their intended outputs?\nHow is the performance of the QMS, opportunities for improvement and the need for change or innovation reported to top management?\nHow is customer focus promoted within the organization?\nHow is the integrity of the QMS maintained when changes to the QMS are planned and implemented?"
+ },
+ {
+  "id": "iso9001-6.1.1-1",
+  "no": "6.1.1",
+  "title": "Actions to address risks and opportunities",
+  "clause": "When planning for the quality management system, the organization shall consider the issues referred to in 4.1 and the requirements referred to in 4.2 and determine the risks and opportunities that need to be addressed to:\na) give assurance that the quality management system can achieve its intended result(s);\nb) prevent, or reduce, undesired effects;\nc) achieve continual improvement.",
+  "task": "How are the internal and external issues and interested parties considered when planning for the QMS?\nHow are risks and opportunities determined and addressed so that the QMS can:\na) achieve its intended results;\nb) Prevent or reduce undesired effects;\nc) Achieve continual improvement?"
+ },
+ {
+  "id": "iso9001-6.1.2-1",
+  "no": "6.1.2",
+  "title": "Actions to address risks and opportunities",
+  "clause": "The organization shall plan:\na) actions to address these risks and opportunities;\nb) how to:\n1) integrate and implement the actions into its quality management system processes (see 4.4);\n2) evaluate the effectiveness of these actions.",
+  "task": "How are actions planned to address risks and opportunities?\nHow are actions integrated and implemented into the QMS processes?\nHow do you evaluate the effectiveness of the actions?"
+ },
+ {
+  "id": "iso9001-6.1.2-2",
+  "no": "6.1.2",
+  "title": "Actions to address risks and opportunities",
+  "clause": "Actions taken to address risks and opportunities shall be proportionate to the potential impact on the conformity of products and services.",
+  "task": "How are actions taken to address risks and opportunities determined as being appropriate to the potential impact on the conformity of products and services?"
+ },
+ {
+  "id": "iso9001-6.2.1-1",
+  "no": "6.2.1",
+  "title": "Quality objectives and planning to achieve them",
+  "clause": "The organization shall establish quality objectives at relevant functions, levels and processes.\nThe quality objectives shall:\na) be consistent with the quality policy,\nb) be measurable;\nc) take into account applicable requirements;\nd) be relevant to conformity of products and services and the enhancement of customer satisfaction;\ne) be monitored;\nf) be communicated;\ng) be updated as appropriate.\nThe organization shall retain documented information on the quality objectives.",
+  "task": "Where are the quality objectives and are these at all relevant functions, levels and processes?\nAre they consistent with the quality policy?\nAre they measurable?\nDo they consider applicable requirements?\nAre they relevant to the conformity of\nproducts and services and do they enhance\ncustomer satisfaction?\nAre they monitored? How? How often?\nHow are they communicated?\nHow are they updated?\nWhere is the documented information on\nthe quality objectives?\n應備證據：Documented information on quality objectives"
+ },
+ {
+  "id": "iso9001-6.2.2-1",
+  "no": "6.2.2",
+  "title": "Quality objectives and planning to achieve them",
+  "clause": "When planning how to achieve its quality objectives, the organization shall determine:\na) what will be done;\nb) what resources will be required;\nc) who will be responsible;\nd) when it will be completed;\ne) how the results will be evaluated.",
+  "task": "How does the organization determine what will be done, with what resources, when completed and how will results be evaluated\nfor quality objectives?"
+ },
+ {
+  "id": "iso9001-6.2.2.1-1",
+  "no": "6.2.2.1",
+  "title": "Product design skills",
+  "clause": "The organization shall ensure that personnel with product design responsibility are competent to achieve design requirements and are skilled in applicable tools and techniques. Applicable tools and techniques shall be identified by the organization.",
+  "task": "How do you determine that personnel with product design responsibility are competent to achieve design requirements? How do you determine skills required in applicable tools and techniques? How do you identify applicable tools and techniques?"
+ },
+ {
+  "id": "iso9001-6.3-1",
+  "no": "6.3",
+  "title": "Planning of changes",
+  "clause": "Where the organization determines the need for change to the quality management system (see 4.4) the change shall be carried out in a planned and systematic manner.\nThe organization shall consider:\na) the purpose of the change and any of its potential consequences;\nb) the integrity of the quality management system;\nc) the availability of resources;\nd) the allocation or reallocation of responsibilities and authorities.",
+  "task": "How are changes to the QMS planned systematically?\nDemonstrate the purpose and potential consequences of changes;\nDemonstrate the integrity of the QMS;\nDemonstrate how resources are made available?\nDemonstrate how responsibility and authority is allocated or reallocated."
+ },
+ {
+  "id": "iso9001-7.1.1-1",
+  "no": "7.1.1",
+  "title": "General",
+  "clause": "The organization shall determine and provide the resources needed for the establishment, implementation, maintenance and continual improvement of the quality management system.\nThe organization shall consider:\na) the capabilities of, and constraints on, existing internal resources;\nb) what needs to be obtained from external providers.",
+  "task": "Demonstrate how resources are determined for the establishment, implementation, maintenance and continual improvement of the QMS.\nShow me how the capabilities and constraints on internal resources are considered.\nShow me how needs from external providers are considered."
+ },
+ {
+  "id": "iso9001-7.1.2-1",
+  "no": "7.1.2",
+  "title": "People",
+  "clause": "To ensure that the organization can consistently meet customer and applicable statutory and regulatory requirements, the organization shall provide the persons necessary for the effective operation of the quality management system, including the processes needed.",
+  "task": "How do you provide persons necessary to consistently meet customer, applicable statutory and regulatory requirements for the QMS including the necessary processes?"
+ },
+ {
+  "id": "iso9001-7.1.3-1",
+  "no": "7.1.3",
+  "title": "Infrastructure",
+  "clause": "The organization shall determine, provide and maintain the infrastructure for the operation of its processes to achieve conformity of products and services.",
+  "task": "How do you determine, provide and maintain the infrastructure for the operation of processes to achieve products and service conformity?"
+ },
+ {
+  "id": "iso9001-7.1.4-1",
+  "no": "7.1.4",
+  "title": "Environment for the operation of processes",
+  "clause": "The organization shall determine, provide and maintain the environment necessary for the operation of its processes and to achieve conformity of products and services.",
+  "task": "How do you determine, provide and maintain the environment for the operation of processes to achieve products and service conformity?"
+ },
+ {
+  "id": "iso9001-7.1.5-1",
+  "no": "7.1.5",
+  "title": "Monitoring and measuring resources",
+  "clause": "Where monitoring or measuring is used for evidence of conformity of products and services to specified requirements the organization shall determine the resources needed to ensure valid and reliable monitoring and measuring results.",
+  "task": "How are the resources determined for ensuring valid and reliable monitoring and measuring results, where used?"
+ },
+ {
+  "id": "iso9001-7.1.5-2",
+  "no": "7.1.5",
+  "title": "Monitoring and measuring resources",
+  "clause": "The organization shall ensure that the resources provided:\na) are suitable for the specific type of monitoring and measurement activities being undertaken;\nb) are maintained to ensure their continued fitness for their purpose.",
+  "task": "How do you ensure that resources provided are suitable for the specific monitoring and measurement activities and are maintained to ensure continued fitness for purpose?"
+ },
+ {
+  "id": "iso9001-7.1.5-3",
+  "no": "7.1.5",
+  "title": "Monitoring and measuring resources",
+  "clause": "The organization shall retain appropriate documented information as evidence of fitness for purpose of monitoring and measurement resources.",
+  "task": "Show me the documented information which is evidence of fitness for purpose of monitoring and measurement resources.\n應備證據：Documented information of fitness for purpose of monitoring & measurement resources."
+ },
+ {
+  "id": "iso9001-7.1.5-4",
+  "no": "7.1.5",
+  "title": "Monitoring and measuring resources",
+  "clause": "Where measurement traceability is: a statutory or regulatory requirement; a customer or relevant interested party expectation; or considered by the organization to be an essential part of providing confidence in the validity of measurement results;\nmeasuring instruments shall be:\n-verified or calibrated at specified intervals or prior to use against measurement standards traceable to international or national measurement standards.\nWhere no such standards exist, the basis used for calibration or verification shall be retained as documented information;\n-identified in order to determine their calibration status;\n-safeguarded from adjustments, damage or deterioration that would invalidate the calibration status and subsequent measurement results.",
+  "task": "Where applicable, show me how measurement instruments are:\nVerified or calibrated at specified intervals against national or international measurement standards;\nIf there are no standards, show me the documented information which is used as the basis used for calibration or verification.\nShow me how measurement instruments are identified to determine their calibration status.\nShow me how they are safeguarded from adjustments.\nShow me how they are safeguarded from damage and deterioration.\n應備證據：Documented information for the basis of calibration or verification where no standards exist."
+ },
+ {
+  "id": "iso9001-7.1.5-5",
+  "no": "7.1.5",
+  "title": "Monitoring and measuring resources",
+  "clause": "The organization shall determine if the validity of previous measurement results has been adversely affected when an instrument is found to be defective during its planned verification or calibration, or during its use, and take appropriate corrective action as necessary.",
+  "task": "How do you determine the validity of previous measurements if you find an instrument to be defective during verification or calibration?\nWhat appropriate actions can you take?"
+ },
+ {
+  "id": "iso9001-7.1.6-1",
+  "no": "7.1.6",
+  "title": "Organizational knowledge",
+  "clause": "The organization shall determine the knowledge\nnecessary for the operation of its processes and to\nachieve conformity of products and services.",
+  "task": "How do you determine necessary\nknowledge for the operation of processes?\nHow do you determine necessary\nknowledge to achieve conformity of\nproducts and services?"
+ },
+ {
+  "id": "iso9001-7.1.6-2",
+  "no": "7.1.6",
+  "title": "Organizational knowledge",
+  "clause": "This knowledge shall be maintained, and made\navailable to the extent necessary.",
+  "task": "How do you maintain this knowledge and\nhow do you make it available to the extent\nnecessary?"
+ },
+ {
+  "id": "iso9001-7.1.6-3",
+  "no": "7.1.6",
+  "title": "Organizational knowledge",
+  "clause": "When addressing changing needs and trends, the\norganization shall consider its current knowledge\nand determine how to acquire or access the\nnecessary additional knowledge.",
+  "task": "How do you consider current knowledge\nand how do you acquire additional\nknowledge when addressing changing\nneeds and trends?"
+ },
+ {
+  "id": "iso9001-7.2-1",
+  "no": "7.2",
+  "title": "Competence",
+  "clause": "The organization shall:\na) determine the necessary competence of person(s) doing work under its control that affects its quality performance;\nb) ensure that these persons are competent on the basis of appropriate education, training, or experience;\nc) where applicable, take actions to acquire the necessary competence, and evaluate the effectiveness of the actions taken;\nd) retain appropriate documented information as evidence of competence.\nNOTE Applicable actions can include, for example, the provision of training to, the mentoring of, or the re-assignment of currently employed persons; or the hiring or contracting of competent persons.",
+  "task": "Show me how:\nYou determine the necessary competence of people doing work under your control that affects quality performance;\nHow do you determine competence on the basis of appropriate education, training or experience?\nHow do you take actions to acquire necessary competence where applicable and how do you evaluate the effectiveness of those actions?\nShow me documented information where appropriate of competence.\n應備證據：Documented information as evidence of competence where appropriate."
+ },
+ {
+  "id": "iso9001-7.3-1",
+  "no": "7.3",
+  "title": "Awareness",
+  "clause": "Persons doing work under the organization’s control shall be aware of:\na) the quality policy;\nb) relevant quality objectives;\nc) their contribution to the effectiveness of the\nquality management system, including the benefits\nof improved quality performance;\nd) the implications of not conforming with the\nquality management system requirements.",
+  "task": "How are people aware of:\nThe quality policy?\nRelevant quality objectives?\nTheir contribution to the effectiveness of the QMS?\nThe benefits of improved performance?\nThe implications of not conforming with the\nQMS requirements?"
+ },
+ {
+  "id": "iso9001-7.4-1",
+  "no": "7.4",
+  "title": "Communication",
+  "clause": "The organization shall determine the internal and external communications relevant to the quality management system including:\na) on what it will communicate;\nb) when to communicate;\nc) with whom to communicate;\nd) how to communicate.",
+  "task": "How do you determine internal and external communications relevant to the QMS?\nHow do you determine:\nWhat?\nWhen?\nWith Whom?\nHow?"
+ },
+ {
+  "id": "iso9001-7.5.1-1",
+  "no": "7.5.1",
+  "title": "General",
+  "clause": "The organization’s quality management system shall include:\na) documented information required by this International Standard;\nb) documented information determined by the organization as being necessary for the effectiveness of the quality management system.",
+  "task": "What documented information do you have as required by this standard?\nWhat documented information do you have as being necessary for the effectiveness of your QMS?\n應備證據：Documented information required by this standard.\nDocumented information necessary for the effectiveness of\nthe QMS."
+ },
+ {
+  "id": "iso9001-7.5.2-1",
+  "no": "7.5.2",
+  "title": "Creating and updating",
+  "clause": "When creating and updating documented information the organization shall ensure appropriate:\na) identification and description (e.g. a title, date, author, or reference number);\nb) format (e.g. language, software version, graphics) and media (e.g. paper, electronic);\nc) review and approval for suitability and adequacy.",
+  "task": "Show me that your documented information contains:\nIdentification;\nDescription;\nIn what media format?\nShow me how the documented information is reviewed and approved for suitability and\nadequacy.\n應備證據：Documented information (in various media) needs\nidentification, description.\nReview / approval process?"
+ },
+ {
+  "id": "iso9001-7.5.3.1-1",
+  "no": "7.5.3.1",
+  "title": "Control of documented information",
+  "clause": "Documented information required by the quality management system and by this International Standard shall be controlled to ensure:\na) it is available and suitable for use, where and when it is needed;\nb) it is adequately protected (e.g. from loss of confidentiality, improper use, or loss of integrity).",
+  "task": "Show me how you control documented information.\nShow me how you make it available and suitable for use.\nHow do you protect your documented information?\n應備證據：Control of documented information.\nSuitability and availability for use.\nHow is it protected?"
+ },
+ {
+  "id": "iso9001-7.5.3.2-1",
+  "no": "7.5.3.2",
+  "title": "Control of documented information",
+  "clause": "For the control of documented information, the\norganization shall address the following\nactivities, as applicable:\na) distribution, access, retrieval and use;\nb) storage and preservation, including preservation\nof legibility;\nc) control of changes (e.g. version control);\nd) retention and disposition.",
+  "task": "When controlling documented information,\nhow do you address:\nDistribution;\nAccess;\nRetrieval;\nUse;\nStorage and preservation;\nLegibility;\nControl of changes;\nRetention and disposition.\n應備證據：Control of documented information.\nChange control, distribution, access, retrieval, use, storage,\npreservation, legibility, retention and disposition."
+ },
+ {
+  "id": "iso9001-7.5.3.2-2",
+  "no": "7.5.3.2",
+  "title": "Control of documented information",
+  "clause": "Documented information of external origin\ndetermined by the organization to be necessary for\nthe planning and operation of the quality\nmanagement system shall be identified as\nappropriate, and controlled.",
+  "task": "How do you identify as appropriate and\ncontrol documented information of\nexternal origin which you have determined\nas necessary for the QMS\n應備證據：Control of external documented information."
+ },
+ {
+  "id": "iso9001-8.1-1",
+  "no": "8.1",
+  "title": "Operational planning and control",
+  "clause": "The organization shall plan, implement and control the processes, as outlined in 4.4, needed to meet requirements for the provision of products and services and to implement the actions determined in 6.1, by:\na) determining requirements for the product and services;\nb) establishing criteria for the processes and for the acceptance of products and services;\nc) determining the resources needed to achieve conformity to product and service requirements;\nd) implementing control of the processes in accordance with the criteria;\ne) retaining documented information to the extent necessary to have confidence that the processes have been carried out as planned and to demonstrate conformity of products and services to requirements.",
+  "task": "How are processes needed to meet requirements for provision of products and services planned, implemented and controlled?\nHow are requirements for products and services determined?\nHow is criteria for processes and acceptance for products and services determined?\nHow are resources determined?\nHow is process control implemented?\nShow me the documented information that shows confidence in that the processes have been carried out as planned and can demonstrate conformity of products and services.\n應備證據：Documented information to show processes have been carried out as planned and can demonstrate conformity of products and services."
+ },
+ {
+  "id": "iso9001-8.1-2",
+  "no": "8.1",
+  "title": "Operational planning and control",
+  "clause": "The output of this planning shall be suitable for the organization's operations.",
+  "task": "How have you determined that the output from the planning process is suitable for your operations?"
+ },
+ {
+  "id": "iso9001-8.1-3",
+  "no": "8.1",
+  "title": "Operational planning and control",
+  "clause": "The organization shall control planned changes and review the consequences of unintended changes, taking action to mitigate any adverse effects, as necessary.",
+  "task": "How do you control planned changes? How do you review the consequences of unintended changes? What action is taken to mitigate any adverse effects?"
+ },
+ {
+  "id": "iso9001-8.1-4",
+  "no": "8.1",
+  "title": "Operational planning and control",
+  "clause": "The organization shall ensure that outsourced processes are controlled in accordance with 8.4.",
+  "task": "How do you control outsourced processes?"
+ },
+ {
+  "id": "iso9001-8.2.1-1",
+  "no": "8.2.1",
+  "title": "Customer communication",
+  "clause": "The organization shall establish the processes for communicating with customers in relation to:\na) information relating to products and services;\nb) enquiries, contracts or order handling, including changes;\nc) obtaining customer views and perceptions, including customer complaints;\nd) the handling or treatment of customer property, if applicable;\ne) specific requirements for contingency actions, when relevant.",
+  "task": "What are your processes for communicating with customers? How do you communicate information relating to:\nProducts;\nServices;\nEnquiries;\nContracts;\nOrder handling;\nCustomer views, perceptions and complaints;\nHandling or treatment of customer property;\nSpecific requirements for contingency actions?"
+ },
+ {
+  "id": "iso9001-8.2.2-1",
+  "no": "8.2.2",
+  "title": "Determination of requirements related to products and services",
+  "clause": "The organization shall establish, implement and maintain a process to determine the requirements for the products and services to be offered to potential customers.",
+  "task": "What is your process to determine the requirements for products and services to be offered to potential customers? How do you establish, implement and maintain this process?"
+ },
+ {
+  "id": "iso9001-8.2.2-2",
+  "no": "8.2.2",
+  "title": "Determination of requirements related to products and services",
+  "clause": "The organization shall ensure that:\na) product and service requirements (including those considered necessary by the organization), and applicable statutory and regulatory requirements, are defined;\nb) it has the ability to meet the defined requirements and substantiate the claims for the products and services it offers.",
+  "task": "How do you define product and service requirements including statutory and regulatory requirements?\nHow do you ensure that you have the ability to meet the defined requirements and substantiate any claims for your products and services?"
+ },
+ {
+  "id": "iso9001-8.2.3-1",
+  "no": "8.2.3",
+  "title": "Review of requirements related to products and services",
+  "clause": "The organization shall review, as applicable:\na) requirements specified by the customer, including the requirements for delivery and post- delivery activities;\nb) requirements not stated by the customer, but necessary for the customers' specified or intended use, when known;\nc) additional statutory and regulatory requirements applicable to the products and services;\nd) contract or order requirements differing from those previously expressed.",
+  "task": "How do you review:\nCustomer requirements for delivery and post-delivery?\nRequirements necessary for customers' specified or intended use, where known;\nAdditional statutory and regulatory requirements applicable to products and services;\nAny other contract or order requirements."
+ },
+ {
+  "id": "iso9001-8.2.3-2",
+  "no": "8.2.3",
+  "title": "Review of requirements related to products and services",
+  "clause": "This review shall be conducted prior to the organization’s commitment to supply products and services to the customer and shall ensure contract or order requirements differing from those previously defined are resolved.",
+  "task": "Show me that the review is conducted prior to your commitment to supply products and services to your customers. How do you resolve contract or order requirements which differ from those previously defined?"
+ },
+ {
+  "id": "iso9001-8.2.3-3",
+  "no": "8.2.3",
+  "title": "Review of requirements related to products and services",
+  "clause": "Where the customer does not provide a documented statement of their requirements, the customer requirements shall be confirmed by the organization before acceptance.",
+  "task": "How do you confirm customer requirements where the customer does not provide a documented statement?"
+ },
+ {
+  "id": "iso9001-8.2.3-4",
+  "no": "8.2.3",
+  "title": "Review of requirements related to products and services",
+  "clause": "Documented information describing the results of the review, including any new or changed requirements for the products and services, shall be retained.",
+  "task": "Show me where you retain documented information which describes results of the review including any new or changed requirements.\n應備證據：Documented information of reviews describing new or changed requirements to products and services."
+ },
+ {
+  "id": "iso9001-8.2.3-5",
+  "no": "8.2.3",
+  "title": "Review of requirements related to products and services",
+  "clause": "Where requirements for products and services are changed, the organization shall ensure that relevant documented information is amended and that relevant personnel are made aware of the changed requirements.",
+  "task": "Show me the documented information containing changes to products and services. How do you ensure that relevant personnel are made aware of those changes?\n應備證據：Documented information of amended reviews and how relevant personnel are made aware of those changes."
+ },
+ {
+  "id": "iso9001-8.3.1-1",
+  "no": "8.3.1",
+  "title": "General",
+  "clause": "Where the detailed requirements of the organization’s products and services are not already established or not defined by the customer or by other interested parties, such that they are adequate for subsequent production or service provision, the organization shall establish, implement and maintain a design and development process.",
+  "task": "How do you establish, implement and maintain a design and development process (where detailed requirements of your products and services are not already established or defined by the customer or other parties)."
+ },
+ {
+  "id": "iso9001-8.3.2-1",
+  "no": "8.3.2",
+  "title": "Design and development planning",
+  "clause": "In determining the stages and controls for design and development, the organization shall consider:\na) the nature, duration and complexity of the design and development activities;\nb) requirements that specify particular process stages, including applicable design and development reviews;\nc) the required design and development verification and validation;\nd) the responsibilities and authorities involved in the design and development process;\ne) the need to control interfaces between individuals and parties involved in the design and development process;\nf) the need for involvement of customer and user groups in the design and development process;\ng) the necessary documented information to confirm that design and development requirements have been met.",
+  "task": "When determining the stages and control for design and development, show me how you consider:\nThe nature, duration and complexity of the activities;\nRequirements that specify particular process stages including applicable reviews;\nRequired verification and validation;\nResponsibilities and authorities;\nHow interfaces are controlled between individuals and parties;\nThe need for involvement of customer and user groups.\nShow me documented information that confirms design and development requirements have been met.\n應備證據：Documented information that confirms design & development requirements have been met."
+ },
+ {
+  "id": "iso9001-8.3.3-1",
+  "no": "8.3.3",
+  "title": "Design and development inputs",
+  "clause": "The organization shall determine:\na) requirements essential for the specific type of products and services being designed and developed, including, as applicable, functional and performance requirements;\nb) applicable statutory and regulatory requirements;\nc) standards or codes of practice that the organization has committed to implement;\nd) internal and external resource needs for the design and development of products and services;\ne) the potential consequences of failure due to the nature of the products and services;\nf) the level of control expected of the design and development process by customers and other relevant interested parties.",
+  "task": "Can you show me how you determine:\nRequirements essential for the type of products and services being designed and developed, including as applicable:\nFunctional & performance requirements;\nStatutory and regulatory requirements;\nStandards or codes of practice where there is a commitment to implement;\nInternal and external resources needed for the design and development of products and services;\nPotential consequences of failure;\nLevel of control expected of the design and development process by customers and other relevant parties."
+ },
+ {
+  "id": "iso9001-8.3.3-2",
+  "no": "8.3.3",
+  "title": "Design and development inputs",
+  "clause": "Inputs shall be adequate for design and development purposes, complete, and unambiguous. Conflicts among inputs shall be resolved.",
+  "task": "How do you determine that inputs are adequate, complete and unambiguous for design and development? How do you resolve conflicts among inputs?"
+ },
+ {
+  "id": "iso9001-8.3.4-1",
+  "no": "8.3.4",
+  "title": "Design and development controls",
+  "clause": "The controls applied to the design and development process shall ensure that:\na) the results to be achieved by the design and development activities are clearly defined;\nb) design and development reviews are conducted as planned;\nc) verification is conducted to ensure that the design and development outputs have met the design and development input requirements;\nd) validation is conducted to ensure that the resulting products and services are capable of meeting the requirements for the specified application or intended use (when known).",
+  "task": "How do controls that are applied to the design and development process ensure:\nResults achieved by design and development activities are clearly defined?\nDesign and development reviews are conducted as planned?\nOutputs meet the input requirements by verification/ Validation is conducted to ensure that the resulting products and services are capable of meeting the requirements for the specified application or intended use (when known)?"
+ },
+ {
+  "id": "iso9001-8.3.5-1",
+  "no": "8.3.5",
+  "title": "Design and development outputs",
+  "clause": "The organization shall ensure that design and development outputs:\na) meet the input requirements for design and development;\nb) are adequate for the subsequent processes for the provision of products and services;\nc) include or reference monitoring and measuring requirements, and acceptance criteria, as applicable;\nd) ensure products to be produced, or services to be provided, are fit for intended purpose and their safe and proper use.",
+  "task": "How do you ensure that design and development outputs:\nMeet the input requirements for design and development?\nAre adequate for the subsequent processes for the provision of products and services?\nInclude or reference monitoring and measuring requirements, and acceptance criteria, as applicable?\nEnsure products to be produced, or services to be provided, are fit for intended purpose and their safe and proper use?"
+ },
+ {
+  "id": "iso9001-8.3.5-2",
+  "no": "8.3.5",
+  "title": "Design and development outputs",
+  "clause": "The organization shall retain the documented information resulting from the design and development process.",
+  "task": "Show me the documented information which results from the design and development process.\n應備證據：Documented information from the design and development process."
+ },
+ {
+  "id": "iso9001-8.3.6-1",
+  "no": "8.3.6",
+  "title": "Design and development changes",
+  "clause": "The organization shall review, control and identify changes made to design inputs and design outputs during the design and development of products and\nservices or subsequently, to the extent that there is no adverse impact on conformity to requirements.",
+  "task": "How do you review, control and identify changes made to the design inputs and outputs during design and development of products and services ensuring no impact on conformity to requirements?"
+ },
+ {
+  "id": "iso9001-8.3.6-2",
+  "no": "8.3.6",
+  "title": "Design and development changes",
+  "clause": "Documented information on design and development changes shall be retained.",
+  "task": "Show me the documented information for design and development changes.\n應備證據：Documented information for design and development changes."
+ },
+ {
+  "id": "iso9001-8.4.1-1",
+  "no": "8.4.1",
+  "title": "General",
+  "clause": "The organization shall ensure that externally provided processes, products, and services conform to specified requirements.",
+  "task": "How do you ensure externally provided processes, products and services conform to specified requirements?"
+ },
+ {
+  "id": "iso9001-8.4.1-2",
+  "no": "8.4.1",
+  "title": "General",
+  "clause": "The organization shall apply the specified requirements for the control of externally provided products and services when:\na) products and services are provided by external providers for incorporation into the organization's own products and services;\nb) products and services are provided directly to the customer(s) by external providers on behalf of the organization;\nc) a process or part of a process is provided by an external provider as a result of a decision by the organization to outsource a process or function.",
+  "task": "Show me how you apply specified requirements for the control of externally provided products and services when:\nProducts and services are provided by external providers for incorporation into your own products and services;\nYou provide products and services directly to customers by external providers on your behalf;\nA process or part-process is provided by an external provider as a result of a decision to outsource a process or function."
+ },
+ {
+  "id": "iso9001-8.4.1-3",
+  "no": "8.4.1",
+  "title": "General",
+  "clause": "The organization shall establish and apply criteria for the evaluation, selection, monitoring of performance and re-evaluation of external providers based on their ability to provide processes or products and services in accordance with specified requirements.",
+  "task": "Show me how you establish and apply criteria for evaluation, selection, monitoring of performance and re-evaluation of external providers. How do you assess their ability to provide processes or products and services in accordance with specified requirements?"
+ },
+ {
+  "id": "iso9001-8.4.1-4",
+  "no": "8.4.1",
+  "title": "General",
+  "clause": "The organization shall retain appropriate documented information of the results of the evaluations, monitoring of the performance and re-evaluations of the external providers.",
+  "task": "What documented information do you have of the results of evaluations, monitoring of performance and re- evaluations of external providers?\n應備證據：Documented information of external providers' performance."
+ },
+ {
+  "id": "iso9001-8.4.2-1",
+  "no": "8.4.2",
+  "title": "Type and extent of control of external provision",
+  "clause": "In determining the type and extent of controls to be applied to the external provision of processes, products and services, the organization shall take into consideration:\na) the potential impact of the externally provided processes, products and services on the organization’s ability to consistently meet customer and applicable statutory and regulatory requirements;\nb) the perceived effectiveness of the controls applied by the external provider.",
+  "task": "How do you determine the controls applied to the external provision of processes, products and services and take into consideration:\na) The potential impact of the externally provided processes, products and services on the ability to consistently meet customer and applicable statutory and regulatory requirements?\nb) The perceived effectiveness of the controls applied by the external provider?"
+ },
+ {
+  "id": "iso9001-8.4.2-2",
+  "no": "8.4.2",
+  "title": "Type and extent of control of external provision",
+  "clause": "The organization shall establish and implement verification or other activities necessary to ensure the externally provided processes, products and services do not adversely affect the organization's ability to consistently deliver conforming products and services to its customers.",
+  "task": "What verification or other activities do you have to ensure externally provided processes, products and services do not adversely affect your ability to consistently deliver conforming products and services to your customers?"
+ },
+ {
+  "id": "iso9001-8.4.2-3",
+  "no": "8.4.2",
+  "title": "Type and extent of control of external provision",
+  "clause": "Processes or functions of the organization which have been outsourced to an external provider remain within the scope of the organization's quality management system; accordingly, the organization shall consider a) and b) above and define both the controls it intends to apply to the external provider and those it intends to apply to the resulting process output.",
+  "task": "When processes or functions have been outsourced to external providers, how do you consider a) and b) in 8.4.1 and how do you define the controls intended to be applied to the external provider and to the resulting process output?"
+ },
+ {
+  "id": "iso9001-8.4.3-1",
+  "no": "8.4.3",
+  "title": "Information for external providers",
+  "clause": "The organization shall communicate to external providers applicable requirements for the following:\na) the products and services to be provided or the processes to be performed on behalf of the organization;\nb) approval or release of products and services, methods, processes or equipment;\nc) competence of personnel, including necessary qualification;\nd) their interactions with the organization's quality management system;\ne) the control and monitoring of the external provide's performance to be applied by the organization;\nf) verification activities that the organization, or its customer, intends to perform at the external provider's premises.",
+  "task": "Show me how you communicate to external providers, applicable requirements for:\nProducts and services to be provided or the processes to be performed on behalf of the organization;\nApproval or release of products and services, methods, processes or equipment;\nCompetence of personnel, including necessary qualification;\nTheir interactions with the organization's quality management system;\nThe control and monitoring of the external provider's performance to be applied by the organization;\nVerification activities that the organization, or its customer, intends to perform at the external provider's premises."
+ },
+ {
+  "id": "iso9001-8.4.3-2",
+  "no": "8.4.3",
+  "title": "Information for external providers",
+  "clause": "The organization shall ensure the adequacy of specified requirements prior to their communication to the external provider.",
+  "task": "Before you communicate with external providers, how do you ensure the adequacy of specified requirements?"
+ },
+ {
+  "id": "iso9001-8.5.1-1",
+  "no": "8.5.1",
+  "title": "Control of production and service provision",
+  "clause": "The organization shall implement controlled conditions for production and service provision, including delivery and post-delivery activities.",
+  "task": "What controlled conditions do you have for production and service provision, including delivery and post-delivery activities?"
+ },
+ {
+  "id": "iso9001-8.5.1-2",
+  "no": "8.5.1",
+  "title": "Control of production and service provision",
+  "clause": "Controlled conditions shall include, as applicable:\na) the availability of documented information that defines the characteristics of the products and services;\nb) the availability of documented information that defines the activities to be performed and the results to be achieved;\nc) monitoring and measurement activities at appropriate stages to verify that criteria for control of processes and process outputs, and acceptance criteria for products and services, have been met.\nd) the use, and control of suitable infrastructure and process environment;\ne) the availability and use of suitable monitoring and measuring resources;\nf) the competence and, where applicable, required qualification of persons;\ng) the validation, and periodic revalidation, of the ability to achieve planned results of any process for production and service provision where the resulting output cannot be verified by subsequent monitoring or measurement;\nh) the implementation of products and services release, delivery and post-delivery activities.",
+  "task": "Can you show me controlled conditions for:\na) the availability of documented information defining the characteristics of the products and services;\nb) the availability of documented information defining the activities to be performed and the results to be achieved;\nc) monitoring and measurement activities at appropriate stages to verify that criteria for control of processes and process outputs, and acceptance criteria for products and services, have been met.\nd) the use, and control of suitable infrastructure and process environment;\ne) the availability and use of suitable monitoring and measuring resources;\nf) the competence and, where applicable, required qualification of persons;\ng) the validation, and periodic revalidation, of the ability to achieve planned results of any process for production and service provision where the resulting output cannot be verified by subsequent monitoring or measurement;\nh) the implementation of products and services release, delivery and post-delivery activities.\n應備證據：Documented information defining characteristics of the products and services"
+ },
+ {
+  "id": "iso9001-8.5.2-1",
+  "no": "8.5.2",
+  "title": "Identification and traceability",
+  "clause": "Where necessary to ensure conformity of products and services, the organization shall use suitable means to identify process outputs.",
+  "task": "What means do you use to identify process outputs to ensure conformity of products and services?"
+ },
+ {
+  "id": "iso9001-8.5.2-2",
+  "no": "8.5.2",
+  "title": "Identification and traceability",
+  "clause": "The organization shall identify the status of process outputs with respect to monitoring and measurement requirements throughout production and service provision.",
+  "task": "How do you identify the status of process outputs?"
+ },
+ {
+  "id": "iso9001-8.5.2-3",
+  "no": "8.5.2",
+  "title": "Identification and traceability",
+  "clause": "Where traceability is a requirement, the organization shall control the unique identification of the process outputs, and retain any documented information necessary to maintain traceability.",
+  "task": "How do you control the unique identification of process outputs, where applicable? What documented information do you retain?\n應備證據：Documented information of traceability, where required."
+ },
+ {
+  "id": "iso9001-8.5.3-1",
+  "no": "8.5.3",
+  "title": "Property belonging to customers or external providers",
+  "clause": "The organization shall exercise care with property belonging to the customer or external providers while it is under the organization's control or being used by the organization. The organization shall identify, verify, protect and safeguard the customer’s or external provider’s property provided for use or incorporation into the products and services.",
+  "task": "What care do you provide for customer or external provider’s property while under your control?\nHow do you identify, verify, protect and safeguard that property which is provided for use or incorporation into your products or services?"
+ },
+ {
+  "id": "iso9001-8.5.3-2",
+  "no": "8.5.3",
+  "title": "Property belonging to customers or external providers",
+  "clause": "When property of the customer or external provider is incorrectly used, lost, damaged or otherwise found to be unsuitable for use, the organization shall report this to the customer or external provider.",
+  "task": "What means do you use to report to the customer or external provider if their property is incorrectly used, lost, damaged or found to be unsuitable for use?"
+ },
+ {
+  "id": "iso9001-8.5.4-1",
+  "no": "8.5.4",
+  "title": "Preservation",
+  "clause": "The organization shall ensure preservation of process outputs during production and service provision, to the extent necessary to maintain conformity to requirements.",
+  "task": "How do you ensure preservation of process outputs during production and service provision to maintain conformity to product requirements?"
+ },
+ {
+  "id": "iso9001-8.5.5-1",
+  "no": "8.5.5",
+  "title": "Post-delivery activities",
+  "clause": "As applicable, the organization shall meet requirements for post-delivery activities associated with the products and services.",
+  "task": "How do you meet requirements for post- delivery activities associated with products and services?"
+ },
+ {
+  "id": "iso9001-8.5.5-2",
+  "no": "8.5.5",
+  "title": "Post-delivery activities",
+  "clause": "In determining the extent of post-delivery activities that are required, the organization shall consider:\na) the risks associated with the products and services;\nb) the nature, use and intended lifetime of the products and services;\nc) customer feedback;\nd) statutory and regulatory requirements.",
+  "task": "How do you determine:\nRisk;\nNature, use and intended lifetime;\nCustomer feedback;\nStatutory and Regulatory requirements, when determining the extent of post-delivery activities required with products and services?"
+ },
+ {
+  "id": "iso9001-8.5.6-1",
+  "no": "8.5.6",
+  "title": "Control of changes",
+  "clause": "The organization shall review and control unplanned changes essential for production or service provision to the extent necessary to ensure continuing conformity with specified requirements.",
+  "task": "How do you review and control unplanned changes to ensure continuing conformity with specified requirements?"
+ },
+ {
+  "id": "iso9001-8.5.6-2",
+  "no": "8.5.6",
+  "title": "Control of changes",
+  "clause": "The organization shall retain documented information describing the results of the review of changes, the personnel authorizing the change, and any necessary actions.",
+  "task": "What documented information can you show me which describes the results of reviews of changes, the personnel authorizing change and any necessary actions?\n應備證據：Documented information describing results of review of changes, personnel and actions."
+ },
+ {
+  "id": "iso9001-8.6-1",
+  "no": "8.6",
+  "title": "Release of products and services",
+  "clause": "The organization shall implement the planned arrangements at appropriate stages to verify that product and service requirements have been met. Evidence of conformity with the acceptance criteria shall be retained.",
+  "task": "Show me how planned arrangement have been implemented at appropriate stages to verify product and service requirements have been met. Show me what evidence you retain."
+ },
+ {
+  "id": "iso9001-8.6-2",
+  "no": "8.6",
+  "title": "Release of products and services",
+  "clause": "The release of products and services to the customer shall not proceed until the planned arrangements for verification of conformity have been satisfactorily completed, unless otherwise approved by a relevant authority and, as applicable, by the customer. Documented information shall provide traceability to the person(s) authorizing release of products and services for delivery to the customer.",
+  "task": "Show me how the release of products and services is held until planned arrangements for verification of conformity have been satisfactorily completed, unless approved by a relevant authority, or the customer if applicable. Show me documented information which shows traceability to the person authorizing release of products and services.\n應備證據：Documented information providing traceability, authorizing release of products and services."
+ },
+ {
+  "id": "iso9001-8.7-1",
+  "no": "8.7",
+  "title": "Control of non-conforming process outputs, products and services",
+  "clause": "The organization shall ensure process outputs, products and services that do not conform to requirements are identified and controlled to prevent their unintended use or delivery.",
+  "task": "How do you identify and control process outputs, products and services that do not conform to requirements and prevent their unintended use or delivery?"
+ },
+ {
+  "id": "iso9001-8.7-2",
+  "no": "8.7",
+  "title": "Control of non-conforming process outputs, products and services",
+  "clause": "The organization shall take appropriate corrective action based on the nature of the nonconformity and its impact on the conformity of products and services. This applies also to nonconforming products and services detected after delivery of the products or during the provision of the service.",
+  "task": "What appropriate corrective actions are taken based on the nature of the nonconformity and its impact on the conformity of products and services? How do you apply this to nonconformity detected after delivery?"
+ },
+ {
+  "id": "iso9001-8.7-3",
+  "no": "8.7",
+  "title": "Control of non-conforming process outputs, products and services",
+  "clause": "As applicable, the organization shall deal with nonconforming process outputs, products and services in one or more of the following ways:\na) correction;\nb) segregation, containment, return or suspension of provision of products and services;\nc) informing the customer;\nd) obtaining authorization for:\n- use “as-is’;\n- release, continuation or re-provision of the products and services;\n- acceptance under concession.",
+  "task": "How you deal with nonconforming process outputs, products and services in terms of:\nCorrection;\nSegregation, containment, return or suspension of provision of products and services?\nInforming the customer?\nObtaining authorization for use as-is?\nRelease, continuation or re-provision of the products and service?\nAcceptance under concession?"
+ },
+ {
+  "id": "iso9001-8.7-4",
+  "no": "8.7",
+  "title": "Control of non-conforming process outputs, products and services",
+  "clause": "Where nonconforming process outputs, products and services are corrected, conformity to the requirements shall be verified.",
+  "task": "How do you verify conformance where process outputs, products and services are corrected following nonconformance?"
+ },
+ {
+  "id": "iso9001-8.7-5",
+  "no": "8.7",
+  "title": "Control of non-conforming process outputs, products and services",
+  "clause": "The organization shall retain documented information of actions taken on nonconforming process outputs, products and services, including on any concessions obtained and on the person or authority that made the decision regarding dealing with the nonconformity.",
+  "task": "What documented information do you keep following actions taken to address nonconformities, including any concessions obtained and on the person or authority that made the decision regarding dealing with the nonconformance.\n應備證據：Documented information for actions taken following nonconformance, including concessions and authority granted."
+ },
+ {
+  "id": "iso9001-9.1.1-1",
+  "no": "9.1.1",
+  "title": "General",
+  "clause": "The organization shall determine:\na) what needs to be monitored and measured;\nb) the methods for monitoring, measurement, analysis and evaluation, as applicable, to ensure valid results;\nc) when the monitoring and measuring shall be performed;\nd) when the results from monitoring and measurement shall be analysed and evaluated.",
+  "task": "Show me how you determine:\nWhat needs to be monitored and measured?\nMethods for monitoring, measurement, analysis and evaluation to ensure valid results?\nWhen to perform monitoring and measuring?\nWhen results shall be analysed and evaluated?"
+ },
+ {
+  "id": "iso9001-9.1.1-2",
+  "no": "9.1.1",
+  "title": "General",
+  "clause": "The organization shall ensure that monitoring and measurement activities are implemented in accordance with the determined requirements and shall retain appropriate documented information as evidence of the results.",
+  "task": "What documented information can you show me that monitoring and measurement activities have been implemented in accordance with determined requirements?\n應備證據：Documented information of monitoring and measurement activities in accordance with determined requirements."
+ },
+ {
+  "id": "iso9001-9.1.1-3",
+  "no": "9.1.1",
+  "title": "General",
+  "clause": "The organization shall evaluate the quality performance and the effectiveness of the quality management system.",
+  "task": "Show me how you evaluate the quality performance and the effectiveness of the QMS."
+ },
+ {
+  "id": "iso9001-9.1.2-1",
+  "no": "9.1.2",
+  "title": "Customer satisfaction",
+  "clause": "The organization shall monitor customer perceptions of the degree to which requirements have been met.",
+  "task": "How do you monitor customer perception of the degree to which requirements have been met?"
+ },
+ {
+  "id": "iso9001-9.1.2-2",
+  "no": "9.1.2",
+  "title": "Customer satisfaction",
+  "clause": "The organization shall obtain information relating to customer views and opinions of the organization and its products and services.",
+  "task": "How do you obtain information relating to customer views and opinions of your products and services?"
+ },
+ {
+  "id": "iso9001-9.1.2-3",
+  "no": "9.1.2",
+  "title": "Customer satisfaction",
+  "clause": "The methods for obtaining and using this information shall be determined.",
+  "task": "What methods for obtaining and using this information do you have?"
+ },
+ {
+  "id": "iso9001-9.1.3-1",
+  "no": "9.1.3",
+  "title": "Analysis and evaluation",
+  "clause": "The organization shall analyse and evaluate appropriate data and information arising from monitoring, measurement and other sources.",
+  "task": "Show me how you analyse and evaluate data and information arising from monitoring, measurement and other sources."
+ },
+ {
+  "id": "iso9001-9.1.3-2",
+  "no": "9.1.3",
+  "title": "Analysis and evaluation",
+  "clause": "The output of analysis and evaluation shall be used to:\na) demonstrate conformity of products and services to requirements;\nb) assess and enhance customer satisfaction;\nc) ensure conformity and effectiveness of the quality management system;\nd) demonstrate that planning has been successfully implemented;\ne) assess the performance of processes;\nf) assess the performance of external provider(s);\ng) determine the need or opportunities for improvements within the quality management system.",
+  "task": "Show me how the output of analysis and evaluation is used to:\nDemonstrate conformity of products and services to requirements?\nAssess and enhance customer satisfaction?\nEnsure conformity and effectiveness of the QMS?\nDemonstrate that planning has been successfully implemented?\nAssess process performance?\nAssess performance of external providers?\nDetermine the need or opportunities for improvements within the QMS?"
+ },
+ {
+  "id": "iso9001-9.1.3-3",
+  "no": "9.1.3",
+  "title": "Analysis and evaluation",
+  "clause": "The results of analysis and evaluation shall also be used to provide inputs to management review.",
+  "task": "Show me where the results of analysis and evaluation are used to provide inputs to management review."
+ },
+ {
+  "id": "iso9001-9.2.1-1",
+  "no": "9.2.1",
+  "title": "Internal audit",
+  "clause": "The organization shall conduct internal audits at planned intervals to provide information on whether the quality management system;\na) conforms to:\n1) the organization’s own requirements for its quality management system;\n2) the requirements of this International Standard;\nb) is effectively implemented and maintained.",
+  "task": "Are internal audits being conducted at planned intervals? Do they determine whether the QMS conforms to the requirements of ISO 9001 and to the other requirements established by Organization?\n(Review records to demonstrate conformance)\nDo they determine whether the QMS is effectively implemented and maintained?\n(Review records)"
+ },
+ {
+  "id": "iso9001-9.2.2-1",
+  "no": "9.2.2",
+  "title": "Internal audit",
+  "clause": "The organization shall:\na) plan, establish, implement and maintain an audit programme(s) including the frequency, methods, responsibilities, planning requirements and reporting, which shall take into consideration the quality objectives, the importance of the processes concerned, customer feedback, changes impacting on the organization, and the results of previous audits;\nb) define the audit criteria and scope for each audit;\nc) select auditors and conduct audits to ensure objectivity and the impartiality of the audit process;\nd) ensure that the results of the audits are reported to relevant management;\ne) take necessary correction and corrective actions without undue delay;\nf) retain documented information as evidence of the implementation of the audit programme and the audit results.",
+  "task": "Can you show me audit programme(s) that takes into consideration the quality objectives, importance of the processes, customer feedback, changes impacting the organization and the results of previous audits?\nWhere are the audit criteria and scope for each audit?\nCan you demonstrate that selection of auditors and the conduct of audits are objective and impartial and that auditors don't audit their own work?\nHow are audit results reported to relevant management?\nCan you demonstrate that necessary correction and corrective actions are taken without undue delay?\nCan you show me documented information of the audit programme and the audit results?\n應備證據：Documented information of the audit programme and results"
+ },
+ {
+  "id": "iso9001-9.3.1-1",
+  "no": "9.3.1",
+  "title": "Management Review",
+  "clause": "Top management shall review the organization's quality management system, at planned intervals, to ensure its continuing suitability, adequacy, and effectiveness.",
+  "task": "What is the frequency that top management reviews the organization's QMS? How is the QMS deemed suitable, adequate and effective?"
+ },
+ {
+  "id": "iso9001-9.3.1-2",
+  "no": "9.3.1",
+  "title": "Management Review",
+  "clause": "The management review shall be planned and carried out taking into consideration:\na) the status of actions from previous management reviews;\nb) changes in external and internal issues that are relevant to the quality management system including its strategic direction;\nc) information on the quality performance, including trends and indicators for:\n1) nonconformities and corrective actions;\n2) monitoring and measurement results;\n3) audit results;\n4) customer satisfaction;\n5) issues concerning external providers and other relevant interested parties;\n6) adequacy of resources required for maintaining an effective quality management system;\n7) process performance and conformity of products and services;\nd) the effectiveness of actions taken to address risks and opportunities (see clause 6.1);\ne) new potential opportunities for continual improvement.",
+  "task": "What kinds of information are reviewed in management reviews? These must include:\nactions status of previous reviews;\nchanges to internal/external issues relevant to the QMS;\nissues that affect strategy;\nKPIs for nonconformities and corrective actions;\nmonitor and measurement of results;\naudit results;\ncustomer satisfaction;\nissues concerning external providers;\nissues concerning other relevant parties;\nadequacy of resources and effectiveness of QMS;\nprocess performance;\nconformity of products and services;\nactions taken to address risks and opportunities and their effectiveness;\nnew potential opportunities for continual improvement."
+ },
+ {
+  "id": "iso9001-9.3.2-1",
+  "no": "9.3.2",
+  "title": "Management Review",
+  "clause": "The outputs of the management review shall include decisions and actions related to:\na) continual improvement opportunities;\nb) any need for changes to the quality management system, including resource needs.",
+  "task": "Show me that management reviews include decisions and actions relating to:\nContinual improvement opportunities;\nThe need for changes to the QMS including resource needs."
+ },
+ {
+  "id": "iso9001-9.3.2-2",
+  "no": "9.3.2",
+  "title": "Management Review",
+  "clause": "The organization shall retain documented information as evidence of the results of management reviews.",
+  "task": "Show me what documented information you have as evidence of management reviews.\n應備證據：Documented information of management reviews."
+ },
+ {
+  "id": "iso9001-10.1-1",
+  "no": "10.1",
+  "title": "General",
+  "clause": "The organization shall determine and select opportunities for improvement and implement necessary actions to meet customer requirements and enhance customer satisfaction.",
+  "task": "How do you determine and select opportunities for improvement? What necessary actions have you implemented so that you have met customer requirements and enhanced customer satisfaction?"
+ },
+ {
+  "id": "iso9001-10.1-2",
+  "no": "10.1",
+  "title": "General",
+  "clause": "This shall include, as appropriate:\na) improving processes to prevent nonconformities;\nb) improving products and services to meet known and predicted requirements;\nc) improving quality management system results.",
+  "task": "Show me how you have:\nImproved processes to prevent nonconformities;\nImproved products and services to meet known and predicted requirements;\nImproved QMS results."
+ },
+ {
+  "id": "iso9001-10.2.1-1",
+  "no": "10.2.1",
+  "title": "Nonconformity and corrective action",
+  "clause": "When a nonconformity occurs, including those arising from complaints, the organization shall:\na) react to the nonconformity, and as applicable:\n1) take action to control and correct it;\n2) deal with the consequences;\nb) evaluate the need for action to eliminate the cause(s) of the nonconformity, in order that it does not recur or occur elsewhere, by:\n1) reviewing the nonconformity;\n2) determining the causes of the nonconformity;\n3) determining if similar nonconformities exist, or could potentially occur;\nc) implement any action needed;\nd) review the effectiveness of any corrective action taken;\ne) make changes to the quality management system, if necessary.",
+  "task": "When nonconformities occur, show me how;\nYou react;\nTake action to control and correct it;\nDeal with the consequences;\nEvaluate the need for action to eliminate the cause so that it does not recur or occur elsewhere by:\nReviewing the nonconformity;\nDetermining the cause of the nonconformity;\nDetermining if similar nonconformities exist or could potentially occur;\nActions needed are implemented;\nReview the effectiveness of corrective actions taken, if any;\nMake necessary changes to the QMS."
+ },
+ {
+  "id": "iso9001-10.2.1-2",
+  "no": "10.2.1",
+  "title": "Nonconformity and corrective action",
+  "clause": "Corrective actions shall be appropriate to the effects of the nonconformities encountered.",
+  "task": "Show me how correction actions were appropriate to the effects of the nonconformities encountered."
+ },
+ {
+  "id": "iso9001-10.2.2-1",
+  "no": "10.2.2",
+  "title": "Nonconformity and corrective action",
+  "clause": "The organization shall retain documented information as evidence of:\na) the nature of the nonconformities and any subsequent actions taken;\nb) the results of any corrective action.",
+  "task": "What documented information can you show me as evidence of:\nThe nature of the nonconformities and subsequent actions taken;\nThe results of any corrective action.\n應備證據：Documented information of the nature of nonconformities, subsequent actions and results of corrective action."
+ },
+ {
+  "id": "iso9001-10.3-1",
+  "no": "10.3",
+  "title": "Continual improvement",
+  "clause": "The organization shall continually improve the suitability, adequacy, and effectiveness of the quality management system.",
+  "task": "Demonstrate that you continually improve the suitability, adequacy and effectiveness of the QMS."
+ },
+ {
+  "id": "iso9001-10.3-2",
+  "no": "10.3",
+  "title": "Continual improvement",
+  "clause": "The organization shall consider the outputs of analysis and evaluation, and the outputs from management review, to confirm if there are areas of underperformance or opportunities that shall be addressed as part of continual improvement.",
+  "task": "Demonstrate that outputs of analysis and evaluation and the outputs from management review are considered to confirm if there are areas of underperformance or opportunities that shall be addressed as part of continual improvement."
+ },
+ {
+  "id": "iso9001-10.3-3",
+  "no": "10.3",
+  "title": "Continual improvement",
+  "clause": "Where applicable, the organization shall select and utilise applicable tools and methodologies for investigation of the causes of underperformance and for supporting continual improvement.",
+  "task": "What applicable tools and methodologies for investigation of the causes of underperformance and to support continual improvement are selected?"
+ }
+]

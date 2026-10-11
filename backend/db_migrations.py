@@ -169,6 +169,11 @@ def run_migrations():
     # BACKLOG #22, user's decision 2026-10-10). Runs once (migration_flags); best effort.
     _clean_legacy_bare_template_results()
 
+    # 24. The audit template library's four initial templates (AUDIT-TEMPLATES-2026-001, user's choice 2026-10-11): the
+    # names the wizard used to hard-code. Runs once (migration_flags); best effort. The table itself comes from start-up
+    # create_all (models.AuditTemplate).
+    _seed_initial_audit_templates()
+
     logger.info("Migrations completed.")
 
 class MigrationError(RuntimeError):
@@ -530,6 +535,46 @@ def _clean_legacy_bare_template_results():
             logger.info("Cleaned %d bare Checklist template(s) holding results: %s", len(cleaned), ", ".join(cleaned) or "none")
     except Exception as e:
         logger.error("Could not clean bare Checklist templates holding results: %s", e)
+
+
+AUDIT_TEMPLATES_INITIAL_FLAG = "audit_templates_initial_v1"
+
+
+def _seed_initial_audit_templates():
+    """Step 24 (AUDIT-TEMPLATES-2026-001). Writes the four initial audit templates (services.audit_template_service.
+    INITIAL_AUDIT_TEMPLATES: ISO 9001:2015 with the company's 116-question checklist, ISO 45001, 品質管理程序書, 供應商評鑑表 empty).
+
+    * Create-if-missing: a template whose name (trimmed, case-insensitive) already exists is left as it is.
+    * Runs exactly once, tracked in migration_flags (the flag is written in the same transaction as the rows). After
+      that the rows are ordinary data: a template the user renames, deactivates or removes is never written back.
+    * Best effort: a failure (including the table missing because create_all did not run) is logged, nothing is
+      half-written, no flag is set, and the next start tries again.
+    """
+    from datetime import datetime, timezone
+    try:
+        from services.audit_template_service import INITIAL_AUDIT_TEMPLATES
+        with engine.connect() as conn:
+            if conn.execute(text("SELECT 1 FROM migration_flags WHERE flag_name = :f"),
+                            {"f": AUDIT_TEMPLATES_INITIAL_FLAG}).first():
+                return
+            now = datetime.now(timezone.utc).isoformat()
+            added = []
+            for tpl in INITIAL_AUDIT_TEMPLATES:
+                if conn.execute(text("SELECT 1 FROM audit_templates WHERE lower(trim(name)) = :n"),
+                                {"n": tpl["name"].strip().lower()}).first():
+                    continue
+                conn.execute(text(
+                    "INSERT INTO audit_templates (name, description, version, is_active, items, created_at, updated_at) "
+                    "VALUES (:name, '', :version, 1, :items, :ts, :ts)"),
+                    {"name": tpl["name"], "version": tpl["version"],
+                     "items": json.dumps(tpl["items"], ensure_ascii=False), "ts": now})
+                added.append(tpl["name"])
+            conn.execute(text("INSERT INTO migration_flags (flag_name, completed_at) VALUES (:f, :ts)"),
+                         {"f": AUDIT_TEMPLATES_INITIAL_FLAG, "ts": now})
+            conn.commit()
+            logger.info("Initial audit templates added: %s", ", ".join(added) or "none")
+    except Exception as e:
+        logger.error("Could not add the initial audit templates: %s", e)
 
 
 RETIRED_MATERIAL_PERMISSION = "material:record_result:all"

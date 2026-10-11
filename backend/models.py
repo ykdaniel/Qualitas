@@ -818,6 +818,23 @@ class Audit(Base):
     vendor_ref = relationship("Contractor")
 
 
+class AuditTemplate(Base):
+    """A reusable set of audit check items (AUDIT-TEMPLATES-2026-001), offered in the wizard as an audit type. The
+    questions the auditor picks are COPIED into the audit's custom_check_items (each copy tagged templateId /
+    templateItemId), so editing a template later never changes an existing audit. Never hard-deleted: audits keep its
+    name in selected_templates; is_active=False hides it from the wizard."""
+    __tablename__ = "audit_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False)
+    description = Column(Text, nullable=True)
+    version = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    items = Column(Text, nullable=True)  # JSON list of {id, no, clause, task}; id is a stable string key
+    created_at = Column(String, nullable=True)
+    updated_at = Column(String, nullable=True)
+
+
 class Checklist(Base):
     # Table name for checklist
     __tablename__ = "checklist"

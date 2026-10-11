@@ -12,12 +12,13 @@ await p.waitForURL(u => !u.pathname.startsWith('/login'), { timeout: 15000 });
 await p.goto(UI + '/audit?openId=AHB-RETIRED-1');
 await p.waitForSelector('input[name=auditDocNo]');
 await p.locator('button', { hasText: /^4$/ }).first().click();  // Checklist Setup (step 4 since AUDIT-AGENDA)
-await p.waitForSelector('input[name=task]');
+await p.waitForSelector('[name=task]');
 const count = () => p.evaluate(() => document.querySelectorAll('[class*="rounded-2xl"] input[name=no], li, .group').length);
-const items = () => p.evaluate(() => [...document.querySelectorAll('*')].filter(e => e.children.length === 0 && /^IME-/.test(e.textContent || '')).length);
+// leaf elements showing an IME- text, not counting the form fields themselves (a <textarea>'s text content mirrors its value)
+const items = () => p.evaluate(() => [...document.querySelectorAll('*')].filter(e => e.children.length === 0 && !/^(TEXTAREA|INPUT)$/.test(e.tagName) && /^IME-/.test(e.textContent || '')).length);
 async function keydown(opts) {
   await p.evaluate(({ keyCode, isComposing }) => {
-    const el = document.querySelector('input[name=task]');
+    const el = document.querySelector('[name=task]');
     const ev = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true, isComposing });
     Object.defineProperty(ev, 'keyCode', { get: () => keyCode });
     Object.defineProperty(ev, 'which', { get: () => keyCode });
@@ -25,11 +26,11 @@ async function keydown(opts) {
   }, opts);
   await p.waitForTimeout(300);
 }
-await p.fill('input[name=task]', 'IME-safari');
+await p.fill('[name=task]', 'IME-safari');
 await keydown({ keyCode: 229, isComposing: false });
-console.log(`${(await items()) === 0 && (await p.inputValue('input[name=task]')) === 'IME-safari' ? 'PASS' : 'FAIL'} Safari IME confirm (keyCode 229, isComposing false) adds nothing, text kept`);
+console.log(`${(await items()) === 0 && (await p.inputValue('[name=task]')) === 'IME-safari' ? 'PASS' : 'FAIL'} Safari IME confirm (keyCode 229, isComposing false) adds nothing, text kept`);
 await keydown({ keyCode: 13, isComposing: true });
 console.log(`${(await items()) === 0 ? 'PASS' : 'FAIL'} Chrome IME confirm (isComposing true) adds nothing`);
 await keydown({ keyCode: 13, isComposing: false });
-console.log(`${(await items()) === 1 && (await p.inputValue('input[name=task]')) === '' ? 'PASS' : 'FAIL'} plain Enter adds the item and clears the field (items=${await items()})`);
+console.log(`${(await items()) === 1 && (await p.inputValue('[name=task]')) === '' ? 'PASS' : 'FAIL'} plain Enter adds the item and clears the field (items=${await items()})`);
 await browser.close();

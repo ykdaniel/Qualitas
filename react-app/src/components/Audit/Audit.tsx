@@ -6,6 +6,7 @@ import { useAuditStore, AuditItem } from '../../store/auditStore';
 import { useProjectStore } from '../../store/projectStore';
 import { useContractorsStore } from '../../store/contractorsStore';
 import ConfirmModal from '../Shared/ConfirmModal';
+import { useLeaveGuard } from '../Shared/LeaveGuard';
 import styles from './Audit.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
@@ -13,6 +14,7 @@ import { createColumns } from './columns';
 import AuditWizard from './AuditWizard';
 import VendorStatsPanel from './VendorStatsPanel';
 import ScheduleMatrix from './ScheduleMatrix';
+import AuditTemplatesPanel from './AuditTemplatesPanel';
 import { Search, Plus, AlertCircle, X } from 'lucide-react';
 
 // Rows shown in the schedule (all of them when a vendor is selected).
@@ -37,6 +39,20 @@ const Audit: React.FC = () => {
     const deferredSearchQuery = useDeferredValue(searchQuery);
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    // The template library tab (AUDIT-TEMPLATES-2026-001), for holders of audit:template:manage. The panel is mounted only
+    // while its tab is shown; leaving the tab with an unsaved template edit asks first (the shared leave confirmation),
+    // then drops the edit. (R1 kept the panel mounted but hidden: its dirty guard then also fired when an audit was closed,
+    // and the wizard's "leave" cleared it, so the edit could later be lost without a prompt — R1 review.)
+    const canManageTemplates = hasPermission('audit:template:manage');
+    const [activeTab, setActiveTab] = useState<'records' | 'templates'>('records');
+    const [templatesDirty, setTemplatesDirty] = useState(false);
+    const tabGuard = useLeaveGuard(templatesDirty);
+    const showTemplates = canManageTemplates && activeTab === 'templates';
+    const switchTab = (tab: 'records' | 'templates') => {
+        if (tab === activeTab) return;
+        if (tab === 'records') tabGuard.requestAction(() => { setTemplatesDirty(false); setActiveTab('records'); });
+        else setActiveTab(tab);
+    };
     const [currentAuditId, setCurrentAuditId] = useState<string | null>(null);
     // The shared contractor picker list (GET /contractors/options, any signed-in user; status normalised so
     // 'Active' and 'active' both count) — CONTRACTOR-OPTIONS-2026-001 replaced the Audit-only list.
@@ -248,7 +264,18 @@ const Audit: React.FC = () => {
             )}
 
             <div className={shellStyles.toolbar + hideWhenPrintingWizard}>
-                <div className={shellStyles.toolbarRight}>
+                {canManageTemplates ? (
+                    <div className={shellStyles.chipGroup} role="tablist">
+                        {(['records', 'templates'] as const).map(tab => (
+                            <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} data-audit-tab={tab}
+                                className={`${shellStyles.chip} ${activeTab === tab ? shellStyles.chipActive : ''}`}
+                                onClick={() => switchTab(tab)}>
+                                {t(tab === 'records' ? 'audit.tabRecords' : 'audit.tabTemplates')}
+                            </button>
+                        ))}
+                    </div>
+                ) : null}
+                <div className={shellStyles.toolbarRight} style={showTemplates ? { display: 'none' } : undefined}>
                     <div className={shellStyles.searchWrap}>
                         <Search size={15} className={shellStyles.searchIcon} strokeWidth={2} />
                         <input
@@ -268,8 +295,14 @@ const Audit: React.FC = () => {
                 </div>
             </div>
 
+            {showTemplates && (
+                <div className={hideWhenPrintingWizard.trim()}>
+                    <AuditTemplatesPanel onDirtyChange={setTemplatesDirty} />
+                </div>
+            )}
+
             {/* Premium Top Section: Interactive Panels */}
-            <div className={styles.topSection + hideWhenPrintingWizard}>
+            <div className={styles.topSection + hideWhenPrintingWizard} style={showTemplates ? { display: 'none' } : undefined}>
                 <VendorStatsPanel
                     stats={vendorStats}
                     maxAudits={maxAudits}
@@ -297,7 +330,7 @@ const Audit: React.FC = () => {
             </div>
 
             {/* Audit Data Table Area */}
-            <div className={shellStyles.content + hideWhenPrintingWizard}>
+            <div className={shellStyles.content + hideWhenPrintingWizard} style={showTemplates ? { display: 'none' } : undefined}>
                 <DataTable
                     title={t('audit.listTitle')}
                     columns={createColumns(handleEdit, handleDeleteClick, t, activeContractors, hasPermission('audit:delete:all'))}
