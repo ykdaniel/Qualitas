@@ -52,3 +52,55 @@ SOURCE: 協調中心（「登入測試」工作階段）交辦，表示使用者
 
 ## 待辦
 - 獨立 Claude 審查 → 暫存前把 stat 傳給協調中心 → 本地提交並回報 hash。不推送、不部署。
+
+> R1 已於 020d0bfc 本地提交（R1 REVIEW PASS）。
+
+---
+
+## R2（2026-10-11）：NCR、ITP、PQP、FAT、IAM
+來源：協調中心在 R1 提交後交辦。MeetingMinutes、Contractors 的 columns.tsx 依指示不動（會議記錄工作階段的 MEETING／CONTRACTOR-PERSONNEL 批次會處理）。基準 HEAD 444c94e1 之後的 020d0bfc。
+
+### 前提確認
+- 9 個 `value.includes(row.getValue(id))` 全都搭配 `filterOptions`，也就是單選 Select、值為字串：
+  - NCR status
+  - ITP status、vendor
+  - PQP status、vendor
+  - FAT supplier、status
+  - IAM role、status
+- 資料值的型別：
+  - IAM 的 `role` 是 `u.role_name || 'user'`（字串），`status` 是 `is_active ? 'active' : 'inactive'`（字串），見 `store/iamStore.ts`、`context/IAMContext.tsx`。
+  - 其餘都是後端回傳的字串。
+- 反向風險：如果資料值剛好是選項值的子字串，舊寫法是碰巧比對成功，改成完全相符後反而會被排除。逐一比對後沒有這種合法情況：
+  - PQP 的狀態由 `pqp_service._normalize_pqp_status` 統一成 `Reject`／`Not Submit`／`Under Review` 等，和選項一致。
+  - ITP 的狀態清單（`ITPModals.ITP_ALL_KNOWN_STATUSES`）和選項一致。
+  - NCR、FAT 的狀態和選項一致。
+  - 原本的 `includes` 也區分大小寫，所以大小寫不同的資料原本就比對不到，不會因為這次修改才被排除。
+
+### 修改（9 處，+9／−9）
+| 檔案 | 換行 | 欄位 |
+|---|---|---|
+| `components/NCR/columns.tsx` | CRLF | status |
+| `components/ITP/columns.tsx` | LF | status、vendor |
+| `components/PQP/columns.tsx` | CRLF | status、vendor |
+| `components/FAT/columns.tsx` | CRLF | supplier、status |
+| `components/IAM/columns.tsx` | CRLF | role、status |
+- 全部改成 `return !value || row.getValue(id) === value;`。以二進位方式修改，換行保留原樣。共用 DataTable 沒有動。
+
+### 證據
+- **實測**：`tsc` exit 0；`npm test` 164／0；5 個檔的 ESLint 都沒有問題。
+- **實測（隔離環境 8292／3292，獨立 cacheDir，已 `down`，快取已刪）**：
+  - 用 API 建資料：ITP「Approved with comments」、PQP（承包商為全名／空白）、FAT（Formosa／Southern MEP）、NCR「In Progress」、停用使用者 lff_inactive。
+  - 種子 NCR 的 `status='Opening'` 會讓 `/api/ncr/` 回 500，所以**只在隔離資料庫**把它改成 Open。
+  - **IAM**：狀態選 Inactive → 只剩 lff_inactive。修改前 `'inactive'.includes('active')` 為 true，Active 使用者也會被列出。
+  - **ITP**：狀態選「Approved with comments」→ 只剩 QTS-FHS-ITP-000001。修改前 3 筆 Approved 也會符合。
+  - **PQP**：承包商選 Formosa Heavy… → 只剩 QTS-FHS-PQP-000001，空白承包商的 QTS-NA-PQP-000001 被排除。
+  - **FAT**：供應商選 Southern MEP → 只剩 LFF pump C。
+  - **NCR**：狀態選 In Progress → 只剩 QTS-FHS-NCR-000001。
+- **未實測**：ITP 的 vendor、PQP 的 status、FAT 的 status、IAM 的 role，只讀過程式碼，和已實測的欄位是同一行寫法。修改前的對照組沒有實測。
+
+### 旁支發現（非本輪，產品既有問題，建議另開任務）
+- **FAT 沒有供應商時，整個清單會壞掉**：
+  - 用 API 建立 `supplier: ''` 的 FAT 時，後端把 vendor_id 存成 NULL，但回應 schema `FAT.supplier: str` 不接受 None，所以回 500。
+  - 之後 `GET /api/fat/` 也回 500：只要有一筆 FAT 沒有供應商，整個 FAT 清單就載入失敗。
+  - 如果正式站有 vendor_id 為 NULL 的 FAT（例如承包商被刪除或舊資料），FAT 頁會整頁失敗。
+  - 前端表單有沒有強制必填沒有確認。為了繼續驗收，只在隔離資料庫刪掉那一筆。
