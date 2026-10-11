@@ -46,6 +46,17 @@ def _entry_kind(entry: dict) -> str:
     return 'category'
 
 
+def _carried_copy(note: dict) -> dict:
+    """A progress note as the next meeting gets it (R17, the user's practice: newest red, last week's blue, key points red):
+    carried; `lastMeeting` only when it was written in the meeting being copied (not already carried into it); `highlight`
+    kept as marked."""
+    out = {k: v for k, v in note.items() if k != 'lastMeeting'}
+    out['carried'] = True
+    if not note.get('carried'):
+        out['lastMeeting'] = True
+    return out
+
+
 def carry_forward_discussion_log(raw) -> Optional[str]:
     """The discussion register the next occurrence starts with (MEETING-TABS-2026-001, user decision 2026-10-11:
     only unfinished items are brought forward). A COPY, not a reference: the earlier meeting keeps its own record.
@@ -85,9 +96,14 @@ def carry_forward_discussion_log(raw) -> Optional[str]:
                 'owner': e.get('owner') or '',
                 'targetDate': e.get('targetDate') or '',
                 'status': 'Open',
-                'updates': [{**u, 'carried': True} for u in (e.get('updates') or [])
+                'updates': [_carried_copy(u) for u in (e.get('updates') or [])
                             if isinstance(u, dict) and isinstance(u.get('content'), str)],
             })
+            # R17: an item first written in the meeting being copied reads blue in the next one; a key point stays marked
+            if not e.get('carried'):
+                row['lastMeeting'] = True
+            if e.get('highlight'):
+                row['highlight'] = True
         carried.append(row)
     return json.dumps(carried, ensure_ascii=False) if carried else None
 
@@ -397,7 +413,7 @@ class MeetingMinutesService:
         Raises ValueError (-> 404 in the router) when the meeting does not exist or is outside the caller's scope.
         """
         from docx.enum.section import WD_ORIENT, WD_SECTION
-        from docx.shared import Cm, Pt
+        from docx.shared import Cm, Pt, RGBColor
         from core import docx_builder as db
         from core.uploads import upload_root as _upload_root
 
@@ -441,6 +457,13 @@ class MeetingMinutesService:
         # 2. Discussions / actions
         _section_heading(doc, "2", "討論事項", "Discussions / Actions")
         _add_register_table(doc, register)
+        # what the colours mean (R17), as on the screen and the print
+        legend = doc.add_paragraph()
+        legend.paragraph_format.space_before = Pt(2)
+        for words, color, bold in (("紅（粗體）＝本次新增或重點 Red (bold) = this meeting or key point　", RGBColor(0xC0, 0x00, 0x00), True),
+                                   ("藍＝上次會議 Blue = last meeting　", RGBColor(0x1F, 0x4E, 0x99), False),
+                                   ("灰／黑＝更早 Grey / black = earlier", RGBColor(0x5B, 0x60, 0x68), False)):
+            db._run_font(legend.add_run(words), Pt(8), bold=bold, color=color)
 
         # 3. Attachments
         _section_heading(doc, "3", "附件", "Attachments")
@@ -494,6 +517,15 @@ def _text(value) -> str:
     return "" if value is None else str(value)
 
 
+def tone_of(x: dict) -> str:
+    """key / current / last / old — the same rule as toneOf in discussionLog.ts (R17)."""
+    if x.get("highlight"):
+        return "key"
+    if not x.get("carried"):
+        return "current"
+    return "last" if x.get("lastMeeting") else "old"
+
+
 def _no_key(no: str):
     return [int(s) if s.isdigit() else 0 for s in no.split(".")]
 
@@ -514,9 +546,11 @@ def minutes_register(raw) -> list:
         if content is None:
             content = " / ".join(str(e[k]) for k in ("topic", "discussion", "decision") if e.get(k))
         # every value as text: the register is free JSON, a hand-written API call could put a number anywhere
-        row = {"no": str(e["no"]).strip(), "kind": kind, "content": _text(content)}
+        row = {"no": str(e["no"]).strip(), "kind": kind, "content": _text(content), "carried": bool(e.get("carried")),
+               "lastMeeting": bool(e.get("lastMeeting")), "highlight": bool(e.get("highlight"))}
         if kind == "item":
-            notes = [{"date": _text(u.get("date")), "content": u["content"], "carried": bool(u.get("carried"))}
+            notes = [{"date": _text(u.get("date")), "content": u["content"], "carried": bool(u.get("carried")),
+                      "lastMeeting": bool(u.get("lastMeeting")), "highlight": bool(u.get("highlight"))}
                      for u in (e.get("updates") or []) if isinstance(u, dict) and isinstance(u.get("content"), str)]
             row.update({
                 "raisedDate": _text(e.get("raisedDate")), "owner": _text(e.get("owner")), "targetDate": _text(e.get("targetDate")),
@@ -623,6 +657,9 @@ def _add_register_table(doc, register: list):
 
     widths = [Cm(1.4), Cm(10.8), Cm(2.4), Cm(2.8)]
     grey = RGBColor(0x80, 0x80, 0x80)
+    red, blue = RGBColor(0xC0, 0x00, 0x00), RGBColor(0x1F, 0x4E, 0x99)
+    # R17: red + bold for a key point or this meeting's text (legible in black and white), blue for the meeting before
+    tone_style = {"key": (red, True), "current": (red, True), "last": (blue, False)}
     table = doc.add_table(rows=1, cols=4)
     table.style = "Table Grid"
     table.autofit = False
@@ -666,15 +703,16 @@ def _add_register_table(doc, register: list):
         if e["raisedDate"]:
             text(body, format_minutes_date(e["raisedDate"]), size=8, color=grey, first=True)
             first = False
+        item_color, item_bold = tone_style.get(tone_of(e), (None, False))
         for line in (e["content"] or db.DASH).split("\n"):
-            text(body, line, indent=bool(e["raisedDate"]), first=first)
+            text(body, line, indent=bool(e["raisedDate"]), first=first, color=item_color, bold=item_bold)
             first = False
         for u in e["updates"]:
-            color = grey if u.get("carried") else None
+            color, bold = tone_style.get(tone_of(u), (grey, False))
             if u.get("date"):
-                text(body, format_minutes_date(u["date"]), size=8, color=grey)
+                text(body, format_minutes_date(u["date"]), size=8, color=color, bold=bold)
             for line in u["content"].split("\n"):
-                text(body, line, indent=True, color=color)
+                text(body, line, indent=True, color=color, bold=bold)
         text(cells[2], e["owner"] or db.DASH, first=True)
         if e["targetDate"]:
             text(cells[3], format_minutes_date(e["targetDate"]), first=True)

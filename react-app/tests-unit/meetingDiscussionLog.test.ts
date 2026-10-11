@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
     compareNo, normalizeDiscussionLog, nextNo, addEntry, removeEntry, removeEntryWithMap, renumber, displayNo, canRemove,
     addUpdate, removeUpdate, openItemCount, headingsOf, formatMinutesDate, updatesByDate, patchUpdate, progressProblem,
-    firstProgressProblem, localToday,
+    firstProgressProblem, localToday, toneOf, toggleUpdateHighlight, toggleItemHighlight,
     latestPerSeries, collectRegisterItems, registerSourcePerSeries,
 } from '../src/components/MeetingMinutes/discussionLog.ts';
 
@@ -194,4 +194,23 @@ test('an occurrence created before open items were carried forward (empty regist
     ];
     assert.deepEqual(registerSourcePerSeries(meetings).map(m => m.id).sort(), ['r1', 't2']);
     assert.deepEqual(collectRegisterItems(meetings, 'open', '2026-10-11').map(r => `${r.meetingId}#${r.itemNo}`).sort(), ['r1#1', 't2#1']);
+});
+
+test('R17 tones: key point / this meeting red, last meeting blue, older plain; key points can be marked on carried notes', () => {
+    assert.equal(toneOf({}), 'current');                                           // written this meeting (a first meeting: all)
+    assert.equal(toneOf({ carried: true, lastMeeting: true }), 'last');
+    assert.equal(toneOf({ carried: true }), 'old');
+    assert.equal(toneOf({ carried: true, highlight: true }), 'key');
+    assert.equal(toneOf({ carried: true, lastMeeting: true, highlight: true }), 'key');  // key point first
+    let log = normalizeDiscussionLog([{ no: '1.1', kind: 'item', content: 'x', carried: true, lastMeeting: true, highlight: true,
+        updates: [{ date: '2026-07-01', content: 'old', carried: true }] }]);
+    assert.equal(log[0].lastMeeting, true);
+    assert.equal(log[0].highlight, true);                                          // flags survive reading
+    log = toggleUpdateHighlight(log, '1.1', 0);
+    assert.deepEqual(log[0].updates?.[0], { date: '2026-07-01', content: 'old', carried: true, highlight: true });  // carried: still markable
+    log = toggleUpdateHighlight(log, '1.1', 0);
+    assert.deepEqual(log[0].updates?.[0], { date: '2026-07-01', content: 'old', carried: true });               // unmarked: key removed
+    log = toggleItemHighlight(log, '1.1');
+    assert.equal('highlight' in log[0], false);
+    assert.equal(toggleItemHighlight(log, '1.1')[0].highlight, true);
 });

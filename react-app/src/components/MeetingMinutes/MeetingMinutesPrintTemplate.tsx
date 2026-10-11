@@ -1,7 +1,7 @@
 import React from 'react';
 import { val, SignCell } from '../Shared/PrintPrimitives';
 import type { Attendee, DiscussionLogEntry } from '../../store/meetingMinutesStore';
-import { displayNo, formatMinutesDate, isItem, normalizeDiscussionLog, updatesByDate } from './discussionLog';
+import { displayNo, formatMinutesDate, isItem, normalizeDiscussionLog, toneOf, updatesByDate } from './discussionLog';
 
 /**
  * Meeting Minutes print report — bilingual, lightweight sibling of the
@@ -122,9 +122,9 @@ const MeetingMinutesPrintTemplate: React.FC<MeetingMinutesPrintTemplateProps> = 
                                                 <td>{e.no}</td>
                                                 <td>
                                                     {e.raisedDate && <div className="raised-date">{formatMinutesDate(e.raisedDate)}</div>}
-                                                    <div className={e.raisedDate ? 'update-text' : undefined} style={{ whiteSpace: 'pre-wrap' }}>{val(e.content)}</div>
+                                                    <div className={`item-text tone-${toneOf(e)}${e.raisedDate ? ' update-text' : ''}`} style={{ whiteSpace: 'pre-wrap' }}>{val(e.content)}</div>
                                                     {updatesByDate(e).map(({ u, i }) => (
-                                                        <div key={i} className={u.carried ? 'update carried' : 'update'}>
+                                                        <div key={i} className={`update tone-${toneOf(u)}`}>
                                                             {u.date && <div className="update-date">{formatMinutesDate(u.date)}</div>}
                                                             <div className="update-text">{u.content}</div>
                                                         </div>
@@ -146,6 +146,11 @@ const MeetingMinutesPrintTemplate: React.FC<MeetingMinutesPrintTemplateProps> = 
                                         ))}
                                 </tbody>
                             </table>
+
+                            <div className="tone-legend">
+                                <span className="key">紅（粗體）＝本次新增或重點 Red (bold) = this meeting or key point</span>{'\u3000'}
+                                <span className="last">藍＝上次會議 Blue = last meeting</span>{'\u3000'}灰／黑＝更早 Grey / black = earlier
+                            </div>
 
                             {/* ===== 3 附件 ===== */}
                             <div className="sec-head">3. 附件 <span className="en">Attachments</span></div>

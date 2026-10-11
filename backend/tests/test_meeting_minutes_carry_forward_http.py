@@ -52,7 +52,8 @@ def test_the_next_occurrence_carries_only_unfinished_items_with_their_structure_
     item = log[2]
     assert (item["kind"], item["owner"], item["targetDate"], item["status"]) == ("item", "TECO", "2026-08-01", "Open")
     assert item["raisedDate"] == "2026-07-14"                            # the date it was first raised is kept
-    assert item["updates"] == [{"date": "2026-07-21", "content": "Drawing HL-ONS-08119 supplemented", "carried": True}]
+    # written in the meeting copied, so it is "last meeting" (blue) in the next one (R17)
+    assert item["updates"] == [{"date": "2026-07-21", "content": "Drawing HL-ONS-08119 supplemented", "carried": True, "lastMeeting": True}]
     # a copy: the earlier meeting keeps its own record unchanged
     again = c.get(f"/api/meeting-minutes/{first['id']}").json()["discussionLog"]
     assert again == THREE_LEVEL
@@ -116,3 +117,25 @@ def test_a_database_from_before_the_column_gets_it_and_old_meetings_still_read(m
         assert db.get(models.MeetingMinutes, old["id"]).meetingEndTime is None
     finally:
         db.close()
+
+
+def test_r17_last_meeting_and_key_point_flags_travel_correctly():
+    """R17 (user: "最新的是紅色、上週紀錄的藍色、過去重點…標示為紅色"): what was written in the meeting being copied is marked
+    `lastMeeting` in the next one; what was already carried into it is not (it is older now); key points keep `highlight`."""
+    source = [
+        {"no": "1", "kind": "category", "content": "Tech"},
+        {"no": "1.1", "kind": "item", "content": "old item", "status": "Open", "carried": True, "lastMeeting": True, "highlight": True,
+         "updates": [{"date": "2026-07-07", "content": "two meetings ago", "carried": True, "lastMeeting": True},
+                     {"date": "2026-07-01", "content": "older key point", "carried": True, "highlight": True},
+                     {"date": "2026-07-14", "content": "this meeting"}]},
+        {"no": "1.2", "kind": "item", "content": "new item", "status": "Open", "updates": []},
+    ]
+    out = json.loads(carry_forward_discussion_log(json.dumps(source)))
+    old, new = out[1], out[2]
+    assert "lastMeeting" not in old and old["highlight"] is True          # carried before: older now; still a key point
+    assert new["lastMeeting"] is True and "highlight" not in new          # added in the copied meeting: blue next time
+    assert old["updates"] == [
+        {"date": "2026-07-07", "content": "two meetings ago", "carried": True},                   # stale "last meeting" dropped
+        {"date": "2026-07-01", "content": "older key point", "carried": True, "highlight": True},
+        {"date": "2026-07-14", "content": "this meeting", "carried": True, "lastMeeting": True},
+    ]

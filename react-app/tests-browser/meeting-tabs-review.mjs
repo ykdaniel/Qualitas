@@ -50,13 +50,24 @@ const field = (label) => modal().locator(`xpath=.//label[normalize-space()="${la
 const saveBtn = () => modal().getByRole('button', { name: /^Save$/ });
 const openList = async () => { await page.goto(`${BASE}/meeting-minutes`); await page.waitForTimeout(800); };
 const openRow = async (text, extra) => {
-    await openList();
-    // search first: the row may be beyond the first page (number / title search, server side)
-    await page.getByPlaceholder(/Search Meeting Minutes|搜尋/).fill(text);
-    await page.waitForTimeout(1200);
-    let row = page.locator('tr', { hasText: text });
-    if (extra) row = row.filter({ hasText: extra });
-    await row.first().click(); await modal().waitFor(); await page.waitForTimeout(600);
+    // search first: the row may be beyond the first page (number / title search, server side). Once more if the list
+    // was still settling (a save just before can race the search's reload).
+    for (let attempt = 0; ; attempt++) {
+        await openList();
+        await page.getByPlaceholder(/Search Meeting Minutes|搜尋/).fill(text);
+        await page.waitForTimeout(1200);
+        let row = page.locator('tr', { hasText: text });
+        if (extra) row = row.filter({ hasText: extra });
+        try {
+            await row.first().waitFor({ timeout: 5000 });
+        } catch (err) {
+            if (attempt) throw err;
+            log('RETRY', `openRow("${text}"): row not there yet, reloading the list once`);
+            continue;
+        }
+        await row.first().click(); await modal().waitFor(); await page.waitForTimeout(600);
+        return;
+    }
 };
 const registerRows = () => modal().locator('[data-register] tbody tr[data-row]');
 const rowNos = async () => (await registerRows().evaluateAll(trs => trs.map(tr => tr.getAttribute('data-row'))));
@@ -432,7 +443,7 @@ await keepNote().click();
 check(await nField().locator('input[type=date]').inputValue() === '2026-08-11', '2c: after filing, the next note is back on the meeting date');
 check(JSON.stringify(await noteTexts()) === JSON.stringify(['6 Aug 2026earlier meeting note', '7 Aug 2026missed day', '11 Aug 2026first note', '11 Aug 2026second, same day']),
     `2c: notes in date order, the missed day in its place, same day as written (${(await noteTexts()).join(' / ')})`);
-check(await nRow().locator('[data-update="1.1#0"] [data-note-actions]').count() === 0, '2c: the carried note has no ✏️ / 🗑');
+check(await nRow().locator('[data-update="1.1#0"]').getByRole('button', { name: /Change progress note|Remove progress note/ }).count() === 0, '2c: the carried note has no ✏️ / 🗑 (only ★, R17)');
 // days outside raised … today are refused, said in red while typing and on ✓, and stop Save
 await nField().locator('input[type=date]').fill('2026-08-01');
 await nField().locator('textarea').fill('too early');
@@ -485,6 +496,67 @@ await modal().getByRole('button', { name: /Print/ }).click();
 await page.waitForTimeout(800);
 const printedNotes = await page.locator('.mom-print-root .register .update .update-date').allTextContents();
 check(JSON.stringify(printedNotes) === JSON.stringify(['5 Aug 2026', '6 Aug 2026', '7 Aug 2026', '8 Aug 2026']), `2c: printed in date order too (${printedNotes.join(' / ')})`);
+
+// ═══ 2d. R17 (user: "最新的是紅色、上週紀錄的藍色、過去重點紀錄…標示為紅色＝重點"): colours, ★ key points ═══
+log('=== 2d. R17 colours ===');
+const tones = await api('POST', '/api/meeting-minutes/', { status: 'Draft', title: 'MTB colours', meetingDate: '2026-08-11', vendor: 'Hailong Construction', discussionLog: [
+    { no: '1', kind: 'category', level: 0, content: 'Tech' },
+    { no: '1.1', kind: 'item', level: 1, content: 'carried item', status: 'Open', carried: true, raisedDate: '2026-07-01', updates: [
+        { date: '2026-07-01', content: 'older note', carried: true },
+        { date: '2026-07-28', content: 'last meeting note', carried: true, lastMeeting: true },
+        { date: '2026-07-14', content: 'older key point', carried: true, highlight: true }] },
+    { no: '1.2', kind: 'item', level: 1, content: 'item from last meeting', status: 'Open', carried: true, lastMeeting: true, raisedDate: '2026-07-28', updates: [] },
+    { no: '1.3', kind: 'item', level: 1, content: 'new item', status: 'Open', raisedDate: '2026-08-11', updates: [{ date: '2026-08-11', content: 'this meeting note' }] }] });
+check(tones.status === 200, '2d: a Draft with carried, last-meeting, key-point and new rows');
+await openRow('MTB colours');
+await tab('Discussions').click();
+const RED = 'rgb(192, 0, 0)', BLUE = 'rgb(31, 78, 153)';
+const look = (loc) => loc.evaluate(el => [el.dataset.tone, getComputedStyle(el).color, getComputedStyle(el).fontWeight]);
+const noteEl = (text) => modal().locator('[data-update]', { hasText: text });
+check(JSON.stringify(await look(noteEl('this meeting note'))) === JSON.stringify(['current', RED, '700']), '2d: this meeting\'s note red bold');
+check(JSON.stringify(await look(noteEl('older key point'))) === JSON.stringify(['key', RED, '700']), '2d: a marked older note red bold');
+check(JSON.stringify(await look(noteEl('last meeting note'))) === JSON.stringify(['last', BLUE, '400']), '2d: last meeting\'s note blue');
+check((await look(noteEl('older note')))[0] === 'old' && (await look(noteEl('older note')))[1] === 'rgb(148, 163, 184)', '2d: an older note grey');
+check(JSON.stringify(await look(modal().locator('[data-row="1.3"] [data-item-text]'))) === JSON.stringify(['current', RED, '700']), '2d: a new item red bold');
+check(JSON.stringify(await look(modal().locator('[data-row="1.2"] [data-item-text]'))) === JSON.stringify(['last', BLUE, '400']), '2d: an item from last meeting blue');
+check((await look(modal().locator('[data-row="1.1"] [data-item-text]')))[0] === 'old', '2d: an older item plain');
+check((await modal().locator('[data-tone-legend]').textContent()).includes('Blue = last meeting'), '2d: a legend says what the colours mean');
+// ★ on a carried note and on an item; saved with the meeting
+await noteEl('older note').hover();
+await noteEl('older note').getByRole('button', { name: 'Mark as key point' }).click();
+check((await look(noteEl('older note')))[0] === 'key' && await noteEl('older note').getByRole('button', { name: 'Clear key point' }).getAttribute('aria-pressed') === 'true', '2d: ★ marks a carried (read-only) note as a key point');
+check(await noteEl('older note').getByRole('button', { name: 'Change progress note' }).count() === 0, '2d: … which stays read-only otherwise');
+await modal().locator('[data-row="1.1"]').hover();
+await modal().locator('[data-row="1.1"] [data-row-actions]').getByRole('button', { name: 'Mark as key point' }).click();
+check((await look(modal().locator('[data-row="1.1"] [data-item-text]')))[0] === 'key', '2d: ★ marks an item as a key point');
+await noteEl('older key point').hover();
+await noteEl('older key point').getByRole('button', { name: 'Clear key point' }).click();
+check((await look(noteEl('older key point')))[0] === 'old', '2d: … and ★ again clears it');
+await saveBtn().click();
+await page.waitForTimeout(1500);
+const toneSaved = (await meetings()).find(m => m.title === 'MTB colours').discussionLog.find(e => e.no === '1.1');
+check(toneSaved.highlight === true && toneSaved.updates.find(u => u.content === 'older note').highlight === true
+    && !('highlight' in toneSaved.updates.find(u => u.content === 'older key point')), '2d: key points stored with the meeting (cleared ones without the key)');
+// print: the same colours
+await openRow('MTB colours');
+await page.evaluate(() => { window.print = () => {}; });
+await modal().getByRole('button', { name: /Print/ }).click();
+await page.waitForTimeout(800);
+const printTone = (text) => page.locator('.mom-print-root .register .update', { hasText: text }).locator('.update-text').evaluate(el => [getComputedStyle(el).color, getComputedStyle(el).fontWeight]);
+check(JSON.stringify(await printTone('this meeting note')) === JSON.stringify([RED, '700']) && JSON.stringify(await printTone('older note')) === JSON.stringify([RED, '700'])
+    && (await printTone('last meeting note'))[0] === BLUE, '2d: print: red bold / blue as on screen');
+check(await page.locator('.mom-print-root .tone-legend').count() === 1, '2d: print has the legend');
+// the next meeting: what was new here is "last meeting" there; key points stay
+const nextOcc = await api('POST', `/api/meeting-minutes/${(await meetings()).find(m => m.title === 'MTB colours').id}/new-occurrence`);
+const nextLog = nextOcc.body.discussionLog;
+check(nextLog.find(e => e.no === '1.3').lastMeeting === true && nextLog.find(e => e.no === '1.3').updates[0].lastMeeting === true
+    && !('lastMeeting' in nextLog.find(e => e.no === '1.1').updates.find(u => u.content === 'last meeting note'))
+    && nextLog.find(e => e.no === '1.1').highlight === true, '2d: New Occurrence: this meeting\'s rows become blue, older blue ones grey, key points kept');
+// a published meeting: colours, no ★
+await api('PUT', `/api/meeting-minutes/${(await meetings()).find(m => m.title === 'MTB colours').id}`, { status: 'Published' });
+await openRow('MTB colours');
+await tab('Discussions').click();
+check(await modal().locator('[data-key-toggle]').count() === 0 && (await look(noteEl('this meeting note')))[1] === RED, '2d: Published: colours shown, no ★');
 
 // ═══ 3. legacy two-level Draft: reads as categories + items; Save writes it back in the new shape ═══
 log('=== 3. legacy format Draft ===');

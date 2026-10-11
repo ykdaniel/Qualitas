@@ -54,6 +54,8 @@ export function normalizeDiscussionLog(raw: DiscussionLogEntry[] | null | undefi
             const kind = kindOf(e);
             const out: DiscussionLogEntry = { no: e.no.trim(), kind, level: depthOf(e.no.trim()) as 0 | 1 | 2, content: legacyContent(e) };
             if (e.carried) out.carried = true;
+            if (e.lastMeeting) out.lastMeeting = true;
+            if (e.highlight) out.highlight = true;
             if (kind === 'item') {
                 out.raisedDate = e.raisedDate || '';
                 out.owner = e.owner || '';
@@ -167,6 +169,37 @@ export function headingsOf(log: DiscussionLogEntry[], no: string): string[] {
 export function updatesByDate(e: DiscussionLogEntry): { u: ProgressUpdate; i: number }[] {
     return (e.updates || []).map((u, i) => ({ u, i }))
         .sort((a, b) => ((a.u.date || '') < (b.u.date || '') ? -1 : (a.u.date || '') > (b.u.date || '') ? 1 : a.i - b.i));
+}
+
+/**
+ * How an item's text or a progress note reads (R17, the user's own practice: "最新的是紅色、上週紀錄的藍色、過去重點紀錄…
+ * 標示為紅色＝重點"): marked key point or written in this meeting → red (bold), written in the meeting before → blue,
+ * anything older → the plain colour (grey for notes). A first meeting (nothing carried) is all red. The same rule drives
+ * the screen, the print and the Word export.
+ */
+export type Tone = 'key' | 'current' | 'last' | 'old';
+export function toneOf(x: { carried?: boolean; lastMeeting?: boolean; highlight?: boolean }): Tone {
+    if (x.highlight) return 'key';
+    if (!x.carried) return 'current';
+    if (x.lastMeeting) return 'last';
+    return 'old';
+}
+export const TONE_COLOR: Record<Tone, string | undefined> = { key: '#C00000', current: '#C00000', last: '#1F4E99', old: undefined };
+
+/** Marks / unmarks a progress note as a key point — carried ones too: the flag is how a past note stays visible. */
+export function toggleUpdateHighlight(log: DiscussionLogEntry[], no: string, index: number): DiscussionLogEntry[] {
+    return log.map(e => (e.no === no && e.updates?.[index]
+        ? { ...e, updates: e.updates.map((u, i) => (i === index ? withFlag(u, !u.highlight) : u)) } : e));
+}
+/** Marks / unmarks an item (its text) as a key point, carried or not. */
+export function toggleItemHighlight(log: DiscussionLogEntry[], no: string): DiscussionLogEntry[] {
+    return log.map(e => (e.no === no ? withFlag(e, !e.highlight) : e));
+}
+function withFlag<T extends { highlight?: boolean }>(x: T, on: boolean): T {
+    const out = { ...x };
+    if (on) out.highlight = true;
+    else delete out.highlight;              // unmarked: the key goes, nothing left behind in the stored JSON
+    return out;
 }
 
 /** Changes one of this meeting's updates; carried ones (an earlier meeting's record) are never changed. */

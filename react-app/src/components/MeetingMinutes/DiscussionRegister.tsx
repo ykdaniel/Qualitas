@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Check, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Check, Pencil, Plus, Star, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
 import type { DiscussionLogEntry, ProgressUpdate } from '../../store/meetingMinutesStore';
@@ -7,7 +7,8 @@ import formStyles from '../Shared/FormShell.module.css';
 import styles from './DiscussionRegister.module.css';
 import {
     addEntry, addUpdate, canRemove, displayNo, formatMinutesDate, isItem, localToday, nextNo, parentOf, patchUpdate, progressProblem,
-    removeEntryWithMap, removeUpdate, updateEntry, updatesByDate, type EntryKind, type ProgressProblem,
+    removeEntryWithMap, removeUpdate, toggleItemHighlight, toggleUpdateHighlight, toneOf, TONE_COLOR, updateEntry, updatesByDate,
+    type EntryKind, type ProgressProblem, type Tone,
 } from './discussionLog';
 
 /** The latest day a progress note may carry: today, or the meeting date when the minutes are prepared ahead of it. */
@@ -55,6 +56,10 @@ interface Props {
     peopleListId: string;
 }
 
+/** R17 colours: red + bold (key point / written this meeting) stays legible in black-and-white print; blue for the meeting
+ *  before; older notes grey, older item text the normal colour. */
+const toneStyle = (tone: Tone, oldColor?: string): React.CSSProperties => (
+    tone === 'old' ? (oldColor ? { color: oldColor } : {}) : { color: TONE_COLOR[tone], fontWeight: tone === 'last' ? undefined : 700 });
 const without = <T,>(rec: Record<string, T>, key: string): Record<string, T> =>
     Object.fromEntries(Object.entries(rec).filter(([k]) => k !== key));
 const HEAD_BG: Record<string, string> = { category: '#e5e7eb', subcategory: '#f1f5f9' };
@@ -256,8 +261,18 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
             aria-disabled={disabledReason ? true : undefined} title={disabledReason}
             onClick={() => (disabledReason ? toast.info(disabledReason) : onClick())}><Plus size={12} /> {label}</button>
     );
+    /** ★ key point (R17): on items and on every progress note, carried ones included — marking is how a past record is
+     *  kept in view; it travels to the next meeting with the copy. */
+    const starButton = (on: boolean, onClick: () => void, size = 14) => (
+        <button type="button" aria-label={on ? t('meetingMinutes.clearKeyPoint') : t('meetingMinutes.markKeyPoint')}
+            title={on ? t('meetingMinutes.clearKeyPoint') : t('meetingMinutes.markKeyPoint')} aria-pressed={on} onClick={onClick}
+            data-key-toggle className={styles.iconBtn} style={on ? { color: '#C00000' } : undefined}>
+            <Star size={size} fill={on ? '#C00000' : 'none'} />
+        </button>
+    );
     const rowButtons = (e: DiscussionLogEntry) => editable && !edit && (
         <div className={styles.rowActions} data-row-actions>
+            {isItem(e) && starButton(!!e.highlight, () => onChange(toggleItemHighlight(log, e.no)))}
             {iconButton(t('meetingMinutes.editRow'), <Pencil size={14} />, () => startEdit(e))}
             {canRemove(log, e.no) && iconButton(t('common.delete'), <Trash2 size={14} />, () => remove(e), true)}
         </div>
@@ -402,14 +417,16 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
             );
         }
         const own = editable && !u.carried && !noteEdit;
+        const tone = toneOf(u);
         return (
-            <div key={i} data-update={`${e.no}#${i}`} style={{ marginTop: 6, color: u.carried ? grey : '#334155' }}>
+            <div key={i} data-update={`${e.no}#${i}`} data-tone={tone} style={{ marginTop: 6, color: '#334155', ...toneStyle(tone, grey) }}>
                 <div style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
                     <span>{formatMinutesDate(u.date)}</span>
-                    {own && (
-                        <span className={styles.rowActions} style={{ display: 'inline-flex' }} data-note-actions>
-                            {iconButton(t('meetingMinutes.editNote'), <Pencil size={12} />, () => { setNoteRefused(null); setNoteEdit({ no: e.no, i, orig: u }); })}
-                            {iconButton(t('meetingMinutes.deleteNote'), <Trash2 size={12} />, () => deleteNote(e, i), true)}
+                    {editable && !noteEdit && (
+                        <span className={styles.rowActions} style={{ display: 'inline-flex', fontWeight: 400 }} data-note-actions>
+                            {starButton(!!u.highlight, () => onChange(toggleUpdateHighlight(log, e.no, i)), 12)}
+                            {own && iconButton(t('meetingMinutes.editNote'), <Pencil size={12} />, () => { setNoteRefused(null); setNoteEdit({ no: e.no, i, orig: u }); })}
+                            {own && iconButton(t('meetingMinutes.deleteNote'), <Trash2 size={12} />, () => deleteNote(e, i), true)}
                         </span>
                     )}
                 </div>
@@ -454,7 +471,7 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
                         ? <AutoText value={editing.content} aria-label={e.no}
                             onChange={ev => setEdit({ ...editing, content: ev.target.value })} />
                         // under its raised date, indented like every progress update below it: one "date / text" list
-                        : <div data-item-text style={{ whiteSpace: 'pre-wrap', paddingLeft: e.raisedDate ? 12 : 0 }}>{e.content}</div>}
+                        : <div data-item-text data-tone={toneOf(e)} style={{ whiteSpace: 'pre-wrap', paddingLeft: e.raisedDate ? 12 : 0, ...toneStyle(toneOf(e)) }}>{e.content}</div>}
                     {editing && editHint}
                     {noteList(e, weekField)}
                     {weekField && noteField(e)}
@@ -562,6 +579,12 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
                     <input type="checkbox" checked={showClosed} onChange={ev => setShowClosed(ev.target.checked)} />
                     {t('meetingMinutes.showClosed')}
                 </label>
+                {/* what the colours mean (R17) — the same rule in the print and the Word file */}
+                <span data-tone-legend style={{ display: 'flex', gap: 10, fontSize: 12, color: '#64748b', flexWrap: 'wrap' }}>
+                    <span style={{ color: TONE_COLOR.current, fontWeight: 700 }}>{t('meetingMinutes.toneCurrent')}</span>
+                    <span style={{ color: TONE_COLOR.last }}>{t('meetingMinutes.toneLast')}</span>
+                    <span>{t('meetingMinutes.toneOld')}</span>
+                </span>
                 {editable && (
                     // always there while the meeting can be edited — also while a row is open (see addFromToolbar)
                     <div data-register-toolbar style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

@@ -257,3 +257,40 @@ def test_basic_information_and_attendees_are_one_table_like_the_company_minutes(
     assert grid[5] == ["出席人員\nATTENDEES", "HL", "Daniel Huang", "Quality Manager", "Quality Manager"]
     assert info.style.name == "Table Grid"
     assert not any(t.rows[0].cells[0].text.startswith("公司 Company") for t in doc.tables)   # no separate attendee table
+
+
+def test_r17_colours_in_word(meeting_env, uploads):
+    """Red + bold for this meeting's text and key points, blue for the meeting before, grey for older notes, plain text
+    for an older item; a legend under the register (R17)."""
+    from docx.shared import RGBColor
+    c = meeting_env.login("mtg_a")
+    m = create(c, discussionLog=[
+        {"no": "1", "kind": "category", "content": "Tech"},
+        {"no": "1.1", "kind": "item", "content": "carried item", "status": "Open", "carried": True, "updates": [
+            {"date": "2026-07-01", "content": "older note", "carried": True},
+            {"date": "2026-07-07", "content": "last meeting note", "carried": True, "lastMeeting": True},
+            {"date": "2026-07-02", "content": "older key point", "carried": True, "highlight": True},
+            {"date": "2026-07-14", "content": "this meeting note"}]},
+        {"no": "1.2", "kind": "item", "content": "new item", "status": "Open"},
+        {"no": "1.3", "kind": "item", "content": "item from last meeting", "status": "Open", "carried": True, "lastMeeting": True},
+    ])
+    doc = Document(BytesIO(c.get(f"/api/meeting-minutes/{m['id']}/export-docx").content))
+    runs = {}
+    for t in doc.tables:
+        for row in t.rows:
+            for cell in row.cells:
+                for p in cell.paragraphs:
+                    for r in p.runs:
+                        runs.setdefault(r.text, r)
+    red, blue, grey = RGBColor(0xC0, 0, 0), RGBColor(0x1F, 0x4E, 0x99), RGBColor(0x80, 0x80, 0x80)
+    def look(text):
+        r = runs[text]
+        return (r.font.color.rgb if r.font.color and r.font.color.type else None, bool(r.font.bold))
+    assert look("this meeting note") == (red, True)
+    assert look("older key point") == (red, True)
+    assert look("last meeting note") == (blue, False)
+    assert look("older note") == (grey, False)
+    assert look("new item") == (red, True)
+    assert look("item from last meeting") == (blue, False)
+    assert look("carried item") == (None, False)
+    assert any("藍＝上次會議 Blue = last meeting" in p.text for p in doc.paragraphs)

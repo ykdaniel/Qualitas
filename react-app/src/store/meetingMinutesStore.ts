@@ -21,6 +21,10 @@ export interface ProgressUpdate {
     content: string;
     /** Brought in from an earlier meeting by "New Occurrence": shown grey and read-only. */
     carried?: boolean;
+    /** Written in the meeting just before this one (set when "New Occurrence" brings it in): shown blue (R17). */
+    lastMeeting?: boolean;
+    /** Marked as a key point by the user: shown red in every later meeting until unmarked (R17). */
+    highlight?: boolean;
 }
 
 /**
@@ -48,6 +52,10 @@ export interface DiscussionLogEntry {
     updates?: ProgressUpdate[];
     /** Brought in from an earlier meeting by "New Occurrence": its text stays as recorded there. */
     carried?: boolean;
+    /** Items: added in the meeting just before this one (set by "New Occurrence"): shown blue (R17). */
+    lastMeeting?: boolean;
+    /** Items: marked as a key point: shown red until unmarked (R17). */
+    highlight?: boolean;
 }
 
 export interface MeetingMinutesItem {
