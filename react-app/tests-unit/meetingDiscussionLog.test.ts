@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
     compareNo, normalizeDiscussionLog, nextNo, addEntry, removeEntry, removeEntryWithMap, renumber, displayNo, canRemove,
-    addUpdate, removeUpdate, openItemCount, headingsOf, currentUpdateIndex, setCurrentUpdate, formatMinutesDate,
+    addUpdate, removeUpdate, openItemCount, headingsOf, formatMinutesDate, updatesByDate, patchUpdate, progressProblem,
+    firstProgressProblem, localToday,
     latestPerSeries, collectRegisterItems, registerSourcePerSeries,
 } from '../src/components/MeetingMinutes/discussionLog.ts';
 
@@ -116,21 +117,37 @@ test('a register with an orphan row or a duplicate number is not renumbered (not
     assert.equal(renumber(dup).length, 3);
 });
 
-test("this week's update: created on first text, edited in place, removed when emptied; carried updates untouched", () => {
-    const base = normalizeDiscussionLog([{ no: '1.1', kind: 'item', content: 'x', raisedDate: '2026-07-14',
+test('several progress notes per item, in date order (a missed day filled in later lands on its day); carried ones untouched', () => {
+    let log = normalizeDiscussionLog([{ no: '1.1', kind: 'item', content: 'x', raisedDate: '2026-07-14',
         updates: [{ date: '2026-07-21', content: 'old', carried: true }] }]);
-    assert.equal(base[0].raisedDate, '2026-07-14');
-    assert.equal(currentUpdateIndex(base[0]), -1);
-    assert.deepEqual(setCurrentUpdate(base, '1.1', { date: '2026-07-30' }, '2026-07-28')[0].updates?.length, 1);   // a date alone creates nothing
-    let log = setCurrentUpdate(base, '1.1', { content: 'n' }, '2026-07-28');
-    assert.deepEqual(log[0].updates?.[1], { date: '2026-07-28', content: 'n' });                               // dated with the meeting
-    log = setCurrentUpdate(log, '1.1', { content: 'new text', date: '2026-07-29' }, '2026-07-28');
-    assert.deepEqual(log[0].updates?.map(u => u.content), ['old', 'new text']);
-    assert.equal(log[0].updates?.[1].date, '2026-07-29');
-    assert.equal(setCurrentUpdate(base, '1.1', { content: '  ' }, '2026-07-28')[0].updates?.length, 1);        // spaces only: nothing created
-    assert.equal(setCurrentUpdate(log, '1.1', { content: '   ' }, '2026-07-28')[0].updates?.length, 1);        // emptied to spaces: removed
-    log = setCurrentUpdate(log, '1.1', { content: '' }, '2026-07-28');
-    assert.deepEqual(log[0].updates, [{ date: '2026-07-21', content: 'old', carried: true }]);
+    log = addUpdate(log, '1.1', { date: '2026-07-28', content: 'this week' });
+    log = addUpdate(log, '1.1', { date: '2026-07-24', content: 'missed day' });
+    log = addUpdate(log, '1.1', { date: '2026-07-28', content: 'same day, later' });
+    assert.deepEqual(updatesByDate(log[0]).map(x => `${x.u.date} ${x.u.content} #${x.i}`),
+        ['2026-07-21 old #0', '2026-07-24 missed day #2', '2026-07-28 this week #1', '2026-07-28 same day, later #3']);
+    assert.equal(log[0].updates?.length, 4);                                                    // stored as written
+    assert.equal(patchUpdate(log, '1.1', 0, { content: 'changed' })[0].updates?.[0].content, 'old');   // carried: unchanged
+    assert.deepEqual(patchUpdate(log, '1.1', 2, { date: '2026-07-25' })[0].updates?.[2], { date: '2026-07-25', content: 'missed day' });
+    assert.equal(removeUpdate(log, '1.1', 0)[0].updates?.length, 4);                             // carried: not removable
+});
+
+test('progress note days: not before the item was raised, not after today (or the meeting date if later); text required', () => {
+    const latest = '2026-07-28';
+    assert.equal(progressProblem({ date: '2026-07-20', content: 'a' }, '2026-07-14', latest), null);
+    assert.equal(progressProblem({ date: '2026-07-14', content: 'a' }, '2026-07-14', latest), null);   // the raised day itself is fine
+    assert.equal(progressProblem({ date: '2026-07-13', content: 'a' }, '2026-07-14', latest), 'beforeRaised');
+    assert.equal(progressProblem({ date: '2026-07-29', content: 'a' }, '2026-07-14', latest), 'afterLatest');
+    assert.equal(progressProblem({ date: '', content: 'a' }, '2026-07-14', latest), 'noDate');
+    assert.equal(progressProblem({ date: '2026-07-20', content: '  ' }, '2026-07-14', latest), 'noText');
+    assert.equal(progressProblem({ date: '2026-07-01', content: 'a' }, undefined, latest), null);      // no raised day: no lower bound
+    const log = normalizeDiscussionLog([
+        { no: '1', kind: 'category', content: 'C' },
+        { no: '1.1', kind: 'item', content: 'x', raisedDate: '2026-07-14', updates: [{ date: '2026-07-01', content: 'old', carried: true }] },
+        { no: '1.2', kind: 'item', content: 'y', raisedDate: '2026-07-20', updates: [{ date: '2026-07-19', content: 'too early' }] },
+    ]);
+    assert.deepEqual(firstProgressProblem(log, latest), { no: '1.2', problem: 'beforeRaised', raisedDate: '2026-07-20' });   // carried 1.1 not checked
+    assert.equal(firstProgressProblem(log.slice(0, 2), latest), null);
+    assert.equal(localToday(new Date(2026, 0, 5, 23, 30)), '2026-01-05');
 });
 
 test('formatMinutesDate gives the company format; anything else is returned as-is', () => {

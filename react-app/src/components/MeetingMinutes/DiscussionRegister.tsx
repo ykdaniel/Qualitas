@@ -2,13 +2,22 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Check, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
-import type { DiscussionLogEntry } from '../../store/meetingMinutesStore';
+import type { DiscussionLogEntry, ProgressUpdate } from '../../store/meetingMinutesStore';
 import formStyles from '../Shared/FormShell.module.css';
 import styles from './DiscussionRegister.module.css';
 import {
-    addEntry, canRemove, currentUpdateIndex, displayNo, formatMinutesDate, isItem, nextNo, parentOf, removeEntryWithMap, setCurrentUpdate,
-    updateEntry, type EntryKind,
+    addEntry, addUpdate, canRemove, displayNo, formatMinutesDate, isItem, localToday, nextNo, parentOf, patchUpdate, progressProblem,
+    removeEntryWithMap, removeUpdate, updateEntry, updatesByDate, type EntryKind, type ProgressProblem,
 } from './discussionLog';
+
+/** The latest day a progress note may carry: today, or the meeting date when the minutes are prepared ahead of it. */
+export const latestNoteDate = (meetingDate: string) => (meetingDate > localToday() ? meetingDate : localToday());
+
+/** Why a progress note cannot be applied or saved, and what to do. */
+export function progressProblemText(t: (key: string, params?: Record<string, string | number>) => string,
+    problem: ProgressProblem, raisedDate: string | undefined, latest: string): string {
+    return t(`meetingMinutes.note_${problem}`, { raised: formatMinutesDate(raisedDate), latest: formatMinutesDate(latest) });
+}
 
 /**
  * The one row being edited in place (✏️), or being added (`no` null — not in the log until ✓). Held by the modal so
@@ -46,6 +55,8 @@ interface Props {
     peopleListId: string;
 }
 
+const without = <T,>(rec: Record<string, T>, key: string): Record<string, T> =>
+    Object.fromEntries(Object.entries(rec).filter(([k]) => k !== key));
 const HEAD_BG: Record<string, string> = { category: '#e5e7eb', subcategory: '#f1f5f9' };
 const cell: React.CSSProperties = { border: '1px solid #cbd5e1', padding: '6px 8px', verticalAlign: 'top' };
 const grey = '#94a3b8';
@@ -102,8 +113,18 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
     // The heading (category / sub-category) of the row last clicked or focused: where "Add Sub-category" / "Add Item"
     // in the toolbar put the new row by default (user, 2026-10-11: all three add buttons in the toolbar).
     const [contextNo, setContextNo] = useState<string | null>(null);
-    // A date picked in an item's this-week field before any text: kept here until the update exists.
-    const [weekDates, setWeekDates] = useState<Record<string, string>>({});
+    // Progress notes (user, 2026-10-11: "同一列可以多個日期 如果我忘記補充資料可以補上去"): an item can get any number in
+    // one meeting, each on its own day (a missed day can be filled in later); shown and printed in date order.
+    // The note being typed in an item's "Add progress…" field is written into the log as it is typed (Save never
+    // loses it) — `pending` holds its index in `updates`; ✓ files it and empties the field for the next one.
+    const [pending, setPending] = useState<Record<string, number>>({});
+    // The day picked in an item's field before any text (the meeting date until changed).
+    const [noteDates, setNoteDates] = useState<Record<string, string>>({});
+    // One of this meeting's notes opened with ✏️: changed in place; ✕ / Esc put back `orig`.
+    const [noteEdit, setNoteEdit] = useState<{ no: string; i: number; orig: ProgressUpdate } | null>(null);
+    // Where ✓ was refused for an empty note ("new:1.2" for the field, "1.2#0" for a ✏️ note) — shown in red until fixed.
+    const [noteRefused, setNoteRefused] = useState<string | null>(null);
+    const latest = latestNoteDate(meetingDate);
 
     const activeThisMeeting = (e: DiscussionLogEntry) => e.status !== 'Closed' || openAtStart.has(e.no);
     const itemShown = (e: DiscussionLogEntry) => showClosed || activeThisMeeting(e);
@@ -210,7 +231,12 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
         const follow = (n: string) => (n in map ? map[n] : n);
         if (contextNo !== null) setContextNo(follow(contextNo));
         setOpenAtStart(new Set([...openAtStart].map(follow).filter((n): n is string => !!n)));
-        setWeekDates(Object.fromEntries(Object.entries(weekDates).map(([n, d]) => [follow(n), d] as const).filter(([n]) => !!n)));
+        const followKeys = <T,>(rec: Record<string, T>) =>
+            Object.fromEntries(Object.entries(rec).map(([n, v]) => [follow(n), v] as const).filter(([n]) => !!n)) as Record<string, T>;
+        setNoteDates(followKeys(noteDates));
+        setPending(followKeys(pending));
+        if (noteEdit) setNoteEdit(follow(noteEdit.no) ? { ...noteEdit, no: follow(noteEdit.no)! } : null);
+        setNoteRefused(null);
         if (edit) {
             const no = edit.no !== null ? follow(edit.no) : null;
             const parent = edit.parent !== null ? follow(edit.parent) : null;
@@ -268,21 +294,151 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
     );
 
     /** Earlier updates as "date + text" (grey when from an earlier meeting); this meeting's own goes in the field. */
-    const updateList = (e: DiscussionLogEntry, skipCurrent: boolean) => {
-        const cur = skipCurrent ? currentUpdateIndex(e) : -1;
-        return (e.updates || []).map((u, i) => i === cur ? null : (
+    // ── progress notes ──
+    const noteProblemLine = (problem: ProgressProblem | null, raisedDate: string | undefined) => problem && (
+        <div data-note-problem role="alert" style={{ fontSize: 12, color: '#dc2626', marginTop: 2 }}>
+            {progressProblemText(t, problem, raisedDate, latest)}
+        </div>
+    );
+    // a day problem shows while typing; an empty note only once ✓ was refused for it
+    const dayProblem = (u: ProgressUpdate | undefined, raisedDate: string | undefined) => {
+        const p = u ? progressProblem(u, raisedDate, latest) : null;
+        return p === 'noText' ? null : p;
+    };
+    const typeNote = (e: DiscussionLogEntry, text: string) => {
+        const i = pending[e.no];
+        setNoteRefused(null);
+        if (i === undefined) {
+            if (!text.trim()) return;                                // spaces alone write nothing
+            onChange(addUpdate(log, e.no, { date: noteDates[e.no] ?? meetingDate, content: text }));
+            setPending({ ...pending, [e.no]: (e.updates || []).length });
+        } else if (!text.trim()) {
+            // emptied again: the note goes, its day stays in the field
+            setNoteDates({ ...noteDates, [e.no]: e.updates?.[i]?.date ?? meetingDate });
+            onChange(removeUpdate(log, e.no, i));
+            setPending(without(pending, e.no));
+        } else {
+            onChange(patchUpdate(log, e.no, i, { content: text }));
+        }
+    };
+    const setNoteDay = (e: DiscussionLogEntry, day: string) => {
+        const i = pending[e.no];
+        if (i === undefined) setNoteDates({ ...noteDates, [e.no]: day });
+        else onChange(patchUpdate(log, e.no, i, { date: day }));
+    };
+    /** ✓ on the field: files the note (it already is in the log) and empties the field for the next one. */
+    const fileNote = (e: DiscussionLogEntry) => {
+        const i = pending[e.no];
+        const u = i === undefined ? undefined : e.updates?.[i];
+        const problem = u ? progressProblem(u, e.raisedDate, latest) : 'noText';
+        if (problem) {
+            toast.error(progressProblemText(t, problem, e.raisedDate, latest));
+            if (problem === 'noText') setNoteRefused(`new:${e.no}`);
+            return;
+        }
+        setPending(without(pending, e.no));
+        setNoteDates(without(noteDates, e.no));                      // the next note starts on the meeting date again
+        setNoteRefused(null);
+    };
+    const dropPendingNote = (e: DiscussionLogEntry) => {
+        const i = pending[e.no];
+        if (i !== undefined) onChange(removeUpdate(log, e.no, i));
+        setPending(without(pending, e.no));
+        setNoteRefused(null);
+    };
+    const applyNote = (e: DiscussionLogEntry) => {
+        if (!noteEdit) return;
+        const u = e.updates?.[noteEdit.i];
+        const problem = u ? progressProblem(u, e.raisedDate, latest) : null;
+        if (problem) {
+            toast.error(progressProblemText(t, problem, e.raisedDate, latest));
+            if (problem === 'noText') setNoteRefused(`${e.no}#${noteEdit.i}`);
+            return;
+        }
+        setNoteEdit(null);
+        setNoteRefused(null);
+    };
+    const cancelNote = () => {
+        if (!noteEdit) return;
+        onChange(patchUpdate(log, noteEdit.no, noteEdit.i, noteEdit.orig));
+        setNoteEdit(null);
+        setNoteRefused(null);
+    };
+    const deleteNote = (e: DiscussionLogEntry, i: number) => {
+        const u = e.updates?.[i];
+        if (!u || !window.confirm(t('meetingMinutes.confirmDeleteNote', { date: formatMinutesDate(u.date) || '-' }))) return;
+        onChange(removeUpdate(log, e.no, i));
+        const p = pending[e.no];
+        if (p !== undefined && p > i) setPending({ ...pending, [e.no]: p - 1 });
+    };
+    const escKey = (ev: React.KeyboardEvent, then: () => void) => {
+        if (ev.key !== 'Escape' || ev.nativeEvent.isComposing || ev.nativeEvent.keyCode === 229) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        then();
+    };
+    const dayInput = (value: string, onDay: (v: string) => void, raisedDate: string | undefined) => (
+        <input type="date" className={formStyles.formInput} style={{ width: 150, height: 34, paddingTop: 4, paddingBottom: 4 }}
+            aria-label={t('meetingMinutes.updateDate')} value={value} min={raisedDate || undefined} max={latest}
+            onChange={ev => onDay(ev.target.value)} />
+    );
+    /** The item's notes in date order (the one still in the "Add progress…" field left out); this meeting's own have ✏️ / 🗑. */
+    const noteList = (e: DiscussionLogEntry, withField: boolean) => updatesByDate(e).map(({ u, i }) => {
+        if (withField && pending[e.no] === i) return null;
+        if (noteEdit && noteEdit.no === e.no && noteEdit.i === i) {
+            const refused = noteRefused === `${e.no}#${i}` && !u.content.trim();
+            return (
+                <div key={i} data-update={`${e.no}#${i}`} data-note-editing onKeyDown={ev => escKey(ev, cancelNote)} style={{ marginTop: 6 }}>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                        {dayInput(u.date, v => onChange(patchUpdate(log, e.no, i, { date: v })), e.raisedDate)}
+                        <AutoText style={{ flex: 1 }} value={u.content} autoFocus aria-label={t('meetingMinutes.updateContent')}
+                            onChange={ev => { setNoteRefused(null); onChange(patchUpdate(log, e.no, i, { content: ev.target.value })); }} />
+                        {iconButton(t('meetingMinutes.applyRow'), <Check size={16} />, () => applyNote(e))}
+                        {iconButton(t('meetingMinutes.cancelRow'), <X size={16} />, cancelNote)}
+                    </div>
+                    {noteProblemLine(refused ? 'noText' : dayProblem(u, e.raisedDate), e.raisedDate)
+                        || <div data-edit-hint style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{t('meetingMinutes.editHint')}</div>}
+                </div>
+            );
+        }
+        const own = editable && !u.carried && !noteEdit;
+        return (
             <div key={i} data-update={`${e.no}#${i}`} style={{ marginTop: 6, color: u.carried ? grey : '#334155' }}>
-                <div style={{ fontSize: 12 }}>{formatMinutesDate(u.date)}</div>
+                <div style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <span>{formatMinutesDate(u.date)}</span>
+                    {own && (
+                        <span className={styles.rowActions} style={{ display: 'inline-flex' }} data-note-actions>
+                            {iconButton(t('meetingMinutes.editNote'), <Pencil size={12} />, () => { setNoteRefused(null); setNoteEdit({ no: e.no, i, orig: u }); })}
+                            {iconButton(t('meetingMinutes.deleteNote'), <Trash2 size={12} />, () => deleteNote(e, i), true)}
+                        </span>
+                    )}
+                </div>
                 <div style={{ whiteSpace: 'pre-wrap', paddingLeft: 12 }}>{u.content}</div>
             </div>
-        ));
+        );
+    });
+    /** "Add progress…": a day (the meeting date unless changed, may go back to fill in a missed day) and the text. */
+    const noteField = (e: DiscussionLogEntry) => {
+        const i = pending[e.no];
+        const u = i === undefined ? undefined : e.updates?.[i];
+        const refused = noteRefused === `new:${e.no}` && !u;
+        return (
+            // Esc drops the note being typed; with nothing typed it is left to the row (✏️ row edit: cancel the row)
+            <div data-this-week-block onKeyDown={ev => { if (i !== undefined) escKey(ev, () => dropPendingNote(e)); }}>
+                <div data-this-week style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginTop: 8 }}>
+                    {dayInput(u?.date ?? noteDates[e.no] ?? meetingDate, v => setNoteDay(e, v), e.raisedDate)}
+                    <AutoText style={{ flex: 1 }} placeholder={t('meetingMinutes.updateContent')}
+                        value={u?.content ?? ''} onChange={ev => typeNote(e, ev.target.value)} />
+                    {iconButton(t('meetingMinutes.fileNote'), <Check size={16} />, () => fileNote(e))}
+                </div>
+                {noteProblemLine(refused ? 'noText' : dayProblem(u ?? { date: noteDates[e.no] ?? meetingDate, content: 'x' }, e.raisedDate), e.raisedDate)}
+            </div>
+        );
     };
 
     const itemRow = (e: DiscussionLogEntry) => {
         const editing = edit?.no === e.no ? edit : null;
         const weekField = editable && activeThisMeeting(e);
-        const cur = currentUpdateIndex(e);
-        const curUpdate = cur >= 0 ? e.updates![cur] : null;
         return (
             <tr key={e.no} data-row={e.no} data-editing={editing ? '' : undefined} onKeyDown={editing ? escToCancel : undefined}
                 onMouseDown={() => setContextNo(headingOf(e.no))} onFocus={() => setContextNo(headingOf(e.no))}>
@@ -300,19 +456,8 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
                         // under its raised date, indented like every progress update below it: one "date / text" list
                         : <div data-item-text style={{ whiteSpace: 'pre-wrap', paddingLeft: e.raisedDate ? 12 : 0 }}>{e.content}</div>}
                     {editing && editHint}
-                    {updateList(e, weekField)}
-                    {weekField && (
-                        <div data-this-week style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginTop: 8 }}>
-                            <input type="date" className={formStyles.formInput} style={{ width: 150, height: 34, paddingTop: 4, paddingBottom: 4 }} aria-label={t('meetingMinutes.updateDate')}
-                                value={curUpdate?.date ?? weekDates[e.no] ?? meetingDate}
-                                onChange={ev => (curUpdate
-                                    ? onChange(setCurrentUpdate(log, e.no, { date: ev.target.value }, meetingDate))
-                                    : setWeekDates({ ...weekDates, [e.no]: ev.target.value }))} />
-                            <AutoText style={{ flex: 1 }} placeholder={t('meetingMinutes.updateContent')}
-                                value={curUpdate?.content ?? ''}
-                                onChange={ev => onChange(setCurrentUpdate(log, e.no, { content: ev.target.value }, weekDates[e.no] ?? meetingDate))} />
-                        </div>
-                    )}
+                    {noteList(e, weekField)}
+                    {weekField && noteField(e)}
                 </td>
                 <td style={cell}>
                     {editing

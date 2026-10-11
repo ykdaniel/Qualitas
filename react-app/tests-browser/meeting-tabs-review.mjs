@@ -80,7 +80,12 @@ await page.waitForTimeout(500);
 await page.getByRole('button', { name: /^Open Items/ }).click();
 await page.waitForTimeout(500);
 const itemTable = () => page.locator('table').first();
-const itemNos = async () => (await itemTable().locator('tbody tr').evaluateAll(trs => trs.map(tr => `${tr.cells[tr.cells.length - 1]?.innerText.split('\n')[0]}#${tr.cells[0]?.innerText.trim()}`)));
+// "MOM-DEMO-002 (1.0)#1.1.1": meeting number (rev) # item number — columns found by their headers
+const itemNos = async () => (await itemTable().evaluate(table => {
+    const heads = [...table.querySelectorAll('thead th')].map(th => th.innerText.trim());
+    const mi = heads.indexOf('Meeting'), ri = heads.indexOf('Rev');
+    return [...table.querySelectorAll('tbody tr')].map(tr => `${tr.cells[mi]?.innerText.split('\n')[0]}${ri >= 0 ? ` (${tr.cells[ri].innerText.trim()})` : ''}#${tr.cells[0]?.innerText.trim()}`);
+}));
 let rowsNow = await itemNos();
 check(rowsNow.length === 9, `1b: nine open items from the four meetings (${rowsNow.join(', ')})`);
 check(rowsNow[0].startsWith('MOM-DEMO-002') && rowsNow[1].startsWith('MOM-DEMO-002'), '1b: overdue items first');
@@ -365,6 +370,90 @@ check(threeSaved.map(e => `${e.no}:${e.kind}`).join(',') === '1:category,1.1:sub
 const demo4 = (await meetings()).find(m => m.documentNumber === 'MOM-DEMO-004');
 const occ4 = await api('POST', `/api/meeting-minutes/${demo4.id}/new-occurrence`);
 check(occ4.status === 200 && occ4.body.discussionLog.map(e => `${e.no}:${e.kind}`).join(',') === '1:category,1.1:item,1.2:item,2:category,2.1:item', '2b: New Occurrence of a two-level meeting carries x.0 / x.y');
+
+// ═══ 2c. R13: several progress notes per item, each on its own day; a missed day filled in later (user: "同一列可以多個日期 如果我忘記補充資料可以補上去") ═══
+log('=== 2c. several progress notes ===');
+const notes = await api('POST', '/api/meeting-minutes/', { status: 'Draft', title: 'MTB progress notes', meetingDate: '2026-08-11', vendor: 'Hailong Construction', discussionLog: [
+    { no: '1', kind: 'category', level: 0, content: 'Tech' },
+    { no: '1.1', kind: 'item', level: 1, content: 'Lifeline certificates', status: 'Open', owner: 'TECO', raisedDate: '2026-08-04', carried: true,
+        updates: [{ date: '2026-08-06', content: 'earlier meeting note', carried: true }] }] });
+check(notes.status === 200, '2c: a Draft with an item raised 4 Aug and a note carried from 6 Aug');
+await openRow('MTB progress notes');
+await tab('Discussions').click();
+const nRow = () => modal().locator('[data-row="1.1"]');
+const nField = () => nRow().locator('[data-this-week]');
+const keepNote = () => nField().getByRole('button', { name: 'Keep this progress note and write the next' });
+const noteTexts = () => nRow().locator('[data-update]').evaluateAll(ds => ds.map(d => d.textContent.trim()));
+check(await nField().locator('input[type=date]').inputValue() === '2026-08-11', '2c: a new note is dated with the meeting by default');
+check(await nField().locator('input[type=date]').getAttribute('min') === '2026-08-04', '2c: the day picker starts at the raised date');
+await keepNote().click();
+await page.waitForTimeout(300);
+check(/Write the progress first, or press Esc to cancel it\./.test(await toasts()) && /Write the progress first/.test(await nRow().locator('[data-note-problem]').textContent()), '2c: ✓ on an empty note adds nothing and says why (toast + red)');
+await nField().locator('textarea').fill('first note');
+check(await nRow().locator('[data-note-problem]').count() === 0, '2c: typing clears the red reason');
+await keepNote().click();
+check(await nField().locator('textarea').inputValue() === '' && (await noteTexts()).some(t => t === '11 Aug 2026first note'), '2c: ✓ files the note and empties the field for the next one');
+await nField().locator('textarea').fill('second, same day');
+await keepNote().click();
+await nField().locator('input[type=date]').fill('2026-08-07');
+await nField().locator('textarea').fill('missed day');
+await keepNote().click();
+check(await nField().locator('input[type=date]').inputValue() === '2026-08-11', '2c: after filing, the next note is back on the meeting date');
+check(JSON.stringify(await noteTexts()) === JSON.stringify(['6 Aug 2026earlier meeting note', '7 Aug 2026missed day', '11 Aug 2026first note', '11 Aug 2026second, same day']),
+    `2c: notes in date order, the missed day in its place, same day as written (${(await noteTexts()).join(' / ')})`);
+check(await nRow().locator('[data-update="1.1#0"] [data-note-actions]').count() === 0, '2c: the carried note has no ✏️ / 🗑');
+// days outside raised … today are refused, said in red while typing and on ✓, and stop Save
+await nField().locator('input[type=date]').fill('2026-08-01');
+await nField().locator('textarea').fill('too early');
+check(/cannot be before the item was raised \(4 Aug 2026\)/.test(await nRow().locator('[data-note-problem]').textContent()), '2c: a day before the raised date shows the reason at once');
+await keepNote().click();
+check(await nField().locator('textarea').inputValue() === 'too early', '2c: … and ✓ keeps it in the field');
+await tab('General Info').click();
+await saveBtn().click();
+await page.waitForTimeout(600);
+check(/Progress of 1\.1: The day cannot be before the item was raised/.test(await toasts()) && await tab('Discussions').getAttribute('aria-selected') === 'true', '2c: Save is stopped, says why and goes to the Discussions tab');
+await nField().locator('input[type=date]').fill('2099-01-01');
+check(/cannot be after/.test(await nRow().locator('[data-note-problem]').textContent()), '2c: a day after today is refused too');
+await nField().locator('textarea').press('Escape');
+check(await nField().locator('textarea').inputValue() === '' && !(await noteTexts()).some(t => t.includes('too early')), '2c: Esc in the field drops the note being typed');
+await nField().locator('input[type=date]').fill('2026-08-05');
+await nField().locator('textarea').fill('fifth of August');
+await keepNote().click();
+// ✏️ on one of this meeting's notes: day and text change in place; Esc puts it back; 🗑 asks first
+const noteAt = (text) => nRow().locator('[data-update]', { hasText: text });
+await noteAt('first note').hover();
+await noteAt('first note').getByRole('button', { name: 'Change progress note' }).click();
+await nRow().locator('[data-note-editing] input[type=date]').fill('2026-08-08');
+await nRow().locator('[data-note-editing] textarea').fill('first note (moved to the 8th)');
+await nRow().locator('[data-note-editing]').getByRole('button', { name: 'Apply' }).click();
+check(JSON.stringify((await noteTexts()).map(t => t.match(/^\d+ \w+ \d{4}/)[0])) === JSON.stringify(['5 Aug 2026', '6 Aug 2026', '7 Aug 2026', '8 Aug 2026', '11 Aug 2026']) && (await noteTexts())[3].includes('moved to the 8th'),
+    '2c: a ✏️ change of day moves the note to its new place');
+await noteAt('missed day').hover();
+await noteAt('missed day').getByRole('button', { name: 'Change progress note' }).click();
+await nRow().locator('[data-note-editing] textarea').fill('');
+await nRow().locator('[data-note-editing]').getByRole('button', { name: 'Apply' }).click();
+check(await nRow().locator('[data-note-editing]').count() === 1 && /Write the progress first/.test(await nRow().locator('[data-note-problem]').textContent()), '2c: an emptied note is not applied, and says why');
+await nRow().locator('[data-note-editing] textarea').press('Escape');
+check(await nRow().locator('[data-note-editing]').count() === 0 && (await noteTexts()).some(t => t === '7 Aug 2026missed day'), '2c: Esc puts the note back as it was');
+const noteDialogs = [];
+page.once('dialog', d => noteDialogs.push(d.message()));
+await noteAt('second, same day').hover();
+await noteAt('second, same day').getByRole('button', { name: 'Remove progress note' }).click();
+check(noteDialogs[0] === 'Remove the progress note of 11 Aug 2026?' && !(await noteTexts()).some(t => t.includes('second, same day')), `2c: 🗑 asks, then removes the note (${noteDialogs[0]})`);
+await saveBtn().click();
+await page.waitForTimeout(1500);
+const notesSaved = (await meetings()).find(m => m.title === 'MTB progress notes').discussionLog.find(e => e.no === '1.1').updates;
+check(JSON.stringify(notesSaved) === JSON.stringify([
+    { date: '2026-08-06', content: 'earlier meeting note', carried: true }, { date: '2026-08-08', content: 'first note (moved to the 8th)' },
+    { date: '2026-08-07', content: 'missed day' }, { date: '2026-08-05', content: 'fifth of August' }]), `2c: stored as written, carried note untouched (${JSON.stringify(notesSaved)})`);
+await openRow('MTB progress notes');
+await tab('Discussions').click();
+check(JSON.stringify((await noteTexts()).map(t => t.match(/^\d+ \w+ \d{4}/)[0])) === JSON.stringify(['5 Aug 2026', '6 Aug 2026', '7 Aug 2026', '8 Aug 2026']), '2c: reopened, the notes read in date order');
+await page.evaluate(() => { window.print = () => {}; });
+await modal().getByRole('button', { name: /Print/ }).click();
+await page.waitForTimeout(800);
+const printedNotes = await page.locator('.mom-print-root .register .update .update-date').allTextContents();
+check(JSON.stringify(printedNotes) === JSON.stringify(['5 Aug 2026', '6 Aug 2026', '7 Aug 2026', '8 Aug 2026']), `2c: printed in date order too (${printedNotes.join(' / ')})`);
 
 // ═══ 3. legacy two-level Draft: reads as categories + items; Save writes it back in the new shape ═══
 log('=== 3. legacy format Draft ===');

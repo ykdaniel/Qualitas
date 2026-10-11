@@ -15,8 +15,8 @@ import { getUsers, getEntityFiles, getAuthenticatedFileUrl, createMeetingMinutes
 import type { MeetingMinutesItem, Attendee, DiscussionLogEntry } from '../../store/meetingMinutesStore';
 import FileAttachment from '../Shared/FileAttachment';
 import { BackButton } from '../ui/BackButton';
-import DiscussionRegister, { isEditDirty, type RegisterEdit } from './DiscussionRegister';
-import { normalizeDiscussionLog, openItemCount } from './discussionLog';
+import DiscussionRegister, { isEditDirty, latestNoteDate, progressProblemText, type RegisterEdit } from './DiscussionRegister';
+import { firstProgressProblem, normalizeDiscussionLog, openItemCount } from './discussionLog';
 import ImagePreviewOverlay from '../Shared/ImagePreviewOverlay';
 import MeetingMinutesPrintTemplate from './MeetingMinutesPrintTemplate';
 import formStyles from '../Shared/FormShell.module.css';
@@ -170,8 +170,19 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
         return true;
     };
 
+    // A progress note of this meeting with no text, or on a day before its item was raised / after today, is not saved:
+    // the register says why next to the note; here Save is stopped and the user taken to it.
+    const blockSaveForProgressNote = () => {
+        const latest = latestNoteDate(formData.meetingDate || todayStr());
+        const bad = firstProgressProblem(discussionLog, latest);
+        if (!bad) return false;
+        setActiveTab('discussion');
+        toast.error(t('meetingMinutes.progressBlocked', { no: bad.no, reason: progressProblemText(t, bad.problem, bad.raisedDate, latest) }));
+        return true;
+    };
+
     const handleSave = async () => {
-        if (blockSaveForUnconfirmedDraft()) return;
+        if (blockSaveForUnconfirmedDraft() || blockSaveForProgressNote()) return;
         setSaving(true);
         setIncompleteNotice(null);
         try {

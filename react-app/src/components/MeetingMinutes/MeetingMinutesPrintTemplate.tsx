@@ -1,7 +1,7 @@
 import React from 'react';
 import { val, SignCell } from '../Shared/PrintPrimitives';
 import type { Attendee, DiscussionLogEntry } from '../../store/meetingMinutesStore';
-import { displayNo, formatMinutesDate, isItem, normalizeDiscussionLog } from './discussionLog';
+import { displayNo, formatMinutesDate, isItem, normalizeDiscussionLog, updatesByDate } from './discussionLog';
 
 /**
  * Meeting Minutes print report — bilingual, lightweight sibling of the
@@ -123,7 +123,7 @@ const MeetingMinutesPrintTemplate: React.FC<MeetingMinutesPrintTemplateProps> = 
                                                 <td>
                                                     {e.raisedDate && <div className="raised-date">{formatMinutesDate(e.raisedDate)}</div>}
                                                     <div className={e.raisedDate ? 'update-text' : undefined} style={{ whiteSpace: 'pre-wrap' }}>{val(e.content)}</div>
-                                                    {(e.updates || []).map((u, i) => (
+                                                    {updatesByDate(e).map(({ u, i }) => (
                                                         <div key={i} className={u.carried ? 'update carried' : 'update'}>
                                                             {u.date && <div className="update-date">{formatMinutesDate(u.date)}</div>}
                                                             <div className="update-text">{u.content}</div>

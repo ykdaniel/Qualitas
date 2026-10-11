@@ -162,32 +162,49 @@ export function headingsOf(log: DiscussionLogEntry[], no: string): string[] {
     return titles;
 }
 
-/** Index of this meeting's own progress update on an item (the last one not carried from an earlier meeting), or -1. */
-export function currentUpdateIndex(e: DiscussionLogEntry): number {
-    const ups = e.updates || [];
-    for (let i = ups.length - 1; i >= 0; i--) if (!ups[i].carried) return i;
-    return -1;
+/** An item's progress updates in date order — the same date in the order they were written — each with its index in
+ *  `updates`. A note written later for an earlier day (user, 2026-10-11: "如果我忘記補充資料可以補上去") lands on its day. */
+export function updatesByDate(e: DiscussionLogEntry): { u: ProgressUpdate; i: number }[] {
+    return (e.updates || []).map((u, i) => ({ u, i }))
+        .sort((a, b) => ((a.u.date || '') < (b.u.date || '') ? -1 : (a.u.date || '') > (b.u.date || '') ? 1 : a.i - b.i));
 }
 
+/** Changes one of this meeting's updates; carried ones (an earlier meeting's record) are never changed. */
+export function patchUpdate(log: DiscussionLogEntry[], no: string, index: number, patch: Partial<ProgressUpdate>): DiscussionLogEntry[] {
+    return log.map(e => (e.no === no && e.updates?.[index] && !e.updates[index].carried
+        ? { ...e, updates: e.updates.map((u, i) => (i === index ? { ...u, ...patch } : u)) } : e));
+}
+
+/** Today as yyyy-mm-dd in local time (what a date input shows). */
+export function localToday(now = new Date()): string {
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
+}
+
+export type ProgressProblem = 'noText' | 'noDate' | 'beforeRaised' | 'afterLatest';
 /**
- * The weekly update of an item in this meeting ("this week: …"): created when text is first typed, changed in place
- * afterwards, removed again when emptied. Carried (earlier) updates are never touched.
+ * What is wrong with a progress note written in this meeting, or null. Its day may not be before the item was raised,
+ * nor after `latest` — today, or the meeting date when the minutes are prepared ahead of it.
  */
-export function setCurrentUpdate(log: DiscussionLogEntry[], no: string, patch: { date?: string; content?: string }, defaultDate: string): DiscussionLogEntry[] {
-    return log.map(e => {
-        if (e.no !== no) return e;
-        const ups = [...(e.updates || [])];
-        const i = currentUpdateIndex(e);
-        if (i === -1) {
-            if (!patch.content?.trim()) return e;               // nothing (or only spaces) typed: no empty update is created
-            ups.push({ date: patch.date ?? defaultDate, content: patch.content });
-        } else {
-            const next = { ...ups[i], ...patch };
-            if (!next.content.trim()) ups.splice(i, 1);
-            else ups[i] = next;
+export function progressProblem(u: ProgressUpdate, raisedDate: string | undefined, latest: string): ProgressProblem | null {
+    if (!u.content.trim()) return 'noText';
+    if (!u.date) return 'noDate';
+    if (raisedDate && u.date < raisedDate) return 'beforeRaised';
+    if (u.date > latest) return 'afterLatest';
+    return null;
+}
+
+/** The first progress note of this meeting that cannot be saved as it is (carried notes are not checked). */
+export function firstProgressProblem(log: DiscussionLogEntry[], latest: string): { no: string; problem: ProgressProblem; raisedDate?: string } | null {
+    for (const e of log) {
+        if (!isItem(e)) continue;
+        for (const u of e.updates || []) {
+            if (u.carried) continue;
+            const problem = progressProblem(u, e.raisedDate, latest);
+            if (problem) return { no: e.no, problem, raisedDate: e.raisedDate };
         }
-        return { ...e, updates: ups };
-    });
+    }
+    return null;
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
