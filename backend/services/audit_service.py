@@ -30,15 +30,20 @@ _CREATE_STATUSES = tuple(s for s, nxt in WorkflowEngine.TRANSITIONS["Audit"].ite
 _LOCKED_STATUSES = tuple(s for s, nxt in WorkflowEngine.TRANSITIONS["Audit"].items() if not nxt)
 
 
-# Word export (AUDIT-EXPORT-DOCX-2026-001): bilingual labels for the status and for a checklist item's result. An item
-# without a status counts as pending, as in the wizard.
+# Word export (AUDIT-EXPORT-DOCX-2026-001): bilingual labels for the status and for a checklist item's result.
+# Results (AUDIT-GRADES-2026-001, user's choice 2026-10-11): pass / positive / major / minor. An older audit's 'fail' is
+# shown as "不符合（未分級）" and counts as graded; 'pending', no status or anything else is 未評 (not graded).
 _STATUS_TEXT = {
     'Draft': '草稿 Draft', 'Planned': '計畫中 Planned', 'In Progress': '進行中 In Progress',
     'Completed': '已完成 Completed', 'Closed': '已關閉 Closed', 'Void': '作廢 Void',
 }
-_RESULT_TEXT = {'pass': '符合 Pass', 'fail': '不符合 Fail', 'pending': '注意／待改善 Attention'}
-# Checklist detail table: #, clause no., clause & question, result, remarks, updated — 17.4 cm = A4 minus the margins.
-_ITEM_COLUMN_WIDTHS_CM = (0.9, 1.7, 6.2, 2.3, 4.3, 2.0)
+AUDIT_GRADES = ('pass', 'positive', 'major', 'minor')
+_RESULT_TEXT = {'pass': '符合 Pass', 'positive': '正面發現 Positive', 'major': '主要不符合 Major', 'minor': '次要不符合 Minor',
+                'fail': '不符合（未分級） Fail'}
+_UNGRADED_TEXT = '未評 Not graded'
+# Checklist detail table: #, clause no., clause text, audit question, result, remarks, updated — 17.4 cm = A4 minus the
+# margins. Clause text and question are separate columns (AUDIT-GRADES-2026-001).
+_ITEM_COLUMN_WIDTHS_CM = (0.8, 1.4, 4.4, 3.8, 2.2, 3.0, 1.8)
 # Agenda table (AUDIT-AGENDA-2026-001): date, time, audit item / process, auditee, auditor, remarks — also 17.4 cm.
 _AGENDA_COLUMN_WIDTHS_CM = (2.2, 2.4, 5.0, 3.2, 2.2, 2.4)
 # Agenda lunch rows (AUDIT-BUTTONS-2026-001): kind "lunch" — a default the wizard adds for each new day, editable and
@@ -60,7 +65,7 @@ def _shade(cell, hex_color):
 
 
 # On-site checklist (AUDIT-BUTTONS-2026-001): #, clause no., clause & question, result boxes, blank remarks — 17.4 cm.
-_CHECKLIST_COLUMN_WIDTHS_CM = (0.9, 1.7, 7.4, 3.0, 4.4)
+_CHECKLIST_COLUMN_WIDTHS_CM = (0.8, 1.4, 5.0, 4.4, 2.8, 3.0)
 # Word export kinds: title (zh, en) and the file-name suffix after the audit number; same titles as the printouts.
 _DOCX_KINDS = {
     "report": ("內部稽核報告", "INTERNAL AUDIT REPORT", ""),
@@ -440,11 +445,11 @@ class AuditService:
         items = [i for i in json_list(audit.custom_check_items) if isinstance(i, dict)]
         agenda = [a for a in json_list(audit.agenda) if isinstance(a, dict)]
 
-        # Same counting as the wizard's statistics cards: anything that is not pass / fail (incl. no status) is pending.
+        # Same counting as the wizard's statistics cards: the four grades and an older 'fail' are graded; anything else
+        # (pending, no status, an odd value) is not graded. Progress = graded / total.
         total = len(items)
-        passed = sum(1 for i in items if i.get('status') == 'pass')
-        failed = sum(1 for i in items if i.get('status') == 'fail')
-        pending = total - passed - failed
+        counts = {g: sum(1 for i in items if status_key(i) == g) for g in AUDIT_GRADES + ('fail',)}
+        pending = total - sum(counts.values())
         # Percent rounded half up in integers (12.5 -> 13), the same formula as the wizard and its printouts
         # (AUDIT-PRINT-2026-001): Python's round() rounds half to even, and in JavaScript a float product can land just under .5.
         progress = 0 if total == 0 else (200 * (total - pending) + total) // (2 * total)
@@ -468,10 +473,10 @@ class AuditService:
             if items:
                 rows = []
                 for n, item in enumerate(items, start=1):
-                    content = "\n".join(filter(None, [txt(item.get('clause')), txt(item.get('task'))]))
-                    rows.append([str(n), txt(item.get('no')) or db.DASH, content or db.DASH,
-                                 "☐ 符合 Pass\n☐ 不符合 Fail\n☐ 注意 Attention", ""])
-                table = db.add_data_table(doc, ["#", "條文編號\nClause No.", "條文與查檢重點\nClause & Audit Question",
+                    rows.append([str(n), txt(item.get('no')) or db.DASH, txt(item.get('clause')) or db.DASH,
+                                 txt(item.get('task')) or db.DASH,
+                                 "☐ 符合 Pass\n☐ 正面發現 Positive\n☐ 主要不符合 Major\n☐ 次要不符合 Minor", ""])
+                table = db.add_data_table(doc, ["#", "條文編號\nClause No.", "條文內容\nClause", "查檢重點\nAudit Question",
                                                 "結果\nResult", "備註\nRemarks"], rows)
                 table.autofit = False
                 for row in table.rows:
@@ -557,23 +562,25 @@ class AuditService:
         db.add_section_heading(doc, "5", "查檢結果", "Checklist Results")
         db.add_field_grid(doc, [
             [("查檢項目數", "Total Items", str(total)), ("完成率", "Progress", f"{progress}%")],
-            [("符合", "Pass", str(passed)), ("不符合", "Fail", str(failed))],
-            [("注意／待改善", "Attention / Pending", str(pending))],
+            [("符合", "Pass", str(counts['pass'])), ("正面發現", "Positive", str(counts['positive']))],
+            [("主要不符合", "Major", str(counts['major'])), ("次要不符合", "Minor", str(counts['minor']))],
+            # an older audit's ungraded 'fail' only shows up when there is one
+            [("未評", "Not graded", str(pending))] + ([("不符合（未分級）", "Fail (ungraded)", str(counts['fail']))] if counts['fail'] else []),
         ])
         db.add_subsection_heading(doc, "5.1 查檢明細", "Audit Items")
         if items:
             rows = []
             for n, item in enumerate(items, start=1):
-                content = "\n".join(filter(None, [txt(item.get('clause')), txt(item.get('task'))]))
                 rows.append([
                     str(n),
                     txt(item.get('no')) or db.DASH,
-                    content or db.DASH,
-                    _RESULT_TEXT.get(status_key(item), _RESULT_TEXT['pending']),
+                    txt(item.get('clause')) or db.DASH,
+                    txt(item.get('task')) or db.DASH,
+                    _RESULT_TEXT.get(status_key(item), _UNGRADED_TEXT),
                     txt(item.get('note')) or db.DASH,
                     txt(item.get('updatedAt')) or db.DASH,
                 ])
-            table = db.add_data_table(doc, ["#", "條文編號\nClause No.", "條文與查檢重點\nClause & Audit Question",
+            table = db.add_data_table(doc, ["#", "條文編號\nClause No.", "條文內容\nClause", "查檢重點\nAudit Question",
                                             "結果\nResult", "備註\nRemarks", "更新日期\nUpdated"], rows)
             # Word gives every column the same width by default: a narrow "#", most of the room for the question.
             table.autofit = False

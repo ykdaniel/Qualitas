@@ -53,7 +53,12 @@ const STATUS_TEXT: Record<string, string> = {
     'Draft': '草稿 Draft', 'Planned': '計畫中 Planned', 'In Progress': '進行中 In Progress',
     'Completed': '已完成 Completed', 'Closed': '已關閉 Closed', 'Void': '作廢 Void',
 };
-const RESULT_TEXT: Record<string, string> = { pass: '符合 Pass', fail: '不符合 Fail', pending: '注意／待改善 Attention' };
+// Results (AUDIT-GRADES-2026-001): the four grades; an older audit's 'fail' is shown as 不符合（未分級）; anything else is
+// 未評 (not graded).
+const RESULT_TEXT: Record<string, string> = {
+    pass: '符合 Pass', positive: '正面發現 Positive', major: '主要不符合 Major', minor: '次要不符合 Minor', fail: '不符合（未分級） Fail',
+};
+const UNGRADED_TEXT = '未評 Not graded';
 
 // Completion percent rounded half up in integers (12.5 -> 13): the wizard's statistics card, these printouts and the Word
 // export all use this formula — Math.round(done / total * 100) gave 57 for 23 of 40 (the float is 57.4999...).
@@ -75,20 +80,17 @@ const AuditPrintTemplate: React.FC<AuditPrintTemplateProps> = ({ kind, data, uns
     const items = data.customCheckItems.filter((i): i is CheckItem => !!i && typeof i === 'object' && !Array.isArray(i));
     const agenda = data.agenda.filter((a): a is AgendaRow => !!a && typeof a === 'object' && !Array.isArray(a));
     const templates = data.selectedTemplates.filter((t): t is string => typeof t === 'string' && !!t.trim());
-    // Same counting as the wizard's statistics cards and the Word export: anything not pass / fail is pending.
+    // Same counting as the wizard's statistics cards and the Word export: the four grades and an older 'fail' are graded,
+    // anything else is not graded; progress = graded / total.
     const total = items.length;
-    const passed = items.filter(i => i.status === 'pass').length;
-    const failed = items.filter(i => i.status === 'fail').length;
-    const pending = total - passed - failed;
+    const count = (s: string) => items.filter(i => i.status === s).length;
+    const byGrade = { pass: count('pass'), positive: count('positive'), major: count('major'), minor: count('minor'), fail: count('fail') };
+    const pending = total - Object.values(byGrade).reduce((a, b) => a + b, 0);
     const progress = auditProgress(total, pending);
-    const resultText = (s: unknown) => RESULT_TEXT[typeof s === 'string' ? s : ''] || RESULT_TEXT.pending;
+    // own keys only: a stored status like '__proto__' / 'constructor' must not reach the prototype (R1 review)
+    const resultText = (s: unknown) =>
+        typeof s === 'string' && Object.prototype.hasOwnProperty.call(RESULT_TEXT, s) ? RESULT_TEXT[s] : UNGRADED_TEXT;
     const [titleZh, titleEn] = TITLES[kind];
-    // Clause (bold) over the question; a single dash only when both are empty — the Word cell joins the two the same way.
-    const questionCell = (item: CheckItem) => {
-        const clause = clean(item.clause), task = clean(item.task);
-        if (!clause && !task) return DASH;
-        return <>{clause && <div className="clause">{clause}</div>}{task && <div>{task}</div>}</>;
-    };
 
     const infoSection = (
         <>
@@ -242,7 +244,7 @@ const AuditPrintTemplate: React.FC<AuditPrintTemplateProps> = ({ kind, data, uns
                                             <thead>
                                                 <tr>
                                                     <th className="c-n">#</th><th className="c-no">條文編號<small>Clause No.</small></th>
-                                                    <th className="c-q">條文與查檢重點<small>Clause &amp; Audit Question</small></th>
+                                                    <th className="c-c">條文內容<small>Clause</small></th><th className="c-q">查檢重點<small>Audit Question</small></th>
                                                     <th className="c-r">結果<small>Result</small></th><th className="c-m">備註<small>Remarks</small></th>
                                                 </tr>
                                             </thead>
@@ -251,8 +253,8 @@ const AuditPrintTemplate: React.FC<AuditPrintTemplateProps> = ({ kind, data, uns
                                                     <tr key={n}>
                                                         <td className="c-n">{n + 1}</td>
                                                         <td className="c-no">{clean(item.no) || DASH}</td>
-                                                        <td className="c-q">{questionCell(item)}</td>
-                                                        <td className="c-r boxes"><div>☐ 符合 Pass</div><div>☐ 不符合 Fail</div><div>☐ 注意 Attention</div></td>
+                                                        <td className="c-c">{clean(item.clause) || DASH}</td><td className="c-q">{clean(item.task) || DASH}</td>
+                                                        <td className="c-r boxes"><div>☐ 符合 Pass</div><div>☐ 正面發現 Positive</div><div>☐ 主要不符合 Major</div><div>☐ 次要不符合 Minor</div></td>
                                                         <td className="c-m" />
                                                     </tr>
                                                 ))}
@@ -283,11 +285,16 @@ const AuditPrintTemplate: React.FC<AuditPrintTemplateProps> = ({ kind, data, uns
                                                         <td className="lbl">完成率<small>Progress</small></td><td className="val">{progress}%</td>
                                                     </tr>
                                                     <tr>
-                                                        <td className="lbl">符合<small>Pass</small></td><td className="val">{passed}</td>
-                                                        <td className="lbl">不符合<small>Fail</small></td><td className="val">{failed}</td>
+                                                        <td className="lbl">符合<small>Pass</small></td><td className="val">{byGrade.pass}</td>
+                                                        <td className="lbl">正面發現<small>Positive</small></td><td className="val">{byGrade.positive}</td>
                                                     </tr>
                                                     <tr>
-                                                        <td className="lbl">注意／待改善<small>Attention / Pending</small></td><td className="val" colSpan={3}>{pending}</td>
+                                                        <td className="lbl">主要不符合<small>Major</small></td><td className="val">{byGrade.major}</td>
+                                                        <td className="lbl">次要不符合<small>Minor</small></td><td className="val">{byGrade.minor}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td className="lbl">未評<small>Not graded</small></td><td className="val" colSpan={byGrade.fail ? 1 : 3}>{pending}</td>
+                                                        {byGrade.fail > 0 && <><td className="lbl">不符合（未分級）<small>Fail (ungraded)</small></td><td className="val">{byGrade.fail}</td></>}
                                                     </tr>
                                                 </tbody>
                                             </table>
@@ -297,7 +304,7 @@ const AuditPrintTemplate: React.FC<AuditPrintTemplateProps> = ({ kind, data, uns
                                                     <thead>
                                                         <tr>
                                                             <th className="c-n">#</th><th className="c-no">條文編號<small>Clause No.</small></th>
-                                                            <th className="c-q">條文與查檢重點<small>Clause &amp; Audit Question</small></th>
+                                                            <th className="c-c">條文內容<small>Clause</small></th><th className="c-q">查檢重點<small>Audit Question</small></th>
                                                             <th className="c-r">結果<small>Result</small></th><th className="c-m">備註<small>Remarks</small></th>
                                                             <th className="c-d">更新日期<small>Updated</small></th>
                                                         </tr>
@@ -307,7 +314,7 @@ const AuditPrintTemplate: React.FC<AuditPrintTemplateProps> = ({ kind, data, uns
                                                             <tr key={n}>
                                                                 <td className="c-n">{n + 1}</td>
                                                                 <td className="c-no">{clean(item.no) || DASH}</td>
-                                                                <td className="c-q">{questionCell(item)}</td>
+                                                                <td className="c-c">{clean(item.clause) || DASH}</td><td className="c-q">{clean(item.task) || DASH}</td>
                                                                 <td className="c-r">{resultText(item.status)}</td>
                                                                 <td className="c-m">{clean(item.note) || DASH}</td>
                                                                 <td className="c-d">{clean(item.updatedAt) || DASH}</td>

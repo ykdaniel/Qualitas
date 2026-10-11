@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import {
   MapPin, ClipboardList, CheckCircle, ChevronRight, ChevronLeft,
   Save, FileText, Users, CheckSquare, Plus, Trash2, Edit2, Check, X,
-  AlertCircle, Search, ShieldCheck, Printer, CalendarDays, Lock, ListChecks
+  Search, ShieldCheck, Printer, CalendarDays, Lock, ListChecks
 } from 'lucide-react';
 import { useAuditStore, AuditItem, AuditAgendaEntry } from '../../store/auditStore';
 import { useAuditTemplateStore, AuditTemplate } from '../../store/auditTemplateStore';
@@ -67,6 +67,15 @@ const AUDIT_STATUS_TRANSITIONS: Record<string, string[]> = {
 const AUDIT_CREATE_STATUSES = ['Draft', 'Planned', 'In Progress', 'Completed'];
 // Closed and Void are dead ends ("Closed": [] / "Void": []): read-only here and in the backend.
 const AUDIT_LOCKED_STATUSES = new Set(['Closed', 'Void']);
+// Checklist results (AUDIT-GRADES-2026-001, user's choice 2026-10-11): 符合 Pass, 正面發現 Positive, 主要不符合 Major,
+// 次要不符合 Minor. An older audit's 'fail' still counts as graded (shown as 不符合（未分級）) until the auditor regrades it.
+const GRADE_BUTTONS = [
+  { value: 'pass', label: 'audit.grades.passShort', title: '符合 (Pass)', active: 'text-green-600' },
+  { value: 'positive', label: 'audit.grades.positiveShort', title: '正面發現 (Positive)', active: 'text-sky-600' },
+  { value: 'major', label: 'audit.grades.majorShort', title: '主要不符合 (Major)', active: 'text-red-600' },
+  { value: 'minor', label: 'audit.grades.minorShort', title: '次要不符合 (Minor)', active: 'text-amber-600' },
+];
+const GRADED_STATUSES = new Set(['pass', 'positive', 'major', 'minor', 'fail']);
 const AUDIT_STATUS_LABELS: Record<string, string> = {
   'Draft': '✏️ Draft（草稿）',
   'Planned': '📅 Planned（計畫中）',
@@ -265,8 +274,8 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
   const templateNames = useMemo(() => new Map(libraryTemplates.map(tpl => [tpl.id, tpl.name])), [libraryTemplates]);
   const [pickerTemplate, setPickerTemplate] = useState<AuditTemplate | null>(null);
 
-  // A copied question counts as filled once it has a result (pass / fail) or a note: those are never removed.
-  const isFilledItem = (item: any) => item?.status === 'pass' || item?.status === 'fail' || !!String(item?.note ?? '').trim();
+  // A copied question counts as filled once it has a result (one of the four grades, or an older 'fail') or a note: those are never removed.
+  const isFilledItem = (item: any) => GRADED_STATUSES.has(item?.status) || !!String(item?.note ?? '').trim();
 
   // Clicking a chip ticks / unticks an audit type (user's design 2026-10-11): ticking only records the name — its questions
   // become available in the add form's dropdown and the batch picker; unticking removes the unfilled questions that came
@@ -328,13 +337,17 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     setPickerTemplate(null);
   };
 
+  // Results (AUDIT-GRADES-2026-001): the four grades and an older audit's 'fail' (不符合（未分級）) are graded; anything
+  // else (no status, the old 'pending') is not graded. Progress = graded / total, as in the printouts and the Word export.
   const stats = useMemo(() => {
-    const total = formData.customCheckItems.length;
-    const passed = formData.customCheckItems.filter((i: any) => i.status === 'pass').length;
-    const failed = formData.customCheckItems.filter((i: any) => i.status === 'fail').length;
-    const pending = total - passed - failed; // The "!" status is treated as pending or warning
+    // only object items count, the same filter as the printouts and the Word export (R1 review)
+    const items: any[] = formData.customCheckItems.filter((i: any) => !!i && typeof i === 'object' && !Array.isArray(i));
+    const total = items.length;
+    const count = (s: string) => items.filter(i => i?.status === s).length;
+    const byGrade = { pass: count('pass'), positive: count('positive'), major: count('major'), minor: count('minor'), fail: count('fail') };
+    const pending = total - Object.values(byGrade).reduce((a, b) => a + b, 0);
     const progress = auditProgress(total, pending);
-    return { total, passed, failed, pending, progress };
+    return { total, ...byGrade, pending, progress };
   }, [formData.customCheckItems]);
 
   const filteredItems = useMemo(() => {
@@ -346,11 +359,12 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     });
   }, [formData.customCheckItems, searchTerm, activeCategory]);
 
+  // Clicking the grade an item already has clears it (back to not graded).
   const updateItemStatus = (id: number, newStatus: string) => {
     setFormData(prev => ({
       ...prev,
-      customCheckItems: prev.customCheckItems.map((item: any) => 
-        item.id === id ? { ...item, status: newStatus, updatedAt: localToday() } : item
+      customCheckItems: prev.customCheckItems.map((item: any) =>
+        item.id === id ? { ...item, status: item.status === newStatus ? '' : newStatus, updatedAt: localToday() } : item
       )
     }));
   };
@@ -1176,7 +1190,8 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                 </header>
 
                 {/* Statistics Cards */}
-                <div className="grid grid-cols-4 gap-4 overflow-x-auto min-w-full pb-2">
+                {/* six cards: one row from xl, 3 × 2 below it so a ~1024px screen needs no sideways scroll (user 2026-10-11) */}
+                <div className="grid grid-cols-3 xl:grid-cols-6 gap-4 overflow-x-auto min-w-full pb-2">
                   <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]">
                     <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">{t('audit.wizard.statTotal')}</p>
                     <p className="text-2xl font-bold text-slate-800">{stats.total}</p>
@@ -1194,18 +1209,32 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                       <div className="bg-blue-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${stats.progress}%` }}></div>
                     </div>
                   </div>
-                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]">
+                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]" data-stat="pass">
                     <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">{t('audit.wizard.statPass')}</p>
-                    <p className="text-2xl font-bold text-green-600">{stats.passed}</p>
+                    <p className="text-2xl font-bold text-green-600">{stats.pass}</p>
                     <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3">
-                      <div className="bg-green-500 h-1.5 rounded-full" style={{ width: stats.total ? `${(stats.passed / stats.total) * 100}%` : '0%' }}></div>
+                      <div className="bg-green-500 h-1.5 rounded-full" style={{ width: stats.total ? `${(stats.pass / stats.total) * 100}%` : '0%' }}></div>
                     </div>
                   </div>
-                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]">
-                    <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">{t('audit.wizard.statFail')}</p>
-                    <p className="text-2xl font-bold text-red-600">{stats.failed}</p>
+                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]" data-stat="positive">
+                    <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">{t('audit.wizard.statPositive')}</p>
+                    <p className="text-2xl font-bold text-sky-600">{stats.positive}</p>
                     <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3">
-                      <div className="bg-red-500 h-1.5 rounded-full" style={{ width: stats.total ? `${(stats.failed / stats.total) * 100}%` : '0%' }}></div>
+                      <div className="bg-sky-500 h-1.5 rounded-full" style={{ width: stats.total ? `${(stats.positive / stats.total) * 100}%` : '0%' }}></div>
+                    </div>
+                  </div>
+                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]" data-stat="major">
+                    <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">{t('audit.wizard.statMajor')}</p>
+                    <p className="text-2xl font-bold text-red-600">{stats.major}</p>
+                    <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3">
+                      <div className="bg-red-500 h-1.5 rounded-full" style={{ width: stats.total ? `${(stats.major / stats.total) * 100}%` : '0%' }}></div>
+                    </div>
+                  </div>
+                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 min-w-[140px]" data-stat="minor">
+                    <p className="text-slate-500 text-sm mb-1 whitespace-nowrap">{t('audit.wizard.statMinor')}</p>
+                    <p className="text-2xl font-bold text-amber-600">{stats.minor}</p>
+                    <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3">
+                      <div className="bg-amber-500 h-1.5 rounded-full" style={{ width: stats.total ? `${(stats.minor / stats.total) * 100}%` : '0%' }}></div>
                     </div>
                   </div>
                 </div>
@@ -1253,7 +1282,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                         <tr className="bg-slate-50 border-b border-slate-100">
                           <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-32">{t('audit.wizard.colCategory')}</th>
                           <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">{t('audit.wizard.colContent')}</th>
-                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-40 text-center">{t('audit.wizard.colStatus')}</th>
+                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-64 text-center">{t('audit.wizard.colStatus')}</th>
                           <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">{t('audit.wizard.colRemarks')}</th>
                           <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-28 text-right">{t('audit.wizard.colUpdated')}</th>
                         </tr>
@@ -1274,31 +1303,26 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex justify-center">
-                                <div className="flex bg-slate-100 p-1 rounded-lg gap-1 border border-slate-200">
-                                  <button 
-                                    type="button"
-                                    onClick={() => updateItemStatus(item.id, 'pass')}
-                                    className={`p-1.5 rounded transition-all ${item.status === 'pass' ? 'bg-white shadow-sm text-green-600' : 'text-slate-400 hover:text-slate-600'}`}
-                                    title="符合 (Pass)"
-                                  >
-                                    <CheckCircle className="w-4 h-4" />
-                                  </button>
-                                  <button 
-                                    type="button"
-                                    onClick={() => updateItemStatus(item.id, 'pending')}
-                                    className={`p-1.5 rounded transition-all ${(!item.status || item.status === 'pending') ? 'bg-white shadow-sm text-amber-500' : 'text-slate-400 hover:text-slate-600'}`}
-                                    title="注意/待改善 (!)"
-                                  >
-                                    <AlertCircle className="w-4 h-4" />
-                                  </button>
-                                  <button 
-                                    type="button"
-                                    onClick={() => updateItemStatus(item.id, 'fail')}
-                                    className={`p-1.5 rounded transition-all ${item.status === 'fail' ? 'bg-white shadow-sm text-red-600' : 'text-slate-400 hover:text-slate-600'}`}
-                                    title="不符合 (X)"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
+                                <div className="flex flex-col items-center gap-1">
+                                  {/* an older audit's ungraded fail: shown until the auditor picks Major or Minor */}
+                                  {item.status === 'fail' && (
+                                    <span className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-200 rounded px-1.5" data-ungraded-fail>{t('audit.wizard.legendUngraded')}</span>
+                                  )}
+                                  <div className="flex bg-slate-100 p-1 rounded-lg gap-1 border border-slate-200" data-grade-buttons>
+                                    {GRADE_BUTTONS.map(g => (
+                                      <button
+                                        key={g.value}
+                                        type="button"
+                                        onClick={() => updateItemStatus(item.id, g.value)}
+                                        className={`px-2 py-1 rounded text-xs font-bold transition-all whitespace-nowrap ${item.status === g.value ? `bg-white shadow-sm ${g.active}` : 'text-slate-400 hover:text-slate-600'}`}
+                                        title={g.title}
+                                        aria-pressed={item.status === g.value}
+                                        data-grade={g.value}
+                                      >
+                                        {t(g.label)}
+                                      </button>
+                                    ))}
+                                  </div>
                                 </div>
                               </div>
                             </td>
@@ -1347,15 +1371,29 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-1.5">
                         <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                        <span className="text-xs text-slate-500">{t('audit.wizard.legendPass')}: {stats.passed}</span>
+                        <span className="text-xs text-slate-500">{t('audit.wizard.legendPass')}: {stats.pass}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                        <span className="text-xs text-slate-500">{t('audit.wizard.legendWarning')}: {stats.pending}</span>
+                        <div className="w-2 h-2 rounded-full bg-sky-500"></div>
+                        <span className="text-xs text-slate-500">{t('audit.wizard.legendPositive')}: {stats.positive}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                        <span className="text-xs text-slate-500">{t('audit.wizard.legendFail')}: {stats.failed}</span>
+                        <span className="text-xs text-slate-500">{t('audit.wizard.legendMajor')}: {stats.major}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                        <span className="text-xs text-slate-500">{t('audit.wizard.legendMinor')}: {stats.minor}</span>
+                      </div>
+                      {stats.fail > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-2 h-2 rounded-full bg-red-300"></div>
+                          <span className="text-xs text-slate-500">{t('audit.wizard.legendUngraded')}: {stats.fail}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-full bg-slate-300"></div>
+                        <span className="text-xs text-slate-500">{t('audit.wizard.legendNotGraded')}: {stats.pending}</span>
                       </div>
                     </div>
                     <p className="text-xs text-slate-400 font-medium italic">

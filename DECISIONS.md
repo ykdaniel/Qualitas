@@ -294,6 +294,24 @@ Result 的既有操作方式比拆開成縱向區塊更直覺）。
 影響範圍：backend/models.py（ContractorPersonnel，新表 contractor_personnel，啟動 create_all 建立）、schemas.py、services/contractor_service.py、routers/contractors.py；前端 Contractors/ContractorModal.tsx、ContractorPersonnel.tsx、Contractors.tsx（刪除被拒的提示）、MeetingMinutes/AttendeePicker.tsx、MeetingMinutesModals.tsx、services/api.ts、store/meetingMinutesStore.ts（Attendee 型別）。
 依據：使用者 2026-10-11 經協調中心選定；本公司人員來源於會議記錄工作階段選定。
 
+### 稽核結果四級與查檢表欄位（AUDIT-GRADES-2026-001，2026-10-11）
+日期：2026-10-11
+決策：
+1. 稽核查檢項目的結果改為四級：**符合 Pass、正面發現 Positive、主要不符合 Major、次要不符合 Minor**。原本的「不符合 Fail」和「注意 Attention」不再提供。四級用在第 5 步的結果按鈕、統計卡片與圖例、進度，以及查檢表和報告的列印與 Word。
+2. 舊資料不自動修改：
+   - 已評為 `fail` 的題目，顯示為「不符合（未分級）」，算已評，等稽核員改選 Major 或 Minor；已結案的稽核維持原樣。
+   - `pending` 和沒有結果的題目算「未評」。
+   - 再點一次已選的結果會清除，回到未評。
+3. **完成率**＝已評題數 ÷ 全部題數（四級和舊的 `fail` 都算已評）。**不新增符合率**：統計和報告摘要只列 Pass、Positive、Major、Minor、未評的數量；只有在還有舊的 `fail` 時，才另列「不符合（未分級）」。第 5 步的統計卡片是總數、完成率與四級共 6 張（寬螢幕一排，約 1280 以下排成 3×2）；未評和不符合（未分級）的數量列在頁尾圖例，不另做卡片。
+4. 查檢表和報告（列印與 Word）的查檢項目表，拆成「條文編號｜條文內容｜查檢重點｜結果｜備註」，報告另加更新日期。查檢表的空白勾選框改為四級。
+5. 後端不加結果值的白名單：`custom_check_items` 照舊是自由 JSON，舊值可以讀寫；已關閉的稽核原樣重存時，不會被判定為有修改。
+理由：使用者 2026-10-11 預覽查檢表列印時提出：「列印怎麼把條文重點跟問題放在一起，而且結果只有 Pass Postive Major Minor」。
+影響範圍：前端 AuditWizard.tsx（第 5 步）、AuditPrintTemplate.tsx、Audit.print.css、LanguageContext.tsx；後端 services/audit_service.py（Word 匯出）。盤點確認 Dashboard、KPI、Owner Performance 沒有讀取稽核結果（見 TASK）。
+依據：使用者 2026-10-11 於 Audit 工作階段的選擇：
+- 欄位「分成兩欄並排」、結果「全部改成這四級」、舊 fail「顯示不符合（未分級）」、未評「空白，算未評」。
+- 中文名稱「符合／正面發現／主要不符合／次要不符合」、完成率「已評題數 ÷ 全部題數」、符合率「不要，只列各級數量」。
+- 預覽後：1024 寬統計卡「窄螢幕改成 3×2」、未評數量「放圖例就好」。
+
 ## 尚未決策（不得當成已核准規則）
 
 - ITR 核准是否須額外檢查 Inspection Result。

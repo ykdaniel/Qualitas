@@ -3,7 +3,13 @@
 // exact contractor / status column filters, the disabled delete button's tooltip on its wrapper, the read-only banner,
 // the default lunch leaving with a day's last session, and step 4's audit types (template library) + clause / question
 // dropdowns instead of the old fixed 20-clause ISO dropdown.
-// TEST ONLY — isolated stack (vite 3323 / backend 8323), freshly reset with /tmp/claude-501/reset-r2-3323.sh (seeds
+// v3 (AUDIT-GRADES-2026-001): step 5's results are four grade buttons per item ([data-grade-buttons] >
+// button[data-grade=pass|positive|major|minor], aria-pressed = active, clicking the active grade clears it); the old
+// 「注意/待改善 (!)」/「不符合 (X)」 buttons and the default "pending" are gone; 6 stats cards ([data-stat=...]); an older
+// audit's 'fail' shows [data-ungraded-fail] 「不符合（未分級）」 and still counts as graded; printouts / Word use the
+// grade texts (符合 Pass / 正面發現 Positive / 主要不符合 Major / 次要不符合 Minor / 未評 Not graded).
+// Reset with /tmp/claude-501/reset-grades-3323.sh for the AUDIT-GRADES candidate.
+// TEST ONLY — isolated stack (vite 3323 / backend 8323), freshly reset (reset-grades-3323.sh above; earlier rounds used reset-r2-3323.sh) (seeds
 // seed_audit_hardening_b_review.py, seed_audit_export_docx_review.py, seed_audit_agenda_review.py and the scratch seed
 // that adds contractor "Second Vendor"; the 4 audit templates come from backend startup).
 // Usage: node audit-all-buttons-check.mjs <stack.json> <outDir>
@@ -98,7 +104,7 @@ const printCheck = async (p, kind) => {
   const before = await p.evaluate(() => window.__printed);
   await p.locator(`[data-step-print=${kind}]`).click(); await p.waitForTimeout(700);
   const got = await p.evaluate(() => ({ printed: window.__printed, kind: document.querySelector('.audit-print-root')?.dataset.printKind,
-    text: (document.querySelector('.audit-print-root')?.innerText || '').slice(0, 4000) }));
+    text: (document.querySelector('.audit-print-root')?.innerText || '').slice(0, 30000) }));
   await p.evaluate(() => dispatchEvent(new Event('afterprint'))); await p.waitForTimeout(200);
   return { calls: got.printed - before, kind: got.kind, text: got.text };
 };
@@ -131,8 +137,28 @@ const wordDownload = async (p, kind) => {
   const buf = readFileSync(path);
   return { file, kind: url ? new URL(url).searchParams.get('kind') : null, zip: buf.subarray(0, 2).toString() === 'PK', text: docxText(buf) || '', ev: `${EV}/downloads/${file}` };
 };
+// AUDIT-GRADES: grade texts in printouts / Word, compared with all whitespace removed (innerText / joined <w:t> runs
+// put <small> labels and runs together differently)
+const nows = s => (s || '').replace(/\s+/g, '');
+const has = (text, ...parts) => parts.every(x => nows(text).includes(nows(x)));
+const GRADE_TEXT = { pass: '符合 Pass', positive: '正面發現 Positive', major: '主要不符合 Major', minor: '次要不符合 Minor', fail: '不符合（未分級） Fail', none: '未評 Not graded' };
+const OLD_RESULT_TITLES = ['注意/待改善 (!)', '不符合 (X)'];
 const DOC_TITLE = { plan: '內部稽核計畫', checklist: '稽核查檢表', report: '內部稽核報告' };
 const DOC_SUFFIX = { plan: '-Plan', checklist: '-Checklist', report: '' };
+
+// step 5 display (AUDIT-GRADES): the 6 stats cards' numbers, 「已評 N」, the legend under the table and the legacy-fail badges
+const step5Display = p => p.evaluate(() => {
+  const grid = document.querySelector('form [data-stat=pass]')?.parentElement;
+  const box = document.querySelector('form table')?.closest('div.bg-white');
+  return {
+    stats: grid ? [...grid.children].map(c => c.querySelector('p.text-2xl')?.innerText.trim() ?? null) : null,
+    statKeys: grid ? [...grid.children].map(c => c.getAttribute('data-stat')) : null,
+    graded: (grid?.innerText.match(/已評\s*(\d+)/) || [])[1] ?? null,
+    legend: [...(box?.querySelectorAll('span.text-xs') || [])].map(s => s.innerText.trim()).filter(t => /^[^:]+:\s*\d+$/.test(t)).join(' / '),
+    // "<row index>:<badge text>" for every row that shows the legacy-fail badge
+    ungradedBadges: [...document.querySelectorAll('form table tbody tr')].map((r, i) => { const b = r.querySelector('[data-ungraded-fail]'); return b ? `${i}:${b.innerText.trim()}` : null; }).filter(Boolean),
+  };
+});
 
 // state probe of an open wizard: walks the 5 steps with Next / Back and records which controls are usable
 async function probeWizard(p) {
@@ -179,16 +205,22 @@ async function probeWizard(p) {
   });
   s.print4 = await p.locator('[data-step-print=checklist]').count(); s.word4 = await p.locator('[data-step-word=checklist]').count();
   await step(p, 5);
-  s.step5 = await p.evaluate(() => {
-    const pass = document.querySelector('form button[title="符合 (Pass)"]');
+  s.step5 = await p.evaluate(OLD => {
+    // AUDIT-GRADES: the four grade buttons of every item (old ! / X buttons are gone)
+    const grades = [...document.querySelectorAll('form table tbody [data-grade-buttons] button[data-grade]')];
+    const firstRow = document.querySelector('form table tbody [data-grade-buttons]');
     const note = document.querySelector('form table tbody textarea');
     const findings = document.querySelector('form textarea[name=findings]');
     const search = document.querySelector('form div.no-print.p-4 input');
     const chip = document.querySelector('form div.no-print.p-4 button');
-    return { passDisabled: pass ? pass.matches(':disabled') : null, noteDisabled: note ? note.matches(':disabled') : null,
+    return { gradesDisabled: grades.length ? (grades.every(b => b.matches(':disabled')) ? true : grades.some(b => b.matches(':disabled')) ? 'mixed' : false) : null,
+      firstRowGrades: firstRow ? [...firstRow.querySelectorAll('button[data-grade]')].map(b => `${b.dataset.grade}|${b.title}`) : null,
+      oldButtons: OLD.reduce((n, t) => n + document.querySelectorAll(`form button[title="${t}"]`).length, 0),
+      noteDisabled: note ? note.matches(':disabled') : null,
       findingsDisabled: findings?.matches(':disabled'), searchDisabled: search?.matches(':disabled'), chipDisabled: chip?.matches(':disabled'),
-      passCursor: pass ? getComputedStyle(pass).cursor : null };
-  });
+      gradeCursor: grades[0] ? getComputedStyle(grades[0]).cursor : null };
+  }, OLD_RESULT_TITLES);
+  s.display5 = await step5Display(p);
   s.next5 = await foot(p, /下一步/).count();
   s.submit = await foot(p, /完成並建立計畫/).count();
   s.print5 = await p.locator('[data-step-print=report]').count(); s.word5 = await p.locator('[data-step-word=report]').count();
@@ -206,7 +238,7 @@ const SEEDED = ['AHB-DRAFT-1', 'AHB-VOID-1', 'AHB-CLOSED-1', 'AHB-LEGACY-1', 'AH
 {
   const nos = await dtNos(full);
   if (nos.length !== 7 || !SEEDED.every(n => nos.includes(n))) {
-    console.error('refusing: stack is not freshly seeded (run /tmp/claude-501/reset-r2-3323.sh first): ' + JSON.stringify(nos));
+    console.error('refusing: stack is not freshly seeded (run /tmp/claude-501/reset-grades-3323.sh first): ' + JSON.stringify(nos));
     process.exit(3);
   }
   rec('清單', '頁面載入', '列出 7 筆種子稽核', nos, true, await shot(full, 'A01-list', true));
@@ -764,33 +796,58 @@ await guard('第4步', async () => {
   const tags = saved.custom_check_items.map(i => i.templateItemId || null);
   rec('第4步', '模板題目來源標記（存檔）', '7.2 / 8.5.4 兩題帶 templateId + templateItemId；自訂題 C-1 不帶', tags,
     tags[0] === 'iso9001-7.2-1' && tags[1] === 'iso9001-8.5.4-1' && tags[2] === null && saved.custom_check_items[0].templateId != null && saved.custom_check_items[2].templateId == null);
+  // AUDIT-GRADES: the blank result boxes are the four grades; separate 條文內容 / 查檢重點 columns
+  const boxes = ['☐ 符合 Pass', '☐ 正面發現 Positive', '☐ 主要不符合 Major', '☐ 次要不符合 Minor'];
   const pr = await printCheck(full, 'checklist');
-  rec('第4步', '列印查檢表', '列印一次、kind=checklist、含查檢項', { calls: pr.calls, kind: pr.kind, hasItem: pr.text.includes('是否配戴安全帽') }, pr.calls === 1 && pr.kind === 'checklist' && pr.text.includes('是否配戴安全帽'));
+  const prG = { boxes: has(pr.text, ...boxes), cols: has(pr.text, '條文內容', '查檢重點'), oldBoxes: /☐\s*不符合\s*Fail|☐\s*注意/.test(pr.text) };
+  rec('第4步', '列印查檢表', '列印一次、kind=checklist、含查檢項；空白結果框為 符合/正面發現/主要不符合/次要不符合 四格；條文內容與查檢重點分欄', { calls: pr.calls, kind: pr.kind, hasItem: pr.text.includes('是否配戴安全帽'), ...prG },
+    pr.calls === 1 && pr.kind === 'checklist' && pr.text.includes('是否配戴安全帽') && prG.boxes && prG.cols && !prG.oldBoxes);
   const w = await wordDownload(full, 'checklist');
-  rec('第4步', '匯出 Word（查檢表）', `下載 ${newNo}-Checklist.docx（docx、標題 稽核查檢表）`, { file: w.file, kind: w.kind, zip: w.zip, title: w.text.includes('稽核查檢表'), hasItem: w.text.includes('是否配戴安全帽') },
-    w.file === `${newNo}-Checklist.docx` && w.kind === 'checklist' && w.zip && w.text.includes('稽核查檢表') && w.text.includes('是否配戴安全帽'), w.ev);
+  const wG = { boxes: has(w.text, ...boxes), cols: has(w.text, '條文內容', '查檢重點'), oldBoxes: /☐\s*不符合\s*Fail|☐\s*注意/.test(w.text) };
+  rec('第4步', '匯出 Word（查檢表）', `下載 ${newNo}-Checklist.docx（docx、標題 稽核查檢表、四個評等空白框、條文內容／查檢重點分欄）`, { file: w.file, kind: w.kind, zip: w.zip, title: w.text.includes('稽核查檢表'), hasItem: w.text.includes('是否配戴安全帽'), ...wG },
+    w.file === `${newNo}-Checklist.docx` && w.kind === 'checklist' && w.zip && w.text.includes('稽核查檢表') && w.text.includes('是否配戴安全帽') && wG.boxes && wG.cols && !wG.oldBoxes, w.ev);
 });
 
 await guard('第5步', async () => {
   await step(full, 5);
-  const stats = () => full.locator('form div.grid-cols-4 > div').evaluateAll(cs => cs.map(c => c.querySelector('p.text-2xl').innerText.trim()));
-  const s0 = await stats();
-  rec('第5步', '統計卡', '總數 3、進度 0%、符合 0、不符合 0', s0, JSON.stringify(s0) === '["3","0%","0","0"]');
+  // AUDIT-GRADES: 6 stats cards (總查核項目 / 查核進度 + 「已評 N」 / [data-stat=pass|positive|major|minor]) and the legend
+  const disp = () => step5Display(full);
+  const LEG = (pa, po, ma, mi, no) => `符合: ${pa} / 正面發現: ${po} / 主要不符合: ${ma} / 次要不符合: ${mi} / 未評: ${no}`;
+  const d0 = await disp();
+  rec('第5步', '統計卡', '6 張卡：總數 3、進度 0%（已評 0）、符合 0、正面發現 0、主要不符合 0、次要不符合 0；圖例全 0、未評 3', d0,
+    JSON.stringify(d0.stats) === '["3","0%","0","0","0","0"]' && JSON.stringify(d0.statKeys) === '[null,null,"pass","positive","major","minor"]'
+    && d0.graded === '0' && d0.legend === LEG(0, 0, 0, 0, 3) && d0.ungradedBadges.length === 0);
   const rowsL = () => full.locator('form table tbody tr');
-  const btn = (i, title) => rowsL().nth(i).locator(`button[title="${title}"]`);
-  const PASS = '符合 (Pass)', WARN = '注意/待改善 (!)', FAIL = '不符合 (X)';
-  const active = async (i, title, cls) => (await btn(i, title).getAttribute('class')).includes(cls);
-  const defaultWarn = await active(0, WARN, 'text-amber-500');
-  await btn(0, PASS).click(); await btn(1, FAIL).click(); await btn(2, PASS).click(); await btn(2, WARN).click(); await full.waitForTimeout(200);
-  const st = { r0pass: await active(0, PASS, 'text-green-600'), r1fail: await active(1, FAIL, 'text-red-600'), r2warn: await active(2, WARN, 'text-amber-500'), r2passOff: !(await active(2, PASS, 'text-green-600')) };
-  const s1 = await stats();
-  const upd = await rowsL().nth(0).locator('td').nth(4).innerText();
-  rec('第5步', '未評估項目預設', '預設亮起「!」（待改善）', defaultWarn, defaultWarn);
-  rec('第5步', 'Pass ✓ 按鈕', '第 1 列變綠色符合', st.r0pass, st.r0pass);
-  rec('第5步', 'Fail ✕ 按鈕', '第 2 列變紅色不符合', st.r1fail, st.r1fail);
-  rec('第5步', 'Warning ! 按鈕', '第 3 列由符合切回「!」', { warn: st.r2warn, passOff: st.r2passOff }, st.r2warn && st.r2passOff);
-  rec('第5步', '統計即時更新', '符合 1、不符合 1、進度 67%', s1, s1[2] === '1' && s1[3] === '1' && s1[1] === '67%');
-  rec('第5步', '更新日期欄', `改狀態後記錄今天 ${TODAY}`, upd.trim(), upd.trim() === TODAY, await shot(full, 'B11-step5-status'));
+  const g = (i, grade) => rowsL().nth(i).locator(`[data-grade-buttons] button[data-grade=${grade}]`);
+  const pressed = i => rowsL().nth(i).locator('[data-grade-buttons] button[aria-pressed=true]').evaluateAll(bs => bs.map(b => b.dataset.grade));
+  const allPressed = async () => [await pressed(0), await pressed(1), await pressed(2)];
+  const activeCls = async (i, grade, cls) => (await g(i, grade).getAttribute('class')).includes(cls);
+  const btnSet = await rowsL().nth(0).locator('[data-grade-buttons] button').evaluateAll(bs => bs.map(b => `${b.dataset.grade}|${b.title}|${b.innerText.trim()}`));
+  const oldBtns = await full.locator(OLD_RESULT_TITLES.map(t => `form button[title="${t}"]`).join(', ')).count();
+  const p0 = await allPressed();
+  rec('第5步', '評等按鈕組', '每列 4 個文字按鈕：符合 (Pass) / 正面發現 (Positive) / 主要不符合 (Major) / 次要不符合 (Minor)；舊的「注意/待改善 (!)」「不符合 (X)」不存在', { btnSet, oldBtns },
+    JSON.stringify(btnSet.map(b => b.split('|').slice(0, 2).join('|'))) === JSON.stringify(['pass|符合 (Pass)', 'positive|正面發現 (Positive)', 'major|主要不符合 (Major)', 'minor|次要不符合 (Minor)'])
+    && btnSet.every(b => b.split('|')[2] !== '') && oldBtns === 0);
+  rec('第5步', '未評估項目預設', '沒有任何評等按下（未評），不再預設「!」待改善', p0, p0.every(x => x.length === 0));
+  await g(0, 'pass').click(); await g(1, 'major').click(); await g(2, 'positive').click(); await full.waitForTimeout(200);
+  const pA = await allPressed();
+  const clsA = { pass: await activeCls(0, 'pass', 'text-green-600'), major: await activeCls(1, 'major', 'text-red-600'), positive: await activeCls(2, 'positive', 'text-sky-600') };
+  const dA = await disp();
+  await g(2, 'minor').click(); await full.waitForTimeout(200);
+  const pB = await allPressed(); const minorCls = await activeCls(2, 'minor', 'text-amber-600'); const dB = await disp();
+  await g(2, 'minor').click(); await full.waitForTimeout(200);
+  const pC = await allPressed(); const dC = await disp();
+  const upd = (await rowsL().nth(0).locator('td').nth(4).innerText()).trim();
+  const upd2 = (await rowsL().nth(2).locator('td').nth(4).innerText()).trim();
+  rec('第5步', '符合 (Pass) 按鈕', '第 1 列「符合」按下（aria-pressed、綠色）', { pressed: pA[0], cls: clsA.pass }, JSON.stringify(pA[0]) === '["pass"]' && clsA.pass);
+  rec('第5步', '主要不符合 (Major) 按鈕', '第 2 列「主要不符合」按下（紅色）', { pressed: pA[1], cls: clsA.major }, JSON.stringify(pA[1]) === '["major"]' && clsA.major);
+  rec('第5步', '正面發現 (Positive) 按鈕', '第 3 列「正面發現」按下（藍色）', { pressed: pA[2], cls: clsA.positive }, JSON.stringify(pA[2]) === '["positive"]' && clsA.positive);
+  rec('第5步', '次要不符合 (Minor) 按鈕', '第 3 列由「正面發現」換成「次要不符合」（同列只亮一個，琥珀色）', { pressed: pB[2], cls: minorCls }, JSON.stringify(pB[2]) === '["minor"]' && minorCls);
+  rec('第5步', '再點已按下的評等（清除）', '第 3 列再點「次要不符合」→ 取消，回到未評（4 鈕皆未按下）', pC[2], pC[2].length === 0 && JSON.stringify(pC[0]) === '["pass"]' && JSON.stringify(pC[1]) === '["major"]');
+  rec('第5步', '統計即時更新', '3 列評完：進度 100%、符合/正面/主要 各 1；換成次要：正面 0、次要 1；清除後：進度 67%（已評 2）、次要 0、圖例 未評 1', { A: dA.stats, B: dB.stats, C: dC.stats, gradedC: dC.graded, legendC: dC.legend },
+    JSON.stringify(dA.stats) === '["3","100%","1","1","1","0"]' && dA.graded === '3' && JSON.stringify(dB.stats) === '["3","100%","1","0","1","1"]'
+    && JSON.stringify(dC.stats) === '["3","67%","1","0","1","0"]' && dC.graded === '2' && dC.legend === LEG(1, 0, 1, 0, 1));
+  rec('第5步', '更新日期欄', `改評等（含清除）後記錄今天 ${TODAY}`, { row1: upd, row3: upd2 }, upd === TODAY && upd2 === TODAY, await shot(full, 'B11-step5-status'));
   const chips = full.locator('form div.no-print.p-4 button');
   const chipTexts = await chips.allInnerTexts();
   await chips.filter({ hasText: /^9\.1$/ }).click(); await full.waitForTimeout(200);
@@ -818,13 +875,20 @@ await guard('第5步', async () => {
   const evid = await full.locator('form input[type=file]').count();
   rec('第5步', '證據／附件輸入', '（任務：有則測）', `第 5 步沒有任何檔案／證據上傳欄（input[type=file] = ${evid}），只有備註與稽核發現文字欄`, evid === 0 ? '待確認' : '未測');
   const pr = await printCheck(full, 'report');
-  rec('第5步', '列印報告', '列印一次、kind=report、含備註與稽核發現（未儲存內容也印出）', { calls: pr.calls, kind: pr.kind, note: pr.text.includes('Remark A'), findings: pr.text.includes('整體符合') },
-    pr.calls === 1 && pr.kind === 'report' && pr.text.includes('Remark A') && pr.text.includes('整體符合'));
+  // AUDIT-GRADES: results 符合 Pass / 主要不符合 Major / 未評 Not graded; summary rows Pass / Positive / Major / Minor / Not graded,
+  // no Fail (ungraded) row (no legacy fail here) and none of the old result texts
+  const gradeOk = text => ({ results: has(text, GRADE_TEXT.pass, GRADE_TEXT.major, GRADE_TEXT.none),
+    summary: has(text, '符合Pass', '正面發現Positive', '主要不符合Major', '次要不符合Minor', '未評Notgraded'),
+    noUngraded: !nows(text).includes('未分級'), noOld: !/不符合Fail|注意／待改善|Attention/.test(nows(text)) });
+  const prG = gradeOk(pr.text);
+  rec('第5步', '列印報告', '列印一次、kind=report、含備註與稽核發現（未儲存內容也印出）；結果文字與摘要列為新評等（符合 Pass／主要不符合 Major／未評 Not graded），無未分級列、無舊文字', { calls: pr.calls, kind: pr.kind, note: pr.text.includes('Remark A'), findings: pr.text.includes('整體符合'), ...prG },
+    pr.calls === 1 && pr.kind === 'report' && pr.text.includes('Remark A') && pr.text.includes('整體符合') && Object.values(prG).every(Boolean));
   const t2 = track(full);
   await foot(full, /儲存草稿/).click(); await full.waitForTimeout(1500); t2.stop();
   const w = await wordDownload(full, 'report');
-  rec('第5步', '匯出 Word（報告）', `下載 ${newNo}.docx（docx、標題 內部稽核報告、含備註與發現）`, { file: w.file, kind: w.kind, zip: w.zip, title: w.text.includes('內部稽核報告'), note: w.text.includes('Remark A'), findings: w.text.includes('整體符合') },
-    w.file === `${newNo}.docx` && w.kind === 'report' && w.zip && w.text.includes('內部稽核報告') && w.text.includes('Remark A') && w.text.includes('整體符合'), w.ev);
+  const wG = gradeOk(w.text);
+  rec('第5步', '匯出 Word（報告）', `下載 ${newNo}.docx（docx、標題 內部稽核報告、含備註與發現、新評等結果文字與摘要列）`, { file: w.file, kind: w.kind, zip: w.zip, title: w.text.includes('內部稽核報告'), note: w.text.includes('Remark A'), findings: w.text.includes('整體符合'), ...wG },
+    w.file === `${newNo}.docx` && w.kind === 'report' && w.zip && w.text.includes('內部稽核報告') && w.text.includes('Remark A') && w.text.includes('整體符合') && Object.values(wG).every(Boolean), w.ev);
   // final submit
   await rowsL().nth(1).locator('textarea').fill('兩份資格證明過期');
   const t3 = track(full);
@@ -834,9 +898,9 @@ await guard('第5步', async () => {
   await full.fill(SEARCH, newNo); await full.waitForTimeout(400);
   const listStatus = await dtRow(full, newNo).locator('td').nth(7).innerText().catch(() => null);
   await full.fill(SEARCH, ''); await full.waitForTimeout(300);
-  rec('頁尾', '完成並建立計畫（第 5 步）', 'PUT 儲存並關閉精靈；狀態維持 In Progress；評估結果、備註、發現已存', { put: t3.c.PUT, closed, status: saved.status,
+  rec('頁尾', '完成並建立計畫（第 5 步）', 'PUT 儲存並關閉精靈；狀態維持 In Progress；評等結果 ["pass","major",""]（第 3 列已清除）、備註、發現已存', { put: t3.c.PUT, closed, status: saved.status,
     statuses: saved.custom_check_items.map(i => i.status), notes: saved.custom_check_items.map(i => i.note || ''), findings: saved.findings, listStatus },
-    t3.c.PUT === 1 && closed && saved.status === 'In Progress' && JSON.stringify(saved.custom_check_items.map(i => i.status)) === '["pass","fail","pending"]'
+    t3.c.PUT === 1 && closed && saved.status === 'In Progress' && JSON.stringify(saved.custom_check_items.map(i => i.status)) === '["pass","major",""]'
     && saved.custom_check_items[1].note === '兩份資格證明過期' && saved.findings === '整體符合，一項待改善。' && listStatus?.trim() === 'In Progress', await shot(full, 'B13-after-submit'));
 });
 
@@ -916,18 +980,32 @@ for (const user of ['audit_full', 'audit_viewer']) {
       const editable = user === 'audit_full' && (status === 'Draft' || status === 'In Progress');
       const lockedOk = s.step1.title && s.step1.project && s.step1.status && s.step2 && !s.step3.addRow && s.step3.rowDelete === 0
         && s.step4.chipDisabled && s.step4.clausePickDisabled && s.step4.taskDisabled && s.step4.plusDisabled && s.step4.batchPick === 0 && (s.step4.itemBtnsDisabled !== false)
-        && (s.step5.passDisabled !== false) && (s.step5.noteDisabled !== false) && s.step5.findingsDisabled && s.saveDraft === 0 && s.submit === 0;
+        && (s.step5.gradesDisabled === true || s.step5.gradesDisabled === null) && (s.step5.noteDisabled !== false) && s.step5.findingsDisabled && s.saveDraft === 0 && s.submit === 0;
       const editOk = !s.step1.title && !s.step1.project && !s.step1.status && !s.step2 && s.step3.addRow && !s.step4.chipDisabled && !s.step4.clausePickDisabled && !s.step4.taskDisabled
-        && !s.step4.plusDisabled && s.step4.itemBtnsDisabled === false && s.step5.passDisabled === false && s.step5.noteDisabled === false && !s.step5.findingsDisabled
+        && !s.step4.plusDisabled && s.step4.itemBtnsDisabled === false && s.step5.gradesDisabled === false && s.step5.noteDisabled === false && !s.step5.findingsDisabled
         && s.saveDraft === 1 && s.submit === 1;
       const loc = `${user}／${status}（${no}）`;
-      rec(loc, '編輯控制項（第 1–5 步欄位、Agenda 新增/刪除、模板、查檢項、Pass/Fail/!、備註、發現）', editable ? '全部可用' : '全部停用／隱藏（唯讀）',
+      rec(loc, '編輯控制項（第 1–5 步欄位、Agenda 新增/刪除、模板、查檢項、四個評等按鈕、備註、發現）', editable ? '全部可用' : '全部停用／隱藏（唯讀）',
         { step1: s.step1, step2AllDisabled: s.step2, step3: s.step3, step4: s.step4, step5: s.step5 }, editable ? editOk : lockedOk, ev4);
       rec(loc, '儲存草稿／完成並建立計畫', editable ? '顯示' : '隱藏', { saveDraft: s.saveDraft, submit: s.submit }, editable ? (s.saveDraft === 1 && s.submit === 1) : (s.saveDraft === 0 && s.submit === 0));
       rec(loc, '下一步／上一步／步驟列', '唯讀時仍可瀏覽各步', { back1: s.back1, next1: s.next1, afterNext: s.afterNext, afterBack: s.afterBack, next5: s.next5 },
         s.back1 === 0 && s.next1 === 1 && s.afterNext === 2 && s.afterBack === 1 && s.next5 === 0);
       rec(loc, '列印（第 3/4/5 步）＋匯出 Word', '三步皆有列印與 Word', [s.print3, s.word3, s.print4, s.word4, s.print5, s.word5], [s.print3, s.word3, s.print4, s.word4, s.print5, s.word5].every(x => x === 1), ev);
       rec(loc, '第 5 步分類篩選／搜尋', '仍可使用（只是瀏覽）', { chipDisabled: s.step5.chipDisabled, searchDisabled: s.step5.searchDisabled }, s.step5.chipDisabled === false && s.step5.searchDisabled === false);
+      // AUDIT-GRADES: the four grade buttons (no old ! / X), and the step-5 display; AHB-EXPORT-1 carries an older 'fail'
+      rec(loc, '第 5 步評等按鈕組', '4 個：pass 符合 / positive 正面發現 / major 主要不符合 / minor 次要不符合；沒有舊的 ! / X 鈕', { grades: s.step5.firstRowGrades, old: s.step5.oldButtons },
+        JSON.stringify(s.step5.firstRowGrades) === JSON.stringify(['pass|符合 (Pass)', 'positive|正面發現 (Positive)', 'major|主要不符合 (Major)', 'minor|次要不符合 (Minor)']) && s.step5.oldButtons === 0);
+      const legacy = no === 'AHB-EXPORT-1';
+      const d5 = s.display5;
+      if (legacy) {
+        rec(loc, '第 5 步統計／圖例（含舊資料 fail）', '5 項 pass/fail/pending/(無狀態)/pass：總數 5、進度 60%（已評 3，fail 算已評、pending 與無狀態為未評）、符合 2、其餘 0；第 2 列（8.4，fail）顯示「不符合（未分級）」；圖例含「不符合（未分級）: 1」與「未評: 2」', d5,
+          JSON.stringify(d5.stats) === '["5","60%","2","0","0","0"]' && d5.graded === '3' && JSON.stringify(d5.ungradedBadges) === '["1:不符合（未分級）"]'
+          && d5.legend === '符合: 2 / 正面發現: 0 / 主要不符合: 0 / 次要不符合: 0 / 不符合（未分級）: 1 / 未評: 2');
+      } else {
+        rec(loc, '第 5 步統計／圖例', '1 個未評項目：總數 1、進度 0%（已評 0）、四個評等 0；無「不符合（未分級）」；圖例 未評 1', d5,
+          JSON.stringify(d5.stats) === '["1","0%","0","0","0","0"]' && d5.graded === '0' && d5.ungradedBadges.length === 0
+          && d5.legend === '符合: 0 / 正面發現: 0 / 主要不符合: 0 / 次要不符合: 0 / 未評: 1');
+      }
       if (editable) rec(loc, '唯讀提示橫幅', '可編輯時不顯示唯讀橫幅', s.banner || '無橫幅', s.banner === null);
       if (status === 'Draft' && user === 'audit_full') {
         rec(loc, '狀態下拉選項', 'Draft / Planned / Void', s.step1.statusOptions, JSON.stringify(s.step1.statusOptions) === '["Draft","Planned","Void"]');
@@ -938,17 +1016,29 @@ for (const user of ['audit_full', 'audit_viewer']) {
       if (!editable) {
         // clicking a locked control does nothing
         await step(p, 5);
-        const before = await p.locator('form table tbody tr').first().locator('button[title="不符合 (X)"]').getAttribute('class');
-        await p.locator('form table tbody tr').first().locator('button[title="不符合 (X)"]').click({ force: true }).catch(() => {});
+        // AUDIT-GRADES: the first row's 主要不符合 (Major) button (a 'pass' row on AHB-EXPORT-1, an ungraded one elsewhere)
+        const major = p.locator('form table tbody tr').first().locator('[data-grade-buttons] button[data-grade=major]');
+        const snap = async () => ({ cls: await major.getAttribute('class'), pressed: await p.locator('form table tbody tr').first().locator('[data-grade-buttons] button[aria-pressed=true]').evaluateAll(bs => bs.map(b => b.dataset.grade)),
+          stats: (await step5Display(p)).stats, disabled: await isDis(major) });
+        const before = await snap();
+        await major.click({ force: true }).catch(() => {});
         await p.waitForTimeout(200);
-        const after = await p.locator('form table tbody tr').first().locator('button[title="不符合 (X)"]').getAttribute('class');
-        rec(loc, '點擊鎖定中的 Fail ✕', '沒有反應（狀態不變）', before === after ? '無變化' : '狀態被改變', before === after);
+        const after = await snap();
+        const same = JSON.stringify({ ...before, disabled: 0 }) === JSON.stringify({ ...after, disabled: 0 });
+        rec(loc, '點擊鎖定中的 主要不符合 (Major)', '按鈕停用、沒有反應（評等與統計不變）', { disabled: before.disabled, changed: !same, before: before.pressed, after: after.pressed }, same && before.disabled);
         const expKey = status === 'Closed' ? 'audit.wizard.readOnlyClosed' : status === 'Void' ? 'audit.wizard.readOnlyVoid' : 'audit.wizard.readOnlyNoPermission';
         rec(loc, '唯讀提示橫幅', `顯示唯讀橫幅（${expKey}）並說明原因`, s.banner || '畫面沒有唯讀橫幅', !!s.banner && s.banner.key === expKey && s.banner.text.length > 0);
         // the print + Word still work when read-only
         const pr = await printCheck(p, 'report');
         const w = await wordDownload(p, 'report');
-        rec(loc, '列印報告＋匯出 Word（唯讀）', `列印 kind=report；下載 ${no}.docx`, { print: pr.kind, calls: pr.calls, file: w.file, zip: w.zip }, pr.calls === 1 && pr.kind === 'report' && w.file === `${no}.docx` && w.zip, w.ev);
+        // AUDIT-GRADES: AHB-EXPORT-1's older 'fail' prints as 「不符合（未分級） Fail」 with a Fail (ungraded) summary row; the others are 未評
+        const gr = text => legacy
+          ? { results: has(text, GRADE_TEXT.pass, GRADE_TEXT.fail, GRADE_TEXT.none), ungradedRow: has(text, 'Fail(ungraded)') }
+          : { results: has(text, GRADE_TEXT.none), ungradedRow: !nows(text).includes('未分級') };
+        const prG = gr(pr.text), wG = gr(w.text);
+        rec(loc, '列印報告＋匯出 Word（唯讀）', `列印 kind=report；下載 ${no}.docx；結果文字為新評等（${legacy ? '含「不符合（未分級） Fail」與 Fail (ungraded) 摘要列' : '未評 Not graded，無未分級列'}）`,
+          { print: pr.kind, calls: pr.calls, file: w.file, zip: w.zip, printGrades: prG, wordGrades: wG },
+          pr.calls === 1 && pr.kind === 'report' && w.file === `${no}.docx` && w.zip && Object.values(prG).every(Boolean) && Object.values(wG).every(Boolean), w.ev);
       }
       await closeX(p).click(); await p.waitForTimeout(400);
       if (await modal(p).count()) {

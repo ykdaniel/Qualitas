@@ -92,19 +92,21 @@
 .audit-print-root .items th small { display: block; color: var(--audit-note); font-weight: 500; font-size: 7.6px; letter-spacing: .2px; }
 .audit-print-root .blank { color: #aeb3ba; }
 
-/* checklist items: narrow #, most of the width for the question (same proportions as the Word export) */
+/* checklist items: clause text and audit question in their own columns (AUDIT-GRADES-2026-001) — the same proportions
+   as the Word export (report 0.8 / 1.4 / 4.4 / 3.8 / 2.2 / 3.0 / 1.8 cm, checklist 0.8 / 1.4 / 5.0 / 4.4 / 2.8 / 3.0 cm) */
 .audit-print-root .items th { background: var(--audit-fill); font-weight: 600; text-align: left; }
 .audit-print-root .items td { white-space: pre-wrap; word-break: break-word; }
 .audit-print-root .items .c-n { width: 5%; text-align: center; }
-.audit-print-root .items .c-no { width: 10%; }
-.audit-print-root .items .c-q { width: 36%; }
+.audit-print-root .items .c-no { width: 8%; }
+.audit-print-root .items .c-c { width: 25%; }
+.audit-print-root .items .c-q { width: 22%; }
 .audit-print-root .items .c-r { width: 13%; }
-.audit-print-root .items .c-m { width: 24%; }
-.audit-print-root .items .c-d { width: 12%; }
-.audit-print-root .items .clause { font-weight: 600; }
-.audit-print-root .checklist-items .c-q { width: 42%; }
-.audit-print-root .checklist-items .c-r { width: 17%; }
-.audit-print-root .checklist-items .c-m { width: 26%; }
+.audit-print-root .items .c-m { width: 17%; }
+.audit-print-root .items .c-d { width: 10%; }
+.audit-print-root .checklist-items .c-c { width: 29%; }
+.audit-print-root .checklist-items .c-q { width: 25%; }
+.audit-print-root .checklist-items .c-r { width: 16%; }
+.audit-print-root .checklist-items .c-m { width: 17%; }
 .audit-print-root .checklist-items td { height: 46px; }
 .audit-print-root .checklist-items .boxes { white-space: nowrap; font-size: 8.6px; line-height: 1.7; }
 /* agenda (AUDIT-AGENDA-2026-001): same proportions as the Word export's agenda table */
