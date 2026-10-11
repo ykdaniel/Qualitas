@@ -74,7 +74,7 @@ export const createColumns = (
                 </div>
             ),
             filterFn: (row, id, value) => {
-                return value.includes(row.getValue(id));
+                return !value || row.getValue(id) === value;
             },
         },
         {
