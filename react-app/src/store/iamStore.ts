@@ -12,10 +12,11 @@ export interface User {
     role_id?: number;
     status: 'active' | 'inactive';
     createdAt: string;
-    /** Editable, cosmetic-only company label for internal staff. */
+    /** The person's company — required for new accounts, never affects data scope. */
     company_name?: string | null;
-    /** Resolved "Name / Company" label source — real vendor name for
-     *  contractor-scoped users, else company_name. Read-only from the API. */
+    /** Resolved "Name / Company" label: the company's abbreviation from the company list (the
+     *  bound vendor for contractor-scoped users, else company_name; full name / typed text when
+     *  there is no abbreviation). Read-only from the API. */
     display_company?: string | null;
 }
 

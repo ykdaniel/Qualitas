@@ -54,6 +54,7 @@ try {
     }
     await fillByLabel('姓名', 'Review New User');
     await fillByLabel('電子郵件', 'reviewnewuser@example.com');
+    await fillByLabel('公司', 'IAM Review Co');   // required on create since IAM-USER-COMPANY-LABEL-2026-001
     await fillByLabel('密碼', 'Accept-Test-1234');
     await fillByLabel('確認密碼', 'Accept-Test-1234');
     await fillByLabel('變更原因', 'IAM review — creating a test account');
@@ -154,9 +155,9 @@ try {
     // The modal has multiple <select> elements (role/status/company + the scope's contractor
     // picker) — .filter({has:...}) on option text is unreliable here (established pitfall this
     // session), so scan every select's option-text list and pick the one containing our target.
-    // Both the Company picker (unrelated cosmetic field, reuses the same contractor list) and the
-    // scope's contractor picker list "IAM Review Vendor" as an option — the scope one is the LAST
-    // matching select in DOM order (Company appears earlier, in the main form grid).
+    // Company is a text input with a datalist since IAM-USER-COMPANY-LABEL-2026-001, so only the
+    // scope's contractor picker is a <select> listing "IAM Review Vendor"; taking the LAST matching
+    // select still finds it (and stays correct if another select listing it is ever added above).
     const allSelects = m3.locator('select');
     const optionTexts = await allSelects.evaluateAll(nodes => nodes.map(n => Array.from(n.options).map(o => o.text)));
     const vendorIdx = optionTexts.map((opts, i) => opts.includes('IAM Review Vendor') ? i : -1).filter(i => i >= 0).pop();

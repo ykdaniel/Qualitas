@@ -37,3 +37,8 @@
 - 發現 3（部分）：models.py 中 `User.company_name` 的過時註解已更新。iamStore.ts、api.ts、schemas.py 的註解，以及沒有用到的 `iam.companyNamePlaceholder` 留待之後清理；schemas.py 目前由其他工作階段修改中。
 - 重跑結果：test_user_company_label_http、test_user_service、test_iam_user_security_http、test_obs_engineer_approval_identity，**132 passed**；開發資料庫沒有變動。tsc、eslint 都通過。user_service.py 維持全檔 CRLF（525/525）。
 - 未處理：發現 4（iam-review.mjs、verify_iam_backend.py 這兩支舊腳本沒有填公司）、發現 5（效能，目前規模影響可以忽略）、發現 6（行為記錄，不需要修改）、發現 7（提示文字要不要補一句，等使用者決定）。
+
+## 收尾（2026-10-11，使用者指示「把低優先的註解和舊腳本也順便清掉」）
+- 發現 3：更新 schemas.py（UserBase.company_name、User.display_company）、iamStore.ts、api.ts 的註解，只改註解；刪除沒有用到的 `iam.companyNamePlaceholder`（中、英各 1 行，已用 grep 確認沒有任何引用）。
+- 發現 4：tests-browser/iam-review.mjs §1 新增帳號時補填「公司」，§4b 的註解改成公司欄位已改為 input；scripts/verification/verify_iam_backend.py 建帳號時補上 company_name。
+- schemas.py、LanguageContext.tsx 只提交本任務的行，Audit 尚未提交的修改留在工作樹。

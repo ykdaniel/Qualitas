@@ -68,6 +68,7 @@ def test_iam_flow():
         "email": "john@example.com",
         "password": _require_env("QUALITAS_TEST_USER_PASSWORD"),
         "full_name": "John Doe",
+        "company_name": "Test Co",   # required on create (IAM-USER-COMPANY-LABEL-2026-001)
         "role_id": role_id
     }
     response = requests.post(f"{BASE_URL}/iam/users", json=user_data, headers=headers)

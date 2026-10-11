@@ -1360,10 +1360,9 @@ class UserBase(BaseModel):
     full_name: str | None = None
     is_active: bool | None = True
     role_id: int | None = None
-    # Cosmetic-only "Name / Company" label for internal staff with no
-    # vendor_id (contractor-scoped users show their real vendor name
-    # instead — see User.display_company). Never affects data-isolation
-    # scope, unlike vendor_id.
+    # The person's company for "Name / Company" labels — required when an
+    # account is created (IAM-USER-COMPANY-LABEL-2026-001, enforced in
+    # UserService). Never affects data-isolation scope, unlike vendor_id.
     company_name: str | None = None
 
 class UserCreate(UserBase):
@@ -1385,8 +1384,9 @@ class User(UserBase):
     role_name: str | None = None
     permissions: list[str] = []
     created_at: str | None = None
-    # Resolved company label: the user's real vendor name if
-    # contractor-scoped, else their cosmetic company_name.
+    # Resolved company label: the company's abbreviation from the company
+    # list (bound vendor if contractor-scoped, else company_name), or the
+    # full name / typed text when there is none — see User.display_company.
     display_company: str | None = None
 
     model_config = ConfigDict(from_attributes=True)

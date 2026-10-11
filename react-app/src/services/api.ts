@@ -325,12 +325,12 @@ export interface User {
   permissions: string[];
   is_active: boolean;
   full_name?: string;
-  /** Editable, cosmetic-only company label — only meaningful for internal
-   *  staff (no vendor_id). Prefer `display_company` for showing a user's
-   *  company; this is the raw settable field. */
+  /** The person's company as entered (required for new accounts; never affects data scope).
+   *  Prefer `display_company` for showing a user's company; this is the raw settable field. */
   company_name?: string | null;
-  /** Resolved "Name / Company" label source: the user's real vendor name
-   *  when contractor-scoped, else their `company_name`. Read-only. */
+  /** Resolved "Name / Company" label: the company's abbreviation from the company list (the
+   *  bound vendor when contractor-scoped, else `company_name`), or the full name / typed text
+   *  when there is no abbreviation. Read-only. */
   display_company?: string | null;
 }
 
