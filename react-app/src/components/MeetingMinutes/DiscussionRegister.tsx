@@ -464,7 +464,8 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
                 <td style={cell}>
                     {editing && !e.carried
                         ? raisedInput(editing.raisedDate, v => setEdit({ ...editing, raisedDate: v }))
-                        : e.raisedDate ? <div style={small} data-raised>{formatMinutesDate(e.raisedDate)}</div> : null}
+                        // the raised date takes the item's colour too (R19, user's choice)
+                        : e.raisedDate ? <div style={{ ...small, ...toneStyle(toneOf(e)) }} data-raised data-tone={toneOf(e)}>{formatMinutesDate(e.raisedDate)}</div> : null}
                     {editing && !e.carried
                         ? <AutoText value={editing.content} aria-label={e.no}
                             onChange={ev => setEdit({ ...editing, content: ev.target.value })} />

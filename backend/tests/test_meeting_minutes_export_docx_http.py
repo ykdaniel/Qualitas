@@ -266,12 +266,12 @@ def test_r17_colours_in_word(meeting_env, uploads):
     c = meeting_env.login("mtg_a")
     m = create(c, discussionLog=[
         {"no": "1", "kind": "category", "content": "Tech"},
-        {"no": "1.1", "kind": "item", "content": "carried item", "status": "Open", "carried": True, "updates": [
+        {"no": "1.1", "kind": "item", "content": "carried item", "status": "Open", "carried": True, "raisedDate": "2026-06-30", "updates": [
             {"date": "2026-07-01", "content": "older note", "carried": True},
             {"date": "2026-07-07", "content": "last meeting note", "carried": True, "lastMeeting": True},
             {"date": "2026-07-02", "content": "older key point", "carried": True, "highlight": True},
             {"date": "2026-07-14", "content": "this meeting note"}]},
-        {"no": "1.2", "kind": "item", "content": "new item", "status": "Open"},
+        {"no": "1.2", "kind": "item", "content": "new item", "status": "Open", "raisedDate": "2026-08-11"},
         {"no": "1.3", "kind": "item", "content": "item from last meeting", "status": "Open", "carried": True, "lastMeeting": True},
     ])
     doc = Document(BytesIO(c.get(f"/api/meeting-minutes/{m['id']}/export-docx").content))
@@ -293,4 +293,5 @@ def test_r17_colours_in_word(meeting_env, uploads):
     assert look("new item") == (red, False)
     assert look("item from last meeting") == (blue, False)
     assert look("carried item") == (grey, False)
+    assert look("11 Aug 2026") == (red, False) and look("30 Jun 2026") == (grey, False)     # the raised date follows its item (R19)
     assert any("藍＝上次會議 Blue = last meeting" in p.text for p in doc.paragraphs)

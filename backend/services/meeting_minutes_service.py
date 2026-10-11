@@ -701,10 +701,11 @@ def _add_register_table(doc, register: list):
         text(cells[0], e["no"], first=True)
         body = cells[1]
         first = True
-        if e["raisedDate"]:
-            text(body, format_minutes_date(e["raisedDate"]), size=8, color=grey, first=True)
-            first = False
         item_color, item_bold = tone_style[tone_of(e)]
+        if e["raisedDate"]:
+            # the raised date takes the item's colour too (R19, user's choice)
+            text(body, format_minutes_date(e["raisedDate"]), size=8, color=item_color, first=True)
+            first = False
         for line in (e["content"] or db.DASH).split("\n"):
             text(body, line, indent=bool(e["raisedDate"]), first=first, color=item_color, bold=item_bold)
             first = False

@@ -521,6 +521,8 @@ check(JSON.stringify(await look(modal().locator('[data-row="1.3"] [data-item-tex
 check(JSON.stringify(await look(modal().locator('[data-row="1.2"] [data-item-text]'))) === JSON.stringify(['last', BLUE, '400']), '2d: an item from last meeting blue');
 check(JSON.stringify(await look(modal().locator('[data-row="1.1"] [data-item-text]'))) === JSON.stringify(['old', 'rgb(122, 129, 138)', '400']), '2d: an older item grey (R18)');
 check((await modal().locator('[data-tone-legend]').textContent()).includes('Blue = last meeting'), '2d: a legend says what the colours mean');
+const raisedColour = (no) => modal().locator(`[data-row="${no}"] [data-raised]`).evaluate(el => getComputedStyle(el).color);
+check(await raisedColour('1.3') === RED && await raisedColour('1.2') === BLUE && await raisedColour('1.1') === 'rgb(122, 129, 138)', '2d: the raised date takes its item\'s colour (R19)');
 // ★ on a carried note and on an item; saved with the meeting
 await noteEl('older note').hover();
 await noteEl('older note').getByRole('button', { name: 'Mark as key point' }).click();
