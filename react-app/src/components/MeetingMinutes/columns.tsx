@@ -138,8 +138,9 @@ export const createColumns = (
                 />
             ),
             cell: ({ row }) => <div className="text-center">{row.getValue("status")}</div>,
+            // single-select filter (a string): exact match — includes() matched substrings and let empty values through
             filterFn: (row, id, value) => {
-                return value.includes(row.getValue(id));
+                return !value || row.getValue(id) === value;
             },
         },
         {
@@ -187,8 +188,9 @@ export const createColumns = (
                 />
             ),
             cell: ({ row }) => <div className="text-center">{row.getValue("vendor") || '-'}</div>,
+            // single-select filter (a string): exact match — includes() matched substrings and let empty values through
             filterFn: (row, id, value) => {
-                return value.includes(row.getValue(id));
+                return !value || row.getValue(id) === value;
             },
         },
         {
