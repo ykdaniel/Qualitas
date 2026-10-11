@@ -460,9 +460,9 @@ class MeetingMinutesService:
         # what the colours mean (R17), as on the screen and the print
         legend = doc.add_paragraph()
         legend.paragraph_format.space_before = Pt(2)
-        for words, color, bold in (("紅（粗體）＝本次新增或重點 Red (bold) = this meeting or key point　", RGBColor(0xC0, 0x00, 0x00), True),
+        for words, color, bold in (("紅＝本次新增或重點 Red = this meeting or key point　", RGBColor(0xC0, 0x00, 0x00), False),
                                    ("藍＝上次會議 Blue = last meeting　", RGBColor(0x1F, 0x4E, 0x99), False),
-                                   ("灰／黑＝更早 Grey / black = earlier", RGBColor(0x5B, 0x60, 0x68), False)):
+                                   ("灰＝更早 Grey = earlier", RGBColor(0x7A, 0x81, 0x8A), False)):
             db._run_font(legend.add_run(words), Pt(8), bold=bold, color=color)
 
         # 3. Attachments
@@ -657,9 +657,10 @@ def _add_register_table(doc, register: list):
 
     widths = [Cm(1.4), Cm(10.8), Cm(2.4), Cm(2.8)]
     grey = RGBColor(0x80, 0x80, 0x80)
-    red, blue = RGBColor(0xC0, 0x00, 0x00), RGBColor(0x1F, 0x4E, 0x99)
-    # R17: red + bold for a key point or this meeting's text (legible in black and white), blue for the meeting before
-    tone_style = {"key": (red, True), "current": (red, True), "last": (blue, False)}
+    red, blue, older = RGBColor(0xC0, 0x00, 0x00), RGBColor(0x1F, 0x4E, 0x99), RGBColor(0x7A, 0x81, 0x8A)
+    # R17 / R18 (user: "日期最新為紅色不粗體 上一次的是藍色 之前的是灰色 補登為紅色"): red for a key point or this meeting's text
+    # (a backfilled day too), blue for the meeting before, grey for older — date and text, nothing bold
+    tone_style = {"key": (red, False), "current": (red, False), "last": (blue, False), "old": (older, False)}
     table = doc.add_table(rows=1, cols=4)
     table.style = "Table Grid"
     table.autofit = False
@@ -703,12 +704,12 @@ def _add_register_table(doc, register: list):
         if e["raisedDate"]:
             text(body, format_minutes_date(e["raisedDate"]), size=8, color=grey, first=True)
             first = False
-        item_color, item_bold = tone_style.get(tone_of(e), (None, False))
+        item_color, item_bold = tone_style[tone_of(e)]
         for line in (e["content"] or db.DASH).split("\n"):
             text(body, line, indent=bool(e["raisedDate"]), first=first, color=item_color, bold=item_bold)
             first = False
         for u in e["updates"]:
-            color, bold = tone_style.get(tone_of(u), (grey, False))
+            color, bold = tone_style[tone_of(u)]
             if u.get("date"):
                 text(body, format_minutes_date(u["date"]), size=8, color=color, bold=bold)
             for line in u["content"].split("\n"):

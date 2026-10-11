@@ -6,7 +6,7 @@ import { chromium } from 'playwright';
 
 const PW = process.env.MTG_TABS_REVIEW_PASSWORD;
 if (!PW) throw new Error('MTG_TABS_REVIEW_PASSWORD not set — use the value the isolated stack was seeded with.');
-const BASE = 'http://127.0.0.1:3344';
+const BASE = process.env.MTG_BASE || 'http://127.0.0.1:3344';
 const OUT = process.env.MTG_TABS_EVIDENCE_DIR || '/private/tmp/claude-501/meeting-tabs-evidence';
 mkdirSync(OUT, { recursive: true });
 const log = (...a) => console.log(new Date().toISOString(), ...a);
@@ -513,13 +513,13 @@ await tab('Discussions').click();
 const RED = 'rgb(192, 0, 0)', BLUE = 'rgb(31, 78, 153)';
 const look = (loc) => loc.evaluate(el => [el.dataset.tone, getComputedStyle(el).color, getComputedStyle(el).fontWeight]);
 const noteEl = (text) => modal().locator('[data-update]', { hasText: text });
-check(JSON.stringify(await look(noteEl('this meeting note'))) === JSON.stringify(['current', RED, '700']), '2d: this meeting\'s note red bold');
-check(JSON.stringify(await look(noteEl('older key point'))) === JSON.stringify(['key', RED, '700']), '2d: a marked older note red bold');
+check(JSON.stringify(await look(noteEl('this meeting note'))) === JSON.stringify(['current', RED, '400']), '2d: this meeting\'s note red (not bold, R18)');
+check(JSON.stringify(await look(noteEl('older key point'))) === JSON.stringify(['key', RED, '400']), '2d: a marked older note red (not bold, R18)');
 check(JSON.stringify(await look(noteEl('last meeting note'))) === JSON.stringify(['last', BLUE, '400']), '2d: last meeting\'s note blue');
-check((await look(noteEl('older note')))[0] === 'old' && (await look(noteEl('older note')))[1] === 'rgb(148, 163, 184)', '2d: an older note grey');
-check(JSON.stringify(await look(modal().locator('[data-row="1.3"] [data-item-text]'))) === JSON.stringify(['current', RED, '700']), '2d: a new item red bold');
+check((await look(noteEl('older note')))[0] === 'old' && (await look(noteEl('older note')))[1] === 'rgb(122, 129, 138)', '2d: an older note grey');
+check(JSON.stringify(await look(modal().locator('[data-row="1.3"] [data-item-text]'))) === JSON.stringify(['current', RED, '400']), '2d: a new item red (not bold, R18)');
 check(JSON.stringify(await look(modal().locator('[data-row="1.2"] [data-item-text]'))) === JSON.stringify(['last', BLUE, '400']), '2d: an item from last meeting blue');
-check((await look(modal().locator('[data-row="1.1"] [data-item-text]')))[0] === 'old', '2d: an older item plain');
+check(JSON.stringify(await look(modal().locator('[data-row="1.1"] [data-item-text]'))) === JSON.stringify(['old', 'rgb(122, 129, 138)', '400']), '2d: an older item grey (R18)');
 check((await modal().locator('[data-tone-legend]').textContent()).includes('Blue = last meeting'), '2d: a legend says what the colours mean');
 // ★ on a carried note and on an item; saved with the meeting
 await noteEl('older note').hover();
@@ -543,8 +543,8 @@ await page.evaluate(() => { window.print = () => {}; });
 await modal().getByRole('button', { name: /Print/ }).click();
 await page.waitForTimeout(800);
 const printTone = (text) => page.locator('.mom-print-root .register .update', { hasText: text }).locator('.update-text').evaluate(el => [getComputedStyle(el).color, getComputedStyle(el).fontWeight]);
-check(JSON.stringify(await printTone('this meeting note')) === JSON.stringify([RED, '700']) && JSON.stringify(await printTone('older note')) === JSON.stringify([RED, '700'])
-    && (await printTone('last meeting note'))[0] === BLUE, '2d: print: red bold / blue as on screen');
+check(JSON.stringify(await printTone('this meeting note')) === JSON.stringify([RED, '400']) && JSON.stringify(await printTone('older note')) === JSON.stringify([RED, '400'])
+    && (await printTone('last meeting note'))[0] === BLUE, '2d: print: red (not bold, R18) / blue as on screen');
 check(await page.locator('.mom-print-root .tone-legend').count() === 1, '2d: print has the legend');
 // the next meeting: what was new here is "last meeting" there; key points stay
 const nextOcc = await api('POST', `/api/meeting-minutes/${(await meetings()).find(m => m.title === 'MTB colours').id}/new-occurrence`);

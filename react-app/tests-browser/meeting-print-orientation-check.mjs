@@ -8,7 +8,7 @@ import { chromium } from 'playwright';
 const PW = process.env.MTG_TABS_REVIEW_PASSWORD;
 const OUT = process.env.MTG_PRINT_OUT;
 if (!PW || !OUT) throw new Error('MTG_TABS_REVIEW_PASSWORD and MTG_PRINT_OUT are required.');
-const BASE = 'http://127.0.0.1:3344';
+const BASE = process.env.MTG_BASE || 'http://127.0.0.1:3344';
 let checks = 0;
 const check = (v, msg) => { if (!v) throw new Error(`FAILED: ${msg}`); checks++; console.log('PASS', msg); };
 

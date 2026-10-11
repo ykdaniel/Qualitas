@@ -260,8 +260,8 @@ def test_basic_information_and_attendees_are_one_table_like_the_company_minutes(
 
 
 def test_r17_colours_in_word(meeting_env, uploads):
-    """Red + bold for this meeting's text and key points, blue for the meeting before, grey for older notes, plain text
-    for an older item; a legend under the register (R17)."""
+    """Red for this meeting's text and key points, blue for the meeting before, grey for older ones — nothing bold (R17,
+    R18 "日期最新為紅色不粗體 上一次的是藍色 之前的是灰色"); a legend under the register."""
     from docx.shared import RGBColor
     c = meeting_env.login("mtg_a")
     m = create(c, discussionLog=[
@@ -282,15 +282,15 @@ def test_r17_colours_in_word(meeting_env, uploads):
                 for p in cell.paragraphs:
                     for r in p.runs:
                         runs.setdefault(r.text, r)
-    red, blue, grey = RGBColor(0xC0, 0, 0), RGBColor(0x1F, 0x4E, 0x99), RGBColor(0x80, 0x80, 0x80)
+    red, blue, grey = RGBColor(0xC0, 0, 0), RGBColor(0x1F, 0x4E, 0x99), RGBColor(0x7A, 0x81, 0x8A)
     def look(text):
         r = runs[text]
         return (r.font.color.rgb if r.font.color and r.font.color.type else None, bool(r.font.bold))
-    assert look("this meeting note") == (red, True)
-    assert look("older key point") == (red, True)
+    assert look("this meeting note") == (red, False)
+    assert look("older key point") == (red, False)
     assert look("last meeting note") == (blue, False)
     assert look("older note") == (grey, False)
-    assert look("new item") == (red, True)
+    assert look("new item") == (red, False)
     assert look("item from last meeting") == (blue, False)
-    assert look("carried item") == (None, False)
+    assert look("carried item") == (grey, False)
     assert any("藍＝上次會議 Blue = last meeting" in p.text for p in doc.paragraphs)

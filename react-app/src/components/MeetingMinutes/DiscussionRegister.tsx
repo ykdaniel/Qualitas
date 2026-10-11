@@ -56,10 +56,8 @@ interface Props {
     peopleListId: string;
 }
 
-/** R17 colours: red + bold (key point / written this meeting) stays legible in black-and-white print; blue for the meeting
- *  before; older notes grey, older item text the normal colour. */
-const toneStyle = (tone: Tone, oldColor?: string): React.CSSProperties => (
-    tone === 'old' ? (oldColor ? { color: oldColor } : {}) : { color: TONE_COLOR[tone], fontWeight: tone === 'last' ? undefined : 700 });
+/** R17 / R18 colours, none of them bold: red (key point / written this meeting), blue (the meeting before), grey (older). */
+const toneStyle = (tone: Tone): React.CSSProperties => ({ color: TONE_COLOR[tone] });
 const without = <T,>(rec: Record<string, T>, key: string): Record<string, T> =>
     Object.fromEntries(Object.entries(rec).filter(([k]) => k !== key));
 const HEAD_BG: Record<string, string> = { category: '#e5e7eb', subcategory: '#f1f5f9' };
@@ -419,7 +417,7 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
         const own = editable && !u.carried && !noteEdit;
         const tone = toneOf(u);
         return (
-            <div key={i} data-update={`${e.no}#${i}`} data-tone={tone} style={{ marginTop: 6, color: '#334155', ...toneStyle(tone, grey) }}>
+            <div key={i} data-update={`${e.no}#${i}`} data-tone={tone} style={{ marginTop: 6, color: '#334155', ...toneStyle(tone) }}>
                 <div style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
                     <span>{formatMinutesDate(u.date)}</span>
                     {editable && !noteEdit && (
@@ -581,9 +579,9 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
                 </label>
                 {/* what the colours mean (R17) — the same rule in the print and the Word file */}
                 <span data-tone-legend style={{ display: 'flex', gap: 10, fontSize: 12, color: '#64748b', flexWrap: 'wrap' }}>
-                    <span style={{ color: TONE_COLOR.current, fontWeight: 700 }}>{t('meetingMinutes.toneCurrent')}</span>
+                    <span style={{ color: TONE_COLOR.current }}>{t('meetingMinutes.toneCurrent')}</span>
                     <span style={{ color: TONE_COLOR.last }}>{t('meetingMinutes.toneLast')}</span>
-                    <span>{t('meetingMinutes.toneOld')}</span>
+                    <span style={{ color: TONE_COLOR.old }}>{t('meetingMinutes.toneOld')}</span>
                 </span>
                 {editable && (
                     // always there while the meeting can be edited — also while a row is open (see addFromToolbar)

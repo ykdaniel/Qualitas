@@ -148,8 +148,8 @@ const MeetingMinutesPrintTemplate: React.FC<MeetingMinutesPrintTemplateProps> = 
                             </table>
 
                             <div className="tone-legend">
-                                <span className="key">紅（粗體）＝本次新增或重點 Red (bold) = this meeting or key point</span>{'\u3000'}
-                                <span className="last">藍＝上次會議 Blue = last meeting</span>{'\u3000'}灰／黑＝更早 Grey / black = earlier
+                                <span className="key">紅＝本次新增或重點 Red = this meeting or key point</span>{'\u3000'}
+                                <span className="last">藍＝上次會議 Blue = last meeting</span>{'\u3000'}<span className="old">灰＝更早 Grey = earlier</span>
                             </div>
 
                             {/* ===== 3 附件 ===== */}

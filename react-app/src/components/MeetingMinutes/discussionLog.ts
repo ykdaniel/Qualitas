@@ -173,9 +173,10 @@ export function updatesByDate(e: DiscussionLogEntry): { u: ProgressUpdate; i: nu
 
 /**
  * How an item's text or a progress note reads (R17, the user's own practice: "最新的是紅色、上週紀錄的藍色、過去重點紀錄…
- * 標示為紅色＝重點"): marked key point or written in this meeting → red (bold), written in the meeting before → blue,
- * anything older → the plain colour (grey for notes). A first meeting (nothing carried) is all red. The same rule drives
- * the screen, the print and the Word export.
+ * 標示為紅色＝重點"; R18, after seeing it: "日期最新為紅色不粗體 上一次的是藍色 之前的是灰色 補登為紅色"): marked key point or
+ * written in this meeting (a backfilled day too) → red, written in the meeting before → blue, anything older → grey —
+ * date and text alike, none of it bold. A first meeting (nothing carried) is all red. The same rule drives the screen,
+ * the print and the Word export.
  */
 export type Tone = 'key' | 'current' | 'last' | 'old';
 export function toneOf(x: { carried?: boolean; lastMeeting?: boolean; highlight?: boolean }): Tone {
@@ -184,7 +185,7 @@ export function toneOf(x: { carried?: boolean; lastMeeting?: boolean; highlight?
     if (x.lastMeeting) return 'last';
     return 'old';
 }
-export const TONE_COLOR: Record<Tone, string | undefined> = { key: '#C00000', current: '#C00000', last: '#1F4E99', old: undefined };
+export const TONE_COLOR: Record<Tone, string> = { key: '#C00000', current: '#C00000', last: '#1F4E99', old: '#7A818A' };
 
 /** Marks / unmarks a progress note as a key point — carried ones too: the flag is how a past note stays visible. */
 export function toggleUpdateHighlight(log: DiscussionLogEntry[], no: string, index: number): DiscussionLogEntry[] {

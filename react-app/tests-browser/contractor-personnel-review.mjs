@@ -5,7 +5,7 @@ import { chromium } from 'playwright';
 
 const PW = process.env.CP_REVIEW_PASSWORD;
 if (!PW) throw new Error('CP_REVIEW_PASSWORD not set — use the value the isolated stack was seeded with.');
-const BASE = 'http://127.0.0.1:3344';
+const BASE = process.env.MTG_BASE || 'http://127.0.0.1:3344';
 const OUT = process.env.CP_EVIDENCE_DIR || '/private/tmp/claude-501/contractor-personnel-evidence';
 mkdirSync(OUT, { recursive: true });
 const log = (...a) => console.log(new Date().toISOString(), ...a);

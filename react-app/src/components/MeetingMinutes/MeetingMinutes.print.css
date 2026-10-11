@@ -111,18 +111,20 @@
 .mom-print-root .register .update-date { color: var(--mom-note); }
 .mom-print-root .register .update-text { padding-left: 12px; white-space: pre-wrap; }
 .mom-print-root .register .update.carried .update-text { color: var(--mom-note); }
-/* R17 (the user's practice): key point / written this meeting red + bold (legible in black-and-white), the meeting before
-   blue, older notes grey — same rule as the screen and the Word export (toneOf in discussionLog.ts) */
+/* R17 / R18 (the user's practice): key point / written this meeting red, the meeting before blue, older grey — date and
+   text alike, not bold; same rule as the screen and the Word export (toneOf in discussionLog.ts) */
 .mom-print-root .register .tone-key, .mom-print-root .register .tone-current,
 .mom-print-root .register .update.tone-key .update-date, .mom-print-root .register .update.tone-current .update-date {
-    color: #C00000; font-weight: 700; -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    color: #C00000; -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
 .mom-print-root .register .tone-last, .mom-print-root .register .update.tone-last .update-date {
     color: #1F4E99; -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
-.mom-print-root .register .update.tone-old .update-text, .mom-print-root .register .update.tone-old .update-date { color: var(--mom-note); }
+.mom-print-root .register .tone-old, .mom-print-root .register .update.tone-old .update-text,
+.mom-print-root .register .update.tone-old .update-date { color: #7A818A; }
 .mom-print-root .tone-legend { font-size: 8.5px; color: var(--mom-muted); margin-top: 3px; }
-.mom-print-root .tone-legend .key { color: #C00000; font-weight: 700; }
+.mom-print-root .tone-legend .key { color: #C00000; }
+.mom-print-root .tone-legend .old { color: #7A818A; }
 .mom-print-root .tone-legend .last { color: #1F4E99; }
 
 .mom-print-root .sign-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 4px; }
