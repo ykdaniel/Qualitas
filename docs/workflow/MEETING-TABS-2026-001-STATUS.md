@@ -1,6 +1,6 @@
-# MEETING-TABS-2026-001 — STATUS（R14：版次獨立一欄，獨立審查 PASS）
+# MEETING-TABS-2026-001 — STATUS（R15：Word 匯出，獨立審查 PASS）
 
-TASK_ID: MEETING-TABS-2026-001 · ROUND: R6 · R1/R2：ff8c6481／0d6a09bc；R3：577813bd／7eb7dd2f；R4–R5：9ec8cf6a／dbb11d66；R6：96c81b56／f83ba745；R7：a8fd54cf／9c06cc8f（＋d7200991 正式站查詢紀錄）；R8：1466df11／86932e29；R9：8aa5cd33／35e64cfa，**已由 fbce7383 revert**（文件 f007de3a）；R10：df528a84／cd71bb26；R11：75dd8459／9c92f749；R12：0a53afd4／2f643be5；R13：70ed5239／241cf0ca；R14 接其後本地提交；未推送、未部署。基準：MEETING-FIX 提交後的 HEAD。
+TASK_ID: MEETING-TABS-2026-001 · ROUND: R6 · R1/R2：ff8c6481／0d6a09bc；R3：577813bd／7eb7dd2f；R4–R5：9ec8cf6a／dbb11d66；R6：96c81b56／f83ba745；R7：a8fd54cf／9c06cc8f（＋d7200991 正式站查詢紀錄）；R8：1466df11／86932e29；R9：8aa5cd33／35e64cfa，**已由 fbce7383 revert**（文件 f007de3a）；R10：df528a84／cd71bb26；R11：75dd8459／9c92f749；R12：0a53afd4／2f643be5；R13：70ed5239／241cf0ca；R14：8e0485f4／1443d9c0；R15 接其後本地提交；未推送、未部署。基準：MEETING-FIX 提交後的 HEAD。
 
 ## 修改
 | 檔案 | 內容 |
@@ -99,6 +99,16 @@ TASK_ID: MEETING-TABS-2026-001 · ROUND: R6 · R1/R2：ff8c6481／0d6a09bc；R3�
 - R8 審查 PASS 後依建議：✓ 新增後「最後點過的位置」改為新標題（或新事項的上層），下一次新增預設放那裡；停用的新增鈕改 aria-disabled（可用鍵盤聚焦，按下時以提示訊息說明「請先新增大類」，不新增）；預設所屬若不在下拉選項中改用第一個選項。
 - 驗證（最終）：tsc 乾淨；`npm test` 159／0；分頁 **121/121**（新增：鍵盤按停用鈕顯示原因且不新增、新增大類後下一次預設放在它下面）、列印 **8/8**、MEETING-FIX 回歸 **28/28**。
 
+## R15：Word 匯出（使用者：「要補word匯出」，經協調中心轉達；照片處理由使用者在本工作階段選「文末照片附錄」）
+- **後端（部署需重建後端）**：新增 `GET /api/meeting-minutes/{id}/export-docx`，權限 meeting:view＋資料範圍（他廠商紀錄 404、不存在 404）。`MeetingMinutesService.export_docx` 以 core/docx_builder 組出（同 NOI／ITR／NCR／Audit，Calibri＋標楷體）。
+- 內容與列印版同順序：頁首（公司、編號、版次、狀態）→ 1. 基本資料（主題、日期／類型、廠商、地點與時間、記錄人）＋出席人員表 → 2. 討論事項（# / DISCUSSIONS / ACTIONS / Action by / Target Date / Status，欄寬比例同列印 8/62/14/16%；大類 x.0 與舊子類標題列跨欄、灰底；事項：起始日期（21 Jul 2026）、內容、進度依日期排序（同日依輸入順序，帶入的灰字）、Action by、目標日期與狀態；兩層、三層、舊兩層與扁平舊列都支援，讀法同前端 normalizeDiscussionLog）→ 3. 附件清單（照片標「照片 n，見照片附錄」）→ 4. 簽核 → 頁尾說明。正文直式 A4（21×29.7）。
+- 照片附錄：Attachments 分頁中的圖片（依上傳順序），文末另起一節橫式 A4（29.7×21），每頁 2×2；每張縮放到 12.4×7.0 cm 方框內（保持比例），下方「照片 Photo n　檔名」；每頁標題「照片 Photos — 編號 (版次)　頁/總頁」。非圖片附件只列在清單；無法讀取的圖片顯示「圖片無法顯示」而不中斷匯出；附件路徑經 resolve_local_upload_path 檢查，uploads 以外一律不讀。
+- 檔名：`編號_Rev版次.docx`（無版次時只用編號）。
+- 前端：表單底部 Print 旁「📄 Export Word」（FileText 圖示、沿用 itr.exportWord／common.exporting／common.exportFailed 中英鍵）；與 Print、NOI 相同，只在已存檔紀錄顯示；儲存中或匯出中停用；失敗顯示友善訊息並 console.error。**匯出的是已存檔的內容**（同 NOI），表單上未存的修改不會出現；列印則用表單現值。
+- 審查建議已處理：自由 JSON 中的數字等非文字值一律轉成文字（新增測試）；照片方框高度 7.4→7.0 cm，確保一頁放得下兩列。
+- **未驗證**：Word 實際開啟的欄寬、框線與照片頁是否剛好一頁 2×2——本機只有 QuickLook 縮圖（它對所有 docx，含共用 builder 的表格，都忽略欄寬與 Table Grid 框線），內容與順序已確認。建議協調中心匯出範本後在 Word 開一次。
+- 驗證：後端 **98 passed**（新測試 7 項：內容與順序、三層＋舊列＋已發布、檔名、照片附錄 5 張兩頁／PDF 不嵌入／壞圖不失敗、uploads 外路徑不讀、權限 403／他廠商 404／同廠商 200／不存在 404、怪值不 500；另 meeting／followup／integration／audit 匯出／路徑防護）；前端 tsc 乾淨、ESLint 乾淨、`npm test` 160／0；隔離環境：分頁 **198/198**（新增 12 項 R15：下載檔名 MOM-DEMO-002_Rev1.0.docx、解壓 document.xml 核對內容、直式 A4、按鈕在 Print 旁）、列印 **8/8**、MEETING-FIX **28/28**。範本 `r15-sample-with-photos.docx` 放在 evidence。
+
 ## R14：版次獨立一欄（使用者：「版次不要放在reference 要多一欄位顯示版次」，經協調中心轉達）
 - 會議清單：Reference no. 只顯示編號（不再附「(1.0)」），旁邊新增「Rev／版次」欄，可排序；依數字排序（10.0 在 2.0 之後），沒有版次的舊資料照舊顯示 1.0。編號欄 180→160、版次欄 70。
 - 未結／已結事項總覽：「來源會議」欄只留編號＋標題（已結另有會議日期），後面另加小欄「版次」（60，不排序）。選擇獨立小欄而非同欄兩行，是為了和清單一致，也方便一眼對照版次。
@@ -181,4 +191,5 @@ TASK_ID: MEETING-TABS-2026-001 · ROUND: R6 · R1/R2：ff8c6481／0d6a09bc；R3�
 - **未做**：Python 3.11 全套；附件權限兩支測試（同 MEETING-FIX，沙箱卡住）；Word 匯出不在範圍（本模組原本就沒有）。
 
 ## 上線注意
+**R15 新增後端端點（export-docx），部署需重建後端。**
 有 schema 變動（`meeting_minutes.meetingEndTime`，啟動時自動補欄位，可空）。前端＋後端，需重建。疊在 AGENDA 之後需以當時正式站重做候選（協調中心已說明）。
