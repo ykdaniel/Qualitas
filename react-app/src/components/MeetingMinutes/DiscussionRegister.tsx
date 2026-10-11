@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Check, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
@@ -130,19 +130,24 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
     // new is added under them; an item for that topic goes under its category.
     const parentChoices = (_kind: EntryKind) => categories;
     // default parent: the category of the row last clicked (or of the row just added), else the last category
-    const defaultParent = () => {
-        const ctx = contextNo && log.some(e => e.no === contextNo) ? contextNo.split('.')[0] : null;
+    const defaultParent = (from: string | null = contextNo, trusted = false) => {
+        if (trusted && from) return from.split('.')[0];             // a category just added: not in `log` until the next render
+        const ctx = from && log.some(e => e.no === from) ? from.split('.')[0] : null;
         const wanted = ctx ?? (categories.length ? categories[categories.length - 1].no : null);
         return categories.some(h => h.no === wanted) ? wanted : (categories[0]?.no ?? null);
     };
-    const apply = () => {
-        if (!edit || !edit.content.trim()) return;
+    /** Applies the open row (✓). Returns its number and where the next Add should go, or null when the row has no text yet. */
+    const commit = (): { no: string; ctx: string | null; newCategory: boolean } | null => {
+        if (!edit || !edit.content.trim()) return null;
+        let ctx: string | null;
+        let no = edit.no ?? '';
         if (edit.no === null) {
             const newNo = nextNo(log, edit.parent);
+            no = newNo;
             // a new item counts as open this meeting: closed later in the same session, it stays on screen
             if (edit.kind === 'item') setOpenAtStart(new Set([...openAtStart, newNo]));
             // the next Add goes where this one went: under the new heading, or beside the new item
-            setContextNo(edit.kind === 'item' ? edit.parent : newNo);
+            ctx = edit.kind === 'item' ? edit.parent : newNo;
             onChange(addEntry(log, edit.parent, edit.kind, edit.content.trim(),
                 { owner: edit.owner, targetDate: edit.targetDate, raisedDate: edit.raisedDate }));
         } else {
@@ -150,8 +155,52 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
             const patch: Partial<DiscussionLogEntry> = e?.carried ? {} : { content: edit.content.trim() };
             if (e && isItem(e)) Object.assign(patch, { owner: edit.owner, targetDate: edit.targetDate, ...(e.carried ? {} : { raisedDate: edit.raisedDate }) });
             set(edit.no, patch);
+            ctx = headingOf(edit.no);
         }
+        setContextNo(ctx);
         setEdit(null);
+        return { no, ctx, newCategory: edit.no === null && edit.kind === 'category' };
+    };
+    // After ✓ the focus goes to "Add Item", so typing on is one key away — no empty row is opened by itself
+    // (user, 2026-10-11: "按完一次後就消失了 這樣不能一直編輯下去").
+    const addItemRef = useRef<HTMLButtonElement>(null);
+    // the open row an Add was refused for; any change to the row makes a new `edit` object, which clears it
+    const [rowError, setRowError] = useState<RegisterEdit | null>(null);
+    const editHint = (
+        rowError && rowError === edit
+            ? <div data-edit-hint role="alert" style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }}>{t('meetingMinutes.rowNeedsText')}</div>
+            : <div data-edit-hint style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{t('meetingMinutes.editHint')}</div>
+    );
+    const [focusAddItem, setFocusAddItem] = useState(0);
+    useEffect(() => { if (focusAddItem) addItemRef.current?.focus(); }, [focusAddItem]);
+    const apply = () => { if (commit()) setFocusAddItem(n => n + 1); };
+    /**
+     * Add Category / Add Item while a row is open: a blank new row (or an unchanged ✏️ row) is simply replaced; a changed row with its text is applied
+     * first (as ✓) and the new one opens after it; a row with other input but no text stays, and says why.
+     */
+    const addFromToolbar = (kind: 'category' | 'item') => {
+        let from = contextNo;
+        let trusted = false;
+        if (edit && !isEditDirty(edit, log)) {
+            // a blank new row is replaced; a ✏️ row opened but not changed is just closed (nothing to apply or announce)
+            if (edit.no !== null) from = headingOf(edit.no);
+        } else if (edit) {
+            const done = commit();
+            if (!done) {
+                // said twice: a toast, and in red under the row itself (until the row is changed)
+                toast.error(t('meetingMinutes.rowNeedsText'));
+                setRowError(edit);
+                document.querySelector<HTMLTextAreaElement>('[data-register] [data-editing] textarea')?.focus();
+                return;
+            }
+            // applied to the minutes on screen only — the Save button still has to write it
+            const shown = log.find(x => x.no === done.no) ?? { no: done.no, kind: edit.kind };
+            toast.success(t('meetingMinutes.rowApplied', { no: displayNo(shown as DiscussionLogEntry) }));
+            from = done.ctx;
+            trusted = done.newCategory;
+        }
+        if (kind === 'category') startNew(null, 'category');
+        else startNew(defaultParent(from, trusted), 'item');
     };
     const remove = (e: DiscussionLogEntry) => {
         if (!window.confirm(t(isItem(e) ? 'meetingMinutes.confirmDeleteItem' : 'meetingMinutes.confirmDeleteRow', { no: displayNo(e) }))) return;
@@ -176,8 +225,8 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
     );
     /** A compact add button; `disabledReason` disables it and says why — as a tooltip, and on click (aria-disabled keeps it
      *  focusable, so keyboard and screen-reader users get the reason too). */
-    const addButton = (label: string, onClick: () => void, disabledReason?: string) => (
-        <button type="button" style={{ ...mini, ...(disabledReason ? { opacity: 0.45, cursor: 'not-allowed' } : {}) }}
+    const addButton = (label: string, onClick: () => void, disabledReason?: string, ref?: React.Ref<HTMLButtonElement>) => (
+        <button type="button" ref={ref} style={{ ...mini, ...(disabledReason ? { opacity: 0.45, cursor: 'not-allowed' } : {}) }}
             aria-disabled={disabledReason ? true : undefined} title={disabledReason}
             onClick={() => (disabledReason ? toast.info(disabledReason) : onClick())}><Plus size={12} /> {label}</button>
     );
@@ -250,6 +299,7 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
                             onChange={ev => setEdit({ ...editing, content: ev.target.value })} />
                         // under its raised date, indented like every progress update below it: one "date / text" list
                         : <div data-item-text style={{ whiteSpace: 'pre-wrap', paddingLeft: e.raisedDate ? 12 : 0 }}>{e.content}</div>}
+                    {editing && editHint}
                     {updateList(e, weekField)}
                     {weekField && (
                         <div data-this-week style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginTop: 8 }}>
@@ -297,6 +347,7 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
                                 onChange={ev => setEdit({ ...editing, content: ev.target.value })} />
                             : <strong style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{e.content}</strong>}
                     </div>
+                    {editing && editHint}
                 </td>
                 {editable && <td style={cell}>{editing ? applyButtons : (!e.carried ? rowButtons(e) : null)}</td>}
             </tr>
@@ -328,6 +379,7 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
                         <AutoText style={{ fontWeight: 600 }} value={edit.content} autoFocus
                             placeholder={t('meetingMinutes.categoryPlaceholder')}
                             onChange={ev => setEdit({ ...edit, content: ev.target.value })} />
+                        {editHint}
                     </td>
                 ) : (
                     <>
@@ -335,6 +387,7 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
                             {raisedInput(edit.raisedDate, v => setEdit({ ...edit, raisedDate: v }))}
                             <AutoText value={edit.content} autoFocus placeholder={t('meetingMinutes.itemPlaceholder')}
                                 onChange={ev => setEdit({ ...edit, content: ev.target.value })} />
+                            {editHint}
                         </td>
                         <td style={cell}>
                             <input className={formStyles.formInput} list={peopleListId} value={edit.owner} placeholder={t('meetingMinutes.colActionBy')}
@@ -364,11 +417,13 @@ const DiscussionRegister: React.FC<Props> = ({ log, onChange, readOnly, meetingD
                     <input type="checkbox" checked={showClosed} onChange={ev => setShowClosed(ev.target.checked)} />
                     {t('meetingMinutes.showClosed')}
                 </label>
-                {editable && !edit && (
+                {editable && (
+                    // always there while the meeting can be edited — also while a row is open (see addFromToolbar)
                     <div data-register-toolbar style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {addButton(t('meetingMinutes.addCategory'), () => startNew(null, 'category'))}
-                        {addButton(t('meetingMinutes.addItem'), () => startNew(defaultParent(), 'item'),
-                            categories.length === 0 ? t('meetingMinutes.needCategoryFirst') : undefined)}
+                        {addButton(t('meetingMinutes.addCategory'), () => addFromToolbar('category'))}
+                        {addButton(t('meetingMinutes.addItem'), () => addFromToolbar('item'),
+                            categories.length === 0 && !(edit?.no === null && edit.kind === 'category' && edit.content.trim())
+                                ? t('meetingMinutes.needCategoryFirst') : undefined, addItemRef)}
                     </div>
                 )}
             </div>

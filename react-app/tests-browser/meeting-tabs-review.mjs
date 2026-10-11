@@ -216,6 +216,74 @@ check(await toolbar().getByRole('button', { name: 'Add Item' }).isVisible(), '2:
 await toolbar().getByRole('button', { name: 'Add Item' }).click();
 check(await newRow().getByRole('button', { name: 'Cancel (Esc)' }).getAttribute('title') === 'Cancel (Esc)', '2: ✕ says "Cancel (Esc)"');
 await newRow().getByRole('button', { name: 'Cancel (Esc)' }).click();
+// R12 (user: "按完一次後就消失了 這樣不能一直編輯下去" / "那應該要提示"): the toolbar stays while a row is open,
+// Add chains (blank row replaced / filled row applied first / text-less row refused with the reason), ✓ hands focus to Add Item
+const savedNos = async () => (await rowNos()).filter(n => n !== 'new');
+const toasts = () => page.locator('[data-sonner-toast]').allTextContents().then(x => x.join(' | '));
+const hint = () => modal().locator('[data-editing] [data-edit-hint]');
+await toolbar().getByRole('button', { name: 'Add Item' }).click();
+check(await toolbar().isVisible() && await newRow().count() === 1, 'R12: the toolbar stays while a row is being added');
+check(await hint().textContent() === '✓ to apply, Esc to cancel', 'R12: the open row says "✓ to apply, Esc to cancel"');
+await toolbar().getByRole('button', { name: 'Add Category' }).click();
+check(await newRow().count() === 1 && await pendingNo() === '2.0', 'R12: Add Category on a blank new item replaces it (one new row, 2.0)');
+await toolbar().getByRole('button', { name: 'Add Item' }).click();
+check(await newRow().count() === 1 && await pendingNo() === '1.3' && (await savedNos()).join(',') === '1,1.1,1.2', 'R12: Add Item on a blank new category replaces it; nothing left behind');
+await newRow().getByPlaceholder('Action by').fill('TECO');
+await toolbar().getByRole('button', { name: 'Add Category' }).click();
+await page.waitForTimeout(300);
+check(await newRow().count() === 1 && await pendingNo() === '1.3' && await newRow().getByPlaceholder('Action by').inputValue() === 'TECO', 'R12: a row with input but no text is not replaced');
+check(/Fill in the text of this row first, or press Esc to cancel it\./.test(await toasts()), 'R12: … and a toast says why and what to do');
+check(await hint().getAttribute('role') === 'alert' && /Fill in the text of this row first/.test(await hint().textContent()), 'R12: … and the same reason shows in red under the row');
+check(await newRow().locator('textarea').evaluate(el => el === document.activeElement), 'R12: … with focus back in the row text');
+await newRow().locator('textarea').fill('Chained item one');
+check(await hint().textContent() === '✓ to apply, Esc to cancel', 'R12: typing in the row clears the red reason');
+await toolbar().getByRole('button', { name: 'Add Item' }).click();
+await page.waitForTimeout(300);
+check((await savedNos()).join(',') === '1,1.1,1.2,1.3' && await newRow().count() === 1 && await pendingNo() === '1.4' && await newRow().getByLabel('Under').inputValue() === '1',
+    `R12: Add Item on a filled row applies it (1.3) and opens the next one beside it (1.4) — ${(await savedNos()).join(',')}`);
+check(await modal().locator('[data-row="1.3"] td').nth(2).textContent() === 'TECO', 'R12: the auto-applied row kept its Action by');
+check(/1\.3 applied to the minutes — press Save to keep it\./.test(await toasts()), 'R12: a toast says 1.3 was applied and Save is still needed');
+check(await newRow().locator('textarea').evaluate(el => el === document.activeElement), 'R12: the new row opens focused');
+await newRow().locator('textarea').fill('Chained item two');
+await apply().click();
+check(await page.evaluate(() => document.activeElement?.textContent?.trim()) === 'Add Item', 'R12: after ✓ the focus is on "Add Item" (no empty row opened by itself)');
+check(await newRow().count() === 0, 'R12: ✓ opens no new row by itself');
+await page.keyboard.press('Enter');
+check(await newRow().count() === 1 && await pendingNo() === '1.5', 'R12: Enter on it opens the next item (1.5)');
+await newRow().locator('textarea').press('Escape');
+// a filled new category chains into its first item
+await toolbar().getByRole('button', { name: 'Add Category' }).click();
+await newRow().locator('textarea').fill('Chained category');
+check(await toolbar().getByRole('button', { name: 'Add Item' }).getAttribute('aria-disabled') === null, 'R12: Add Item is enabled while a filled category is open');
+await toolbar().getByRole('button', { name: 'Add Item' }).click();
+check(await newRow().count() === 1 && await newRow().getByLabel('Under').inputValue() === '2' && await pendingNo() === '2.1', 'R12: Add Item on a filled category applies it (2.0) and opens 2.1 under it');
+await page.waitForTimeout(300);
+const t20 = await toasts();
+check(/2\.0 applied to the minutes/.test(t20), `R12: … and the toast names 2.0 (${t20})`);
+await newRow().locator('textarea').press('Escape');
+// a ✏️ row opened but not changed is just closed: nothing applied, nothing announced
+await modal().locator('[data-row="1.4"]').hover();
+await modal().locator('[data-row="1.4"]').getByRole('button', { name: 'Edit' }).click();
+await toolbar().getByRole('button', { name: 'Add Item' }).click();
+await page.waitForTimeout(300);
+check(await pendingNo() === '1.5' && !/1\.4 applied/.test(await toasts()), 'R12: Add on an unchanged ✏️ row opens the next item without an "applied" toast');
+await newRow().locator('textarea').press('Escape');
+// a ✏️ row with its text chains too; with its text cleared it is refused
+await modal().locator('[data-row="1.4"]').hover();
+await modal().locator('[data-row="1.4"]').getByRole('button', { name: 'Edit' }).click();
+check(await toolbar().isVisible(), 'R12: the toolbar stays while a ✏️ row is open');
+await modal().locator('textarea[aria-label="1.4"]').fill('');
+await toolbar().getByRole('button', { name: 'Add Item' }).click();
+check(await newRow().count() === 0 && await modal().locator('[data-row="1.4"][data-editing]').count() === 1, 'R12: a ✏️ row with its text cleared is not applied or left');
+await modal().locator('textarea[aria-label="1.4"]').fill('Chained item two (edited)');
+await toolbar().getByRole('button', { name: 'Add Item' }).click();
+check((await modal().locator('[data-row="1.4"] td').nth(1).textContent()).includes('Chained item two (edited)') && await pendingNo() === '1.5', 'R12: a ✏️ row with text is applied, the next item goes beside it');
+await newRow().locator('textarea').press('Escape');
+for (const no of ['1.4', '1.3', '2']) {
+    await modal().locator(`[data-row="${no}"]`).hover();
+    await modal().locator(`[data-row="${no}"]`).getByRole('button', { name: 'Delete' }).click();
+}
+check((await rowNos()).join(',') === '1,1.1,1.2', 'R12: (chained rows removed again)');
 await modal().locator('[data-row="1.2"]').getByRole('button', { name: 'Edit' }).click();
 await modal().locator('[data-row="1.2"]').getByLabel('Action by').fill('HL');
 await apply().click();
