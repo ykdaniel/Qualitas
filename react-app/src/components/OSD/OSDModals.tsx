@@ -219,7 +219,7 @@ export const OSDDetailModal: React.FC<OSDDetailModalProps> = ({ osdId: _osdId, e
                 if (!e.target.value) e.target.type = 'text';
                 const label = dateFieldLabels[field];
                 if (label) {
-                    const check = checkDateOrder(getValues('raiseDate'), e.target.value, t('osd.raiseDate') || 'Raise Date', label);
+                    const check = checkDateOrder(getValues('raiseDate'), e.target.value, t('osd.raiseDate') || 'Raise Date', label, t);
                     if (!check.valid) toast.warning(check.message);
                 }
             }}

@@ -12,6 +12,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useDataTableText } from "./useDataTableText"
 
 interface DataTableViewOptionsProps<TData> {
     table: Table<TData>
@@ -20,6 +21,7 @@ interface DataTableViewOptionsProps<TData> {
 export function DataTableViewOptions<TData>({
     table,
 }: DataTableViewOptionsProps<TData>) {
+    const text = useDataTableText()
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -29,11 +31,11 @@ export function DataTableViewOptions<TData>({
                     className="ml-auto h-8 hidden lg:flex border-dashed"
                 >
                     <MixerHorizontalIcon className="mr-2 h-4 w-4" />
-                    View
+                    {text("view")}
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[150px]">
-                <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+                <DropdownMenuLabel>{text("toggleColumns")}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {table
                     .getAllColumns()

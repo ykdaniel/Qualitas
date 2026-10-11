@@ -588,11 +588,11 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
     setFormData(prev => {
       const updated = { ...prev, [field]: value };
       if (field === 'startDate' || field === 'endDate') {
-        const check = checkDateOrder(updated.startDate, updated.endDate, t('fat.startDate') || 'Start Date', t('fat.endDate') || 'End Date');
+        const check = checkDateOrder(updated.startDate, updated.endDate, t('fat.startDate') || 'Start Date', t('fat.endDate') || 'End Date', t);
         if (!check.valid) toast.warning(check.message);
       }
       if (field === 'endDate' || field === 'moveInDate') {
-        const check = checkDateOrder(updated.endDate, updated.moveInDate, t('fat.endDate') || 'End Date', t('fat.moveInDate') || 'Move-in Date');
+        const check = checkDateOrder(updated.endDate, updated.moveInDate, t('fat.endDate') || 'End Date', t('fat.moveInDate') || 'Move-in Date', t);
         if (!check.valid) toast.warning(check.message);
       }
       return updated;

@@ -320,7 +320,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     // Outside the state updater (StrictMode runs updaters twice, which showed the toast twice).
     if (name === 'auditStartDate' || name === 'auditEndDate') {
       const next = { ...formData, [name]: value };
-      const check = checkDateOrder(next.auditStartDate, next.auditEndDate, t('audit.wizard.startDateLabel'), t('audit.wizard.endDateLabel'));
+      const check = checkDateOrder(next.auditStartDate, next.auditEndDate, t('audit.wizard.startDateLabel'), t('audit.wizard.endDateLabel'), t);
       if (!check.valid) toast.warning(check.message);
     }
   };

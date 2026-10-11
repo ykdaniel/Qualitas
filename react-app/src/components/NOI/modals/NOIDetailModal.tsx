@@ -210,7 +210,7 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
                 updated.itpNo = '';
             }
             if (field === 'issueDate' || field === 'inspectionDate') {
-                const check = checkDateOrder(updated.issueDate, updated.inspectionDate, t('noi.issueDate') || 'Issue Date', t('noi.inspectionDate') || 'Inspection Date');
+                const check = checkDateOrder(updated.issueDate, updated.inspectionDate, t('noi.issueDate') || 'Issue Date', t('noi.inspectionDate') || 'Inspection Date', t);
                 if (!check.valid) toast.warning(check.message);
             }
             return updated;
