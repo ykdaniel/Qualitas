@@ -1,0 +1,3 @@
+PASS Safari IME confirm (keyCode 229, isComposing false) adds nothing, text kept
+PASS Chrome IME confirm (isComposing true) adds nothing
+PASS plain Enter adds the item and clears the field (items=1)

@@ -1,0 +1,8 @@
+PASS export button not on step 1; on the last step it sits in the footer beside Print Report  -> 0 | 上一步 列印報告 匯出 Word
+PASS download is AHB-EXPORT-1.docx (a real docx/zip)  -> {"file":"AHB-EXPORT-1.docx","size":39281,"zip":true}
+PASS unsaved changes: asks to save first, no download  -> 有尚未儲存的修改。請先按「儲存草稿」再匯出，Word 檔的內容是已儲存的資料。
+PASS new audit: no button before saving, exports after Save Draft  -> 0 | QTS-NA-AUDIT-000001 | {"file":"QTS-NA-AUDIT-000001.docx","size":38447,"zip":true}
+PASS view-only user can export  -> {"file":"AHB-EXPORT-1.docx","size":39281,"zip":true}
+PASS locked Void record can export  -> {"file":"AHB-VOID-1.docx","size":38672,"zip":true}
+PASS English label, hidden when printing  -> Export Word | visible in print: false
+ALL PASS

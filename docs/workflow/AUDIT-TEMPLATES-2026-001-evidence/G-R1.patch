@@ -1,0 +1,1712 @@
+diff --git a/DECISIONS.md b/DECISIONS.md
+index a82aeb52..3b7bafa1 100644
+--- a/DECISIONS.md
++++ b/DECISIONS.md
+@@ -251,6 +251,18 @@ Result 的既有操作方式比拆開成縱向區塊更直覺）。
+ 理由：使用者（2026-10-11）：「會議記錄內的每件事項都是要追蹤的，Action by 就是指定人員」，並選擇「拿掉，以討論事項為準」。同一件事分在討論事項與 Follow-up 兩處追蹤會不一致。本條取代 MEETING-TABS-2026-001 先前記在任務文件的決定「Action by 與行動項目（Follow Up）分開、維持現狀」。
+ 影響範圍：`react-app/src/components/MeetingMinutes/`（MeetingMinutesModals.tsx、MeetingMinutes.tsx、columns.tsx、discussionLog.ts）；Follow Up 模組與後端 followup 端點不變。
+ 
++### 稽核查檢模板庫（AUDIT-TEMPLATES-2026-001，2026-10-11）
++日期：2026-10-11
++決策：
++1. 稽核精靈第 4 步的模板改由資料表 `audit_templates` 管理（原本是寫死的 4 個名稱，勾選只記名稱、不帶入項目）。勾選模板會把它的查檢項目複製到這筆稽核的查檢項目，每一項標記來源模板與項目（`templateId`、`templateItemId`），再勾一次只補上還沒有的項目。之後修改或停用模板，不影響已經帶入的稽核。`selected_templates` 照舊存名稱，舊稽核照常顯示。
++2. 取消勾選時，只移除還沒填結果、也沒填備註的帶入項目；已填的保留，並提示保留了幾項。
++3. 模板管理放在 Audit 頁的「模板管理」分頁。模板不硬刪，以停用取代（稽核會引用模板名稱）。
++4. 新增權限 `audit:template:manage`（管理稽核模板）：讀取模板只需 `audit:view:all`；新增、編輯、停用需要這個權限。ADMIN 由 seeder 自動同步；正式站 QA_MANAGER 部署後由使用者在 IAM UI 指派，不經 seeder 或 migration。因此上一條「IAM 角色權限矩陣」的數字變為：共 73 個，QA_MANAGER 70（該條原文不改）。
++5. 既有 4 個名稱轉為 4 個初始模板（db_migrations 第 24 步，只執行一次，旗標 `audit_templates_initial_v1`）：ISO 9001:2015 帶入精靈原有的 20 條 ISO 條文；ISO 45001、品質管理程序書、供應商評鑑表先留空，由使用者在管理頁填寫。初始模板寫入後就是一般資料，改名、停用或刪除都不會在重啟時被補回。
++理由：使用者 2026-10-11 預覽第 4 步時問「可以自己新增嗎？」，在 A（自訂名稱）與 B（真正的模板庫）中選 B。
++影響範圍：backend/models.py（AuditTemplate）、schemas.py、db_migrations.py（第 24 步）、core/perms.py、core/dependencies.py、routers/audit.py（`/api/audit/templates`）、services/audit_template_service.py；前端 Audit.tsx、AuditTemplatesPanel.tsx、AuditWizard.tsx 第 4 步。
++依據：使用者 2026-10-11 於 Audit 工作階段選擇（取消勾選「只移除還沒填的項目」、管理頁「Audit 頁的模板管理分頁」、權限「新增管理稽核模板權限」、既有名稱「轉成 4 個初始模板」、ISO 9001「要，先帶入這 20 條」）。
++
+ ## 尚未決策（不得當成已核准規則）
+ 
+ - ITR 核准是否須額外檢查 Inspection Result。
+diff --git a/backend/core/dependencies.py b/backend/core/dependencies.py
+index 4fecaa45..45da9e25 100755
+--- a/backend/core/dependencies.py
++++ b/backend/core/dependencies.py
+@@ -40,6 +40,7 @@ from services.followup_service import FollowUpService
+ from services.checklist_service import ChecklistService
+ from services.contractor_service import ContractorService
+ from services.audit_service import AuditService
++from services.audit_template_service import AuditTemplateService
+ from services.fat_service import FATService
+ from services.kpi_service import KPIService
+ from services.related_service import RelatedService
+@@ -103,6 +104,9 @@ def get_audit_service(db: Session = Depends(get_db)) -> AuditService:
+     repo = AuditRepository(db)
+     return AuditService(repo)
+ 
++def get_audit_template_service(db: Session = Depends(get_db)) -> AuditTemplateService:
++    return AuditTemplateService(db)
++
+ def get_fat_service(db: Session = Depends(get_db)) -> FATService:
+     repo = FATRepository(db)
+     return FATService(repo)
+diff --git a/backend/core/perms.py b/backend/core/perms.py
+index 1cd994d8..38b44c83 100755
+--- a/backend/core/perms.py
++++ b/backend/core/perms.py
+@@ -56,6 +56,7 @@ AUDIT_VIEW = "audit:view:all"
+ AUDIT_CREATE = "audit:create:all"
+ AUDIT_UPDATE = "audit:update:all"
+ AUDIT_DELETE = "audit:delete:all"
++AUDIT_TEMPLATE_MANAGE = "audit:template:manage"  # the audit template library (AUDIT-TEMPLATES-2026-001)
+ 
+ # OBS Permissions
+ OBS_VIEW = "obs:view:all"
+@@ -152,6 +153,7 @@ ALL_PERMISSIONS = [
+     {"code": AUDIT_CREATE, "description": "建立 Audit"},
+     {"code": AUDIT_UPDATE, "description": "更新 Audit"},
+     {"code": AUDIT_DELETE, "description": "刪除 Audit"},
++    {"code": AUDIT_TEMPLATE_MANAGE, "description": "管理稽核模板"},
+ 
+     {"code": OBS_VIEW, "description": "查看 OBS 記錄"},
+     {"code": OBS_CREATE, "description": "建立 OBS"},
+diff --git a/backend/db_migrations.py b/backend/db_migrations.py
+index 701425e1..65f28d0a 100755
+--- a/backend/db_migrations.py
++++ b/backend/db_migrations.py
+@@ -169,6 +169,11 @@ def run_migrations():
+     # BACKLOG #22, user's decision 2026-10-10). Runs once (migration_flags); best effort.
+     _clean_legacy_bare_template_results()
+ 
++    # 24. The audit template library's four initial templates (AUDIT-TEMPLATES-2026-001, user's choice 2026-10-11): the
++    # names the wizard used to hard-code. Runs once (migration_flags); best effort. The table itself comes from start-up
++    # create_all (models.AuditTemplate).
++    _seed_initial_audit_templates()
++
+     logger.info("Migrations completed.")
+ 
+ class MigrationError(RuntimeError):
+@@ -532,6 +537,46 @@ def _clean_legacy_bare_template_results():
+         logger.error("Could not clean bare Checklist templates holding results: %s", e)
+ 
+ 
++AUDIT_TEMPLATES_INITIAL_FLAG = "audit_templates_initial_v1"
++
++
++def _seed_initial_audit_templates():
++    """Step 24 (AUDIT-TEMPLATES-2026-001). Writes the four initial audit templates (services.audit_template_service.
++    INITIAL_AUDIT_TEMPLATES: ISO 9001:2015 with the wizard's 20 ISO clauses, ISO 45001, 品質管理程序書, 供應商評鑑表 empty).
++
++    * Create-if-missing: a template whose name (trimmed, case-insensitive) already exists is left as it is.
++    * Runs exactly once, tracked in migration_flags (the flag is written in the same transaction as the rows). After
++      that the rows are ordinary data: a template the user renames, deactivates or removes is never written back.
++    * Best effort: a failure (including the table missing because create_all did not run) is logged, nothing is
++      half-written, no flag is set, and the next start tries again.
++    """
++    from datetime import datetime, timezone
++    try:
++        from services.audit_template_service import INITIAL_AUDIT_TEMPLATES
++        with engine.connect() as conn:
++            if conn.execute(text("SELECT 1 FROM migration_flags WHERE flag_name = :f"),
++                            {"f": AUDIT_TEMPLATES_INITIAL_FLAG}).first():
++                return
++            now = datetime.now(timezone.utc).isoformat()
++            added = []
++            for tpl in INITIAL_AUDIT_TEMPLATES:
++                if conn.execute(text("SELECT 1 FROM audit_templates WHERE lower(trim(name)) = :n"),
++                                {"n": tpl["name"].strip().lower()}).first():
++                    continue
++                conn.execute(text(
++                    "INSERT INTO audit_templates (name, description, version, is_active, items, created_at, updated_at) "
++                    "VALUES (:name, '', :version, 1, :items, :ts, :ts)"),
++                    {"name": tpl["name"], "version": tpl["version"],
++                     "items": json.dumps(tpl["items"], ensure_ascii=False), "ts": now})
++                added.append(tpl["name"])
++            conn.execute(text("INSERT INTO migration_flags (flag_name, completed_at) VALUES (:f, :ts)"),
++                         {"f": AUDIT_TEMPLATES_INITIAL_FLAG, "ts": now})
++            conn.commit()
++            logger.info("Initial audit templates added: %s", ", ".join(added) or "none")
++    except Exception as e:
++        logger.error("Could not add the initial audit templates: %s", e)
++
++
+ RETIRED_MATERIAL_PERMISSION = "material:record_result:all"
+ _MATERIAL_PERMISSION_DESCRIPTIONS = {"material:view:all": "查看核准材料", "material:manage:all": "登錄與編輯核准材料"}
+ 
+diff --git a/backend/models.py b/backend/models.py
+index 8c5da7e3..cfadc2a3 100755
+--- a/backend/models.py
++++ b/backend/models.py
+@@ -786,6 +786,23 @@ class Audit(Base):
+     vendor_ref = relationship("Contractor")
+ 
+ 
++class AuditTemplate(Base):
++    """A reusable set of audit check items (AUDIT-TEMPLATES-2026-001). Selecting it in the wizard COPIES its items into
++    the audit's custom_check_items (each copy tagged templateId / templateItemId), so editing a template later never
++    changes an existing audit. Never hard-deleted: audits keep its name in selected_templates; is_active=False hides it
++    from the wizard."""
++    __tablename__ = "audit_templates"
++
++    id = Column(Integer, primary_key=True, index=True)
++    name = Column(String, unique=True, nullable=False)
++    description = Column(Text, nullable=True)
++    version = Column(String, nullable=True)
++    is_active = Column(Boolean, default=True, nullable=False)
++    items = Column(Text, nullable=True)  # JSON list of {id, no, clause, task}; id is a stable string key
++    created_at = Column(String, nullable=True)
++    updated_at = Column(String, nullable=True)
++
++
+ class Checklist(Base):
+     # Table name for checklist
+     __tablename__ = "checklist"
+diff --git a/backend/routers/audit.py b/backend/routers/audit.py
+index 5e4aae91..00e2b24e 100755
+--- a/backend/routers/audit.py
++++ b/backend/routers/audit.py
+@@ -2,11 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
+ from fastapi.responses import StreamingResponse
+ 
+ import schemas
+-from core.dependencies import RoleChecker, get_audit_service
+-from core.perms import AUDIT_VIEW, AUDIT_CREATE, AUDIT_UPDATE, AUDIT_DELETE
++from core.dependencies import RoleChecker, get_audit_service, get_audit_template_service
++from core.perms import AUDIT_VIEW, AUDIT_CREATE, AUDIT_UPDATE, AUDIT_DELETE, AUDIT_TEMPLATE_MANAGE
+ from core.scope import Scope, ScopeForbidden, get_scope
+ from core.strict_dates import DateValidationError
+ from services.audit_service import AUDIT_DOCX_KINDS, AuditConflict, AuditService
++from services.audit_template_service import AuditTemplateConflict, AuditTemplateService
+ 
+ router = APIRouter(
+     prefix="/audit",
+@@ -26,6 +27,46 @@ def read_audits(
+     """Get list of audits with pagination"""
+     return service.get_audits(skip=skip, limit=limit, project_id=project_id, scope=scope)
+ 
++# --- Audit template library (AUDIT-TEMPLATES-2026-001). Declared before /{audit_id} so "templates" is never read as an
++# audit id. Reading needs audit:view (the wizard lists them); creating / editing needs audit:template:manage. There is no
++# DELETE: audits keep a template's name, so a template is deactivated (is_active=false) instead.
++@router.get("/templates", response_model=list[schemas.AuditTemplate])
++def read_audit_templates(
++    include_inactive: bool = Query(False),
++    service: AuditTemplateService = Depends(get_audit_template_service),
++    current_user: schemas.User = Depends(RoleChecker(AUDIT_VIEW))
++):
++    return service.list_templates(include_inactive=include_inactive)
++
++
++@router.post("/templates", response_model=schemas.AuditTemplate)
++def create_audit_template_route(
++    template: schemas.AuditTemplateCreate,
++    service: AuditTemplateService = Depends(get_audit_template_service),
++    current_user: schemas.User = Depends(RoleChecker(AUDIT_TEMPLATE_MANAGE))
++):
++    try:
++        return service.create_template(template, user_id=current_user.id, username=current_user.username)
++    except AuditTemplateConflict as e:
++        raise HTTPException(status_code=409, detail=str(e))
++
++
++@router.put("/templates/{template_id}", response_model=schemas.AuditTemplate)
++def update_audit_template_route(
++    template_id: int,
++    template: schemas.AuditTemplateUpdate,
++    service: AuditTemplateService = Depends(get_audit_template_service),
++    current_user: schemas.User = Depends(RoleChecker(AUDIT_TEMPLATE_MANAGE))
++):
++    try:
++        updated = service.update_template(template_id, template, user_id=current_user.id, username=current_user.username)
++    except AuditTemplateConflict as e:
++        raise HTTPException(status_code=409, detail=str(e))
++    if updated is None:
++        raise HTTPException(status_code=404, detail="Audit template not found")
++    return updated
++
++
+ @router.get("/{audit_id}", response_model=schemas.Audit)
+ def read_audit(
+     audit_id: str,
+diff --git a/backend/schemas.py b/backend/schemas.py
+index 422a1b06..f254aeaa 100644
+--- a/backend/schemas.py
++++ b/backend/schemas.py
+@@ -1511,6 +1511,92 @@ class Audit(AuditBase):
+     model_config = ConfigDict(from_attributes=True)
+ 
+ 
++# --- Audit template library (AUDIT-TEMPLATES-2026-001) ---
++class AuditTemplateItem(BaseModel):
++    """One check item of a template — the same {no, clause, task} shape as an audit's custom_check_items. `id` is a
++    stable key the server assigns (a new one for each new item, never reused), copied into the audit as templateItemId
++    so selecting the template again adds only the items the audit does not have yet."""
++    model_config = ConfigDict(extra='ignore')
++
++    id: str | None = None
++    no: str = Field('', max_length=50)
++    clause: str = Field('', max_length=500)
++    task: str = Field(..., max_length=2000)
++
++    @field_validator('id', 'no', 'clause', 'task', mode='before')
++    @classmethod
++    def strip_text(cls, v):
++        if v is None:
++            return v
++        return str(v).strip()
++
++    @field_validator('task')
++    @classmethod
++    def task_required(cls, v):
++        if not v:
++            raise ValueError('every template item needs an audit question (task)')
++        return v
++
++
++def _template_name(v):
++    v = (v or '').strip()
++    if not v:
++        raise ValueError('template name is required')
++    if len(v) > 100:
++        raise ValueError('template name must be at most 100 characters')
++    return v
++
++
++class AuditTemplateCreate(BaseModel):
++    name: str
++    description: str | None = ''
++    version: str | None = Field('', max_length=50)
++    is_active: bool = True
++    items: list[AuditTemplateItem] = []
++
++    @field_validator('name', mode='before')
++    @classmethod
++    def check_name(cls, v):
++        return _template_name(v)
++
++
++class AuditTemplateUpdate(BaseModel):
++    name: str | None = None
++    description: str | None = None
++    version: str | None = Field(None, max_length=50)
++    is_active: bool | None = None
++    items: list[AuditTemplateItem] | None = None
++
++    @field_validator('name', mode='before')
++    @classmethod
++    def check_name(cls, v):
++        return None if v is None else _template_name(v)
++
++
++class AuditTemplate(BaseModel):
++    id: int
++    name: str
++    description: str | None = ''
++    version: str | None = ''
++    is_active: bool = True
++    # lenient on read: one hand-edited row must not break the list
++    items: Any | None = []
++    created_at: str | None = None
++    updated_at: str | None = None
++
++    model_config = ConfigDict(from_attributes=True)
++
++    @field_validator('items', mode='before')
++    @classmethod
++    def parse_items(cls, v):
++        if isinstance(v, str):
++            try:
++                v = json.loads(v)
++            except Exception:
++                return []
++        return v if isinstance(v, list) else []
++
++
+ # --- KPI & Performance Schemas ---
+ class KPIWeightBase(BaseModel):
+     pqp_weight: int = 25
+diff --git a/backend/scripts/verification/seed_audit_templates_review.py b/backend/scripts/verification/seed_audit_templates_review.py
+new file mode 100644
+index 00000000..1ac65798
+--- /dev/null
++++ b/backend/scripts/verification/seed_audit_templates_review.py
+@@ -0,0 +1,45 @@
++"""Seed for AUDIT-TEMPLATES-2026-001 browser review (isolated stack only — never run against a real DB).
++
++Run AFTER seed_audit_hardening_b_review.py (reuses project AHB-P1, contractor "Review Vendor" and the accounts, password
++`Accept-Test-1234`). The four initial templates come from start-up (db_migrations step 24). Adds:
++    audit_tpl_mgr      audit view / create / update + audit:template:manage (the 模板管理 tab); audit_full has no manage
++    AHB-TPL-1          Draft, no template selected, no items (select / unselect in step 4)
++    AHB-TPL-LEGACY-1   Draft from before the library: selected_templates ["ISO 9001:2015", "Old supplier form"] by name only,
++                       one hand-added item (no templateId)
++"""
++import json
++import os
++import sys
++
++if not os.environ.get("DATABASE_URL"):
++    sys.exit("refusing to seed: DATABASE_URL is not set (run through isolated_stack.py seed, never against a real DB)")
++
++BACKEND = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
++sys.path.insert(0, BACKEND)
++import database, models  # noqa: E402
++from core import perms  # noqa: E402
++from core.security import get_password_hash  # noqa: E402
++
++PW = "Accept-Test-1234"  # shared, isolated-only test constant used across this directory's seed scripts
++
++d = database.SessionLocal()
++codes = [perms.AUDIT_VIEW, perms.AUDIT_CREATE, perms.AUDIT_UPDATE, perms.AUDIT_TEMPLATE_MANAGE, perms.USER_VIEW]
++role = models.Role(name="AUDIT_TEMPLATE_MANAGER", description="AUDIT-TEMPLATES review",
++                   permissions_rel=d.query(models.Permission).filter(models.Permission.code.in_(codes)).all())
++d.add(role)
++d.flush()
++assert len(role.permissions_rel) == len(codes), [p.code for p in role.permissions_rel]
++d.add(models.User(username="audit_tpl_mgr", email="audit_tpl_mgr@example.com", is_active=True, role_id=role.id,
++                  hashed_password=get_password_hash(PW)))
++common = dict(project_id="AHB-P1", project_name="Audit Review P1", contractor="Review Vendor", vendor_id="ahb-vendor",
++              date="2026-10-01", end_date="2026-10-02", auditor="王稽核", status="Draft")
++d.add(models.Audit(id="ahb-tpl-1", auditNo="AHB-TPL-1", title="Template review", selected_templates="[]",
++                   custom_check_items="[]", **common))
++d.add(models.Audit(id="ahb-tpl-legacy-1", auditNo="AHB-TPL-LEGACY-1", title="Template review (legacy)",
++                   selected_templates=json.dumps(["ISO 9001:2015", "Old supplier form"]),
++                   custom_check_items=json.dumps([{"id": 1, "no": "7.1", "clause": "Resources", "task": "Hand-added question"}]),
++                   **common))
++d.commit()
++names = [t.name for t in d.query(models.AuditTemplate).order_by(models.AuditTemplate.id)]
++d.close()
++print("SEED " + json.dumps({"ok": True, "templates": names}, ensure_ascii=False))
+diff --git a/backend/services/audit_template_service.py b/backend/services/audit_template_service.py
+new file mode 100644
+index 00000000..2f3a380a
+--- /dev/null
++++ b/backend/services/audit_template_service.py
+@@ -0,0 +1,151 @@
++"""
++Audit template library (AUDIT-TEMPLATES-2026-001).
++
++A template is a named list of check items ({id, no, clause, task}). The wizard COPIES a selected template's items into
++the audit's custom_check_items, so nothing here ever reaches into an existing audit: editing or deactivating a template
++changes only what later selections copy. Templates are never hard-deleted (audits keep the name in selected_templates);
++is_active=False hides one from the wizard.
++
++Initial templates: the four names the wizard used to hard-code. ISO 9001:2015 starts with the wizard's 20 built-in ISO
++clauses; the other three start empty for the user to fill in on the template management tab. They are written once by
++db_migrations step 24 (flag audit_templates_initial_v1) and are ordinary rows after that.
++"""
++import json
++import uuid
++from datetime import datetime, timezone
++
++from sqlalchemy import func
++from sqlalchemy.exc import IntegrityError
++from sqlalchemy.orm import Session
++
++import models
++import schemas
++
++
++class AuditTemplateConflict(Exception):
++    """Another template already has this name (compared trimmed, case-insensitively)."""
++
++
++# The wizard's built-in ISO 9001:2015 clause list (AuditWizard.tsx ISO_CLAUSES), with fixed item ids so the seeded rows
++# are the same on every database.
++ISO_9001_CLAUSES = [
++    ("4.1", "Understanding the organization and its context", "How has the organization determined external and internal issues relevant to its purpose and strategic direction?"),
++    ("4.2", "Understanding the needs and expectations of interested parties", "How do you monitor and review information about these interested parties and their relevant requirements?"),
++    ("4.3", "Determining the scope of the quality management system", "Has the organization determined the boundaries and applicability of the QMS to establish its scope?"),
++    ("4.4", "Quality management system and its processes", "How has the organization determined the processes needed for the QMS and their application?"),
++    ("5.1", "Leadership and commitment", "How does top management demonstrate leadership and commitment with respect to the QMS?"),
++    ("5.2", "Policy", "Has top management established, implemented and maintained a quality policy?"),
++    ("6.1", "Actions to address risks and opportunities", "How are risks and opportunities determined and addressed?"),
++    ("6.2", "Quality objectives and planning to achieve them", "Are quality objectives established at relevant functions, levels and processes?"),
++    ("7.1", "Resources", "How does the organization determine and provide the resources needed for the QMS?"),
++    ("7.2", "Competence", "How do you determine the necessary competence of person(s) doing work under your control?"),
++    ("7.5", "Documented information", "Does the QMS include documented information required by ISO 9001?"),
++    ("8.1", "Operational planning and control", "How does the organization plan, implement and control the processes needed to meet requirements?"),
++    ("8.2", "Requirements for products and services", "How do you determine the requirements for the products and services to be offered?"),
++    ("8.4", "Control of externally provided processes, products and services", "How do you ensure that externally provided processes, products and services conform to requirements?"),
++    ("8.5", "Production and service provision", "Are production and service provision implemented under controlled conditions?"),
++    ("9.1", "Monitoring, measurement, analysis and evaluation", "How do you determine what needs to be monitored and measured?"),
++    ("9.2", "Internal audit", "Are internal audits conducted at planned intervals?"),
++    ("9.3", "Management review", "Does top management review the organization's QMS at planned intervals?"),
++    ("10.2", "Nonconformity and corrective action", "When a nonconformity occurs, how does the organization react to it?"),
++    ("10.3", "Continual improvement", "How does the organization continually improve the QMS?"),
++]
++
++INITIAL_AUDIT_TEMPLATES = [
++    {"name": "ISO 9001:2015", "version": "2015",
++     "items": [{"id": f"iso9001-{no}", "no": no, "clause": clause, "task": task} for no, clause, task in ISO_9001_CLAUSES]},
++    {"name": "ISO 45001", "version": "", "items": []},
++    {"name": "品質管理程序書", "version": "", "items": []},
++    {"name": "供應商評鑑表", "version": "", "items": []},
++]
++
++
++def _now():
++    return datetime.now(timezone.utc).isoformat()
++
++
++def _items_json(items):
++    """Dump items, giving every item without an id a fresh one. An id the request repeats on two items is replaced on
++    the second, so templateItemId stays unique inside a template."""
++    seen, out = set(), []
++    for it in items:
++        d = it.model_dump()
++        if not d.get("id") or d["id"] in seen:
++            d["id"] = uuid.uuid4().hex
++        seen.add(d["id"])
++        out.append({"id": d["id"], "no": d["no"], "clause": d["clause"], "task": d["task"]})
++    return json.dumps(out, ensure_ascii=False)
++
++
++class AuditTemplateService:
++    def __init__(self, db: Session):
++        self.db = db
++
++    def list_templates(self, include_inactive: bool = False):
++        q = self.db.query(models.AuditTemplate)
++        if not include_inactive:
++            q = q.filter(models.AuditTemplate.is_active.is_(True))
++        return q.order_by(models.AuditTemplate.id).all()
++
++    def _check_name_free(self, name, exclude_id=None):
++        q = self.db.query(models.AuditTemplate).filter(func.lower(func.trim(models.AuditTemplate.name)) == name.strip().lower())
++        if exclude_id is not None:
++            q = q.filter(models.AuditTemplate.id != exclude_id)
++        if q.first():
++            raise AuditTemplateConflict(f"A template named '{name}' already exists.")
++
++    def _log(self, action, tpl, old, new, user_id, username):
++        self.db.add(models.AuditLog(
++            timestamp=datetime.now().isoformat(), action=action, entity_type="AuditTemplate", entity_id=str(tpl.id),
++            entity_name=tpl.name, old_value=json.dumps(old, ensure_ascii=False) if old else None,
++            new_value=json.dumps(new, ensure_ascii=False) if new else None, user_id=user_id, username=username))
++
++    def _commit(self, name):
++        try:
++            self.db.commit()
++        except IntegrityError:  # a concurrent save took the name between the check and the commit (unique index)
++            self.db.rollback()
++            raise AuditTemplateConflict(f"A template named '{name}' already exists.")
++
++    @staticmethod
++    def _snapshot(tpl):
++        return {"name": tpl.name, "description": tpl.description, "version": tpl.version, "is_active": tpl.is_active,
++                "items": json.loads(tpl.items or "[]")}
++
++    def create_template(self, data: schemas.AuditTemplateCreate, user_id=None, username=None):
++        self._check_name_free(data.name)
++        now = _now()
++        tpl = models.AuditTemplate(name=data.name, description=data.description or "", version=data.version or "",
++                                   is_active=data.is_active, items=_items_json(data.items), created_at=now, updated_at=now)
++        self.db.add(tpl)
++        self.db.flush()
++        self._log("CREATE", tpl, None, self._snapshot(tpl), user_id, username)
++        self._commit(data.name)
++        self.db.refresh(tpl)
++        return tpl
++
++    def update_template(self, template_id: int, data: schemas.AuditTemplateUpdate, user_id=None, username=None):
++        tpl = self.db.get(models.AuditTemplate, template_id)
++        if tpl is None:
++            return None
++        old = self._snapshot(tpl)
++        fields = data.model_dump(exclude_unset=True)
++        if fields.get("name") is not None:
++            self._check_name_free(fields["name"], exclude_id=tpl.id)
++            tpl.name = fields["name"]
++        if "description" in fields:
++            tpl.description = fields["description"] or ""
++        if "version" in fields:
++            tpl.version = fields["version"] or ""
++        if fields.get("is_active") is not None:
++            tpl.is_active = fields["is_active"]
++        if data.items is not None:
++            tpl.items = _items_json(data.items)
++        new = self._snapshot(tpl)
++        if new == old:
++            return tpl
++        tpl.updated_at = _now()
++        self._log("UPDATE", tpl, old, new, user_id, username)
++        self._commit(tpl.name)
++        self.db.refresh(tpl)
++        return tpl
+diff --git a/backend/tests/test_audit_templates_http.py b/backend/tests/test_audit_templates_http.py
+new file mode 100644
+index 00000000..495d7bf0
+--- /dev/null
++++ b/backend/tests/test_audit_templates_http.py
+@@ -0,0 +1,168 @@
++"""Audit template library (AUDIT-TEMPLATES-2026-001): /api/audit/templates — read with audit:view, create / edit with
++audit:template:manage, deactivate instead of delete; item ids assigned by the server; and the copy semantics — an audit
++keeps the items it copied when the template is edited afterwards.
++
++Real login/routes on a disposable file DB; no main import, no development database access.
++"""
++import importlib
++import json
++import secrets
++from types import SimpleNamespace
++
++import pytest
++from fastapi import FastAPI
++from fastapi.testclient import TestClient
++from sqlalchemy import create_engine
++from sqlalchemy.orm import sessionmaker
++
++import models
++from core.perms import AUDIT_TEMPLATE_MANAGE
++from core.security import get_password_hash
++from database import Base, get_db
++
++VIEW_CODES = ['audit:view:all', 'audit:create:all', 'audit:update:all']
++
++
++@pytest.fixture
++def env(tmp_path, monkeypatch):
++    engine = create_engine(f"sqlite:///{tmp_path / 'audit-templates.db'}", connect_args={'check_same_thread': False, 'timeout': 30})
++    Base.metadata.create_all(engine)
++    S = sessionmaker(bind=engine, autoflush=False)
++    import core.security as security
++    monkeypatch.setattr(security, 'SessionLocal', S)
++    password = secrets.token_urlsafe(24)
++    with S() as db:
++        perms = {c: models.Permission(code=c, description=c) for c in VIEW_CODES + [AUDIT_TEMPLATE_MANAGE]}
++        auditor = models.Role(name='Auditor', permissions_rel=[perms[c] for c in VIEW_CODES])
++        manager = models.Role(name='TemplateManager', permissions_rel=list(perms.values()))
++        db.add_all([auditor, manager])
++        db.flush()
++        for name, role in (('auditor', auditor), ('manager', manager)):
++            db.add(models.User(username=name, email=f'{name}@example.test', is_active=True, role_id=role.id,
++                               hashed_password=get_password_hash(password)))
++        db.add(models.Contractor(id='vendor', name='Audit vendor', abbreviation='AV'))
++        db.commit()
++    app = FastAPI()
++    for name in ['auth', 'audit']:
++        app.include_router(importlib.import_module('routers.' + name).router, prefix='/api')
++
++    def session():
++        with S() as db:
++            yield db
++    app.dependency_overrides[get_db] = session
++    clients = {}
++    for name in ('auditor', 'manager'):
++        c = TestClient(app, raise_server_exceptions=False)
++        c.__enter__()
++        response = c.post('/api/auth/login', data={'username': name, 'password': password})
++        assert response.status_code == 200, response.text
++        clients[name] = c
++    yield SimpleNamespace(auditor=clients['auditor'], manager=clients['manager'], Session=S)
++    for c in clients.values():
++        c.__exit__(None, None, None)
++    engine.dispose()
++
++
++ITEMS = [{'no': '7.1', 'clause': 'Resources', 'task': 'Are resources provided?'},
++         {'no': '', 'clause': '', 'task': 'Is the site tidy?'}]
++
++
++def new_template(env, **over):
++    return env.manager.post('/api/audit/templates', json={'name': 'Site QA', 'items': ITEMS, **over})
++
++
++def test_manager_creates_a_template_and_every_item_gets_its_own_id(env):
++    response = new_template(env, description='Monthly', version='A')
++    assert response.status_code == 200, response.text
++    body = response.json()
++    assert (body['name'], body['description'], body['version'], body['is_active']) == ('Site QA', 'Monthly', 'A', True)
++    assert [(i['no'], i['clause'], i['task']) for i in body['items']] == [(i['no'], i['clause'], i['task']) for i in ITEMS]
++    ids = [i['id'] for i in body['items']]
++    assert all(ids) and len(set(ids)) == 2
++    assert body['created_at'] and body['updated_at']
++    with env.Session() as db:
++        log = db.query(models.AuditLog).filter_by(entity_type='AuditTemplate', action='CREATE').one()
++        assert log.entity_id == str(body['id']) and log.username == 'manager'
++
++
++def test_without_the_manage_permission_templates_can_be_read_but_not_written(env):
++    created = new_template(env).json()
++    listed = env.auditor.get('/api/audit/templates')
++    assert listed.status_code == 200 and [t['name'] for t in listed.json()] == ['Site QA']
++    assert env.auditor.post('/api/audit/templates', json={'name': 'Mine', 'items': []}).status_code == 403
++    assert env.auditor.put(f"/api/audit/templates/{created['id']}", json={'name': 'Renamed'}).status_code == 403
++    assert env.manager.get('/api/audit/templates').json()[0]['name'] == 'Site QA'
++
++
++def test_names_are_unique_ignoring_case_and_surrounding_spaces(env):
++    first = new_template(env).json()
++    assert new_template(env, name='  site qa ').status_code == 409
++    other = new_template(env, name='Other').json()
++    assert env.manager.put(f"/api/audit/templates/{other['id']}", json={'name': 'SITE QA'}).status_code == 409
++    # renaming a template to its own name (another case) is not a clash
++    assert env.manager.put(f"/api/audit/templates/{first['id']}", json={'name': 'Site QA'}).status_code == 200
++    for bad in ('', '   ', 'x' * 101):
++        assert new_template(env, name=bad).status_code == 422, bad
++
++
++def test_items_need_a_question_and_ids_stay_stable_across_edits(env):
++    assert new_template(env, items=[{'no': '1', 'task': '  '}]).status_code == 422
++    created = new_template(env).json()
++    kept = created['items'][0]
++    # the client sends the stored ids back; a new item has none; a repeated id is replaced
++    response = env.manager.put(f"/api/audit/templates/{created['id']}", json={'items': [
++        {**kept, 'task': 'Are resources provided and recorded?'}, {'no': '8.1', 'task': 'New question'},
++        {**kept, 'task': 'Copy with the same id'}]})
++    assert response.status_code == 200, response.text
++    items = response.json()['items']
++    assert items[0]['id'] == kept['id'] and items[0]['task'] == 'Are resources provided and recorded?'
++    assert items[1]['id'] not in {kept['id'], created['items'][1]['id']}
++    assert len({i['id'] for i in items}) == 3
++
++
++def test_deactivated_templates_leave_the_wizard_list_and_there_is_no_delete(env):
++    created = new_template(env).json()
++    new_template(env, name='Second')
++    response = env.manager.put(f"/api/audit/templates/{created['id']}", json={'is_active': False})
++    assert response.status_code == 200 and response.json()['is_active'] is False
++    assert [t['name'] for t in env.auditor.get('/api/audit/templates').json()] == ['Second']
++    everything = env.auditor.get('/api/audit/templates', params={'include_inactive': True}).json()
++    assert [(t['name'], t['is_active']) for t in everything] == [('Site QA', False), ('Second', True)]
++    assert env.manager.delete(f"/api/audit/templates/{created['id']}").status_code in (404, 405)
++    assert env.manager.put('/api/audit/templates/9999', json={'name': 'Nope'}).status_code == 404
++
++
++def test_an_unchanged_save_writes_no_log_and_keeps_updated_at(env):
++    created = new_template(env).json()
++    same = env.manager.put(f"/api/audit/templates/{created['id']}", json={'name': 'Site QA', 'items': created['items']})
++    assert same.status_code == 200 and same.json()['updated_at'] == created['updated_at']
++    with env.Session() as db:
++        assert db.query(models.AuditLog).filter_by(entity_type='AuditTemplate', action='UPDATE').count() == 0
++
++
++def test_templates_is_not_read_as_an_audit_id(env):
++    assert env.auditor.get('/api/audit/templates').status_code == 200
++    assert env.auditor.get('/api/audit/not-an-id').status_code == 404
++
++
++def test_items_copied_into_an_audit_do_not_change_when_the_template_is_edited(env):
++    tpl = new_template(env).json()
++    copied = [{'id': 1000 + n, 'no': i['no'], 'clause': i['clause'], 'task': i['task'], 'templateId': tpl['id'],
++               'templateItemId': i['id']} for n, i in enumerate(tpl['items'])]
++    audit = env.manager.post('/api/audit/', json={
++        'auditNo': '', 'title': 'Copy test', 'date': '2026-10-01', 'end_date': '2026-10-02', 'status': 'Draft',
++        'contractor': 'Audit vendor', 'selected_templates': ['Site QA'], 'custom_check_items': copied})
++    assert audit.status_code == 200, audit.text
++    audit_id = audit.json()['id']
++    assert audit.json()['custom_check_items'] == copied  # templateId / templateItemId are kept as sent
++
++    edit = env.manager.put(f"/api/audit/templates/{tpl['id']}", json={
++        'name': 'Site QA v2', 'items': [{**tpl['items'][0], 'task': 'Changed question'}]})
++    assert edit.status_code == 200, edit.text
++    env.manager.put(f"/api/audit/templates/{tpl['id']}", json={'is_active': False})
++
++    after = env.auditor.get(f'/api/audit/{audit_id}').json()
++    assert after['custom_check_items'] == copied
++    assert after['selected_templates'] == ['Site QA']  # the name as it was when selected
++    with env.Session() as db:
++        assert json.loads(db.get(models.Audit, audit_id).custom_check_items) == copied
+diff --git a/backend/tests/test_audit_templates_migration.py b/backend/tests/test_audit_templates_migration.py
+new file mode 100644
+index 00000000..05957a62
+--- /dev/null
++++ b/backend/tests/test_audit_templates_migration.py
+@@ -0,0 +1,186 @@
++"""AUDIT-TEMPLATES-2026-001 — start-up: the audit_templates table, the four initial templates (db_migrations step 24,
++flag audit_templates_initial_v1) and the new audit:template:manage permission.
++
++"Boots" are fresh Python processes that import `main` (create tables → run_migrations → seeding, exactly a server start)
++against a throwaway file database. The "old code" is the backend tree at BASE_COMMIT (before the template library),
++exported with `git archive`, so the "existing database" is one a real older server produced. The step's own edge cases
++run in-process on the suite's db_session. Nothing here reads or writes the development database.
++"""
++import io
++import json
++import shutil
++import sqlite3
++import subprocess
++import sys
++import tarfile
++from pathlib import Path
++from unittest.mock import patch
++
++import pytest
++from sqlalchemy import text
++
++import db_migrations
++import models
++from core.perms import AUDIT_TEMPLATE_MANAGE
++from isolation import BACKEND, isolated_env, make_run_dir, run_python
++from services.audit_template_service import INITIAL_AUDIT_TEMPLATES, ISO_9001_CLAUSES
++
++BASE_COMMIT = "cd71bb26111a3c44902873cceab556511aecb959"     # last commit without the template library
++ENV = {"INITIAL_ADMIN_PASSWORD": "Audit-Templates-Migration-Pw-123456", "ENVIRONMENT": "staging"}
++NAMES = ["ISO 9001:2015", "ISO 45001", "品質管理程序書", "供應商評鑑表"]
++FLAG = "audit_templates_initial_v1"
++
++
++@pytest.fixture
++def run_dir():
++    root = make_run_dir("qualitas-audit-tpl-mig-")
++    yield root
++    shutil.rmtree(root, ignore_errors=True)
++
++
++@pytest.fixture(scope="module")
++def old_backend(tmp_path_factory):
++    repo = BACKEND.parent
++    try:
++        data = subprocess.run(["git", "-C", str(repo), "archive", BASE_COMMIT, "backend"], capture_output=True, check=True).stdout
++    except (subprocess.CalledProcessError, FileNotFoundError) as e:
++        pytest.skip(f"base commit {BASE_COMMIT} not available: {e}")
++    dest = tmp_path_factory.mktemp("old-code")
++    with tarfile.open(fileobj=io.BytesIO(data)) as tar:
++        tar.extractall(dest, filter="data")
++    old = dest / "backend"
++    assert not (old / "services" / "audit_template_service.py").exists()
++    return old
++
++
++def boot(db_path):
++    r = run_python("import main", db_path, extra_env=ENV, timeout=240, check=False)
++    assert r.returncode == 0, (r.stdout + r.stderr)[-3000:]
++    return r.stdout + r.stderr
++
++
++def old_boot(old_backend, db_path):
++    env = isolated_env(db_path, Path(db_path).parent, ENV)
++    env["PYTHONPATH"] = str(old_backend)
++    prelude = "from core.startup_guard import guard_if_required\nguard_if_required()\n"
++    r = subprocess.run([sys.executable, "-c", prelude + "import main"], cwd=old_backend, env=env, capture_output=True,
++                       text=True, timeout=240)
++    assert r.returncode == 0, r.stdout[-1500:] + r.stderr[-3000:]
++
++
++def sql(db_path, query, params=()):
++    con = sqlite3.connect(db_path)
++    try:
++        rows = con.execute(query, params).fetchall()
++        con.commit()
++        return rows
++    finally:
++        con.close()
++
++
++def templates(db_path):
++    return sql(db_path, "SELECT id, name, description, version, is_active, items FROM audit_templates ORDER BY id")
++
++
++def role_perms(db_path, role):
++    return {r[0] for r in sql(db_path, "SELECT p.code FROM roles r JOIN role_permissions rp ON rp.role_id = r.id "
++                                       "JOIN permissions p ON p.id = rp.permission_id WHERE lower(r.name) = lower(?)", (role,))}
++
++
++def assert_initial_templates(db_path):
++    rows = templates(db_path)
++    assert [r[1] for r in rows] == NAMES
++    assert all(r[4] == 1 for r in rows)
++    iso = json.loads(rows[0][5])
++    assert [(i["no"], i["clause"], i["task"]) for i in iso] == list(ISO_9001_CLAUSES)
++    assert len(iso) == 20 and len({i["id"] for i in iso}) == 20
++    assert all(json.loads(r[5]) == [] for r in rows[1:])
++    assert sql(db_path, "SELECT count(*) FROM migration_flags WHERE flag_name = ?", (FLAG,)) == [(1,)]
++
++
++# ── start-up order ───────────────────────────────────────────────────────────────────────────────────────────
++def test_fresh_database_gets_the_table_the_four_templates_and_admin_gets_the_permission(run_dir):
++    db = run_dir / "fresh.db"
++    boot(db)
++    assert_initial_templates(db)
++    assert AUDIT_TEMPLATE_MANAGE in role_perms(db, "admin")
++    assert sql(db, "SELECT description FROM permissions WHERE code = ?", (AUDIT_TEMPLATE_MANAGE,)) == [("管理稽核模板",)]
++    holders = sql(db, "SELECT r.name FROM roles r JOIN role_permissions rp ON rp.role_id = r.id JOIN permissions p "
++                      "ON p.id = rp.permission_id WHERE p.code = ?", (AUDIT_TEMPLATE_MANAGE,))
++    assert [h[0].lower() for h in holders] == ["admin"]
++
++
++def test_existing_database_without_the_table_is_upgraded_and_only_admin_is_synced(old_backend, run_dir):
++    db = run_dir / "old.db"
++    old_boot(old_backend, db)
++    assert not sql(db, "SELECT name FROM sqlite_master WHERE name = 'audit_templates'")
++    # a production-like QA_MANAGER role holding the audit permissions it has today
++    sql(db, "INSERT INTO roles (name, description) VALUES ('QA_MANAGER', 'QA manager')")
++    sql(db, "INSERT INTO role_permissions (role_id, permission_id) SELECT r.id, p.id FROM roles r, permissions p "
++            "WHERE r.name = 'QA_MANAGER' AND p.code LIKE 'audit:%'")
++    qa_before = role_perms(db, "QA_MANAGER")
++    audits_before = sql(db, "SELECT * FROM audits ORDER BY 1")
++
++    boot(db)
++
++    assert_initial_templates(db)
++    assert AUDIT_TEMPLATE_MANAGE in role_perms(db, "admin")
++    assert role_perms(db, "QA_MANAGER") == qa_before and AUDIT_TEMPLATE_MANAGE not in qa_before   # assigned by hand later
++    assert sql(db, "SELECT * FROM audits ORDER BY 1") == audits_before
++
++
++def test_restarts_never_duplicate_or_bring_back_initial_templates(run_dir):
++    db = run_dir / "twice.db"
++    boot(db)
++    first = templates(db)
++    boot(db)
++    assert templates(db) == first
++    # the user renames one, deactivates one and (by hand) removes one
++    sql(db, "UPDATE audit_templates SET name = 'ISO 45001:2018' WHERE name = 'ISO 45001'")
++    sql(db, "UPDATE audit_templates SET is_active = 0, items = '[]' WHERE name = 'ISO 9001:2015'")
++    sql(db, "DELETE FROM audit_templates WHERE name = '供應商評鑑表'")
++    edited = templates(db)
++    boot(db)
++    assert templates(db) == edited
++    assert [r[1] for r in edited] == ["ISO 9001:2015", "ISO 45001:2018", "品質管理程序書"]
++
++
++# ── step 24 in-process ───────────────────────────────────────────────────────────────────────────────────────
++def _run(db):
++    with patch("db_migrations.engine", db.get_bind()):
++        db_migrations._create_migration_flags_table()
++        db_migrations._seed_initial_audit_templates()
++
++
++def _names(db):
++    db.expire_all()
++    return [(t.name, t.is_active) for t in db.query(models.AuditTemplate).order_by(models.AuditTemplate.id)]
++
++
++def test_a_template_already_named_like_an_initial_one_is_left_alone(db_session):
++    db = db_session
++    db.add(models.AuditTemplate(name=" iso 45001 ", description="mine", version="v9", is_active=False, items="[]"))
++    db.commit()
++    _run(db)
++    assert _names(db) == [(" iso 45001 ", False), ("ISO 9001:2015", True), ("品質管理程序書", True), ("供應商評鑑表", True)]
++    assert db.query(models.AuditTemplate).filter_by(description="mine").one().version == "v9"
++
++
++def test_the_step_runs_once_even_when_every_template_was_removed(db_session):
++    db = db_session
++    _run(db)
++    db.query(models.AuditTemplate).delete()
++    db.commit()
++    _run(db)
++    assert _names(db) == []
++
++
++def test_a_failure_writes_nothing_and_the_next_start_tries_again(db_session):
++    db = db_session
++    bad = [*INITIAL_AUDIT_TEMPLATES[:2], {"name": None, "version": "", "items": []}]   # the third insert fails
++    with patch("services.audit_template_service.INITIAL_AUDIT_TEMPLATES", bad):
++        _run(db)
++    assert _names(db) == []
++    assert db.execute(text("SELECT count(*) FROM migration_flags WHERE flag_name = :f"), {"f": FLAG}).scalar() == 0
++    _run(db)
++    assert [n for n, _ in _names(db)] == NAMES
+diff --git a/react-app/src/components/Audit/Audit.tsx b/react-app/src/components/Audit/Audit.tsx
+index b8b61dad..9e255df9 100755
+--- a/react-app/src/components/Audit/Audit.tsx
++++ b/react-app/src/components/Audit/Audit.tsx
+@@ -13,6 +13,7 @@ import { createColumns } from './columns';
+ import AuditWizard from './AuditWizard';
+ import VendorStatsPanel from './VendorStatsPanel';
+ import ScheduleMatrix from './ScheduleMatrix';
++import AuditTemplatesPanel from './AuditTemplatesPanel';
+ import { Search, Plus, AlertCircle, X } from 'lucide-react';
+ 
+ // Rows shown in the schedule (all of them when a vendor is selected).
+@@ -37,6 +38,12 @@ const Audit: React.FC = () => {
+     const deferredSearchQuery = useDeferredValue(searchQuery);
+ 
+     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
++    // The template library tab (AUDIT-TEMPLATES-2026-001), for holders of audit:template:manage. Once opened, the panel
++    // stays mounted (only hidden) while the audit list is shown, so switching tabs never drops an unsaved template edit.
++    const canManageTemplates = hasPermission('audit:template:manage');
++    const [activeTab, setActiveTab] = useState<'records' | 'templates'>('records');
++    const [templatesOpened, setTemplatesOpened] = useState(false);
++    const showTemplates = canManageTemplates && activeTab === 'templates';
+     const [currentAuditId, setCurrentAuditId] = useState<string | null>(null);
+     // The shared contractor picker list (GET /contractors/options, any signed-in user; status normalised so
+     // 'Active' and 'active' both count) — CONTRACTOR-OPTIONS-2026-001 replaced the Audit-only list.
+@@ -248,7 +255,18 @@ const Audit: React.FC = () => {
+             )}
+ 
+             <div className={shellStyles.toolbar + hideWhenPrintingWizard}>
+-                <div className={shellStyles.toolbarRight}>
++                {canManageTemplates ? (
++                    <div className={shellStyles.chipGroup} role="tablist">
++                        {(['records', 'templates'] as const).map(tab => (
++                            <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} data-audit-tab={tab}
++                                className={`${shellStyles.chip} ${activeTab === tab ? shellStyles.chipActive : ''}`}
++                                onClick={() => { setActiveTab(tab); if (tab === 'templates') setTemplatesOpened(true); }}>
++                                {t(tab === 'records' ? 'audit.tabRecords' : 'audit.tabTemplates')}
++                            </button>
++                        ))}
++                    </div>
++                ) : null}
++                <div className={shellStyles.toolbarRight} style={showTemplates ? { display: 'none' } : undefined}>
+                     <div className={shellStyles.searchWrap}>
+                         <Search size={15} className={shellStyles.searchIcon} strokeWidth={2} />
+                         <input
+@@ -268,8 +286,14 @@ const Audit: React.FC = () => {
+                 </div>
+             </div>
+ 
++            {canManageTemplates && templatesOpened && (
++                <div className={hideWhenPrintingWizard.trim()} style={showTemplates ? undefined : { display: 'none' }}>
++                    <AuditTemplatesPanel />
++                </div>
++            )}
++
+             {/* Premium Top Section: Interactive Panels */}
+-            <div className={styles.topSection + hideWhenPrintingWizard}>
++            <div className={styles.topSection + hideWhenPrintingWizard} style={showTemplates ? { display: 'none' } : undefined}>
+                 <VendorStatsPanel
+                     stats={vendorStats}
+                     maxAudits={maxAudits}
+@@ -297,7 +321,7 @@ const Audit: React.FC = () => {
+             </div>
+ 
+             {/* Audit Data Table Area */}
+-            <div className={shellStyles.content + hideWhenPrintingWizard}>
++            <div className={shellStyles.content + hideWhenPrintingWizard} style={showTemplates ? { display: 'none' } : undefined}>
+                 <DataTable
+                     title={t('audit.listTitle')}
+                     columns={createColumns(handleEdit, handleDeleteClick, t, activeContractors, hasPermission('audit:delete:all'))}
+diff --git a/react-app/src/components/Audit/AuditTemplatesPanel.tsx b/react-app/src/components/Audit/AuditTemplatesPanel.tsx
+new file mode 100644
+index 00000000..bc393dd4
+--- /dev/null
++++ b/react-app/src/components/Audit/AuditTemplatesPanel.tsx
+@@ -0,0 +1,225 @@
++import React, { useEffect, useMemo, useState } from 'react';
++import { toast } from 'sonner';
++import { ArrowDown, ArrowUp, Check, Plus, Trash2, X } from 'lucide-react';
++import actionStyles from '../Shared/FormActions.module.css';
++import shellStyles from '../Shared/ModuleShell.module.css';
++import { useLeaveGuard } from '../Shared/LeaveGuard';
++import { useLanguage } from '../../context/LanguageContext';
++import { useAuditTemplateStore, AuditTemplate, AuditTemplateItem } from '../../store/auditTemplateStore';
++
++/**
++ * The audit template library's management tab (AUDIT-TEMPLATES-2026-001), shown on the Audit page to holders of
++ * audit:template:manage. A template is a name plus a list of check items ({no, clause, task}); the wizard copies the
++ * items into an audit when the template is selected, so saving here only changes what later selections copy.
++ * Templates are never deleted — clearing "Active" hides one from the wizard. Blank item rows are dropped on save.
++ */
++type DraftItem = AuditTemplateItem & { _key: string };
++interface Draft {
++    id: number | null;  // null = a new template not saved yet
++    name: string;
++    version: string;
++    description: string;
++    is_active: boolean;
++    items: DraftItem[];
++}
++
++let nextDraftKey = 0;
++const draftKey = () => `row-${nextDraftKey++}`;
++const blankItem = (): DraftItem => ({ _key: draftKey(), no: '', clause: '', task: '' });
++const isBlankItem = (i: AuditTemplateItem) => !i.no.trim() && !i.clause.trim() && !i.task.trim();
++const toDraft = (tpl: AuditTemplate | null): Draft => tpl
++    ? { id: tpl.id, name: tpl.name, version: tpl.version || '', description: tpl.description || '', is_active: tpl.is_active,
++        items: (tpl.items || []).map(i => ({ _key: i.id || draftKey(), id: i.id, no: i.no || '', clause: i.clause || '', task: i.task || '' })) }
++    : { id: null, name: '', version: '', description: '', is_active: true, items: [blankItem()] };
++// what the dirty check compares: the content, not the React row keys
++const comparable = (d: Draft | null) => d && JSON.stringify({ ...d, items: d.items.map(({ _key, ...rest }) => rest) });
++
++const INPUT = 'w-full px-3 py-2 bg-[#F5F7FA] border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none text-sm text-slate-800';
++const CELL_INPUT = 'w-full px-2 py-1.5 bg-[#F5F7FA] border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none text-sm text-slate-800';
++
++export default function AuditTemplatesPanel() {
++    const { t } = useLanguage();
++    const { templates, loading, error, fetchTemplates, createTemplate, updateTemplate } = useAuditTemplateStore();
++    const [showInactive, setShowInactive] = useState(false);
++    const [draft, setDraft] = useState<Draft | null>(null);
++    const [baseline, setBaseline] = useState<string | null>(null);
++    const [saving, setSaving] = useState(false);
++    const dirty = draft !== null && comparable(draft) !== baseline;
++    const guard = useLeaveGuard(dirty, saving);
++
++    useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
++
++    const visible = useMemo(() => templates.filter(tpl => showInactive || tpl.is_active || tpl.id === draft?.id),
++        [templates, showInactive, draft?.id]);
++
++    const open = (tpl: AuditTemplate | null) => guard.requestAction(() => {
++        const next = toDraft(tpl);
++        setDraft(next);
++        setBaseline(comparable(next));
++    });
++
++    const setField = <K extends keyof Draft>(field: K, value: Draft[K]) => setDraft(d => (d ? { ...d, [field]: value } : d));
++    const setItem = (key: string, field: 'no' | 'clause' | 'task', value: string) =>
++        setDraft(d => (d ? { ...d, items: d.items.map(i => (i._key === key ? { ...i, [field]: value } : i)) } : d));
++    const addItem = () => setDraft(d => (d ? { ...d, items: [...d.items, blankItem()] } : d));
++    const removeItem = (key: string) => setDraft(d => (d ? { ...d, items: d.items.filter(i => i._key !== key) } : d));
++    const moveItem = (index: number, by: -1 | 1) => setDraft(d => {
++        if (!d) return d;
++        const to = index + by;
++        if (to < 0 || to >= d.items.length) return d;
++        const items = [...d.items];
++        [items[index], items[to]] = [items[to], items[index]];
++        return { ...d, items };
++    });
++
++    const handleSave = async () => {
++        if (!draft) return;
++        if (!draft.name.trim()) { toast.error(t('audit.templates.nameRequired')); return; }
++        const kept = draft.items.filter(i => !isBlankItem(i));
++        const missing = kept.findIndex(i => !i.task.trim());
++        if (missing !== -1) {
++            toast.error(t('audit.templates.taskRequired').replace('{n}', String(draft.items.indexOf(kept[missing]) + 1)));
++            return;
++        }
++        const payload = {
++            name: draft.name.trim(), version: draft.version.trim(), description: draft.description, is_active: draft.is_active,
++            items: kept.map(({ _key, ...item }) => item),
++        };
++        setSaving(true);
++        try {
++            const saved = draft.id === null ? await createTemplate(payload) : await updateTemplate(draft.id, payload);
++            const next = toDraft(saved);
++            setDraft(next);
++            setBaseline(comparable(next));
++            toast.success(t('audit.templates.saved'));
++        } catch (err: any) {
++            toast.error(err?.message);
++        } finally {
++            setSaving(false);
++        }
++    };
++
++    const handleCancel = () => {
++        if (!draft) return;
++        const original = draft.id === null ? null : templates.find(tpl => tpl.id === draft.id) || null;
++        if (draft.id === null) {
++            guard.requestAction(() => { setDraft(null); setBaseline(null); });
++        } else {
++            guard.requestAction(() => { const next = toDraft(original); setDraft(next); setBaseline(comparable(next)); });
++        }
++    };
++
++    return (
++        <div className="grid grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)] gap-5 items-start" data-audit-templates>
++            {/* template list */}
++            <div className={shellStyles.content}>
++                <div className="flex items-center justify-between gap-2 mb-3">
++                    <h2 className="text-base font-bold text-slate-800">{t('audit.templates.listTitle')}</h2>
++                    <button className={actionStyles.secondary} type="button" onClick={() => open(null)} data-template-new>
++                        <Plus size={16} /> {t('audit.templates.new')}
++                    </button>
++                </div>
++                <label className="flex items-center gap-2 text-xs text-slate-500 mb-3">
++                    <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} />
++                    {t('audit.templates.showInactive')}
++                </label>
++                {error && <p className="text-sm text-red-600 mb-2">{t('audit.templates.loadFailed')}</p>}
++                <ul className="space-y-1.5">
++                    {visible.map(tpl => (
++                        <li key={tpl.id}>
++                            <button type="button" onClick={() => draft?.id !== tpl.id && open(tpl)} data-template-row={tpl.name}
++                                className={`w-full text-left px-3 py-2 rounded-lg border transition-colors ${draft?.id === tpl.id
++                                    ? 'border-teal-500 bg-teal-50' : 'border-slate-200 hover:bg-slate-50'}`}>
++                                <span className={`block text-sm font-semibold ${tpl.is_active ? 'text-slate-800' : 'text-slate-400'}`}>{tpl.name}</span>
++                                <span className="flex items-center gap-2 text-xs text-slate-500">
++                                    {t('audit.templates.itemCount').replace('{n}', String((tpl.items || []).length))}
++                                    {tpl.version && <span>· {tpl.version}</span>}
++                                    {!tpl.is_active && <span className="px-1.5 rounded bg-slate-200 text-slate-600">{t('audit.templates.inactive')}</span>}
++                                </span>
++                            </button>
++                        </li>
++                    ))}
++                    {!loading && visible.length === 0 && <li className="text-sm text-slate-400 py-4 text-center">{t('audit.templates.empty')}</li>}
++                </ul>
++            </div>
++
++            {/* editor */}
++            <div className={shellStyles.content} data-template-editor>
++                {!draft ? (
++                    <p className="text-sm text-slate-400 py-16 text-center">{t('audit.templates.selectHint')}</p>
++                ) : (
++                    <div className="space-y-4">
++                        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_160px] gap-3">
++                            <label className="block">
++                                <span className="block text-xs font-bold text-slate-500 mb-1">{t('audit.templates.name')} *</span>
++                                <input className={INPUT} value={draft.name} maxLength={100} onChange={e => setField('name', e.target.value)} data-template-name />
++                            </label>
++                            <label className="block">
++                                <span className="block text-xs font-bold text-slate-500 mb-1">{t('audit.templates.version')}</span>
++                                <input className={INPUT} value={draft.version} maxLength={50} onChange={e => setField('version', e.target.value)} />
++                            </label>
++                        </div>
++                        <label className="block">
++                            <span className="block text-xs font-bold text-slate-500 mb-1">{t('audit.templates.description')}</span>
++                            <textarea className={INPUT} rows={2} value={draft.description} onChange={e => setField('description', e.target.value)} />
++                        </label>
++                        <label className="flex items-center gap-2 text-sm text-slate-700">
++                            <input type="checkbox" checked={draft.is_active} onChange={e => setField('is_active', e.target.checked)} data-template-active />
++                            {t('audit.templates.active')}
++                        </label>
++
++                        <div>
++                            <span className="block text-xs font-bold text-slate-500 mb-2">{t('audit.templates.items')}</span>
++                            <div className="overflow-x-auto border border-slate-200 rounded-xl">
++                                <table className="w-full min-w-[760px] table-fixed text-left border-collapse" data-template-items>
++                                    <thead>
++                                        <tr className="bg-slate-50 border-b border-slate-200">
++                                            <th className="px-3 py-2.5 text-xs font-bold text-slate-500 w-[44px]">#</th>
++                                            <th className="px-3 py-2.5 text-xs font-bold text-slate-500 w-[120px]">{t('audit.templates.colNo')}</th>
++                                            <th className="px-3 py-2.5 text-xs font-bold text-slate-500 w-[32%]">{t('audit.templates.colClause')}</th>
++                                            <th className="px-3 py-2.5 text-xs font-bold text-slate-500">{t('audit.templates.colTask')} *</th>
++                                            <th className="px-2 py-2.5 w-[124px]" />
++                                        </tr>
++                                    </thead>
++                                    <tbody className="divide-y divide-slate-100">
++                                        {draft.items.map((item, index) => (
++                                            <tr key={item._key} data-template-item>
++                                                <td className="px-3 py-2 text-xs text-slate-400">{index + 1}</td>
++                                                <td className="px-3 py-2"><input className={CELL_INPUT} aria-label={t('audit.templates.colNo')} value={item.no} maxLength={50} onChange={e => setItem(item._key, 'no', e.target.value)} /></td>
++                                                <td className="px-3 py-2"><input className={CELL_INPUT} aria-label={t('audit.templates.colClause')} value={item.clause} maxLength={500} onChange={e => setItem(item._key, 'clause', e.target.value)} /></td>
++                                                <td className="px-3 py-2"><input className={CELL_INPUT} aria-label={t('audit.templates.colTask')} value={item.task} maxLength={2000} onChange={e => setItem(item._key, 'task', e.target.value)} /></td>
++                                                <td className="px-2 py-2">
++                                                    <div className="flex justify-end gap-1">
++                                                        <button className={actionStyles.icon} type="button" onClick={() => moveItem(index, -1)} disabled={index === 0} aria-label={t('audit.templates.moveUp')}><ArrowUp size={15} /></button>
++                                                        <button className={actionStyles.icon} type="button" onClick={() => moveItem(index, 1)} disabled={index === draft.items.length - 1} aria-label={t('audit.templates.moveDown')}><ArrowDown size={15} /></button>
++                                                        <button className={actionStyles.iconDanger} type="button" onClick={() => removeItem(item._key)} aria-label={t('audit.templates.removeItem')}><Trash2 size={15} /></button>
++                                                    </div>
++                                                </td>
++                                            </tr>
++                                        ))}
++                                        {draft.items.length === 0 && (
++                                            <tr><td colSpan={5} className="px-6 py-8 text-center text-slate-400 text-sm">{t('audit.templates.noItems')}</td></tr>
++                                        )}
++                                    </tbody>
++                                </table>
++                            </div>
++                            <button className={`${actionStyles.secondary} mt-3`} type="button" onClick={addItem} data-template-add-item>
++                                <Plus size={16} /> {t('audit.templates.addItem')}
++                            </button>
++                        </div>
++
++                        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
++                            <p className="text-xs text-slate-500 max-w-xl">{t('audit.templates.copyNote')}</p>
++                            <div className="flex gap-2 ml-auto">
++                                <button className={actionStyles.secondary} type="button" onClick={handleCancel} disabled={saving}><X size={16} /> {t('common.cancel')}</button>
++                                <button className={actionStyles.primary} type="button" onClick={handleSave} disabled={saving || !dirty} data-template-save>
++                                    <Check size={16} /> {saving ? t('common.saving') : t('common.save')}
++                                </button>
++                            </div>
++                        </div>
++                    </div>
++                )}
++            </div>
++        </div>
++    );
++}
+diff --git a/react-app/src/components/Audit/AuditWizard.tsx b/react-app/src/components/Audit/AuditWizard.tsx
+index 872abe93..897a2a51 100755
+--- a/react-app/src/components/Audit/AuditWizard.tsx
++++ b/react-app/src/components/Audit/AuditWizard.tsx
+@@ -10,6 +10,7 @@ import {
+   AlertCircle, Search, ShieldCheck, Printer, CalendarDays
+ } from 'lucide-react';
+ import { useAuditStore, AuditItem, AuditAgendaEntry } from '../../store/auditStore';
++import { useAuditTemplateStore, AuditTemplate } from '../../store/auditTemplateStore';
+ import { useContractorsStore } from '../../store/contractorsStore';
+ import { useProjectStore } from '../../store/projectStore';
+ import { useLanguage } from '../../context/LanguageContext';
+@@ -115,6 +116,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+   const activeContractors = useMemo(() => contractorOptions.filter(c => c.status === 'active'), [contractorOptions]);
+   const { projectList, fetchProjects, currentProject } = useProjectStore();
+   React.useEffect(() => { fetchProjects(); }, [fetchProjects]);
++  // The audit template library (AUDIT-TEMPLATES-2026-001), every template incl. inactive ones (see templateChips).
++  const { templates: libraryTemplates, loaded: templatesLoaded, error: templatesError, fetchTemplates } = useAuditTemplateStore();
++  React.useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
+ 
+   const [isSaving, setIsSaving] = useState(false);
+   const [saveError, setSaveError] = useState('');
+@@ -256,6 +260,58 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+     return [ALL_CATEGORY, ...Array.from(new Set(cats))] as string[];
+   }, [formData.customCheckItems]);
+ 
++  // Step 4 template chips (AUDIT-TEMPLATES-2026-001). A chip is selected when its name is in selected_templates (what
++  // the audit records and prints). Shown: the library's active templates, a deactivated one this audit still selects,
++  // and a selected name the library no longer has (an audit from before the library, or a renamed template) — that last
++  // kind can only be unselected.
++  const templateChips = useMemo(() => {
++    const chips: { key: string; name: string; template: AuditTemplate | null; selected: boolean }[] = [];
++    for (const tpl of libraryTemplates) {
++      const selected = formData.selectedTemplates.includes(tpl.name);
++      if (tpl.is_active || selected) chips.push({ key: `t-${tpl.id}`, name: tpl.name, template: tpl, selected });
++    }
++    for (const name of formData.selectedTemplates) {
++      if (!libraryTemplates.some(tpl => tpl.name === name)) chips.push({ key: `n-${name}`, name, template: null, selected: true });
++    }
++    return chips;
++  }, [libraryTemplates, formData.selectedTemplates]);
++  const templateNames = useMemo(() => new Map(libraryTemplates.map(tpl => [tpl.id, tpl.name])), [libraryTemplates]);
++
++  // Selecting a template COPIES its items into this audit, each tagged with templateId / templateItemId; items the audit
++  // already has from it are not copied again. Unselecting removes only the copied items that have no result (pass /
++  // fail) and no note yet — the filled ones stay, with a notice saying how many. Editing a template later never touches
++  // an audit: the copies are the audit's own items.
++  const toggleTemplate = (chip: typeof templateChips[number]) => {
++    const tpl = chip.template;
++    const items: any[] = formData.customCheckItems;
++    const isFilled = (item: any) => item?.status === 'pass' || item?.status === 'fail' || !!String(item?.note ?? '').trim();
++    const fill = (key: string, n: number) => t(key).replace('{n}', String(n)).replace('{name}', chip.name);
++    if (chip.selected) {
++      const copied = tpl ? items.filter(i => i?.templateId === tpl.id) : [];
++      const kept = copied.filter(isFilled).length;
++      setFormData(prev => ({
++        ...prev,
++        selectedTemplates: prev.selectedTemplates.filter((n: string) => n !== chip.name),
++        customCheckItems: tpl ? prev.customCheckItems.filter((i: any) => i?.templateId !== tpl.id || isFilled(i)) : prev.customCheckItems,
++      }));
++      if (copied.length > kept) toast.info(fill('audit.templates.removed', copied.length - kept));
++      if (kept) toast.warning(fill('audit.templates.keptFilled', kept));
++      return;
++    }
++    if (!tpl) return;
++    const have = new Set(items.filter(i => i?.templateId === tpl.id).map(i => String(i.templateItemId)));
++    const missing = (tpl.items || []).filter(it => !have.has(String(it.id)));
++    let nextId = Math.max(Date.now(), ...items.map(i => (typeof i?.id === 'number' ? i.id : 0))) + 1;
++    const copies = missing.map(it => ({ id: nextId++, no: it.no || '', clause: it.clause || '', task: it.task || '', templateId: tpl.id, templateItemId: it.id }));
++    setFormData(prev => ({
++      ...prev,
++      selectedTemplates: prev.selectedTemplates.includes(tpl.name) ? prev.selectedTemplates : [...prev.selectedTemplates, tpl.name],
++      customCheckItems: [...prev.customCheckItems, ...copies],
++    }));
++    if (copies.length) toast.success(fill('audit.templates.added', copies.length));
++    else toast.info(fill((tpl.items || []).length ? 'audit.templates.allPresent' : 'audit.templates.nothingToAdd', 0));
++  };
++
+   const stats = useMemo(() => {
+     const total = formData.customCheckItems.length;
+     const passed = formData.customCheckItems.filter((i: any) => i.status === 'pass').length;
+@@ -855,23 +911,22 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                        <span className="text-xs font-medium text-slate-400">(選用標準模板)</span>
+                   </label>
+                   <div className="flex flex-wrap gap-3">
+-                    {['ISO 9001:2015', 'ISO 45001', '品質管理程序書', '供應商評鑑表'].map((template) => (
++                    {templateChips.map((chip) => (
+                       <button
+-                        key={template} type="button"
+-                        onClick={() => {
+-                          const exists = formData.selectedTemplates.includes(template);
+-                          setFormData((prev: any) => ({
+-                            ...prev,
+-                            selectedTemplates: exists ? prev.selectedTemplates.filter((t: string) => t !== template) : [...prev.selectedTemplates, template]
+-                          }));
+-                        }}
++                        key={chip.key} type="button" data-template-chip={chip.name} aria-pressed={chip.selected}
++                        title={chip.template ? (chip.template.description || undefined) : t('audit.templates.legacyHint')}
++                        onClick={() => toggleTemplate(chip)}
+                         className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all border ${
+-                          formData.selectedTemplates.includes(template) ? 'bg-teal-600 border-teal-600 text-white shadow-md' : 'bg-transparent border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
++                          chip.selected ? 'bg-teal-600 border-teal-600 text-white shadow-md' : 'bg-transparent border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                         }`}
+                       >
+-                        {template}
++                        {chip.name}
++                        {chip.template && !chip.template.is_active && <span className="ml-1 font-medium opacity-80">{t('audit.templates.inactiveSuffix')}</span>}
+                       </button>
+                     ))}
++                    {templateChips.length === 0 && (templatesLoaded || templatesError) && (
++                      <span className="text-sm text-slate-400">{t(templatesError ? 'audit.templates.loadFailed' : 'audit.templates.noneAvailable')}</span>
++                    )}
+                   </div>
+                 </fieldset>
+ 
+@@ -940,6 +995,11 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+                                 <div className="w-1/3 shrink-0">
+                                   <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block mb-1">條文編號 Clause No.</span>
+                                   <p className="text-sm font-semibold text-teal-700 bg-teal-50 inline-block px-2 py-1 rounded">{item.no || '-'}</p>
++                                  {item.templateId != null && (
++                                    <span className="block mt-1 text-[11px] text-slate-400" data-item-template>
++                                      {t('audit.templates.fromTemplate')}{templateNames.has(item.templateId) ? `：${templateNames.get(item.templateId)}` : ''}
++                                    </span>
++                                  )}
+                                 </div>
+                                 <div className="flex-1">
+                                   <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Clause Description</span>
+diff --git a/react-app/src/context/LanguageContext.tsx b/react-app/src/context/LanguageContext.tsx
+index c9d83c98..0ee01bfc 100644
+--- a/react-app/src/context/LanguageContext.tsx
++++ b/react-app/src/context/LanguageContext.tsx
+@@ -934,6 +934,42 @@ const translations: Record<Language, Record<string, string>> = {
+     'audit.agenda.addRow': 'Add row',
+     'audit.agenda.timeOrder': 'An end time is earlier than its start time. Fix it before saving.',
+     'audit.agenda.outsidePeriod': 'Some dates are outside the audit period (start to end date). The agenda can still be saved.',
++    'audit.tabRecords': 'Audits',
++    'audit.tabTemplates': 'Templates',
++    'audit.templates.listTitle': 'Audit templates',
++    'audit.templates.new': 'New template',
++    'audit.templates.showInactive': 'Show inactive',
++    'audit.templates.inactive': 'Inactive',
++    'audit.templates.itemCount': '{n} items',
++    'audit.templates.empty': 'No templates yet.',
++    'audit.templates.selectHint': 'Select a template on the left, or create a new one.',
++    'audit.templates.name': 'Template name',
++    'audit.templates.version': 'Version',
++    'audit.templates.description': 'Description',
++    'audit.templates.active': 'Active (offered in the audit wizard)',
++    'audit.templates.items': 'Check items',
++    'audit.templates.colNo': 'Clause No.',
++    'audit.templates.colClause': 'Clause',
++    'audit.templates.colTask': 'Audit question',
++    'audit.templates.addItem': 'Add item',
++    'audit.templates.removeItem': 'Remove item',
++    'audit.templates.moveUp': 'Move up',
++    'audit.templates.moveDown': 'Move down',
++    'audit.templates.noItems': 'No check items yet. Add the questions this template should bring into an audit.',
++    'audit.templates.nameRequired': 'Enter a template name.',
++    'audit.templates.taskRequired': 'Every item needs an audit question (row {n}).',
++    'audit.templates.saved': 'Template saved.',
++    'audit.templates.copyNote': 'Changes apply to audits that select this template from now on. Audits that already copied its items keep them unchanged.',
++    'audit.templates.loadFailed': 'Could not load the audit templates.',
++    'audit.templates.noneAvailable': 'No templates in the library yet.',
++    'audit.templates.legacyHint': 'No longer in the template library (selected on an older version of this audit).',
++    'audit.templates.inactiveSuffix': '(inactive)',
++    'audit.templates.added': 'Added {n} item(s) from {name}.',
++    'audit.templates.nothingToAdd': '{name} has no check items yet.',
++    'audit.templates.allPresent': 'All items of {name} are already in this audit.',
++    'audit.templates.removed': 'Removed {n} unfilled item(s) from {name}.',
++    'audit.templates.keptFilled': 'Kept {n} item(s) from {name} that already have a result or note.',
++    'audit.templates.fromTemplate': 'From template',
+     'audit.wizard.selectProject': '-- Select Project --',
+     'audit.wizard.selectContractor': '-- Select Contractor --',
+     'audit.wizard.allCategories': 'All',
+@@ -2471,6 +2507,42 @@ const translations: Record<Language, Record<string, string>> = {
+     'audit.agenda.addRow': '新增一列',
+     'audit.agenda.timeOrder': '有時段的結束時間早於開始時間，請修正後再儲存。',
+     'audit.agenda.outsidePeriod': '部分日期不在稽核期間（開始～結束日期）內，仍可儲存。',
++    'audit.tabRecords': '稽核記錄',
++    'audit.tabTemplates': '模板管理',
++    'audit.templates.listTitle': '稽核模板',
++    'audit.templates.new': '新增模板',
++    'audit.templates.showInactive': '顯示已停用',
++    'audit.templates.inactive': '已停用',
++    'audit.templates.itemCount': '{n} 項',
++    'audit.templates.empty': '目前沒有模板。',
++    'audit.templates.selectHint': '請從左側選擇模板，或新增一個。',
++    'audit.templates.name': '模板名稱',
++    'audit.templates.version': '版本',
++    'audit.templates.description': '說明',
++    'audit.templates.active': '啟用（稽核精靈可選用）',
++    'audit.templates.items': '查檢項目',
++    'audit.templates.colNo': '條文編號',
++    'audit.templates.colClause': '條文內容',
++    'audit.templates.colTask': '稽核查檢重點',
++    'audit.templates.addItem': '新增項目',
++    'audit.templates.removeItem': '刪除此項',
++    'audit.templates.moveUp': '上移',
++    'audit.templates.moveDown': '下移',
++    'audit.templates.noItems': '尚無查檢項目，請新增這個模板要帶入稽核的查檢重點。',
++    'audit.templates.nameRequired': '請輸入模板名稱。',
++    'audit.templates.taskRequired': '每一項都要填寫稽核查檢重點（第 {n} 列）。',
++    'audit.templates.saved': '模板已儲存。',
++    'audit.templates.copyNote': '修改只影響之後選用這個模板的稽核；已經帶入項目的稽核維持原樣。',
++    'audit.templates.loadFailed': '無法載入稽核模板。',
++    'audit.templates.noneAvailable': '模板庫目前沒有模板。',
++    'audit.templates.legacyHint': '模板庫已沒有這個模板（這筆稽核以前選用的）。',
++    'audit.templates.inactiveSuffix': '（已停用）',
++    'audit.templates.added': '已從 {name} 帶入 {n} 項。',
++    'audit.templates.nothingToAdd': '{name} 目前沒有查檢項目。',
++    'audit.templates.allPresent': '{name} 的項目都已在這筆稽核中。',
++    'audit.templates.removed': '已移除 {name} 尚未填寫的 {n} 項。',
++    'audit.templates.keptFilled': '{name} 有 {n} 項已填寫結果或備註，予以保留。',
++    'audit.templates.fromTemplate': '來自模板',
+     'audit.wizard.selectProject': '-- 請選擇專案 --',
+     'audit.wizard.selectContractor': '-- 請選擇受稽核廠商 --',
+     'audit.wizard.allCategories': '全部',
+diff --git a/react-app/src/store/auditTemplateStore.ts b/react-app/src/store/auditTemplateStore.ts
+new file mode 100644
+index 00000000..028972c4
+--- /dev/null
++++ b/react-app/src/store/auditTemplateStore.ts
+@@ -0,0 +1,85 @@
++import { create } from 'zustand';
++import api from '../services/api';
++import { getErrorMessage } from '../utils/errorUtils';
++
++// The audit template library (AUDIT-TEMPLATES-2026-001). A template's items are COPIED into an audit when it is
++// selected in the wizard (each copy tagged templateId / templateItemId), so editing a template never changes an
++// existing audit. Templates are never deleted: is_active=false hides one from the wizard.
++export interface AuditTemplateItem {
++    id?: string;  // stable key assigned by the server; a new item has none
++    no: string;
++    clause: string;
++    task: string;
++}
++
++export interface AuditTemplate {
++    id: number;
++    name: string;
++    description: string;
++    version: string;
++    is_active: boolean;
++    items: AuditTemplateItem[];
++    created_at?: string;
++    updated_at?: string;
++}
++
++export type AuditTemplateInput = Pick<AuditTemplate, 'name' | 'description' | 'version' | 'is_active' | 'items'>;
++
++interface AuditTemplateState {
++    // every template, active or not (the wizard shows the active ones plus any the audit already uses)
++    templates: AuditTemplate[];
++    loading: boolean;
++    loaded: boolean;
++    error: string | null;
++    fetchTemplates: () => Promise<void>;
++    createTemplate: (data: AuditTemplateInput) => Promise<AuditTemplate>;
++    updateTemplate: (id: number, data: Partial<AuditTemplateInput>) => Promise<AuditTemplate>;
++}
++
++let templateFetchSeq = 0;
++
++const upsert = (list: AuditTemplate[], tpl: AuditTemplate) =>
++    list.some(t => t.id === tpl.id) ? list.map(t => (t.id === tpl.id ? tpl : t)) : [...list, tpl];
++
++export const useAuditTemplateStore = create<AuditTemplateState>((set) => ({
++    templates: [],
++    loading: false,
++    loaded: false,
++    error: null,
++
++    fetchTemplates: async () => {
++        const seq = ++templateFetchSeq;
++        set({ loading: true, error: null });
++        try {
++            const response = await api.get('/audit/templates', { params: { include_inactive: true } });
++            if (seq !== templateFetchSeq) return;
++            set({ templates: Array.isArray(response.data) ? response.data : [], loading: false, loaded: true });
++        } catch (err: any) {
++            if (seq !== templateFetchSeq) return;
++            console.error('Failed to fetch audit templates:', err);
++            set({ loading: false, error: getErrorMessage(err, 'Failed to load audit templates') });
++        }
++    },
++
++    createTemplate: async (data) => {
++        try {
++            const response = await api.post('/audit/templates', data);
++            set(state => ({ templates: upsert(state.templates, response.data) }));
++            return response.data;
++        } catch (err: any) {
++            console.error('Failed to create audit template:', err);
++            throw new Error(getErrorMessage(err, 'Failed to create the template'));
++        }
++    },
++
++    updateTemplate: async (id, data) => {
++        try {
++            const response = await api.put(`/audit/templates/${id}`, data);
++            set(state => ({ templates: upsert(state.templates, response.data) }));
++            return response.data;
++        } catch (err: any) {
++            console.error('Failed to update audit template:', err);
++            throw new Error(getErrorMessage(err, 'Failed to save the template'));
++        }
++    },
++}));
+diff --git a/react-app/tests-browser/audit-templates-check.mjs b/react-app/tests-browser/audit-templates-check.mjs
+new file mode 100644
+index 00000000..94b845de
+--- /dev/null
++++ b/react-app/tests-browser/audit-templates-check.mjs
+@@ -0,0 +1,204 @@
++// AUDIT-TEMPLATES-2026-001 browser checks (isolated stack only; seeds: seed_audit_hardening_b_review.py,
++// seed_audit_templates_review.py). Usage: node audit-templates-check.mjs <stack.json> <outDir>
++import { chromium } from '/Users/nook/Documents/Qualitas/react-app/node_modules/playwright/index.mjs';
++import { readFileSync, mkdirSync } from 'node:fs';
++const stack = JSON.parse(readFileSync(process.argv[2], 'utf8'));
++const out = process.argv[3]; mkdirSync(out, { recursive: true });
++const UI = `http://127.0.0.1:${stack.vite_port}`, PW = 'Accept-Test-1234';
++const INITIAL = ['ISO 9001:2015', 'ISO 45001', '品質管理程序書', '供應商評鑑表'];
++let failures = 0;
++const result = (name, ok, extra = '') => { if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${extra ? '  -> ' + String(extra).replace(/\s+/g, ' ').slice(0, 400) : ''}`); };
++const browser = await chromium.launch({ headless: true });
++
++async function login(user, language = 'zh') {
++  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
++  await ctx.addInitScript(lang => { localStorage.setItem('language', lang); }, language);
++  const p = await ctx.newPage();
++  await p.goto(UI + '/login'); await p.fill('#email', user); await p.fill('#password', PW); await p.click('button[type=submit]');
++  await p.waitForURL(u => !u.pathname.startsWith('/login'), { timeout: 15000 });
++  return p;
++}
++const api = (p, method, path, body) => p.evaluate(async ([m, u, b]) => {
++  const csrf = (document.cookie.match(/(?:^|; )csrf_token=([^;]*)/) || [])[1];
++  const headers = { ...(b ? { 'Content-Type': 'application/json' } : {}), ...(csrf ? { 'X-CSRF-Token': decodeURIComponent(csrf) } : {}) };
++  const r = await fetch('/api' + u, { method: m, credentials: 'include', headers, body: b ? JSON.stringify(b) : undefined });
++  return { status: r.status, body: await r.json().catch(() => null) };
++}, [method, path, body]);
++const open = async (p, id) => { await p.goto(UI + `/audit?openId=${id}`); await p.waitForSelector('input[name=auditDocNo]', { timeout: 15000 }); };
++const step = async (p, n) => { await p.locator('.max-w-4xl button').nth(n - 1).click(); await p.waitForTimeout(400); };
++const chips = p => p.$$eval('[data-template-chip]', els => els.map(e => ({ name: e.dataset.templateChip, on: e.getAttribute('aria-pressed') === 'true', text: e.innerText.trim() })));
++const chip = (p, name) => p.locator(`[data-template-chip="${name}"]`);
++const itemCards = p => p.locator('.custom-scrollbar > div.group').count();
++const toasts = async p => { const t = await p.$$eval('[data-sonner-toast]', els => els.map(e => e.innerText.trim())); return t; };
++// waits up to 4s for a toast whose text contains every given fragment (sonner keeps recent toasts on screen)
++const sawToast = (p, ...parts) => p.waitForFunction(ps => [...document.querySelectorAll('[data-sonner-toast]')].some(e => ps.every(x => e.innerText.includes(x))),
++  parts, { timeout: 4000 }).then(() => true, () => false);
++const saveDraft = async p => { await p.locator('button', { hasText: /儲存草稿/ }).first().click(); await p.waitForTimeout(1500); };
++
++// 1. without audit:template:manage: no tab, templates readable (wizard), not writable
++{
++  const p = await login('audit_full');
++  await p.goto(UI + '/audit'); await p.waitForSelector('table tbody tr', { timeout: 15000 });
++  result('no manage permission: no 模板管理 tab', await p.locator('[data-audit-tab]').count() === 0);
++  const list = await api(p, 'GET', '/audit/templates');
++  result('no manage permission: GET /audit/templates = the 4 initial templates', list.status === 200 && JSON.stringify(list.body.map(t => t.name)) === JSON.stringify(INITIAL), JSON.stringify(list.body?.map?.(t => t.name)));
++  const iso = list.body.find(t => t.name === 'ISO 9001:2015');
++  result('ISO 9001:2015 starts with the 20 clauses (4.1 … 10.3)', iso.items.length === 20 && iso.items[0].no === '4.1' && iso.items[19].no === '10.3', iso.items.map(i => i.no).join(','));
++  const post = await api(p, 'POST', '/audit/templates', { name: 'Nope', items: [] });
++  result('no manage permission: POST refused (403, missing permission — not CSRF)', post.status === 403 && /audit:template:manage|permission/i.test(JSON.stringify(post.body)) && !/csrf/i.test(JSON.stringify(post.body)), JSON.stringify(post));
++  await open(p, 'ahb-tpl-1'); await step(p, 4);
++  const c = await chips(p);
++  result('no manage permission: wizard step 4 offers the 4 templates, none selected', JSON.stringify(c.map(x => x.name)) === JSON.stringify(INITIAL) && c.every(x => !x.on), JSON.stringify(c));
++  await p.context().close();
++}
++
++// 2. template management tab
++{
++  const p = await login('audit_tpl_mgr');
++  await p.goto(UI + '/audit'); await p.waitForSelector('[data-audit-tab=templates]', { timeout: 15000 });
++  const tabs = await p.$$eval('[data-audit-tab]', els => els.map(e => e.innerText.trim()));
++  result('manager: tabs 稽核記錄 / 模板管理', JSON.stringify(tabs) === '["稽核記錄","模板管理"]', JSON.stringify(tabs));
++  await p.locator('[data-audit-tab=templates]').click();
++  await p.waitForSelector('[data-template-row]');
++  const rows = await p.$$eval('[data-template-row]', els => els.map(e => e.dataset.templateRow));
++  const listHidden = await p.evaluate(() => ![...document.querySelectorAll('tbody tr')].some(tr => !tr.closest('[data-audit-templates]') && tr.offsetParent !== null));
++  result('templates tab lists the 4 initial templates; the audit list is hidden', JSON.stringify(rows) === JSON.stringify(INITIAL) && listHidden, JSON.stringify({ rows, listHidden }));
++  await p.locator('[data-template-row="ISO 9001:2015"]').click();
++  result('ISO 9001:2015 opens with 20 item rows', await p.locator('[data-template-item]').count() === 20);
++  await p.screenshot({ path: `${out}/templates-tab-iso.png` });
++
++  // new template
++  await p.locator('[data-template-new]').click();
++  await p.fill('[data-template-name]', 'Site QA');
++  const r1 = p.locator('[data-template-item]').nth(0).locator('input');
++  await r1.nth(2).fill('Is the site tidy?');
++  await p.locator('[data-template-add-item]').click();
++  const r2 = p.locator('[data-template-item]').nth(1).locator('input');
++  await r2.nth(0).fill('8.5'); await r2.nth(1).fill('Production and service provision'); await r2.nth(2).fill('Are work instructions at the workplace?');
++  await p.locator('[data-template-add-item]').click();   // a blank third row is dropped on save
++  await p.locator('[data-template-save]').click(); await p.waitForTimeout(1000);
++  const created = (await api(p, 'GET', '/audit/templates')).body.find(t => t.name === 'Site QA');
++  result('new template saved with 2 items (blank row dropped), each with a server id', created && created.items.length === 2 && created.items.every(i => i.id)
++    && await sawToast(p, '模板已儲存'), JSON.stringify(created?.items));
++  result('the new template appears in the list', (await p.$$eval('[data-template-row]', els => els.map(e => e.dataset.templateRow))).includes('Site QA'));
++
++  // a duplicate name is refused
++  await p.locator('[data-template-new]').click();
++  await p.fill('[data-template-name]', ' site qa ');
++  await p.locator('[data-template-item]').nth(0).locator('input').nth(2).fill('x');
++  await p.locator('[data-template-save]').click(); await p.waitForTimeout(800);
++  result('a duplicate name (other case, spaces) is refused with a message', await sawToast(p, 'already exists'), JSON.stringify(await toasts(p)));
++
++  // unsaved edits: switching to another template asks first; switching tabs keeps them
++  await p.locator('[data-template-row="ISO 45001"]').click(); await p.waitForTimeout(300);
++  const asked = await p.getByText('未儲存', { exact: false }).first().isVisible().catch(() => false);
++  await p.locator('button', { hasText: '離開' }).first().click(); await p.waitForTimeout(300);
++  result('switching away from an unsaved new template asks first', asked);
++  await p.fill('[data-template-name]', 'ISO 45001 edited');
++  await p.locator('[data-audit-tab=records]').click(); await p.waitForTimeout(300);
++  const listShown = await p.evaluate(() => [...document.querySelectorAll('tbody tr')].some(tr => !tr.closest('[data-audit-templates]') && tr.offsetParent !== null));
++  await p.locator('[data-audit-tab=templates]').click(); await p.waitForTimeout(300);
++  const keptName = await p.inputValue('[data-template-name]');
++  result('switching to 稽核記錄 and back keeps the unsaved edit', listShown && keptName === 'ISO 45001 edited', JSON.stringify({ listShown, keptName }));
++  await p.fill('[data-template-name]', 'ISO 45001');
++  result('typing the original name back is no change (Save disabled)', await p.locator('[data-template-save]').isDisabled());
++
++  // deactivate 供應商評鑑表
++  await p.locator('[data-template-row="供應商評鑑表"]').click(); await p.waitForTimeout(200);
++  await p.locator('[data-template-active]').uncheck();
++  await p.locator('[data-template-save]').click(); await p.waitForTimeout(800);
++  await p.locator('[data-template-row="ISO 45001"]').click(); await p.waitForTimeout(200);
++  const afterDeactivate = await p.$$eval('[data-template-row]', els => els.map(e => e.dataset.templateRow));
++  await p.getByText('顯示已停用').click(); await p.waitForTimeout(200);
++  const withInactive = await p.$$eval('[data-template-row]', els => els.map(e => e.dataset.templateRow));
++  result('a deactivated template leaves the list, "顯示已停用" shows it again', !afterDeactivate.includes('供應商評鑑表') && withInactive.includes('供應商評鑑表'),
++    JSON.stringify({ afterDeactivate, withInactive }));
++  await p.screenshot({ path: `${out}/templates-tab-inactive.png` });
++  await p.context().close();
++}
++
++// 3. wizard step 4: select copies, unselect removes only unfilled items, no duplicates, save keeps the tags
++{
++  const p = await login('audit_tpl_mgr');
++  await open(p, 'ahb-tpl-1'); await step(p, 4);
++  const c = await chips(p);
++  result('wizard chips: active templates only (供應商評鑑表 deactivated)', JSON.stringify(c.map(x => x.name)) === JSON.stringify(['ISO 9001:2015', 'ISO 45001', '品質管理程序書', 'Site QA']), JSON.stringify(c));
++  await chip(p, 'ISO 9001:2015').click(); await p.waitForTimeout(300);
++  result('select ISO 9001:2015: 20 items copied, chip on, notice', await itemCards(p) === 20 && (await chips(p))[0].on && await sawToast(p, '帶入 20 項'), JSON.stringify(await toasts(p)));
++  await p.screenshot({ path: `${out}/wizard-step4-selected.png` });
++  await chip(p, 'ISO 9001:2015').click(); await p.waitForTimeout(300);
++  result('unselect (nothing filled): all 20 removed', await itemCards(p) === 0 && !(await chips(p))[0].on && await sawToast(p, '已移除', '20 項'), JSON.stringify(await toasts(p)));
++  await chip(p, 'ISO 9001:2015').click(); await p.waitForTimeout(300);
++  // fill item 1 (Pass) and item 2 (a note) in step 5
++  await step(p, 5);
++  const resultRows = p.locator('tr', { has: p.locator('button[title="符合 (Pass)"]') });
++  await resultRows.nth(0).locator('button[title="符合 (Pass)"]').click();
++  await resultRows.nth(1).locator('textarea').fill('checked on site');
++  await step(p, 4);
++  await chip(p, 'ISO 9001:2015').click(); await p.waitForTimeout(300);
++  result('unselect with 2 filled: 18 removed, 2 kept, both notices', await itemCards(p) === 2 && await sawToast(p, '已移除', '18 項') && await sawToast(p, '2 項已填寫'), JSON.stringify(await toasts(p)));
++  await p.screenshot({ path: `${out}/wizard-step4-kept.png` });
++  await chip(p, 'ISO 9001:2015').click(); await p.waitForTimeout(300);
++  result('select again: only the 18 missing items are added (20, no duplicates)', await itemCards(p) === 20);
++  await chip(p, 'Site QA').click(); await p.waitForTimeout(300);
++  result('a second template adds its 2 items', await itemCards(p) === 22);
++  const badge = await p.locator('[data-item-template]').first().innerText();
++  result('copied items show their template', badge.includes('ISO 9001:2015'), badge);
++  await saveDraft(p);
++  const saved = (await api(p, 'GET', '/audit/ahb-tpl-1')).body;
++  const items = saved.custom_check_items;
++  const isoKeys = items.filter(i => i.templateId && i.templateItemId?.startsWith('iso9001-')).map(i => i.templateItemId);
++  result('saved: selected_templates + 22 items tagged templateId / templateItemId, filled ones intact',
++    JSON.stringify(saved.selected_templates) === '["ISO 9001:2015","Site QA"]' && items.length === 22 && items.every(i => i.templateId && i.templateItemId)
++    && new Set(isoKeys).size === 20 && items.some(i => i.status === 'pass') && items.some(i => i.note === 'checked on site'),
++    JSON.stringify({ sel: saved.selected_templates, n: items.length }));
++
++  // editing the template afterwards does not touch the audit
++  const tpls = (await api(p, 'GET', '/audit/templates')).body;
++  const iso = tpls.find(t => t.name === 'ISO 9001:2015');
++  const edit = await api(p, 'PUT', `/audit/templates/${iso.id}`, { items: [{ ...iso.items[0], task: 'CHANGED' }] });
++  const site = tpls.find(t => t.name === 'Site QA');
++  const deact = await api(p, 'PUT', `/audit/templates/${site.id}`, { is_active: false });
++  const again = (await api(p, 'GET', '/audit/ahb-tpl-1')).body;
++  result('template edited (1 item) + Site QA deactivated: the audit keeps its 22 items unchanged',
++    edit.status === 200 && deact.status === 200 && JSON.stringify(again.custom_check_items) === JSON.stringify(items), JSON.stringify({ edit: edit.status, deact: deact.status }));
++  await open(p, 'ahb-tpl-1'); await step(p, 4);
++  const c2 = await chips(p);
++  const siteChip = c2.find(x => x.name === 'Site QA');
++  result('reopened: ISO + Site QA selected; the deactivated Site QA still shown (marked) because it is selected',
++    c2.find(x => x.name === 'ISO 9001:2015')?.on && siteChip?.on && siteChip.text.includes('已停用'), JSON.stringify(c2));
++  await chip(p, 'Site QA').click(); await p.waitForTimeout(300);
++  result('unselecting the deactivated template removes its items and its chip', await itemCards(p) === 20 && !(await chips(p)).some(x => x.name === 'Site QA'));
++  await p.context().close();
++}
++
++// 4. an audit from before the library (names only)
++{
++  const p = await login('audit_tpl_mgr');
++  await open(p, 'ahb-tpl-legacy-1'); await step(p, 4);
++  const c = await chips(p);
++  result('legacy audit: ISO 9001:2015 selected by name, "Old supplier form" shown selected', c.find(x => x.name === 'ISO 9001:2015')?.on && c.find(x => x.name === 'Old supplier form')?.on, JSON.stringify(c));
++  await chip(p, 'Old supplier form').click(); await p.waitForTimeout(300);
++  result('unselecting a name the library does not have removes only the name', !(await chips(p)).some(x => x.name === 'Old supplier form') && await itemCards(p) === 1);
++  await chip(p, 'ISO 9001:2015').click(); await p.waitForTimeout(300);
++  result('unselecting ISO (no copied items): the hand-added item stays', await itemCards(p) === 1 && !(await chips(p)).find(x => x.name === 'ISO 9001:2015').on);
++  await chip(p, 'ISO 9001:2015').click(); await p.waitForTimeout(300);
++  // section 3 cut the ISO template down to one (edited) item: a new selection copies the template as it is now
++  const isoNow = (await api(p, 'GET', '/audit/templates')).body.find(t => t.name === 'ISO 9001:2015');
++  const lastTask = await p.locator('.custom-scrollbar > div.group').last().innerText();
++  result('selecting it again copies the template as it is now (1 edited item)', isoNow.items.length === 1 && await itemCards(p) === 2 && lastTask.includes('CHANGED'));
++  await p.context().close();
++}
++
++// 5. English labels
++{
++  const p = await login('audit_tpl_mgr', 'en');
++  await p.goto(UI + '/audit'); await p.waitForSelector('[data-audit-tab]');
++  const tabs = await p.$$eval('[data-audit-tab]', els => els.map(e => e.innerText.trim()));
++  result('English: tabs Audits / Templates', JSON.stringify(tabs) === '["Audits","Templates"]', JSON.stringify(tabs));
++  await p.context().close();
++}
++
++await browser.close();
++console.log(failures ? `${failures} FAILED` : 'ALL PASS');
++process.exit(failures ? 1 : 0);

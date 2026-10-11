@@ -1,0 +1,4 @@
+# 2026-10-11T09:20:53Z TEMPLATES FINAL candidate = AUDIT-BTNFIX cand-final (live AGENDA + NOI + BUTTONS + BTNFIX) + G.patch 37a590e2 (excluding DECISIONS.md and tests-browser/audit-all-buttons-check.mjs, not in the live tree)
+tsc exit=0
+npm test exit=0 (ℹ tests 148 ℹ pass 148 ℹ fail 0 )
+npm run build exit=0
