@@ -384,3 +384,258 @@ class MeetingMinutesService:
         except Exception as e:
             logger.error(f"Error deleting Meeting Minutes {meeting_id}: {e}", exc_info=True)
             raise e
+
+    def export_docx(self, meeting_id: str, scope=None):
+        """Word (.docx) copy of the printed minutes (MEETING-TABS-2026-001 R15, user 2026-10-11: "要補word匯出").
+
+        Same content and order as MeetingMinutesPrintTemplate.tsx: masthead (number, rev, status), basic information
+        and attendees, the discussion register (two- and three-level; items with raised date, text, progress notes in
+        date order, Action by, target date and status), the attachment list, sign-off — portrait A4 — and then the
+        photo appendix: the images on the Attachments tab, landscape A4, four (2 × 2) per page (user decision
+        2026-10-11). Built with core/docx_builder.py like the NOI / ITR / NCR / Audit exports.
+
+        Raises ValueError (-> 404 in the router) when the meeting does not exist or is outside the caller's scope.
+        """
+        from docx.enum.section import WD_ORIENT, WD_SECTION
+        from docx.shared import Cm
+        from core import docx_builder as db
+        from core.uploads import upload_root as _upload_root
+
+        meeting = self.get_meeting_minutes(meeting_id, scope=scope)
+        if not meeting:
+            raise ValueError("Meeting Minutes not found")
+
+        def _json_list(raw):
+            try:
+                value = json.loads(raw) if isinstance(raw, str) else raw
+            except (TypeError, ValueError):
+                return []
+            return value if isinstance(value, list) else []
+
+        attendees = [{k: _text(a.get(k)) for k in ("company", "name", "role")} for a in _json_list(meeting.attendees) if isinstance(a, dict)]
+        register = minutes_register(meeting.discussionLog)
+        upload_root = _upload_root()
+        files = self.repo.db.query(models.Attachment).filter(
+            models.Attachment.entity_type == "meeting",
+            models.Attachment.entity_id == meeting.id,
+            models.Attachment.category == "attachment",
+            models.Attachment.is_deleted == False,  # noqa: E712
+        ).all()
+        # upload order, as on the printed photo pages (photo numbers follow the order they were added)
+        files.sort(key=lambda f: f.uploaded_at or "")
+        photos = [f for f in files if _is_image(f)]
+        doc_ref = f"{meeting.documentNumber or ''}{f' ({meeting.rev})' if meeting.rev else ''}"
+
+        doc = db.new_document()
+        section = doc.sections[0]
+        section.orientation = WD_ORIENT.PORTRAIT
+        section.page_width, section.page_height = Cm(21), Cm(29.7)
+        db.add_masthead(doc, "會議記錄", "MEETING MINUTES", doc_no=meeting.documentNumber, rev=meeting.rev,
+                        status=meeting.status or "Draft")
+
+        # 1. Basic information + attendees (SUBJECT / DATE & TYPE / VENUE & TIME / RECORDED BY / ATTENDEES)
+        db.add_section_heading(doc, "1", "基本資料", "Basic Information")
+        time_range = " ~ ".join(t for t in (meeting.meetingTime, meeting.meetingEndTime) if t)
+        db.add_field_grid(doc, [
+            [("主題", "SUBJECT", meeting.title)],
+            [("日期／類型", "DATE / TYPE", "　".join(x for x in (format_minutes_date(meeting.meetingDate), meeting.meetingType) if x)),
+             ("廠商", "CONTRACTOR", meeting.vendor)],
+            [("地點與時間", "VENUE & TIME", "　".join(x for x in (meeting.location, time_range) if x) or None),
+             ("記錄人", "RECORDED BY", meeting.organizer)],
+        ])
+        db.add_subsection_heading(doc, "出席人員", "Attendees")
+        if attendees:
+            db.add_data_table(doc, ["公司 Company", "姓名 Name", "職稱 Position"],
+                              [[a.get("company") or db.DASH, a.get("name") or db.DASH, a.get("role") or db.DASH] for a in attendees])
+        else:
+            db.add_paragraph(doc, "（無資料 No attendees）", size=9, italic=True)
+
+        # 2. Discussions / actions
+        db.add_section_heading(doc, "2", "討論事項", "Discussions / Actions")
+        _add_register_table(doc, register)
+
+        # 3. Attachments
+        db.add_section_heading(doc, "3", "附件", "Attachments")
+        if files:
+            for i, f in enumerate(files, start=1):
+                note = f"　（照片 {photos.index(f) + 1}，見照片附錄 See photo appendix）" if f in photos else ""
+                db.add_paragraph(doc, f"{i}. {f.file_name}{note}", size=9.5)
+        else:
+            db.add_paragraph(doc, "（無附件 No attachments）", size=9, italic=True)
+
+        # 4. Sign-off
+        db.add_section_heading(doc, "4", "簽核", "Sign-off")
+        db.add_sign_off_grid(doc, [
+            {"num": "4.1", "zh": "記錄人", "en": "Recorded By", "name": meeting.organizer, "date": format_minutes_date(meeting.meetingDate)},
+            {"num": "4.2", "zh": "廠商代表", "en": "Contractor Rep.", "name": meeting.vendor},
+        ])
+        db.add_paragraph(doc, "會議記錄｜一經發布不可修改，如需修正請建立新版次 — Meeting Minutes: locked once Published; "
+                              "create a new occurrence to amend", size=8, italic=True)
+
+        # Photo appendix: landscape A4, 2 × 2 per page
+        pages = [photos[i:i + 4] for i in range(0, len(photos), 4)]
+        if pages:
+            appendix = doc.add_section(WD_SECTION.NEW_PAGE)
+            appendix.orientation = WD_ORIENT.LANDSCAPE
+            appendix.page_width, appendix.page_height = Cm(29.7), Cm(21)
+            for page_no, group in enumerate(pages):
+                if page_no:
+                    doc.add_page_break()
+                db.add_paragraph(doc, f"照片 Photos — {doc_ref}　　{page_no + 1} / {len(pages)}", size=10.5, bold=True)
+                _add_photo_grid(doc, group, page_no * 4, upload_root)
+
+        name = f"{meeting.documentNumber or 'Meeting-Minutes'}_Rev{meeting.rev}" if meeting.rev else (meeting.documentNumber or "Meeting-Minutes")
+        return db.finalize_response(doc, name)
+
+
+# ── Word export helpers (R15) ──
+
+_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+_IMAGE_NAME = re.compile(r"\.(png|jpe?g|gif|webp|bmp)$", re.IGNORECASE)
+
+
+def format_minutes_date(value) -> str:
+    """"2026-07-21" -> "21 Jul 2026", as formatMinutesDate in discussionLog.ts; anything else as it is."""
+    m = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", str(value or ""))
+    if not m or not 1 <= int(m.group(2)) <= 12:
+        return str(value or "")
+    return f"{int(m.group(3))} {_MONTHS[int(m.group(2)) - 1]} {m.group(1)}"
+
+
+def _text(value) -> str:
+    return "" if value is None else str(value)
+
+
+def _no_key(no: str):
+    return [int(s) if s.isdigit() else 0 for s in no.split(".")]
+
+
+def minutes_register(raw) -> list:
+    """The register as the print reads it (normalizeDiscussionLog): every stored shape — current two/three levels,
+    legacy two-level and flat rows — in tree order; an item's progress notes in date order, same day as written."""
+    try:
+        entries = json.loads(raw) if isinstance(raw, str) else raw
+    except (TypeError, ValueError):
+        return []
+    rows = []
+    for e in entries if isinstance(entries, list) else []:
+        if not isinstance(e, dict) or not str(e.get("no", "")).strip():
+            continue
+        kind = _entry_kind(e)
+        content = e.get("content")
+        if content is None:
+            content = " / ".join(str(e[k]) for k in ("topic", "discussion", "decision") if e.get(k))
+        # every value as text: the register is free JSON, a hand-written API call could put a number anywhere
+        row = {"no": str(e["no"]).strip(), "kind": kind, "content": _text(content)}
+        if kind == "item":
+            notes = [{"date": _text(u.get("date")), "content": u["content"], "carried": bool(u.get("carried"))}
+                     for u in (e.get("updates") or []) if isinstance(u, dict) and isinstance(u.get("content"), str)]
+            row.update({
+                "raisedDate": _text(e.get("raisedDate")), "owner": _text(e.get("owner")), "targetDate": _text(e.get("targetDate")),
+                "status": "Closed" if e.get("status") == "Closed" else "Open",
+                # sorted() is stable: the same day keeps the order the notes were written in
+                "updates": sorted(notes, key=lambda u: u["date"]),
+            })
+        rows.append(row)
+    return sorted(rows, key=lambda r: _no_key(r["no"]))
+
+
+def _is_image(f) -> bool:
+    return (f.mime_type or "").startswith("image/") or bool(_IMAGE_NAME.search(f.file_name or ""))
+
+
+def _add_register_table(doc, register: list):
+    """# / DISCUSSIONS / ACTIONS / Action by / Target Date & Status — widths as the print (8 / 62 / 14 / 16 %)."""
+    from docx.shared import Cm, Pt, RGBColor
+    from core import docx_builder as db
+
+    widths = [Cm(1.4), Cm(10.8), Cm(2.4), Cm(2.8)]
+    grey = RGBColor(0x80, 0x80, 0x80)
+    table = doc.add_table(rows=1, cols=4)
+    table.style = "Table Grid"
+    table.autofit = False
+    for i, w in enumerate(widths):          # the grid too, not only each cell: some readers size columns from it
+        table.columns[i].width = w
+
+    def text(cell, value, size=9, bold=False, color=None, indent=False, first=False):
+        p = cell.paragraphs[0] if first else cell.add_paragraph()
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(1)
+        if indent:
+            p.paragraph_format.left_indent = Cm(0.35)
+        db._run_font(p.add_run(value), Pt(size), bold=bold, color=color)
+        return p
+
+    for i, h in enumerate(["#", "DISCUSSIONS / ACTIONS", "Action by", "Target Date / Status"]):
+        cell = table.rows[0].cells[i]
+        cell.width = widths[i]
+        db._shade_cell(cell, "F2F2F2")
+        text(cell, h, bold=True, first=True)
+    if not register:
+        cells = table.add_row().cells
+        cells[0].merge(cells[3])
+        text(cells[0], "（無資料 No discussion items）", color=grey, first=True)
+        return table
+    for e in register:
+        cells = table.add_row().cells
+        for i, cell in enumerate(cells):
+            cell.width = widths[i]
+        if e["kind"] != "item":
+            db._shade_cell(cells[0], "D9D9D9" if e["kind"] == "category" else "EEEEEE")
+            label = f"{e['no']}.0" if e["kind"] == "category" else e["no"]
+            text(cells[0], label, bold=True, first=True)
+            merged = cells[1].merge(cells[3])
+            db._shade_cell(merged, "D9D9D9" if e["kind"] == "category" else "EEEEEE")
+            text(merged, e["content"], bold=True, first=True)
+            continue
+        text(cells[0], e["no"], first=True)
+        body = cells[1]
+        first = True
+        if e["raisedDate"]:
+            text(body, format_minutes_date(e["raisedDate"]), size=8, color=grey, first=True)
+            first = False
+        for line in (e["content"] or db.DASH).split("\n"):
+            text(body, line, indent=bool(e["raisedDate"]), first=first)
+            first = False
+        for u in e["updates"]:
+            color = grey if u.get("carried") else None
+            if u.get("date"):
+                text(body, format_minutes_date(u["date"]), size=8, color=grey)
+            for line in u["content"].split("\n"):
+                text(body, line, indent=True, color=color)
+        text(cells[2], e["owner"] or db.DASH, first=True)
+        if e["targetDate"]:
+            text(cells[3], format_minutes_date(e["targetDate"]), first=True)
+            text(cells[3], e["status"])
+        else:
+            text(cells[3], e["status"], first=True)
+    return table
+
+
+def _add_photo_grid(doc, group: list, offset: int, upload_root: str):
+    """Up to four photos, 2 × 2, each fitted into its box (12.4 × 7.0 cm) with its number and file name below."""
+    from docx.image.image import Image as DocxImage
+    from docx.shared import Cm, Pt
+    from core import docx_builder as db
+
+    box_w, box_h = Cm(12.4), Cm(7.0)     # two rows of photo + caption fit the 18 cm landscape page with room to spare
+    table = doc.add_table(rows=(len(group) + 1) // 2, cols=2)
+    table.style = "Table Grid"
+    table.autofit = False
+    for col in table.columns:
+        col.width = Cm(12.9)
+    for i, f in enumerate(group):
+        cell = table.rows[i // 2].cells[i % 2]
+        cell.width = Cm(12.9)
+        p = cell.paragraphs[0]
+        path = db.resolve_local_upload_path(f.file_path, upload_root)
+        try:
+            if not path:
+                raise ValueError("missing")
+            img = DocxImage.from_file(path)
+            scale = min(box_w / img.width, box_h / img.height)  # EMU sizes: fit inside the box, keep the proportions
+            p.add_run().add_picture(path, width=int(img.width * scale), height=int(img.height * scale))
+        except Exception:
+            db._run_font(p.add_run("（圖片無法顯示 image could not be shown）"), Pt(9))
+        cap = cell.add_paragraph()
+        db._run_font(cap.add_run(f"照片 Photo {offset + i + 1}　{f.file_name}"), Pt(8.5))

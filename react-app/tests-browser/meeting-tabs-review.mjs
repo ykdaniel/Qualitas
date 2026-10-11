@@ -1,5 +1,6 @@
 // MEETING-TABS-2026-001 browser acceptance, isolated stack only (8344/3344 via meeting-fix-vite-launcher.mjs,
 // seed_meeting_tabs_review.py). Usage: MTG_TABS_REVIEW_PASSWORD=... MTG_TABS_EVIDENCE_DIR=... node tests-browser/meeting-tabs-review.mjs
+import { execFileSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { chromium } from 'playwright';
 
@@ -643,6 +644,20 @@ for (const s of ['SUBJECT', 'VENUE & TIME', 'RECORDED BY', 'DISCUSSIONS / ACTION
 await page.emulateMedia({ media: 'print' });
 await page.screenshot({ path: `${OUT}/06-print.png`, fullPage: true });
 await page.emulateMedia({ media: 'screen' });
+// R15 (user: "要補word匯出"): Export Word beside Print downloads the minutes as .docx, same content as the print
+const [download] = await Promise.all([page.waitForEvent('download'), modal().getByRole('button', { name: 'Export Word' }).click()]);
+check(download.suggestedFilename() === 'MOM-DEMO-002_Rev1.0.docx', `R15: Export Word downloads MOM-DEMO-002_Rev1.0.docx (${download.suggestedFilename()})`);
+const docxPath = `${OUT}/r15-export.docx`;
+await download.saveAs(docxPath);
+const docXml = execFileSync('unzip', ['-p', docxPath, 'word/document.xml']).toString('utf8');
+const docText = docXml.replace(/<w:tab\/>/g, ' ').replace(/<\/w:p>/g, '\n').replace(/<[^>]+>/g, '');
+for (const s of ['MEETING MINUTES', 'MOM-DEMO-002', 'PUBLISHED', 'DISCUSSIONS / ACTIONS', '1.0', '1.1.1', '21 Jul 2026', '14 Jul 2026', 'Action by']) {
+    check(docText.includes(s), `R15: the .docx contains "${s}"`);
+}
+check(/<w:pgSz[^>]*w:w="11906"[^>]*w:h="16838"/.test(docXml), 'R15: the minutes are portrait A4 (21 × 29.7 cm)');
+const btnBox = await modal().getByRole('button', { name: 'Export Word' }).boundingBox();
+const printBox = await modal().getByRole('button', { name: /^Print$/ }).boundingBox();
+check(Math.abs(btnBox.y - printBox.y) < 4 && btnBox.x > printBox.x, 'R15: Export Word sits next to Print in the footer');
 
 // ═══ 7. Chinese labels ═══
 log('=== 7. zh labels ===');

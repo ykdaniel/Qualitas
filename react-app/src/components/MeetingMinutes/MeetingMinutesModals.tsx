@@ -5,13 +5,13 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Plus, Trash2, Printer } from 'lucide-react';
+import { FileText, Plus, Trash2, Printer } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useMeetingMinutesStore } from '../../store/meetingMinutesStore';
 import { describeSaveError } from '../../utils/saveErrors';
-import { getUsers, getEntityFiles, getAuthenticatedFileUrl, createMeetingMinutesOccurrence, type User as ApiUser } from '../../services/api';
+import { getUsers, getEntityFiles, getAuthenticatedFileUrl, createMeetingMinutesOccurrence, exportMeetingMinutesDocx, type User as ApiUser } from '../../services/api';
 import type { MeetingMinutesItem, Attendee, DiscussionLogEntry } from '../../store/meetingMinutesStore';
 import FileAttachment from '../Shared/FileAttachment';
 import { BackButton } from '../ui/BackButton';
@@ -286,6 +286,23 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
         setIsPrinting(true);
     };
 
+    // Word export (R15): the saved record, as printed (photo appendix included); a message when it fails, no repeat
+    // clicks while the file is being built.
+    const [exportingDocx, setExportingDocx] = useState(false);
+    const handleExportDocx = async () => {
+        if (!existingItem?.id || exportingDocx || saving) return;
+        setExportingDocx(true);
+        try {
+            const doc = existingItem.documentNumber || 'Meeting-Minutes';
+            await exportMeetingMinutesDocx(existingItem.id, existingItem.rev ? `${doc}_Rev${existingItem.rev}` : doc);
+        } catch (err) {
+            console.error('Meeting Minutes Word export failed:', err);
+            toast.error(t('common.exportFailed') || 'Export failed. Please try again.');
+        } finally {
+            setExportingDocx(false);
+        }
+    };
+
     const tabs: { key: MeetingTab; label: string; count?: number }[] = [
         { key: 'general', label: t('meetingMinutes.tabGeneral') },
         { key: 'attendees', label: t('meetingMinutes.attendeesSection'), count: attendees.length },
@@ -458,6 +475,12 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                         {existingItem?.id && (
                             <button className={actionStyles.secondary} type="button" onClick={handlePrintClick} disabled={saving} title={t('common.print') || 'Print'}>
                                 <Printer size={16} /> {t('common.print') || 'Print'}
+                            </button>
+                        )}
+                        {/* needs the saved record (same gate as Print and NOI / ITR "Export Word") */}
+                        {existingItem?.id && (
+                            <button className={actionStyles.secondary} type="button" onClick={handleExportDocx} disabled={saving || exportingDocx}>
+                                <FileText size={16} /> {exportingDocx ? (t('common.exporting') || 'Exporting...') : (t('itr.exportWord') || 'Export Word')}
                             </button>
                         )}
                         {existingItem?.id && hasPermission('meeting:create:all') && (

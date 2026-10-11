@@ -609,6 +609,18 @@ export const exportAuditDocx = async (auditId: string, filename: string, kind: '
   URL.revokeObjectURL(url);
 };
 
+// Word copy of the printed Meeting Minutes, photo appendix included (MEETING-TABS-2026-001 R15) — mirrors
+// exportNoiDocx's blob-download pattern.
+export const exportMeetingMinutesDocx = async (meetingId: string, filename: string): Promise<void> => {
+  const response = await api.get(`/meeting-minutes/${meetingId}/export-docx`, { responseType: 'blob' });
+  const url = URL.createObjectURL(new Blob([response.data]));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filename}.docx`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 // --- File Management API ---
 
 export interface AttachmentInfo {

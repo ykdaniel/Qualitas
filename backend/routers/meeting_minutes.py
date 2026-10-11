@@ -1,5 +1,6 @@
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 import schemas
@@ -105,6 +106,19 @@ def update_meeting_minutes(
     if db_meeting is None:
         raise HTTPException(status_code=404, detail="Meeting Minutes not found")
     return db_meeting
+
+@router.get("/{meeting_id}/export-docx", response_class=StreamingResponse)
+def export_meeting_minutes_docx(
+    meeting_id: str,
+    meeting_service: MeetingMinutesService = Depends(get_meeting_minutes_service),
+    scope: Scope = Depends(get_scope),
+    current_user: schemas.User = Depends(RoleChecker(MEETING_VIEW))
+):
+    """Word copy of the printed minutes, photo appendix included (MEETING-TABS-2026-001 R15)."""
+    try:
+        return meeting_service.export_docx(meeting_id=meeting_id, scope=scope)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 @router.delete("/{meeting_id}")
 def delete_meeting_minutes(
