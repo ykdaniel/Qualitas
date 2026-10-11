@@ -1,0 +1,20 @@
+PASS stats cards: 7 items, progress 5/7 = 71% (已評 5), one of each grade  -> {"total":"7","progress":"71%","graded":"已評 5","pass":"1","positive":"1","major":"1","minor":"1","legend":["符合: 1","正面發現: 1","主要不符合: 1","次要不符合: 1","不符合（未分級）: 1","未評: 2"]}
+PASS legend: the four grades, 不符合（未分級） 1, 未評 2  -> ["符合: 1","正面發現: 1","主要不符合: 1","次要不符合: 1","不符合（未分級）: 1","未評: 2"]
+PASS each item has the four grade buttons (titles bilingual)  -> ["符合 (Pass)","正面發現 (Positive)","主要不符合 (Major)","次要不符合 (Minor)"]
+PASS the stored grades show as the pressed button; fail / pending / none press nothing  -> ["pass","positive","major","minor",null,null,null]
+PASS the older fail shows the 不符合（未分級） badge
+PASS regrading the old fail as Major: badge gone, Major 2, no ungraded line, progress unchanged (71%)  -> {"total":"7","progress":"71%","graded":"已評 5","pass":"1","positive":"1","major":"2","minor":"1","legend":["符合: 1","正面發現: 1","主要不符合: 2","次要不符合: 1","未評: 2"]}
+PASS grading an ungraded item: Positive 2, progress 6/7 = 86%  -> {"total":"7","progress":"86%","graded":"已評 6","pass":"1","positive":"2","major":"2","minor":"1","legend":["符合: 1","正面發現: 2","主要不符合: 2","次要不符合: 1","未評: 1"]}
+PASS clicking the active grade again clears it: Pass 0, progress back to 5/7 = 71%  -> {"total":"7","progress":"71%","graded":"已評 5","pass":"0","positive":"2","major":"2","minor":"1","legend":["符合: 0","正面發現: 2","主要不符合: 2","次要不符合: 1","未評: 2"]}
+PASS saved statuses  -> ["","positive","major","minor","major","positive",null]
+PASS clearing a grade stamps the item with today (updatedAt), untouched items keep theirs  -> ["2026-10-11","2026-10-02","2026-10-02","2026-10-02","2026-10-11","2026-10-11",null]
+PASS report printout: grade summary (Pass 0 / Positive 2 / Major 2 / Minor 1 / Not graded 2, 71%), results in the item table, separate 條文內容 / 查檢重點 columns  -> {"Audit No.":"AHB-GRADES-1","Status":"進行中 In Progress","Audit Title":"Grades review","Project":"[AHB1] Audit Review P1","Auditee / Contractor":"Review Vendor","Start Date":"2026-10-01","End Date":"2026-10-02","Location":"Yard 3","Project Director":"—","Package / Tech. Lead":"—","Lead Auditor":"王稽核","Support Auditor(s)":"—","Audit Criteria":"—","Templates":"ISO 9001:2015","Total Items":"7","Progres
+PASS checklist printout: four blank grade boxes per item, separate clause / question columns  -> LOGO［ 公司名稱 Company Name ］品質管理 — Quality ManagementAHB-GRADES-1版次 Rev：—狀態 IN PROGRESS稽核查檢表AUDIT CHECKLIST1. 稽核資訊 Audit Information稽核編號Audit No.AHB-GRADES-1專案Project[AHB1] Audit Review P1受稽核廠商Auditee / 
+PASS Word report: grade summary numbers (Total 7, 71%, Pass 0 / Positive 2 / Major 2 / Minor 1 / Not graded 2), results, separate clause / question columns, no Attention  -> {"Total Items":"7","Progress":"71%","Pass":"0","Positive":"2","Major":"2","Minor":"1","Not graded":"2"}
+PASS Word checklist: the four grade boxes
+PASS Word report of an audit still holding an older fail: full summary incl. Fail (ungraded) 1, row text shows  -> {"Total Items":"7","Progress":"71%","Pass":"1","Positive":"1","Major":"1","Minor":"1","Not graded":"2","Fail (ungraded)":"1"}
+PASS Closed audit: grade buttons disabled, clicking changes nothing
+PASS Closed audit printout keeps the 不符合（未分級） line
+PASS English: grade buttons Pass / Positive / Major / Minor, legend Not graded  -> {"labels":["Pass","Positive","Major","Minor"],"legend":["Pass: 0","Positive: 2","Major: 2","Minor: 1","Not graded: 2"]}
+PASS stats cards: 3 × 2 at 1024px, one row of six at 1280px, neither with sideways scroll or cut labels  -> {"narrow":{"cards":6,"rows":2,"overflow":0,"clipped":0},"wide":{"cards":6,"rows":1,"overflow":0,"clipped":0}}
+ALL PASS

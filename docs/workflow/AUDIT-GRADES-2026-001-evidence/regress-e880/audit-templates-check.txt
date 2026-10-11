@@ -1,0 +1,37 @@
+PASS no manage permission: no 模板管理 tab
+PASS no manage permission: GET /audit/templates = the 4 initial templates  -> ["ISO 9001:2015","ISO 45001","品質管理程序書","供應商評鑑表"]
+PASS ISO 9001:2015 = the company checklist: 116 questions over 59 clauses, each with a clause title  -> 116 / 59
+PASS no manage permission: POST refused (403, permission — not CSRF)  -> {"status":403,"body":{"detail":"Operation not permitted. Required: audit:template:manage"}}
+PASS wizard step 4: the 4 types, none ticked; the clause dropdown asks to tick a type first  -> {"c":[{"name":"ISO 9001:2015","on":false,"text":"ISO 9001:2015"},{"name":"ISO 45001","on":false,"text":"ISO 45001"},{"name":"品質管理程序書","on":false,"text":"品質管理程序書"},{"name":"供應商評鑑表","on":false,"text":"供應商評鑑表"}],"ph":"請先在上方勾選稽核類型，才會列出題目"}
+PASS templates tab lists the 4 initial templates; the audit list is not shown  -> ["ISO 9001:2015","ISO 45001","品質管理程序書","供應商評鑑表"]
+PASS ISO 9001:2015 opens with 116 rows and a clause-title column  -> Understanding the organization and its context
+PASS new template saved: 2 items (blank row dropped), server ids, title kept  -> [{"id":"f34442e568cd441588303be53dfe4b0e","no":"7.1","title":"Resources","clause":"The organization shall provide the resources","task":"Are resources provided?"},{"id":"b2f87627b44243968eb910c2dcf19e64","no":"7.1","title":"","clause":"","task":"Is the site tidy?"}]
+PASS a duplicate name (other case, spaces) is refused with a friendly message (not the raw backend text)  -> ["已有同名的模板，請換一個名稱。","模板已儲存。"]
+PASS unsaved template edit: switching to 稽核記錄 asks first; staying keeps the edit  -> {"asked":true,"stayed":"ISO 45001 edited","stayButtons":["×","留下並儲存","離開"]}
+PASS choosing 離開: the records tab shows and the edit is dropped (reopened = saved name)  -> {"onRecords":true,"reloaded":"ISO 45001"}
+PASS after leaving the tab, in-app navigation away does not prompt (no stale guard)  -> http://127.0.0.1:3321/
+PASS a deactivated template leaves the list; 顯示已停用 shows it again  -> {"afterDeactivate":["ISO 9001:2015","ISO 45001","品質管理程序書","Site QA"],"withInactive":["ISO 9001:2015","ISO 45001","品質管理程序書","供應商評鑑表","Site QA"]}
+PASS types offered: active templates only (供應商評鑑表 deactivated)
+PASS ticking ISO 9001:2015 only marks the type (no questions added); the clause dropdown lists its 59 clauses with titles  -> [{"value":"","text":"選擇條文（來自上方勾選的稽核類型）"},{"value":"1::4.1","text":"4.1 Understanding the organization and its context（2）"},{"value":"1::4.2","text":"4.2 Understanding the needs and expectations of interested parties（2）"}]
+PASS a batch-pick button appears for the ticked type
+PASS clause 4.1: question dropdown = 全部（2 題）, 第 1 題, 第 2 題; "all" previews both with clause text + question  -> {"qs":["全部（2 題）","第 1 題","第 2 題"],"preview":2}
+PASS clause and question dropdowns sit side by side  -> {"cl":{"x":86,"y":477.5,"width":1008,"height":45},"qd":{"x":1106,"y":477.5,"width":208,"height":45}}
+PASS + with 全部: both 4.1 questions added, notice  -> ["已從 ISO 9001:2015 帶入 2 項。"]
+PASS a clause whose questions are all in the audit is marked （已加入）  -> 4.1 Understanding the organization and its context（2） （已加入）
+PASS one question fills clause text and question (text boxes grow to fit, no inner scrollbar)  -> {"clause":"When determining this scope, the organization shall consider:\na) the external and internal issues referred to in 4.1;\nb) the requirements of relevant interested parties referred to in 4.2
+PASS the edited question is added
+PASS adding the same question again: refused with a notice, no duplicate
+PASS ✎ 自訂題目: free-text question added
+PASS batch picker: the 3 questions already in the audit are pre-ticked; ticking 4.4 adds its 3  -> {"pre":"已選 3／116 題","applyText":"套用（新增 3、移除 0）"}
+PASS untick the type: 4 unfilled ISO questions removed, 2 filled kept (+ the custom one), type stays ticked because of them  -> ["ISO 9001:2015 有 2 項已填寫結果或備註，予以保留，所以此類型仍維持勾選。","已移除 ISO 9001:2015 尚未填寫的 4 項。","已從 ISO 9001:2015 帶入 3 項。","這一題已經在稽核中。"]
+PASS saved: the type name kept, filled items keep templateId / templateItemId, the custom item has none  -> ["ISO 9001:2015"]
+PASS template renamed and cut to 3 items afterwards: the audit keeps its items unchanged
+PASS reopened after the rename: "Rev A" shows ticked (its questions are in the audit); the old name shows as a leftover name  -> [{"name":"ISO 9001:2015 Rev A","on":true,"text":"ISO 9001:2015 Rev A"},{"name":"ISO 45001","on":false,"text":"ISO 45001"},{"name":"品質管理程序書","on":false,"text":"品質管理程序書"},{"name":"Site QA","on":false,"text":"Site QA"},{"name":"ISO 9001:2015","on":true,"text":"ISO 9001:2015"}]
+PASS a clause picked, then its type unticked: the add form is cleared and + adds nothing  -> {"qPick":0,"preview":0,"clause":""}
+PASS one question picked, then its type unticked: the fields are cleared too
+PASS batch picker after the template dropped a question: "新增 1、移除 0", and the old copy of the dropped question stays  -> {"applyText":"套用（新增 1、移除 0）","dropped":"Are resources provided?"}
+PASS legacy audit: ISO 9001:2015 ticked by name, "Old supplier form" shown ticked  -> [{"name":"ISO 9001:2015","on":true,"text":"ISO 9001:2015"},{"name":"ISO 45001","on":false,"text":"ISO 45001"},{"name":"品質管理程序書","on":false,"text":"品質管理程序書"},{"name":"Site QA","on":false,"text":"Site QA"},{"name":"Old supplier form","on":true,"text":"Old supplier form"}]
+PASS unticking a name the library does not have removes only the name
+PASS unticking ISO (nothing copied from it): the name goes, the hand-added item stays
+PASS English: tabs Audits / Templates; question dropdown All (2 questions) / Question 1 / Question 2  -> {"tabs":["Audits","Templates"],"qs":["All (2 questions)","Question 1","Question 2"]}
+ALL PASS

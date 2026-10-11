@@ -1,0 +1,5 @@
+# 2026-10-11T10:43:04Z GRADES candidate tree (HEAD 89671cbb + G.patch), local Python 3.14.6, DATABASE_URL=sqlite:///:memory:
+# files: tests/test_audit_export_docx_http.py tests/test_audit_agenda_http.py tests/test_audit_hardening_http.py tests/test_audit_service.py tests/test_audit_void_lock_http.py tests/test_audit_contractor_scope_http.py tests/test_audit_templates_http.py tests/test_audit_templates_migration.py
+..................s....                                                  [100%]
+94 passed, 1 skipped in 41.33s
+pytest_exit=0
