@@ -1,0 +1,156 @@
+# Subtest: formatUtc: stored server time, always labelled UTC; garbage is returned as-is, never replaced
+# Subtest: formatLocalWithZone includes the zone name; unparseable input gives null (nothing invented)
+# Subtest: actorOf: as recorded; blank or missing parts stay missing
+# Subtest: revokedTarget: known, unknown (pre-event approval), or not applicable
+# Subtest: pageWindow arithmetic
+# Subtest: snapshotItems: only object items, verbatim; missing list is empty, not invented
+# Subtest: classifyDeleteResults: all succeed -> every id is deleted, no errors
+# Subtest: classifyDeleteResults: one succeeds, one fails -> only the failed id stays out of deletedIds
+# Subtest: classifyDeleteResults: a 404 is NOT counted as deleted (never silently treated as success)
+# Subtest: classifyDeleteResults: a 404 and a network failure produce DIFFERENT wording (two distinct unknowns)
+# Subtest: classifyDeleteResults: a generic 4xx/5xx surfaces the backend detail, not a generic label
+# Subtest: classifyDeleteResults: order of ids and results must line up positionally
+# Subtest: isUnchangedSincePriorWrite: first write (no prior key) is never skipped
+# Subtest: isUnchangedSincePriorWrite: identical payload to the last written one is skipped
+# Subtest: isUnchangedSincePriorWrite: a changed field (mid-retry edit) is NOT skipped, even if almost everything else matches
+# Subtest: isUnchangedSincePriorWrite: key order in the object does not matter for JSON.stringify only when keys are inserted the same way — this documents that constraint
+# Subtest: ITP combined key: main payload AND detail both unchanged -> skip (both were written together last time)
+# Subtest: ITP combined key: main payload unchanged but DETAIL changed -> NOT skipped (detail work still owed)
+# Subtest: ITP combined key: a prior attempt where the DETAIL write failed never reaches this comparison with a matching key in the first place — simulated here by the caller simply never having recorded a prior key, which must not skip
+# Subtest: classify: four states + legacy/unknown
+# Subtest: summary: N/A is judged but not pass; unknown and unfilled are not judged
+# Subtest: counts follow O / X only
+# Subtest: status derivation: the unified rule
+# Subtest: pass/fail counts stay O / X only; N/A is judged but never counted as a pass
+# Subtest: display helpers: one description of an Ongoing checklist
+# Subtest: approval-limiting note applies to any N/A (mixed or all)
+# Subtest: N/A reason: required for a new N/A, exempt for an untouched historical one
+# Subtest: withResult drops the reason when leaving N/A; other items untouched
+# Subtest: itemsForSave never normalises legacy values
+# Subtest: loading: always "loading", regardless of any other input
+# Subtest: first load for a scope, not yet observed loading and not yet confirmed: "loading" even if not currently loading (the scope-switch race)
+# Subtest: failed, nothing usable for this scope (never confirmed, or confirmed for a DIFFERENT scope): "error-empty"
+# Subtest: failed, but a previous successful load for THIS SAME scope is still held: "error-stale" (keep showing the data, flag it)
+# Subtest: failed with confirmedThisScope=true but hasData=false: still "error-empty" (nothing to keep showing)
+# Subtest: no error, sawLoadingThisScope or confirmedThisScope true: "ok" — list.length may legitimately be 0 (a real "no records")
+# Subtest: pagination with 0 records at index 0
+# Subtest: pagination with 1 records at index 0
+# Subtest: pagination with 21 records at index 1
+# Subtest: issuesOf / fieldIssues tolerate rows without the field (older API, normal rows)
+# Subtest: formatStrictDate never rolls a non-existent day over and never shifts by the time zone
+# Subtest: dateCell shows the stored value as-is when it has an issue, formats only clean values, dash only for blanks
+# Subtest: preserveHistoricalDates: a blank form value cannot silently erase an invalid stored date; real edits are kept
+# Subtest: issueMessageKey maps every stable code and falls back for unknown ones
+# Subtest: getErrorMessage: a 500 never shows the server stack; a date 422 names the field; other messages are unchanged
+# Subtest: getEntityFiles asks for the exact backend route — no trailing slash, so no 307 redirect is needed
+# Subtest: getEntityFiles without a category sends no category parameter
+# Subtest: IAM preserves distinct login names when users share the same display name
+# Subtest: combined IAM reload and create/update responses retain login names
+# Subtest: English only, Chinese only, or both count as filled
+# Subtest: empty, missing and whitespace-only values do not count
+# Subtest: a legacy plain-string Standard is judged by its own text
+# Subtest: Activity and Standard are each required independently
+# Subtest: preferEnglishText: English first, Chinese only when English is blank after trim
+# Subtest: preferEnglishText returns the original string untouched (no trimming, no copying)
+# Subtest: preferEnglishText keeps the previous output when neither language has content
+# Subtest: checklistFromItpPath without an ITP id keeps the previous link shape
+# Subtest: checklistFromItpPath carries the source ITP id
+# Subtest: special characters are encoded, not interpreted as extra parameters
+# Subtest: itpReopenPath always targets /itp with the reopen parameter only
+# Subtest: addITP passes detail_data through UNCHANGED, matching the phase-split shape its one real caller (ITP.tsx) sends
+# Subtest: addITP with no detail_data at all (a plain new record) sends detail_data as null/undefined, not an empty array or throwing
+# Subtest: addITP preserves the explicitly selected project in its POST
+# Subtest: empty editor initialization does not mark a new draft dirty
+# Subtest: actual content and metadata edits remain dirty
+# Subtest: editor snapshot preserves only the selected article and its own chapters
+# Subtest: failed and missing article loads reject instead of presenting an empty editable chapter
+# Subtest: KM denied load hides prior articles and recovery clears access denial
+# Subtest: KM network failure is not classified as missing permission or empty success
+# Subtest: confirmed create survives a later chapter failure; retry updates same main with latest content/version
+# Subtest: main rejection does not advance saved id/version; confirmed updates carry fresh version into retry
+# Subtest: KM delete action is absent by default and without delete permission
+# Subtest: KM authorized delete action targets its own article without triggering the row
+# Subtest: no response (network error / timeout) is UNKNOWN, never "not saved"
+# Subtest: a 5xx is UNKNOWN: the server may have committed before failing
+# Subtest: a 4xx is a definite refusal and keeps the server detail
+# Subtest: column filters: result + text columns combine, case-insensitive, over records beyond the loaded page
+# Subtest: column filters: no filter keeps every row; an empty result filter ("ALL") keeps every row; unmatched gives none
+# Subtest: list guard: a restart makes older answers stale; only one load-more at a time; a stale finish cannot unlock the new list
+# Subtest: appendUnique: a page that overlaps the loaded rows adds each record once
+# Subtest: shelf levels: categories in name order, uncategorised last, list order kept inside a level, blanks count as uncategorised
+# Subtest: NCR: standard 5-state data — opening folds Open+In Progress+Resolved, closed/void stay exact
+# Subtest: NCR: a non-standard status value counts toward opening, not silently dropped
+# Subtest: NCR: opening + closed + void always equals total, for any mix
+# Subtest: OBS: standard 5-state data — opening folds Open+In Progress+Resolved
+# Subtest: OBS: a blank status now counts toward opening (previous bug: fell through every bucket)
+# Subtest: OBS: opening + closed + void always equals total, for any mix
+# Subtest: dayNumber: strict calendar days only — nothing rolls over and no time zone is involved
+# Subtest: lateClosureDays: positive only when the close-out date is after the due date
+# Subtest: ncrOverdueState keeps "open and overdue" apart from "closed late" — a late closure is Closed, not overdue
+# Subtest: the closed-late fact is never also "open-overdue" (the states are exclusive, so no count can double-count a closed NCR)
+# Subtest: a refused change of the due date of a closed NCR reads as "<field>：<reason>", not as an unknown problem
+# Subtest: clean success: write, deletes, uploads, reload — and the outcome says saved
+# Subtest: record write fails: nothing else is attempted and the outcome is failed with the described message
+# Subtest: an upload failing after the record was written is NOT reported as "not saved": incomplete, id kept, only the failed group remains
+# Subtest: a failed delete stays in the retry list; the ones that worked do not
+# Subtest: retry with reuseId: the record is not written again and only the leftover files are processed (no duplicate upload, no repeat delete)
+# Subtest: only the reload fails: everything is stored, nothing to retry — saved-reload-failed (a throw counts too)
+# Subtest: file failure AND reload failure: incomplete, with reloadFailed set
+# Subtest: onRecordSaved fires as soon as the id is known — also for reuseId — and before any follow-up
+# Subtest: a record without a usable id never uploads to a made-up id: the groups stay pending
+# Subtest: groups without files are skipped
+# Subtest: sameWrite: only an identical payload for the same record id counts as already written
+# Subtest: a date 422 becomes "<field label>：<reason>", one line per distinct problem, no Pydantic text or loc path
+# Subtest: an unknown field name is shown as sent, a plain-text detail (403/409/400) as written
+# Subtest: network failure, server error and unknown errors: friendly fixed lines, the response body is never shown
+# Subtest: presentOutcome: incomplete saves use the banner only; other outcomes keep their toast
+# Subtest: followUpOf: only an incomplete save leaves work; categories are de-duplicated; `created` is carried through
+# Subtest: isClosedStatus: only "Closed" (case/whitespace-insensitive) is closed
+# Subtest: isVoidStatus: only "Void" (case/whitespace-insensitive) is void
+# Subtest: isOutstandingStatus: Open, In Progress, Resolved and any non-standard value are all outstanding — Closed and Void are not
+# Subtest: isOutstandingStatus is the exact complement of isClosedStatus||isVoidStatus for all five real statuses
+# Subtest: buildParetoCumulative: denominator excludes Void — a contractor with a Void record still reaches 100% cumulative once open+closed rows are exhausted
+# Subtest: buildParetoCumulative: running total across multiple contractors, denominator is the grand total of open+closed only
+# Subtest: buildParetoCumulative: no rows or all-zero open/closed -> 0%, not NaN or a divide-by-zero crash
+# Subtest: buildParetoCumulative: preserves every input field (does not drop open/closed/contractor) and only adds cumulativePercent
+# Subtest: reproduction: the old window loses the current month in zones ahead of UTC
+# Subtest: [Asia/Taipei] window = local current month + previous five, oldest first
+# Subtest: [Asia/Taipei] known counts per month, current month included
+# Subtest: [Asia/Taipei] outside the window is not counted (before the first month, after the current month)
+# Subtest: [Asia/Taipei] a window that crosses the year
+# Subtest: [Asia/Taipei] plain dates belong to the month written in them (no zone shift at month end / start)
+# Subtest: [Asia/Taipei] the current month follows the LOCAL clock at a month boundary
+# Subtest: [Asia/Taipei] timestamps: zone-less as written, zone-qualified converted to the user's local month
+# Subtest: [UTC] window = local current month + previous five, oldest first
+# Subtest: [UTC] known counts per month, current month included
+# Subtest: [UTC] outside the window is not counted (before the first month, after the current month)
+# Subtest: [UTC] a window that crosses the year
+# Subtest: [UTC] plain dates belong to the month written in them (no zone shift at month end / start)
+# Subtest: [UTC] the current month follows the LOCAL clock at a month boundary
+# Subtest: [UTC] timestamps: zone-less as written, zone-qualified converted to the user's local month
+# Subtest: [America/Los_Angeles] window = local current month + previous five, oldest first
+# Subtest: [America/Los_Angeles] known counts per month, current month included
+# Subtest: [America/Los_Angeles] outside the window is not counted (before the first month, after the current month)
+# Subtest: [America/Los_Angeles] a window that crosses the year
+# Subtest: [America/Los_Angeles] plain dates belong to the month written in them (no zone shift at month end / start)
+# Subtest: [America/Los_Angeles] the current month follows the LOCAL clock at a month boundary
+# Subtest: [America/Los_Angeles] timestamps: zone-less as written, zone-qualified converted to the user's local month
+# Subtest: missing, non-string and invalid dates are never counted (never treated as the current month)
+# Subtest: calendar rules: 29 February is valid only in a leap year
+# Subtest: the vendor filter is unchanged: a named vendor keeps only its own rows, "all" keeps everything
+# Subtest: each card keeps its own date source (NCR/OBS raiseDate, NOI issueDate, ITP submissionDate, Checklist date, PQP updatedAt then dueDate)
+# Subtest: a blocked improvement cell says why (one message per reason), an old server answer without the new fields says nothing
+# Subtest: verified and unverified counts are reported separately, with the underlying reasons for the unverified ones
+# Subtest: the percentage note appears only when something passed without verification, and never claims verification
+# Subtest: the wording itself: zh and en both keep "not verified" and never say "verified" for the Closed-status pass
+# Subtest: workflow list retrieves beyond 200 and keeps selected project on every page
+# Subtest: later workflow page failure rejects instead of reporting a partial list as complete
+# Subtest: workflow stats and attention send the same explicit project filter
+# tests 148
+# suites 0
+# pass 148
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3120.383194

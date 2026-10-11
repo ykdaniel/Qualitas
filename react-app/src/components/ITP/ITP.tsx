@@ -21,6 +21,7 @@ import { createColumns } from './columns';
 import { ITPDetailModal, type SaveOutcome, ItpMainSavedError } from './ITPModals';
 import { useDebounce } from '../../hooks/useDebounce';
 import { useITPStats } from '../../hooks/useITPStats';
+import { REOPEN_ITP_PARAM } from '../../utils/itpReturnLink';
 
 type StatusFilter =
   | 'all'
@@ -78,7 +79,11 @@ const ITP: React.FC = () => {
 
   const statistics = useITPStats(itpList);
 
-  const handleEdit = React.useCallback((id: string) => {
+  // Tab the edit window opens on: 'plan' only when returning from a Checklist (see the
+  // ?reopenItp= effect below); every other open starts on General Information as before.
+  const [modalInitialTab, setModalInitialTab] = useState<'general' | 'plan'>('general');
+  const handleEdit = React.useCallback((id: string, tab: 'general' | 'plan' = 'general') => {
+    setModalInitialTab(tab);
     setCurrentItpId(id);
     setIsEditModalOpen(true);
   }, []);
@@ -106,6 +111,37 @@ const ITP: React.FC = () => {
     setSearchParams(next, { replace: true });
   }, [searchParams, itpList, handleEdit, setSearchParams]);
 
+  // Return from a Checklist opened inside an ITP edit window (?reopenItp=, see
+  // utils/itpReturnLink): reopen that window, but NOT as a deep link — closing it must stay on
+  // this list instead of navigate(-1), which would go straight back into the Checklist.
+  const reopenAppliedRef = useRef(false);
+  // An empty list only counts as "loaded" after a fetch was actually seen (the store also starts
+  // empty with loading=false), so a failed fetch or an empty project still resolves the parameter
+  // with a notice instead of leaving it in the URL forever.
+  const reopenSawLoadRef = useRef(false);
+  useEffect(() => {
+    if (reopenAppliedRef.current) return;
+    const reopenId = searchParams.get(REOPEN_ITP_PARAM);
+    if (!reopenId) return;
+    if (loading) { reopenSawLoadRef.current = true; return; }
+    if (itpList.length === 0 && !reopenSawLoadRef.current) return;
+    reopenAppliedRef.current = true;
+    const next = new URLSearchParams(searchParams);
+    next.delete(REOPEN_ITP_PARAM);
+    setSearchParams(next, { replace: true });
+    const match = itpList.find(item => item.id === reopenId);
+    if (!match) {
+      // e.g. outside the current project filter, or deleted meanwhile: say so instead of
+      // silently showing the plain list.
+      toast.info(t('itp.reopenNotFound') || 'The ITP you came from is not in the current list.');
+      return;
+    }
+    // One-shot, ref-guarded reaction to a URL parameter once the list has loaded — the same
+    // pattern as the existing ?openId= deep link above (which this rule also flags).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    handleEdit(match.id, 'plan');
+  }, [searchParams, itpList, loading, handleEdit, setSearchParams, t]);
+
   // Nothing is written to the backend here — clicking "Add New" only opens a blank form.
   // The record is created on the FIRST Save/Publish click (see onSave below), so opening the
   // form and then Cancelling sends no request and leaves no row behind, and someone who only
@@ -115,6 +151,7 @@ const ITP: React.FC = () => {
   const handleAddNew = () => {
     const activeContractors = getActiveContractors();
     setNewItpDefaultVendor(activeContractors.length > 0 ? activeContractors[0].name : '');
+    setModalInitialTab('general');
     setCurrentItpId(null);
     setIsEditModalOpen(true);
   };
@@ -293,6 +330,7 @@ const ITP: React.FC = () => {
           canCreate={canCreate}
           canUpdate={canUpdate}
           canCreateChecklist={hasPermission('checklist:create:all')}
+          initialTab={modalInitialTab}
           onApplyItems={async (detailPayload) => {
             if (!currentItpId) return false; // guarded by the modal itself (itpId falsy skips the call), kept here too for safety
             try {
