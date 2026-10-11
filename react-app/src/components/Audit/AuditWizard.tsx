@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import {
   MapPin, ClipboardList, CheckCircle, ChevronRight, ChevronLeft,
   Save, FileText, Users, CheckSquare, Plus, Trash2, Edit2, Check, X,
-  AlertCircle, Search, ShieldCheck, Printer, CalendarDays
+  AlertCircle, Search, ShieldCheck, Printer, CalendarDays, Lock
 } from 'lucide-react';
 import { useAuditStore, AuditItem, AuditAgendaEntry } from '../../store/auditStore';
 import { useContractorsStore } from '../../store/contractorsStore';
@@ -206,6 +206,13 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
   const createdWithoutUpdate = createdId !== null && !canUpdate;
   const readOnly = readOnlyProp || createdWithoutUpdate
     || (savedStatus !== undefined && AUDIT_LOCKED_STATUSES.has(savedStatus));
+  // Why the wizard is read-only, shown as a banner under the step bar (AUDIT-BTNFIX-2026-001): the controls are disabled
+  // either way, but without it a locked audit looked editable and clicks just did nothing.
+  const readOnlyReason = savedStatus === 'Closed' ? 'audit.wizard.readOnlyClosed'
+    : savedStatus === 'Void' ? 'audit.wizard.readOnlyVoid'
+    : createdWithoutUpdate ? 'audit.wizard.createdNoUpdateNotice'
+    : readOnlyProp ? 'audit.wizard.readOnlyNoPermission'
+    : null;
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const [editFormData, setEditFormData] = useState({ no: '', clause: '', task: '' });
   const [isCustomEdit, setIsCustomEdit] = useState(false);
@@ -597,9 +604,10 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
           {renderProgressBar()}
         </div>
 
-        {createdWithoutUpdate && (
-          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-center font-medium shadow-sm no-print">
-            {t('audit.wizard.createdNoUpdateNotice')}
+        {readOnlyReason && (
+          <div role="status" data-readonly-banner={readOnlyReason} className="mb-6 p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl font-medium shadow-sm no-print flex items-center justify-center gap-2 text-center">
+            <Lock size={18} className="shrink-0" />
+            <span>{t(readOnlyReason)}</span>
           </div>
         )}
         {saveError && (

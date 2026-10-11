@@ -14,7 +14,8 @@ import type { AuditAgendaEntry } from '../../store/auditStore';
  * is moved to a day that had none), a 12:00-13:00 "Lunch Time" row (kind 'lunch') is added for that day. It is a default,
  * stored like any row: it can be edited or deleted, and is not added again for a day that already has rows. Every date
  * change reconciles at once: the day the row arrives on gets its lunch if it had no rows, and the day it left loses its
- * lunch when no session remains there and the lunch is still the untouched default. So the intermediate values a typed
+ * lunch when no session remains there and the lunch is still the untouched default; deleting a day's last session drops it
+ * the same way (AUDIT-BTNFIX-2026-001). So the intermediate values a typed
  * date goes through (0002-10-01, 0020-10-01, …) or arrow-key steps leave nothing behind, and the table never grows when
  * the field is left — a click straight from the date field onto a button below lands on that button (AUDIT-BUTTONS R3).
  */
@@ -93,7 +94,16 @@ export default function AuditAgendaEditor({ rows, onChange, readOnly, startDate,
         onChange(isNewDay ? [...rows, row, lunchRow(row.date)] : [...rows, row]);
     };
 
-    const removeRow = (id: AuditAgendaEntry['id']) => onChange(rows.filter(r => r.id !== id));
+    // Deleting a day's last session also drops that day's default lunch while it is still untouched — the same rule as
+    // moving the session to another day (AUDIT-BTNFIX-2026-001, #68); an edited lunch row stays.
+    const removeRow = (id: AuditAgendaEntry['id']) => {
+        const row = rows.find(r => r.id === id);
+        let next = rows.filter(r => r.id !== id);
+        if (row && row.kind !== 'lunch' && row.date && !next.some(r => r.kind !== 'lunch' && r.date === row.date)) {
+            next = next.filter(r => !(r.date === row.date && isUntouchedLunch(r)));
+        }
+        onChange(next);
+    };
 
     return (
         <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }} className="space-y-3">
