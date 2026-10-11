@@ -251,6 +251,17 @@ Result 的既有操作方式比拆開成縱向區塊更直覺）。
 理由：使用者（2026-10-11）：「會議記錄內的每件事項都是要追蹤的，Action by 就是指定人員」，並選擇「拿掉，以討論事項為準」。同一件事分在討論事項與 Follow-up 兩處追蹤會不一致。本條取代 MEETING-TABS-2026-001 先前記在任務文件的決定「Action by 與行動項目（Follow Up）分開、維持現狀」。
 影響範圍：`react-app/src/components/MeetingMinutes/`（MeetingMinutesModals.tsx、MeetingMinutes.tsx、columns.tsx、discussionLog.ts）；Follow Up 模組與後端 followup 端點不變。
 
+### 公司人員名單與會議出席人員（CONTRACTOR-PERSONNEL-2026-001，2026-10-11）
+日期：2026-10-11
+決策：
+1. 每家公司（廠商、業主、本公司）在廠商管理裡維護「人員」名單（姓名、職稱、Email、電話、在職），不是系統帳號，不需能登入。本公司與業主也以一筆「廠商」維護（使用者選「都當成公司維護名單」），因此也會出現在各模組的廠商選單，不另加公司類型欄位。
+2. 人員不硬刪，以停用取代；有人員名單的公司不可刪除（400，請改為停用）——防呆、可還原（協調中心同意）。
+3. 會議出席人員：先選公司再選該公司在職人員，職稱自動帶入；名單外的人可直接輸入，有 `contractors:manage:all` 者可同時加入該公司名單。每筆出席者存快照文字（company／name／role）加 `contractorId`／`personnelId`，人員之後改名或停用不影響舊會議；舊資料（純文字）照常顯示。列印與 Word 只用快照文字。公司以縮寫（無縮寫時用全名）記錄，與公司會議記錄的寫法一致（TECO、HL）。
+4. 權限：管理沿用 `contractors:manage:all`、完整名單（含聯絡資料）沿用 `contractors:view:all`；會議選人用的 `/contractors/personnel/options` 給任何登入者，只回 id／姓名／職稱／公司 id，廠商範圍帳號只拿得到自己公司的人。不新增權限。
+理由：使用者 2026-10-11：「這裡要從contractor 內取得資料 contractor 有人員 但不一定能進系統」，選「廠商新增人員名單，出席人員從名單選」。
+影響範圍：backend/models.py（ContractorPersonnel，新表 contractor_personnel，啟動 create_all 建立）、schemas.py、services/contractor_service.py、routers/contractors.py；前端 Contractors/ContractorModal.tsx、ContractorPersonnel.tsx、Contractors.tsx（刪除被拒的提示）、MeetingMinutes/AttendeePicker.tsx、MeetingMinutesModals.tsx、services/api.ts、store/meetingMinutesStore.ts（Attendee 型別）。
+依據：使用者 2026-10-11 經協調中心選定；本公司人員來源於會議記錄工作階段選定。
+
 ## 尚未決策（不得當成已核准規則）
 
 - ITR 核准是否須額外檢查 Inspection Result。

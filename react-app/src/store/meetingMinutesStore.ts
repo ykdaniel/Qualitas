@@ -9,6 +9,10 @@ export interface Attendee {
     name: string;
     company?: string;
     role?: string;
+    /** CONTRACTOR-PERSONNEL-2026-001: picked from a company's personnel list. The texts above are the snapshot shown and
+     *  printed, so renaming or deactivating that person later never changes these minutes; older rows have no ids. */
+    contractorId?: string;
+    personnelId?: string;
 }
 
 /** A dated progress note under a discussion item ("21 Jul 2026 — TECO supplemented drawing …"). */

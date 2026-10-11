@@ -229,6 +229,50 @@ export const deleteContractor = async (id: string): Promise<void> => {
   await api.delete(`/contractors/${id}`);
 };
 
+// --- Company personnel (CONTRACTOR-PERSONNEL-2026-001): a company's people, not system accounts; no delete, deactivate ---
+
+export interface ContractorPersonnelApi {
+  id: string;
+  contractor_id: string;
+  name: string;
+  position?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  is_active: boolean;
+}
+
+/** The attendee picker's view: active people, name and position only (any signed-in user; scoped to the caller's company). */
+export interface PersonnelOptionApi {
+  id: string;
+  contractor_id: string;
+  name: string;
+  position?: string | null;
+}
+
+export const getContractorPersonnel = async (contractorId: string, includeInactive = false): Promise<ContractorPersonnelApi[]> => {
+  const response = await api.get<ContractorPersonnelApi[]>(`/contractors/${contractorId}/personnel`, { params: { include_inactive: includeInactive } });
+  return response.data;
+};
+
+export const createContractorPersonnel = async (
+  contractorId: string, data: { name: string; position?: string; email?: string; phone?: string },
+): Promise<ContractorPersonnelApi> => {
+  const response = await api.post<ContractorPersonnelApi>(`/contractors/${contractorId}/personnel`, data);
+  return response.data;
+};
+
+export const updateContractorPersonnel = async (
+  personnelId: string, data: { name?: string; position?: string; email?: string; phone?: string; is_active?: boolean },
+): Promise<ContractorPersonnelApi> => {
+  const response = await api.put<ContractorPersonnelApi>(`/contractors/personnel/${personnelId}`, data);
+  return response.data;
+};
+
+export const getPersonnelOptions = async (contractorId?: string): Promise<PersonnelOptionApi[]> => {
+  const response = await api.get<PersonnelOptionApi[]>('/contractors/personnel/options', { params: contractorId ? { contractor_id: contractorId } : {} });
+  return response.data;
+};
+
 // --- Projects API ---
 
 export interface ProjectApi {

@@ -597,6 +597,30 @@ class Contractor(Base):
                              cascade="save-update, merge", passive_deletes=True)
 
 
+class ContractorPersonnel(Base):
+    """A company's people — contractor, owner or our own (CONTRACTOR-PERSONNEL-2026-001, user 2026-10-11: "contractor 有人員
+    但不一定能進系統"): not system accounts. The meeting attendee picker offers the active ones; a meeting stores a text
+    snapshot (company / name / position) next to the id, so renaming or deactivating someone never changes old minutes.
+    Never hard-deleted (is_active=False instead); a contractor that still has people cannot be deleted."""
+    __tablename__ = "contractor_personnel"
+
+    id = Column(String, primary_key=True, index=True)
+    contractor_id = Column(String, ForeignKey("contractors.id", ondelete="RESTRICT"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    position = Column(String, nullable=True)
+    email = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(String, nullable=True)
+    updated_at = Column(String, nullable=True)
+
+    __table_args__ = (
+        Index("ix_contractor_personnel_contractor_active", "contractor_id", "is_active"),
+        # one name per company, whatever the case (the service says so first; this stops two requests at once)
+        Index("uq_contractor_personnel_name", "contractor_id", text("lower(name)"), unique=True),
+    )
+
+
 class ReferenceSequence(Base):
     """序號表：用於自動產生 Reference No，以 (project, vendor, doc) 為 key 各自累加"""
     __tablename__ = "reference_sequences"

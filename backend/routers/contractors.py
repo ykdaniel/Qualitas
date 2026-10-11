@@ -32,6 +32,64 @@ def read_contractor_options(
     """Contractor names for every module's pickers (any signed-in user; no contact details). Declared before /{contractor_id}."""
     return service.get_contractor_options(scope=scope)
 
+# ── Personnel (CONTRACTOR-PERSONNEL-2026-001): a company's people, not system accounts. No delete: deactivate instead. ──
+
+@router.get("/personnel/options", response_model=list[schemas.ContractorPersonnelOption])
+def read_personnel_options(
+    contractor_id: str | None = None,
+    service: ContractorService = Depends(get_contractor_service),
+    scope: Scope = Depends(get_scope),
+    current_user: schemas.User = Depends(get_current_user)
+):
+    """Active people for the meeting attendee picker (any signed-in user; name and position only). A contractor-scoped
+    caller gets its own company's people only."""
+    return service.personnel_options(contractor_id=contractor_id, scope=scope)
+
+@router.put("/personnel/{personnel_id}", response_model=schemas.ContractorPersonnel)
+def update_personnel(
+    personnel_id: str,
+    data: schemas.ContractorPersonnelUpdate,
+    service: ContractorService = Depends(get_contractor_service),
+    scope: Scope = Depends(get_scope),
+    current_user: schemas.User = Depends(RoleChecker(CONTRACTOR_MANAGE))
+):
+    try:
+        person = service.update_personnel(personnel_id, data, user_id=current_user.id, username=current_user.username, scope=scope)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if person is None:
+        raise HTTPException(status_code=404, detail="Person not found")
+    return person
+
+@router.get("/{contractor_id}/personnel", response_model=list[schemas.ContractorPersonnel])
+def read_personnel(
+    contractor_id: str,
+    include_inactive: bool = False,
+    service: ContractorService = Depends(get_contractor_service),
+    scope: Scope = Depends(get_scope),
+    current_user: schemas.User = Depends(RoleChecker(CONTRACTOR_VIEW))
+):
+    people = service.list_personnel(contractor_id, include_inactive=include_inactive, scope=scope)
+    if people is None:
+        raise HTTPException(status_code=404, detail="Contractor not found")
+    return people
+
+@router.post("/{contractor_id}/personnel", response_model=schemas.ContractorPersonnel)
+def create_personnel(
+    contractor_id: str,
+    data: schemas.ContractorPersonnelCreate,
+    service: ContractorService = Depends(get_contractor_service),
+    scope: Scope = Depends(get_scope),
+    current_user: schemas.User = Depends(RoleChecker(CONTRACTOR_MANAGE))
+):
+    try:
+        person = service.create_personnel(contractor_id, data, user_id=current_user.id, username=current_user.username, scope=scope)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if person is None:
+        raise HTTPException(status_code=404, detail="Contractor not found")
+    return person
+
 @router.get("/{contractor_id}", response_model=schemas.Contractor)
 def read_contractor(
     contractor_id: str,

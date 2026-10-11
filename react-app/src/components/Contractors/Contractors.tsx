@@ -19,6 +19,7 @@ import styles from './Contractors.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns, createProjectColumns } from './columns';
 import { Search, Plus } from 'lucide-react';
+import { toast } from 'sonner';
 import ContractorModal from './ContractorModal';
 import ProjectModal from './ProjectModal';
 
@@ -102,9 +103,10 @@ const Contractors: React.FC = () => {
         setEditingId(contractor.id);
         setFormData({
             package: contractor.package || '', name: contractor.name,
-            abbreviation: contractor.abbreviation || '', scope: contractor.scope,
-            contactPerson: contractor.contactPerson, email: contractor.email,
-            phone: contractor.phone, address: contractor.address, status: contractor.status,
+            // empty fields come back as null — the inputs need '' (a null value made them uncontrolled)
+            abbreviation: contractor.abbreviation || '', scope: contractor.scope || '',
+            contactPerson: contractor.contactPerson || '', email: contractor.email || '',
+            phone: contractor.phone || '', address: contractor.address || '', status: contractor.status,
         });
         setIsModalOpen(true);
     };
@@ -119,7 +121,14 @@ const Contractors: React.FC = () => {
 
     const handleDeleteConfirm = async () => {
         if (deleteModal.id) {
-            await deleteContractor(deleteModal.id);
+            try {
+                await deleteContractor(deleteModal.id);
+            } catch (err: any) {
+                // a refusal used to fail silently; a company with people on its list is refused (CONTRACTOR-PERSONNEL-2026-001)
+                console.error('Deleting the contractor failed:', err);
+                const detail: string = err?.response?.data?.detail || '';
+                toast.error(/personnel list/.test(detail) ? t('contractors.personnel.blocksDelete') : (detail || t('common.deleteFailed')));
+            }
             setDeleteModal({ isOpen: false, id: null, message: '' });
         }
     };

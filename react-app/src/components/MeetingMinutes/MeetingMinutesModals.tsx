@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { FileText, Plus, Trash2, Printer } from 'lucide-react';
+import { FileText, Trash2, Printer } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
@@ -18,6 +18,7 @@ import { BackButton } from '../ui/BackButton';
 import DiscussionRegister, { isEditDirty, latestNoteDate, progressProblemText, type RegisterEdit } from './DiscussionRegister';
 import { firstProgressProblem, normalizeDiscussionLog, openItemCount } from './discussionLog';
 import ImagePreviewOverlay from '../Shared/ImagePreviewOverlay';
+import AttendeePicker from './AttendeePicker';
 import MeetingMinutesPrintTemplate from './MeetingMinutesPrintTemplate';
 import formStyles from '../Shared/FormShell.module.css';
 import './MeetingMinutes.print.css';
@@ -136,9 +137,9 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
-    const addAttendeeRow = () => {
-        if (!newAttendee.name.trim()) return;
-        setAttendees(prev => [...prev, newAttendee]);
+    const addAttendeeRow = (attendee: Attendee) => {
+        if (!attendee.name.trim()) return;
+        setAttendees(prev => [...prev, attendee]);
         setNewAttendee({ name: '', company: '', role: '' });
     };
     const removeAttendeeRow = (idx: number) => {
@@ -420,12 +421,9 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                                     </tbody>
                                 </table>
                                 {!readOnly && (
-                                    <div style={{ display: 'flex', gap: 8 }}>
-                                        <input className={formStyles.formInput} placeholder={t('meetingMinutes.attendeeCompany')} value={newAttendee.company} onChange={(e) => setNewAttendee(prev => ({ ...prev, company: e.target.value }))} style={{ flex: 1 }} />
-                                        <input className={formStyles.formInput} list="meeting-attendee-people" placeholder={t('meetingMinutes.attendeeName')} value={newAttendee.name} onChange={(e) => setNewAttendee(prev => ({ ...prev, name: e.target.value }))} style={{ flex: 2 }} />
-                                        <input className={formStyles.formInput} placeholder={t('meetingMinutes.attendeeRole')} value={newAttendee.role} onChange={(e) => setNewAttendee(prev => ({ ...prev, role: e.target.value }))} style={{ flex: 2 }} />
-                                        <button type="button" onClick={addAttendeeRow} className={formStyles.printButton} aria-label={t('common.add')}><Plus size={16} /></button>
-                                    </div>
+                                    // company from the contractor list, then one of its people (CONTRACTOR-PERSONNEL-2026-001)
+                                    <AttendeePicker value={newAttendee} onChange={setNewAttendee} onAdd={addAttendeeRow}
+                                        fallbackPeopleListId="meeting-attendee-people" />
                                 )}
                             </div>
                         </div>

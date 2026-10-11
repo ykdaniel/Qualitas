@@ -1107,6 +1107,59 @@ class ContractorContact(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ContractorPersonnelCreate(BaseModel):
+    """A person on a company's list (CONTRACTOR-PERSONNEL-2026-001). Not a system account."""
+    name: str = Field(max_length=120)
+    position: str | None = Field(default=None, max_length=120)
+    email: str | None = Field(default=None, max_length=200)
+    phone: str | None = Field(default=None, max_length=60)
+
+    @field_validator('name')
+    @classmethod
+    def name_not_blank(cls, v):
+        if not v or not v.strip():
+            raise ValueError('name is required')
+        return v.strip()
+
+
+class ContractorPersonnelUpdate(BaseModel):
+    name: str | None = Field(default=None, max_length=120)
+    position: str | None = Field(default=None, max_length=120)
+    email: str | None = Field(default=None, max_length=200)
+    phone: str | None = Field(default=None, max_length=60)
+    is_active: bool | None = None
+
+    @field_validator('name')
+    @classmethod
+    def name_not_blank(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError('name cannot be blank')
+        return v.strip() if v is not None else v
+
+
+class ContractorPersonnel(BaseModel):
+    id: str
+    contractor_id: str
+    name: str
+    position: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    is_active: bool
+    created_at: str | None = None
+    updated_at: str | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ContractorPersonnelOption(BaseModel):
+    """What the meeting attendee picker needs (GET /contractors/personnel/options): served to any signed-in user, so no
+    email / phone."""
+    id: str
+    contractor_id: str
+    name: str
+    position: str | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+
 # Project
 # material_reply_days (MATERIAL-SUBMITTAL M1): calendar days for a material submittal's expected reply date. null = not set;
 # there is no default. Strict non-negative integer — -1, 1.5, "14" and true are rejected. JSON name: materialReplyDays.
