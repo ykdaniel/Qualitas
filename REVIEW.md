@@ -1,18 +1,17 @@
 # REVIEW.md — 獨立審查
 
-TASK_ID: DEPLOY-EXEC-2026-001
-審查日期：2026-10-08
-範圍：前端切換方案；不是部署完成驗收。
+TASK_ID: ITP-CHECKLIST-RETURN-2026-001
+審查日期：2026-10-11
+審查者：未參與實作的獨立 agent（本會話另開，只讀，不改產品程式）。下方「補正後核對」由實作者（Claude）記錄，不是新的獨立審查結論。
 
 ## EVIDENCE_CHECK
-已讀 TASK、前端切換計畫、Python 3.11 輸出與映像紀錄。32 passed/4 warnings、exit 0，映像為 arm64，證明該環境 Python 3.11 相容，不等於正式容器所有依賴與架構完全一致。
-候選 manifest 的根目錄檔僅 index.html，其餘在 assets，資產先置入、入口最後切換方案適用。實際容器 mount 尚未 inspect；NAS 檔案與對外首頁/三資產相符是抽樣服務證據，不是完整服務拓撲證明。正式部署後須對外核對候選內容，若未生效立即停止，不能另找未知目錄操作。
+審查者實際重跑：`tsc --noEmit` exit 0；`npm test` 144 pass / 0 fail；改動檔 ESLint 1 error／3 warnings，全數為基準 `a80799f` 既有問題，本輪未新增。換行格式：CRLF 檔（Checklist、ITPAdvancedEditor、LanguageContext）新增行皆 CRLF，無整檔轉換。封存檔與 HEAD 版本逐字相同。STATUS 所述瀏覽器 13 項 PASS、5 張截圖與證據檔相符。
 
 ## SCOPE_CHECK
-前端可與後端分開；不重啟容器、不換 dist 目錄、不刪舊資產。後端門檻 G 尚未完成，禁止以此 PASS 執行後端部署。
+只改前端 ITP／Checklist 導頁；`/itp/:id`（ITPDetail）、`from=itr`、後端皆未動，與 TASK 一致。`returnItp`／`reopenItp` 只用於比對使用者範圍內的 ITP id，網址以 URLSearchParams 編碼、路徑固定，無 open redirect 或 XSS 管道（讀碼）。
 
 ## DECISIONS_CHECK
-持續部署授權有效，無需再次詢問。正式冒煙不得新增/修改業務資料。前端候選部署不要求推送 122 個未全面審查提交。
+未新增業務政策。部署適用「每批 PASS 後完成準備即提交、推送及部署」，但正式站部署需要使用者環境的 NAS 存取，本輪不在雲端環境執行。
 
 ## VERDICT
 - [x] PASS
@@ -20,17 +19,18 @@ TASK_ID: DEPLOY-EXEC-2026-001
 - [ ] HUMAN_REQUIRED
 
 ## REQUIRED_FIXES
-無需重開補正輪。執行時必須落實以下收尾條件並記錄：
-1. 切換前就將回退包放到 NAS、核對完整雜湊、解壓並確認可讀的舊 index/資產；不要等故障後才上傳回退包。
-2. 將 TS、完整絕對 dist/staging/rollback 路徑固定為本次唯一值，建立目的目錄，採 fail-fast；不可把文件角括號示意行直接當命令。臨時入口使用唯一檔名，避免覆寫他人暫存。
-3. 對既有同名資產只驗證，不覆寫；候選資產全數落地核對後才替換入口。新舊資產均保留，不執行計畫 D 的清理刪除選項。
-4. 修正「正式站完整版本已證實」為 NAS 全量比對＋對外抽樣相符，保留 mount 未直接確認之限制。回退恢復舊入口供新載入頁面使用，不保證已開啟新版本的分頁瞬間回舊版。
+無阻擋項。非阻擋建議 6 項：
+1. 瀏覽器「上一頁」與頁面 Cancel 行為不一致，且返回後歷史有兩筆 /itp → 寫入已知限制（實作者決定本輪不改）。
+2. `returnItp` 在整個 Checklist 頁停留期間有效 → 寫入已知限制（非回歸）。
+3. 清單為空時 `reopenItp` 不會被消耗 → **已補正**。
+4. 兩個 effect 從舊參數刪除，人為構造網址時可能互相加回 → 寫入已知限制。
+5. 新工具函式缺單元測試 → **已補正**（4 個測試）。
+6. 隔離測試帳號密碼寫在驗證腳本（repo 既有 46 支腳本同模式）→ 提供使用者知悉，可考慮在 DECISIONS 明訂例外。
+
+## 補正後核對（實作者記錄）
+- ITP.tsx 補正後：`tsc` exit 0、`vite build` exit 0、`npm test` 148 pass / 0 fail、改動檔 ESLint 與基準相同（1 error／3 warnings）。
+- 重建隔離環境重跑瀏覽器情境：13 項全部 PASS（`docs/workflow/ITP-CHECKLIST-RETURN-2026-001-evidence/browser-scenarios.txt`）。
+- 補正內容未再經獨立審查；改動限於 ITP.tsx 的 reopen effect 判斷條件與新增單元測試檔。
 
 ## NEXT_STEP
-可依已授權直接執行前端部署，以上條件為執行前置，不需另問使用者。更新 STATUS 記錄實際時間、包雜湊、切換/回退路徑及逐项檢查；部署失敗按方案回退並回報。登入若無可用 session，回報登入後冒煙未完成，不宣稱全部驗收通過。
-後端維持 blocked：由使用者在自己的終端機完成需要 sudo 的唯讀預檢，或提供其他已授權方式；不索取/保存密碼、不新增免密 sudo 或 docker 權限。保留使用者預覽環境。
-
-## 結案備註（2026-10-10，Claude；不是新的審查結論）
-- 上方 PASS 只涵蓋前端切換方案，已於 2026-10-07 執行。
-- 後端 DOCX 路徑防護於 2026-10-09 部署：程式本身為 DOCX-PATH-GUARD-2026-001 獨立審查 PASS；預檢 r3 因正式站已改變而未執行，改用唯讀核對（見 STATUS 結案摘要與 `DEPLOY-EXEC-2026-001-docx-deploy-record.md`）。這個替代做法與部署執行**未經獨立審查**。
-- 依使用者 2026-10-10 指示結案。
+提交分支 `fix/itp-checklist-return` 並開 PR。合併後的正式站部署須在使用者環境依既有部署程序執行（前端建置、NAS 候選包、回退準備、冒煙）。

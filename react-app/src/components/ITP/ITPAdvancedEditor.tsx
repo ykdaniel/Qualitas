@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import VPBadge from './VPBadge';
 import { resolveItpRecordLink } from '../../utils/itpRecordLink';
+import { checklistFromItpPath } from '../../utils/itpReturnLink';
 import { useLanguage } from '../../context/LanguageContext';
 import { missingRequiredItemFields, preferEnglishText } from '../../utils/itpItemValidation';
 // Define Props
@@ -18,6 +19,8 @@ interface ITPAdvancedEditorProps {
     onItemsChange: (items: InspectionItem[]) => void;
     readOnly?: boolean;
     onViewRecord?: (itr: any) => void;
+    /** Id of the ITP being edited; lets a Checklist opened from here return to this window. */
+    itpId?: string | null;
     headerData?: {
         referenceNo: string;
         description: string;
@@ -32,7 +35,7 @@ export interface ITPAdvancedEditorRef {
     handleAddNew: () => void;
 }
 
-export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvancedEditorProps>(({ items, onItemsChange, readOnly = false, onViewRecord, headerData }, ref) => {
+export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvancedEditorProps>(({ items, onItemsChange, readOnly = false, onViewRecord, itpId, headerData }, ref) => {
     const itrList = useITRStore(state => state.itrList);
     const { t } = useLanguage();
     const navigate = useNavigate();
@@ -58,7 +61,7 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
                     }
                     break;
                 case 'checklist':
-                    navigate(`/checklist?openId=${result.recordsNo}&from=itp`);
+                    navigate(checklistFromItpPath(result.recordsNo, itpId));
                     break;
                 case 'ambiguous':
                     toast.error(`Multiple documents match "${value}" — cannot tell which one this Record refers to. Please check the record number.`);

@@ -1,23 +1,30 @@
-# TASK.md — 部署執行（核定範圍）
+# TASK.md — Checklist 返回原 ITP 編輯視窗
 
-TASK_ID: DEPLOY-EXEC-2026-001
-SOURCE: GPT 於 `DEPLOY-SCOPE-INVENTORY-2026-001` R2 PASS 後交辦，使用者轉交（2026-10-07）。部署授權：使用者已在對話中直接確認（每批 PASS 且準備完成即提交、推送、部署，含遠端唯讀預檢），亦記於 `DECISIONS.md`。
+TASK_ID: ITP-CHECKLIST-RETURN-2026-001
+SOURCE: 使用者於對話中直接交辦（2026-10-11 22:29）：「按 Back 就直接回到原本那份 ITP 的編輯視窗，可以改程式」。
 
 ## 前一任務
-`DEPLOY-SCOPE-INVENTORY-2026-001`：R2 PASS，收尾後封存為 `docs/workflow/DEPLOY-SCOPE-INVENTORY-2026-001-R2-PASS-*-archive.md`。
+`DEPLOY-EXEC-2026-001`：已結案（2026-10-10），三份檔案封存為 `docs/workflow/DEPLOY-EXEC-2026-001-CLOSED-{TASK,STATUS,REVIEW}-archive.md`。
 
-## 核定範圍
-- 前端：已保全候選包 `~/Documents/Qualitas-deploy-artifacts/DEPLOY-SCOPE-INVENTORY-2026-001/candidate/qualitas-frontend-candidate-056c245c-plus7.tgz`（基準 `056c245ca3ff630f74bfc7af86233e7cbc7dc51b`＋7 個已審前端檔）。
-- 後端：`backend/core/docx_builder.py`（DOCX-PATH-GUARD），依 `DOCX-PATH-GUARD-2026-001-deploy-handoff.md` v3。
+## 問題（現況，讀碼）
+- ITP 編輯視窗（`/itp` 頁的 `ITPDetailModal`）中點 Records 的 Checklist 連結，或按 Generate Checklist，會導到 `/checklist?openId=<recordsNo>&from=itp`。
+- Checklist 的 Back（`handleBack`）在 `from=itp` 時執行 `navigate(-1)`，回到 `/itp`；但 ITP 編輯視窗的開啟狀態不在網址中，回去只看到 ITP 列表，必須再點一次原 ITP。
 
-## 步驟
-1. 啟動既有 Colima，以官方 Python 3.11 可丟棄容器跑兩個 DOCX path guard 測試檔；不掛正式資料或帳密；保存映像識別、來源雜湊、完整輸出、退出碼。不安裝 Homebrew Python。**3.11 未通過不得部署後端。**
-2. 遠端唯讀預檢：前端服務目錄、掛載、內容雜湊、快取、權限；後端依 v3 §3 與門檻 G。
-3. 依現場結果整理具體切換與回退步驟，交獨立審核。通過且準備完成後直接部署（不再詢問相同授權）；前後端可分開。
-4. 冒煙：唯讀檢查與既有合法紀錄匯出；不新增正式業務資料（不按 Generate Checklist）。
+## 範圍
+1. 從 ITP 編輯視窗進入 Checklist 的兩個入口（Records 連結、Generate Checklist），網址多帶來源 ITP 的 id。
+2. Checklist 的 Back：有來源 ITP id 時，回到 `/itp` 並自動重新開啟該 ITP 的編輯視窗；沒有時維持原行為。
+3. 重新開啟的 ITP 視窗，關閉後停在 ITP 列表（不得沿用 `openId` 深連結「關閉即 navigate(-1)」的行為，否則會跳回 Checklist）。
+4. 重新開啟時停在 Inspection Plan 分頁（兩個入口都在該分頁）；一般點開與 Add New 仍從 General Information 開始。（實作中發現並補入，屬同一需求「回到原本那份 ITP 的編輯視窗」。）
+
+## 不在範圍
+- `/itp/:id`（`ITPDetail` 頁）：該頁本身有獨立網址，`navigate(-1)` 已回到原頁，不改。
+- ITR 來源（`from=itr`）的返回行為不改。
+- 不改後端、不改資料。
+
+## 驗收
+- 型別檢查與建置通過；既有前端單元測試通過。
+- 隔離環境實測：ITP 視窗 → Records 連結 → Checklist → Back，回到同一份 ITP 的編輯視窗；關閉該視窗後停在 ITP 列表。
+- 既有 `?openId=` 深連結（例如從其他模組開 ITP）的關閉行為不變。
 
 ## 限制
-不混入未審變更；不推送全部基準提交；不強制推送；任何檢查失敗即停止並回報。保留 8240／3240、8198／3198。不改產品程式。
-
-## 結案（2026-10-10）
-使用者指示「DEPLOY-EXEC 收尾結案並提交」。前端與後端皆已上線，詳見 STATUS「結案摘要」。本 TASK 不再有待執行步驟；新任務開始前依規則封存後覆寫。
+獨立審查 PASS 前不合併、不部署。不混入其他未審變更。

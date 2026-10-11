@@ -1,0 +1,26 @@
+
+/home/claude/qualitas/react-app/src/components/ITP/ITP.tsx
+   17:8   warning  'styles' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+  106:5   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/claude/qualitas/react-app/src/components/ITP/ITP.tsx:106:5
+  104 |     const match = itpList.find(item => item.id === openId || item.referenceNo === openId);
+  105 |     if (!match) return;
+> 106 |     handleEdit(match.id);
+      |     ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  107 |     openedViaDeepLinkRef.current = true;
+  108 |     deepLinkAppliedRef.current = true;
+  109 |     const next = new URLSearchParams(searchParams);  react-hooks/set-state-in-effect
+  381:26  warning  'detailErr' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           @typescript-eslint/no-unused-vars
+
+/home/claude/qualitas/react-app/src/components/ITP/ITPAdvancedEditor.tsx
+  5:27  warning  'ArrowDown' is defined but never used  @typescript-eslint/no-unused-vars
+
+✖ 4 problems (1 error, 3 warnings)
+
