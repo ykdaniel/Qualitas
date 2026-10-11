@@ -41,11 +41,14 @@ const ITPDetail: React.FC = () => {
 
   const [, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Item Save / Delete writes still in flight (see saveItemsNow) — counted, so overlapping writes
+  // keep the page busy until the last one finishes.
+  const [itemSaves, setItemSaves] = useState(0);
   const [isPrinting, setIsPrinting] = useState(false);
   const [rev, setRev] = useState("");
   const draftKey = JSON.stringify({ items, workTitle });
   const [baseline, setBaseline] = useState<string | null>(null);
-  useLeaveGuard(baseline !== null && draftKey !== baseline, saving);
+  useLeaveGuard(baseline !== null && draftKey !== baseline, saving || itemSaves > 0);
   // Which Record value's link is currently being resolved (real lookup, not a prefix guess —
   // see utils/itpRecordLink.ts) — used to disable that one button while the round trip is in
   // flight.
@@ -194,8 +197,10 @@ const ITPDetail: React.FC = () => {
   // Item Save / Delete write the inspection plan at once, the same as the list-page modal; only the
   // plan is sent, so an unsaved title edit still waits for the main Save (the baseline keeps its title).
   const saveItemsNow = async (nextItems: InspectionItem[]) => {
-    if (!id) return;
-    setSaving(true);
+    // baseline is null only when the plan never loaded: writing then would replace the stored plan
+    // with whatever is on screen, so the change stays local until Save Document.
+    if (!id || baseline === null) return;
+    setItemSaves(n => n + 1);
     try {
       await api.put(`/itp/${id}/detail`, {
         a: nextItems.filter(i => i.phase === 'A').map(({ phase: _phase, ...rest }) => rest),
@@ -210,7 +215,7 @@ const ITPDetail: React.FC = () => {
       console.error("Failed to save ITP inspection plan:", error);
       toast.error(t('itp.updateError') || 'Failed to update. Please try again later.');
     } finally {
-      setSaving(false);
+      setItemSaves(n => n - 1);
     }
   };
 

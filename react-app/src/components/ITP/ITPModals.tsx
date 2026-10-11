@@ -138,6 +138,9 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
 
 
     const [saving, setSaving] = useState(false);
+    // Immediate item saves still in flight: closing waits for them, so a write that then fails
+    // is never dropped silently after the window is gone.
+    const [applyingCount, setApplyingCount] = useState(0);
     const [isPrinting, setIsPrinting] = useState(false);
     const [isDirty, setIsDirty] = useState(false);
 
@@ -261,7 +264,13 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
             // This is an immediate save, separate from the main Save/Publish flow (unchanged,
             // existing behavior) — reflect its real result rather than assuming success, since
             // onApplyItems shows its own error toast and never throws.
-            const applied = await onApplyItems(prepareDetailPayload(newItems));
+            setApplyingCount(c => c + 1);
+            let applied = false;
+            try {
+                applied = await onApplyItems(prepareDetailPayload(newItems));
+            } finally {
+                setApplyingCount(c => c - 1);
+            }
             setPlanStatus(applied ? 'saved' : 'failed');
             // A plan that reached the server is not an unsaved edit, so closing must not warn
             // that it will be lost; a failed one still needs the main Save (which always resends
@@ -523,7 +532,7 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
 
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
     const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
-    const navigationGuard = useLeaveGuard(isDirty || pendingFiles.length > 0 || deletedFileIds.length > 0, saving);
+    const navigationGuard = useLeaveGuard(isDirty || pendingFiles.length > 0 || deletedFileIds.length > 0, saving || applyingCount > 0);
     // Bumped after a successful upload/delete so FileAttachment's entityType/entityId auto-fetch
     // re-queries the live attachment list (the actual source of truth for real attachments —
     // see the FileAttachment usage below) instead of showing stale data from before the save.
