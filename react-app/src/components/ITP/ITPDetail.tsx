@@ -191,6 +191,29 @@ const ITPDetail: React.FC = () => {
     }
   };
 
+  // Item Save / Delete write the inspection plan at once, the same as the list-page modal; only the
+  // plan is sent, so an unsaved title edit still waits for the main Save (the baseline keeps its title).
+  const saveItemsNow = async (nextItems: InspectionItem[]) => {
+    if (!id) return;
+    setSaving(true);
+    try {
+      await api.put(`/itp/${id}/detail`, {
+        a: nextItems.filter(i => i.phase === 'A').map(({ phase: _phase, ...rest }) => rest),
+        b: nextItems.filter(i => i.phase === 'B').map(({ phase: _phase, ...rest }) => rest),
+        c: nextItems.filter(i => i.phase === 'C').map(({ phase: _phase, ...rest }) => rest),
+        checklist: [],
+        self_inspection: null
+      });
+      setBaseline(prev => JSON.stringify({ items: nextItems, workTitle: prev ? JSON.parse(prev).workTitle : workTitle }));
+      toast.success(t('itp.saveStatusSaved') || 'Saved');
+    } catch (error) {
+      console.error("Failed to save ITP inspection plan:", error);
+      toast.error(t('itp.updateError') || 'Failed to update. Please try again later.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // 計算下一個 ID
   const calculateNextId = (phase: string, insertAfterId: string = 'end') => {
     const phaseItems = items.filter(i => i.phase === phase);
@@ -254,11 +277,13 @@ const ITPDetail: React.FC = () => {
         id: `${item.phase}${index + 1}`
       }));
 
-      setItems([...otherItems, ...newPhaseItems]);
+      const nextItems = [...otherItems, ...newPhaseItems];
+      setItems(nextItems);
+      void saveItemsNow(nextItems);
     } else {
-      setItems(prevItems => prevItems.map(item =>
-        item.id === editingItem.id ? editingItem : item
-      ));
+      const nextItems = items.map(item => item.id === editingItem.id ? editingItem : item);
+      setItems(nextItems);
+      void saveItemsNow(nextItems);
     }
     setEditingItem(null);
   };
@@ -331,7 +356,9 @@ const ITPDetail: React.FC = () => {
 
   const handleDelete = (itemId: string) => {
     if (window.confirm("Are you sure you want to delete this item?")) {
-      setItems(prev => prev.filter(item => item.id !== itemId));
+      const nextItems = items.filter(item => item.id !== itemId);
+      setItems(nextItems);
+      void saveItemsNow(nextItems);
     }
   };
 
@@ -377,23 +404,23 @@ const ITPDetail: React.FC = () => {
                   modal title. Phase stays (handleAddNew defaults to 'A', and it is the only way
                   to move an item between phases); Insert After shares its row for new items. */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                   <div className="flex items-center gap-3 mb-2">
                     <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.phase') || 'Phase'}</span>
                     <span className="flex-1 border-t-2 border-slate-400"></span>
                   </div>
-                  <select className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm" value={editingItem.phase} onChange={(e) => handleChange('phase', e.target.value)}>
+                  <select className="w-full border border-slate-300 bg-white rounded-lg px-4 h-10 text-sm" value={editingItem.phase} onChange={(e) => handleChange('phase', e.target.value)}>
                     {PHASES.map(p => <option key={p.code} value={p.code}>{p.title}</option>)}
                   </select>
                 </div>
                 {editingItem.isNew && (
-                  <div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                     <div className="flex items-center gap-3 mb-2">
                       <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.detail.insertAfter') || 'Insert After'}</span>
                       <span className="flex-1 border-t-2 border-slate-400"></span>
                     </div>
                     <select
-                      className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm"
+                      className="w-full border border-slate-300 bg-white rounded-lg px-4 h-10 text-sm"
                       value={editingItem.insertAfter || 'end'}
                       onChange={(e) => handleChange('insertAfter', e.target.value)}
                     >
@@ -416,30 +443,30 @@ const ITPDetail: React.FC = () => {
                     own EN/CH stays stacked top-to-bottom internally, matching the table/print
                     direction, with a persistent "EN"/"中文" label on every box). */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                     <div className="flex items-center gap-3 mb-2">
                       <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.activityLabel') || 'Activity (EN/CH)'}</span>
                       <span className="text-[11px] font-semibold text-[#b91c1c] whitespace-nowrap">{t('itp.itemPanel.eitherLanguageRequired') || 'English or Chinese — at least one'}</span>
                       <span className="flex-1 border-t-2 border-slate-400"></span>
                     </div>
                     <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
-                    <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm resize-y mb-2" value={editingItem.activity.en} onChange={(e) => handleChange('activity', e.target.value, 'en')} />
+                    <textarea rows={2} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm resize-y mb-2" value={editingItem.activity.en} onChange={(e) => handleChange('activity', e.target.value, 'en')} />
                     <span className="inline-block text-[11px] font-bold text-[#8a6a3a] bg-[#faf7f1] border border-[#b8945a]/40 rounded px-1.5 py-0.5 mb-1">中文</span>
-                    <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={editingItem.activity.ch} onChange={(e) => handleChange('activity', e.target.value, 'ch')} />
+                    <textarea rows={2} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={editingItem.activity.ch} onChange={(e) => handleChange('activity', e.target.value, 'ch')} />
                   </div>
 
-                  <div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                     <div className="flex items-center gap-3 mb-2">
                       <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.standardLabel') || 'Standard (EN/CH)'}</span>
                       <span className="text-[11px] font-semibold text-[#b91c1c] whitespace-nowrap">{t('itp.itemPanel.eitherLanguageRequired') || 'English or Chinese — at least one'}</span>
                       <span className="flex-1 border-t-2 border-slate-400"></span>
                     </div>
                     <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
-                    <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm resize-y mb-2"
+                    <textarea rows={2} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm resize-y mb-2"
                       value={typeof editingItem.standard === 'string' ? editingItem.standard : editingItem.standard.en}
                       onChange={(e) => handleChange('standard', e.target.value, 'en')} />
                     <span className="inline-block text-[11px] font-bold text-[#8a6a3a] bg-[#faf7f1] border border-[#b8945a]/40 rounded px-1.5 py-0.5 mb-1">中文</span>
-                    <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y"
+                    <textarea rows={2} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm text-slate-900 resize-y"
                       value={typeof editingItem.standard === 'string' ? '' : editingItem.standard.ch}
                       onChange={(e) => handleChange('standard', e.target.value, 'ch')} />
                   </div>
@@ -448,13 +475,13 @@ const ITPDetail: React.FC = () => {
                 {/* Criteria — EN above CH per entry, stacked (same reasoning as Activity).
                     Section label sits ON the divider line (2026-10-07, "字可以放在橫線前面"),
                     not below a plain line, so the label reads as part of the same divider. */}
-                <div className="pt-2">
+                <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                   <div className="flex items-center gap-3 mb-2">
                     <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.criteriaLabel') || 'Criteria'}</span>
                     <span className="flex-1 border-t-2 border-slate-400"></span>
                   </div>
                   {normalizeCriteria(editingItem.criteria).map((c, idx) => (
-                    <div key={idx} data-criteria-row={idx} className="flex items-start gap-2 mb-3 p-2 rounded-lg border border-slate-200 bg-slate-50/60">
+                    <div key={idx} data-criteria-row={idx} className="flex items-start gap-2 mb-3 p-2 rounded-lg border border-slate-200 bg-white">
                         {normalizeCriteria(editingItem.criteria).length > 1 && (
                             <span className="shrink-0 w-6 h-6 mt-0.5 rounded-full bg-slate-700 text-white text-xs font-bold flex items-center justify-center">{idx + 1}</span>
                         )}
@@ -462,11 +489,11 @@ const ITPDetail: React.FC = () => {
                         <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="min-w-0">
                                 <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
-                                <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm resize-y" value={c.en} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'en')} />
+                                <textarea rows={2} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm resize-y" value={c.en} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'en')} />
                             </div>
                             <div className="min-w-0">
                                 <span className="inline-block text-[11px] font-bold text-[#8a6a3a] bg-[#faf7f1] border border-[#b8945a]/40 rounded px-1.5 py-0.5 mb-1">中文</span>
-                                <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={c.ch} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'ch')} />
+                                <textarea rows={2} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={c.ch} onChange={(e) => handleCriteriaChange(idx, e.target.value, 'ch')} />
                             </div>
                         </div>
                         <button className={actionStyles.iconDanger} type="button" onClick={() => handleCriteriaRemove(idx)}>✕</button>
@@ -477,41 +504,47 @@ const ITPDetail: React.FC = () => {
 
                 {/* Others — Check Time / Method each get their own labeled-divider line (2026-10-07, "Check Time/Method 各劃一條") */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 pt-2">
-                  <div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                     <div className="flex items-center gap-3 mb-2">
                       <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.checkTimeLabel') || 'Check Time (EN/CH)'}</span>
                       <span className="flex-1 border-t-2 border-slate-400"></span>
                     </div>
-                    <textarea rows={3} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm mb-2 resize-y" value={editingItem.checkTime.en} onChange={(e) => handleChange('checkTime', e.target.value, 'en')} />
-                    <textarea rows={3} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={editingItem.checkTime.ch} onChange={(e) => handleChange('checkTime', e.target.value, 'ch')} />
+                    <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
+                    <textarea rows={3} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm mb-2 resize-y" value={editingItem.checkTime.en} onChange={(e) => handleChange('checkTime', e.target.value, 'en')} />
+                    <span className="inline-block text-[11px] font-bold text-[#8a6a3a] bg-[#faf7f1] border border-[#b8945a]/40 rounded px-1.5 py-0.5 mb-1">中文</span>
+                    <textarea rows={3} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={editingItem.checkTime.ch} onChange={(e) => handleChange('checkTime', e.target.value, 'ch')} />
                   </div>
-                  <div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                     <div className="flex items-center gap-3 mb-2">
                       <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.methodLabel') || 'Method (EN/CH)'}</span>
                       <span className="flex-1 border-t-2 border-slate-400"></span>
                     </div>
-                    <textarea rows={3} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm mb-2 resize-y" value={editingItem.method.en} onChange={(e) => handleChange('method', e.target.value, 'en')} />
-                    <textarea rows={3} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={editingItem.method.ch} onChange={(e) => handleChange('method', e.target.value, 'ch')} />
+                    <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
+                    <textarea rows={3} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm mb-2 resize-y" value={editingItem.method.en} onChange={(e) => handleChange('method', e.target.value, 'en')} />
+                    <span className="inline-block text-[11px] font-bold text-[#8a6a3a] bg-[#faf7f1] border border-[#b8945a]/40 rounded px-1.5 py-0.5 mb-1">中文</span>
+                    <textarea rows={3} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm text-slate-900 resize-y" value={editingItem.method.ch} onChange={(e) => handleChange('method', e.target.value, 'ch')} />
                   </div>
-                  <div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                     <div className="flex items-center gap-3 mb-2">
                       <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.frequencyLabel') || 'Frequency (EN/CH)'}</span>
                       <span className="flex-1 border-t-2 border-slate-400"></span>
                     </div>
-                    <textarea rows={3} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm mb-2 resize-y"
+                    <span className="inline-block text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 mb-1">EN</span>
+                    <textarea rows={3} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm mb-2 resize-y"
                       value={typeof editingItem.frequency === 'string' ? editingItem.frequency : editingItem.frequency.en}
                       onChange={(e) => handleChange('frequency', e.target.value, 'en')} />
-                    <textarea rows={3} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm text-slate-900 resize-y"
+                    <span className="inline-block text-[11px] font-bold text-[#8a6a3a] bg-[#faf7f1] border border-[#b8945a]/40 rounded px-1.5 py-0.5 mb-1">中文</span>
+                    <textarea rows={3} className="w-full border border-slate-300 bg-white rounded-lg px-4 py-2 text-sm text-slate-900 resize-y"
                       value={typeof editingItem.frequency === 'string' ? '' : editingItem.frequency.ch}
                       onChange={(e) => handleChange('frequency', e.target.value, 'ch')} />
                   </div>
-                  <div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                     <div className="flex items-center gap-3 mb-2">
                       <span className="text-xs font-bold text-slate-700 uppercase whitespace-nowrap">{t('itp.itemPanel.recordLabel') || 'Record'}</span>
                       <span className="flex-1 border-t-2 border-slate-400"></span>
                     </div>
                     <input
-                      className="w-full border border-slate-300 rounded-lg px-4 h-10 text-sm"
+                      className="w-full border border-slate-300 bg-white rounded-lg px-4 h-10 text-sm"
                       list="itr-options"
                       value={editingItem.record}
                       onChange={(e) => handleChange('record', e.target.value)}
@@ -563,7 +596,7 @@ const ITPDetail: React.FC = () => {
                           onClick={handleSave}
                           className={actionStyles.primary}
                       >
-                          <Save size={18} /> {t('common.apply') || 'Apply'}
+                          <Save size={18} /> {t('common.save') || 'Save'}
                       </button>} />
           </div>
         </div>

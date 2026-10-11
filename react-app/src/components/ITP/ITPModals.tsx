@@ -256,7 +256,6 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
 
     const handleItemsChange = async (newItems: InspectionItem[]) => {
         setAdvancedItems(newItems);
-        setIsDirty(true);
         setPlanStatus('unsaved');
         if (onApplyItems && itpId) {
             // This is an immediate save, separate from the main Save/Publish flow (unchanged,
@@ -264,7 +263,13 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
             // onApplyItems shows its own error toast and never throws.
             const applied = await onApplyItems(prepareDetailPayload(newItems));
             setPlanStatus(applied ? 'saved' : 'failed');
+            // A plan that reached the server is not an unsaved edit, so closing must not warn
+            // that it will be lost; a failed one still needs the main Save (which always resends
+            // the plan for an existing record), so the leave guard stays on for it.
+            if (!applied) setIsDirty(true);
+            return;
         }
+        setIsDirty(true);
     };
 
 
@@ -878,6 +883,7 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                                 items={advancedItems}
                                 onItemsChange={handleItemsChange}
                                 readOnly={formReadOnly}
+                                savesImmediately={!!(onApplyItems && itpId)}
                                 onViewRecord={() => {
                                     navigate('/itr');
                                 }}
