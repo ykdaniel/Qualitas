@@ -1,191 +1,199 @@
-2026-10-11T00:16:27.159Z === 1. layout ===
-2026-10-11T00:16:28.045Z PASS 1: full-screen form (width 1440)
-2026-10-11T00:16:28.048Z PASS 1: four tabs in order (no Action Items)
-2026-10-11T00:16:28.049Z PASS 1: back button
-2026-10-11T00:16:28.051Z PASS 1: Meeting Type placeholder translated (-- Please select --)
-2026-10-11T00:16:28.052Z PASS 1: General tab has "Subject"
-2026-10-11T00:16:28.052Z PASS 1: General tab has "Start Time"
-2026-10-11T00:16:28.053Z PASS 1: General tab has "End Time"
-2026-10-11T00:16:28.053Z PASS 1: General tab has "Venue"
-2026-10-11T00:16:28.054Z PASS 1: General tab has "Recorded By"
-2026-10-11T00:16:28.086Z === 1b. item views ===
-2026-10-11T00:16:29.143Z PASS 1b: nine open items from the four meetings (MOM-DEMO-002 (1.0)#2.1, MOM-DEMO-002 (1.0)#1.1.1, MOM-DEMO-004 (1.0)#1.1, MOM-DEMO-004 (1.0)#1.2, MOM-DEMO-004 (1.0)#2.1, MOM-DEMO-001 (1.0)#1.1, MOM-DEMO-001 (1.0)#2.1, MOM-DEMO-003 (1.0)#1.1, MOM-DEMO-003 (1.0)#2.1)
-2026-10-11T00:16:29.143Z PASS 1b: overdue items first
-2026-10-11T00:16:29.144Z PASS 1b: the two past-target items marked overdue
-2026-10-11T00:16:29.145Z PASS 1b: overdue shown in red
-2026-10-11T00:16:29.454Z PASS 1b: filtered by Action by (TECO: 4)
-2026-10-11T00:16:29.778Z PASS 1b: overdue only (MOM-DEMO-002 (1.0)#1.1.1)
-2026-10-11T00:16:30.752Z PASS 1b: searching item text finds it (MOM-DEMO-002 (1.0)#1.1.1)
-2026-10-11T00:16:32.093Z PASS 1b: three closed items (MOM-DEMO-002 (1.0)#1.1.2, MOM-DEMO-001 (1.0)#1.2, MOM-DEMO-003 (1.0)#1.2)
-2026-10-11T00:16:32.441Z PASS 1b: clicking an item opens its meeting
-2026-10-11T00:16:32.825Z === 2. build a register on a new meeting ===
-2026-10-11T00:16:32.954Z PASS 2: one screen, no mode switch
-2026-10-11T00:16:32.955Z PASS 2: "Show closed items" unchecked by default
-2026-10-11T00:16:32.956Z PASS 2: toolbar: Add Category | Add Item (no Add Sub-category)
-2026-10-11T00:16:32.957Z PASS 2: with no category, Add Item is disabled and says why
-2026-10-11T00:16:33.262Z PASS 2: pressing it (keyboard) adds nothing and shows the reason
-2026-10-11T00:16:33.289Z PASS 2: a new category shows the number it will get (1.0), not "Add"
-2026-10-11T00:16:33.291Z PASS 2: the new row opens focused
-2026-10-11T00:16:33.342Z PASS 2: after adding category 1.0, the next item goes under it by default
-2026-10-11T00:16:33.342Z PASS 2: a new item under 1.0 shows 1.1
-2026-10-11T00:16:33.343Z PASS 2: a new item opens straight in edit
-2026-10-11T00:16:33.346Z PASS 2: a new item is raised on the meeting date by default
-2026-10-11T00:16:33.411Z PASS 2: the next item under 1.0 shows 1.2
-2026-10-11T00:16:33.436Z PASS 2: register numbered 1 / 1.1 / 1.2 — two levels (1,1.1,1.2)
-2026-10-11T00:16:33.437Z PASS 2: no add buttons on the category rows
-2026-10-11T00:16:33.543Z PASS 2: "Under" lists the categories only
-2026-10-11T00:16:33.544Z PASS 2: Add Item goes under the category of the row last clicked (1.1 → 1.3)
-2026-10-11T00:16:33.550Z PASS 2: changing "Under" renumbers the pending row (2 → 2.1)
-2026-10-11T00:16:33.650Z PASS 2: (category 2.0 removed again)
-2026-10-11T00:16:33.651Z PASS 2: category shown as 1.0
-2026-10-11T00:16:33.651Z PASS 2: raised date shown above the item (11 Aug 2026)
-2026-10-11T00:16:33.652Z PASS 2: only the this-week field is an input in a resting item
-2026-10-11T00:16:33.652Z PASS 2: ✏️ on the item
-2026-10-11T00:16:33.654Z PASS 2: no "This week" label; the field says "Add progress…"
-2026-10-11T00:16:33.675Z PASS 2: only that row is in edit
-2026-10-11T00:16:33.676Z PASS 2: other rows have no ✏️ while one is open
-2026-10-11T00:16:33.701Z PASS 2: ✕ leaves the row unchanged
-2026-10-11T00:16:33.735Z PASS 2: Esc in a new row cancels it; the form stays open
-2026-10-11T00:16:33.737Z PASS 2: Esc does not bring up the leave prompt
-2026-10-11T00:16:33.771Z PASS 2: Esc with the "Under" picker focused cancels too
-2026-10-11T00:16:33.841Z PASS 2: Esc on a ✏️ row drops the change
-2026-10-11T00:16:33.841Z PASS 2: and the toolbar is back
-2026-10-11T00:16:33.875Z PASS 2: ✕ says "Cancel (Esc)"
-2026-10-11T00:16:33.928Z PASS R12: the toolbar stays while a row is being added
-2026-10-11T00:16:33.929Z PASS R12: the open row says "✓ to apply, Esc to cancel"
-2026-10-11T00:16:33.955Z PASS R12: Add Category on a blank new item replaces it (one new row, 2.0)
-2026-10-11T00:16:33.983Z PASS R12: Add Item on a blank new category replaces it; nothing left behind
-2026-10-11T00:16:34.310Z PASS R12: a row with input but no text is not replaced
-2026-10-11T00:16:34.311Z PASS R12: … and a toast says why and what to do
-2026-10-11T00:16:34.313Z PASS R12: … and the same reason shows in red under the row
-2026-10-11T00:16:34.314Z PASS R12: … with focus back in the row text
-2026-10-11T00:16:34.317Z PASS R12: typing in the row clears the red reason
-2026-10-11T00:16:34.647Z PASS R12: Add Item on a filled row applies it (1.3) and opens the next one beside it (1.4) — 1,1.1,1.2,1.3
-2026-10-11T00:16:34.647Z PASS R12: the auto-applied row kept its Action by
-2026-10-11T00:16:34.648Z PASS R12: a toast says 1.3 was applied and Save is still needed
-2026-10-11T00:16:34.650Z PASS R12: the new row opens focused
-2026-10-11T00:16:34.675Z PASS R12: after ✓ the focus is on "Add Item" (no empty row opened by itself)
-2026-10-11T00:16:34.676Z PASS R12: ✓ opens no new row by itself
-2026-10-11T00:16:34.680Z PASS R12: Enter on it opens the next item (1.5)
-2026-10-11T00:16:34.718Z PASS R12: Add Item is enabled while a filled category is open
-2026-10-11T00:16:34.744Z PASS R12: Add Item on a filled category applies it (2.0) and opens 2.1 under it
-2026-10-11T00:16:35.047Z PASS R12: … and the toast names 2.0 (2.0 applied to the minutes — press Save to keep it. | 1.3 applied to the minutes — press Save to keep it. | Fill in the text of this row first, or press Esc to cancel it. | Add a category first)
-2026-10-11T00:16:35.444Z PASS R12: Add on an unchanged ✏️ row opens the next item without an "applied" toast
-2026-10-11T00:16:35.515Z PASS R12: the toolbar stays while a ✏️ row is open
-2026-10-11T00:16:35.541Z PASS R12: a ✏️ row with its text cleared is not applied or left
-2026-10-11T00:16:35.571Z PASS R12: a ✏️ row with text is applied, the next item goes beside it
-2026-10-11T00:16:35.769Z PASS R12: (chained rows removed again)
-2026-10-11T00:16:35.824Z PASS 2: ✓ applies the change
-2026-10-11T00:16:35.833Z PASS 2: date picked before typing stays in the field
-2026-10-11T00:16:36.743Z PASS 2: Save blocked while a new item is typed but not applied
-2026-10-11T00:16:36.744Z PASS 2: the form switched to the Discussions tab
-2026-10-11T00:16:36.745Z PASS 2: the next new item shows 1.3
-2026-10-11T00:16:36.768Z PASS 2: ✕ on a new row adds nothing
-2026-10-11T00:16:36.798Z PASS 2: after ✕ the same number is offered again (nothing consumed)
-2026-10-11T00:16:36.824Z PASS 2: an item added and closed this session stays on screen
-2026-10-11T00:16:36.848Z PASS 2: deleting an item asks about that item only (Delete 1.2?)
-2026-10-11T00:16:36.849Z PASS 2: 🗑 (confirmed) removes the row
-2026-10-11T00:16:36.875Z PASS 2: after deleting, the next category is 2.0 (no gap)
-2026-10-11T00:16:36.928Z PASS 2: queued file kept across tab switches
-2026-10-11T00:16:39.465Z PASS 2: meeting saved
-2026-10-11T00:16:39.465Z PASS 2: start and end time stored
-2026-10-11T00:16:39.465Z PASS 2: attendee by Company / Name / Position
-2026-10-11T00:16:39.465Z PASS 2: stored register shape
-2026-10-11T00:16:39.465Z PASS 2: item fields, raised date and this week's update dated with the meeting date
-2026-10-11T00:16:39.465Z PASS 2: the cancelled new row was not stored
-2026-10-11T00:16:39.465Z === 2b. three-level Draft ===
-2026-10-11T00:16:39.473Z PASS 2b: a three-level Draft
-2026-10-11T00:16:40.960Z PASS 2b: the sub-category and its item are shown
-2026-10-11T00:16:41.105Z PASS 2b: a new item goes under the category (1.2), not under the old sub-category
-2026-10-11T00:16:42.666Z PASS 2b: stored as is plus the new item; the old title and item stay editable
-2026-10-11T00:16:42.679Z PASS 2b: New Occurrence of a two-level meeting carries x.0 / x.y
-2026-10-11T00:16:42.679Z === 2c. several progress notes ===
-2026-10-11T00:16:42.685Z PASS 2c: a Draft with an item raised 4 Aug and a note carried from 6 Aug
-2026-10-11T00:16:44.171Z PASS 2c: a new note is dated with the meeting by default
-2026-10-11T00:16:44.172Z PASS 2c: the day picker starts at the raised date
-2026-10-11T00:16:44.503Z PASS 2c: ✓ on an empty note adds nothing and says why (toast + red)
-2026-10-11T00:16:44.507Z PASS 2c: typing clears the red reason
-2026-10-11T00:16:44.532Z PASS 2c: ✓ files the note and empties the field for the next one
-2026-10-11T00:16:44.584Z PASS 2c: after filing, the next note is back on the meeting date
-2026-10-11T00:16:44.586Z PASS 2c: notes in date order, the missed day in its place, same day as written (6 Aug 2026earlier meeting note / 7 Aug 2026missed day / 11 Aug 2026first note / 11 Aug 2026second, same day)
-2026-10-11T00:16:44.586Z PASS 2c: the carried note has no ✏️ / 🗑
-2026-10-11T00:16:44.592Z PASS 2c: a day before the raised date shows the reason at once
-2026-10-11T00:16:44.624Z PASS 2c: … and ✓ keeps it in the field
-2026-10-11T00:16:45.281Z PASS 2c: Save is stopped, says why and goes to the Discussions tab
-2026-10-11T00:16:45.285Z PASS 2c: a day after today is refused too
-2026-10-11T00:16:45.291Z PASS 2c: Esc in the field drops the note being typed
-2026-10-11T00:16:45.426Z PASS 2c: a ✏️ change of day moves the note to its new place
-2026-10-11T00:16:45.518Z PASS 2c: an emptied note is not applied, and says why
-2026-10-11T00:16:45.523Z PASS 2c: Esc puts the note back as it was
-2026-10-11T00:16:45.585Z PASS 2c: 🗑 asks, then removes the note (Remove the progress note of 11 Aug 2026?)
-2026-10-11T00:16:47.121Z PASS 2c: stored as written, carried note untouched ([{"date":"2026-08-06","content":"earlier meeting note","carried":true},{"date":"2026-08-08","content":"first note (moved to the 8th)"},{"date":"2026-08-07","content":"missed day"},{"date":"2026-08-05","content":"fifth of August"}])
-2026-10-11T00:16:48.617Z PASS 2c: reopened, the notes read in date order
-2026-10-11T00:16:49.440Z PASS 2c: printed in date order too (5 Aug 2026 / 6 Aug 2026 / 7 Aug 2026 / 8 Aug 2026)
-2026-10-11T00:16:49.440Z === 3. legacy format Draft ===
-2026-10-11T00:16:50.931Z PASS 3: legacy open rows (1,1.1,2,2.1)
-2026-10-11T00:16:50.960Z PASS 3: "Show closed items" adds the legacy Closed sub-item under its topic
-2026-10-11T00:16:50.961Z PASS 3: a closed item has no this-week field
-2026-10-11T00:16:52.516Z PASS 3: saving a legacy Draft writes the new shape
-2026-10-11T00:16:52.525Z PASS 3: content and statuses preserved
-2026-10-11T00:16:52.525Z PASS 3: this week's update stored with the date picked before typing
-2026-10-11T00:16:52.525Z === 4. legacy Published ===
-2026-10-11T00:16:54.017Z PASS 4: legacy published register readable
-2026-10-11T00:16:54.018Z PASS 4: read-only (no Save)
-2026-10-11T00:16:54.019Z PASS 4: no editable register fields
-2026-10-11T00:16:54.020Z PASS 4: no ✏️ / 🗑 / add buttons on a published record
-2026-10-11T00:16:54.020Z PASS 4: no this-week field on a published record
-2026-10-11T00:16:54.028Z PASS 4: stored log untouched
-2026-10-11T00:16:54.028Z === 5. new occurrence carry-forward ===
-2026-10-11T00:16:55.512Z PASS 5: published register (Open filter hides the Closed 1.1.2)
-2026-10-11T00:16:58.173Z PASS 5: rev 2.0 created
-2026-10-11T00:16:58.173Z PASS 5: unfinished items + headings carried, numbers kept, Closed 1.1.2 left behind
-2026-10-11T00:16:58.190Z PASS 5: carried item marked
-2026-10-11T00:16:58.191Z PASS 5: raised date kept on the carried item
-2026-10-11T00:16:58.197Z PASS 5: item text indented under its raised date, like the progress updates
-2026-10-11T00:16:58.197Z PASS 5: carried item has no 🗑
-2026-10-11T00:16:58.337Z PASS 5: new items under carried 2.0 get 2.2, 2.3
-2026-10-11T00:16:58.405Z PASS 5: deleting 2.2 keeps 2.3 (no renumbering while carried rows exist)
-2026-10-11T00:16:58.434Z PASS 5: the next one is 2.4 (the gap 2.2 is not reused)
-2026-10-11T00:16:58.551Z PASS 5: ✏️ on a carried item: text stays read-only, Action by editable
-2026-10-11T00:16:58.576Z PASS 5: carried update read-only
-2026-10-11T00:16:58.576Z PASS 5: carried item cannot be deleted
-2026-10-11T00:16:58.577Z PASS 5: earlier update shown as "21 Jul 2026" + text
-2026-10-11T00:16:58.583Z PASS 5: an item closed this week stays, with its this-week field, until the form closes
-2026-10-11T00:17:00.157Z PASS 5: new update added after the carried one, item closed
-2026-10-11T00:17:00.166Z PASS 5: the earlier meeting keeps its own record (a copy, not a reference)
-2026-10-11T00:17:00.166Z === 5a. hover icons, auto-height text ===
-2026-10-11T00:17:01.673Z PASS 5a: row icons hidden until hover
-2026-10-11T00:17:01.962Z PASS 5a: row icons shown on hover
-2026-10-11T00:17:01.963Z PASS 5a: ✏️ is a small icon (18x18)
-2026-10-11T00:17:01.969Z PASS 5a: row icons shown on keyboard focus
-2026-10-11T00:17:01.970Z PASS 5a: empty update box is one line high (34px)
-2026-10-11T00:17:01.978Z PASS 5a: the box grows with its text, no scrollbar (34 -> 92px)
-2026-10-11T00:17:01.982Z PASS 5a: and shrinks back to one line when emptied
-2026-10-11T00:17:02.007Z PASS 5a: edit box sized to its one-line content
-2026-10-11T00:17:02.031Z === 5b. control sizes ===
-2026-10-11T00:17:03.953Z PASS 5b@800: register buttons present (5)
-2026-10-11T00:17:03.954Z PASS 5b@800: every button inside its cell, no cell overflow ()
-2026-10-11T00:17:03.954Z PASS 5b@800: buttons stay one compact line (tallest 20px)
-2026-10-11T00:17:04.402Z PASS 5b@1400: register buttons present (5)
-2026-10-11T00:17:04.402Z PASS 5b@1400: every button inside its cell, no cell overflow ()
-2026-10-11T00:17:04.402Z PASS 5b@1400: buttons stay one compact line (tallest 20px)
-2026-10-11T00:17:04.437Z === 6. print ===
-2026-10-11T00:17:06.727Z PASS 6: print: item text indented under its raised date
-2026-10-11T00:17:06.727Z PASS 6: print contains "SUBJECT"
-2026-10-11T00:17:06.727Z PASS 6: print contains "VENUE & TIME"
-2026-10-11T00:17:06.727Z PASS 6: print contains "RECORDED BY"
-2026-10-11T00:17:06.727Z PASS 6: print contains "DISCUSSIONS / ACTIONS"
-2026-10-11T00:17:06.727Z PASS 6: print contains "Action by"
-2026-10-11T00:17:06.727Z PASS 6: print contains "15:00 ~ 17:15"
-2026-10-11T00:17:06.727Z PASS 6: print contains "1.0"
-2026-10-11T00:17:06.727Z PASS 6: print contains "1.1.1"
-2026-10-11T00:17:06.727Z PASS 6: print contains "21 Jul 2026"
-2026-10-11T00:17:06.727Z PASS 6: print contains "14 Jul 2026"
-2026-10-11T00:17:06.727Z PASS 6: print contains "15 Aug 2026"
-2026-10-11T00:17:06.727Z PASS 6: print contains "4 Aug 2026"
-2026-10-11T00:17:06.783Z === 7. zh labels ===
-2026-10-11T00:17:10.457Z PASS 7: zh tab names
-2026-10-11T00:17:10.458Z PASS 7: zh placeholder (-- 請選擇 --)
-2026-10-11T00:17:10.459Z PASS 7: zh 記錄人 / 結束時間
-2026-10-11T00:17:10.519Z PASS no script errors in the console ()
-2026-10-11T00:17:10.544Z ALL 178 CHECKS PASSED
+2026-10-11T00:21:03.162Z === 1. layout ===
+2026-10-11T00:21:04.050Z PASS 1: full-screen form (width 1440)
+2026-10-11T00:21:04.054Z PASS 1: four tabs in order (no Action Items)
+2026-10-11T00:21:04.055Z PASS 1: back button
+2026-10-11T00:21:04.058Z PASS 1: Meeting Type placeholder translated (-- Please select --)
+2026-10-11T00:21:04.059Z PASS 1: General tab has "Subject"
+2026-10-11T00:21:04.060Z PASS 1: General tab has "Start Time"
+2026-10-11T00:21:04.060Z PASS 1: General tab has "End Time"
+2026-10-11T00:21:04.061Z PASS 1: General tab has "Venue"
+2026-10-11T00:21:04.062Z PASS 1: General tab has "Recorded By"
+2026-10-11T00:21:04.082Z === 1b. item views ===
+2026-10-11T00:21:05.140Z PASS 1b: nine open items from the four meetings (MOM-DEMO-002 (1.0)#2.1, MOM-DEMO-002 (1.0)#1.1.1, MOM-DEMO-004 (1.0)#1.1, MOM-DEMO-004 (1.0)#1.2, MOM-DEMO-004 (1.0)#2.1, MOM-DEMO-001 (1.0)#1.1, MOM-DEMO-001 (1.0)#2.1, MOM-DEMO-003 (1.0)#1.1, MOM-DEMO-003 (1.0)#2.1)
+2026-10-11T00:21:05.140Z PASS 1b: overdue items first
+2026-10-11T00:21:05.140Z PASS 1b: the two past-target items marked overdue
+2026-10-11T00:21:05.142Z PASS 1b: overdue shown in red
+2026-10-11T00:21:05.451Z PASS 1b: filtered by Action by (TECO: 4)
+2026-10-11T00:21:05.776Z PASS 1b: overdue only (MOM-DEMO-002 (1.0)#1.1.1)
+2026-10-11T00:21:06.752Z PASS 1b: searching item text finds it (MOM-DEMO-002 (1.0)#1.1.1)
+2026-10-11T00:21:08.091Z PASS 1b: three closed items (MOM-DEMO-002 (1.0)#1.1.2, MOM-DEMO-001 (1.0)#1.2, MOM-DEMO-003 (1.0)#1.2)
+2026-10-11T00:21:08.437Z PASS 1b: clicking an item opens its meeting
+2026-10-11T00:21:08.760Z PASS R14: Open Items has a Rev column after Meeting (# | Discussions / Actions | Action by | Raised | Target Date | Status | Meeting | Rev)
+2026-10-11T00:21:08.764Z PASS R14: the Meeting column shows no revision in brackets; Rev shows it
+2026-10-11T00:21:08.774Z PASS R14: a meeting at rev 10.0
+2026-10-11T00:21:08.781Z PASS R14: a meeting at rev 2.0
+2026-10-11T00:21:09.611Z PASS R14: the list has a Rev column next to Reference no. (# | Reference no. | Rev | Status | Subject | Meeting Type | Meeting Date | Venue | Recorded By | Contractor | Operations)
+2026-10-11T00:21:09.618Z PASS R14: Reference no. is the number only (MOM-DEMO-001, MOM-DEMO-002, MOM-DEMO-003)
+2026-10-11T00:21:09.980Z PASS R14: Rev sorts as numbers — 10.0 before 2.0 (10.0, 2.0, 1.0)
+2026-10-11T00:21:11.192Z PASS R14: searching the number still finds it (MOM-DEMO-001)
+2026-10-11T00:21:12.072Z === 2. build a register on a new meeting ===
+2026-10-11T00:21:12.232Z PASS 2: one screen, no mode switch
+2026-10-11T00:21:12.234Z PASS 2: "Show closed items" unchecked by default
+2026-10-11T00:21:12.239Z PASS 2: toolbar: Add Category | Add Item (no Add Sub-category)
+2026-10-11T00:21:12.241Z PASS 2: with no category, Add Item is disabled and says why
+2026-10-11T00:21:12.551Z PASS 2: pressing it (keyboard) adds nothing and shows the reason
+2026-10-11T00:21:12.581Z PASS 2: a new category shows the number it will get (1.0), not "Add"
+2026-10-11T00:21:12.583Z PASS 2: the new row opens focused
+2026-10-11T00:21:12.648Z PASS 2: after adding category 1.0, the next item goes under it by default
+2026-10-11T00:21:12.649Z PASS 2: a new item under 1.0 shows 1.1
+2026-10-11T00:21:12.656Z PASS 2: a new item opens straight in edit
+2026-10-11T00:21:12.665Z PASS 2: a new item is raised on the meeting date by default
+2026-10-11T00:21:12.730Z PASS 2: the next item under 1.0 shows 1.2
+2026-10-11T00:21:12.770Z PASS 2: register numbered 1 / 1.1 / 1.2 — two levels (1,1.1,1.2)
+2026-10-11T00:21:12.770Z PASS 2: no add buttons on the category rows
+2026-10-11T00:21:12.874Z PASS 2: "Under" lists the categories only
+2026-10-11T00:21:12.876Z PASS 2: Add Item goes under the category of the row last clicked (1.1 → 1.3)
+2026-10-11T00:21:12.881Z PASS 2: changing "Under" renumbers the pending row (2 → 2.1)
+2026-10-11T00:21:12.982Z PASS 2: (category 2.0 removed again)
+2026-10-11T00:21:12.983Z PASS 2: category shown as 1.0
+2026-10-11T00:21:12.983Z PASS 2: raised date shown above the item (11 Aug 2026)
+2026-10-11T00:21:12.984Z PASS 2: only the this-week field is an input in a resting item
+2026-10-11T00:21:12.985Z PASS 2: ✏️ on the item
+2026-10-11T00:21:12.986Z PASS 2: no "This week" label; the field says "Add progress…"
+2026-10-11T00:21:13.021Z PASS 2: only that row is in edit
+2026-10-11T00:21:13.022Z PASS 2: other rows have no ✏️ while one is open
+2026-10-11T00:21:13.059Z PASS 2: ✕ leaves the row unchanged
+2026-10-11T00:21:13.094Z PASS 2: Esc in a new row cancels it; the form stays open
+2026-10-11T00:21:13.096Z PASS 2: Esc does not bring up the leave prompt
+2026-10-11T00:21:13.129Z PASS 2: Esc with the "Under" picker focused cancels too
+2026-10-11T00:21:13.199Z PASS 2: Esc on a ✏️ row drops the change
+2026-10-11T00:21:13.199Z PASS 2: and the toolbar is back
+2026-10-11T00:21:13.233Z PASS 2: ✕ says "Cancel (Esc)"
+2026-10-11T00:21:13.286Z PASS R12: the toolbar stays while a row is being added
+2026-10-11T00:21:13.287Z PASS R12: the open row says "✓ to apply, Esc to cancel"
+2026-10-11T00:21:13.313Z PASS R12: Add Category on a blank new item replaces it (one new row, 2.0)
+2026-10-11T00:21:13.341Z PASS R12: Add Item on a blank new category replaces it; nothing left behind
+2026-10-11T00:21:13.667Z PASS R12: a row with input but no text is not replaced
+2026-10-11T00:21:13.668Z PASS R12: … and a toast says why and what to do
+2026-10-11T00:21:13.670Z PASS R12: … and the same reason shows in red under the row
+2026-10-11T00:21:13.671Z PASS R12: … with focus back in the row text
+2026-10-11T00:21:13.675Z PASS R12: typing in the row clears the red reason
+2026-10-11T00:21:14.006Z PASS R12: Add Item on a filled row applies it (1.3) and opens the next one beside it (1.4) — 1,1.1,1.2,1.3
+2026-10-11T00:21:14.007Z PASS R12: the auto-applied row kept its Action by
+2026-10-11T00:21:14.008Z PASS R12: a toast says 1.3 was applied and Save is still needed
+2026-10-11T00:21:14.010Z PASS R12: the new row opens focused
+2026-10-11T00:21:14.048Z PASS R12: after ✓ the focus is on "Add Item" (no empty row opened by itself)
+2026-10-11T00:21:14.048Z PASS R12: ✓ opens no new row by itself
+2026-10-11T00:21:14.053Z PASS R12: Enter on it opens the next item (1.5)
+2026-10-11T00:21:14.089Z PASS R12: Add Item is enabled while a filled category is open
+2026-10-11T00:21:14.116Z PASS R12: Add Item on a filled category applies it (2.0) and opens 2.1 under it
+2026-10-11T00:21:14.420Z PASS R12: … and the toast names 2.0 (2.0 applied to the minutes — press Save to keep it. | 1.3 applied to the minutes — press Save to keep it. | Fill in the text of this row first, or press Esc to cancel it. | Add a category first)
+2026-10-11T00:21:14.816Z PASS R12: Add on an unchanged ✏️ row opens the next item without an "applied" toast
+2026-10-11T00:21:14.886Z PASS R12: the toolbar stays while a ✏️ row is open
+2026-10-11T00:21:14.913Z PASS R12: a ✏️ row with its text cleared is not applied or left
+2026-10-11T00:21:14.942Z PASS R12: a ✏️ row with text is applied, the next item goes beside it
+2026-10-11T00:21:15.153Z PASS R12: (chained rows removed again)
+2026-10-11T00:21:15.207Z PASS 2: ✓ applies the change
+2026-10-11T00:21:15.214Z PASS 2: date picked before typing stays in the field
+2026-10-11T00:21:16.142Z PASS 2: Save blocked while a new item is typed but not applied
+2026-10-11T00:21:16.144Z PASS 2: the form switched to the Discussions tab
+2026-10-11T00:21:16.144Z PASS 2: the next new item shows 1.3
+2026-10-11T00:21:16.165Z PASS 2: ✕ on a new row adds nothing
+2026-10-11T00:21:16.196Z PASS 2: after ✕ the same number is offered again (nothing consumed)
+2026-10-11T00:21:16.222Z PASS 2: an item added and closed this session stays on screen
+2026-10-11T00:21:16.246Z PASS 2: deleting an item asks about that item only (Delete 1.2?)
+2026-10-11T00:21:16.247Z PASS 2: 🗑 (confirmed) removes the row
+2026-10-11T00:21:16.274Z PASS 2: after deleting, the next category is 2.0 (no gap)
+2026-10-11T00:21:16.326Z PASS 2: queued file kept across tab switches
+2026-10-11T00:21:18.862Z PASS 2: meeting saved
+2026-10-11T00:21:18.862Z PASS 2: start and end time stored
+2026-10-11T00:21:18.862Z PASS 2: attendee by Company / Name / Position
+2026-10-11T00:21:18.862Z PASS 2: stored register shape
+2026-10-11T00:21:18.862Z PASS 2: item fields, raised date and this week's update dated with the meeting date
+2026-10-11T00:21:18.862Z PASS 2: the cancelled new row was not stored
+2026-10-11T00:21:18.862Z === 2b. three-level Draft ===
+2026-10-11T00:21:18.869Z PASS 2b: a three-level Draft
+2026-10-11T00:21:21.558Z PASS 2b: the sub-category and its item are shown
+2026-10-11T00:21:21.704Z PASS 2b: a new item goes under the category (1.2), not under the old sub-category
+2026-10-11T00:21:23.265Z PASS 2b: stored as is plus the new item; the old title and item stay editable
+2026-10-11T00:21:23.282Z PASS 2b: New Occurrence of a two-level meeting carries x.0 / x.y
+2026-10-11T00:21:23.282Z === 2c. several progress notes ===
+2026-10-11T00:21:23.290Z PASS 2c: a Draft with an item raised 4 Aug and a note carried from 6 Aug
+2026-10-11T00:21:25.983Z PASS 2c: a new note is dated with the meeting by default
+2026-10-11T00:21:25.984Z PASS 2c: the day picker starts at the raised date
+2026-10-11T00:21:26.315Z PASS 2c: ✓ on an empty note adds nothing and says why (toast + red)
+2026-10-11T00:21:26.319Z PASS 2c: typing clears the red reason
+2026-10-11T00:21:26.343Z PASS 2c: ✓ files the note and empties the field for the next one
+2026-10-11T00:21:26.397Z PASS 2c: after filing, the next note is back on the meeting date
+2026-10-11T00:21:26.398Z PASS 2c: notes in date order, the missed day in its place, same day as written (6 Aug 2026earlier meeting note / 7 Aug 2026missed day / 11 Aug 2026first note / 11 Aug 2026second, same day)
+2026-10-11T00:21:26.399Z PASS 2c: the carried note has no ✏️ / 🗑
+2026-10-11T00:21:26.406Z PASS 2c: a day before the raised date shows the reason at once
+2026-10-11T00:21:26.437Z PASS 2c: … and ✓ keeps it in the field
+2026-10-11T00:21:27.093Z PASS 2c: Save is stopped, says why and goes to the Discussions tab
+2026-10-11T00:21:27.098Z PASS 2c: a day after today is refused too
+2026-10-11T00:21:27.103Z PASS 2c: Esc in the field drops the note being typed
+2026-10-11T00:21:27.225Z PASS 2c: a ✏️ change of day moves the note to its new place
+2026-10-11T00:21:27.317Z PASS 2c: an emptied note is not applied, and says why
+2026-10-11T00:21:27.322Z PASS 2c: Esc puts the note back as it was
+2026-10-11T00:21:27.383Z PASS 2c: 🗑 asks, then removes the note (Remove the progress note of 11 Aug 2026?)
+2026-10-11T00:21:28.921Z PASS 2c: stored as written, carried note untouched ([{"date":"2026-08-06","content":"earlier meeting note","carried":true},{"date":"2026-08-08","content":"first note (moved to the 8th)"},{"date":"2026-08-07","content":"missed day"},{"date":"2026-08-05","content":"fifth of August"}])
+2026-10-11T00:21:31.630Z PASS 2c: reopened, the notes read in date order
+2026-10-11T00:21:32.454Z PASS 2c: printed in date order too (5 Aug 2026 / 6 Aug 2026 / 7 Aug 2026 / 8 Aug 2026)
+2026-10-11T00:21:32.454Z === 3. legacy format Draft ===
+2026-10-11T00:21:35.172Z PASS 3: legacy open rows (1,1.1,2,2.1)
+2026-10-11T00:21:35.201Z PASS 3: "Show closed items" adds the legacy Closed sub-item under its topic
+2026-10-11T00:21:35.201Z PASS 3: a closed item has no this-week field
+2026-10-11T00:21:36.757Z PASS 3: saving a legacy Draft writes the new shape
+2026-10-11T00:21:36.765Z PASS 3: content and statuses preserved
+2026-10-11T00:21:36.765Z PASS 3: this week's update stored with the date picked before typing
+2026-10-11T00:21:36.765Z === 4. legacy Published ===
+2026-10-11T00:21:39.471Z PASS 4: legacy published register readable
+2026-10-11T00:21:39.473Z PASS 4: read-only (no Save)
+2026-10-11T00:21:39.474Z PASS 4: no editable register fields
+2026-10-11T00:21:39.474Z PASS 4: no ✏️ / 🗑 / add buttons on a published record
+2026-10-11T00:21:39.475Z PASS 4: no this-week field on a published record
+2026-10-11T00:21:39.484Z PASS 4: stored log untouched
+2026-10-11T00:21:39.484Z === 5. new occurrence carry-forward ===
+2026-10-11T00:21:42.180Z PASS 5: published register (Open filter hides the Closed 1.1.2)
+2026-10-11T00:21:44.845Z PASS 5: rev 2.0 created
+2026-10-11T00:21:44.845Z PASS 5: unfinished items + headings carried, numbers kept, Closed 1.1.2 left behind
+2026-10-11T00:21:44.872Z PASS 5: carried item marked
+2026-10-11T00:21:44.872Z PASS 5: raised date kept on the carried item
+2026-10-11T00:21:44.878Z PASS 5: item text indented under its raised date, like the progress updates
+2026-10-11T00:21:44.879Z PASS 5: carried item has no 🗑
+2026-10-11T00:21:45.018Z PASS 5: new items under carried 2.0 get 2.2, 2.3
+2026-10-11T00:21:45.086Z PASS 5: deleting 2.2 keeps 2.3 (no renumbering while carried rows exist)
+2026-10-11T00:21:45.115Z PASS 5: the next one is 2.4 (the gap 2.2 is not reused)
+2026-10-11T00:21:45.232Z PASS 5: ✏️ on a carried item: text stays read-only, Action by editable
+2026-10-11T00:21:45.257Z PASS 5: carried update read-only
+2026-10-11T00:21:45.258Z PASS 5: carried item cannot be deleted
+2026-10-11T00:21:45.258Z PASS 5: earlier update shown as "21 Jul 2026" + text
+2026-10-11T00:21:45.266Z PASS 5: an item closed this week stays, with its this-week field, until the form closes
+2026-10-11T00:21:46.846Z PASS 5: new update added after the carried one, item closed
+2026-10-11T00:21:46.854Z PASS 5: the earlier meeting keeps its own record (a copy, not a reference)
+2026-10-11T00:21:46.854Z === 5a. hover icons, auto-height text ===
+2026-10-11T00:21:49.566Z PASS 5a: row icons hidden until hover
+2026-10-11T00:21:49.856Z PASS 5a: row icons shown on hover
+2026-10-11T00:21:49.857Z PASS 5a: ✏️ is a small icon (18x18)
+2026-10-11T00:21:49.863Z PASS 5a: row icons shown on keyboard focus
+2026-10-11T00:21:49.865Z PASS 5a: empty update box is one line high (34px)
+2026-10-11T00:21:49.874Z PASS 5a: the box grows with its text, no scrollbar (34 -> 92px)
+2026-10-11T00:21:49.880Z PASS 5a: and shrinks back to one line when emptied
+2026-10-11T00:21:49.915Z PASS 5a: edit box sized to its one-line content
+2026-10-11T00:21:49.938Z === 5b. control sizes ===
+2026-10-11T00:21:53.075Z PASS 5b@800: register buttons present (5)
+2026-10-11T00:21:53.075Z PASS 5b@800: every button inside its cell, no cell overflow ()
+2026-10-11T00:21:53.076Z PASS 5b@800: buttons stay one compact line (tallest 20px)
+2026-10-11T00:21:53.524Z PASS 5b@1400: register buttons present (5)
+2026-10-11T00:21:53.524Z PASS 5b@1400: every button inside its cell, no cell overflow ()
+2026-10-11T00:21:53.524Z PASS 5b@1400: buttons stay one compact line (tallest 20px)
+2026-10-11T00:21:53.559Z === 6. print ===
+2026-10-11T00:21:57.049Z PASS 6: print: item text indented under its raised date
+2026-10-11T00:21:57.049Z PASS 6: print contains "SUBJECT"
+2026-10-11T00:21:57.049Z PASS 6: print contains "VENUE & TIME"
+2026-10-11T00:21:57.049Z PASS 6: print contains "RECORDED BY"
+2026-10-11T00:21:57.049Z PASS 6: print contains "DISCUSSIONS / ACTIONS"
+2026-10-11T00:21:57.049Z PASS 6: print contains "Action by"
+2026-10-11T00:21:57.049Z PASS 6: print contains "15:00 ~ 17:15"
+2026-10-11T00:21:57.049Z PASS 6: print contains "1.0"
+2026-10-11T00:21:57.049Z PASS 6: print contains "1.1.1"
+2026-10-11T00:21:57.049Z PASS 6: print contains "21 Jul 2026"
+2026-10-11T00:21:57.049Z PASS 6: print contains "14 Jul 2026"
+2026-10-11T00:21:57.049Z PASS 6: print contains "15 Aug 2026"
+2026-10-11T00:21:57.049Z PASS 6: print contains "4 Aug 2026"
+2026-10-11T00:21:57.104Z === 7. zh labels ===
+2026-10-11T00:22:01.968Z PASS 7: zh tab names
+2026-10-11T00:22:01.969Z PASS 7: zh placeholder (-- 請選擇 --)
+2026-10-11T00:22:01.970Z PASS 7: zh 記錄人 / 結束時間
+2026-10-11T00:22:02.030Z PASS no script errors in the console ()
+2026-10-11T00:22:02.054Z ALL 186 CHECKS PASSED
