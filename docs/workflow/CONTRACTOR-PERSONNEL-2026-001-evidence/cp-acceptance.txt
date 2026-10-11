@@ -1,0 +1,39 @@
+2026-10-11T06:59:24.156Z === 1. personnel list on the Contractors page ===
+2026-10-11T06:59:28.054Z PASS 1: the company form has a Personnel section
+2026-10-11T06:59:28.064Z PASS 1: five active people, the one who left hidden (曾耀葦(Toby Tseng), 謝明倫(ML Hsieh), 謝苡渲(Yi-Hsuan Hsieh), 陳俊維(Arisaka Chen), 陳韋向(Mac Chen))
+2026-10-11T06:59:28.097Z PASS 1: "Show inactive (1)" shows the one who left
+2026-10-11T06:59:28.100Z PASS 1: … greyed
+2026-10-11T06:59:28.549Z PASS 1: Enter in a personnel field does not submit the contractor form
+2026-10-11T06:59:29.180Z PASS 1: a person is added at once (no form Save needed)
+2026-10-11T06:59:29.821Z PASS 1: the same name twice is refused with the reason
+2026-10-11T06:59:30.489Z PASS 1: ✏️ changes the position
+2026-10-11T06:59:30.503Z PASS 1: Esc drops the change and keeps the form open
+2026-10-11T06:59:31.141Z PASS 1: Deactivate takes the person off the active list
+2026-10-11T06:59:31.142Z PASS 1: there is no delete for people
+2026-10-11T06:59:32.966Z PASS 1: deleting a company with people is refused, with the reason
+2026-10-11T06:59:32.967Z PASS 1: … and TECO is still there
+2026-10-11T06:59:32.967Z === 2. attendee picker ===
+2026-10-11T06:59:33.890Z PASS 2: companies offered by short name (EC,HL,TECO,A,B,C)
+2026-10-11T06:59:34.497Z PASS 2: TECO's active people are offered (曾耀葦(Toby Tseng), 謝明倫(ML Hsieh), 謝苡渲(Yi-Hsuan Hsieh), 陳俊維(Arisaka Chen), 陳韋向(Mac Chen))
+2026-10-11T06:59:34.503Z PASS 2: picking a person fills the position and says it comes from the list
+2026-10-11T06:59:34.504Z PASS 2: no "add to list" box for someone already on it
+2026-10-11T06:59:35.137Z PASS 2: the full company name works too
+2026-10-11T06:59:35.174Z PASS 2: for a typed name, "Add to the TECO personnel list" is offered
+2026-10-11T06:59:36.021Z PASS 2: … and adding puts them on the list
+2026-10-11T06:59:36.026Z PASS 2: … stored with the position
+2026-10-11T06:59:36.632Z PASS 2: a company with nobody listed says so (type the name)
+2026-10-11T06:59:36.640Z PASS 2: a company not on the contractor list: no "add to list" box
+2026-10-11T06:59:36.662Z PASS 2: the attendee table (TECO / 曾耀葦(Toby Tseng) / QAQC Manager | HL / Daniel Huang / Quality Manager | TECO / Visiting Engineer / Visitor | Random Ltd / Walk-in Guest / -)
+2026-10-11T06:59:38.724Z PASS 2: stored as text snapshots plus the ids ([{"name":"曾耀葦(Toby Tseng)","company":"TECO","role":"QAQC Manager","contractorId":"CP-TECO","personnelId":"b37c5834-0bfc-4918-b62b-d6eff895e3ff"},{"name":"Daniel Huang","company":"HL","role":"Quality Manager","contractorId":"CP-HL","personnelId":"480aed54-ff50-4c2e-ab0e-381b160333d8"},{"name":"Visiting Engineer","company":"TECO","role":"Visitor","contractorId":"CP-TECO","personnelId":"dac10009-5a4c-4db7-a08c-cfa1c31ee458"},{"name":"Walk-in Guest","company":"Random Ltd","role":""}])
+2026-10-11T06:59:38.734Z PASS 2: renaming the person later leaves the meeting as it was
+2026-10-11T06:59:39.639Z PASS 2: a meeting saved before shows its text attendees as before
+2026-10-11T06:59:39.640Z === 3. meeting-only user ===
+2026-10-11T06:59:43.325Z PASS 3: the people are offered without contractor permissions (5 + the one added in 2: Toby Tseng (renamed), Visiting Engineer, 謝明倫(ML Hsieh), 謝苡渲(Yi-Hsuan Hsieh), 陳俊維(Arisaka Chen), 陳韋向(Mac Chen))
+2026-10-11T06:59:43.332Z PASS 3: no "add to list" box without contractors:manage
+2026-10-11T06:59:43.336Z PASS 3: the full list (contact details) stays behind contractors:view
+2026-10-11T06:59:43.336Z === 4. contractor-scoped user ===
+2026-10-11T06:59:45.500Z PASS 4: another company's people are not served
+2026-10-11T06:59:45.504Z PASS 4: only TECO's people
+2026-10-11T06:59:46.388Z PASS 4: only TECO is offered as a company
+2026-10-11T06:59:46.388Z PASS no front-end errors ()
+2026-10-11T06:59:46.388Z ALL 34 CHECKS PASSED
