@@ -50,6 +50,9 @@ const saveBtn = () => modal().getByRole('button', { name: /^Save$/ });
 const openList = async () => { await page.goto(`${BASE}/meeting-minutes`); await page.waitForTimeout(800); };
 const openRow = async (text, extra) => {
     await openList();
+    // search first: the row may be beyond the first page (number / title search, server side)
+    await page.getByPlaceholder(/Search Meeting Minutes|搜尋/).fill(text);
+    await page.waitForTimeout(1200);
     let row = page.locator('tr', { hasText: text });
     if (extra) row = row.filter({ hasText: extra });
     await row.first().click(); await modal().waitFor(); await page.waitForTimeout(600);
@@ -116,7 +119,34 @@ await modal().waitFor();
 check((await modal().getByRole('textbox').first().inputValue()) === 'MOM-DEMO-002', '1b: clicking an item opens its meeting');
 await modal().getByRole('button', { name: /Back/ }).click();
 await page.waitForTimeout(300);
-await page.getByRole('button', { name: /^Meeting List/ }).click();
+// R14 (user: "版次不要放在reference 要多一欄位顯示版次"): the number alone, the revision in a column of its own (sortable)
+const headsOf = (table) => table.locator('thead th').evaluateAll(ths => ths.map(th => th.innerText.trim()));
+const colTexts = (table, header) => table.evaluate((t, h) => {
+    const i = [...t.querySelectorAll('thead th')].map(th => th.innerText.trim()).indexOf(h);
+    return [...t.querySelectorAll('tbody tr')].map(tr => tr.cells[i]?.innerText.trim());
+}, header);
+const openHeads = await headsOf(itemTable());
+check(openHeads.indexOf('Rev') === openHeads.indexOf('Meeting') + 1, `R14: Open Items has a Rev column after Meeting (${openHeads.join(' | ')})`);
+check((await colTexts(itemTable(), 'Meeting')).every(x => !/\(\d/.test(x)) && (await colTexts(itemTable(), 'Rev')).every(x => x === '1.0'), 'R14: the Meeting column shows no revision in brackets; Rev shows it');
+for (const rev of ['10.0', '2.0']) {
+    check((await api('POST', '/api/meeting-minutes/', { status: 'Draft', title: `MTB rev ${rev}`, rev, vendor: 'Hailong Construction' })).status === 200, `R14: a meeting at rev ${rev}`);
+}
+await openList();
+const listTable = () => page.locator('table').first();
+const listHeads = await headsOf(listTable());
+check(listHeads.indexOf('Rev') === listHeads.indexOf('Reference no.') + 1, `R14: the list has a Rev column next to Reference no. (${listHeads.join(' | ')})`);
+check((await colTexts(listTable(), 'Reference no.')).every(x => /^[A-Z0-9-]+$/.test(x)), `R14: Reference no. is the number only (${(await colTexts(listTable(), 'Reference no.')).slice(0, 3).join(', ')})`);
+await listTable().locator('thead').getByRole('button', { name: 'Rev', exact: true }).click();
+await page.getByRole('button', { name: 'Sort Desc' }).click();
+await page.waitForTimeout(300);
+const revsDesc = await colTexts(listTable(), 'Rev');
+check(revsDesc[0] === '10.0' && revsDesc[1] === '2.0', `R14: Rev sorts as numbers — 10.0 before 2.0 (${revsDesc.slice(0, 3).join(', ')})`);
+await page.getByPlaceholder(/Search Meeting Minutes/).fill('MOM-DEMO-001');
+await page.waitForTimeout(1200);
+const found = await colTexts(listTable(), 'Reference no.');
+check(found.length >= 1 && found.every(x => x === 'MOM-DEMO-001'), `R14: searching the number still finds it (${found.join(', ')})`);
+await page.getByPlaceholder(/Search Meeting Minutes/).fill('');
+await openList();
 await page.getByRole('button', { name: /Add New Meeting/i }).click();
 await modal().waitFor();
 

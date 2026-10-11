@@ -72,14 +72,24 @@ export const createItemColumns = (
             header: t('meetingMinutes.colSourceMeeting'),
             cell: ({ row }) => (
                 <div>
-                    <div>{row.original.documentNumber}{row.original.rev ? ` (${row.original.rev})` : ''}</div>
+                    <div>{row.original.documentNumber}</div>
                     <div style={{ color: '#64748b', fontSize: 12 }}>{row.original.meetingTitle}</div>
                     {which === 'closed' && <div style={{ color: '#64748b', fontSize: 12 }}>{formatMinutesDate(row.original.meetingDate)}</div>}
                 </div>
             ),
             size: 200,
         },
+        {
+            // the meeting's revision in a column of its own, not in brackets after the number (user, 2026-10-11)
+            id: "rev",
+            header: t('meetingMinutes.rev'),
+            cell: ({ row }) => <div className="text-center">{row.original.rev || '-'}</div>,
+            size: 60,
+        },
     ];
+
+/** Revisions in number order — "10.0" after "2.0" — whatever text a revision holds. */
+const compareRev = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
 
 export const createColumns = (
     confirmDelete: (id: string) => void,
@@ -100,8 +110,19 @@ export const createColumns = (
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title={t('meetingMinutes.refNo')} />
             ),
-            cell: ({ row }) => <div className="text-center">{row.getValue("documentNumber")} ({row.original.rev ?? '1.0'})</div>,
-            size: 180,
+            cell: ({ row }) => <div className="text-center">{row.getValue("documentNumber")}</div>,
+            size: 160,
+        },
+        {
+            // user, 2026-10-11: "版次不要放在reference 要多一欄位顯示版次"
+            id: "rev",
+            accessorFn: row => row.rev ?? '1.0',
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title={t('meetingMinutes.rev')} />
+            ),
+            cell: ({ row }) => <div className="text-center">{row.original.rev ?? '1.0'}</div>,
+            sortingFn: (a, b) => compareRev(a.getValue<string>("rev"), b.getValue<string>("rev")),
+            size: 70,
         },
         {
             accessorKey: "status",
