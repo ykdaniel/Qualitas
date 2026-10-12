@@ -1,0 +1,18 @@
+115c115
+< index 7e1c3291..7a91c912 100755
+---
+> index 7e1c3291..885662e4 100755
+118c118
+< @@ -56,6 +56,9 @@ const NCR: React.FC = () => {
+---
+> @@ -56,6 +56,14 @@ const NCR: React.FC = () => {
+124a125,129
+> +  // Once the banner shows anything else (a reload clears it first), the remembered delete reason is dropped — so a later load
+> +  // failure with the same text (a 5xx / network message) is never taken for the delete's own and cleared.
+> +  useEffect(() => {
+> +    if (error !== deleteErrorRef.current) deleteErrorRef.current = null;
+> +  }, [error]);
+128c133
+< @@ -245,8 +248,16 @@ const NCR: React.FC = () => {
+---
+> @@ -245,8 +253,16 @@ const NCR: React.FC = () => {

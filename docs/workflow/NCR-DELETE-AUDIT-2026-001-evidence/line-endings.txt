@@ -1,0 +1,12 @@
+backend/services/ncr_service.py:                              Python script text executable, Unicode text, UTF-8 text, with CRLF line terminators
+backend/routers/ncr.py:                                       Python script text executable, Unicode text, UTF-8 text
+backend/tests/test_ncr_service.py:                            Python script text executable, Unicode text, UTF-8 text
+react-app/src/components/NCR/NCR.tsx:                         Java source, Unicode text, UTF-8 text
+backend/tests/test_ncr_audit_delete_http.py:                  Python script text executable, Unicode text, UTF-8 text
+backend/scripts/verification/seed_ncr_delete_audit_review.py: Python script text executable, Unicode text, UTF-8 text
+react-app/tests-browser/ncr-delete-audit-vite-launcher.mjs:   Java source, Unicode text, UTF-8 text
+ backend/routers/ncr.py               | 12 ++++++++----
+ backend/services/ncr_service.py      | 23 ++++++++++++++++++-----
+ backend/tests/test_ncr_service.py    | 12 ++++++++++--
+ react-app/src/components/NCR/NCR.tsx | 13 ++++++++++++-
+ 4 files changed, 48 insertions(+), 12 deletions(-)
