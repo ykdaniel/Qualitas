@@ -56,6 +56,14 @@ const NCR: React.FC = () => {
     id: null,
     message: '',
   });
+  // The reason a refused delete put in the page banner: cleared when the next delete starts, so it never stays above a later
+  // successful delete. Any other banner text (a failed list load) is left alone.
+  const deleteErrorRef = useRef<string | null>(null);
+  // Once the banner shows anything else (a reload clears it first), the remembered delete reason is dropped — so a later load
+  // failure with the same text (a 5xx / network message) is never taken for the delete's own and cleared.
+  useEffect(() => {
+    if (error !== deleteErrorRef.current) deleteErrorRef.current = null;
+  }, [error]);
 
   const statistics = useNCRStats(ncrList);
   // The last successful record write of the open modal (id + serialized payload) — see runSaveFlow / sameWrite.
@@ -245,8 +253,16 @@ const NCR: React.FC = () => {
   }, [ncrList, itrList, t]);
 
   const handleDelete = async () => {
-    if (deleteModal.id) {
+    if (!deleteModal.id) return;
+    const { error: shownError, clearError } = useNCRStore.getState();
+    if (deleteErrorRef.current !== null && shownError === deleteErrorRef.current) clearError();
+    deleteErrorRef.current = null;
+    try {
       await deleteNCR(deleteModal.id);
+    } catch {
+      // ncrStore has already put the reason (not Void yet / still cited by an ITR) in this page's error banner
+      deleteErrorRef.current = useNCRStore.getState().error;
+    } finally {
       setDeleteModal({ isOpen: false, id: null, message: '' });
     }
   };

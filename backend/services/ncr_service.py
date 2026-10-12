@@ -24,6 +24,7 @@ from core.utils import (
     _resolve_vendor_id,
     begin_write_transaction,
     lock_ncr_for_write,
+    reload_locked,
     generate_reference_no,
     log_audit,
     WorkflowEngine
@@ -606,6 +607,13 @@ class NCRService:
             if not db_ncr or not record_in_scope(db_ncr, scope):
                 return False
 
+            # Take the NCR write lock (the one update_ncr takes) BEFORE the status and ITR-reference checks, then re-read the NCR, so a
+            # status change or an ITR citing it saved a moment ago is seen — never a Void check or an ITR count read before another write.
+            lock_ncr_for_write(self.repo.db, ncr_id)
+            if not reload_locked(self.repo.db, db_ncr) or not record_in_scope(db_ncr, scope):
+                self.repo.db.rollback()
+                return False                       # deleted, or moved out of the caller's scope, by a request that held the lock first
+
             # Only Void NCRs can be deleted — deleting Open/In Progress/Resolved/Closed
             # NCRs would game the Q-WorkFlow completion percentage to 100%.
             if db_ncr.status != 'Void':
@@ -624,17 +632,22 @@ class NCRService:
             # Capture old values for audit
             old_val = {c.name: getattr(db_ncr, c.name) for c in db_ncr.__table__.columns}
 
-            # Delete the record
-            self.repo.delete(db_ncr)
-
-            # Log audit trail
+            # Delete the record + audit entry: ONE commit, strict audit (the repository's delete() commits on its own, which used to leave
+            # the audit entry behind uncommitted — dropped at the end of the request, so no NCR deletion ever reached audit_logs)
+            self.repo.db.delete(db_ncr)
             log_audit(
                 self.repo.db, "DELETE", "NCR", ncr_id, db_ncr.documentNumber,
-                old_value=old_val, user_id=user_id, username=username
+                old_value=old_val, user_id=user_id, username=username, strict=True,
             )
+            self.repo.db.flush()
+            self.repo.db.commit()
 
             return True
+        except ValueError:
+            self.repo.db.rollback()            # expected refusal (not Void / still referenced): nothing was written
+            raise
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error deleting NCR {ncr_id}: {e}", exc_info=True)
             raise e
 

@@ -221,10 +221,14 @@ def test_delete_ncr_success(ncr_service, mock_repo):
         # Act
         result = ncr_service.delete_ncr("ncr-123", user_id=1, username="admin")
 
-        # Assert
+        # Assert: deleted on the session and committed ONCE together with a strict audit
+        # (NCR-DELETE-AUDIT-2026-001: repo.delete() committed on its own and the audit entry was lost)
         assert result is True
-        mock_repo.delete.assert_called_once()
+        mock_repo.db.delete.assert_called_once_with(mock_db_ncr)
+        mock_repo.delete.assert_not_called()
+        mock_repo.db.commit.assert_called_once()
         mock_log.assert_called_once()
+        assert mock_log.call_args.kwargs["strict"] is True
 
 
 def test_delete_ncr_blocked_by_non_void_status(ncr_service, mock_repo):
@@ -235,6 +239,8 @@ def test_delete_ncr_blocked_by_non_void_status(ncr_service, mock_repo):
     with pytest.raises(ValueError, match="Void the NCR first"):
         ncr_service.delete_ncr("ncr-123", user_id=1, username="admin")
     mock_repo.delete.assert_not_called()
+    mock_repo.db.delete.assert_not_called()
+    mock_repo.db.commit.assert_not_called()
 
 
 def test_delete_ncr_blocked_by_itr_references(ncr_service, mock_repo):
@@ -249,3 +255,5 @@ def test_delete_ncr_blocked_by_itr_references(ncr_service, mock_repo):
 
     assert "referenced by 2 ITR record(s)" in str(excinfo.value)
     mock_repo.delete.assert_not_called()
+    mock_repo.db.delete.assert_not_called()
+    mock_repo.db.commit.assert_not_called()
