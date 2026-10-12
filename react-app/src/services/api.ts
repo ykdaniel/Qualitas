@@ -665,6 +665,17 @@ export const exportMeetingMinutesDocx = async (meetingId: string, filename: stri
   URL.revokeObjectURL(url);
 };
 
+// Word copy of the printed Checklist (CHECKLIST-BACK-LABEL-2026-001 R2) — mirrors exportNoiDocx's blob-download pattern.
+export const exportChecklistDocx = async (checklistId: string, filename: string): Promise<void> => {
+  const response = await api.get(`/checklist/${checklistId}/export-docx`, { responseType: 'blob' });
+  const url = URL.createObjectURL(new Blob([response.data]));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filename}.docx`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 // --- File Management API ---
 
 export interface AttachmentInfo {

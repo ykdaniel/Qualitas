@@ -38,11 +38,26 @@
     white-space: nowrap;
 }
 
+/* Template save note, after the left-hand buttons of the action bar (CHECKLIST-BACK-LABEL-2026-001 R2). It never
+   counts toward the button group's width (flex-basis 0, width 0), so it can never push Save onto a second row: it only
+   fills the room left on the button row, wrapping there if that room is short. On a narrower editor (e.g. a 1024 screen
+   with the sidebar) it takes its own line under the buttons instead. */
 .saveHint {
-    font-size: 11px;
+    flex: 1 1 0;
+    width: 0;
+    min-width: 0;
+    align-self: center;
+    font-size: 12px;
+    line-height: 16px;
     color: #94a3b8;
-    max-width: 260px;
-    text-align: right;
+    margin-left: 4px;
+}
+
+@container checklist-editor (max-width: 1000px) {
+    .saveHint {
+        flex: 0 0 100%;
+        margin-left: 0;
+    }
 }
 
 .templateBanner {
@@ -107,6 +122,7 @@
 
 /* --- Modern Web UI Styles --- */
 .webEditor {
+    container: checklist-editor / inline-size;   /* for the action-bar note above */
     width: 100%;
     max-width: 1100px;
     margin: 0 auto;

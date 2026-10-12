@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
-import { Plus, Printer, Info, MapPin, CheckCircle, AlertCircle, Trash2, User, Signature, History, Search } from 'lucide-react';
+import { Plus, Printer, Info, MapPin, CheckCircle, AlertCircle, Trash2, User, Signature, History, Search, ArrowLeft, FileText } from 'lucide-react';
 import { useChecklistStore, ChecklistRecord, isTemplateHistoricallyProtected } from '../../store/checklistStore';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
@@ -24,6 +24,7 @@ import { useITPStore } from '../../store/itpStore';
 import { useITRStore } from '../../store/itrStore';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { getErrorMessage } from '../../utils/errorUtils';
+import { exportChecklistDocx } from '../../services/api';
 
 // --- ITP 資料庫定義 ---
 interface ItpItemDefinition {
@@ -100,9 +101,12 @@ const Checklist: React.FC = () => {
     }, [searchParams, records, setSearchParams]);
 
     const returnItpId = searchParams.get(RETURN_ITP_PARAM);
+    // Opened from an ITP edit window: Cancel goes back to that ITP, so it is labelled "Back to ITP"
+    // (CHECKLIST-BACK-LABEL-2026-001). Same condition as handleBack below, so label and destination agree.
+    const backToItp = fromSource === 'itp' && !!returnItpId;
 
     const handleBack = () => {
-        if (fromSource === 'itp' && returnItpId) {
+        if (backToItp && returnItpId) {
             // Back to the ITP edit window this Checklist was opened from (see utils/itpReturnLink).
             // replace: the Checklist entry is left behind, so the browser's own Back afterwards
             // does not bounce between the two pages.
@@ -232,6 +236,7 @@ const Checklist: React.FC = () => {
                 <ChecklistEditor
                     record={editingRecord}
                     onCancel={handleBack}
+                    backToItp={backToItp}
                     saving={saving}
                     // §17: a bare template (itrId & templateId both null) must never take real
                     // pass/fail results directly — force read-only regardless of permission,
@@ -317,9 +322,10 @@ const Checklist: React.FC = () => {
 };
 
 
-const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, isBareTemplate = false, canReopen = false, onReopen, selectedItpIndex, dynamicItpDatabase }: {
+const ChecklistEditor = ({ record, onCancel, backToItp = false, onSave, saving, readOnly = false, isBareTemplate = false, canReopen = false, onReopen, selectedItpIndex, dynamicItpDatabase }: {
     record: ChecklistRecord | null,
     onCancel: () => void,
+    backToItp?: boolean,
     onSave: (data: any) => Promise<void>,
     saving?: boolean,
     readOnly?: boolean,
@@ -463,6 +469,26 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
     }, [isPrinting]);
 
     const handlePrint = () => setIsPrinting(true);
+
+    // Word export (CHECKLIST-BACK-LABEL-2026-001 R2): the server builds the file from the SAVED record, so a new
+    // template or unsaved edits would silently be missing from it — ask for a save first instead (as the Audit wizard).
+    const [exportingDocx, setExportingDocx] = useState(false);
+    const handleExportDocx = async () => {
+        if (exportingDocx || saving) return;
+        if (!record || leaveGuard.dirty) {
+            toast.warning(t('checklist.exportSaveFirst'));
+            return;
+        }
+        setExportingDocx(true);
+        try {
+            await exportChecklistDocx(record.id, record.recordsNo || 'Checklist');
+        } catch (err) {
+            console.error('Checklist Word export failed:', err);
+            toast.error(t('common.exportFailed') || 'Export failed. Please try again.');
+        } finally {
+            setExportingDocx(false);
+        }
+    };
 
     return (
         <div className={styles.editorWrapper}>
@@ -888,11 +914,23 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
                     </>
                 )}
                 </fieldset>
-                <FormActions tools={<><button className={actionStyles.secondary}
-                    onClick={handlePrint}
-                >
-                    <Printer size={16} /> {t('common.print')}
-                </button></>}
+                {/* Navigation and output on the left, saving on the right (as the Audit wizard / NOI), user 2026-10-12. */}
+                <FormActions tools={<>
+                    <button className={actionStyles.secondary} onClick={requestCancel}>
+                        {backToItp
+                            ? <><ArrowLeft size={16} /> {t('checklist.backToItp') || 'Back to ITP'}</>
+                            : t('common.cancel')}
+                    </button>
+                    <button className={actionStyles.secondary} onClick={handlePrint}>
+                        <Printer size={16} /> {t('common.print')}
+                    </button>
+                    <button className={actionStyles.secondary} onClick={handleExportDocx} disabled={saving || exportingDocx}>
+                        <FileText size={16} /> {exportingDocx ? (t('common.exporting') || 'Exporting...') : (t('common.exportWord') || 'Export Word')}
+                    </button>
+                    {!readOnly && isBareTemplate && record && (
+                        <span className={styles.saveHint}>{t('checklist.updateTemplateNote') || 'Updating this template does not affect existing ITR references.'}</span>
+                    )}
+                </>}
                     secondary={<>{canReopen && onReopen && (
                         <button className={actionStyles.workflow}
                             disabled={saving}
@@ -902,11 +940,7 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
                             {t('checklist.reopen') || 'Reopen'}
                         </button>
                     )}</>}
-                    cancel={<><button className={actionStyles.secondary} onClick={requestCancel}>
-                        {t('common.cancel')}
-                    </button></>}
                     primary={<>{!readOnly && (
-                        <div className="flex flex-col items-end gap-1">
                             <button className={actionStyles.primary}
                                 disabled={saving}
                                 onClick={() => onSave(
@@ -965,10 +999,6 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
                                     ? (saving ? (t('checklist.savingTemplate') || 'Saving...') : (t('checklist.saveTemplate') || 'Save Template'))
                                     : (saving ? t('common.saving') : t('common.save'))}
                             </button>
-                            {isBareTemplate && record && (
-                                <span className={styles.saveHint}>{t('checklist.updateTemplateNote') || 'Updating this template does not affect existing ITR references.'}</span>
-                            )}
-                        </div>
                     )}</>} />
             </div>
 
