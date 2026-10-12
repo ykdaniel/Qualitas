@@ -246,12 +246,20 @@ def check_noi_references(db: Session, noi_reference_no: str) -> None:
     Raises:
         ValueError: If NOI has references
     """
-    references = []
+    references = [f"{count} {display_name} record(s)" for display_name, count in count_noi_references(db, noi_reference_no)]
+    if references:
+        raise ValueError(error_messages.cannot_delete_has_references('NOI', noi_reference_no, references))
+
+
+def count_noi_references(db: Session, noi_reference_no: str) -> list:
+    """The documents that block deleting this NOI, as [(type, count)] with count > 0 — the one list both the delete
+    refusal (check_noi_references) and the delete prompt (GET /noi/{id}/delete-check) read."""
+    found = []
     for model_class, display_name in ((models.NCR, 'NCR'), (models.ITR, 'ITR'), (models.OBS, 'Observation'),
                                       (models.Checklist, 'Checklist')):
         count = db.query(model_class).filter(model_class.noiNumber == noi_reference_no).count()
         if count > 0:
-            references.append(f"{count} {display_name} record(s)")
+            found.append((display_name, count))
     # A Follow-up names its source as module + number (business decision 2026-10-11: it blocks deletion too, the same
     # documents that lock the NOI's contractor in noi_service._documents_citing).
     count = db.query(models.FollowUp).filter(
@@ -259,9 +267,8 @@ def check_noi_references(db: Session, noi_reference_no: str) -> None:
         models.FollowUp.sourceReferenceNo == noi_reference_no,
     ).count()
     if count > 0:
-        references.append(f"{count} Follow-up record(s)")
-    if references:
-        raise ValueError(error_messages.cannot_delete_has_references('NOI', noi_reference_no, references))
+        found.append(('Follow-up', count))
+    return found
 
 
 def check_role_references(db: Session, role_id: int, role_name: str) -> None:

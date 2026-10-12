@@ -8,10 +8,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useNOIStore } from '../../store/noiStore';
 import type { NOIItem } from '../../store/noiStore';
 
-import { useNCRStore } from '../../store/ncrStore';
-import { useITRStore } from '../../store/itrStore';
-import { uploadFiles, deleteFile } from '../../services/api';
-import { checkNOIReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
+import { uploadFiles, deleteFile, getNoiDeleteCheck } from '../../services/api';
 import ConfirmModal from '../Shared/ConfirmModal';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
@@ -32,13 +29,11 @@ import { useNOIStats } from '../../hooks/useNOIStats';
 type StatusFilter = 'all' | 'open' | 'closed' | 'reject';
 
 const NOI: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { hasPermission } = useAuth();
   const { noiList, loading, error, refetch, addNOI, addBulkNOI, updateNOI, deleteNOI } = useNOIStore();
   // The last successful record write of the open modal (id + serialized payload) — see runSaveFlow / sameWrite.
   const lastWriteRef = useRef<{ id: string; key: string } | null>(null);
-  const ncrList = useNCRStore(state => state.ncrList);
-  const itrList = useITRStore(state => state.itrList);
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -229,17 +224,40 @@ const NOI: React.FC = () => {
     return { status: 'failed', message: t('common.saveFailed') };
   };
 
-  const handleDeleteClick = React.useCallback((id: string) => {
+  // Ask the server what still cites this NOI (ITR / NCR / OBS / Checklist / Follow-up — the list a delete is refused on):
+  // a cited NOI is not offered for deletion at all. If the check itself fails, the prompt still opens; the server refuses then.
+  const deleteCheckInFlight = useRef(false);
+  const handleDeleteClick = React.useCallback(async (id: string) => {
     const noi = noiList.find(item => item.id === id);
-    if (!noi) return;
-    const references = checkNOIReferences(id, noi.referenceNo, itrList, ncrList);
-    const message = generateDeleteMessage('NOI', noi.referenceNo, references.references, t);
-    setDeleteModal({ isOpen: true, id, message });
-  }, [noiList, itrList, ncrList, t]);
+    if (!noi || deleteCheckInFlight.current) return;      // a second click while the check is out does nothing
+    deleteCheckInFlight.current = true;
+    try {
+      const check = await getNoiDeleteCheck(id);
+      if (!check.canDelete) {
+        const label = (type: string) => {
+          const key = `noi.citedBy.${type}`;
+          const text = t(key);
+          return text === key ? type : text;
+        };
+        const list = check.references.map(r => `${r.count} ${label(r.type)}`).join(language === 'zh' ? '、' : ', ');
+        toast.error(t('noi.deleteBlocked', { ref: noi.referenceNo, list }));
+        return;
+      }
+    } catch (err) {
+      console.error('Failed to check NOI references before delete:', err);
+    } finally {
+      deleteCheckInFlight.current = false;
+    }
+    setDeleteModal({ isOpen: true, id, message: t('common.deleteConfirmMessage', { item: `NOI ${noi.referenceNo}` }) });
+  }, [noiList, t, language]);
 
   const handleDeleteConfirm = async () => {
-    if (deleteModal.id) {
+    if (!deleteModal.id) return;
+    try {
       await deleteNOI(deleteModal.id);
+    } catch {
+      // noiStore has already put the reason (e.g. the documents that still cite this NOI) in this page's error banner
+    } finally {
       setDeleteModal({ isOpen: false, id: null, message: '' });
     }
   };
@@ -440,8 +458,6 @@ const NOI: React.FC = () => {
         message={deleteModal.message || t('common.deleteConfirmMessage', { item: 'NOI' })}
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteModal({ isOpen: false, id: null, message: '' })}
-        confirmText="Delete"
-        cancelText="Cancel"
       />
 
       {batchPrintData &&

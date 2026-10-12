@@ -376,17 +376,19 @@ class NOIService:
                         f"no fields can be changed once an NOI is closed."
                     )
 
-            # Update the record
-            updated = self.repo.update(db_noi, d)
-
-            # Log audit trail
+            # Update the record and its audit entry: ONE commit, strict audit (the repository's update() commits on its own,
+            # which used to leave the audit entry behind uncommitted — dropped at the end of the request)
+            for key, value in d.items():
+                setattr(db_noi, key, value)
             log_audit(
-                self.repo.db, "UPDATE", "NOI", noi_id, updated.referenceNo,
+                self.repo.db, "UPDATE", "NOI", noi_id, db_noi.referenceNo,
                 old_value=old_val, new_value=noi_update.model_dump(exclude_unset=True),
-                user_id=user_id, username=username
+                user_id=user_id, username=username, strict=True,
             )
-
-            return updated
+            self.repo.db.flush()
+            self.repo.db.commit()
+            self.repo.db.refresh(db_noi)
+            return db_noi
         except ValueError as e:
             self.repo.db.rollback()            # releases the write lock taken for a contractor change
             raise e
@@ -456,6 +458,14 @@ class NOIService:
             if not db_noi or not record_in_scope(db_noi, scope):
                 return False
 
+            # Take the write lock BEFORE counting the documents that cite this NOI, then re-read it, so a document
+            # saved a moment ago is counted (same as a contractor change in update_noi) and never left citing a
+            # deleted NOI.
+            begin_write_transaction(self.repo.db)
+            if not reload_locked(self.repo.db, db_noi):
+                self.repo.db.rollback()
+                return False                       # deleted by a request that held the lock first
+
             # Check for references before deletion
             validators.check_noi_references(self.repo.db, db_noi.referenceNo)
 
@@ -470,19 +480,51 @@ class NOIService:
                 models.QWorkflow.noi_id == db_noi.id
             ).delete()
 
-            # Delete the record
-            self.repo.delete(db_noi)
-
-            # Log audit trail
+            # Delete the record + Q-WorkFlow row + audit entry: ONE commit, strict audit (the repository's delete() commits on
+            # its own, which used to leave the audit entry behind uncommitted — dropped at the end of the request)
+            self.repo.db.delete(db_noi)
             log_audit(
                 self.repo.db, "DELETE", "NOI", noi_id, db_noi.referenceNo,
-                old_value=old_val, user_id=user_id, username=username
+                old_value=old_val, user_id=user_id, username=username, strict=True,
             )
+            self.repo.db.flush()
+            self.repo.db.commit()
 
             return True
+        except ValueError:
+            self.repo.db.rollback()            # expected refusal (still referenced): nothing was written
+            raise
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error deleting NOI {noi_id}: {e}", exc_info=True)
             raise e
+
+    def preview_reference_no(self, contractor: str, scope=None) -> dict:
+        """The reference number a new NOI for this contractor is expected to get (create_noi numbers it the same way);
+        nothing is reserved. Returns {"referenceNo": str | None, "pattern": str}.
+
+        The sequence is per contractor across ALL projects, so the number tells how many NOIs that contractor has had
+        everywhere. Only callers entitled to that see it (business decision 2026-10-12): an unrestricted caller, and a
+        contractor-scoped caller for its own contractor (any other contractor is refused). A caller limited to projects
+        only gets the format with the sequence masked (referenceNo None)."""
+        from core.utils import preview_reference_no, reference_pattern
+        restricted = scope is not None and not scope.unrestricted
+        if restricted and scope.vendor_id is not None \
+                and _resolve_vendor_id(self.repo.db, contractor) != scope.vendor_id:
+            raise ScopeForbidden("contractor is outside your scope")
+        pattern = reference_pattern(self.repo.db, contractor or '', 'NOI')
+        if restricted and scope.vendor_id is None:
+            return {"referenceNo": None, "pattern": pattern}
+        return {"referenceNo": preview_reference_no(self.repo.db, contractor or '', 'NOI'), "pattern": pattern}
+
+    def delete_check(self, noi_id: str, scope=None) -> Optional[dict]:
+        """What a delete of this NOI would run into, for the delete prompt: the documents that still cite it (the same
+        list delete_noi refuses on). None if the NOI does not exist or is outside the caller's scope."""
+        db_noi = self.repo.get_by_id(noi_id)
+        if not db_noi or not record_in_scope(db_noi, scope):
+            return None
+        references = [{"type": t, "count": n} for t, n in validators.count_noi_references(self.repo.db, db_noi.referenceNo)]
+        return {"referenceNo": db_noi.referenceNo, "canDelete": not references, "references": references}
 
     def export_docx(self, noi_id: str, scope=None):
         """

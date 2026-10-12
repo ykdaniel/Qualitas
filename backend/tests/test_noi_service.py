@@ -76,17 +76,18 @@ def test_update_noi_success(noi_service, mock_repo):
         # Open -> In Progress is a valid transition
         noi_update = schemas.NOIUpdate(checkpoint="NEW_POINT", status="In Progress")
         
-        mock_updated_noi = models.NOI(id="noi-123", status="In Progress", checkpoint="NEW_POINT")
-        mock_repo.update.return_value = mock_updated_noi
-        
         # Act
         result = noi_service.update_noi("noi-123", noi_update, user_id=1, username="admin")
         
-        # Assert
+        # Assert: the change is written onto the record itself and committed ONCE together with a strict audit
+        # (NOI-DEFECTS-2026-001: repo.update() committed on its own and the audit entry was lost)
+        assert result is mock_db_noi
         assert result.status == "In Progress"
         assert result.checkpoint == "NEW_POINT"
-        mock_repo.update.assert_called_once()
+        mock_repo.update.assert_not_called()
+        mock_repo.db.commit.assert_called_once()
         mock_log.assert_called_once()
+        assert mock_log.call_args.kwargs["strict"] is True
 
 def test_update_closed_noi_rejects_field_change(noi_service, mock_repo):
     """A Closed NOI is a true dead end (WorkflowEngine's "Closed": [] means
@@ -116,12 +117,12 @@ def test_update_closed_noi_allows_noop_resave(noi_service, mock_repo):
         # update_noi, which is a separate concern from this lock and would
         # need its own DB-query mocking to exercise cleanly.
         noi_update = schemas.NOIUpdate(remark="same value")
-        mock_repo.update.return_value = mock_db_noi
 
         result = noi_service.update_noi("noi-123", noi_update, user_id=1, username="admin")
 
         assert result.status == "Closed"
-        mock_repo.update.assert_called_once()
+        assert result.remark == "same value"
+        mock_repo.db.commit.assert_called_once()
         mock_log.assert_called_once()
 
 def test_create_reinspection_noi_skips_qworkflow(noi_service, mock_repo):
@@ -209,8 +210,11 @@ def test_delete_noi_success(noi_service, mock_repo):
 
         # Assert
         assert result is True
-        mock_repo.delete.assert_called_once()
+        mock_repo.db.delete.assert_called_once_with(mock_db_noi)
+        mock_repo.delete.assert_not_called()
+        mock_repo.db.commit.assert_called_once()
         mock_log.assert_called_once()
+        assert mock_log.call_args.kwargs["strict"] is True
         mock_check.assert_called_once()
 
 

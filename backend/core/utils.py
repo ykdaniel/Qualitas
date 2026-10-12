@@ -537,6 +537,40 @@ def generate_reference_no(db: Session, vendor_name: str, doc_type: str, project_
     return f"{expected_prefix}{seq_str}"
 
 
+def _reference_format(db: Session, vendor_name: str, doc_type: str, project_code: str | None = None):
+    """(project code, contractor abbreviation, prefix, sequence digits) exactly as generate_reference_no() builds them."""
+    code = project_code or PROJECT_CODE
+    vendor_abbrev = get_contractor_abbreviation(db, vendor_name)
+    rule = db.query(DocumentNamingRule).filter(
+        DocumentNamingRule.doc_type == doc_type.lower()
+    ).first()
+    if rule and rule.prefix:
+        return code, vendor_abbrev, rule.prefix.replace('[ABBREV]', vendor_abbrev), rule.sequence_digits or 6
+    return code, vendor_abbrev, f"{code}-{vendor_abbrev}-{doc_type.upper()}-", 6
+
+
+def preview_reference_no(db: Session, vendor_name: str, doc_type: str, project_code: str | None = None) -> str:
+    """
+    The number generate_reference_no() WOULD hand out right now, without taking it: same prefix, rule and self-heal,
+    but nothing is written and the sequence is not advanced. Shown to the user as "expected" — someone else creating a
+    record for the same contractor first moves the real number on (NOI-REF-PREVIEW, 2026-10-12).
+    """
+    code, vendor_abbrev, expected_prefix, seq_digits = _reference_format(db, vendor_name, doc_type, project_code)
+    seq_record = db.query(ReferenceSequence).filter(
+        ReferenceSequence.project == code,
+        ReferenceSequence.vendor == vendor_abbrev,
+        ReferenceSequence.doc == doc_type
+    ).first()
+    next_seq = max(seq_record.last_seq if seq_record else 0, _max_existing_seq(db, doc_type, expected_prefix)) + 1
+    return f"{expected_prefix}{str(next_seq).zfill(seq_digits)}"
+
+
+def reference_pattern(db: Session, vendor_name: str, doc_type: str, project_code: str | None = None) -> str:
+    """The number's format with the sequence masked, e.g. QTS-ABC-NOI-###### — reveals no count."""
+    _, _, prefix, seq_digits = _reference_format(db, vendor_name, doc_type, project_code)
+    return prefix + '#' * seq_digits
+
+
 def reclaim_reference_no(db: Session, vendor_name: str, doc_type: str,
                           project_code: str | None = None) -> bool:
     """

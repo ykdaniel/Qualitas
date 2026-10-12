@@ -210,6 +210,31 @@ export const getNoiContractorContact = async (contractorId: string): Promise<Con
   return response.data;
 };
 
+export interface NoiNextReference {
+  /** The expected number, or null when the caller may only see the format (a user limited to projects). */
+  referenceNo: string | null;
+  /** The number's format with the sequence masked, e.g. QTS-ABC-NOI-###### */
+  pattern: string;
+}
+
+/** The reference number a new NOI for this contractor is expected to get (nothing is reserved; fixed on save). */
+export const getNoiNextReference = async (contractor: string): Promise<NoiNextReference> => {
+  const response = await api.get<NoiNextReference>('/noi/next-reference', { params: { contractor } });
+  return response.data;
+};
+
+export interface NoiDeleteCheck {
+  referenceNo: string;
+  canDelete: boolean;
+  references: { type: string; count: number }[];
+}
+
+/** The documents that still cite this NOI — a delete is refused while there are any. */
+export const getNoiDeleteCheck = async (noiId: string): Promise<NoiDeleteCheck> => {
+  const response = await api.get<NoiDeleteCheck>(`/noi/${encodeURIComponent(noiId)}/delete-check`);
+  return response.data;
+};
+
 export const createContractor = async (
   data: CreateContractorPayload
 ): Promise<Contractor> => {
