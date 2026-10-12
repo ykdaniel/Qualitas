@@ -56,13 +56,10 @@ export const useKMStore = create<KMState>((set, _get) => ({
     },
 
     deleteKM: async (id: string) => {
-        try {
-            await kmService.delete(id);
-            set((state) => ({
-                kmList: state.kmList.filter((km) => km.id !== id),
-            }));
-        } catch (err: any) {
-            throw new Error(getErrorMessage(err, 'Failed to delete KM article'));
-        }
+        // A refused or failed delete goes to the caller as the axios error itself (so the refusal dialog sees its status and code).
+        await kmService.delete(id);
+        set((state) => ({
+            kmList: state.kmList.filter((km) => km.id !== id),
+        }));
     },
 }));

@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { ChecklistSnapshotModal } from './ChecklistSnapshotModal';
 import { useChecklistStore } from '../../store/checklistStore';
+import { showRefusal } from '../../store/refusalStore';
 import { ShieldCheck, ClipboardCheck, ArrowRight, AlertCircle, Info, Printer, FileText } from 'lucide-react';
 import { getNextRevision } from '../../utils/revision';
 import { useLanguage } from '../../context/LanguageContext';
@@ -1461,8 +1462,10 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                     try {
                         await unlinkChecklistFromITR(persistedItrId, id);
                         await refreshInstances();
-                    } catch (e: any) {
-                        toast.error(e?.response?.data?.detail || (e as Error)?.message || 'Failed to remove checklist');
+                    } catch (e) {
+                        // ITR locked / the checklist has held results: shown in the refusal dialog
+                        console.error('Failed to remove checklist:', e);
+                        showRefusal(e, 'delete');
                     }
                 }
             }}

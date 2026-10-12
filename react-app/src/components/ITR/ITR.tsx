@@ -8,6 +8,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useITRStats, isITROverdue } from '../../hooks/useITRStats';
 import { useITRStore } from '../../store/itrStore';
 import type { ITRItem } from '../../store/itrStore';
+import { showRefusal } from '../../store/refusalStore';
 
 import { useChecklistStore } from '../../store/checklistStore';
 import { checkITRChecklistReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
@@ -105,8 +106,14 @@ const ITR: React.FC = () => {
     const columns = useMemo(() => createColumns(handleDeleteClick, navigate, t), [handleDeleteClick, navigate, t]);
 
     const handleDelete = async () => {
-        if (deleteModal.id) {
+        if (!deleteModal.id) return;
+        try {
             await deleteITR(deleteModal.id);
+        } catch (err) {
+            // locked / has approval history / cited / has evidence: shown in the refusal dialog (the page banner is for list loads only)
+            console.error('Failed to delete ITR:', err);
+            showRefusal(err, 'delete');
+        } finally {
             setDeleteModal({ isOpen: false, id: null, message: '' });
         }
     };

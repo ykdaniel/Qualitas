@@ -1,13 +1,12 @@
 import React, { useState, useMemo, useDeferredValue } from 'react';
-import { toast } from 'sonner';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createRoleColumns } from './columns';
 import { useIAMStore, Role } from '../../store/iamStore';
+import { showRefusal } from '../../store/refusalStore';
 import DeleteAuditModal from './DeleteAuditModal';
 import RoleModal from './RoleModal';
-import { getErrorMessage } from '../../utils/errorUtils';
 import styles from './IAM.module.css';
 import { Plus } from 'lucide-react';
 
@@ -61,8 +60,10 @@ const RoleManagement: React.FC<RoleManagementProps> = ({ searchQuery, tabsCompon
             try {
                 await deleteRole(parseInt(deleteModal.id), reason);
                 setDeleteModal({ isOpen: false, id: null });
-            } catch (err: any) {
-                toast.error(getErrorMessage(err, "Failed to delete role"));
+            } catch (err) {
+                // still assigned to users / Admin role: the refusal dialog opens over this one, which stays open with the reason kept
+                console.error('Failed to delete role:', err);
+                showRefusal(err, 'delete');
             }
         }
     };
@@ -108,6 +109,7 @@ const RoleManagement: React.FC<RoleManagementProps> = ({ searchQuery, tabsCompon
             )}
 
             <DeleteAuditModal
+                key={deleteModal.id ?? 'closed'}
                 isOpen={deleteModal.isOpen}
                 title={t('iam.deleteRole') || 'Delete Role'}
                 message={t('common.confirmDelete') || 'Are you sure you want to delete this role?'}

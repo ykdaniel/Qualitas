@@ -19,8 +19,9 @@ import schemas
 from database import get_db
 from core.scope import Scope, get_scope, compute_scope, entity_in_scope, attachment_target, find_attachment_record
 from core.attachment_access import (
-    ENTITY_PERMISSIONS, IMAGE_ONLY_CATEGORIES, is_km_image_path, lock_reason, require_attachment_permission, validate_category,
+    ENTITY_PERMISSIONS, IMAGE_ONLY_CATEGORIES, is_km_image_path, lock_reason, lock_refusal, require_attachment_permission, validate_category,
 )
+from core.refusals import RefusalHTTPException
 from core.uploads import upload_root
 from core.utils import lock_ncr_for_write
 from core.material_access import lock_material_submittal_for_write
@@ -446,10 +447,10 @@ def delete_file(
             db.rollback()
             raise HTTPException(status_code=404, detail="Attachment not found")
     record = find_attachment_record(db, attachment.entity_type, attachment.entity_id)
-    reason = lock_reason(db, attachment.entity_type, record, attachment.category) if record is not None else None
-    if reason:
+    locked = lock_refusal(db, attachment.entity_type, record, attachment.category) if record is not None else None
+    if locked:
         db.rollback()
-        raise HTTPException(status_code=409, detail=reason)
+        raise RefusalHTTPException(409, locked[0], 'ATTACHMENT_LOCKED', locked[1])
 
     attachment.is_deleted = True
     db.commit()

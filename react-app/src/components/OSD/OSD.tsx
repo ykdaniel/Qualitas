@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { toast } from 'sonner';
 import { Clock, CheckCircle2, BarChart3, Zap, Search, Ban } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useOSDStore } from '../../store/osdStore';
+import { showRefusal } from '../../store/refusalStore';
 import type { OSDItem as ContextOSDItem } from '../../store/osdStore';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import ConfirmModal from '../Shared/ConfirmModal';
@@ -158,7 +158,7 @@ const OSD: React.FC = () => {
         await deleteOSD(deleteModal.id);
       } catch (err) {
         console.error('Failed to delete OSD:', err);
-        toast.error((err as Error)?.message || t('common.deleteFailed'));
+        showRefusal(err, 'delete');
       }
       setDeleteModal({ isOpen: false, id: null, message: '' });
     }

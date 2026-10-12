@@ -25,6 +25,7 @@ from core.utils import (
     WorkflowEngine
 )
 from core import validators
+from core.refusals import Refusal
 
 logger = logging.getLogger(__name__)
 
@@ -884,11 +885,13 @@ class ChecklistService:
             # instance's results with none of those checks, including one
             # behind an Approved ITR.
             if db_checklist.itrId:
-                raise ValueError(
+                raise Refusal(
+                    'CHECKLIST_DELETE_ITR_OWNED',
                     f"Cannot delete Checklist '{db_checklist.recordsNo}' — it is an "
                     f"ITR-owned instance linked to ITR "
                     f"{db_checklist.itrNumber or db_checklist.itrId}. Use the ITR's "
-                    f"Unlink action instead of deleting it directly."
+                    f"Unlink action instead of deleting it directly.",
+                    number=db_checklist.recordsNo, itr=db_checklist.itrNumber or db_checklist.itrId,
                 )
 
             # A template that has (incorrectly, per the guards above) ended
@@ -900,9 +903,11 @@ class ChecklistService:
             # so the only rule available is: never hard-delete a row that
             # has ever held evidence.
             if _instance_has_historical_evidence(db_checklist):
-                raise ValueError(
+                raise Refusal(
+                    'CHECKLIST_DELETE_HAS_EVIDENCE',
                     f"Cannot delete Checklist '{db_checklist.recordsNo}' — it has held "
-                    f"inspection evidence (now or previously)."
+                    f"inspection evidence (now or previously).",
+                    number=db_checklist.recordsNo,
                 )
 
             # Capture old values for audit using inspect

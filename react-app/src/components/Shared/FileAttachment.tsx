@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { getEntityFiles, deleteFile, AttachmentInfo, getAuthenticatedFileUrl } from '../../services/api';
+import { showRefusal } from '../../store/refusalStore';
 
 export interface FileAttachmentProps {
     /** 已存在於伺服器的檔案資訊 (由上層傳入或由內部抓取) */
@@ -169,7 +170,9 @@ const FileAttachment: React.FC<FileAttachmentProps> = ({
                 const updated = apiAttachments.filter(a => a.id !== fileId);
                 setApiAttachments(updated);
             } catch (err) {
+                // e.g. the record's attachments are locked: it used to fail with no message at all (REFUSAL-DIALOG-2026-001)
                 console.error('Delete failed', err);
+                showRefusal(err, 'delete');
             }
         }
     }, [apiAttachments, onDeleteExistingFile]);

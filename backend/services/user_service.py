@@ -13,6 +13,7 @@ from crud import log_audit  # Import existing audit logger to maintain legacy co
 # every other caller in this module.
 from core.utils import log_audit as strict_log_audit
 from core import validators
+from core.refusals import RefusalHTTPException, refusal_http
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -498,14 +499,14 @@ class UserService:
             self.repo.db.refresh(db_role)
             if _admin_like_name(db_role.name) and not self._actor_is_admin(current_user_id):
                 self.repo.db.rollback()
-                raise HTTPException(status_code=403, detail=_ADMIN_ONLY_ROLE)
+                raise RefusalHTTPException(403, _ADMIN_ONLY_ROLE, 'ROLE_ADMIN_PROTECTED')
 
         # Existing restriction kept exactly as it was: a role still assigned to
         # users cannot be deleted. Raised before anything is written.
         try:
             validators.check_role_references(self.repo.db, role_id, db_role.name)
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            raise refusal_http(e)
 
         try:
             old_val = self._role_audit_snapshot(db_role)

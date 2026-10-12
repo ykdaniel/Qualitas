@@ -1,5 +1,6 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from core.refusals import refusal_http
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -308,7 +309,7 @@ def delete_itr(
     except ScopeForbidden as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e)
     if not deleted:
         raise HTTPException(status_code=404, detail="ITR not found")
     return {"ok": True}
@@ -375,7 +376,7 @@ def unlink_checklist_from_itr(
             scope=scope,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e)
     if db_itr is None:
         raise HTTPException(status_code=404, detail="ITR or checklist instance not found")
     return db_itr

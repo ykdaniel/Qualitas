@@ -5,6 +5,7 @@ import { Toaster } from 'sonner';
 import { useAuth } from './context/AuthContext';
 import { AppProviders } from './components/Shared/AppProviders';
 import AppLayout from './components/Shared/AppLayout';
+import RefusalDialog from './components/Shared/RefusalDialog';
 import './App.css';
 
 // --- Lazy loaded components ---
@@ -106,7 +107,7 @@ const router = createBrowserRouter(createRoutesFromElements(
 ));
 
 function App() {
-  return <><RouterProvider router={router} /><Toaster position="top-center" richColors /></>;
+  return <><RouterProvider router={router} /><Toaster position="top-center" richColors /><RefusalDialog /></>;
 }
 
 export default App;

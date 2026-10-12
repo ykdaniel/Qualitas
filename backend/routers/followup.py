@@ -1,6 +1,7 @@
 
 
 from fastapi import APIRouter, Depends, HTTPException
+from core.refusals import refusal_http
 from sqlalchemy.orm import Session
 
 import schemas
@@ -111,7 +112,7 @@ def delete_followup(
     except ScopeForbidden as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e)
     if not deleted:
         raise HTTPException(status_code=404, detail="FollowUp not found")
     return {"ok": True}

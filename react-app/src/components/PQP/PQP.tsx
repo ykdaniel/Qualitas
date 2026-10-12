@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { toast } from 'sonner';
 import { CheckCircle2, XCircle, BarChart3, TrendingUp, Search } from 'lucide-react';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { usePQPStore } from '../../store/pqpStore';
+import { showRefusal } from '../../store/refusalStore';
 import type { PQPItem } from '../../store/pqpStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
@@ -191,10 +191,11 @@ const PQP: React.FC = () => {
     if (!deleteModal.id) return;
     try {
       await deletePQP(deleteModal.id);
-      setDeleteModal({ isOpen: false, id: null });
     } catch (err) {
       console.error('Delete PQP failed:', err);
-      toast.error((err as Error)?.message || t('common.deleteFailed'));
+      showRefusal(err, 'delete');
+    } finally {
+      setDeleteModal({ isOpen: false, id: null });
     }
   };
 

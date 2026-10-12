@@ -3,6 +3,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore, Contractor } from '../../store/contractorsStore';
 import { useProjectStore, Project } from '../../store/projectStore';
+import { showRefusal } from '../../store/refusalStore';
 import { useITPStore } from '../../store/itpStore';
 import { useNCRStore } from '../../store/ncrStore';
 import { useNOIStore } from '../../store/noiStore';
@@ -19,7 +20,6 @@ import styles from './Contractors.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns, createProjectColumns } from './columns';
 import { Search, Plus } from 'lucide-react';
-import { toast } from 'sonner';
 import ContractorModal from './ContractorModal';
 import ProjectModal from './ProjectModal';
 
@@ -123,11 +123,10 @@ const Contractors: React.FC = () => {
         if (deleteModal.id) {
             try {
                 await deleteContractor(deleteModal.id);
-            } catch (err: any) {
-                // a refusal used to fail silently; a company with people on its list is refused (CONTRACTOR-PERSONNEL-2026-001)
+            } catch (err) {
+                // still referenced, or has people on its list (CONTRACTOR-PERSONNEL-2026-001): shown in the refusal dialog
                 console.error('Deleting the contractor failed:', err);
-                const detail: string = err?.response?.data?.detail || '';
-                toast.error(/personnel list/.test(detail) ? t('contractors.personnel.blocksDelete') : (detail || t('common.deleteFailed')));
+                showRefusal(err, 'delete');
             }
             setDeleteModal({ isOpen: false, id: null, message: '' });
         }
@@ -145,8 +144,14 @@ const Contractors: React.FC = () => {
     };
 
     const handleProjectDeleteConfirm = async () => {
-        if (projectDeleteModal.id) {
+        if (!projectDeleteModal.id) return;
+        try {
             await deleteProject(projectDeleteModal.id);
+        } catch (err) {
+            // still referenced by records: shown in the refusal dialog (it used to fail with no message at all)
+            console.error('Deleting the project failed:', err);
+            showRefusal(err, 'delete');
+        } finally {
             setProjectDeleteModal({ isOpen: false, id: null });
         }
     };

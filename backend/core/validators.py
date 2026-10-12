@@ -12,6 +12,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 import models
 from core import error_messages
+from core.refusals import Refusal
 
 
 # ============================================================================
@@ -130,7 +131,7 @@ def check_references_before_delete(
             ]
         )
     """
-    references = []
+    found = []
 
     for model_class, filter_field, filter_value, display_name in reference_checks:
         count = db.query(model_class).filter(
@@ -138,12 +139,21 @@ def check_references_before_delete(
         ).count()
 
         if count > 0:
-            references.append(f"{count} {display_name} record(s)")
+            found.append((display_name, count))
 
-    if references:
-        raise ValueError(error_messages.cannot_delete_has_references(
-            entity_display_name, entity_id, references
-        ))
+    if found:
+        raise delete_referenced(entity_display_name, entity_id, found)
+
+
+def delete_referenced(doc_type: str, number: str, found: list) -> Refusal:
+    """DELETE_REFERENCED refusal; `found` is [(type, count)] with count > 0."""
+    references = [f"{count} {display_name} record(s)" for display_name, count in found]
+    return Refusal(
+        'DELETE_REFERENCED',
+        error_messages.cannot_delete_has_references(doc_type, number, references),
+        docType=doc_type, number=number,
+        references=[{'type': display_name, 'count': count} for display_name, count in found],
+    )
 
 
 def check_contractor_references(db: Session, contractor_id: str, contractor_name: str) -> None:
@@ -246,9 +256,9 @@ def check_noi_references(db: Session, noi_reference_no: str) -> None:
     Raises:
         ValueError: If NOI has references
     """
-    references = [f"{count} {display_name} record(s)" for display_name, count in count_noi_references(db, noi_reference_no)]
-    if references:
-        raise ValueError(error_messages.cannot_delete_has_references('NOI', noi_reference_no, references))
+    found = count_noi_references(db, noi_reference_no)
+    if found:
+        raise delete_referenced('NOI', noi_reference_no, found)
 
 
 def count_noi_references(db: Session, noi_reference_no: str) -> list:

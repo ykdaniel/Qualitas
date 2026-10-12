@@ -240,16 +240,11 @@ export const useChecklistStore = create<ChecklistState>((set, get) => ({
     },
 
     deleteRecord: async (id) => {
-        try {
-            await api.deleteChecklist(id);
-            // NOTE: 本地記憶體直接移除該筆記錄，不觸發全量 refetch
-            set((state) => ({
-                records: state.records.filter((r) => r.id !== id),
-            }));
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to delete checklist record');
-            set({ error: msg });
-            throw error;
-        }
+        // A refused or failed delete goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-001).
+        await api.deleteChecklist(id);
+        // NOTE: 本地記憶體直接移除該筆記錄，不觸發全量 refetch
+        set((state) => ({
+            records: state.records.filter((r) => r.id !== id),
+        }));
     },
 }));

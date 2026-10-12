@@ -138,19 +138,14 @@ export const useFATStore = create<FATState>((set, get) => ({
     },
 
     deleteFAT: async (id) => {
-        try {
-            await api.delete(`/fat/${id}`);
-            set((state) => ({
-                fatList: state.fatList.filter(f => f.id !== id),
-                fatDetails: Object.fromEntries(
-                    Object.entries(state.fatDetails).filter(([key]) => key !== id)
-                ),
-            }));
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to delete FAT');
-            set({ error: msg });
-            throw error;
-        }
+        // A refused or failed delete goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-001).
+        await api.delete(`/fat/${id}`);
+        set((state) => ({
+            fatList: state.fatList.filter(f => f.id !== id),
+            fatDetails: Object.fromEntries(
+                Object.entries(state.fatDetails).filter(([key]) => key !== id)
+            ),
+        }));
     },
 
     saveFATDetails: async (fatId, details) => {

@@ -173,13 +173,8 @@ export const useITPStore = create<ITPState>((set, get) => ({
     },
 
     deleteITP: async (id: string) => {
-        try {
-            await api.delete(`/itp/${id}/`);
-            set((state) => ({ itpList: state.itpList.filter((item) => item.id !== id) }));
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to delete ITP');
-            set({ error: msg });
-            throw error;
-        }
+        // A refused or failed delete goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-001); the page's error banner is for list loads only.
+        await api.delete(`/itp/${id}/`);
+        set((state) => ({ itpList: state.itpList.filter((item) => item.id !== id) }));
     }
 }));

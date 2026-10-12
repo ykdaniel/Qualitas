@@ -171,13 +171,8 @@ export const useNCRStore = create<NCRState>((set, get) => ({
     },
 
     deleteNCR: async (id: string) => {
-        try {
-            await api.delete(`/ncr/${id}/`);
-            set((state) => ({ ncrList: state.ncrList.filter(n => n.id !== id) }));
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to delete NCR');
-            set({ error: msg });
-            throw error;
-        }
+        // A refused or failed delete goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-001); the page's error banner is for list loads only.
+        await api.delete(`/ncr/${id}/`);
+        set((state) => ({ ncrList: state.ncrList.filter(n => n.id !== id) }));
     }
 }));

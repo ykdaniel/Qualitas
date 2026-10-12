@@ -18,6 +18,7 @@ import { uploadFiles, deleteFile } from '../../services/api';
 import { useNCRStats } from '../../hooks/useNCRStats';
 import { runSaveFlow, sameWrite, SaveOutcome } from '../../utils/saveFlow';
 import { describeSaveError } from '../../utils/saveErrors';
+import { showRefusal } from '../../store/refusalStore';
 
 type StatusFilter = 'all' | 'open' | 'inProgress' | 'resolved' | 'closed' | 'void';
 
@@ -56,15 +57,6 @@ const NCR: React.FC = () => {
     id: null,
     message: '',
   });
-  // The reason a refused delete put in the page banner: cleared when the next delete starts, so it never stays above a later
-  // successful delete. Any other banner text (a failed list load) is left alone.
-  const deleteErrorRef = useRef<string | null>(null);
-  // Once the banner shows anything else (a reload clears it first), the remembered delete reason is dropped — so a later load
-  // failure with the same text (a 5xx / network message) is never taken for the delete's own and cleared.
-  useEffect(() => {
-    if (error !== deleteErrorRef.current) deleteErrorRef.current = null;
-  }, [error]);
-
   const statistics = useNCRStats(ncrList);
   // The last successful record write of the open modal (id + serialized payload) — see runSaveFlow / sameWrite.
   const lastWriteRef = useRef<{ id: string; key: string } | null>(null);
@@ -254,14 +246,12 @@ const NCR: React.FC = () => {
 
   const handleDelete = async () => {
     if (!deleteModal.id) return;
-    const { error: shownError, clearError } = useNCRStore.getState();
-    if (deleteErrorRef.current !== null && shownError === deleteErrorRef.current) clearError();
-    deleteErrorRef.current = null;
     try {
       await deleteNCR(deleteModal.id);
-    } catch {
-      // ncrStore has already put the reason (not Void yet / still cited by an ITR) in this page's error banner
-      deleteErrorRef.current = useNCRStore.getState().error;
+    } catch (err) {
+      // not Void yet / still cited by an ITR: the reason goes to the refusal dialog (the page banner is for list loads only)
+      console.error('Failed to delete NCR:', err);
+      showRefusal(err, 'delete');
     } finally {
       setDeleteModal({ isOpen: false, id: null, message: '' });
     }

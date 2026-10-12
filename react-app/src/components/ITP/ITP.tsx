@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useITPStore } from '../../store/itpStore';
 import type { ITPItem } from '../../store/itpStore';
+import { showRefusal } from '../../store/refusalStore';
 import { useNOIStore } from '../../store/noiStore';
 import { useChecklistStore } from '../../store/checklistStore';
 import { checkITPReferences, checkITPChecklistReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
@@ -175,10 +176,12 @@ const ITP: React.FC = () => {
     if (deleteModal.id) {
       try {
         await deleteITP(deleteModal.id);
+      } catch (error) {
+        // e.g. still cited by NOIs: shown in the refusal dialog (the page banner is for list loads only)
+        console.error('Failed to delete ITP:', error);
+        showRefusal(error, 'delete');
+      } finally {
         setDeleteModal({ isOpen: false, id: null, message: '' });
-      } catch (error: any) {
-        if (error?.response?.status === 401) return;
-        toast.error(t('itp.deleteError'));
       }
     }
   };

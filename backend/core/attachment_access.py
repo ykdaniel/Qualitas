@@ -28,9 +28,11 @@ NOT locked, because the record's own rules do not say anything about attachments
 PENDING_STATE_DECISIONS.
 """
 import re
-from typing import Optional
+from typing import Optional, Tuple
 
 from fastapi import HTTPException
+
+from core.refusals import permission_denied
 from sqlalchemy.orm import Session
 
 import models
@@ -153,29 +155,39 @@ def require_attachment_permission(user, entity_type: str, action: str, category:
         raise HTTPException(status_code=403, detail="Not available to contractor-scoped accounts.")
     needed = pair[0] if action == "view" else CATEGORY_UPDATE_PERMISSIONS.get(etype, {}).get(category, pair[1])
     if needed not in permission_codes(user):
-        raise HTTPException(status_code=403, detail=f"Operation not permitted. Required: {needed}")
+        raise permission_denied(f"Operation not permitted. Required: {needed}", needed)
 
 
 def lock_reason(db: Session, entity_type: str, record, category: Optional[str]) -> Optional[str]:
     """Why an upload / delete on this record's attachments is refused because of the record's STATE; None when it is allowed."""
+    found = lock_refusal(db, entity_type, record, category)
+    return found[0] if found else None
+
+
+def lock_refusal(db: Session, entity_type: str, record, category: Optional[str]) -> Optional[Tuple[str, dict]]:
+    """lock_reason's text plus the ATTACHMENT_LOCKED params (`kind`: record / pqp / parentItr / evidence)."""
     etype = (entity_type or "").lower()
     status = getattr(record, "status", None)
     if (etype, category) in NEVER_LOCKED_CATEGORIES:
         return None
     if etype in _UNCONDITIONAL_LOCKED_STATUSES and status in _UNCONDITIONAL_LOCKED_STATUSES[etype]:
-        return f"Cannot change attachments of a {status} {etype.upper()}: the record is locked."
+        return (f"Cannot change attachments of a {status} {etype.upper()}: the record is locked.",
+                {"kind": "record", "docType": etype.upper(), "status": status})
     if etype == "pqp":
         from services.pqp_service import PQPService
         if PQPService._normalize_pqp_status(status) == "Approved":
-            return "Cannot change attachments of an Approved PQP: the document content is locked (use Publish to create a new revision)."
+            return ("Cannot change attachments of an Approved PQP: the document content is locked (use Publish to create a new revision).",
+                    {"kind": "pqp", "docType": "PQP", "status": "Approved"})
     if etype == "checklist" and getattr(record, "itrId", None):
         parent = db.query(models.ITR).filter(models.ITR.id == record.itrId).first()
         if parent is not None and parent.status in ("Approved", "Void"):
-            return f"Cannot change attachments of this Checklist: its parent ITR is {parent.status}."
+            return (f"Cannot change attachments of this Checklist: its parent ITR is {parent.status}.",
+                    {"kind": "parentItr", "docType": "CHECKLIST", "status": parent.status})
     locked = _LOCKED_CATEGORIES.get((etype, status))
     if locked is not None:
         effective = category or "attachment"
         open_categories = ALLOWED_CATEGORIES.get(etype, set()) - locked
         if effective not in open_categories:                  # locked, OR not a recognised category at all: deny by default
-            return f"Cannot change {effective} files of a {status} {etype.upper()}: that evidence is locked."
+            return (f"Cannot change {effective} files of a {status} {etype.upper()}: that evidence is locked.",
+                    {"kind": "evidence", "docType": etype.upper(), "status": status, "category": effective})
     return None

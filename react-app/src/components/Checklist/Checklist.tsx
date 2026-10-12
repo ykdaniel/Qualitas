@@ -9,6 +9,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { Plus, Printer, Info, MapPin, CheckCircle, AlertCircle, Trash2, User, Signature, History, Search, ArrowLeft, FileText } from 'lucide-react';
 import { useChecklistStore, ChecklistRecord, isTemplateHistoricallyProtected } from '../../store/checklistStore';
+import { showRefusal } from '../../store/refusalStore';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import ChecklistPrintTemplate from './ChecklistPrintTemplate';
@@ -176,8 +177,13 @@ const Checklist: React.FC = () => {
     }, []);
 
     const handleDelete = useCallback(async (id: string) => {
-        if (window.confirm(t('common.confirmDelete'))) {
+        if (!window.confirm(t('common.confirmDelete'))) return;
+        try {
             await deleteRecord(id);
+        } catch (err) {
+            // ITR-owned instance / has held results: it used to fail with no message at all; now shown in the refusal dialog
+            console.error('Failed to delete checklist:', err);
+            showRefusal(err, 'delete');
         }
     }, [deleteRecord, t]);
 

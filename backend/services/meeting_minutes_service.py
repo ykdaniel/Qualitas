@@ -14,6 +14,7 @@ from typing import List, Optional
 from sqlalchemy.exc import IntegrityError
 
 import models
+from core.refusals import Refusal
 import schemas
 from repositories.meeting_minutes_repository import MeetingMinutesRepository
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
@@ -362,9 +363,12 @@ class MeetingMinutesService:
             # (see reclaim_reference_no) so it doesn't leave an unexplained
             # gap the way a published-then-voided record's number does.
             if db_meeting.status not in ('Void', 'Draft'):
-                raise ValueError(
+                raise Refusal(
+                    'DELETE_NOT_VOID',
                     f"Cannot delete Meeting Minutes '{db_meeting.documentNumber}' "
-                    f"with status '{db_meeting.status}'. Please Void it first, then delete."
+                    f"with status '{db_meeting.status}'. Please Void it first, then delete.",
+                    docType='MeetingMinutes', number=db_meeting.documentNumber, status=db_meeting.status,
+                    allowed=['Void', 'Draft'],
                 )
 
             is_draft = db_meeting.status == 'Draft'

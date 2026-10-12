@@ -7,6 +7,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useNOIStore } from '../../store/noiStore';
 import type { NOIItem } from '../../store/noiStore';
+import { showCodedRefusal, showRefusal } from '../../store/refusalStore';
 
 import { uploadFiles, deleteFile, getNoiDeleteCheck } from '../../services/api';
 import ConfirmModal from '../Shared/ConfirmModal';
@@ -29,7 +30,7 @@ import { useNOIStats } from '../../hooks/useNOIStats';
 type StatusFilter = 'all' | 'open' | 'closed' | 'reject';
 
 const NOI: React.FC = () => {
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
   const { hasPermission } = useAuth();
   const { noiList, loading, error, refetch, addNOI, addBulkNOI, updateNOI, deleteNOI } = useNOIStore();
   // The last successful record write of the open modal (id + serialized payload) — see runSaveFlow / sameWrite.
@@ -234,13 +235,8 @@ const NOI: React.FC = () => {
     try {
       const check = await getNoiDeleteCheck(id);
       if (!check.canDelete) {
-        const label = (type: string) => {
-          const key = `noi.citedBy.${type}`;
-          const text = t(key);
-          return text === key ? type : text;
-        };
-        const list = check.references.map(r => `${r.count} ${label(r.type)}`).join(language === 'zh' ? '、' : ', ');
-        toast.error(t('noi.deleteBlocked', { ref: noi.referenceNo, list }));
+        // the same refusal the server gives on DELETE, shown in the refusal dialog
+        showCodedRefusal('DELETE_REFERENCED', { docType: 'NOI', number: noi.referenceNo, references: check.references }, 'delete');
         return;
       }
     } catch (err) {
@@ -249,14 +245,16 @@ const NOI: React.FC = () => {
       deleteCheckInFlight.current = false;
     }
     setDeleteModal({ isOpen: true, id, message: t('common.deleteConfirmMessage', { item: `NOI ${noi.referenceNo}` }) });
-  }, [noiList, t, language]);
+  }, [noiList, t]);
 
   const handleDeleteConfirm = async () => {
     if (!deleteModal.id) return;
     try {
       await deleteNOI(deleteModal.id);
-    } catch {
-      // noiStore has already put the reason (e.g. the documents that still cite this NOI) in this page's error banner
+    } catch (err) {
+      // e.g. the documents that still cite this NOI: shown in the refusal dialog (the page banner is for list loads only)
+      console.error('Failed to delete NOI:', err);
+      showRefusal(err, 'delete');
     } finally {
       setDeleteModal({ isOpen: false, id: null, message: '' });
     }

@@ -1,6 +1,7 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
+from core.refusals import refusal_http
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -138,7 +139,11 @@ def delete_itp(
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(ITP_DELETE))
 ):
-    success = itp_service.delete_itp(itp_id=itp_id, user_id=current_user.id, username=current_user.username, scope=scope)
+    try:
+        success = itp_service.delete_itp(itp_id=itp_id, user_id=current_user.id, username=current_user.username, scope=scope)
+    except ValueError as e:
+        # still cited by NOIs: a business refusal (400), never the 500 it used to fall through to (REFUSAL-DIALOG-2026-001)
+        raise refusal_http(e)
     if not success:
         raise HTTPException(status_code=404, detail="ITP not found")
     return {"ok": True}

@@ -17,6 +17,8 @@ from mail_service import send_ncr_rejection_notification
 from repositories.ncr_repository import NCRRepository
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
 from core import strict_dates
+from core.refusals import Refusal
+from core.validators import delete_referenced
 from core.perms import NCR_CLOSE
 from core.ncr_photo_evidence import ncr_photo_evidence, photo_list
 from core.utils import (
@@ -617,9 +619,11 @@ class NCRService:
             # Only Void NCRs can be deleted — deleting Open/In Progress/Resolved/Closed
             # NCRs would game the Q-WorkFlow completion percentage to 100%.
             if db_ncr.status != 'Void':
-                raise ValueError(
+                raise Refusal(
+                    'DELETE_NOT_VOID',
                     f"Cannot delete NCR '{db_ncr.documentNumber}' with status '{db_ncr.status}'. "
-                    f"Please Void the NCR first, then delete."
+                    f"Please Void the NCR first, then delete.",
+                    docType='NCR', number=db_ncr.documentNumber, status=db_ncr.status, allowed=['Void'],
                 )
 
             # Check for ITR references before deletion
@@ -627,7 +631,7 @@ class NCRService:
                 models.ITR.ncrNumber == db_ncr.documentNumber
             ).count()
             if itr_count > 0:
-                raise ValueError(f"Cannot delete NCR '{db_ncr.documentNumber}': referenced by {itr_count} ITR record(s)")
+                raise delete_referenced('NCR', db_ncr.documentNumber, [('ITR', itr_count)])
 
             # Capture old values for audit
             old_val = {c.name: getattr(db_ncr, c.name) for c in db_ncr.__table__.columns}
