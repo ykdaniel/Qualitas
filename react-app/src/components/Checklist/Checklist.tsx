@@ -13,6 +13,7 @@ import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import ChecklistPrintTemplate from './ChecklistPrintTemplate';
 import { ResultSelect } from './ChecklistResultControls';
+import ChecklistCellInput from './ChecklistCellInput';
 import { withResult, deriveChecklistStatus, itemCounts } from '../../utils/checklistResult';
 import styles from './Checklist.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
@@ -673,16 +674,26 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
                                 <Plus size={16} /> Add Row
                             </button>
                         </div>
-                        <div className={styles.cardContent} style={{ padding: 0 }}>
-                            <table className={styles.webTable}>
+                        <div className={`${styles.cardContent} ${styles.itemsTableWrap}`} style={{ padding: 0 }}>
+                            {/* Proportional columns (CHECKLIST-TEMPLATE-LAYOUT-2026-001): Criteria is usually the
+                                longest text, so it gets the widest share; the result columns take theirs when shown. */}
+                            <table className={`${styles.webTable} ${showResultColumns ? styles.webTableWithResults : ''}`}>
+                                <colgroup>
+                                    <col className={styles.colNo} />
+                                    <col className={styles.colItem} />
+                                    <col className={styles.colCriteria} />
+                                    {showResultColumns && <col />}
+                                    {showResultColumns && <col className={styles.colResult} />}
+                                    <col className={styles.colDelete} />
+                                </colgroup>
                                 <thead>
                                     <tr>
-                                        <th style={{ width: '60px' }}>#</th>
+                                        <th>#</th>
                                         <th>{t('checklist.item') || 'Inspection Item'}</th>
-                                        <th style={{ width: '200px' }}>{t('checklist.criteria') || 'Criteria'}</th>
-                                        {showResultColumns && <th style={{ width: '200px' }}>Actual Situation</th>}
-                                        {showResultColumns && <th style={{ width: '120px', textAlign: 'center' }}>Result</th>}
-                                        <th style={{ width: '50px' }}></th>
+                                        <th>{t('checklist.criteria') || 'Criteria'}</th>
+                                        {showResultColumns && <th>Actual Situation</th>}
+                                        {showResultColumns && <th>Result</th>}
+                                        <th></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -690,48 +701,43 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
                                         <tr key={idx}>
                                             <td className={styles.webItemNo}>{item.id}</td>
                                             <td>
-                                                <input
-                                                    className={styles.underlineInput}
-                                                    style={{ fontWeight: 600 }}
+                                                <ChecklistCellInput
+                                                    bold
                                                     value={item.item}
                                                     placeholder="Enter inspection item..."
-                                                    onChange={e => {
+                                                    onChange={value => {
                                                         const newItems = [...formData.items];
-                                                        newItems[idx].item = e.target.value;
+                                                        newItems[idx].item = value;
                                                         setFormData({ ...formData, items: newItems });
                                                     }}
                                                 />
                                             </td>
                                             <td>
-                                                <div className={styles.criteriaBox}>
-                                                    <input
-                                                        className="w-full bg-transparent border-none outline-none"
-                                                        value={item.criteria}
-                                                        placeholder="Enter criteria..."
-                                                        onChange={e => {
-                                                            const newItems = [...formData.items];
-                                                            newItems[idx].criteria = e.target.value;
-                                                            setFormData({ ...formData, items: newItems });
-                                                        }}
-                                                    />
-                                                </div>
+                                                <ChecklistCellInput
+                                                    value={item.criteria}
+                                                    placeholder="Enter criteria..."
+                                                    onChange={value => {
+                                                        const newItems = [...formData.items];
+                                                        newItems[idx].criteria = value;
+                                                        setFormData({ ...formData, items: newItems });
+                                                    }}
+                                                />
                                             </td>
                                             {showResultColumns && (
                                             <td>
-                                                <input
-                                                    className={styles.underlineInput}
+                                                <ChecklistCellInput
                                                     value={item.situation}
                                                     placeholder="Enter observation..."
-                                                    onChange={e => {
+                                                    onChange={value => {
                                                         const newItems = [...formData.items];
-                                                        newItems[idx].situation = e.target.value;
+                                                        newItems[idx].situation = value;
                                                         setFormData({ ...formData, items: newItems });
                                                     }}
                                                 />
                                             </td>
                                             )}
                                             {showResultColumns && (
-                                            <td>
+                                            <td className={styles.resultCell}>
                                                 {/* Same four-way control as the ITR snapshot (no cycling
                                                     button). For a historically-anomalous template this is
                                                     locked read-only, so the original values are simply shown. */}
@@ -753,7 +759,7 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
                                                 )}
                                             </td>
                                             )}
-                                            <td>
+                                            <td className={styles.webDeleteCell}>
                                                 <button
                                                     onClick={() => {
                                                         const newItems = formData.items.filter((_: any, i: number) => i !== idx);

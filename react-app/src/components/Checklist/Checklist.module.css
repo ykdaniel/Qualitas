@@ -215,59 +215,103 @@
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-.criteriaBox {
-    background: #f8faff;
-    border: 1px solid #eef4ff;
-    border-radius: 6px;
-    padding: 6px 12px;
-    font-size: 13px;
-    color: #475569;
-    min-height: 38px;
-    display: flex;
-    align-items: center;
-}
-
-.underlineInput {
-    width: 100%;
-    border: none;
-    border-bottom: 1px solid #e2e8f0;
-    padding: 8px 0;
-    font-size: 14px;
-    background: transparent;
-    transition: all 0.2s;
-}
-
-.underlineInput:focus {
-    outline: none;
-    border-bottom-color: #3b82f6;
-}
-
+/* Items table (CHECKLIST-TEMPLATE-LAYOUT-2026-001): fixed layout with proportional columns, so a long Criteria wraps
+   inside its own share instead of being cut off or pushing Item wide. Item / Criteria / Actual Situation all use the
+   same grow-with-text box (.cellInput, see ChecklistCellInput.tsx). */
 .webTable {
     width: 100%;
+    table-layout: fixed;
     border-collapse: separate;
     border-spacing: 0;
 }
 
+.colNo { width: 44px; }
+.colDelete { width: 44px; }
+.colItem { width: 36%; }            /* Criteria takes the rest (about 55%) */
+
+/* With the result columns: the four result buttons sit 2 x 2 in a fixed column. On a wide table Item / Criteria get
+   proportional shares and Actual Situation the rest; on a narrow one (e.g. a 1024 screen with the sidebar) the three
+   text columns share the room equally, so none of them is squeezed to nothing. */
+.itemsTableWrap { container-type: inline-size; }
+.webTableWithResults .colItem { width: auto; }
+.webTableWithResults .colResult { width: 172px; }
+
+@container (min-width: 900px) {
+    .webTableWithResults .colItem { width: 22%; }
+    .webTableWithResults .colCriteria { width: 32%; }
+}
+
+.resultCell [role=radiogroup] {
+    display: inline-grid;
+    grid-template-columns: repeat(2, auto);
+}
+
+.resultCell [role=radiogroup] > button:nth-child(2n) {
+    border-right-width: 0;
+}
+
+.resultCell [role=radiogroup] > button:nth-child(-n+2) {
+    border-bottom: 1px solid #e2e8f0;
+}
+
 .webTable th {
     background: #fff;
-    padding: 16px 24px;
+    padding: 10px 12px;
     text-align: left;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     color: #475569;
     border-bottom: 1px solid #f1f5f9;
 }
 
 .webTable td {
-    padding: 16px 24px;
+    padding: 6px 12px;
     border-bottom: 1px solid #f8fafc;
-    vertical-align: middle;
+    vertical-align: top;
 }
 
-.webItemNo {
+.webTable td.webItemNo {
     font-size: 13px;
+    line-height: 20px;
     color: #94a3b8;
-    padding-top: 10px;
+    padding-top: 13px;              /* level with the first text line of the boxes */
+}
+
+.webTable td.webDeleteCell {
+    padding-top: 11px;
+}
+
+.cellInput {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font: inherit;
+    font-size: 14px;
+    line-height: 20px;
+    color: #1e293b;
+    background: #fff;
+    resize: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.cellInput:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.cellInput:disabled {
+    background: #f8fafc;
+    color: #334155;
+    -webkit-text-fill-color: #334155;
+    opacity: 1;
+}
+
+.cellInputBold {
+    font-weight: 600;
 }
 
 .statusChip {

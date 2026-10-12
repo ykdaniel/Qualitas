@@ -1,0 +1,59 @@
+OBSERVED template @1440 geometry  -> {"tableW":1058,"cardW":1058,"ths":[{"text":"#","w":44},{"text":"Item","w":381},{"text":"Criteria","w":589},{"text":"","w":44}],"rows":[87,47,67,47],"boxes":[{"h":32,"sh":32,"w":355},{"h":72,"sh":72,"w":563},{"h":32,"sh":32,"w":355},{"h":32,"sh":32,"w":563},{"h":32,"sh":32,"w":355},{"h":52,"sh":52,"w":563},{"h":32,"sh":32,"w":355},{"h":32,"sh":32,"w":563}],"groups":[],"pageOverflow":0,"tableOverflow":0}
+PASS template @1440: no horizontal page overflow  -> 0
+PASS template @1440: table fits its card  -> {"tableW":1058,"cardW":1058}
+PASS template @1440: every box shows its full text (no inner scroll)  -> [{"h":32,"sh":32,"w":355},{"h":72,"sh":72,"w":563},{"h":32,"sh":32,"w":355},{"h":32,"sh":32,"w":563},{"h":32,"sh":32,"w":355},{"h":52,"sh":52,"w":563},{"h":32,"sh":32,"w":355},{"h":32,"sh":32,"w":563}]
+PASS template @1440: Criteria wider than Item  -> {"item":381,"crit":589}
+PASS template @1440: no result columns in template mode  -> ["#","Item","Criteria",""]
+PASS Enter adds no line break  -> Per ITP table 3
+PASS box grows as text is typed  -> {"h0":32,"h1":52}
+PASS pasted line breaks become spaces  -> itness by QCline one line two line three
+PASS old line break in data is kept and shown  -> No cracks, porosity or undercut > 0.5 mm per AWS D1.1 Table 8.1
+Weld size ≥ drawing size; profile per Figure 7.4
+OBSERVED template save payload keys  -> {"top":["activity","date","detail_data","itpIndex","status"],"item":["criteria","id","item","result","situation"]}
+PASS template payload: status Ongoing, items carry no situation/result  -> {"status":"Ongoing"}
+PASS template payload: criteria text sent as typed (one line)  -> Per ITP table 3 and torque wrench calibrated within 6 months, record attached to the ITR, witness by QCline one line two line three
+PASS saved to the database  -> QCline one line two line three
+PASS Cancel returns to the ITP (reopenItp)  -> http://127.0.0.1:3372/itp?reopenItp=cccd9ca0602f47dfac6cd8152b7fdef0
+OBSERVED instance @1440 geometry  -> {"tableW":1058,"cardW":1058,"ths":[{"text":"#","w":44},{"text":"Item","w":233},{"text":"Criteria","w":339},{"text":"Actual Situation","w":227},{"text":"Result","w":172},{"text":"","w":44}],"rows":[147,64,107,101],"boxes":[{"h":52,"sh":52,"w":207},{"h":132,"sh":132,"w":313},{"h":52,"sh":52,"w":201},{"h":32,"sh":32,"w":207},{"h":32,"sh":32,"w":313},{"h":32,"sh":32,"w":201},{"h":52,"sh":52,"w":207},{"h":92,"sh":92,"w":313},{"h":52,"sh":52,"w":201},{"h":32,"sh":32,"w":207},{"h":52,"sh":52,"w":313},{"h":32,"sh":32,"w":201}],"groups":[{"g":145,"room":148},{"g":145,"room":148},{"g":145,"room":148},{"g":145,"room":148}],"pageOverflow":0,"tableOverflow":0}
+PASS instance @1440: no horizontal page overflow  -> 0
+PASS instance @1440: table fits its card  -> {"tableW":1058,"cardW":1058}
+PASS instance @1440: every box shows its full text (no inner scroll)  -> [{"h":52,"sh":52,"w":207},{"h":132,"sh":132,"w":313},{"h":52,"sh":52,"w":201},{"h":32,"sh":32,"w":207},{"h":32,"sh":32,"w":313},{"h":32,"sh":32,"w":201},{"h":52,"sh":52,"w":207},{"h":92,"sh":92,"w":313},{"h":52,"sh":52,"w":201},{"h":32,"sh":32,"w":207},{"h":52,"sh":52,"w":313},{"h":32,"sh":32,"w":201}]
+PASS instance @1440: result columns shown  -> ["#","Item","Criteria","Actual Situation","Result",""]
+PASS instance @1440: result buttons fit their column  -> [{"g":145,"room":148},{"g":145,"room":148},{"g":145,"room":148},{"g":145,"room":148}]
+PASS instance @1440: Actual Situation at least 140px  -> {"#":44,"Item":233,"Criteria":339,"Actual Situation":227,"Result":172,"del":44}
+OBSERVED instance save payload keys  -> {"top":["activity","contractor","date","detail_data","failCount","itpId","itpIndex","itpVersion","itrId","itrNumber","location","noiNumber","packageName","passCount","revision","status"],"item":["criteria","id","item","result","situation"]}
+PASS instance payload keeps situation / result values  -> [["Mill certifi","O"],["Torque check",""],["One porosity","X"],["N/A — coatin","/"]]
+OBSERVED historical template @1440 geometry  -> {"tableW":1058,"cardW":1058,"ths":[{"text":"#","w":44},{"text":"Item","w":233},{"text":"Criteria","w":339},{"text":"Actual Situation","w":227},{"text":"Result","w":172},{"text":"","w":44}],"rows":[147,64,107,101],"boxes":[{"h":52,"sh":52,"w":207},{"h":132,"sh":132,"w":313},{"h":52,"sh":52,"w":201},{"h":32,"sh":32,"w":207},{"h":32,"sh":32,"w":313},{"h":32,"sh":32,"w":201},{"h":52,"sh":52,"w":207},{"h":92,"sh":92,"w":313},{"h":52,"sh":52,"w":201},{"h":32,"sh":32,"w":207},{"h":52,"sh":52,"w":313},{"h":32,"sh":32,"w":201}],"groups":[{"g":145,"room":148},{"g":145,"room":148},{"g":145,"room":148},{"g":145,"room":148}],"pageOverflow":0,"tableOverflow":0}
+PASS historical template @1440: no horizontal page overflow  -> 0
+PASS historical template @1440: table fits its card  -> {"tableW":1058,"cardW":1058}
+PASS historical template @1440: every box shows its full text (no inner scroll)  -> [{"h":52,"sh":52,"w":207},{"h":132,"sh":132,"w":313},{"h":52,"sh":52,"w":201},{"h":32,"sh":32,"w":207},{"h":32,"sh":32,"w":313},{"h":32,"sh":32,"w":201},{"h":52,"sh":52,"w":207},{"h":92,"sh":92,"w":313},{"h":52,"sh":52,"w":201},{"h":32,"sh":32,"w":207},{"h":52,"sh":52,"w":313},{"h":32,"sh":32,"w":201}]
+PASS historical template @1440: result columns shown  -> ["#","Item","Criteria","Actual Situation","Result",""]
+PASS historical template @1440: result buttons fit their column  -> [{"g":145,"room":148},{"g":145,"room":148},{"g":145,"room":148},{"g":145,"room":148}]
+PASS historical template @1440: Actual Situation at least 140px  -> {"#":44,"Item":233,"Criteria":339,"Actual Situation":227,"Result":172,"del":44}
+PASS historical template @1440: boxes read-only  -> [true,true,true,true,true,true,true,true,true,true,true,true]
+OBSERVED template @1024 geometry  -> {"tableW":694,"cardW":694,"ths":[{"text":"#","w":44},{"text":"Item","w":250},{"text":"Criteria","w":356},{"text":"","w":44}],"rows":[127,87,87,67],"boxes":[{"h":52,"sh":52,"w":224},{"h":112,"sh":112,"w":330},{"h":32,"sh":32,"w":224},{"h":72,"sh":72,"w":330},{"h":52,"sh":52,"w":224},{"h":72,"sh":72,"w":330},{"h":32,"sh":32,"w":224},{"h":52,"sh":52,"w":330}],"groups":[],"pageOverflow":0,"tableOverflow":0}
+PASS template @1024: no horizontal page overflow  -> 0
+PASS template @1024: table fits its card  -> {"tableW":694,"cardW":694}
+PASS template @1024: every box shows its full text (no inner scroll)  -> [{"h":52,"sh":52,"w":224},{"h":112,"sh":112,"w":330},{"h":32,"sh":32,"w":224},{"h":72,"sh":72,"w":330},{"h":52,"sh":52,"w":224},{"h":72,"sh":72,"w":330},{"h":32,"sh":32,"w":224},{"h":52,"sh":52,"w":330}]
+PASS template @1024: Criteria wider than Item  -> {"item":250,"crit":356}
+PASS template @1024: no result columns in template mode  -> ["#","Item","Criteria",""]
+OBSERVED instance @1024 geometry  -> {"tableW":694,"cardW":694,"ths":[{"text":"#","w":44},{"text":"Item","w":145},{"text":"Criteria","w":145},{"text":"Actual Situation","w":145},{"text":"Result","w":172},{"text":"","w":44}],"rows":[367,87,207,127],"boxes":[{"h":72,"sh":72,"w":119},{"h":352,"sh":352,"w":119},{"h":92,"sh":92,"w":119},{"h":52,"sh":52,"w":119},{"h":32,"sh":32,"w":119},{"h":72,"sh":72,"w":119},{"h":92,"sh":92,"w":119},{"h":192,"sh":192,"w":119},{"h":112,"sh":112,"w":119},{"h":52,"sh":52,"w":119},{"h":112,"sh":112,"w":119},{"h":52,"sh":52,"w":119}],"groups":[{"g":145,"room":148},{"g":145,"room":148},{"g":145,"room":148},{"g":145,"room":148}],"pageOverflow":0,"tableOverflow":0}
+PASS instance @1024: no horizontal page overflow  -> 0
+PASS instance @1024: table fits its card  -> {"tableW":694,"cardW":694}
+PASS instance @1024: every box shows its full text (no inner scroll)  -> [{"h":72,"sh":72,"w":119},{"h":352,"sh":352,"w":119},{"h":92,"sh":92,"w":119},{"h":52,"sh":52,"w":119},{"h":32,"sh":32,"w":119},{"h":72,"sh":72,"w":119},{"h":92,"sh":92,"w":119},{"h":192,"sh":192,"w":119},{"h":112,"sh":112,"w":119},{"h":52,"sh":52,"w":119},{"h":112,"sh":112,"w":119},{"h":52,"sh":52,"w":119}]
+PASS instance @1024: result columns shown  -> ["#","Item","Criteria","Actual Situation","Result",""]
+PASS instance @1024: result buttons fit their column  -> [{"g":145,"room":148},{"g":145,"room":148},{"g":145,"room":148},{"g":145,"room":148}]
+PASS instance @1024: Actual Situation at least 140px  -> {"#":44,"Item":145,"Criteria":145,"Actual Situation":145,"Result":172,"del":44}
+OBSERVED historical template @1024 geometry  -> {"tableW":694,"cardW":694,"ths":[{"text":"#","w":44},{"text":"Item","w":145},{"text":"Criteria","w":145},{"text":"Actual Situation","w":145},{"text":"Result","w":172},{"text":"","w":44}],"rows":[367,67,207,127],"boxes":[{"h":72,"sh":72,"w":119},{"h":352,"sh":352,"w":119},{"h":92,"sh":92,"w":119},{"h":52,"sh":52,"w":119},{"h":32,"sh":32,"w":119},{"h":52,"sh":52,"w":119},{"h":92,"sh":92,"w":119},{"h":192,"sh":192,"w":119},{"h":112,"sh":112,"w":119},{"h":52,"sh":52,"w":119},{"h":112,"sh":112,"w":119},{"h":52,"sh":52,"w":119}],"groups":[{"g":145,"room":148},{"g":145,"room":148},{"g":145,"room":148},{"g":145,"room":148}],"pageOverflow":0,"tableOverflow":0}
+PASS historical template @1024: no horizontal page overflow  -> 0
+PASS historical template @1024: table fits its card  -> {"tableW":694,"cardW":694}
+PASS historical template @1024: every box shows its full text (no inner scroll)  -> [{"h":72,"sh":72,"w":119},{"h":352,"sh":352,"w":119},{"h":92,"sh":92,"w":119},{"h":52,"sh":52,"w":119},{"h":32,"sh":32,"w":119},{"h":52,"sh":52,"w":119},{"h":92,"sh":92,"w":119},{"h":192,"sh":192,"w":119},{"h":112,"sh":112,"w":119},{"h":52,"sh":52,"w":119},{"h":112,"sh":112,"w":119},{"h":52,"sh":52,"w":119}]
+PASS historical template @1024: result columns shown  -> ["#","Item","Criteria","Actual Situation","Result",""]
+PASS historical template @1024: result buttons fit their column  -> [{"g":145,"room":148},{"g":145,"room":148},{"g":145,"room":148},{"g":145,"room":148}]
+PASS historical template @1024: Actual Situation at least 140px  -> {"#":44,"Item":145,"Criteria":145,"Actual Situation":145,"Result":172,"del":44}
+PASS historical template @1024: boxes read-only  -> [true,true,true,true,true,true,true,true,true,true,true,true]
+PASS read-only (template): every box disabled  -> [true,true,true,true,true,true,true,true]
+PASS read-only (template): full text shown  -> [{"h":32,"sh":32,"w":355},{"h":72,"sh":72,"w":563},{"h":32,"sh":32,"w":355},{"h":52,"sh":52,"w":563},{"h":32,"sh":32,"w":355},{"h":52,"sh":52,"w":563},{"h":32,"sh":32,"w":355},{"h":32,"sh":32,"w":563}]
+PASS read-only (instance): every box disabled  -> [true,true,true,true,true,true,true,true,true,true,true,true]
+PASS read-only (instance): full text shown  -> [{"h":52,"sh":52,"w":207},{"h":132,"sh":132,"w":313},{"h":52,"sh":52,"w":201},{"h":32,"sh":32,"w":207},{"h":32,"sh":32,"w":313},{"h":52,"sh":52,"w":201},{"h":52,"sh":52,"w":207},{"h":92,"sh":92,"w":313},{"h":52,"sh":52,"w":201},{"h":32,"sh":32,"w":207},{"h":52,"sh":52,"w":313},{"h":32,"sh":32,"w":201}]
+DONE all PASS
