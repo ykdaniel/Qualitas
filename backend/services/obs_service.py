@@ -4,6 +4,7 @@ OBS (Observation) Service
 Business logic layer for OBS module
 """
 
+import json
 import uuid
 import logging
 from typing import List, Optional
@@ -12,6 +13,8 @@ import models
 import schemas
 from repositories.obs_repository import OBSRepository
 from core import strict_dates
+from core.attachment_access import obs_locked
+from core.refusals import Refusal
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
 from core.utils import (
     _json_serialize,
@@ -65,6 +68,53 @@ def _apply_engineer_approval_identity(d: dict, db, user_id, current_values: dict
         d[by_field] = _approver_label(approver)
 
 
+# The record's own photo / attachment fields: locked while the STORED status is Closed or Void (obs_locked), except a
+# save that reopens a Closed OBS (Void has no way out) — the same records whose files /api/files refuses to change.
+_OBS_ATTACHMENT_FIELDS = ('defectPhotos', 'improvementPhotos', 'attachments', 'photoOrder')
+
+
+class OBSAttachmentsLocked(Refusal):
+    """A change to the photos / attachments of a Closed or Void OBS (its JSON photo fields, attachments or photoOrder).
+    The router answers 409 ATTACHMENT_LOCKED with the same text and record-lock params as core.attachment_access.lock_refusal."""
+
+    def __init__(self, status: str, fields=()):
+        super().__init__("ATTACHMENT_LOCKED", f"Cannot change attachments of a {status} OBS: the record is locked.",
+                         kind="record", docType="OBS", status=status)
+        self.status = status
+        self.fields = sorted(fields)
+
+
+def _normalized_photo_order(value):
+    """photoOrder for comparison: stored JSON text or the parsed dict -> dict without empty lists, or None."""
+    parsed = schemas.parse_obs_photo_order(value, strict=False)
+    cleaned = {k: v for k, v in (parsed or {}).items() if v}
+    return cleaned or None
+
+
+def _normalized_file_list(value):
+    """A JSON list field (defectPhotos / improvementPhotos / attachments) for comparison: the stored text or the sent
+    value as data; NULL, "" and [] are all "no files". Unparseable stored text compares as itself."""
+    if isinstance(value, str):
+        if value.strip() == "":
+            return []
+        try:
+            value = json.loads(value)
+        except ValueError:
+            return value
+    return value if value else []
+
+
+def _attachment_fields_changed(d: dict, db_obs) -> set:
+    changed = set()
+    for f in _OBS_ATTACHMENT_FIELDS:
+        if f not in d:
+            continue
+        normalize = _normalized_photo_order if f == 'photoOrder' else _normalized_file_list
+        if normalize(d[f]) != normalize(getattr(db_obs, f, None)):
+            changed.add(f)
+    return changed
+
+
 class OBSService:
     """Service layer for OBS business logic"""
 
@@ -86,7 +136,7 @@ class OBSService:
         try:
             data = _json_serialize(
                 obs_create.model_dump(),
-                ['defectPhotos', 'improvementPhotos', 'attachments']
+                ['defectPhotos', 'improvementPhotos', 'attachments', 'photoOrder']
             )
 
             vendor_name = data.pop('vendor', None)
@@ -154,7 +204,9 @@ class OBSService:
 
             old_val = {c.name: getattr(db_obs, c.name) for c in db_obs.__table__.columns}
             d = obs_update.model_dump(exclude_unset=True)
-            d = _json_serialize(d, ['defectPhotos', 'improvementPhotos', 'attachments'])
+            if 'status' in d and d['status'] is None:
+                d.pop('status')                     # blank / null status = not changed (OBSUpdate normalises "" to None)
+            d = _json_serialize(d, ['defectPhotos', 'improvementPhotos', 'attachments', 'photoOrder'])
 
             # Guard: once Closed, the observation's actual substance — the
             # improvement action taken and its before/after photo evidence —
@@ -167,9 +219,21 @@ class OBSService:
             # Closed->Open transition, so a save that explicitly reopens the
             # record (changes status away from Closed) is exempted outright,
             # rather than needing NCR's narrow single-field carve-out.
-            _LOCKED_OBS_FIELDS = {'productDisposition', 'defectPhotos', 'improvementPhotos'}
+            # The photo / attachment fields (defectPhotos, improvementPhotos, attachments, photoOrder) are checked below
+            # with the Closed / Void record lock; productDisposition keeps this Closed-only rule.
+            _LOCKED_OBS_FIELDS = {'productDisposition'}
             is_already_closed = db_obs.status == 'Closed'
             is_reopening = is_already_closed and d.get('status') not in (None, 'Closed')
+
+            # Photos and attachments (OBS-PRINT-PHOTOS-2026-001): locked while the STORED status is Closed or Void
+            # (obs_locked), except a save that reopens a Closed OBS to an unlocked status (Open / In Progress / Resolved).
+            # Closed -> Void is NOT such a reopen: voiding must not change the evidence on the way. Compared as data, so
+            # re-sending the stored values unchanged (the form sends the whole record) is not a change.
+            reopens_files = is_reopening and not obs_locked(d.get('status'))
+            if obs_locked(db_obs.status) and not reopens_files:
+                changed_files = _attachment_fields_changed(d, db_obs)
+                if changed_files:
+                    raise OBSAttachmentsLocked(db_obs.status, changed_files)
 
             if is_already_closed and not is_reopening:
                 changed_locked = {

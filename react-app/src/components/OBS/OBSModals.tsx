@@ -1,7 +1,7 @@
 import { useDraftGuard } from '../Shared/LeaveGuard';
 import FormActions from '../Shared/FormActions';
 import actionStyles from '../Shared/FormActions.module.css';
-import { Printer } from 'lucide-react';
+import { Lock, Printer } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -10,7 +10,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import ReactDOM from 'react-dom';
-import { getUsers, getEntityFiles, getAuthenticatedFileUrl, formatUserLabel, type User as ApiUser } from '../../services/api';
+import { getUsers, getEntityFiles, getAuthenticatedFileUrl, formatUserLabel, type User as ApiUser, type AttachmentInfo } from '../../services/api';
 import type { OBSItem } from '../../store/obsStore';
 import FileAttachment from '../Shared/FileAttachment';
 import ImagePreviewOverlay from '../Shared/ImagePreviewOverlay';
@@ -26,6 +26,9 @@ import { DateIssueBanner } from '../Shared/DateIssueMark';
 import { AttachmentsBlockedNotice, SaveFollowUpBanner } from '../Shared/SaveFollowUpBanner';
 import { OBS_DATE_FIELDS, preserveHistoricalDates } from '../../utils/dateIssues';
 import { followUpOf } from '../../utils/saveFlow';
+import { moveKey, orderPhotos } from '../../utils/obsPhotoOrder';
+import type { OrderedPhoto, PhotoCategory, PhotoOrder } from '../../utils/obsPhotoOrder';
+import OBSPhotoPairs from './OBSPhotoPairs';
 import type { FollowUp, SaveOutcome } from '../../utils/saveFlow';
 import { describeSaveError, presentOutcome } from '../../utils/saveErrors';
 
@@ -93,6 +96,13 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
     // manually); "Void" is a manual override.
     const [voided, setVoided] = useState(() => existingItem?.status === 'Void');
 
+    // Photos and attachments lock on the STORED status (Closed / Void), never on the unsaved form value —
+    // same basis as ITR's isLocked. Reopening a Closed OBS and saving reopens the modal with the new
+    // status, which unlocks them. Preview and print stay available.
+    const persistedStatus = existingItem?.status;
+    const filesLocked = persistedStatus === 'Closed' || persistedStatus === 'Void';
+    const filesReadOnly = !attachmentsAllowed || filesLocked;
+
     // File handling
     const [pendingDefectPhotos, setPendingDefectPhotos] = useState<File[]>([]);
     const [pendingImprovementPhotos, setPendingImprovementPhotos] = useState<File[]>([]);
@@ -127,23 +137,23 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
 
     const handlePrintClick = async () => {
         const current = getValues();
-        const legacyDefect = (current.defectPhotos || []).filter((p): p is string => typeof p === 'string');
-        const legacyImprove = (current.improvementPhotos || []).filter((p): p is string => typeof p === 'string');
-        let defect = legacyDefect;
-        let improve = legacyImprove;
+        let defectFiles: AttachmentInfo[] = [];
+        let improveFiles: AttachmentInfo[] = [];
         if (existingItem?.id) {
             try {
-                const [d, i] = await Promise.all([
+                [defectFiles, improveFiles] = await Promise.all([
                     getEntityFiles('obs', existingItem.id, 'defectPhoto'),
                     getEntityFiles('obs', existingItem.id, 'improvementPhoto'),
                 ]);
-                defect = [...legacyDefect, ...d.map(f => f.file_url)];
-                improve = [...legacyImprove, ...i.map(f => f.file_url)];
-            } catch {/* fall back to legacy arrays */}
+            } catch {/* print the legacy photos only */}
         }
+        // The same pairs as the Photos tab: its order (saved or just changed) and without the photos removed in this edit.
+        const deleted = new Set(deletedFileIds);
+        const column = (field: 'defectPhotos' | 'improvementPhotos', files: AttachmentInfo[], category: PhotoCategory) =>
+            orderPhotos(legacyOf(field).srcs, files.filter(f => !deleted.has(f.id)), current.photoOrder?.[category]).map(p => getAuthenticatedFileUrl(p.src));
         setPrintData(current);
-        setPrintDefectPhotos(defect.map(getAuthenticatedFileUrl));
-        setPrintImprovementPhotos(improve.map(getAuthenticatedFileUrl));
+        setPrintDefectPhotos(column('defectPhotos', defectFiles, 'defectPhoto'));
+        setPrintImprovementPhotos(column('improvementPhotos', improveFiles, 'improvementPhoto'));
         setIsPrinting(true);
     };
 
@@ -189,6 +199,47 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
         setValue(key, (getValues(key) || []).filter((a: any) => typeof a === 'string' || a?.id !== id), { shouldDirty: true });
     };
 
+    // ── Photos tab: Before / After in pairs (OBS-PRINT-PHOTOS-2026-001) ──
+    // Stored photos are fetched here (not inside a FileAttachment) so the tab and the print pair them the same way;
+    // fetched again when a save has just uploaded that category (syncTokens).
+    const [storedPhotos, setStoredPhotos] = useState<Record<PhotoCategory, AttachmentInfo[]>>({ defectPhoto: [], improvementPhoto: [] });
+    const recordId = existingItem?.id;
+    useEffect(() => {
+        if (!recordId) return;
+        let alive = true;
+        (['defectPhoto', 'improvementPhoto'] as const).forEach(category => {
+            getEntityFiles('obs', recordId, category)
+                .then(files => { if (alive) setStoredPhotos(prev => ({ ...prev, [category]: files })); })
+                .catch(err => console.error('Failed to load OBS photos', err));
+        });
+        return () => { alive = false; };
+    }, [recordId, syncTokens.defectPhoto, syncTokens.improvementPhoto]);
+    /** The record's legacy photos (strings in its JSON field) with their index in that field, for removeLegacy. */
+    const legacyOf = (field: 'defectPhotos' | 'improvementPhotos') => {
+        const all = (getValues(field) || []) as unknown[];
+        const srcs: string[] = [];
+        const index: number[] = [];
+        all.forEach((p, i) => { if (typeof p === 'string') { srcs.push(p); index.push(i); } });
+        return { srcs, index };
+    };
+    const PHOTO_FIELD: Record<PhotoCategory, 'defectPhotos' | 'improvementPhotos'> = { defectPhoto: 'defectPhotos', improvementPhoto: 'improvementPhotos' };
+    const watchedOrder = watch('photoOrder') as PhotoOrder | null | undefined;
+    watch('defectPhotos'); watch('improvementPhotos');          // re-render when a legacy photo is removed
+    const orderedColumn = (category: PhotoCategory): OrderedPhoto[] => {
+        const deleted = new Set(deletedFileIds);
+        return orderPhotos(legacyOf(PHOTO_FIELD[category]).srcs, storedPhotos[category].filter(f => !deleted.has(f.id)), watchedOrder?.[category]);
+    };
+    const movePhoto = (category: PhotoCategory, key: string, delta: -1 | 1) => {
+        const keys = orderedColumn(category).map(p => p.key);
+        setValue('photoOrder', { ...(getValues('photoOrder') || {}), [category]: moveKey(keys, key, delta) }, { shouldDirty: true });
+    };
+    const removePhoto = (category: PhotoCategory, photo: OrderedPhoto) => {
+        const field = PHOTO_FIELD[category];
+        if (photo.stored) deleteExisting(field, photo.stored.id);
+        else if (photo.legacyIndex !== undefined) removeLegacy(field, legacyOf(field).index[photo.legacyIndex]);
+    };
+    const setPending = { defectPhoto: setPendingDefectPhotos, improvementPhoto: setPendingImprovementPhotos };
+
     // What is still owed after a "saved, but a file step failed" outcome (see SaveFollowUpBanner).
     const [followUp, setFollowUp] = useState<FollowUp | null>(null);
     const uploadGroups = () => [
@@ -204,6 +255,13 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
             if (done.has('defectPhoto')) setPendingDefectPhotos([]);
             if (done.has('improvementPhoto')) setPendingImprovementPhotos([]);
             if (done.has('attachment')) setPendingAttachments([]);
+            // Deletes that went through are gone from the server: drop them from the Photos tab's list too (it only
+            // refetches a category whose uploads finished), or they would reappear as broken, clickable photos.
+            const removed = new Set(deletedFileIds.filter(id => !outcome.remainingDeletes.includes(id)));
+            if (removed.size) setStoredPhotos(prev => ({
+                defectPhoto: prev.defectPhoto.filter(f => !removed.has(f.id)),
+                improvementPhoto: prev.improvementPhoto.filter(f => !removed.has(f.id)),
+            }));
             setDeletedFileIds(outcome.remainingDeletes);
             setSyncTokens(prev => outcome.uploadedCategories.reduce((acc, c) => ({ ...acc, [c]: (acc[c] ?? 0) + 1 }), { ...prev }));
             setFollowUp(prev => followUpOf(outcome, prev?.created ?? created));
@@ -216,27 +274,42 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
     };
     const onValid = async (values: OBSDetailData) => {
         const finalStatus = voided ? 'Void' : deriveOBSStatus(values);
+        // Closing / voiding locks the files (the server refuses uploads and deletes on a Closed / Void OBS, 409), and the
+        // save flow writes the record BEFORE it uploads or deletes files — so files still pending in this form would all
+        // fail after the record is already Closed / Void (BACKLOG "OBS close+upload 409"). Same as NCR: stop before anything
+        // is written and say what to do — save the file changes first, close / void in a second save.
+        const pendingFileChanges = pendingDefectPhotos.length + pendingImprovementPhotos.length + pendingAttachments.length + deletedFileIds.length;
+        if ((finalStatus === 'Closed' || finalStatus === 'Void') && pendingFileChanges > 0) {
+            toast.warning(finalStatus === 'Void'
+                ? '請先存檔上傳／刪除檔案，再作廢。本次未儲存任何內容。 / Save the file uploads / deletions first, then void. Nothing was saved.'
+                : '請先存檔上傳／刪除檔案，再結案。本次未儲存任何內容。 / Save the file uploads / deletions first, then close. Nothing was saved.',
+                { duration: 12000 });
+            goToTab('attachments');
+            return;
+        }
         // Closure photo gate: an OBS can only close with BOTH an observation
         // (defect) photo and an improvement photo as evidence. Voided records are
-        // withdrawn so they skip it. Photos may be already-saved server files,
-        // pending uploads in this save, or legacy URL strings on the record.
+        // withdrawn so they skip it. Only photos the record already holds count —
+        // files stored on the server (minus any removed in this edit) and legacy URL
+        // strings on the record; nothing can be pending here (stopped above).
         if (!voided && finalStatus === 'Closed') {
             const legacyCount = (key: 'defectPhotos' | 'improvementPhotos') =>
                 ((getValues(key) as unknown[]) || []).filter(a => typeof a === 'string').length;
-            let serverDefect = 0, serverImprove = 0;
+            const del = new Set(deletedFileIds);
+            let serverDefect = storedPhotos.defectPhoto.filter(f => !del.has(f.id)).length;
+            let serverImprove = storedPhotos.improvementPhoto.filter(f => !del.has(f.id)).length;
             if (existingItem?.id) {
                 try {
                     const [d, i] = await Promise.all([
                         getEntityFiles('obs', existingItem.id, 'defectPhoto'),
                         getEntityFiles('obs', existingItem.id, 'improvementPhoto'),
                     ]);
-                    const del = new Set(deletedFileIds);
                     serverDefect = d.filter(f => !del.has(f.id)).length;
                     serverImprove = i.filter(f => !del.has(f.id)).length;
-                } catch {/* fall back to pending + legacy counts */}
+                } catch {/* keep the lists the Photos tab already loaded */}
             }
-            const defectTotal = serverDefect + pendingDefectPhotos.length + legacyCount('defectPhotos');
-            const improveTotal = serverImprove + pendingImprovementPhotos.length + legacyCount('improvementPhotos');
+            const defectTotal = serverDefect + legacyCount('defectPhotos');
+            const improveTotal = serverImprove + legacyCount('improvementPhotos');
             const missing: string[] = [];
             if (defectTotal === 0) missing.push(t('obs.defectPhotos') || '觀察照片');
             if (improveTotal === 0) missing.push(t('obs.improvementPhotos') || '改善照片');
@@ -370,7 +443,7 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                 </div>
                 <div className={formStyles.modalBody} ref={modalBodyRef}>
                     <DateIssueBanner item={existingItem} />
-                    {!readOnly && !attachmentsAllowed && <AttachmentsBlockedNotice creating={!existingItem} />}
+                    {!readOnly && !attachmentsAllowed && !filesLocked && <AttachmentsBlockedNotice creating={!existingItem} />}
                     <SaveFollowUpBanner followUp={followUp} canEditFields={!readOnly} canRetry={attachmentsAllowed} busy={saving} onRetry={() => { void retryFiles(); }} />
                     {!readOnly && (
                         <p className={formStyles.formRequiredHint}>{t('form.requiredHint')}</p>
@@ -498,42 +571,29 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
                         {/* ===== 5. 照片與附件 / Photos & Attachments ===== */}
                         <div className={formStyles.formSection}>
                             <h3 className={formStyles.sectionTitle}>照片與附件 / Photos &amp; Attachments</h3>
-                            <FileAttachment
-                                id="obs-defect-photos"
-                                category="defectPhoto"
-                                readOnly={!attachmentsAllowed}
-                                syncToken={syncTokens.defectPhoto}
-                                initialPendingFiles={pendingDefectPhotos}
-                                entityType={existingItem ? 'obs' : undefined}
-                                entityId={existingItem?.id}
-                                title={t('obs.defectPhotos')}
-                                legacyAttachments={watch('defectPhotos')}
-                                onPendingFilesChange={setPendingDefectPhotos}
-                                onDeleteExistingFile={(id) => deleteExisting('defectPhotos', id)}
-                                onRemoveLegacy={(index) => removeLegacy('defectPhotos', index)}
+                            {filesLocked && (
+                                <div data-obs-files-locked role="note" style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fef9c3', border: '1px solid #fde047', borderRadius: 6, padding: '8px 14px', margin: '0 0 12px', color: '#854d0e', fontSize: 13, fontWeight: 600 }}>
+                                    <Lock size={16} aria-hidden="true" />
+                                    {persistedStatus === 'Void'
+                                        ? '已作廢，照片與附件已鎖定 / Void — photos and attachments are locked'
+                                        : '已結案，照片與附件已鎖定 / Closed — photos and attachments are locked'}
+                                </div>
+                            )}
+                            <OBSPhotoPairs
+                                before={{ photos: orderedColumn('defectPhoto'), pending: pendingDefectPhotos }}
+                                after={{ photos: orderedColumn('improvementPhoto'), pending: pendingImprovementPhotos }}
+                                canChangeFiles={!filesReadOnly}
+                                canReorder={!readOnly && !filesLocked && !!existingItem}
+                                onAddFiles={(category, files) => setPending[category](prev => [...prev, ...files])}
+                                onRemovePending={(category, index) => setPending[category](prev => prev.filter((_, i) => i !== index))}
+                                onRemove={removePhoto}
+                                onMove={movePhoto}
                                 onPreview={handlePreview}
-                                accept="image/*"
-                            />
-                            <FileAttachment
-                                id="obs-improvement-photos"
-                                category="improvementPhoto"
-                                readOnly={!attachmentsAllowed}
-                                syncToken={syncTokens.improvementPhoto}
-                                initialPendingFiles={pendingImprovementPhotos}
-                                entityType={existingItem ? 'obs' : undefined}
-                                entityId={existingItem?.id}
-                                title={t('obs.improvementPhotos')}
-                                legacyAttachments={watch('improvementPhotos')}
-                                onPendingFilesChange={setPendingImprovementPhotos}
-                                onDeleteExistingFile={(id) => deleteExisting('improvementPhotos', id)}
-                                onRemoveLegacy={(index) => removeLegacy('improvementPhotos', index)}
-                                onPreview={handlePreview}
-                                accept="image/*"
                             />
                             <FileAttachment
                                 id="obs-attachments"
                                 category="attachment"
-                                readOnly={!attachmentsAllowed}
+                                readOnly={filesReadOnly}
                                 syncToken={syncTokens.attachment}
                                 initialPendingFiles={pendingAttachments}
                                 entityType={existingItem ? 'obs' : undefined}

@@ -158,6 +158,14 @@ def require_attachment_permission(user, entity_type: str, action: str, category:
         raise permission_denied(f"Operation not permitted. Required: {needed}", needed)
 
 
+OBS_LOCKED_STATUSES = frozenset({"Closed", "Void"})
+
+
+def obs_locked(status: str | None) -> bool:
+    """OBS records whose photos/attachments may no longer change (Closed or Void)."""
+    return (status or "") in OBS_LOCKED_STATUSES
+
+
 def lock_reason(db: Session, entity_type: str, record, category: Optional[str]) -> Optional[str]:
     """Why an upload / delete on this record's attachments is refused because of the record's STATE; None when it is allowed."""
     found = lock_refusal(db, entity_type, record, category)

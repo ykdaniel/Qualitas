@@ -151,6 +151,7 @@ const OBS: React.FC = () => {
       defectPhotos: details.defectPhotos,
       improvementPhotos: details.improvementPhotos,
       attachments: details.attachments,
+      photoOrder: details.photoOrder ?? undefined,     // photo pairing order; unchanged = not sent as a change (backend compares data)
       dueDate: details.dueDate || undefined,
       qualityEngineerApproval: details.qualityEngineerApproval || undefined,
       qualityEngineerApprovalBy: details.qualityEngineerApprovalBy || undefined,

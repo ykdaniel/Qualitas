@@ -685,6 +685,7 @@ def _add_missing_columns():
             _add_column_if_missing(conn, "obs", "constructionEngineerApproval", "VARCHAR")
             _add_column_if_missing(conn, "obs", "constructionEngineerApprovalBy", "VARCHAR")
             _add_column_if_missing(conn, "obs", "constructionEngineerApprovalDate", "TEXT")
+            _add_column_if_missing(conn, "obs", "photoOrder", "TEXT")          # photo pairing order (2026-10-12)
 
             # OSD
             _add_column_if_missing(conn, "osd", "improvementPhotos", "TEXT")

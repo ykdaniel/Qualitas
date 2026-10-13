@@ -34,6 +34,8 @@ export interface OBSItem {
     defectPhotos?: string[];
     improvementPhotos?: string[];
     attachments?: string[];
+    /** Pairing order of the before / after photos (see utils/obsPhotoOrder); null / absent = default order. */
+    photoOrder?: Partial<Record<'defectPhoto' | 'improvementPhoto', string[]>> | null;
     noiNumber?: string;
     itrNumber?: string;
     dueDate?: string;

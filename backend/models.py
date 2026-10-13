@@ -443,6 +443,10 @@ class OBS(Base):
     defectPhotos = Column(Text, nullable=True)
     improvementPhotos = Column(Text, nullable=True)
     attachments = Column(Text, nullable=True)
+    # Pairing order of the before / after photos (OBS-PRINT-PHOTOS-2026-001): JSON
+    # {"defectPhoto": [key, ...], "improvementPhoto": [key, ...]}, key = "att:<attachment id>" or
+    # "legacy:<hash>:<k>" for a data: URL kept in defectPhotos / improvementPhotos. NULL = default order.
+    photoOrder = Column(Text, nullable=True)
     last_reminded_at = Column(String, nullable=True)
     dueDate = Column(String, nullable=True)
     noiNumber = Column(String, nullable=True, index=True)

@@ -15,6 +15,8 @@ import type { OBSItem } from '../../store/obsStore';
 
 const str = z.string();
 const fileArr = z.array(z.any());
+/** Photo pairing order — see utils/obsPhotoOrder. */
+const photoOrder = z.object({ defectPhoto: z.array(z.string()).optional(), improvementPhoto: z.array(z.string()).optional() }).nullable().optional();
 
 export const obsFormSchema = z.object({
     obsNumber: str,
@@ -44,6 +46,7 @@ export const obsFormSchema = z.object({
     defectPhotos: fileArr,
     improvementPhotos: fileArr,
     attachments: fileArr,
+    photoOrder,
 });
 
 export type OBSDetailData = z.infer<typeof obsFormSchema>;
@@ -58,6 +61,7 @@ export const emptyOBSForm: OBSDetailData = {
     remark: '',
     aconex: '',
     defectPhotos: [], improvementPhotos: [], attachments: [],
+    photoOrder: null,
 };
 
 /** Map a stored OBSItem onto form values. */
@@ -88,6 +92,7 @@ export function toFormValues(item: OBSItem): OBSDetailData {
         defectPhotos: item.defectPhotos || [],
         improvementPhotos: item.improvementPhotos || [],
         attachments: item.attachments || [],
+        photoOrder: item.photoOrder ?? null,
     };
 }
 
