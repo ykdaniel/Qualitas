@@ -113,6 +113,15 @@ test('describeCoded renders a refusal known before any request (NOI delete-check
     assert.equal(describeCoded('NOT_A_CODE', {}, zh, 'delete'), null);
 });
 
+test('FAT supplier refusals on save (FAT-SUPPLIER-NULL-2026-001)', () => {
+    const required = axiosErr(400, { detail: 'Supplier is required. Choose a contractor from the list.', code: 'FAT_SUPPLIER_REQUIRED', params: {} });
+    assert.deepEqual(describeRefusal(required, zh, 'save', 'zh'), { title: '無法儲存', message: '請選擇供應商：從清單中選一個承包商。', items: undefined });
+    const missing = axiosErr(400, { detail: "Supplier 'Gone Co' is not a contractor in the system", code: 'FAT_SUPPLIER_NOT_FOUND', params: { name: 'Gone Co' } });
+    assert.equal(describeRefusal(missing, zh, 'save', 'zh')!.message, '承包商清單中找不到供應商「Gone Co」（可能已改名或被刪除），請從清單重新選擇。');
+    assert.equal(describeRefusal(missing, en, 'save', 'en')!.message,
+        'Supplier "Gone Co" is not in the contractor list (it may have been renamed or deleted). Choose a contractor from the list again.');
+});
+
 test('every refusal code the backend raises has its wording in both languages', () => {
     const backend = path.resolve('..', 'backend');
     const files: string[] = [];
@@ -160,6 +169,8 @@ test('every refusal code the backend raises has its wording in both languages', 
         ROLE_ADMIN_PROTECTED: [],
         PERMISSION_DENIED: ['permissions'],
         ATTACHMENT_LOCKED: ['kind', 'docType', 'status', 'category'],
+        FAT_SUPPLIER_REQUIRED: [],
+        FAT_SUPPLIER_NOT_FOUND: ['name'],
     };
     assert.deepEqual([...codes].sort(), Object.keys(PARAMS).sort(), 'a backend code is missing from (or extra in) the PARAMS table');
     for (const lang of ['en', 'zh'] as const) {

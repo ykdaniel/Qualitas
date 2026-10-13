@@ -1,0 +1,69 @@
+# AFTER the fix — worktree focused-fermat-46fe7e (uncommitted diff on 26e454d9), fresh isolated stack port 8263
+## seed base: project FSN-P1, contractors FSN-V1 'FAT Supplier Co' / FSN-V2 'FAT Gone Co', FAT FSN-OK (V1), FSN-GONE (V2)
+SEED base ok
+FAT rows: [('FSN-GONE', 'FSN-V2'), ('FSN-OK', 'FSN-V1')]
+list: GET /fat/ 
+  -> HTTP 200 [{"id": "FSN-OK", "equipment": "Transformer T1 (normal)", "supplier": "FAT Supplier Co", "startDate": "2026-10-01", "endDate": "2026-10-05"}, {"id": "FSN-GONE", "equipment": "Switchgear S1 (contractor will be deleted)", "supplier": "FAT Gone Co", "startDate": "2026-10-01", "endDate": "2026-10-05"}]
+search: GET /fat/?search=Supplier 
+  -> HTTP 200 [{"id": "FSN-OK", "equipment": "Transformer T1 (normal)", "supplier": "FAT Supplier Co", "startDate": "2026-10-01", "endDate": "2026-10-05"}]
+
+## case 1: create with supplier ""
+create-empty: POST /fat/ {"project_id": "FSN-P1", "equipment": "Probe equipment", "startDate": "2026-10-01", "endDate": "2026-10-02", "supplier": ""}
+  -> HTTP 400 {"detail":"Supplier is required. Choose a contractor from the list.","code":"FAT_SUPPLIER_REQUIRED","params":{}}
+  db: 
+list: GET /fat/ 
+  -> HTTP 200 [{"id": "FSN-OK", "equipment": "Transformer T1 (normal)", "supplier": "FAT Supplier Co", "startDate": "2026-10-01", "endDate": "2026-10-05"}, {"id": "FSN-GONE", "equipment": "Switchgear S1 (contractor will be deleted)", "supplier": "FAT Gone Co", "startDate": "2026-10-01", "endDate": "2026-10-05"}]
+
+
+## case 2: create with supplier "No Such Co"
+create-unknown: POST /fat/ {"project_id": "FSN-P1", "equipment": "Probe equipment", "startDate": "2026-10-01", "endDate": "2026-10-02", "supplier": "No Such Co"}
+  -> HTTP 400 {"detail":"Supplier 'No Such Co' is not a contractor in the system (it may have been renamed or deleted). Choose a contractor from the list.","code":"FAT_SUPPLIER_NOT_FOUND","params":{"name":"No Such Co"}}
+  db: 
+list: GET /fat/ 
+  -> HTTP 200 [{"id": "FSN-OK", "equipment": "Transformer T1 (normal)", "supplier": "FAT Supplier Co", "startDate": "2026-10-01", "endDate": "2026-10-05"}, {"id": "FSN-GONE", "equipment": "Switchgear S1 (contractor will be deleted)", "supplier": "FAT Gone Co", "startDate": "2026-10-01", "endDate": "2026-10-05"}]
+
+
+## case 1b / 2b: update FSN-OK with supplier "" / "No Such Co" / null
+update-empty: PUT /fat/FSN-OK {"supplier": ""}
+  -> HTTP 400 {"detail":"Supplier is required. Choose a contractor from the list.","code":"FAT_SUPPLIER_REQUIRED","params":{}}
+  db: [('FSN-OK', 'FSN-V1')]
+list: GET /fat/ 
+  -> HTTP 200 [{"id": "FSN-OK", "equipment": "Transformer T1 (normal)", "supplier": "FAT Supplier Co", "startDate": "2026-10-01", "endDate": "2026-10-05"}, {"id": "FSN-GONE", "equipment": "Switchgear S1 (contractor will be deleted)", "supplier": "FAT Gone Co", "startDate": "2026-10-01", "endDate": "2026-10-05"}]
+
+update-unknown: PUT /fat/FSN-OK {"supplier": "No Such Co"}
+  -> HTTP 400 {"detail":"Supplier 'No Such Co' is not a contractor in the system (it may have been renamed or deleted). Choose a contractor from the list.","code":"FAT_SUPPLIER_NOT_FOUND","params":{"name":"No Such Co"}}
+  db: [('FSN-OK', 'FSN-V1')]
+list: GET /fat/ 
+  -> HTTP 200 [{"id": "FSN-OK", "equipment": "Transformer T1 (normal)", "supplier": "FAT Supplier Co", "startDate": "2026-10-01", "endDate": "2026-10-05"}, {"id": "FSN-GONE", "equipment": "Switchgear S1 (contractor will be deleted)", "supplier": "FAT Gone Co", "startDate": "2026-10-01", "endDate": "2026-10-05"}]
+
+
+## case 3: contractor deleted (directly in the db; the API refuses to delete a contractor a FAT cites)
+SEED drop-contractor ok
+FAT rows: [('FSN-GONE', 'FSN-V2'), ('FSN-OK', 'FSN-V1')]
+  db: [('FSN-GONE', 'FSN-V2', None)]
+list: GET /fat/ 
+  -> HTTP 200 [{"id": "FSN-OK", "equipment": "Transformer T1 (normal)", "supplier": "FAT Supplier Co", "startDate": "2026-10-01", "endDate": "2026-10-05"}, {"id": "FSN-GONE", "equipment": "Switchgear S1 (contractor will be deleted)", "supplier": null, "startDate": "2026-10-01", "endDate": "2026-10-05"}]
+get: GET /fat/FSN-GONE 
+  -> HTTP 200 {"id": "FSN-GONE", "equipment": "Switchgear S1 (contractor will be deleted)", "supplier": null, "startDate": "2026-10-01", "endDate": "2026-10-05"}
+
+
+## related: update with null supplier / equipment / startDate / endDate (one request each)
+update-null:supplier: PUT /fat/FSN-OK {"supplier": null}
+  -> HTTP 400 {"detail":"Supplier is required. Choose a contractor from the list.","code":"FAT_SUPPLIER_REQUIRED","params":{}}
+update-null:equipment: PUT /fat/FSN-OK {"equipment": null}
+  -> HTTP 422 {"detail":[{"type":"value_error","loc":["body","equipment"],"msg":"Value error, equipment cannot be null; leave it out to keep the current value","input":null,"ctx":{"error":{}},"url":"https://errors.pydantic.dev/2.12/v/value_error"}]}
+update-null:startDate: PUT /fat/FSN-OK {"startDate": null}
+  -> HTTP 422 {"detail":[{"type":"value_error","loc":["body","startDate"],"msg":"Value error, startDate cannot be null; leave it out to keep the current value","input":null,"ctx":{"error":{}},"url":"https://errors.pydantic.dev/2.12/v/value_error"}]}
+update-null:endDate: PUT /fat/FSN-OK {"endDate": null}
+  -> HTTP 422 {"detail":[{"type":"value_error","loc":["body","endDate"],"msg":"Value error, endDate cannot be null; leave it out to keep the current value","input":null,"ctx":{"error":{}},"url":"https://errors.pydantic.dev/2.12/v/value_error"}]}
+  db: [('FSN-OK', 'FSN-V1', 'Transformer T1 (normal)', '2026-10-01', '2026-10-05')]
+list: GET /fat/ 
+  -> HTTP 200 [{"id": "FSN-OK", "equipment": "Transformer T1 (normal)", "supplier": "FAT Supplier Co", "startDate": "2026-10-01", "endDate": "2026-10-05"}]
+
+## legacy rows (seed legacy): no supplier / no equipment+dates / start after end / start 2026/10/01
+SEED legacy ok
+FAT rows: [('FSN-FORMAT', 'FSN-V1'), ('FSN-NODATE', 'FSN-V1'), ('FSN-NOSUP', None), ('FSN-OK', 'FSN-V1'), ('FSN-ORDER', 'FSN-V1')]
+list: GET /fat/ 
+  -> HTTP 200 [{"id": "FSN-OK", "equipment": "Transformer T1 (normal)", "supplier": "FAT Supplier Co", "startDate": "2026-10-01", "endDate": "2026-10-05"}, {"id": "FSN-NOSUP", "equipment": "Pump P1 (no supplier)", "supplier": null, "startDate": "2026-10-01", "endDate": "2026-10-05"}, {"id": "FSN-NODATE", "equipment": null, "supplier": "FAT Supplier Co", "startDate": null, "endDate": null}, {"id": "FSN-ORDER", "equipment": "Cable C1 (start after end)", "supplier": "FAT Supplier Co", "startDate": "2026-10-09", "endDate": "2026-10-02"}, {"id": "FSN-FORMAT", "equipment": "Valve V1 (start date 2026/10/01)", "sup
+search: GET /fat/?search=Supplier 
+  -> HTTP 200 [{"id": "FSN-OK", "equipment": "Transformer T1 (normal)", "supplier": "FAT Supplier Co", "startDate": "2026-10-01", "endDate": "2026-10-05"}, {"id": "FSN-NOSUP", "equipment": "Pump P1 (no supplier)", "supplier": null, "startDate": "2026-10-01", "endDate": "2026-10-05"}, {"id": "FSN-NODATE", "equipment": null, "supplier": "FAT Supplier Co", "startDate": null, "endDate": null}, {"id": "FSN-ORDER", "equipment": "Cable C1 (start after end)", "supplier": "FAT Supplier Co", "startDate": "2026-10-09", "endDate": "2026-10-02"}, {"id": "FSN-FORMAT", "equipment": "Valve V1 (start date 2026/10/01)", "sup

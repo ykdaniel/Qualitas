@@ -70,14 +70,16 @@ const FAT: React.FC = () => {
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
+      // any of these can be null in a stored record (e.g. no supplier: its contractor was deleted — FAT-SUPPLIER-NULL-2026-001)
+      const matches = (value?: string | null) => (value ?? '').toLowerCase().includes(query);
       filtered = filtered.filter(item =>
-        item.equipment.toLowerCase().includes(query) ||
-        item.supplier.toLowerCase().includes(query) ||
-        item.procedure.toLowerCase().includes(query) ||
-        item.location.toLowerCase().includes(query) ||
-        item.deliveryFrom.toLowerCase().includes(query) ||
-        item.deliveryTo.toLowerCase().includes(query) ||
-        item.siteReadiness.toLowerCase().includes(query)
+        matches(item.equipment) ||
+        matches(item.supplier) ||
+        matches(item.procedure) ||
+        matches(item.location) ||
+        matches(item.deliveryFrom) ||
+        matches(item.deliveryTo) ||
+        matches(item.siteReadiness)
       );
     }
 
@@ -111,12 +113,12 @@ const FAT: React.FC = () => {
     if (currentFatId) {
       await updateFAT(currentFatId, updates);
     } else {
-      const activeContractors = getActiveContractors();
-      const defaultSupplier = activeContractors.length > 0 ? activeContractors[0].name : '';
       const newItem: Omit<FATItem, 'id'> = {
         project_id: updates.project_id || undefined,
         equipment: updates.equipment || '',
-        supplier: updates.supplier || defaultSupplier,
+        // required, no default (FAT-SUPPLIER-NULL-2026-001): an empty choice is refused by the server
+        // (FAT_SUPPLIER_REQUIRED) and shown once, by FATEditModal.handleSave's showRefusal
+        supplier: updates.supplier || '',
         procedure: updates.procedure || '',
         location: updates.location || '',
         startDate: updates.startDate || '',
@@ -613,7 +615,9 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
       await onSave(formData);
       onClose(); // only reached on success — formData/modal are left untouched on any rejection
     } catch (err) {
-      toast.error((err as Error)?.message || 'Save failed');
+      // e.g. no supplier chosen / the chosen contractor no longer exists (FAT_SUPPLIER_*): shown in the user's language
+      console.error('Failed to save FAT:', err);
+      showRefusal(err, 'save');
     } finally {
       setSaving(false);
     }

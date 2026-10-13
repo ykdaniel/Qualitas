@@ -43,7 +43,9 @@ class FATRepository:
             if search_term:
                 query = query.filter(
                     (models.FAT.equipment.ilike(f"%{search_term}%")) |
-                    (models.FAT.supplier.ilike(f"%{search_term}%")) |
+                    # supplier is a Python property (vendor_ref.name), not a column: search the contractor's name
+                    # (FAT-SUPPLIER-NULL-2026-001; `FAT.supplier.ilike` raised AttributeError -> 500)
+                    (models.FAT.vendor_ref.has(models.Contractor.name.ilike(f"%{search_term}%"))) |
                     (models.FAT.procedure.ilike(f"%{search_term}%"))
                 )
 

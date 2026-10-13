@@ -1,0 +1,125 @@
+vite v5.4.21 building for production...
+transforming...
+✓ 3123 modules transformed.
+rendering chunks...
+computing gzip size...
+../../../../../../../../tmp/claude-501/fsn-dist/index.html                                    0.52 kB │ gzip:   0.32 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/OwnerPerformance-cHT7M3fV.css          0.24 kB │ gzip:   0.19 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/ITPDetail-uVXEdI_g.css                 0.84 kB │ gzip:   0.37 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/StatusBadge-BlM2oXDr.css               0.88 kB │ gzip:   0.43 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/ITP-BVefYkJ7.css                       1.08 kB │ gzip:   0.50 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/Home-hanbAqvl.css                      1.76 kB │ gzip:   0.72 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/KPI-CEHCcU_e.css                       2.03 kB │ gzip:   0.77 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/RelatedDocuments-Cs8EDcJZ.css          2.51 kB │ gzip:   0.90 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/Login-CH_MYU_E.css                     2.85 kB │ gzip:   1.07 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/DocumentNamingRules-VEviJLGY.css       3.52 kB │ gzip:   1.18 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/ModuleShell-C6YfhypF.css               4.18 kB │ gzip:   1.29 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/OSD-CzwreGAc.css                       4.49 kB │ gzip:   1.33 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/PQP-Be6vBOec.css                       5.19 kB │ gzip:   1.65 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/Workflow-B2FQP5UI.css                  5.29 kB │ gzip:   1.49 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/ITR-BvLiiOU4.css                       5.77 kB │ gzip:   1.53 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/FAT-TLuSNY2l.css                       6.16 kB │ gzip:   1.81 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/MaterialSubmittal-DQOyLBR2.css         6.63 kB │ gzip:   2.02 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/NCR-Dld6BS49.css                       7.19 kB │ gzip:   2.01 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/OBS-O5D-qI2v.css                       7.44 kB │ gzip:   2.07 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/MeetingMinutes-kMhqes38.css            7.50 kB │ gzip:   2.01 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/FormShell-B6QrKzCD.css                 7.94 kB │ gzip:   2.18 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/NOI-Cr-393VZ.css                       8.85 kB │ gzip:   2.21 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/Contractors-kLYgIlw7.css              11.36 kB │ gzip:   2.43 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/Checklist-DguNDTLv.css                11.57 kB │ gzip:   2.87 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/Dashboard-BrS4tO7C.css                15.56 kB │ gzip:   3.42 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/IAM-Hl4Pwl9z.css                      15.85 kB │ gzip:   3.32 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/Audit-CoYI9Q-o.css                    16.68 kB │ gzip:   3.95 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/KM-DVv4x-49.css                       45.53 kB │ gzip:   8.38 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/index-l23BoccD.css                    80.22 kB │ gzip:  15.94 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/useDebounce-BfoxqWDA.js                0.19 kB │ gzip:   0.17 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/revision-Ccufz_-Y.js                   0.24 kB │ gzip:   0.20 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/itpReturnLink-B4Bj_mDS.js              0.26 kB │ gzip:   0.19 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/statusBuckets-B_a05HwV.js              0.32 kB │ gzip:   0.24 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/plus-pRRHKAc9.js                       0.33 kB │ gzip:   0.26 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/x-CCllfEk2.js                          0.33 kB │ gzip:   0.26 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/arrow-left-Dn76YGWE.js                 0.34 kB │ gzip:   0.27 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/clock-DrikOKJl.js                      0.34 kB │ gzip:   0.27 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/circle-check-BC_pU8fX.js               0.35 kB │ gzip:   0.28 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/ban-D6v5ubLU.js                        0.35 kB │ gzip:   0.28 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/user-Cv5Yypdn.js                       0.37 kB │ gzip:   0.29 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/clsx-B-dksMZM.js                       0.37 kB │ gzip:   0.24 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/lock-D6LB2dZm.js                       0.38 kB │ gzip:   0.30 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/circle-x-Ctfn0DyA.js                   0.38 kB │ gzip:   0.28 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/dateValidation-AI7lREnz.js             0.38 kB │ gzip:   0.25 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/activity-BFpvTx1I.js                   0.41 kB │ gzip:   0.31 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/circle-alert-D2PH3EWf.js               0.42 kB │ gzip:   0.29 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/chart-column-czTl_zfE.js               0.42 kB │ gzip:   0.30 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/zap-CMt7o-7V.js                        0.44 kB │ gzip:   0.32 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/pencil-CBP42zSD.js                     0.45 kB │ gzip:   0.33 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/OwnerPerformance-CaqiQ4ag.js           0.49 kB │ gzip:   0.29 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/printer-DY6_SX3x.js                    0.49 kB │ gzip:   0.34 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/shield-check-D7SDky5a.js               0.49 kB │ gzip:   0.36 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/save-BdqijIi8.js                       0.50 kB │ gzip:   0.33 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/trash-2-DqJte7Yw.js                    0.50 kB │ gzip:   0.32 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/attachmentOutcome-Dbx9a4Dw.js          0.65 kB │ gzip:   0.65 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/materialApi-CXyWaV1S.js                0.67 kB │ gzip:   0.33 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/formatters-CR8HXx_Z.js                 0.71 kB │ gzip:   0.43 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/circle-question-mark-CQbSPETl.js       0.74 kB │ gzip:   0.39 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/BackButton-DDJ9cAlR.js                 0.74 kB │ gzip:   0.49 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/PrintPrimitives-BUv6ApCQ.js            0.87 kB │ gzip:   0.49 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/AutoGrowTextarea-Djsj-Z4X.js           0.92 kB │ gzip:   0.60 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/ModuleShell.module-BB-C7AX0.js         0.95 kB │ gzip:   0.43 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/StatusBadge-CzFBWzRM.js                1.02 kB │ gzip:   0.57 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/saveFlow-CQ2pBcgG.js                   1.12 kB │ gzip:   0.57 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/auditStore-Dmvx5Wsm.js                 1.16 kB │ gzip:   0.51 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/FormShell.module-zdjdZu1r.js           1.48 kB │ gzip:   0.60 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/table-BC0vdrN7.js                      1.51 kB │ gzip:   0.54 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/CreationProjectField-CHspeIIN.js       1.54 kB │ gzip:   1.05 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/cascadeDelete-z7hLUnLE.js              1.80 kB │ gzip:   0.81 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/Home-Dq3PgioQ.js                       2.17 kB │ gzip:   0.82 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/ImagePreviewOverlay-D0tofWxS.js        2.97 kB │ gzip:   1.50 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/SaveFollowUpBanner-Dy1K028r.js         3.13 kB │ gzip:   1.19 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/Login-DxqeP2xc.js                      3.30 kB │ gzip:   1.41 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/RelatedDocuments-CI1I1XA1.js           3.58 kB │ gzip:   1.43 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/button-CxHof_8V.js                     4.06 kB │ gzip:   1.77 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/ChecklistResultControls-Dn8a3sAT.js    4.08 kB │ gzip:   1.68 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/SecuritySettings-8CPv9O-M.js           4.68 kB │ gzip:   1.70 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/itpParser-B-KVWlR3.js                  5.01 kB │ gzip:   2.10 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/FileAttachment-jw_h8fLc.js             6.34 kB │ gzip:   2.43 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/statusValidation-CQvKtFPV.js           6.68 kB │ gzip:   2.60 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/DocumentNamingRules-CUvsuRcz.js        8.46 kB │ gzip:   3.16 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/DataTableColumnHeader-BrKiII67.js      9.44 kB │ gzip:   3.47 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/Workflow-vGqoqRbL.js                  10.00 kB │ gzip:   3.43 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/KPI-Bn4r5fLj.js                       11.43 kB │ gzip:   4.14 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/FollowUpIssue-3I4n_i_w.js             22.17 kB │ gzip:   6.23 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/PQP-B25wWERP.js                       23.18 kB │ gzip:   7.45 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/Contractors-DjcySuc0.js               23.48 kB │ gzip:   6.04 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/utils-BykweIWy.js                     25.18 kB │ gzip:   8.02 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/OSD-C0HJevco.js                       29.06 kB │ gzip:   8.42 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/zod-Dby91pih.js                       29.07 kB │ gzip:  10.68 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/FAT-oLMP37MY.js                       29.28 kB │ gzip:   7.28 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/Checklist-Dr0dWGke.js                 31.93 kB │ gzip:   9.35 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/ITPDetail-Bu-BjjsE.js                 35.39 kB │ gzip:   7.00 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/IAM-CBMIckhf.js                       36.26 kB │ gzip:  10.08 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/NOI-BvAhdoxd.js                       40.57 kB │ gzip:  11.12 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/OBS-Cx2tntPu.js                       41.43 kB │ gzip:  12.88 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/MeetingMinutes-B0EXjXuL.js            59.99 kB │ gzip:  18.22 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/Dashboard-Cq0YADhF.js                 61.31 kB │ gzip:  17.56 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/ITP-HYT_uJh6.js                       64.73 kB │ gzip:  16.83 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/schemas-3edHhHNv.js                   64.91 kB │ gzip:  17.59 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/ITR-PxVkOK3X.js                       74.99 kB │ gzip:  20.15 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/NCR-bRl-3D6k.js                       76.54 kB │ gzip:  19.63 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/Audit-CKoDPXBw.js                    109.51 kB │ gzip:  26.68 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/DataTable-C5niHC3p.js                176.62 kB │ gzip:  52.94 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/MaterialSubmittal-DPC4LNqK.js        318.00 kB │ gzip: 105.29 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/CartesianChart-CgI39nkj.js           351.98 kB │ gzip: 104.49 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/KM-BHeSpmsw.js                       362.67 kB │ gzip: 104.21 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/mammoth.browser-DDh9Jnq9.js          499.39 kB │ gzip: 124.65 kB
+../../../../../../../../tmp/claude-501/fsn-dist/assets/index-CUH2BTdD.js                    512.30 kB │ gzip: 169.22 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 5.04s
+vite build exit 0
+
+# grep FAT_SUPPLIER codes in the built bundle
+   2 /tmp/claude-501/fsn-dist/assets/index-CUH2BTdD.js:FAT_SUPPLIER_NOT_FOUND
+   2 /tmp/claude-501/fsn-dist/assets/index-CUH2BTdD.js:FAT_SUPPLIER_REQUIRED

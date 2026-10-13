@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 import schemas
 from core.dependencies import RoleChecker, get_fat_service
 from core.perms import FAT_CREATE, FAT_DELETE, FAT_UPDATE, FAT_VIEW
+from core.refusals import Refusal, refusal_http
 from core.scope import Scope, ScopeForbidden, get_scope
 from services.fat_service import FATService
 
@@ -27,6 +28,8 @@ def create_fat(
         )
     except ScopeForbidden as e:
         raise HTTPException(status_code=403, detail=str(e))
+    except Refusal as e:    # FAT_SUPPLIER_REQUIRED / FAT_SUPPLIER_NOT_FOUND
+        raise refusal_http(e, 400)
 
 @router.get("/", response_model=list[schemas.FAT])
 def read_fats(
@@ -81,6 +84,8 @@ def update_fat(
         )
     except ScopeForbidden as e:
         raise HTTPException(status_code=403, detail=str(e))
+    except Refusal as e:    # FAT_SUPPLIER_REQUIRED / FAT_SUPPLIER_NOT_FOUND
+        raise refusal_http(e, 400)
     if db_fat is None:
         raise HTTPException(status_code=404, detail="FAT not found")
     return db_fat
