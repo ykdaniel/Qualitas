@@ -312,6 +312,30 @@ Result 的既有操作方式比拆開成縱向區塊更直覺）。
 - 中文名稱「符合／正面發現／主要不符合／次要不符合」、完成率「已評題數 ÷ 全部題數」、符合率「不要，只列各級數量」。
 - 預覽後：1024 寬統計卡「窄螢幕改成 3×2」、未評數量「放圖例就好」。
 
+### OBS 結案或作廢後照片與附件全部鎖定（OBS-ATTACH-LOCK-2026-001，2026-10-12）
+日期：2026-10-12
+決策：
+1. Observation 的狀態為 Closed 或 Void 時，所有照片與附件（缺失照片、改善照片、一般附件，不分類別）都不能上傳、刪除或調整。改回 Open 後恢復。
+2. 原本 Closed 只鎖缺失照片與改善照片、一般附件仍可上傳；Void 完全不鎖。本條取代這兩點，也取代 `core/attachment_access.PENDING_STATE_DECISIONS` 裡的「OBS Void」「OBS Closed 只鎖兩類」。
+3. 狀態判斷只有一處：`core/attachment_access.obs_locked()`（`OBS_LOCKED_STATUSES = {"Closed", "Void"}`，看已存檔的狀態）。附件上傳與刪除（本批），以及 OBS 照片調整順序與 OBS 紀錄本身的照片欄位（OBS-PRINT-PHOTOS），都用它。Closed 改回 Open 的判斷由 `obs_service` 的 update 處理。
+4. 被擋時回 409，代碼 `ATTACHMENT_LOCKED`（params `{"kind": "record", "docType": "OBS", "status": …}`），前端彈跳視窗顯示「這筆Observation的狀態為「Closed」，附件已鎖定，不能變更。」（REFUSAL-DIALOG 第 1 批的既有文字）。
+理由：使用者 2026-10-12 同意「Closed／Void 時照片和附件全部鎖定」（協調中心轉述）；結案或作廢後的照片是佐證，不應再被增刪。
+影響範圍：backend/core/attachment_access.py（obs_locked、lock_refusal 的 OBS 分支、鎖定表）；測試 test_attachment_authorization_http.py、test_attachment_hardening_http.py。OBS 紀錄的照片欄位與調整順序由 OBS-PRINT-PHOTOS 對齊。前端 OBSModals 在 Closed／Void 時隱藏上傳與刪除（OBS-PRINT-PHOTOS）。
+依據：使用者 2026-10-12 經協調中心轉述同意；協調中心指定由 OBS-ATTACH-LOCK 與 OBS-PRINT-PHOTOS 分工（obs_service 缺口選 A）。
+
+### 專案隔離與依專案編號（REF-PROJECT-SEQ-2026-001，2026-10-12）
+日期：2026-10-12（使用者在協調中心和 NOI 工作階段定案）
+決策：設計 `docs/workflow/REF-PROJECT-SEQ-2026-001-DESIGN.md` 第 0 節的 D1–D21，全文以該設計為準。重點如下：
+1. 不同專案的號碼不能共用：格式為 `QTS-RKS-[PROJECT]-<類型>-######`，RKS 是公司代碼，不含承包商縮寫，序號依（專案, 類型）計算。
+2. 登入時就決定專案。只有系統管理者能用專案選單；綁了多個專案的人，登入後選一個，之後不能換。沒綁專案的帳號什麼都看不到（安全修正）。承包商帳號也必須綁專案。新建單據時，專案自動帶入目前的專案。
+3. 共用主檔不分專案：承包商、範本庫、模板庫、KM、命名規則。ITP 分成兩種：共用範本（沒有專案）和專案 ITP。
+4. 舊單據歸到 Hailong，號碼不改。系統編號的 ITP 共 63 筆改為 `QTS-RKS-STD-ITP-`，81 筆外部文件號保留原號。
+5. 釐清（R1 P2-1，由 D9 推得，不是新政策）：第 25 步只把 checklist **實例**（itrId 或 template_id 不為空）歸到專案；Checklist 裸範本依 D9 維持沒有專案。
+6. 釐清（R1 P1-1）：只有名稱為 admin（不分大小寫）的角色是系統管理者、不受範圍限制，和 IAM 的管理者判斷一致；名為「Administrator」等其他名稱的角色都是一般角色。
+7. 釐清（R1 P3-5，使用者 2026-10-13 決定）：有 km:view 的非專案人員直接呼叫 API 仍讀得到 KM，**維持現狀**：KM 依 D9 共用，第 2 批也不處理（畫面上由 ProjectGate 擋下）。
+8. 81 筆外部文件號（使用者 2026-10-13 決定）：ITP 單號照原規劃保留；在 STD 改號那一批，把外部文件號複製一份到 ITP 新增的「原始文件號」欄位。只在該欄位為空時寫入、不覆蓋既有值，每筆異動都寫 audit。
+延後：跨專案唯讀權限、NOI 軟刪除。
+
 ## 尚未決策（不得當成已核准規則）
 
 - ITR 核准是否須額外檢查 Inspection Result。

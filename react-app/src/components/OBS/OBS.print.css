@@ -105,17 +105,37 @@
     display: flex; justify-content: space-between; gap: 14px; font-size: 7.6px; color: var(--obs-note);
 }
 
-/* photo report */
-.obs-print-root .photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+/* photo report — Before / After side by side in pairs: a header row, then one row per pair labelled
+   第 n 組 / Pair n (Before n left, After n right). Every frame has the same fixed height (photo scaled to fit,
+   aspect kept): 65mm lets three pairs and the page foot share one A4 page under the repeated masthead
+   (measured: masthead 30.6mm + heading block 85.6mm + 2 × 75.4mm + foot 8.1mm = 275mm at 68mm > the 271mm page).
+   A missing partner is a dashed frame of the same size saying 無對應照片. */
+.obs-print-root .photo-section { margin-top: 2px; }
+.obs-print-root .photo-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+.obs-print-root .photo-row.photo-head { margin-top: 4px; }
 .obs-print-root .photo-item { border: 1px solid var(--obs-line); padding: 4px; text-align: center; }
-.obs-print-root .photo-item img { width: 100%; height: auto; max-height: 300px; object-fit: contain; }
-.obs-print-root .subhead { font-weight: 700; font-size: 9px; margin: 6px 0 2px; color: var(--obs-accent); }
+.obs-print-root .photo-item img { display: block; width: 100%; height: 65mm; object-fit: contain; }
+.obs-print-root .photo-item.photo-missing {
+    border-style: dashed; border-color: var(--obs-line-soft);
+    min-height: calc(65mm + 10px); display: flex; align-items: center; justify-content: center;
+}
+.obs-print-root .photo-pair { margin-top: 5px; }
+.obs-print-root .photo-pair .photo-row { margin-top: 1px; }
+.obs-print-root .pair-label { font-size: 8px; font-weight: 700; color: var(--obs-muted); }
+.obs-print-root .pair-label .en { font-weight: 500; }
+.obs-print-root .subhead { font-weight: 700; font-size: 9px; margin: 0; color: var(--obs-accent); }
+.obs-print-root .subhead .en { font-weight: 500; color: var(--obs-muted); }
 
 /* keep rows / boxes intact across page breaks */
 .obs-print-root tr,
 .obs-print-root .sign-cell,
-.obs-print-root .field-box { break-inside: avoid; page-break-inside: avoid; }
-.obs-print-root .sec-head { break-after: avoid; page-break-after: avoid; }
+.obs-print-root .field-box,
+.obs-print-root .photo-keep,
+.obs-print-root .photo-pair,
+.obs-print-root .photo-row,
+.obs-print-root .photo-item { break-inside: avoid; page-break-inside: avoid; }
+.obs-print-root .sec-head,
+.obs-print-root .subhead { break-after: avoid; page-break-after: avoid; }
 
 @media print {
     @page { size: A4; margin: 13mm 12mm; }

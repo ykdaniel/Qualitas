@@ -1,0 +1,42 @@
+# old service + old router (HEAD 33b8a1ce), new test file
+E       ValueError: not enough values to unpack (expected 1, got 0)
+E               ValueError: Cannot delete NCR 'NCR-LIVE' with status 'Open'. Please Void the NCR first, then delete.
+E               ValueError: Cannot delete NCR 'NCR-LIVE' with status 'In Progress'. Please Void the NCR first, then delete.
+E               ValueError: Cannot delete NCR 'NCR-LIVE' with status 'Resolved'. Please Void the NCR first, then delete.
+E               ValueError: Cannot delete NCR 'NCR-LIVE' with status 'Closed'. Please Void the NCR first, then delete.
+E               ValueError: Cannot delete NCR 'NCR-VOID': referenced by 1 ITR record(s)
+E       AssertionError: assert (False)
+E        +  where False = _exists(<test_itr_revoke_approval_acceptance.Env object at 0x10d02e580>, 'e3c070231a35483fad5f28ec339a8817')
+ERROR    services.ncr_service:ncr_service.py:638 Error deleting NCR e3c070231a35483fad5f28ec339a8817: audit construction failed
+    raise RuntimeError("audit construction failed")
+RuntimeError: audit construction failed
+E           Failed: DID NOT RAISE <class 'RuntimeError'>
+E           Failed: DID NOT RAISE <class 'RuntimeError'>
+E       AssertionError: assert (not False and 0 == 1)
+E        +  where False = _exists(<test_itr_revoke_approval_acceptance.Env object at 0x10e3287d0>, 'b70c9738a7324480b45a770e149bfc82')
+E        +  and   0 = len([])
+E        +    where [] = audit(<test_itr_revoke_approval_acceptance.Env object at 0x10e3287d0>, 'DELETE', 'b70c9738a7324480b45a770e149bfc82')
+ERROR    services.ncr_service:ncr_service.py:638 Error deleting NCR b70c9738a7324480b45a770e149bfc82: commit failed
+    raise RuntimeError("commit failed")
+RuntimeError: commit failed
+E       AssertionError: assert [] == ['544d0b3a641...9482ef3e0111']
+E         
+E         Right contains one more item: '544d0b3a641e429ba1979482ef3e0111'
+E         Use -v to get more diff
+E       AssertionError: assert [] == ['b02d7e1f4cd...173ec4f6fd44']
+E         
+E         Right contains one more item: 'b02d7e1f4cd94599951f173ec4f6fd44'
+E         Use -v to get more diff
+FAILED tests/test_ncr_audit_delete_http.py::test_a_delete_records_one_audit_entry_with_the_deleted_row_and_who
+FAILED tests/test_ncr_audit_delete_http.py::test_a_non_void_ncr_is_refused_with_400_and_nothing_changes[Open]
+FAILED tests/test_ncr_audit_delete_http.py::test_a_non_void_ncr_is_refused_with_400_and_nothing_changes[In Progress]
+FAILED tests/test_ncr_audit_delete_http.py::test_a_non_void_ncr_is_refused_with_400_and_nothing_changes[Resolved]
+FAILED tests/test_ncr_audit_delete_http.py::test_a_non_void_ncr_is_refused_with_400_and_nothing_changes[Closed]
+FAILED tests/test_ncr_audit_delete_http.py::test_a_void_ncr_still_cited_by_an_itr_is_refused_with_400_and_nothing_changes
+FAILED tests/test_ncr_audit_delete_http.py::test_a_failing_audit_flush_or_commit_rolls_a_delete_back_completely[construction]
+FAILED tests/test_ncr_audit_delete_http.py::test_a_failing_audit_flush_or_commit_rolls_a_delete_back_completely[audit-object]
+FAILED tests/test_ncr_audit_delete_http.py::test_a_failing_audit_flush_or_commit_rolls_a_delete_back_completely[flush]
+FAILED tests/test_ncr_audit_delete_http.py::test_a_failing_audit_flush_or_commit_rolls_a_delete_back_completely[commit]
+FAILED tests/test_ncr_audit_delete_http.py::test_an_itr_citing_the_ncr_saved_just_before_the_lock_is_counted
+FAILED tests/test_ncr_audit_delete_http.py::test_an_ncr_deleted_by_another_request_first_is_a_404_not_a_500
+12 failed, 1 passed in 25.64s

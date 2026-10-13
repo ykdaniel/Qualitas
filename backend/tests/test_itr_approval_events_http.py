@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session, sessionmaker
 import models
 from core import perms
 from core.security import get_password_hash
+from project_membership import TEST_PROJECT_ID, bind
 from test_itr_revoke_approval_acceptance import (   # noqa: F401  (env is a fixture, re-exported on purpose)
     ITEM, PW, Env, _mk_itr, _seed, env,
 )
@@ -76,8 +77,11 @@ def _add_second_approver(env):
     db = env.Session()
     try:
         role = db.query(models.Role).filter_by(name="AcceptApprover").one()
-        db.add(models.User(username="acc_approver2", email="acc_approver2@example.com", full_name="Bea Approver",
-                           is_active=True, hashed_password=get_password_hash(PW), role_id=role.id))
+        second = models.User(username="acc_approver2", email="acc_approver2@example.com", full_name="Bea Approver",
+                             is_active=True, hashed_password=get_password_hash(PW), role_id=role.id)
+        db.add(second)
+        db.flush()
+        bind(db, second, TEST_PROJECT_ID)            # REF-PROJECT-SEQ B1: works in the harness's project, like acc_approver
         me = db.query(models.User).filter_by(username="acc_approver").one()
         me.full_name = "Ada Approver"
         db.commit()

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 import models
 from core.security import get_current_user
+from core.refusals import permission_denied
 from database import get_db
 
 # Repositories
@@ -139,10 +140,7 @@ class AnyPermissionChecker:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User has no assigned role")
         held = {p.code for p in user.role.permissions_rel}
         if not held.intersection(self.permissions):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Operation not permitted. Required one of: {', '.join(self.permissions)}"
-            )
+            raise permission_denied(f"Operation not permitted. Required one of: {', '.join(self.permissions)}", *self.permissions)
         return user
 
 
@@ -171,9 +169,6 @@ class RoleChecker:
 
         if self.required_permission not in user_permissions:
             logger.debug(f"Permission denied. User: {user.username}, Role: {user.role.name}, Required: {self.required_permission}, Has: {user_permissions}")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Operation not permitted. Required: {self.required_permission}"
-            )
+            raise permission_denied(f"Operation not permitted. Required: {self.required_permission}", self.required_permission)
 
         return user

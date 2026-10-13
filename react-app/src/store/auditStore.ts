@@ -125,17 +125,11 @@ export const useAuditStore = create<AuditState>((set, get) => ({
     },
 
     deleteAudit: async (id) => {
-        try {
-            set({ error: null });
-            await api.delete(`/audit/${id}`);
-            set((state) => ({
-                auditList: state.auditList.filter(a => a.id !== id)
-            }));
-        } catch (err: any) {
-            const errorMessage = getErrorMessage(err, 'Failed to delete audit');
-            set({ error: errorMessage });
-            console.error('Failed to delete audit:', err);
-            throw new Error(errorMessage);
-        }
+        // A refused or failed delete goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-001); the page's error banner is for list loads only.
+        // The axios error is rethrown as is (not wrapped in a new Error) so the dialog still sees its status and refusal code.
+        await api.delete(`/audit/${id}`);
+        set((state) => ({
+            auditList: state.auditList.filter(a => a.id !== id)
+        }));
     },
 }));

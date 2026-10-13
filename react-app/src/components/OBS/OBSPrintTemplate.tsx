@@ -13,6 +13,42 @@ interface OBSPrintTemplateProps {
     improvementPhotos?: string[];
 }
 
+/**
+ * Photos side by side in pairs so each Before can be compared with its After: a header row (改善前 Before |
+ * 改善後 After), then one row per pair labelled 第 n 組 / Pair n (as on the Photos tab) — Before n on the left,
+ * After n on the right, in the order given (the record's pairing order, see utils/obsPhotoOrder). When one side has fewer photos the empty cell says so (無對應照片). The section
+ * heading, the header row and the first pair travel as one unbreakable block, so the headings are never
+ * left alone at the foot of a page; every later pair row is unbreakable on its own.
+ */
+const PhotoPairs: React.FC<{ before: string[]; after: string[] }> = ({ before, after }) => {
+    const pairCount = Math.max(before.length, after.length);
+    const cell = (src: string | undefined, label: string) => (src
+        ? <div className="photo-item"><img src={src} alt={label} /></div>
+        : <div className="photo-item photo-missing"><span className="guide">無對應照片 / No corresponding photo</span></div>);
+    const pair = (n: number) => (
+        <div className="photo-pair" key={n}>
+            <div className="pair-label">第 {n + 1} 組 <span className="en">Pair {n + 1}</span></div>
+            <div className="photo-row">
+                {cell(before[n], `before ${n + 1}`)}
+                {cell(after[n], `after ${n + 1}`)}
+            </div>
+        </div>
+    );
+    return (
+        <div className="photo-section">
+            <div className="photo-keep">
+                <div className="sec-head">6. 照片 <span className="en">Photos</span></div>
+                <div className="photo-row photo-head">
+                    <div className="subhead">改善前 <span className="en">Before</span></div>
+                    <div className="subhead">改善後 <span className="en">After</span></div>
+                </div>
+                {pair(0)}
+            </div>
+            {Array.from({ length: pairCount - 1 }, (_, i) => pair(i + 1))}
+        </div>
+    );
+};
+
 const OBSPrintTemplate: React.FC<OBSPrintTemplateProps> = ({ data, defectPhotos = [], improvementPhotos = [] }) => {
     const hasPhotos = defectPhotos.length > 0 || improvementPhotos.length > 0;
 
@@ -100,34 +136,8 @@ const OBSPrintTemplate: React.FC<OBSPrintTemplateProps> = ({ data, defectPhotos 
                                 <SignCell num="5.4" zh="工地工程師" en="Construction Engineer" name={data.constructionEngineerApprovalBy} date={data.constructionEngineerApprovalDate} req={data.constructionEngineerApproval} />
                             </div>
 
-                            {/* ===== 照片 ===== */}
-                            {hasPhotos && (
-                                <>
-                                    <div className="sec-head">6. 照片 <span className="en">Photos</span></div>
-                                    <div className="photo-grid">
-                                        <div>
-                                            <div className="subhead">觀察照片 Observation</div>
-                                            {defectPhotos.length === 0
-                                                ? <div className="field-box"><span className="guide">（無照片 No photos）</span></div>
-                                                : defectPhotos.map((u, i) => (
-                                                    <div key={i} className="photo-item" style={{ marginBottom: 8 }}>
-                                                        <img src={u} alt={`observation ${i + 1}`} />
-                                                    </div>
-                                                ))}
-                                        </div>
-                                        <div>
-                                            <div className="subhead">改善照片 Improvement</div>
-                                            {improvementPhotos.length === 0
-                                                ? <div className="field-box"><span className="guide">（無照片 No photos）</span></div>
-                                                : improvementPhotos.map((u, i) => (
-                                                    <div key={i} className="photo-item" style={{ marginBottom: 8 }}>
-                                                        <img src={u} alt={`improvement ${i + 1}`} />
-                                                    </div>
-                                                ))}
-                                        </div>
-                                    </div>
-                                </>
-                            )}
+                            {/* ===== 照片：改善前／改善後 左右成對 ===== */}
+                            {hasPhotos && <PhotoPairs before={defectPhotos} after={improvementPhotos} />}
 
                             <div className="foot">
                                 <span>OBS 觀察記錄｜非正式不符合（如屬正式不符合請開立 NCR）</span>

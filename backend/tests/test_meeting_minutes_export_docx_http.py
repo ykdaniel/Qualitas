@@ -20,6 +20,7 @@ from core import perms
 from core.security import get_password_hash
 from test_itr_revoke_approval_acceptance import PW, _get_or_create_perm
 from test_meeting_minutes_rev_http import meeting_env  # noqa: F401  (fixture re-export)
+from project_membership import bind
 
 DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
@@ -65,8 +66,11 @@ def add_user(env, username, codes, vendor_id=None):
         role.permissions_rel = [_get_or_create_perm(db, c) for c in codes]
         db.add(role)
         db.flush()
-        db.add(models.User(username=username, email=f"{username}@example.com", is_active=True, role_id=role.id,
-                           vendor_id=vendor_id, hashed_password=get_password_hash(PW)))
+        u = models.User(username=username, email=f"{username}@example.com", is_active=True, role_id=role.id,
+                        vendor_id=vendor_id, hashed_password=get_password_hash(PW))
+        db.add(u)
+        db.flush()
+        bind(db, u)   # the same project as mtg_a's meetings: a refusal must come from permission / contractor, not "no project"
         db.commit()
 
 

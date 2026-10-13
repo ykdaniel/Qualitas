@@ -135,8 +135,12 @@ def publish_pqp(
 def get_pqp_history(
     pqp_id: str,
     pqp_service: PQPService = Depends(get_pqp_service),
+    scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(PQP_VIEW))
 ):
+    # Only the history of a PQP the caller may see (it used to answer for any id — REF-PROJECT-SEQ-2026-001 B1, G4).
+    if pqp_service.get_pqp(pqp_id, scope=scope) is None:
+        raise HTTPException(status_code=404, detail="PQP not found")
     return pqp_service.get_history(pqp_id)
 
 

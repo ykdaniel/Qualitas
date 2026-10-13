@@ -98,12 +98,8 @@ export const useProjectStore = create<ProjectState>((set, _get) => ({
     },
 
     deleteProject: async (id) => {
-        try {
-            await deleteProjectApi(id);
-            set(state => ({ projectList: state.projectList.filter(p => p.id !== id) }));
-        } catch (err: any) {
-            set({ error: err?.message || 'Failed to delete project' });
-            throw err;
-        }
+        // A refused or failed delete goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-001).
+        await deleteProjectApi(id);
+        set(state => ({ projectList: state.projectList.filter(p => p.id !== id) }));
     },
 }));

@@ -34,6 +34,8 @@ export interface OBSItem {
     defectPhotos?: string[];
     improvementPhotos?: string[];
     attachments?: string[];
+    /** Pairing order of the before / after photos (see utils/obsPhotoOrder); null / absent = default order. */
+    photoOrder?: Partial<Record<'defectPhoto' | 'improvementPhoto', string[]>> | null;
     noiNumber?: string;
     itrNumber?: string;
     dueDate?: string;
@@ -123,13 +125,8 @@ export const useOBSStore = create<OBSState>((set, get) => ({
     },
 
     deleteOBS: async (id: string) => {
-        try {
-            await api.delete(`/obs/${id}`);
-            set((state) => ({ obsList: state.obsList.filter(o => o.id !== id) }));
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to delete OBS');
-            set({ error: msg });
-            throw error;
-        }
+        // A refused or failed delete goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-001); the page's error banner is for list loads only.
+        await api.delete(`/obs/${id}`);
+        set((state) => ({ obsList: state.obsList.filter(o => o.id !== id) }));
     }
 }));

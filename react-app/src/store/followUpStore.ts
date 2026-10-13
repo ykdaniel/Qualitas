@@ -100,15 +100,10 @@ export const useFollowUpStore = create<FollowUpState>((set, get) => ({
     },
 
     deleteFollowUp: async (id) => {
-        try {
-            await api.delete(`/followup/${id}`);
-            set((state) => ({
-                followUpList: state.followUpList.filter(f => f.id !== id),
-            }));
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to delete Follow-up Issue');
-            set({ error: msg });
-            throw error;
-        }
+        // A refused or failed delete goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-001).
+        await api.delete(`/followup/${id}`);
+        set((state) => ({
+            followUpList: state.followUpList.filter(f => f.id !== id),
+        }));
     },
 }));

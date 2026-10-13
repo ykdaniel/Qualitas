@@ -6,6 +6,12 @@ from repositories.user_repository import UserRepository
 import schemas
 import models
 
+def _known_project(mock_repo, project_id):
+    """The project lookup create_user makes (every id must name an existing project)."""
+    from types import SimpleNamespace
+    mock_repo.db.query.return_value.filter.return_value.all.return_value = [SimpleNamespace(id=project_id)]
+
+
 def test_create_user_success():
     # Setup
     mock_repo = MagicMock()
@@ -18,9 +24,10 @@ def test_create_user_success():
     mock_repo.create.return_value = mock_created_user
     
     service = UserService(mock_repo)
+    _known_project(mock_repo, "P1")
     user_data = schemas.UserCreate(
         username="testuser", email="test@test.com", password="password123!", role_id=1, full_name="Test User",
-        company_name="Qualitas",
+        company_name="Qualitas", project_ids=["P1"],   # every non-admin account works in a project (REF-PROJECT-SEQ-2026-001 B1)
     )
     
     # Execute
@@ -45,9 +52,10 @@ def test_create_user_persists_company_name():
     mock_repo.create.side_effect = lambda u, commit=True: u
 
     service = UserService(mock_repo)
+    _known_project(mock_repo, "P1")
     user_data = schemas.UserCreate(
         username="testuser", email="test@test.com", password="password123!",
-        role_id=1, full_name="Test User", company_name="Qualitas",
+        role_id=1, full_name="Test User", company_name="Qualitas", project_ids=["P1"],
     )
 
     result = service.create_user(user_data)

@@ -1,4 +1,5 @@
 import api from '../services/api';
+import { getProjectFilterParams } from './projectFilter';
 
 // ITP inspection items' "Record" column links to a document that a real, already-completed
 // inspection produced — either an ITR or a Checklist. The document number ALONE cannot tell
@@ -18,10 +19,10 @@ export async function resolveItpRecordLink(value: string): Promise<ItpRecordLink
     if (!value || value === '-') return { kind: 'not_found' };
 
     const [itrResult, checklistResult] = await Promise.allSettled([
-        api.get('/itr/', { params: { search: value, limit: 20 } }),
+        api.get('/itr/', { params: { ...getProjectFilterParams(), search: value, limit: 20 } }),
         // include_instances: a Record value may point to a Checklist INSTANCE linked to an ITR
         // (itrId set), which the default list (bare templates only) would otherwise miss.
-        api.get('/checklist/', { params: { search: value, limit: 20, include_instances: true } }),
+        api.get('/checklist/', { params: { ...getProjectFilterParams(), search: value, limit: 20, include_instances: true } }),
     ]);
 
     // The search endpoints do a substring (ILIKE) match — filter down to an exact document

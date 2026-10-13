@@ -25,6 +25,7 @@ from core.utils import (
     WorkflowEngine
 )
 from core import validators
+from core.refusals import Refusal
 
 logger = logging.getLogger(__name__)
 
@@ -373,6 +374,19 @@ def _template_content_signature(activity, detail_data) -> tuple:
         for it in items if isinstance(it, dict)
     ) if isinstance(items, list) else ()
     return (activity, normalized_items)
+
+
+# Word export result wording (CHECKLIST-BACK-LABEL-2026-001 R2) — the four codes of utils/checklistResult.ts; anything
+# else is shown as stored, never reinterpreted.
+_DOCX_RESULT_LABELS = {"O": "合格 Pass", "X": "不合格 Fail", "/": "不適用 N/A"}
+
+
+def _docx_result_label(raw) -> str:
+    if raw is None or (isinstance(raw, str) and raw.strip() in ("", "-")):
+        return "未填 Not filled"
+    if isinstance(raw, str) and raw in _DOCX_RESULT_LABELS:
+        return _DOCX_RESULT_LABELS[raw]
+    return f"未知值 Unknown value: {raw}"
 
 
 class ChecklistService:
@@ -871,11 +885,13 @@ class ChecklistService:
             # instance's results with none of those checks, including one
             # behind an Approved ITR.
             if db_checklist.itrId:
-                raise ValueError(
+                raise Refusal(
+                    'CHECKLIST_DELETE_ITR_OWNED',
                     f"Cannot delete Checklist '{db_checklist.recordsNo}' — it is an "
                     f"ITR-owned instance linked to ITR "
                     f"{db_checklist.itrNumber or db_checklist.itrId}. Use the ITR's "
-                    f"Unlink action instead of deleting it directly."
+                    f"Unlink action instead of deleting it directly.",
+                    number=db_checklist.recordsNo, itr=db_checklist.itrNumber or db_checklist.itrId,
                 )
 
             # A template that has (incorrectly, per the guards above) ended
@@ -887,9 +903,11 @@ class ChecklistService:
             # so the only rule available is: never hard-delete a row that
             # has ever held evidence.
             if _instance_has_historical_evidence(db_checklist):
-                raise ValueError(
+                raise Refusal(
+                    'CHECKLIST_DELETE_HAS_EVIDENCE',
                     f"Cannot delete Checklist '{db_checklist.recordsNo}' — it has held "
-                    f"inspection evidence (now or previously)."
+                    f"inspection evidence (now or previously).",
+                    number=db_checklist.recordsNo,
                 )
 
             # Capture old values for audit using inspect
@@ -914,3 +932,82 @@ class ChecklistService:
             self.repo.db.rollback()
             logger.error(f"Error deleting Checklist {checklist_id}: {e}", exc_info=True)
             raise e
+
+    def export_docx(self, checklist_id: str, scope=None):
+        """
+        Word copy of the printed Checklist (CHECKLIST-BACK-LABEL-2026-001 R2) — the same sections, in the same order,
+        as react-app/src/components/Checklist/ChecklistPrintTemplate.tsx: title with the activity, Doc No. /
+        Revision (the masthead; the print view's Date is the inspection date, shown in the project block), the project block, the items table (#, Inspection Item, Criteria, Actual Situation,
+        Result, then -END-), the two statement boxes, Re-inspection Date / NCR No., Remarks and the three signature
+        blocks. Built from the SAVED record (the editor asks for a save first when there are unsaved edits), with
+        core/docx_builder.py like NOIService.export_docx.
+
+        Returns a StreamingResponse; raises ValueError (-> 404 in the router) if the checklist doesn't exist or
+        isn't in the caller's scope.
+        """
+        from core import docx_builder as db
+
+        chk = self.get_checklist(checklist_id, scope=scope)
+        if not chk:
+            raise ValueError("Checklist not found")
+        try:
+            detail = json.loads(chk.detail_data) if chk.detail_data else {}
+        except (TypeError, ValueError):
+            detail = {}
+        if not isinstance(detail, dict):
+            detail = {}
+        items = detail.get("items") if isinstance(detail.get("items"), list) else []
+
+        def text(value):
+            return "" if value is None else str(value)
+
+        # The print view reads the editor's form: detail_data with the record's own columns on top (Checklist.tsx).
+        activity = chk.activity or detail.get("activity")
+        contractor = chk.contractor or detail.get("contractor")
+        noi_number = chk.noiNumber or detail.get("noiNumber")
+        location = detail.get("location") or chk.location
+        inspection_date = detail.get("inspectionDate")
+        agreement = bool(detail.get("agreementChecked"))
+
+        doc = db.new_document()
+        db.add_masthead(doc, "現場檢驗查核表", "FIELD INSPECTION CHECKLIST",
+                        doc_no=chk.recordsNo, rev=text(detail.get("revision") or 0), status=chk.status)
+        db.add_paragraph(doc, activity or "[ Activity ]", size=11.5, bold=True)
+        db.add_field_grid(doc, [
+            [("專案名稱", "Project Title", detail.get("projectTitle")), ("ITR 編號", "ITR No.", detail.get("referenceNo"))],
+            [("NOI 編號", "NOI Number", noi_number), ("承包商", "Contractor", contractor)],
+            [("檢驗日期", "Insp. Date", inspection_date), ("檢驗地點", "Location", location)],
+        ])
+        db.add_paragraph(doc, "")
+
+        rows = []
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            result = _docx_result_label(it.get("result"))
+            if it.get("result") == "/":
+                reason = text(it.get("naReason")).strip()
+                result += "\n" + (f"不適用原因 N/A reason: {reason}" if reason
+                                   else "歷史資料未記錄原因 No reason recorded (historical data)")
+            rows.append([text(it.get("id")), text(it.get("item")), text(it.get("criteria")),
+                         text(it.get("situation")), result])
+        rows.append(["", "", "", "", ""])                      # the print view's one blank row
+        rows.append(["-END-", "", "", "", ""])
+        db.add_data_table(doc, ["#", "Inspection Item", "Criteria", "Actual Situation", "Result"], rows)
+        db.add_paragraph(doc, "")
+
+        db.add_checkbox_row(doc, [("All inspection has been done and meet the Drawings, Criteria, Standards.", agreement)])
+        db.add_checkbox_row(doc, [('Unfinished improvement, fill in "Non-Conformity Report" to track improvement.', not agreement)])
+        db.add_field_grid(doc, [
+            [("複檢日期", "Re-inspection Date", "N/A" if agreement else detail.get("reInspectionDate")),
+             ("NCR 編號", "NCR No.", "N/A" if agreement else detail.get("ncrNo"))],
+        ])
+        db.add_subsection_heading(doc, "備註", "Remarks")
+        db.add_field_box(doc, value=detail.get("remarks"))
+        db.add_paragraph(doc, "")
+        db.add_sign_off_grid(doc, [
+            {"num": "1", "zh": "現場工程師", "en": "Site Engineer"},
+            {"num": "2", "zh": "施工負責人", "en": "Construction Leader"},
+            {"num": "3", "zh": "分包商代表", "en": "Subcontractor Representative"},
+        ])
+        return db.finalize_response(doc, chk.recordsNo or "Checklist")

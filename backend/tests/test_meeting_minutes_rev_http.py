@@ -15,6 +15,7 @@ import models
 from core import perms
 from core.security import get_password_hash
 from test_itr_revoke_approval_acceptance import PW, Env, _get_or_create_perm
+from project_membership import bind
 
 
 @pytest.fixture
@@ -59,8 +60,11 @@ def _seed(S):
         db.add(role)
         db.add(models.Contractor(id="MTG-V1", name="Accept Co", abbreviation="ACC"))
         db.flush()
-        db.add(models.User(username="mtg_a", email="mtg_a@example.com", is_active=True,
-                           hashed_password=get_password_hash(PW), role_id=role.id, full_name="Full mtg_a"))
+        u = models.User(username="mtg_a", email="mtg_a@example.com", is_active=True,
+                        hashed_password=get_password_hash(PW), role_id=role.id, full_name="Full mtg_a")
+        db.add(u)
+        db.flush()
+        bind(db, u)   # REF-PROJECT-SEQ B1: a non-admin works in one project (unbound = sees nothing); its meetings land there
         db.commit()
     finally:
         db.close()

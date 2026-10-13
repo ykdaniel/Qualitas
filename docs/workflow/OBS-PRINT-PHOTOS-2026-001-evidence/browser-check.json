@@ -1,0 +1,604 @@
+[
+  {
+    "name": "void-1-1 print layout",
+    "value": {
+      "headers": [
+        "改善前 Before",
+        "改善後 After"
+      ],
+      "labels": [
+        "第 1 組 Pair 1"
+      ],
+      "pairs": [
+        "photo | photo"
+      ],
+      "twoCellsEveryRow": true,
+      "halfWidth": true,
+      "leftCellAtRowStart": true,
+      "cellsSameHeight": true,
+      "missingText": [],
+      "imgHeight": "245.656px",
+      "objectFit": "contain",
+      "headingHeaderFirstPairInOneBlock": true
+    }
+  },
+  {
+    "name": "closed-2-2 print layout",
+    "value": {
+      "headers": [
+        "改善前 Before",
+        "改善後 After"
+      ],
+      "labels": [
+        "第 1 組 Pair 1",
+        "第 2 組 Pair 2"
+      ],
+      "pairs": [
+        "photo | photo",
+        "photo | photo"
+      ],
+      "twoCellsEveryRow": true,
+      "halfWidth": true,
+      "leftCellAtRowStart": true,
+      "cellsSameHeight": true,
+      "missingText": [],
+      "imgHeight": "245.656px",
+      "objectFit": "contain",
+      "headingHeaderFirstPairInOneBlock": true
+    }
+  },
+  {
+    "name": "open-3-3 print layout",
+    "value": {
+      "headers": [
+        "改善前 Before",
+        "改善後 After"
+      ],
+      "labels": [
+        "第 1 組 Pair 1",
+        "第 2 組 Pair 2",
+        "第 3 組 Pair 3"
+      ],
+      "pairs": [
+        "photo | photo",
+        "photo | photo",
+        "photo | photo"
+      ],
+      "twoCellsEveryRow": true,
+      "halfWidth": true,
+      "leftCellAtRowStart": true,
+      "cellsSameHeight": true,
+      "missingText": [],
+      "imgHeight": "245.656px",
+      "objectFit": "contain",
+      "headingHeaderFirstPairInOneBlock": true
+    }
+  },
+  {
+    "name": "open-4-3 print layout",
+    "value": {
+      "headers": [
+        "改善前 Before",
+        "改善後 After"
+      ],
+      "labels": [
+        "第 1 組 Pair 1",
+        "第 2 組 Pair 2",
+        "第 3 組 Pair 3",
+        "第 4 組 Pair 4"
+      ],
+      "pairs": [
+        "photo | photo",
+        "photo | photo",
+        "photo | photo",
+        "photo | —"
+      ],
+      "twoCellsEveryRow": true,
+      "halfWidth": true,
+      "leftCellAtRowStart": true,
+      "cellsSameHeight": true,
+      "missingText": [
+        "無對應照片 / No corresponding photo"
+      ],
+      "imgHeight": "245.656px",
+      "objectFit": "contain",
+      "headingHeaderFirstPairInOneBlock": true
+    }
+  },
+  {
+    "name": "open-2-0 print layout",
+    "value": {
+      "headers": [
+        "改善前 Before",
+        "改善後 After"
+      ],
+      "labels": [
+        "第 1 組 Pair 1",
+        "第 2 組 Pair 2"
+      ],
+      "pairs": [
+        "photo | —",
+        "photo | —"
+      ],
+      "twoCellsEveryRow": true,
+      "halfWidth": true,
+      "leftCellAtRowStart": true,
+      "cellsSameHeight": true,
+      "missingText": [
+        "無對應照片 / No corresponding photo"
+      ],
+      "imgHeight": "245.656px",
+      "objectFit": "contain",
+      "headingHeaderFirstPairInOneBlock": true
+    }
+  },
+  {
+    "name": "inprogress-2-1 print layout",
+    "value": {
+      "headers": [
+        "改善前 Before",
+        "改善後 After"
+      ],
+      "labels": [
+        "第 1 組 Pair 1",
+        "第 2 組 Pair 2"
+      ],
+      "pairs": [
+        "photo | photo",
+        "photo | —"
+      ],
+      "twoCellsEveryRow": true,
+      "halfWidth": true,
+      "leftCellAtRowStart": true,
+      "cellsSameHeight": true,
+      "missingText": [
+        "無對應照片 / No corresponding photo"
+      ],
+      "imgHeight": "245.656px",
+      "objectFit": "contain",
+      "headingHeaderFirstPairInOneBlock": true
+    }
+  },
+  {
+    "name": "open-0-2 print layout",
+    "value": {
+      "headers": [
+        "改善前 Before",
+        "改善後 After"
+      ],
+      "labels": [
+        "第 1 組 Pair 1",
+        "第 2 組 Pair 2"
+      ],
+      "pairs": [
+        "— | photo",
+        "— | photo"
+      ],
+      "twoCellsEveryRow": true,
+      "halfWidth": true,
+      "leftCellAtRowStart": true,
+      "cellsSameHeight": true,
+      "missingText": [
+        "無對應照片 / No corresponding photo"
+      ],
+      "imgHeight": "245.656px",
+      "objectFit": "contain",
+      "headingHeaderFirstPairInOneBlock": true
+    }
+  },
+  {
+    "name": "legacy-mixed print layout",
+    "value": {
+      "headers": [
+        "改善前 Before",
+        "改善後 After"
+      ],
+      "labels": [
+        "第 1 組 Pair 1",
+        "第 2 組 Pair 2",
+        "第 3 組 Pair 3"
+      ],
+      "pairs": [
+        "photo | photo",
+        "photo | photo",
+        "photo | —"
+      ],
+      "twoCellsEveryRow": true,
+      "halfWidth": true,
+      "leftCellAtRowStart": true,
+      "cellsSameHeight": true,
+      "missingText": [
+        "無對應照片 / No corresponding photo"
+      ],
+      "imgHeight": "245.656px",
+      "objectFit": "contain",
+      "headingHeaderFirstPairInOneBlock": true
+    }
+  },
+  {
+    "name": "resolved-2-2 print layout",
+    "value": {
+      "headers": [
+        "改善前 Before",
+        "改善後 After"
+      ],
+      "labels": [
+        "第 1 組 Pair 1",
+        "第 2 組 Pair 2"
+      ],
+      "pairs": [
+        "photo | photo",
+        "photo | photo"
+      ],
+      "twoCellsEveryRow": true,
+      "halfWidth": true,
+      "leftCellAtRowStart": true,
+      "cellsSameHeight": true,
+      "missingText": [],
+      "imgHeight": "245.656px",
+      "objectFit": "contain",
+      "headingHeaderFirstPairInOneBlock": true
+    }
+  },
+  {
+    "name": "QTS-OPP-FSW-OBS-000004 Photos tab pairs (names)",
+    "value": [
+      "第 1 組 / Pair 1: Legacy 1 | Legacy 1",
+      "第 2 組 / Pair 2: before-1.jpg | after-1.jpg",
+      "第 3 組 / Pair 3: before-2.jpg | —"
+    ]
+  },
+  {
+    "name": "QTS-OPP-FSW-OBS-000004 print pairs equal the Photos tab pairs",
+    "value": true
+  },
+  {
+    "name": "QTS-OPP-HCE-OBS-000004 Photos tab pairs (names)",
+    "value": [
+      "第 1 組 / Pair 1: before-1.jpg | after-1.jpg",
+      "第 2 組 / Pair 2: before-2.jpg | after-2.jpg",
+      "第 3 組 / Pair 3: before-3.jpg | after-3.jpg",
+      "第 4 組 / Pair 4: before-4.jpg | —"
+    ]
+  },
+  {
+    "name": "QTS-OPP-HCE-OBS-000004 print pairs equal the Photos tab pairs",
+    "value": true
+  },
+  {
+    "name": "QTS-OPP-FSW-OBS-000001 Photos tab pairs (names)",
+    "value": [
+      "第 1 組 / Pair 1: before-1.jpg | —",
+      "第 2 組 / Pair 2: before-2.jpg | —"
+    ]
+  },
+  {
+    "name": "QTS-OPP-FSW-OBS-000001 print pairs equal the Photos tab pairs",
+    "value": true
+  },
+  {
+    "name": "Closed: Photos tab controls",
+    "value": {
+      "lockNote": "已結案，照片與附件已鎖定 / Closed — photos and attachments are locked",
+      "uploadInputs": 0,
+      "moveUp": 0,
+      "moveDown": 0,
+      "deletePhoto": 0,
+      "removeNew": 0,
+      "hint": null
+    }
+  },
+  {
+    "name": "Closed: clicking a photo still opens the preview",
+    "value": true
+  },
+  {
+    "name": "Void: Photos tab controls",
+    "value": {
+      "lockNote": "已作廢，照片與附件已鎖定 / Void — photos and attachments are locked",
+      "uploadInputs": 0,
+      "moveUp": 0,
+      "moveDown": 0,
+      "deletePhoto": 0,
+      "removeNew": 0,
+      "hint": null
+    }
+  },
+  {
+    "name": "Resolved (not locked): Photos tab controls",
+    "value": {
+      "lockNote": null,
+      "uploadInputs": 3,
+      "moveUp": 4,
+      "moveDown": 4,
+      "deletePhoto": 4,
+      "removeNew": 0,
+      "hint": null
+    }
+  },
+  {
+    "name": "API: changed photoOrder on Closed",
+    "value": {
+      "status": 409,
+      "body": {
+        "detail": "Cannot change attachments of a Closed OBS: the record is locked.",
+        "code": "ATTACHMENT_LOCKED",
+        "params": {
+          "kind": "record",
+          "docType": "OBS",
+          "status": "Closed"
+        }
+      }
+    }
+  },
+  {
+    "name": "API: changed photoOrder on Void",
+    "value": {
+      "status": 409,
+      "body": {
+        "detail": "Cannot change attachments of a Void OBS: the record is locked.",
+        "code": "ATTACHMENT_LOCKED",
+        "params": {
+          "kind": "record",
+          "docType": "OBS",
+          "status": "Void"
+        }
+      }
+    }
+  },
+  {
+    "name": "API: attachments / defectPhotos changed on Void",
+    "value": [
+      {
+        "status": 409,
+        "body": {
+          "detail": "Cannot change attachments of a Void OBS: the record is locked.",
+          "code": "ATTACHMENT_LOCKED",
+          "params": {
+            "kind": "record",
+            "docType": "OBS",
+            "status": "Void"
+          }
+        }
+      },
+      200
+    ]
+  },
+  {
+    "name": "API: unchanged (no) photoOrder re-sent on Closed -> status",
+    "value": 200
+  },
+  {
+    "name": "API: Closed + blank status + attachments change -> refused (blank = no status change), still Closed",
+    "value": [
+      {
+        "status": 409,
+        "body": {
+          "detail": "Cannot change attachments of a Closed OBS: the record is locked.",
+          "code": "ATTACHMENT_LOCKED",
+          "params": {
+            "kind": "record",
+            "docType": "OBS",
+            "status": "Closed"
+          }
+        }
+      },
+      "Closed"
+    ]
+  },
+  {
+    "name": "API: Closed + blank status + productDisposition change -> existing Closed rule (400), still Closed",
+    "value": [
+      400,
+      "Closed"
+    ]
+  },
+  {
+    "name": "API: Closed -> Void together with an attachments change (not a reopen) -> refused, still Closed",
+    "value": [
+      {
+        "status": 409,
+        "body": {
+          "detail": "Cannot change attachments of a Closed OBS: the record is locked.",
+          "code": "ATTACHMENT_LOCKED",
+          "params": {
+            "kind": "record",
+            "docType": "OBS",
+            "status": "Closed"
+          }
+        }
+      },
+      "Closed"
+    ]
+  },
+  {
+    "name": "API: photoOrder after the refusals (Closed, Void)",
+    "value": [
+      null,
+      null
+    ]
+  },
+  {
+    "name": "Open 3/3 tab before reorder",
+    "value": [
+      "before-1.jpg | after-1.jpg",
+      "before-2.jpg | after-2.jpg",
+      "before-3.jpg | after-3.jpg"
+    ]
+  },
+  {
+    "name": "Open 3/3 tab after ↓ on Before 1 (unsaved)",
+    "value": [
+      "before-2.jpg | after-1.jpg",
+      "before-1.jpg | after-2.jpg",
+      "before-3.jpg | after-3.jpg"
+    ]
+  },
+  {
+    "name": "Open 3/3 stored photoOrder",
+    "value": {
+      "defectPhoto": [
+        "att:726d7a58adf2492db4f8c7d77e449a33",
+        "att:0cfa4b763bfa4a4bb472d411e0717fec",
+        "att:2c40e70e951a4590b3e02f76baa03f6a"
+      ]
+    }
+  },
+  {
+    "name": "Open 3/3 tab after save + reopen",
+    "value": [
+      "before-2.jpg | after-1.jpg",
+      "before-1.jpg | after-2.jpg",
+      "before-3.jpg | after-3.jpg"
+    ]
+  },
+  {
+    "name": "Open 3/3 print pairs equal the reordered tab",
+    "value": true
+  },
+  {
+    "name": "Reopen pending (unsaved): still locked on the stored status",
+    "value": true
+  },
+  {
+    "name": "Reopened after save: Photos tab controls",
+    "value": {
+      "lockNote": null,
+      "uploadInputs": 3,
+      "moveUp": 4,
+      "moveDown": 4,
+      "deletePhoto": 4,
+      "removeNew": 0,
+      "hint": null
+    }
+  },
+  {
+    "name": "Pending NEW: tab pairs",
+    "value": [
+      "photo | photo",
+      "photo | photo",
+      "NEW | —"
+    ]
+  },
+  {
+    "name": "Pending NEW: controls (no ↑↓ on NEW; hint shown)",
+    "value": {
+      "lockNote": null,
+      "uploadInputs": 3,
+      "moveUp": 4,
+      "moveDown": 4,
+      "deletePhoto": 4,
+      "removeNew": 1,
+      "hint": "新選的照片（NEW）存檔後可調整順序 / Save first to reorder new photos"
+    }
+  },
+  {
+    "name": "7a close with a pending photo: toast",
+    "value": [
+      "請先存檔上傳／刪除檔案，再結案。本次未儲存任何內容。 / Save the file uploads / deletions first, then close. Nothing was saved."
+    ]
+  },
+  {
+    "name": "7a close with a pending photo: no write request, status / files unchanged, modal still open",
+    "value": {
+      "writes": [],
+      "status": "Resolved",
+      "defectFiles": 2,
+      "defectBefore": 2,
+      "modalOpen": true
+    }
+  },
+  {
+    "name": "7b step 1 (no status change): photo uploaded, still Resolved",
+    "value": {
+      "status": "Open",
+      "defectFiles": 3
+    }
+  },
+  {
+    "name": "7b step 2: closed",
+    "value": {
+      "status": "Closed",
+      "defectFiles": 3
+    }
+  },
+  {
+    "name": "7c void with a pending photo: refused, nothing written",
+    "value": {
+      "toast": [
+        "請先存檔上傳／刪除檔案，再作廢。本次未儲存任何內容。 / Save the file uploads / deletions first, then void. Nothing was saved."
+      ],
+      "writes": [],
+      "status": "In Progress"
+    }
+  },
+  {
+    "name": "7c void with a pending delete: refused, nothing written",
+    "value": {
+      "toast": [
+        "請先存檔上傳／刪除檔案，再作廢。本次未儲存任何內容。 / Save the file uploads / deletions first, then void. Nothing was saved."
+      ],
+      "writes": [],
+      "status": "In Progress",
+      "defectFiles": 2
+    }
+  },
+  {
+    "name": "7d void with no pending files: Void",
+    "value": "Void"
+  },
+  {
+    "name": "7e Open save with a pending photo: uploaded, status unchanged",
+    "value": {
+      "status": "Open",
+      "improvementFiles": 3,
+      "afterBefore": 2
+    }
+  },
+  {
+    "name": "7f close + photoOrder change in one save: Closed with the new order",
+    "value": {
+      "status": "Closed",
+      "photoOrder": {
+        "defectPhoto": [
+          "att:2fdcb2b44be94848993c5873eedd6a87",
+          "att:1b246a8301c54037b57213d3d0331415",
+          "att:d8322f7d230440a599a2071e7b4eb44e",
+          "att:372e304723f848f5a94b7c34be3f548a"
+        ]
+      }
+    }
+  },
+  {
+    "name": "8 saved-incomplete: modal still open with the follow-up, the deleted photo is gone on the server and does NOT reappear on the tab",
+    "value": {
+      "modalOpen": true,
+      "defectFiles": 2,
+      "defectBefore8": 3,
+      "deletedName": "before-2.jpg",
+      "tabBefore": [
+        "before-1.jpg",
+        "before-3.jpg",
+        "—"
+      ],
+      "reappeared": false
+    }
+  },
+  {
+    "name": "9 new OBS with a chosen photo: NEW cell, no ↑↓, hint shown",
+    "value": {
+      "pairs": [
+        "NEW | —"
+      ],
+      "controls": {
+        "lockNote": null,
+        "uploadInputs": 3,
+        "moveUp": 0,
+        "moveDown": 0,
+        "deletePhoto": 0,
+        "removeNew": 1,
+        "hint": "新選的照片（NEW）存檔後可調整順序 / Save first to reorder new photos"
+      }
+    }
+  }
+]

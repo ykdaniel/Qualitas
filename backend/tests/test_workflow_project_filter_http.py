@@ -16,7 +16,7 @@ def test_project_filter_applies_to_workflow_list_stats_and_attention(denv, endpo
             db.flush()
             db.add(models.QWorkflow(id=f"wf-project-{i}", referenceNo=f"WF-{i}", noi_id=noi.id))
         db.commit()
-    client = denv.login("dt_a")
+    client = denv.login("dt_admin")      # sees every project (only an administrator does — REF-PROJECT-SEQ-2026-001 B1)
     def count(params):
         r = client.get(endpoint, params={"limit": 20, **params})
         assert r.status_code == 200, r.text

@@ -23,6 +23,7 @@ from core.security import get_password_hash
 from database import Base, get_db
 from repositories.audit_repository import AuditRepository
 from services.audit_service import AuditService
+from project_membership import TEST_PROJECT_ID, bind
 
 VENDOR = 'Audit vendor'
 
@@ -51,8 +52,11 @@ def env(tmp_path, monkeypatch):
         role.permissions_rel = [models.Permission(code=c, description=c) for c in codes]
         db.add(role)
         db.flush()
-        db.add(models.User(username='auditor', email='auditor@example.test', is_active=True,
-                           role_id=role.id, hashed_password=get_password_hash(password)))
+        auditor = models.User(username='auditor', email='auditor@example.test', is_active=True,
+                              role_id=role.id, hashed_password=get_password_hash(password))
+        db.add(auditor)
+        db.flush()
+        bind(db, auditor)  # the auditor works in the test project; every audit row lives there
         db.add(models.Contractor(id='vendor', name=VENDOR, abbreviation='AV'))
         db.commit()
     app = FastAPI()
@@ -68,6 +72,27 @@ def env(tmp_path, monkeypatch):
         assert response.status_code == 200, response.text
         yield SimpleNamespace(client=client, Session=S, engine=engine)
     engine.dispose()
+
+
+def login_admin(env):
+    """Sign the client in as a system administrator: a role NAMED "admin" (the name is what makes an account unscoped —
+    it sees every project and records without a project) with the same audit permissions as the auditor. For the few
+    tests that need an unscoped account (moving an audit between projects, reading a legacy row without project_id)."""
+    password = secrets.token_urlsafe(24)
+    with env.Session() as db:
+        if db.query(models.User).filter_by(username='audit-admin').first() is None:
+            role = models.Role(name='admin')
+            role.permissions_rel = [db.query(models.Permission).filter_by(code=c).one() for c in
+                                    ['audit:view:all', 'audit:create:all', 'audit:update:all', 'audit:delete:all']]
+            db.add(role)
+            db.flush()
+            db.add(models.User(username='audit-admin', email='audit-admin@example.test', is_active=True, role_id=role.id,
+                               hashed_password=get_password_hash(password)))
+        else:
+            db.query(models.User).filter_by(username='audit-admin').one().hashed_password = get_password_hash(password)
+        db.commit()
+    response = env.client.post('/api/auth/login', data={'username': 'audit-admin', 'password': password})
+    assert response.status_code == 200, response.text
 
 
 def snapshot(env):
@@ -89,7 +114,7 @@ def stored(env, audit_id):
 
 def insert_raw(env, **cols):
     """A legacy row written directly (as old code paths could leave it), bypassing the API."""
-    data = dict(id=str(uuid.uuid4()), auditNo=f'LEGACY-{uuid.uuid4().hex[:8]}', date='2026-10-01', status='Draft',
+    data = dict(id=str(uuid.uuid4()), project_id=TEST_PROJECT_ID, auditNo=f'LEGACY-{uuid.uuid4().hex[:8]}', date='2026-10-01', status='Draft',
                 contractor=VENDOR, vendor_id='vendor', selected_templates='[]', custom_check_items='[]')
     data.update(cols)
     with env.Session() as db:

@@ -17,6 +17,7 @@ from sqlalchemy.orm import sessionmaker
 import models
 from database import Base, get_db
 from core.security import get_password_hash
+from project_membership import bind
 
 CASES = ['pqp', 'obs', 'osd', 'fat', 'contractor']
 MODELS = dict(pqp=models.PQP, obs=models.OBS, osd=models.OSD, fat=models.FAT, contractor=models.Contractor)
@@ -44,8 +45,11 @@ def env(tmp_path, monkeypatch):
         role.permissions_rel = [models.Permission(code=c, description=c) for c in codes]
         db.add(role)
         db.flush()
-        db.add(models.User(username='audit-writer', email='audit-writer@example.test', is_active=True,
-                           role_id=role.id, hashed_password=get_password_hash(password)))
+        writer = models.User(username='audit-writer', email='audit-writer@example.test', is_active=True,
+                             role_id=role.id, hashed_password=get_password_hash(password))
+        db.add(writer)
+        db.flush()
+        bind(db, writer)  # the writer works in the test project (REF-PROJECT-SEQ B1: no project = sees/creates nothing)
         db.add(models.Contractor(id='vendor', name='Audit vendor', abbreviation='AV', contactPerson='Old contact'))
         db.commit()
     app = FastAPI()

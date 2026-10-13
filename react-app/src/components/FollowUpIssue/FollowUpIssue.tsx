@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { Clock, CheckCircle2, BarChart3, Search, Printer } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
+import { showRefusal } from '../../store/refusalStore';
 import { useNCRStore } from '../../store/ncrStore';
 import { useOBSStore } from '../../store/obsStore';
 import { useNOIStore } from '../../store/noiStore';
@@ -338,10 +339,12 @@ const FollowUpIssue: React.FC = () => {
       try {
         await api.delete(`/followup/${deleteModal.id}`);
         fetchManualIssues();
-        setDeleteModal({ isOpen: false, id: null, message: '' });
       } catch (err) {
+        // e.g. not Void yet: shown in the refusal dialog
         console.error('Failed to delete issue:', err);
-        toast.error(t('common.deleteFailed') || '刪除失敗');
+        showRefusal(err, 'delete');
+      } finally {
+        setDeleteModal({ isOpen: false, id: null, message: '' });
       }
     }
   };

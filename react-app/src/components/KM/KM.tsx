@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useKMStore } from '../../store/kmStore';
+import { showRefusal } from '../../store/refusalStore';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { KMModal } from './KMModals';
@@ -116,8 +116,10 @@ const KM: React.FC = () => {
         setCurrentView('list');
         setSelectedArticleId(null);
       }
-    } catch {
-      toast.error(t('common.deleteFailed'));
+    } catch (err) {
+      console.error('Failed to delete KM article:', err);
+      setDeleteModal({ isOpen: false, id: null });
+      showRefusal(err, 'delete');
     } finally {
       deleteInFlight.current = false;
       setDeleting(false);

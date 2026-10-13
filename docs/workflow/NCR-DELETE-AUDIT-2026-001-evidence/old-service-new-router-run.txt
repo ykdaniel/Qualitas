@@ -1,0 +1,32 @@
+# old service (HEAD 33b8a1ce) + NEW router, new test file
+E       ValueError: not enough values to unpack (expected 1, got 0)
+E       AssertionError: assert (False)
+E        +  where False = _exists(<test_itr_revoke_approval_acceptance.Env object at 0x10c112be0>, '2a6e188e4cc044dfbadf36070327b119')
+ERROR    services.ncr_service:ncr_service.py:638 Error deleting NCR 2a6e188e4cc044dfbadf36070327b119: audit construction failed
+    raise RuntimeError("audit construction failed")
+RuntimeError: audit construction failed
+E           Failed: DID NOT RAISE <class 'RuntimeError'>
+E           Failed: DID NOT RAISE <class 'RuntimeError'>
+E       AssertionError: assert (not False and 0 == 1)
+E        +  where False = _exists(<test_itr_revoke_approval_acceptance.Env object at 0x10c3e5040>, '2dfff9b7c64f48188e2c0dbf29032b50')
+E        +  and   0 = len([])
+E        +    where [] = audit(<test_itr_revoke_approval_acceptance.Env object at 0x10c3e5040>, 'DELETE', '2dfff9b7c64f48188e2c0dbf29032b50')
+ERROR    services.ncr_service:ncr_service.py:638 Error deleting NCR 2dfff9b7c64f48188e2c0dbf29032b50: commit failed
+    raise RuntimeError("commit failed")
+RuntimeError: commit failed
+E       AssertionError: assert [] == ['98ae37be6b2...d504b8190947']
+E         
+E         Right contains one more item: '98ae37be6b2a4325a191d504b8190947'
+E         Use -v to get more diff
+E       AssertionError: assert [] == ['26f169948a0...bc3bf189ed53']
+E         
+E         Right contains one more item: '26f169948a0f405695d9bc3bf189ed53'
+E         Use -v to get more diff
+FAILED tests/test_ncr_audit_delete_http.py::test_a_delete_records_one_audit_entry_with_the_deleted_row_and_who
+FAILED tests/test_ncr_audit_delete_http.py::test_a_failing_audit_flush_or_commit_rolls_a_delete_back_completely[construction]
+FAILED tests/test_ncr_audit_delete_http.py::test_a_failing_audit_flush_or_commit_rolls_a_delete_back_completely[audit-object]
+FAILED tests/test_ncr_audit_delete_http.py::test_a_failing_audit_flush_or_commit_rolls_a_delete_back_completely[flush]
+FAILED tests/test_ncr_audit_delete_http.py::test_a_failing_audit_flush_or_commit_rolls_a_delete_back_completely[commit]
+FAILED tests/test_ncr_audit_delete_http.py::test_an_itr_citing_the_ncr_saved_just_before_the_lock_is_counted
+FAILED tests/test_ncr_audit_delete_http.py::test_an_ncr_deleted_by_another_request_first_is_a_404_not_a_500
+7 failed, 6 passed in 24.63s

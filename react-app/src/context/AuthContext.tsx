@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import api, { User, setupLogoutHandler } from '../services/api';
+import { useProjectStore } from '../store/projectStore';
 
 export type { User };
 
@@ -14,6 +15,8 @@ interface AuthContextType {
   /** True if the current user's role grants the given permission code
    *  (e.g. "ncr:update:all"). False while logged out or still loading. */
   hasPermission: (code: string) => boolean;
+  /** Re-read the profile (e.g. after choosing the project to work in). */
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -25,8 +28,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const fetchUser = useCallback(async () => {
     try {
-      const response = await api.get('/user/profile');
-      setUser(response.data);
+      const response = await api.get<User>('/user/profile');
+      const profile = response.data;
+      // A non-admin works in the ONE project the server says (chosen at sign-in) — never a project left in this
+      // browser by an earlier session. Admins keep their own choice from the project menu (checked against the
+      // projects they can see in AppProviders).
+      if (!profile.is_admin) {
+        const current = profile.projects?.find(p => p.id === profile.current_project_id) ?? null;
+        useProjectStore.getState().setCurrentProject(current ? {
+          id: current.id, name: current.name, code: current.code || '', description: '', owner: '', created_at: null,
+        } : null);
+      }
+      setUser(profile);
     } catch (error) {
       console.error('Failed to fetch user:', error);
     }
@@ -68,6 +81,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Best-effort: tell the server to blacklist the access/refresh tokens and
     // expire the cookies. Don't await — local state should clear regardless.
     api.post('/auth/logout').catch(() => {/* server may already be unreachable */});
+    // The next person signing in on this browser must not inherit this session's project.
+    useProjectStore.getState().setCurrentProject(null);
     setIsAuthenticated(false);
     setUser(null);
   };
@@ -78,7 +93,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   );
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, logout, loading, hasPermission }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, login, logout, loading, hasPermission, refreshUser: fetchUser }}>
       {!loading && children}
     </AuthContext.Provider>
   );

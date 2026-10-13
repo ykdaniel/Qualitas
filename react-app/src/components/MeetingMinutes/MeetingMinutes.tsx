@@ -6,6 +6,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useMeetingMinutesStore } from '../../store/meetingMinutesStore';
+import { showRefusal } from '../../store/refusalStore';
 import type { MeetingMinutesItem as ContextMeetingMinutesItem } from '../../store/meetingMinutesStore';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import ConfirmModal from '../Shared/ConfirmModal';
@@ -263,7 +264,7 @@ const MeetingMinutes: React.FC = () => {
         await deleteMeetingMinutes(deleteModal.id);
       } catch (err) {
         console.error('Failed to delete Meeting Minutes:', err);
-        toast.error((err as Error)?.message || t('common.deleteFailed'));
+        showRefusal(err, 'delete');
       }
       setDeleteModal({ isOpen: false, id: null, message: '' });
     }

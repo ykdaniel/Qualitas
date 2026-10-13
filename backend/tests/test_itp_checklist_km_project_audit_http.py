@@ -28,6 +28,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 import models
+from project_membership import bind
 from database import Base, get_db
 from core.security import get_password_hash
 
@@ -61,8 +62,11 @@ def env(tmp_path, monkeypatch):
         role.permissions_rel = [models.Permission(code=c, description=c) for c in codes]
         db.add(role)
         db.flush()
-        db.add(models.User(username='audit-writer2', email='audit-writer2@example.test', is_active=True,
-                           role_id=role.id, hashed_password=get_password_hash(password)))
+        writer = models.User(username='audit-writer2', email='audit-writer2@example.test', is_active=True,
+                             role_id=role.id, hashed_password=get_password_hash(password))
+        db.add(writer)
+        db.flush()
+        bind(db, writer)        # works in the shared test project (REF-PROJECT-SEQ-2026-001 B1)
         db.add(models.Contractor(id='vendor', name='Audit vendor', abbreviation='AV'))
         db.commit()
     app = FastAPI()

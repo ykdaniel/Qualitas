@@ -96,7 +96,7 @@ def test_unknown_and_case_variant_categories_are_refused_on_open_and_on_closed_r
     assert nothing_added(aenv, before)
 
 
-@pytest.mark.parametrize("etype,rid,closed_expect", [("obs", "obs-a", 200), ("ncr", "ncr-a", 200), ("noi", "noi-1", 409), ("itr", "itr-1", 409)])
+@pytest.mark.parametrize("etype,rid,closed_expect", [("obs", "obs-a", 409), ("ncr", "ncr-a", 200), ("noi", "noi-1", 409), ("itr", "itr-1", 409)])
 def test_an_EMPTY_category_is_dropped_by_the_form_parser_and_becomes_the_default_attachment_never_a_locked_label(aenv, etype, rid, closed_expect):
     """A multipart field with an empty value reaches the endpoint as "not sent", so it takes the API default `attachment` — which is what is
     stored and what every lock is judged on. It cannot be used to reach a locked category; on a locked record it is refused like any upload."""
@@ -132,32 +132,36 @@ def test_historical_rows_with_an_unknown_category_stay_readable_and_are_never_re
     assert stored["old-legacy-photo"] == "legacy-photo" and stored["old-DefectPhoto"] == "DefectPhoto" and stored["old-None"] is None   # not rewritten
 
 
-def test_on_a_closed_record_a_historical_unknown_category_cannot_be_deleted_but_an_open_record_can(aenv):
+@pytest.mark.parametrize("etype,model,rid", [("ncr", models.NCR, "ncr-a"), ("obs", models.OBS, "obs-a")])
+def test_on_a_closed_record_a_historical_unknown_category_cannot_be_deleted_but_an_open_record_can(aenv, etype, model, rid):
+    # ncr: Closed is a CATEGORY lock, so an unknown historical category is refused by deny-by-default;
+    # obs: Closed locks every category (OBS-ATTACH-LOCK-2026-001), so it is refused by the whole-record lock
     db = aenv.Session()
-    db.add(models.Attachment(id="old-x", entity_type="obs", entity_id="obs-a", file_name="o.txt", file_path="obs/old-x.txt", file_size=1, mime_type="text/plain",
+    db.add(models.Attachment(id="old-x", entity_type=etype, entity_id=rid, file_name="o.txt", file_path=f"{etype}/old-x.txt", file_size=1, mime_type="text/plain",
                              category="legacy-photo", uploaded_by="x", uploaded_at="2026-01-01T00:00:00+00:00", is_deleted=False))
     db.commit()
     db.close()
     c = aenv.login("adm")
-    _set_state(aenv, models.OBS, "obs-a", status="Closed")
+    _set_state(aenv, model, rid, status="Closed")
     before = state(aenv)
-    assert c.delete("/api/files/old-x").status_code == 409          # deny by default under a category lock
+    assert c.delete("/api/files/old-x").status_code == 409
     assert nothing_added(aenv, before)
-    _set_state(aenv, models.OBS, "obs-a", status="Open")
+    _set_state(aenv, model, rid, status="Open")
     assert c.delete("/api/files/old-x").status_code == 200
 
 
-def test_LIMIT_a_photo_can_still_be_added_to_a_closed_obs_or_ncr_by_labelling_it_attachment(aenv):
-    """The category lock restricts the LABEL, not the content: `attachment` is a legitimate category that stays open on a closed OBS / NCR
+def test_LIMIT_a_photo_can_still_be_added_to_a_closed_ncr_by_labelling_it_attachment(aenv):
+    """The category lock restricts the LABEL, not the content: `attachment` is a legitimate category that stays open on a closed NCR
     (see PENDING_STATE_DECISIONS), and an image uploaded as `attachment` is accepted. So the category lock cannot guarantee that the
-    record's evidence is unchanged — it only keeps files out of the locked photo categories. Pinned so nobody reads it as a full lock."""
-    for etype, model, rid in (("obs", models.OBS, "obs-a"), ("ncr", models.NCR, "ncr-a")):
-        c = aenv.login("adm")
-        _set_state(aenv, model, rid, status="Closed")
-        photo_as_photo = up(c, etype, rid, files=(_png(),), category="improvementPhoto")
-        photo_as_attachment = up(c, etype, rid, files=(_png("q.png"),), category="attachment")
-        assert photo_as_photo.status_code == 409
-        assert photo_as_attachment.status_code == 200
+    record's evidence is unchanged — it only keeps files out of the locked photo categories. Pinned so nobody reads it as a full lock.
+    A closed OBS is no longer in this list: since OBS-ATTACH-LOCK-2026-001 it refuses every category."""
+    c = aenv.login("adm")
+    _set_state(aenv, models.NCR, "ncr-a", status="Closed")
+    assert up(c, "ncr", "ncr-a", files=(_png(),), category="improvementPhoto").status_code == 409
+    assert up(c, "ncr", "ncr-a", files=(_png("q.png"),), category="attachment").status_code == 200
+    _set_state(aenv, models.OBS, "obs-a", status="Closed")
+    assert up(c, "obs", "obs-a", files=(_png("r.png"),), category="improvementPhoto").status_code == 409
+    assert up(c, "obs", "obs-a", files=(_png("s.png"),), category="attachment").status_code == 409
 
 
 # ══ 3. downloads of files that have no attachment row ═══════════════════════════════════════════════════════════════════════════
@@ -195,9 +199,14 @@ def test_a_km_looking_name_in_another_modules_directory_is_not_a_km_image(aenv):
     assert aenv.login("adm").get(f"/api/files/download/ncr/km_{HEX}.png").status_code == 404
 
 
-def test_scoped_accounts_keep_the_existing_rule_no_row_no_download(aenv):
+def test_a_scoped_account_with_km_view_is_served_km_images_but_no_other_row_less_file(aenv):
+    """Changed by REF-PROJECT-SEQ-2026-001 B1 (scope addition 11, business decision D9 — KM is shared by every project):
+    a project-scoped account used to get 404 for a row-less KM image; since every non-admin is now project-scoped, that
+    hid KM images from everyone but administrators. km:view:all is still required; any other row-less file stays 404."""
     _plant(aenv, f"km/km_{HEX}.png")
-    assert aenv.login("sV").get(f"/api/files/download/km/km_{HEX}.png").status_code == 404
+    _plant(aenv, f"ncr/km_{HEX}.png")
+    assert aenv.login("sV").get(f"/api/files/download/km/km_{HEX}.png").status_code == 200
+    assert aenv.login("sV").get(f"/api/files/download/ncr/km_{HEX}.png").status_code == 404
 
 
 def test_a_file_that_has_a_row_is_still_served_by_its_row_not_by_its_name(aenv):

@@ -217,6 +217,10 @@ from core.uploads import upload_root
 UPLOAD_DIR = upload_root()          # backend/uploads unless QUALITAS_UPLOAD_ROOT is set (mandatory and confined to the run directory when isolated)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# Coded refusals (core/refusals.py): same `detail` as before, plus `code` and `params` for the frontend's translated dialog.
+from core.refusals import RefusalHTTPException, refusal_exception_handler
+app.add_exception_handler(RefusalHTTPException, refusal_exception_handler)
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Global Exception: {exc}", exc_info=True)

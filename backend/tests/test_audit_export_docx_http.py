@@ -10,7 +10,8 @@ from docx import Document
 
 import models
 from core.security import get_password_hash
-from test_audit_hardening_http import create, env, insert_raw  # noqa: F401  (env is a fixture)
+from project_membership import TEST_PROJECT_ID, bind
+from test_audit_hardening_http import create, env, insert_raw, login_admin  # noqa: F401  (env is a fixture)
 
 PW = 'Export-Test-1234'  # isolated, test-only
 DOCX_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -40,15 +41,20 @@ def item_rows(response):
     return None
 
 
-def add_user(env, username, codes, vendor_id=None):
+def add_user(env, username, codes, vendor_id=None, projects=(TEST_PROJECT_ID,)):
+    """A test account bound to `projects` (default: the test project the harness's audits live in; () = bind none here)."""
     with env.Session() as db:
         role = models.Role(name=f'role-{username}')
         role.permissions_rel = [db.query(models.Permission).filter_by(code=c).first() or models.Permission(code=c, description=c)
                                 for c in codes]
         db.add(role)
         db.flush()
-        db.add(models.User(username=username, email=f'{username}@example.com', is_active=True, role_id=role.id,
-                           vendor_id=vendor_id, hashed_password=get_password_hash(PW)))
+        user = models.User(username=username, email=f'{username}@example.com', is_active=True, role_id=role.id,
+                           vendor_id=vendor_id, hashed_password=get_password_hash(PW))
+        db.add(user)
+        db.flush()
+        if projects:
+            bind(db, user, *projects)
         db.commit()
 
 
@@ -74,9 +80,10 @@ ITEMS = [
 
 def test_export_contains_the_whole_report(env):
     with env.Session() as db:
-        db.add(models.Project(id='p1', name='Harbour Line', code='HL'))
+        project = db.get(models.Project, TEST_PROJECT_ID)  # the auditor's working project, labelled like a real one
+        project.name, project.code = 'Harbour Line', 'HL'
         db.commit()
-    created = create(env, title='Q4 supplier audit', project_id='p1', project_name='Harbour Line', location='Yard 3',
+    created = create(env, title='Q4 supplier audit', project_id=TEST_PROJECT_ID, project_name='Harbour Line', location='Yard 3',
                      project_director='Director Chen', tech_lead='Tech Lin', auditor='Lead Wang', support_auditors='Support Lee',
                      audit_criteria='Contract + ISO 9001', scope_description='Receiving and storage',
                      selected_templates=['ISO 9001:2015', '供應商評鑑表'], custom_check_items=ITEMS,
@@ -130,9 +137,11 @@ def test_export_of_an_audit_without_items_or_optional_fields(env):
 
 
 def test_legacy_rows_export_without_failing(env):
-    # project name only (no project_id), list fields that are not valid JSON / not lists / hold non-objects
+    # project name only (no project_id), list fields that are not valid JSON / not lists / hold non-objects.
+    # A row without project_id is visible only to a system administrator (REF-PROJECT-SEQ B1), so export as one.
+    login_admin(env)
     for templates, items in [('not json', '{"a": 1}'), ('{"x": 1}', '[1, "two", null]'), (None, None)]:
-        audit_id = insert_raw(env, project_name='Old Project', selected_templates=templates, custom_check_items=items)
+        audit_id = insert_raw(env, project_id=None, project_name='Old Project', selected_templates=templates, custom_check_items=items)
         response = export(env, audit_id)
         assert response.status_code == 200, response.text
         text = docx_text(response)
@@ -209,14 +218,14 @@ def test_project_scoped_user_cannot_export_another_projects_audit(env):
     with env.Session() as db:
         db.add_all([models.Project(id='p1', name='Project One'), models.Project(id='p2', name='Project Two')])
         db.commit()
-    other = create(env, project_id='p2').json()
-    add_user(env, 'p1-viewer', ['audit:view:all'])
+    other = insert_raw(env, project_id='p2')  # an audit of project p2 (the auditor works in the test project only)
+    add_user(env, 'p1-viewer', ['audit:view:all'], projects=())
     with env.Session() as db:
         user = db.query(models.User).filter_by(username='p1-viewer').one()
         db.add(models.UserProject(user_id=user.id, project_id='p1'))
         db.commit()
     login(env, 'p1-viewer')
-    assert export(env, other['id']).status_code == 404
+    assert export(env, other).status_code == 404
 
 
 def test_without_audit_view_or_signed_out_is_refused(env):

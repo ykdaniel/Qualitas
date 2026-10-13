@@ -11,6 +11,7 @@ from typing import List, Optional
 import models
 import schemas
 from core.assignees import validate_new_assignee
+from core.refusals import Refusal
 from repositories.followup_repository import FollowUpRepository
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
 from core.utils import (
@@ -165,9 +166,11 @@ class FollowUpService:
             # let that lock be bypassed entirely by removing the record
             # instead of changing it.
             if db_followup.status != 'Void':
-                raise ValueError(
+                raise Refusal(
+                    'DELETE_NOT_VOID',
                     f"Cannot delete FollowUp '{db_followup.issueNo}' with status "
-                    f"'{db_followup.status}'. Please Void it first, then delete."
+                    f"'{db_followup.status}'. Please Void it first, then delete.",
+                    docType='FollowUp', number=db_followup.issueNo, status=db_followup.status, allowed=['Void'],
                 )
 
             old_val = {c.name: getattr(db_followup, c.name) for c in db_followup.__table__.columns}

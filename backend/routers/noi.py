@@ -1,5 +1,6 @@
 
 from fastapi import APIRouter, Depends, HTTPException
+from core.refusals import refusal_http
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -32,6 +33,21 @@ def read_noi_contractor_contact(
     if contractor is None:
         raise HTTPException(status_code=404, detail="Contractor not found")
     return contractor
+
+@router.get("/next-reference", response_model=dict)
+def read_noi_next_reference(
+    contractor: str,
+    noi_service: NOIService = Depends(get_noi_service),
+    scope: Scope = Depends(get_scope),
+    current_user: schemas.User = Depends(RoleChecker(NOI_CREATE))
+):
+    """The reference number a new NOI for this contractor is expected to get — shown in the create form as "expected";
+    nothing is reserved, the number is fixed on save. A caller limited to projects gets only the masked format
+    (referenceNo null) — see NOIService.preview_reference_no (NOI-DEFECTS-2026-001)."""
+    try:
+        return noi_service.preview_reference_no(contractor, scope=scope)
+    except ScopeForbidden as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
 # 讀取操作 - 無需認證
 @router.get("/", response_model=list[schemas.NOI])
@@ -161,10 +177,23 @@ def delete_noi(
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         # a business refusal (e.g. the NOI is still referenced by ITR / NCR records) is a 400, never a 500
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e)
     if not deleted:
         raise HTTPException(status_code=404, detail="NOI not found")
     return {"ok": True}
+
+@router.get("/{noi_id}/delete-check", response_model=dict)
+def read_noi_delete_check(
+    noi_id: str,
+    noi_service: NOIService = Depends(get_noi_service),
+    scope: Scope = Depends(get_scope),
+    current_user: schemas.User = Depends(RoleChecker(NOI_DELETE))
+):
+    """For the delete prompt: the documents that still cite this NOI (a delete is refused while there are any)."""
+    result = noi_service.delete_check(noi_id, scope=scope)
+    if result is None:
+        raise HTTPException(status_code=404, detail="NOI not found")
+    return result
 
 @router.get("/{noi_id}/related", response_model=schemas.RelatedEntitiesResponse)
 def read_noi_related(

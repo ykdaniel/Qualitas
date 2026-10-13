@@ -20,6 +20,7 @@ from core.perms import ITR_APPROVE, ITR_UPDATE, CHECKLIST_CLOSE, CHECKLIST_UPDAT
 from core.scope import get_scope
 import models
 import schemas
+from project_membership import TEST_PROJECT_ID, bind
 from routers import itr as itr_router
 from routers import checklist as checklist_router
 from repositories.itr_repository import ITRRepository
@@ -53,11 +54,14 @@ def env():
     editor = models.User(id=1, username="editor", email="e@x.com", is_active=True, role_id=editor_role.id)
     approver = models.User(id=2, username="approver", email="a@x.com", is_active=True, role_id=approver_role.id)
     db.add_all([editor, approver])
+    db.flush()
+    bind(db, editor)
+    bind(db, approver)      # both work in the shared test project (REF-PROJECT-SEQ-2026-001 B1)
     db.commit()
 
     itr_svc = ITRService(ITRRepository(db))
     chk_svc = ChecklistService(ChecklistRepository(db))
-    scope = get_scope(user=editor, db=db)  # both users are unscoped-equivalent here (no UserProject rows) — fine, this suite is about permissions, not scope
+    scope = get_scope(user=editor, db=db)  # both users work in the same project — this suite is about permissions, not scope
 
     yield db, itr_svc, chk_svc, editor, approver, scope
     db.close()
@@ -69,7 +73,7 @@ def _make_passing_itr_with_checklist(db, itr_svc, chk_svc, scope):
         user_id=1, username="editor", scope=scope,
     )
     template = models.Checklist(
-        id="tpl-1", recordsNo="CHK-TPL-1", status="Ongoing",
+        id="tpl-1", recordsNo="CHK-TPL-1", status="Ongoing", project_id=TEST_PROJECT_ID,   # in the users' project
         detail_data=json.dumps({"items": [{"item": "Spacing", "criteria": "x", "situation": "", "result": ""}]}),
     )
     db.add(template)

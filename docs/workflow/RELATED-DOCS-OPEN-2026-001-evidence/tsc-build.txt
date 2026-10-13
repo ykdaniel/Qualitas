@@ -1,0 +1,2 @@
+tsc --noEmit exit=0
+vite build exit=0

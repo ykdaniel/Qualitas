@@ -19,6 +19,7 @@ import models
 from core.perms import AUDIT_TEMPLATE_MANAGE
 from core.security import get_password_hash
 from database import Base, get_db
+from project_membership import bind
 
 VIEW_CODES = ['audit:view:all', 'audit:create:all', 'audit:update:all']
 
@@ -38,8 +39,11 @@ def env(tmp_path, monkeypatch):
         db.add_all([auditor, manager])
         db.flush()
         for name, role in (('auditor', auditor), ('manager', manager)):
-            db.add(models.User(username=name, email=f'{name}@example.test', is_active=True, role_id=role.id,
-                               hashed_password=get_password_hash(password)))
+            u = models.User(username=name, email=f'{name}@example.test', is_active=True, role_id=role.id,
+                            hashed_password=get_password_hash(password))
+            db.add(u)
+            db.flush()
+            bind(db, u)   # REF-PROJECT-SEQ B1: both work in one project (unbound = sees nothing, creates nothing)
         db.add(models.Contractor(id='vendor', name='Audit vendor', abbreviation='AV'))
         db.commit()
     app = FastAPI()

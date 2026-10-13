@@ -25,7 +25,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from test_iam_user_security_http import (   # noqa: F401  (env is a fixture, re-exported on purpose)
-    NEW_PW, PW, _add_user, _boom, _same, env,
+    IAM_PROJECT, NEW_PW, PW, _add_user, _boom, _same, env,
 )
 
 NON_ADMIN_ACTORS = ["usermgr", "roleusermgr"]        # plain account manager / account manager WITH role management
@@ -170,7 +170,9 @@ def test_non_admin_cannot_change_an_admin_accounts_data_scope(env):
     assert mgr.put(f"/api/iam/users/{aid}/scope", json={"project_ids": [], "vendor_id": "V-1"}).status_code == 403
     _same(env.state(), before)
     assert mgr.put(f"/api/iam/users/{aid}/scope", json={"project_ids": [], "vendor_id": None}).status_code == 200     # unchanged resend: no modification
-    assert mgr.put(f"/api/iam/users/{env.user_id('ordinary')}/scope", json={"project_ids": [], "vendor_id": None}).status_code == 200
+    # an ordinary account's scope is still the manager's to set (it may not be emptied any more: every non-admin account
+    # works in a project — REF-PROJECT-SEQ-2026-001 B1)
+    assert mgr.put(f"/api/iam/users/{env.user_id('ordinary')}/scope", json={"project_ids": [IAM_PROJECT], "vendor_id": None}).status_code == 200
 
 
 # ── 4. the legitimate Admin reset ────────────────────────────────────────

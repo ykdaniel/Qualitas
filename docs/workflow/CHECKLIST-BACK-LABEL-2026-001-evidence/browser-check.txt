@@ -1,0 +1,98 @@
+PASS A: Record link opens the template with from=itp & returnItp  -> http://127.0.0.1:3374/checklist?from=itp&returnItp=51e009ca8be14638bf0083c163c2849c
+PASS A: footer shows "Back to ITP" with an icon, no Cancel  -> [{"text":"Back to ITP","icon":true}]
+PASS A: Back to ITP reopens the same ITP edit window  -> {"param":"51e009ca8be14638bf0083c163c2849c","modal":true,"sameItp":true}
+PASS B: unsaved edit → leave warning shown, still on the Checklist  -> http://127.0.0.1:3374/checklist?from=itp&returnItp=51e009ca8be14638bf0083c163c2849c
+PASS B: "Stay & Save" keeps the edit on the Checklist
+PASS B: "Leave" goes back to the same ITP  -> {"param":"51e009ca8be14638bf0083c163c2849c","modal":true,"sameItp":true}
+PASS D: instance mode with returnItp shows "Back to ITP"  -> [{"text":"Back to ITP","icon":true}]
+PASS D: instance Back to ITP reopens the ITP  -> {"param":"51e009ca8be14638bf0083c163c2849c","modal":true,"sameItp":true}
+PASS D: read-only historical template with returnItp shows "Back to ITP"  -> [{"text":"Back to ITP","icon":true}]
+PASS E: template library deep link → "Cancel"  -> [{"text":"Cancel","icon":false}]
+PASS E: from=itr → "Cancel"  -> [{"text":"Cancel","icon":false}]
+PASS E: from=itp without returnItp (the /itp/:id page, ITPDetail.tsx) → "Cancel"  -> [{"text":"Cancel","icon":false}]
+PASS E: instance without returnItp → "Cancel"  -> [{"text":"Cancel","icon":false}]
+PASS E: New Template from the library → "Cancel"  -> [{"text":"Cancel","icon":false}]
+PASS C: zh → "返回 ITP"  -> [{"text":"返回 ITP","icon":true}]
+PASS C: 1024 wide — no page overflow, button on one line  -> {"overflow":0,"wrapped":[40]}
+PASS C: zh without returnItp → "取消"  -> [{"text":"取消","icon":false}]
+PASS F template @1440: left = Back to ITP, Print, Export Word  -> ["Back to ITP","Print","Export Word","Updating this template does not affect existing ITR references."]
+PASS F template @1440: right = Save only  -> ["Save Template"]
+PASS F template @1440: all buttons on one line, no page overflow  -> [["Back to ITP",722,40],["Print",722,40],["Export Word",722,40],["Save Template",722,40]]
+PASS F template @1440: Save at the right edge, buttons left  -> {"left":{"x":570,"y":722,"w":142,"h":40,"text":"Export Word"},"right":{"x":1209,"y":722,"w":133,"h":40,"text":"Save Template"}}
+PASS F template @1440: the save note is shown, clear of Save  -> {"note":{"x":724,"y":734,"w":461,"h":16,"text":"Updating this template does not affect existing ITR references."},"save":{"x":1209,"y":722,"w":133,"h":40,"text":"Save Template"}}
+OBSERVED F template @1440: note on the button row, 1 line(s)
+PASS F instance @1440: left = Back to ITP, Print, Export Word  -> ["Back to ITP","Print","Export Word"]
+PASS F instance @1440: right = Save only  -> ["Save"]
+PASS F instance @1440: all buttons on one line, no page overflow  -> [["Back to ITP",887,40],["Print",887,40],["Export Word",887,40],["Save",887,40]]
+PASS F instance @1440: Save at the right edge, buttons left  -> {"left":{"x":570,"y":887,"w":142,"h":40,"text":"Export Word"},"right":{"x":1254,"y":887,"w":88,"h":40,"text":"Save"}}
+PASS F template without returnItp @1440: left = Cancel, Print, Export Word  -> ["Cancel","Print","Export Word","Updating this template does not affect existing ITR references."]
+PASS F template without returnItp @1440: right = Save only  -> ["Save Template"]
+PASS F template without returnItp @1440: all buttons on one line, no page overflow  -> [["Cancel",722,40],["Print",722,40],["Export Word",722,40],["Save Template",722,40]]
+PASS F template without returnItp @1440: Save at the right edge, buttons left  -> {"left":{"x":524,"y":722,"w":142,"h":40,"text":"Export Word"},"right":{"x":1209,"y":722,"w":133,"h":40,"text":"Save Template"}}
+PASS F template @1280: left = Back to ITP, Print, Export Word  -> ["Back to ITP","Print","Export Word","Updating this template does not affect existing ITR references."]
+PASS F template @1280: right = Save only  -> ["Save Template"]
+PASS F template @1280: all buttons on one line, no page overflow  -> [["Back to ITP",742,40],["Print",742,40],["Export Word",742,40],["Save Template",742,40]]
+PASS F template @1280: Save at the right edge, buttons left  -> {"left":{"x":544,"y":742,"w":142,"h":40,"text":"Export Word"},"right":{"x":1075,"y":742,"w":133,"h":40,"text":"Save Template"}}
+PASS F template @1280: the save note is shown, clear of Save  -> {"note":{"x":304,"y":790,"w":747,"h":16,"text":"Updating this template does not affect existing ITR references."},"save":{"x":1075,"y":742,"w":133,"h":40,"text":"Save Template"}}
+OBSERVED F template @1280: note on its own row under the buttons, 1 line(s)
+PASS F instance @1280: left = Back to ITP, Print, Export Word  -> ["Back to ITP","Print","Export Word"]
+PASS F instance @1280: right = Save only  -> ["Save"]
+PASS F instance @1280: all buttons on one line, no page overflow  -> [["Back to ITP",887,40],["Print",887,40],["Export Word",887,40],["Save",887,40]]
+PASS F instance @1280: Save at the right edge, buttons left  -> {"left":{"x":544,"y":887,"w":142,"h":40,"text":"Export Word"},"right":{"x":1120,"y":887,"w":88,"h":40,"text":"Save"}}
+PASS F template without returnItp @1280: left = Cancel, Print, Export Word  -> ["Cancel","Print","Export Word","Updating this template does not affect existing ITR references."]
+PASS F template without returnItp @1280: right = Save only  -> ["Save Template"]
+PASS F template without returnItp @1280: all buttons on one line, no page overflow  -> [["Cancel",742,40],["Print",742,40],["Export Word",742,40],["Save Template",742,40]]
+PASS F template without returnItp @1280: Save at the right edge, buttons left  -> {"left":{"x":498,"y":742,"w":142,"h":40,"text":"Export Word"},"right":{"x":1075,"y":742,"w":133,"h":40,"text":"Save Template"}}
+PASS F template @1260: left = Back to ITP, Print, Export Word  -> ["Back to ITP","Print","Export Word","Updating this template does not affect existing ITR references."]
+PASS F template @1260: right = Save only  -> ["Save Template"]
+PASS F template @1260: all buttons on one line, no page overflow  -> [["Back to ITP",742,40],["Print",742,40],["Export Word",742,40],["Save Template",742,40]]
+PASS F template @1260: Save at the right edge, buttons left  -> {"left":{"x":544,"y":742,"w":142,"h":40,"text":"Export Word"},"right":{"x":1055,"y":742,"w":133,"h":40,"text":"Save Template"}}
+PASS F template @1260: the save note is shown, clear of Save  -> {"note":{"x":304,"y":790,"w":727,"h":16,"text":"Updating this template does not affect existing ITR references."},"save":{"x":1055,"y":742,"w":133,"h":40,"text":"Save Template"}}
+OBSERVED F template @1260: note on its own row under the buttons, 1 line(s)
+PASS F instance @1260: left = Back to ITP, Print, Export Word  -> ["Back to ITP","Print","Export Word"]
+PASS F instance @1260: right = Save only  -> ["Save"]
+PASS F instance @1260: all buttons on one line, no page overflow  -> [["Back to ITP",890,40],["Print",890,40],["Export Word",890,40],["Save",890,40]]
+PASS F instance @1260: Save at the right edge, buttons left  -> {"left":{"x":544,"y":890,"w":142,"h":40,"text":"Export Word"},"right":{"x":1100,"y":890,"w":88,"h":40,"text":"Save"}}
+PASS F template without returnItp @1260: left = Cancel, Print, Export Word  -> ["Cancel","Print","Export Word","Updating this template does not affect existing ITR references."]
+PASS F template without returnItp @1260: right = Save only  -> ["Save Template"]
+PASS F template without returnItp @1260: all buttons on one line, no page overflow  -> [["Cancel",742,40],["Print",742,40],["Export Word",742,40],["Save Template",742,40]]
+PASS F template without returnItp @1260: Save at the right edge, buttons left  -> {"left":{"x":498,"y":742,"w":142,"h":40,"text":"Export Word"},"right":{"x":1055,"y":742,"w":133,"h":40,"text":"Save Template"}}
+PASS F template @1240: left = Back to ITP, Print, Export Word  -> ["Back to ITP","Print","Export Word","Updating this template does not affect existing ITR references."]
+PASS F template @1240: right = Save only  -> ["Save Template"]
+PASS F template @1240: all buttons on one line, no page overflow  -> [["Back to ITP",742,40],["Print",742,40],["Export Word",742,40],["Save Template",742,40]]
+PASS F template @1240: Save at the right edge, buttons left  -> {"left":{"x":544,"y":742,"w":142,"h":40,"text":"Export Word"},"right":{"x":1035,"y":742,"w":133,"h":40,"text":"Save Template"}}
+PASS F template @1240: the save note is shown, clear of Save  -> {"note":{"x":304,"y":790,"w":707,"h":16,"text":"Updating this template does not affect existing ITR references."},"save":{"x":1035,"y":742,"w":133,"h":40,"text":"Save Template"}}
+OBSERVED F template @1240: note on its own row under the buttons, 1 line(s)
+PASS F instance @1240: left = Back to ITP, Print, Export Word  -> ["Back to ITP","Print","Export Word"]
+PASS F instance @1240: right = Save only  -> ["Save"]
+PASS F instance @1240: all buttons on one line, no page overflow  -> [["Back to ITP",890,40],["Print",890,40],["Export Word",890,40],["Save",890,40]]
+PASS F instance @1240: Save at the right edge, buttons left  -> {"left":{"x":544,"y":890,"w":142,"h":40,"text":"Export Word"},"right":{"x":1080,"y":890,"w":88,"h":40,"text":"Save"}}
+PASS F template without returnItp @1240: left = Cancel, Print, Export Word  -> ["Cancel","Print","Export Word","Updating this template does not affect existing ITR references."]
+PASS F template without returnItp @1240: right = Save only  -> ["Save Template"]
+PASS F template without returnItp @1240: all buttons on one line, no page overflow  -> [["Cancel",742,40],["Print",742,40],["Export Word",742,40],["Save Template",742,40]]
+PASS F template without returnItp @1240: Save at the right edge, buttons left  -> {"left":{"x":498,"y":742,"w":142,"h":40,"text":"Export Word"},"right":{"x":1035,"y":742,"w":133,"h":40,"text":"Save Template"}}
+PASS F template @1024: left = Back to ITP, Print, Export Word  -> ["Back to ITP","Print","Export Word","Updating this template does not affect existing ITR references."]
+PASS F template @1024: right = Save only  -> ["Save Template"]
+PASS F template @1024: all buttons on one line, no page overflow  -> [["Back to ITP",802,40],["Print",802,40],["Export Word",802,40],["Save Template",802,40]]
+PASS F template @1024: Save at the right edge, buttons left  -> {"left":{"x":544,"y":802,"w":142,"h":40,"text":"Export Word"},"right":{"x":819,"y":802,"w":133,"h":40,"text":"Save Template"}}
+PASS F template @1024: the save note is shown, clear of Save  -> {"note":{"x":304,"y":850,"w":491,"h":16,"text":"Updating this template does not affect existing ITR references."},"save":{"x":819,"y":802,"w":133,"h":40,"text":"Save Template"}}
+OBSERVED F template @1024: note on its own row under the buttons, 1 line(s)
+PASS F instance @1024: left = Back to ITP, Print, Export Word  -> ["Back to ITP","Print","Export Word"]
+PASS F instance @1024: right = Save only  -> ["Save"]
+PASS F instance @1024: all buttons on one line, no page overflow  -> [["Back to ITP",1236,40],["Print",1236,40],["Export Word",1236,40],["Save",1236,40]]
+PASS F instance @1024: Save at the right edge, buttons left  -> {"left":{"x":544,"y":1236,"w":142,"h":40,"text":"Export Word"},"right":{"x":864,"y":1236,"w":88,"h":40,"text":"Save"}}
+PASS F template without returnItp @1024: left = Cancel, Print, Export Word  -> ["Cancel","Print","Export Word","Updating this template does not affect existing ITR references."]
+PASS F template without returnItp @1024: right = Save only  -> ["Save Template"]
+PASS F template without returnItp @1024: all buttons on one line, no page overflow  -> [["Cancel",802,40],["Print",802,40],["Export Word",802,40],["Save Template",802,40]]
+PASS F template without returnItp @1024: Save at the right edge, buttons left  -> {"left":{"x":498,"y":802,"w":142,"h":40,"text":"Export Word"},"right":{"x":819,"y":802,"w":133,"h":40,"text":"Save Template"}}
+PASS G template: file name is the Form ID  -> QTS-CTL1-HL-CHK-000001.docx
+OBSERVED G template: button while exporting  -> disabled
+PASS G template: the .docx opens and has the printed sections  -> []
+PASS G instance: file name is the Form ID  -> QTS-CTL1-HL-CHK-000002.docx
+OBSERVED G instance: button while exporting  -> disabled
+PASS G instance: the .docx opens and has the printed sections  -> []
+PASS G unsaved edit: "save first" warning, no file  -> {"warned":true,"downloaded":false}
+PASS G new template: "save first" warning
+PASS G view-only: left = Back to ITP, Print, Export Word; no Save, no note  -> {"left":["Back to ITP","Print","Export Word"],"right":[]}
+PASS G view-only: Word export downloads
+DONE all PASS

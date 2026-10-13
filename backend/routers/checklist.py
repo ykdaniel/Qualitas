@@ -1,5 +1,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
+from core.refusals import refusal_http
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 import schemas
@@ -83,6 +85,19 @@ def read_checklist(
         raise HTTPException(status_code=404, detail="Checklist not found")
     return db_chk
 
+@router.get("/{checklist_id}/export-docx", response_class=StreamingResponse)
+def export_checklist_docx(
+    checklist_id: str,
+    service: ChecklistService = Depends(get_checklist_service),
+    scope: Scope = Depends(get_scope),
+    _: schemas.User = Depends(RoleChecker(CHECKLIST_VIEW))
+):
+    """Word copy of the printed Checklist (CHECKLIST-BACK-LABEL-2026-001 R2); same permission and scope as reading it."""
+    try:
+        return service.export_docx(checklist_id=checklist_id, scope=scope)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
 @router.put("/{chk_id}/", response_model=schemas.Checklist)
 def update_checklist(
     chk_id: str,
@@ -117,7 +132,7 @@ def delete_checklist(
     except ScopeForbidden as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e)
     if not deleted:
         raise HTTPException(status_code=404, detail="Checklist not found")
     return {"ok": True}

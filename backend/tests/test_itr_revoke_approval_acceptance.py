@@ -30,6 +30,7 @@ from sqlalchemy.pool import StaticPool
 import models
 from core import perms
 from core.security import get_password_hash
+from project_membership import TEST_PROJECT_ID, bind
 
 FULLSTACK = os.environ.get("ACCEPT_FULLSTACK") == "1"
 PW = "Accept-Test-1234"
@@ -41,23 +42,34 @@ class Env:
         self.app = app
         self.Session = session_factory
         self.clients = {}
+        # REF-PROJECT-SEQ-2026-001 B1: an account bound to several projects works in ONE per session, chosen after
+        # sign-in. A suite names that project per account here (or per call with login(..., project=...)).
+        self.default_projects = {}
 
-    def login(self, username):
+    def login(self, username, project=None):
+        project = project or self.default_projects.get(username)
+        key = (username, project)
         # The real app rate-limits /auth/login per IP (429). In full-stack
         # mode reuse one real session per account across tests instead of
         # re-logging in every test — still a genuine login, just done once.
-        if FULLSTACK and username in _LOGIN_CACHE:
-            self.clients[username] = _LOGIN_CACHE[username]
-            return _LOGIN_CACHE[username]
+        if FULLSTACK and key in _LOGIN_CACHE:
+            self.clients[username] = _LOGIN_CACHE[key]
+            return _LOGIN_CACHE[key]
         client = TestClient(self.app)
         r = client.post("/api/auth/login", data={"username": username, "password": PW})
         assert r.status_code == 200, r.text
         csrf = client.cookies.get("csrf_token")
         if csrf:
             client.headers["X-CSRF-Token"] = csrf
+        if project:                                       # the project this session works in (POST /auth/select-project)
+            r = client.post("/api/auth/select-project", json={"project_id": project})
+            assert r.status_code == 200, r.text
+            csrf = client.cookies.get("csrf_token")
+            if csrf:
+                client.headers["X-CSRF-Token"] = csrf
         self.clients[username] = client
         if FULLSTACK:
-            _LOGIN_CACHE[username] = client
+            _LOGIN_CACHE[key] = client
         return client
 
     def anonymous(self):
@@ -94,10 +106,15 @@ def _seed(Session):
         db.add(role)
         db.flush()
         uname = name.replace("Accept", "acc_").lower()
-        db.add(models.User(
+        user = models.User(
             username=uname, email=f"{uname}@example.com", is_active=True,
             hashed_password=get_password_hash(PW), role_id=role.id,
-        ))
+        )
+        db.add(user)
+        db.flush()
+        # REF-PROJECT-SEQ-2026-001 B1: non-admin accounts work in one project; these internal accounts work in the
+        # shared test project, and every ITR this harness makes lives there (_mk_itr).
+        bind(db, user, TEST_PROJECT_ID)
     db.add(models.Contractor(id="ACC-V1", name="Accept Co", abbreviation="ACC"))
     db.commit()
     db.close()
@@ -151,12 +168,13 @@ def env():
 ITEM = {"item": "Spacing", "criteria": "<=200mm", "situation": "", "result": ""}
 
 
-def _mk_itr(env, status="In Progress"):
+def _mk_itr(env, status="In Progress", project_id=TEST_PROJECT_ID):
     db = env.Session()
     import uuid
     itr = models.ITR(
         id=uuid.uuid4().hex, vendor_id="ACC-V1", documentNumber=f"ITR-ACC-{uuid.uuid4().hex[:6]}",
         description="accept", rev="Rev1.0", submit="2026-09-19", status=status, raiseDate="2026-09-19",
+        project_id=project_id,
     )
     db.add(itr)
     db.commit()

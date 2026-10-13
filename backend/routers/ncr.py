@@ -1,5 +1,6 @@
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from core.refusals import refusal_http
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -159,10 +160,14 @@ def delete_ncr(
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(NCR_DELETE))
 ):
-    deleted = ncr_service.delete_ncr(
-        ncr_id=ncr_id, user_id=current_user.id, username=current_user.username,
-        scope=scope,
-    )
+    try:
+        deleted = ncr_service.delete_ncr(
+            ncr_id=ncr_id, user_id=current_user.id, username=current_user.username,
+            scope=scope,
+        )
+    except ValueError as e:
+        # a business refusal (not Void yet / still referenced by ITR records) is a 400, never a 500
+        raise refusal_http(e)
     if not deleted:
         raise HTTPException(status_code=404, detail="NCR not found")
     return {"ok": True}

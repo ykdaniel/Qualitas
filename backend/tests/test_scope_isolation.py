@@ -63,11 +63,14 @@ def test_admin_is_unscoped(db_session):
     assert compute_scope(user, db_session).unrestricted is True
 
 
-def test_user_without_config_is_unscoped(db_session):
+def test_user_without_config_is_not_a_project_member_and_sees_nothing(db_session):
+    """Changed by REF-PROJECT-SEQ-2026-001 B1 (business decision D6, a security fix): a non-admin account with no project
+    and no contractor used to be unscoped and see everything; it is now a "non project member" with an EMPTY scope."""
     user = models.User(username="legacy", email="l@x.com")
     db_session.add(user)
     db_session.commit()
-    assert compute_scope(user, db_session).unrestricted is True
+    scope = compute_scope(user, db_session)
+    assert scope.unrestricted is False and scope.project_ids == frozenset() and scope.vendor_id is None
 
 
 def test_project_scoped_user(seeded):

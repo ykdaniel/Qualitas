@@ -115,13 +115,8 @@ export const useNOIStore = create<NOIState>((set, get) => ({
     },
 
     deleteNOI: async (id: string) => {
-        try {
-            await api.delete(`/noi/${id}/`);
-            set((state) => ({ noiList: state.noiList.filter(n => n.id !== id) }));
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to delete NOI');
-            set({ error: msg });
-            throw error;
-        }
+        // A refused or failed delete goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-001); the page's error banner is for list loads only.
+        await api.delete(`/noi/${id}/`);
+        set((state) => ({ noiList: state.noiList.filter(n => n.id !== id) }));
     }
 }));

@@ -7,6 +7,7 @@ database access.
 """
 import models
 from core.security import get_password_hash
+from project_membership import TEST_PROJECT_ID, bind
 from test_audit_hardening_http import create, env  # noqa: F401  (env is a fixture)
 
 PW = 'Scope-Test-1234'  # isolated, test-only
@@ -19,8 +20,11 @@ def add_user(env, username, codes, vendor_id=None):
                                 for c in codes]
         db.add(role)
         db.flush()
-        db.add(models.User(username=username, email=f'{username}@example.com', is_active=True, role_id=role.id,
-                           vendor_id=vendor_id, hashed_password=get_password_hash(PW)))
+        user = models.User(username=username, email=f'{username}@example.com', is_active=True, role_id=role.id,
+                           vendor_id=vendor_id, hashed_password=get_password_hash(PW))
+        db.add(user)
+        db.flush()
+        bind(db, user, TEST_PROJECT_ID)  # a contractor account works in a project too (D8): the one the audits live in
         db.commit()
 
 

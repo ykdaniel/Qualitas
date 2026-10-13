@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from core.refusals import refusal_http
 from sqlalchemy.orm import Session
 
 import schemas
@@ -87,7 +88,11 @@ def delete_project(
     service: ProjectService = Depends(get_project_service),
     current_user: schemas.User = Depends(RoleChecker(CONTRACTOR_MANAGE)),
 ):
-    deleted = service.delete_project(project_id, user_id=current_user.id, username=current_user.username)
+    try:
+        deleted = service.delete_project(project_id, user_id=current_user.id, username=current_user.username)
+    except ValueError as e:
+        # still referenced by records: a business refusal (400), never the 500 it used to fall through to (REFUSAL-DIALOG-2026-001)
+        raise refusal_http(e)
     if not deleted:
         raise HTTPException(status_code=404, detail="Project not found")
     return {"ok": True}

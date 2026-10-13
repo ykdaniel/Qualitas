@@ -153,15 +153,10 @@ export const useContractorsStore = create<ContractorsState>((set, get) => ({
     },
 
     deleteContractor: async (id) => {
-        try {
-            await apiDeleteContractor(id);
-            set((state) => ({ contractors: state.contractors.filter(c => c.id !== id) }));
-            void get().fetchOptions();
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to delete contractor');
-            set({ error: msg });
-            throw error;
-        }
+        // A refused or failed delete goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-001).
+        await apiDeleteContractor(id);
+        set((state) => ({ contractors: state.contractors.filter(c => c.id !== id) }));
+        void get().fetchOptions();
     },
 
     getActiveContractors: () => get().options.filter(c => c.status === 'active'),

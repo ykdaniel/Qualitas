@@ -5,10 +5,11 @@ from sqlalchemy.orm import Session
 import schemas
 from core.dependencies import RoleChecker, get_obs_service
 from core.perms import OBS_CREATE, OBS_DELETE, OBS_UPDATE, OBS_VIEW
+from core.refusals import refusal_http
 from core.scope import Scope, ScopeForbidden, get_scope
 from core.strict_dates import DateValidationError
 from database import get_db
-from services.obs_service import OBSService
+from services.obs_service import OBSAttachmentsLocked, OBSService
 
 router = APIRouter(
     prefix="/obs",
@@ -82,6 +83,9 @@ def update_obs(
         raise HTTPException(status_code=403, detail=str(e))
     except DateValidationError as e:
         raise HTTPException(status_code=422, detail=e.http_detail())
+    except OBSAttachmentsLocked as e:
+        # Closed / Void: photos, attachments and their pairing order are locked — 409 ATTACHMENT_LOCKED, like /api/files.
+        raise refusal_http(e, 409)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if db_obs is None:

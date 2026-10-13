@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { toast } from 'sonner';
 import { Clock, CheckCircle2, BarChart3, Zap, Search, Ban } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useOBSStore } from '../../store/obsStore';
+import { showRefusal } from '../../store/refusalStore';
 import type { OBSItem as ContextOBSItem } from '../../store/obsStore';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import ConfirmModal from '../Shared/ConfirmModal';
@@ -151,6 +151,7 @@ const OBS: React.FC = () => {
       defectPhotos: details.defectPhotos,
       improvementPhotos: details.improvementPhotos,
       attachments: details.attachments,
+      photoOrder: details.photoOrder ?? undefined,     // photo pairing order; unchanged = not sent as a change (backend compares data)
       dueDate: details.dueDate || undefined,
       qualityEngineerApproval: details.qualityEngineerApproval || undefined,
       qualityEngineerApprovalBy: details.qualityEngineerApprovalBy || undefined,
@@ -195,7 +196,7 @@ const OBS: React.FC = () => {
         await deleteOBS(deleteModal.id);
       } catch (err) {
         console.error('Failed to delete OBS:', err);
-        toast.error((err as Error)?.message || t('common.deleteFailed'));
+        showRefusal(err, 'delete');
       }
       setDeleteModal({ isOpen: false, id: null, message: '' });
     }

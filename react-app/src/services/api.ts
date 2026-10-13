@@ -210,6 +210,31 @@ export const getNoiContractorContact = async (contractorId: string): Promise<Con
   return response.data;
 };
 
+export interface NoiNextReference {
+  /** The expected number, or null when the caller may only see the format (a user limited to projects). */
+  referenceNo: string | null;
+  /** The number's format with the sequence masked, e.g. QTS-ABC-NOI-###### */
+  pattern: string;
+}
+
+/** The reference number a new NOI for this contractor is expected to get (nothing is reserved; fixed on save). */
+export const getNoiNextReference = async (contractor: string): Promise<NoiNextReference> => {
+  const response = await api.get<NoiNextReference>('/noi/next-reference', { params: { contractor } });
+  return response.data;
+};
+
+export interface NoiDeleteCheck {
+  referenceNo: string;
+  canDelete: boolean;
+  references: { type: string; count: number }[];
+}
+
+/** The documents that still cite this NOI — a delete is refused while there are any. */
+export const getNoiDeleteCheck = async (noiId: string): Promise<NoiDeleteCheck> => {
+  const response = await api.get<NoiDeleteCheck>(`/noi/${encodeURIComponent(noiId)}/delete-check`);
+  return response.data;
+};
+
 export const createContractor = async (
   data: CreateContractorPayload
 ): Promise<Contractor> => {
@@ -332,7 +357,20 @@ export interface User {
    *  bound vendor when contractor-scoped, else `company_name`), or the full name / typed text
    *  when there is no abbreviation. Read-only. */
   display_company?: string | null;
+  /** Where the account works (GET /user/profile only; REF-PROJECT-SEQ-2026-001 B1). */
+  is_admin?: boolean;
+  /** The projects the account is assigned to (non-admins). */
+  projects?: { id: string; name: string; code?: string | null }[];
+  /** The ONE project this session works in (non-admins; switching needs a new sign-in). */
+  current_project_id?: string | null;
+  /** "admin" | "working" | "choose" (pick a project first) | "relogin" | "non_member" (sees nothing). */
+  project_status?: 'admin' | 'working' | 'choose' | 'relogin' | 'non_member';
 }
+
+/** A non-admin assigned to several projects picks the one this session works in (once; new tokens are set as cookies). */
+export const selectProject = async (projectId: string): Promise<void> => {
+  await api.post('/auth/select-project', { project_id: projectId });
+};
 
 export interface Role {
   id: number;
@@ -384,9 +422,11 @@ export interface CreateUserPayload {
   is_active: boolean;
   company_name?: string | null;
   reason?: string | null;
+  /** Projects the new account works in, saved with the account (required for every non-admin account). */
+  project_ids?: string[];
 }
 
-export type UpdateUserPayload = Partial<CreateUserPayload>
+export type UpdateUserPayload = Partial<Omit<CreateUserPayload, 'project_ids'>>
 
 export const createUser = async (data: CreateUserPayload): Promise<User> => {
   const response = await api.post<User>('/iam/users/', data);
@@ -657,6 +697,17 @@ export const exportAuditDocx = async (auditId: string, filename: string, kind: '
 // exportNoiDocx's blob-download pattern.
 export const exportMeetingMinutesDocx = async (meetingId: string, filename: string): Promise<void> => {
   const response = await api.get(`/meeting-minutes/${meetingId}/export-docx`, { responseType: 'blob' });
+  const url = URL.createObjectURL(new Blob([response.data]));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filename}.docx`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+// Word copy of the printed Checklist (CHECKLIST-BACK-LABEL-2026-001 R2) — mirrors exportNoiDocx's blob-download pattern.
+export const exportChecklistDocx = async (checklistId: string, filename: string): Promise<void> => {
+  const response = await api.get(`/checklist/${checklistId}/export-docx`, { responseType: 'blob' });
   const url = URL.createObjectURL(new Blob([response.data]));
   const a = document.createElement('a');
   a.href = url;

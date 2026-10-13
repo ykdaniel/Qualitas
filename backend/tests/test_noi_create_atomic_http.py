@@ -70,6 +70,9 @@ def _seed_noi_world(S):
             return r
         full = role("NoiUser", [perms.NOI_VIEW, perms.NOI_CREATE, perms.NOI_UPDATE, perms.ITP_VIEW])
         view = role("NoiViewOnly", [perms.NOI_VIEW])
+        # REF-PROJECT-SEQ-2026-001 B1: only a role NAMED admin is unscoped; same permissions as NoiUser, for the
+        # assertions about what an unrestricted caller sees (the expected reference number with its count).
+        admin = role("admin", [perms.NOI_VIEW, perms.NOI_CREATE, perms.NOI_UPDATE, perms.ITP_VIEW])
         db.add(models.Contractor(id="ACC-V1", name="Accept Co", abbreviation="ACC"))
         db.add(models.Contractor(id="ACC-V2", name="Beta Co", abbreviation="BET"))
         for pid in ("P-A", "P-B"):
@@ -83,10 +86,13 @@ def _seed_noi_world(S):
             db.flush()
             for p in projects:
                 db.add(models.UserProject(user_id=u.id, project_id=p))
-        user("noi_a", full)
-        user("noi_b", full)
+        # internal staff work in ONE project since REF-PROJECT-SEQ-2026-001 B1 (unbound = sees nothing): P-A, the
+        # project of the ITP the NOIs are raised against
+        user("noi_a", full, projects=["P-A"])
+        user("noi_b", full, projects=["P-A"])
         user("noi_scoped", full, "ACC-V1", ["P-A"])
-        user("noi_view", view)
+        user("noi_view", view, projects=["P-A"])
+        user("noi_admin", admin)
         db.add(models.ITP(id="itp-1", referenceNo="QTS-ACC-ITP-000001", vendor_id="ACC-V1", project_id="P-A",
                           description="itp", rev="Rev1.0", submit="2026-09-20", status="Approved"))
         db.commit()

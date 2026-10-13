@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException, Request, status
@@ -112,7 +113,9 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     expire = now + (expires_delta or timedelta(minutes=15))
     # iat (issued-at) lets us bulk-revoke a user's sessions by setting
     # User.tokens_valid_after — any token issued before that cutoff is rejected.
-    to_encode.update({"exp": expire, "iat": now, "type": "access"})
+    # jti makes every token unique: two sign-ins within the same second would otherwise get byte-identical tokens, and
+    # revoking one (logout, choosing a project) would revoke the other (REF-PROJECT-SEQ-2026-001 B1).
+    to_encode.update({"exp": expire, "iat": now, "type": "access", "jti": uuid.uuid4().hex})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
@@ -120,7 +123,7 @@ def create_refresh_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
     now = datetime.now(timezone.utc)
     expire = now + (expires_delta or timedelta(days=7))
-    to_encode.update({"exp": expire, "iat": now, "type": "refresh"})
+    to_encode.update({"exp": expire, "iat": now, "type": "refresh", "jti": uuid.uuid4().hex})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
@@ -155,6 +158,7 @@ def authenticate_access_token(token: str, db: Session):
         if username is None:
             raise credentials_exception
         token_data = schemas.TokenData(username=username)
+        token_project_id = payload.get("project_id")
     except JWTError:
         raise credentials_exception
 
@@ -190,6 +194,9 @@ def authenticate_access_token(token: str, db: Session):
                 detail="Session revoked",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+    # The project chosen at sign-in (REF-PROJECT-SEQ-2026-001 B1): a plain attribute on this request's User object, read
+    # by core.scope.working_project_id — never a column, never trusted beyond "is the user still bound to it".
+    user.token_project_id = token_project_id
     return user
 
 

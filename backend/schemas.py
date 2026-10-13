@@ -769,6 +769,40 @@ class PQPHistoryItem(BaseModel):
 
 
 # OBS
+OBS_PHOTO_ORDER_CATEGORIES = ("defectPhoto", "improvementPhoto")
+OBS_PHOTO_ORDER_MAX_KEYS = 500
+OBS_PHOTO_ORDER_MAX_KEY_LEN = 120
+
+
+def parse_obs_photo_order(v, strict: bool):
+    """OBS.photoOrder (OBS-PRINT-PHOTOS-2026-001): {"defectPhoto": [key, ...], "improvementPhoto": [key, ...]}.
+    Stored as JSON text. Reading (strict=False) never fails on bad stored data — it reads as None (default order).
+    Writing (strict=True) refuses anything but that shape: known categories only, lists of short strings."""
+    if v is None:
+        return None
+    if isinstance(v, str):
+        try:
+            v = json.loads(v)
+        except Exception:
+            if strict:
+                raise ValueError("photoOrder must be a JSON object")
+            return None
+    if not isinstance(v, dict):
+        if strict:
+            raise ValueError("photoOrder must be an object")
+        return None
+    out = {}
+    for category, keys in v.items():
+        ok = (category in OBS_PHOTO_ORDER_CATEGORIES and isinstance(keys, list) and len(keys) <= OBS_PHOTO_ORDER_MAX_KEYS
+              and all(isinstance(k, str) and 0 < len(k) <= OBS_PHOTO_ORDER_MAX_KEY_LEN for k in keys))
+        if not ok:
+            if strict:
+                raise ValueError(f"photoOrder.{category}: expected a list of up to {OBS_PHOTO_ORDER_MAX_KEYS} photo keys")
+            return None
+        out[category] = keys
+    return out
+
+
 class OBSBase(BaseModel):
     project_id: str | None = None
     vendor: str | None = None
@@ -793,6 +827,7 @@ class OBSBase(BaseModel):
     impactToOM: str | None = None
     defectPhotos: Any | None = None
     improvementPhotos: Any | None = None
+    photoOrder: dict[str, list[str]] | None = None
     attachments: list[str] | None = None
     dueDate: str | None = None
     noiNumber: str | None = None
@@ -819,6 +854,11 @@ class OBSBase(BaseModel):
                 return []
         return v
 
+    @field_validator('photoOrder', mode='before')
+    @classmethod
+    def parse_photo_order(cls, v):
+        return parse_obs_photo_order(v, strict=False)          # reading stored data never fails
+
     @model_validator(mode='after')
     def check_date_ranges(self):
         # Disabled strict ValueError to allow reading legacy dirty data
@@ -831,6 +871,11 @@ class OBSCreate(OBSBase):
     @classmethod
     def check_strict_dates(cls, v):
         return strict_dates.strict_date_input(v)
+
+    @field_validator('photoOrder', mode='before')
+    @classmethod
+    def parse_photo_order(cls, v):
+        return parse_obs_photo_order(v, strict=True)
 
 class OBSUpdate(BaseModel):
     project_id: str | None = None
@@ -856,6 +901,7 @@ class OBSUpdate(BaseModel):
     impactToOM: str | None = None
     defectPhotos: Any | None = None
     improvementPhotos: Any | None = None
+    photoOrder: dict[str, list[str]] | None = None
     attachments: list[str] | None = None
     last_reminded_at: str | None = None
     dueDate: str | None = None
@@ -878,6 +924,20 @@ class OBSUpdate(BaseModel):
                 return json.loads(v)
             except Exception:
                 return []
+        return v
+
+    @field_validator('photoOrder', mode='before')
+    @classmethod
+    def parse_photo_order(cls, v):
+        return parse_obs_photo_order(v, strict=True)
+
+    @field_validator('status', mode='before')
+    @classmethod
+    def blank_status_is_no_change(cls, v):
+        # A blank status ("" / whitespace) means "status not changed" (None): it used to skip the transition check and
+        # count as a reopen, letting a Closed OBS change its locked fields and storing an empty status (OBS-PRINT-PHOTOS-2026-001).
+        if isinstance(v, str) and not v.strip():
+            return None
         return v
 
 class OBS(OBSBase):
@@ -1368,6 +1428,9 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str
     reason: str | None = None
+    # The projects the account works in, saved with the account itself. Required for every non-admin account
+    # (REF-PROJECT-SEQ-2026-001 B1, enforced in UserService.create_user).
+    project_ids: list[str] | None = None
 
 class UserUpdate(BaseModel):
     username: str | None = None
@@ -1390,6 +1453,30 @@ class User(UserBase):
     display_company: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ProjectBrief(BaseModel):
+    id: str
+    name: str
+    code: str | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserProfile(User):
+    """GET /user/profile — the account plus where it works (REF-PROJECT-SEQ-2026-001 B1).
+
+    project_status: "admin" (project switcher, may pick "All projects"), "working" (current_project_id is the ONE
+    project this session works in; switching needs a new sign-in), "choose" (bound to several projects, none chosen
+    yet — POST /auth/select-project), "relogin" (the project this session was signed in to is no longer assigned to the
+    user — sign in again), "non_member" (bound to no project: sees nothing)."""
+    is_admin: bool = False
+    projects: list[ProjectBrief] = []
+    current_project_id: str | None = None
+    project_status: str = "non_member"
+
+
+class SelectProjectRequest(BaseModel):
+    project_id: str
 
 
 class UserScope(BaseModel):

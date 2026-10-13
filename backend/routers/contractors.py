@@ -1,5 +1,6 @@
 
 from fastapi import APIRouter, Depends, HTTPException
+from core.refusals import refusal_http
 
 import schemas
 from core.dependencies import RoleChecker, get_contractor_service
@@ -135,7 +136,7 @@ def delete_contractor(
     try:
         deleted = service.delete_contractor(contractor_id, user_id=current_user.id, username=current_user.username)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e)
     if not deleted:
         raise HTTPException(status_code=404, detail="Contractor not found")
     return {"ok": True}

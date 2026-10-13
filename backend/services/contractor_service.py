@@ -16,6 +16,7 @@ from repositories.contractor_repository import ContractorRepository
 from core.utils import log_audit
 from core import error_messages
 from core import validators
+from core.refusals import Refusal
 
 logger = logging.getLogger(__name__)
 
@@ -183,8 +184,10 @@ class ContractorService:
             people = self.repo.db.query(models.ContractorPersonnel).filter(
                 models.ContractorPersonnel.contractor_id == contractor_id).count()
             if people:
-                raise ValueError(f"Contractor '{db_contractor.name}' has {people} people on its personnel list. "
-                                 "Set it inactive instead of deleting it.")
+                raise Refusal('CONTRACTOR_DELETE_HAS_PERSONNEL',
+                              f"Contractor '{db_contractor.name}' has {people} people on its personnel list. "
+                              "Set it inactive instead of deleting it.",
+                              name=db_contractor.name, count=people)
 
             # Capture old values for audit
             old_val = {c.name: getattr(db_contractor, c.name) for c in db_contractor.__table__.columns}

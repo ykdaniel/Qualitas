@@ -4,6 +4,7 @@ import json
 import pytest
 from sqlalchemy import event
 import models
+from project_membership import TEST_PROJECT_ID
 from tests.test_reviewed_audit_paths_http import env, BODIES, MODELS, TYPES, snapshot
 
 CASES = [(m, op) for m in ('pqp', 'obs', 'osd', 'fat') for op in ('update', 'delete')]
@@ -20,7 +21,7 @@ def prepared(env):
             data = dict(BODIES[m])
             data.pop('vendor', None)
             data.pop('supplier', None)
-            db.add(MODELS[m](id=m, vendor_id='vendor', **data))
+            db.add(MODELS[m](id=m, vendor_id='vendor', project_id=TEST_PROJECT_ID, **data))  # the writer's project
         db.add(models.Contractor(id='unused', name='Unused', abbreviation='UN'))
         db.add(models.PQPHistory(id='old-history', pqp_id='pqp', version='Rev0.0', version_no=1,
                                  title='Older', status='Not Submit', created_at='2026-08-01'))

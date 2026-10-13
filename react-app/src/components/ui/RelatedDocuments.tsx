@@ -26,8 +26,9 @@ export interface RelatedDocumentsProps {
     entityType: RelatedEntityType;
     entityId: string | null | undefined;
     /**
-     * Override click-through behaviour. Default: navigate to the matching
-     * module page (the host modal should close itself on unmount).
+     * Override click-through behaviour. Default: navigate to
+     * `<module>?openId=<id>`, which opens that record's window on the target
+     * page (the host modal closes itself on unmount).
      */
     onOpen?: (entityType: RelatedEntityType, entityId: string) => void;
     /** Max BFS depth — defaults to 2 (see PR1 plan, Q1). */
@@ -106,7 +107,10 @@ export const RelatedDocuments: React.FC<RelatedDocumentsProps> = ({
                 onOpen(target.entityType, target.id);
                 return;
             }
-            navigate(ENTITY_ROUTE[target.entityType]);
+            // Open that record, not just its module list: every target page (ITP / NOI / ITR / NCR)
+            // reads ?openId=<id> and opens the record's window, closing back to where the user was.
+            const params = new URLSearchParams({ openId: target.id });
+            navigate(`${ENTITY_ROUTE[target.entityType]}?${params.toString()}`);
         },
         [onOpen, navigate],
     );

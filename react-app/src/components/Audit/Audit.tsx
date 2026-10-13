@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useAuditStore, AuditItem } from '../../store/auditStore';
+import { showRefusal } from '../../store/refusalStore';
 import { useProjectStore } from '../../store/projectStore';
 import { useContractorsStore } from '../../store/contractorsStore';
 import ConfirmModal from '../Shared/ConfirmModal';
@@ -238,8 +239,10 @@ const Audit: React.FC = () => {
         if (!deleteModal.id) return;
         try {
             await deleteAudit(deleteModal.id);
-        } catch {
-            // auditStore has already put the (friendly) reason in this page's error banner
+        } catch (err) {
+            // e.g. not Void yet: shown in the refusal dialog (the page banner is for list loads only)
+            console.error('Failed to delete audit:', err);
+            showRefusal(err, 'delete');
         } finally {
             setDeleteModal({ isOpen: false, id: null, message: '' });
         }

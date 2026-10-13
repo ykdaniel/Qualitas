@@ -101,6 +101,19 @@ def test_update_closed_obs_rejects_evidence_change(obs_service, mock_repo):
     with pytest.raises(ValueError) as excinfo:
         obs_service.update_obs("obs-123", obs_update)
 
+    # photo fields: the Closed / Void record lock (409 ATTACHMENT_LOCKED, OBS-PRINT-PHOTOS-2026-001)
+    assert "Cannot change attachments of a Closed OBS" in str(excinfo.value)
+    assert getattr(excinfo.value, "code", None) == "ATTACHMENT_LOCKED"
+    mock_repo.update.assert_not_called()
+
+def test_update_closed_obs_still_rejects_product_disposition_change(obs_service, mock_repo):
+    """productDisposition keeps its own Closed-only rule (400, unchanged)."""
+    mock_db_obs = models.OBS(id="obs-123", status="Closed", documentNumber="OBS-001", productDisposition="Repair")
+    mock_repo.get_by_id.return_value = mock_db_obs
+
+    with pytest.raises(ValueError) as excinfo:
+        obs_service.update_obs("obs-123", schemas.OBSUpdate(productDisposition="Use as is"))
+
     assert "Closed observation" in str(excinfo.value)
     mock_repo.update.assert_not_called()
 

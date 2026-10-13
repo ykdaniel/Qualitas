@@ -117,13 +117,8 @@ export const useOSDStore = create<OSDState>((set, get) => ({
     },
 
     deleteOSD: async (id: string) => {
-        try {
-            await api.delete(`/osd/${id}`);
-            set((state) => ({ osdList: state.osdList.filter(o => o.id !== id) }));
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to delete OSD');
-            set({ error: msg });
-            throw error;
-        }
+        // A refused or failed delete goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-001); the page's error banner is for list loads only.
+        await api.delete(`/osd/${id}`);
+        set((state) => ({ osdList: state.osdList.filter(o => o.id !== id) }));
     }
 }));

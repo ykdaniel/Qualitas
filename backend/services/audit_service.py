@@ -14,6 +14,7 @@ import models
 import schemas
 from repositories.audit_repository import AuditRepository
 from core import strict_dates
+from core.refusals import Refusal
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
 from core.utils import begin_write_transaction, generate_reference_no, WorkflowEngine
 from sqlalchemy.exc import IntegrityError
@@ -371,9 +372,11 @@ class AuditService:
         # outright would let that unconditional edit-lock be bypassed
         # entirely by just removing the record instead of changing it.
         if db_audit.status != 'Void':
-            raise ValueError(
+            raise Refusal(
+                'DELETE_NOT_VOID',
                 f"Cannot delete Audit '{db_audit.auditNo}' with status '{db_audit.status}'. "
-                f"Please Void the Audit first, then delete."
+                f"Please Void the Audit first, then delete.",
+                docType='Audit', number=db_audit.auditNo, status=db_audit.status, allowed=['Void'],
             )
 
         # Log the deletion

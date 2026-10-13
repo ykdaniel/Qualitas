@@ -18,6 +18,7 @@ import { uploadFiles, deleteFile } from '../../services/api';
 import { useNCRStats } from '../../hooks/useNCRStats';
 import { runSaveFlow, sameWrite, SaveOutcome } from '../../utils/saveFlow';
 import { describeSaveError } from '../../utils/saveErrors';
+import { showRefusal } from '../../store/refusalStore';
 
 type StatusFilter = 'all' | 'open' | 'inProgress' | 'resolved' | 'closed' | 'void';
 
@@ -56,7 +57,6 @@ const NCR: React.FC = () => {
     id: null,
     message: '',
   });
-
   const statistics = useNCRStats(ncrList);
   // The last successful record write of the open modal (id + serialized payload) — see runSaveFlow / sameWrite.
   const lastWriteRef = useRef<{ id: string; key: string } | null>(null);
@@ -245,8 +245,14 @@ const NCR: React.FC = () => {
   }, [ncrList, itrList, t]);
 
   const handleDelete = async () => {
-    if (deleteModal.id) {
+    if (!deleteModal.id) return;
+    try {
       await deleteNCR(deleteModal.id);
+    } catch (err) {
+      // not Void yet / still cited by an ITR: the reason goes to the refusal dialog (the page banner is for list loads only)
+      console.error('Failed to delete NCR:', err);
+      showRefusal(err, 'delete');
+    } finally {
       setDeleteModal({ isOpen: false, id: null, message: '' });
     }
   };

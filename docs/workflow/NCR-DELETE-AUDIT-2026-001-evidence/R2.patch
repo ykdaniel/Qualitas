@@ -1,0 +1,425 @@
+diff --git a/backend/routers/ncr.py b/backend/routers/ncr.py
+index 2c7a6c21..fe26add9 100755
+--- a/backend/routers/ncr.py
++++ b/backend/routers/ncr.py
+@@ -159,10 +159,14 @@ def delete_ncr(
+     scope: Scope = Depends(get_scope),
+     current_user: schemas.User = Depends(RoleChecker(NCR_DELETE))
+ ):
+-    deleted = ncr_service.delete_ncr(
+-        ncr_id=ncr_id, user_id=current_user.id, username=current_user.username,
+-        scope=scope,
+-    )
++    try:
++        deleted = ncr_service.delete_ncr(
++            ncr_id=ncr_id, user_id=current_user.id, username=current_user.username,
++            scope=scope,
++        )
++    except ValueError as e:
++        # a business refusal (not Void yet / still referenced by ITR records) is a 400, never a 500
++        raise HTTPException(status_code=400, detail=str(e))
+     if not deleted:
+         raise HTTPException(status_code=404, detail="NCR not found")
+     return {"ok": True}
+diff --git a/backend/services/ncr_service.py b/backend/services/ncr_service.py
+index 316bd116..66562c50 100755
+--- a/backend/services/ncr_service.py
++++ b/backend/services/ncr_service.py
+@@ -24,6 +24,7 @@ from core.utils import (
+     _resolve_vendor_id,
+     begin_write_transaction,
+     lock_ncr_for_write,
++    reload_locked,
+     generate_reference_no,
+     log_audit,
+     WorkflowEngine
+@@ -606,6 +607,13 @@ class NCRService:
+             if not db_ncr or not record_in_scope(db_ncr, scope):
+                 return False
+ 
++            # Take the NCR write lock (the one update_ncr takes) BEFORE the status and ITR-reference checks, then re-read the NCR, so a
++            # status change or an ITR citing it saved a moment ago is seen — never a Void check or an ITR count read before another write.
++            lock_ncr_for_write(self.repo.db, ncr_id)
++            if not reload_locked(self.repo.db, db_ncr) or not record_in_scope(db_ncr, scope):
++                self.repo.db.rollback()
++                return False                       # deleted, or moved out of the caller's scope, by a request that held the lock first
++
+             # Only Void NCRs can be deleted — deleting Open/In Progress/Resolved/Closed
+             # NCRs would game the Q-WorkFlow completion percentage to 100%.
+             if db_ncr.status != 'Void':
+@@ -624,17 +632,22 @@ class NCRService:
+             # Capture old values for audit
+             old_val = {c.name: getattr(db_ncr, c.name) for c in db_ncr.__table__.columns}
+ 
+-            # Delete the record
+-            self.repo.delete(db_ncr)
+-
+-            # Log audit trail
++            # Delete the record + audit entry: ONE commit, strict audit (the repository's delete() commits on its own, which used to leave
++            # the audit entry behind uncommitted — dropped at the end of the request, so no NCR deletion ever reached audit_logs)
++            self.repo.db.delete(db_ncr)
+             log_audit(
+                 self.repo.db, "DELETE", "NCR", ncr_id, db_ncr.documentNumber,
+-                old_value=old_val, user_id=user_id, username=username
++                old_value=old_val, user_id=user_id, username=username, strict=True,
+             )
++            self.repo.db.flush()
++            self.repo.db.commit()
+ 
+             return True
++        except ValueError:
++            self.repo.db.rollback()            # expected refusal (not Void / still referenced): nothing was written
++            raise
+         except Exception as e:
++            self.repo.db.rollback()
+             logger.error(f"Error deleting NCR {ncr_id}: {e}", exc_info=True)
+             raise e
+ 
+diff --git a/backend/tests/test_ncr_service.py b/backend/tests/test_ncr_service.py
+index e520f583..b6ebf4a0 100755
+--- a/backend/tests/test_ncr_service.py
++++ b/backend/tests/test_ncr_service.py
+@@ -221,10 +221,14 @@ def test_delete_ncr_success(ncr_service, mock_repo):
+         # Act
+         result = ncr_service.delete_ncr("ncr-123", user_id=1, username="admin")
+ 
+-        # Assert
++        # Assert: deleted on the session and committed ONCE together with a strict audit
++        # (NCR-DELETE-AUDIT-2026-001: repo.delete() committed on its own and the audit entry was lost)
+         assert result is True
+-        mock_repo.delete.assert_called_once()
++        mock_repo.db.delete.assert_called_once_with(mock_db_ncr)
++        mock_repo.delete.assert_not_called()
++        mock_repo.db.commit.assert_called_once()
+         mock_log.assert_called_once()
++        assert mock_log.call_args.kwargs["strict"] is True
+ 
+ 
+ def test_delete_ncr_blocked_by_non_void_status(ncr_service, mock_repo):
+@@ -235,6 +239,8 @@ def test_delete_ncr_blocked_by_non_void_status(ncr_service, mock_repo):
+     with pytest.raises(ValueError, match="Void the NCR first"):
+         ncr_service.delete_ncr("ncr-123", user_id=1, username="admin")
+     mock_repo.delete.assert_not_called()
++    mock_repo.db.delete.assert_not_called()
++    mock_repo.db.commit.assert_not_called()
+ 
+ 
+ def test_delete_ncr_blocked_by_itr_references(ncr_service, mock_repo):
+@@ -249,3 +255,5 @@ def test_delete_ncr_blocked_by_itr_references(ncr_service, mock_repo):
+ 
+     assert "referenced by 2 ITR record(s)" in str(excinfo.value)
+     mock_repo.delete.assert_not_called()
++    mock_repo.db.delete.assert_not_called()
++    mock_repo.db.commit.assert_not_called()
+diff --git a/react-app/src/components/NCR/NCR.tsx b/react-app/src/components/NCR/NCR.tsx
+index 7e1c3291..885662e4 100755
+--- a/react-app/src/components/NCR/NCR.tsx
++++ b/react-app/src/components/NCR/NCR.tsx
+@@ -56,6 +56,14 @@ const NCR: React.FC = () => {
+     id: null,
+     message: '',
+   });
++  // The reason a refused delete put in the page banner: cleared when the next delete starts, so it never stays above a later
++  // successful delete. Any other banner text (a failed list load) is left alone.
++  const deleteErrorRef = useRef<string | null>(null);
++  // Once the banner shows anything else (a reload clears it first), the remembered delete reason is dropped — so a later load
++  // failure with the same text (a 5xx / network message) is never taken for the delete's own and cleared.
++  useEffect(() => {
++    if (error !== deleteErrorRef.current) deleteErrorRef.current = null;
++  }, [error]);
+ 
+   const statistics = useNCRStats(ncrList);
+   // The last successful record write of the open modal (id + serialized payload) — see runSaveFlow / sameWrite.
+@@ -245,8 +253,16 @@ const NCR: React.FC = () => {
+   }, [ncrList, itrList, t]);
+ 
+   const handleDelete = async () => {
+-    if (deleteModal.id) {
++    if (!deleteModal.id) return;
++    const { error: shownError, clearError } = useNCRStore.getState();
++    if (deleteErrorRef.current !== null && shownError === deleteErrorRef.current) clearError();
++    deleteErrorRef.current = null;
++    try {
+       await deleteNCR(deleteModal.id);
++    } catch {
++      // ncrStore has already put the reason (not Void yet / still cited by an ITR) in this page's error banner
++      deleteErrorRef.current = useNCRStore.getState().error;
++    } finally {
+       setDeleteModal({ isOpen: false, id: null, message: '' });
+     }
+   };
+diff --git a/backend/tests/test_ncr_audit_delete_http.py b/backend/tests/test_ncr_audit_delete_http.py
+new file mode 100644
+index 00000000..3c09ece5
+--- /dev/null
++++ b/backend/tests/test_ncr_audit_delete_http.py
+@@ -0,0 +1,188 @@
++"""NCR delete: the deletion and its audit entry are ONE transaction (NCR-DELETE-AUDIT-2026-001, 2026-10-12).
++
++Before: `delete_ncr` deleted through the repository (whose delete() commits on its own) and only then `db.add()`-ed the audit entry with a
++non-strict `log_audit`; nothing committed it afterwards, so the session dropped it at the end of the request — no NCR deletion ever reached
++`audit_logs`. The same defect NCR create/update had (fixed 2026-09-21, test_ncr_audit_atomic_http) and NOI delete/update had (fixed in
++NOI-DEFECTS-2026-001, test_noi_audit_delete_update_http).
++
++Now: the NCR write lock is taken and the NCR re-read BEFORE the Void-only rule and the ITR-reference check; the delete + a strict audit entry are
++committed ONCE; a failing audit, flush or commit rolls EVERYTHING back. The two refusals keep their messages and answer 400 (they used to escape
++the route as 500s). Real logins and routes, brand-new Sessions for every database assertion.
++"""
++import uuid
++
++import pytest
++
++import models
++from core import perms
++from test_date_write_guard_http import _add_row, _snapshot, denv  # noqa: F401  (denv is a fixture)
++from test_ncr_audit_atomic_http import FAILURES, _inject, audit, uid
++
++
++def _grant_delete(env, role_name="DateUser"):
++    db = env.Session()
++    try:
++        role = db.query(models.Role).filter_by(name=role_name).one()
++        perm = db.query(models.Permission).filter_by(code=perms.NCR_DELETE).first() or models.Permission(
++            code=perms.NCR_DELETE, description=perms.NCR_DELETE)
++        role.permissions_rel.append(perm)
++        db.commit()
++    finally:
++        db.close()
++
++
++def _exists(env, ncr_id):
++    db = env.Session()
++    try:
++        return db.get(models.NCR, ncr_id) is not None
++    finally:
++        db.close()
++
++
++def _cite_by_itr(env, ncr_ref):
++    db = env.Session()
++    try:
++        i = uuid.uuid4().hex
++        db.add(models.ITR(id=i, vendor_id="ACC-V1", documentNumber=f"ITR-{i[:6]}", description="d", rev="Rev1.0", submit="s",
++                          status="In Progress", ncrNumber=ncr_ref))
++        db.commit()
++    finally:
++        db.close()
++
++
++def _void(env, ref="NCR-VOID"):
++    return _add_row(env, "ncr", ref, status="Void")
++
++
++def _delete(c, rid):
++    return c.delete(f"/api/ncr/{rid}/")
++
++
++# ══ 1. success: the deletion and its audit are saved together ══════════════════════════════════════════════════════════════════════
++
++def test_a_delete_records_one_audit_entry_with_the_deleted_row_and_who(denv):
++    _grant_delete(denv)
++    rid = _void(denv)
++    r = _delete(denv.login("dt_a"), rid)
++    assert r.status_code == 200 and r.json() == {"ok": True}
++    assert not _exists(denv, rid)
++    (e,) = audit(denv, "DELETE", rid)
++    assert (e["entity_name"], e["user_id"], e["username"]) == ("NCR-VOID", uid(denv, "dt_a"), "dt_a") and e["timestamp"]
++    assert e["old"]["documentNumber"] == "NCR-VOID" and e["old"]["status"] == "Void" and e["old"]["id"] == rid and e["new"] is None
++
++
++# ══ 2. refusals: same rules, same messages, now a 400 — nothing deleted, nothing audited ═════════════════════════════════════════
++
++@pytest.mark.parametrize("status", ["Open", "In Progress", "Resolved", "Closed"])
++def test_a_non_void_ncr_is_refused_with_400_and_nothing_changes(denv, status):
++    _grant_delete(denv)
++    rid = _add_row(denv, "ncr", "NCR-LIVE", status=status)
++    before = _snapshot(denv)
++    r = _delete(denv.login("dt_a"), rid)
++    assert r.status_code == 400
++    assert r.json()["detail"] == f"Cannot delete NCR 'NCR-LIVE' with status '{status}'. Please Void the NCR first, then delete."
++    assert _snapshot(denv) == before and audit(denv, "DELETE") == []
++
++
++def test_a_void_ncr_still_cited_by_an_itr_is_refused_with_400_and_nothing_changes(denv):
++    _grant_delete(denv)
++    rid = _void(denv)
++    _cite_by_itr(denv, "NCR-VOID")
++    before = _snapshot(denv)
++    r = _delete(denv.login("dt_a"), rid)
++    assert r.status_code == 400
++    assert r.json()["detail"] == "Cannot delete NCR 'NCR-VOID': referenced by 1 ITR record(s)"
++    assert _snapshot(denv) == before and audit(denv, "DELETE") == []
++
++
++def test_permission_scope_and_missing_record_still_decide_and_write_nothing(denv):
++    rid = _void(denv)
++    before = _snapshot(denv)
++    assert _delete(denv.login("dt_a"), rid).status_code == 403                  # no ncr:delete:all yet
++    _grant_delete(denv)
++    assert _delete(denv.login("dt_scoped"), rid).status_code == 404             # contractor Beta Co: an Accept Co NCR is not theirs
++    assert _delete(denv.login("dt_a"), "no-such-ncr").status_code == 404
++    assert _snapshot(denv) == before and audit(denv, "DELETE") == []
++
++
++# ══ 3. failure injection: nothing of the delete survives ═══════════════════════════════════════════════════════════════════════════
++
++@pytest.mark.parametrize("kind", FAILURES)
++def test_a_failing_audit_flush_or_commit_rolls_a_delete_back_completely(denv, monkeypatch, kind):
++    _grant_delete(denv)
++    rid = _void(denv)
++    c = denv.login("dt_a")
++    before = _snapshot(denv)
++    undo = _inject(kind, monkeypatch)
++    try:
++        with pytest.raises(RuntimeError):
++            _delete(c, rid)
++    finally:
++        undo()
++        monkeypatch.undo()
++    assert _exists(denv, rid) and _snapshot(denv) == before                      # the NCR is still there, no DELETE entry
++    assert _delete(c, rid).status_code == 200                                    # and the same delete works afterwards, with exactly one entry
++    assert not _exists(denv, rid) and len(audit(denv, "DELETE", rid)) == 1
++
++
++# ══ 4. the checks are made under the write lock, on the re-read NCR ════════════════════════════════════════════════════════════════
++
++def _just_before_the_lock(monkeypatch, action):
++    """Runs `action` (another request's committed write) after delete_ncr has read the NCR but right before it takes the write lock."""
++    import services.ncr_service as svc
++    real, ran = svc.lock_ncr_for_write, []
++
++    def lock(db, ncr_id):
++        ran.append(ncr_id)
++        action()
++        return real(db, ncr_id)
++    monkeypatch.setattr(svc, "lock_ncr_for_write", lock)
++    return ran
++
++
++def test_an_itr_citing_the_ncr_saved_just_before_the_lock_is_counted(denv, monkeypatch):
++    _grant_delete(denv)
++    rid = _void(denv)
++    ran = _just_before_the_lock(monkeypatch, lambda: _cite_by_itr(denv, "NCR-VOID"))
++    r = _delete(denv.login("dt_a"), rid)
++    assert ran == [rid]
++    assert r.status_code == 400 and "referenced by 1 ITR record(s)" in r.json()["detail"]
++    assert _exists(denv, rid) and audit(denv, "DELETE") == []
++
++
++def test_an_ncr_deleted_by_another_request_first_is_a_404_not_a_500(denv, monkeypatch):
++    _grant_delete(denv)
++    rid = _void(denv)
++
++    def other_request_deletes_it():
++        db = denv.Session()
++        try:
++            db.delete(db.get(models.NCR, rid))
++            db.commit()
++        finally:
++            db.close()
++    ran = _just_before_the_lock(monkeypatch, other_request_deletes_it)
++    r = _delete(denv.login("dt_a"), rid)
++    assert ran == [rid]
++    assert r.status_code == 404 and audit(denv, "DELETE") == []
++
++
++def test_an_ncr_moved_out_of_the_callers_scope_just_before_the_lock_is_a_404_and_stays(denv, monkeypatch):
++    """Scope is judged again on the re-read NCR (as update_ncr judges it after the lock), not only on the copy read before it."""
++    _grant_delete(denv)
++    keep = _add_row(denv, "ncr", "NCR-SCOPED-OK", status="Void", project_id="P-A")
++    assert _delete(denv.login("dt_v1"), keep).status_code == 200              # dt_v1 (Accept Co, P-A) may delete its own NCRs
++    rid = _add_row(denv, "ncr", "NCR-SCOPED", status="Void", project_id="P-A")
++
++    def other_request_moves_it():
++        db = denv.Session()
++        try:
++            db.get(models.NCR, rid).vendor_id = "ACC-V2"
++            db.commit()
++        finally:
++            db.close()
++    ran = _just_before_the_lock(monkeypatch, other_request_moves_it)
++    r = _delete(denv.login("dt_v1"), rid)
++    assert ran == [rid]
++    assert r.status_code == 404 and _exists(denv, rid)
++    assert [e["entity_id"] for e in audit(denv, "DELETE")] == [keep]
+diff --git a/backend/scripts/verification/seed_ncr_delete_audit_review.py b/backend/scripts/verification/seed_ncr_delete_audit_review.py
+new file mode 100644
+index 00000000..5913aac1
+--- /dev/null
++++ b/backend/scripts/verification/seed_ncr_delete_audit_review.py
+@@ -0,0 +1,62 @@
++"""Isolated TEST SEED SCRIPT for NCR-DELETE-AUDIT-2026-001 (2026-10-12) — writes test fixtures to an isolated database; it is a
++seed script, not a read-only script.
++
++Isolated stack only. Requires NCR_DELETE_REVIEW_PASSWORD in the environment (no hardcoded or defaulted password).
++
++Creates one project, one contractor, one reviewer (NCR view / delete, ITR view) and three NCRs, one per delete outcome:
++  * QTS-NDA1-HL-NCR-000001  Void, not cited       → deleted; one DELETE row in audit_logs
++  * QTS-NDA1-HL-NCR-000002  Open                  → refused (400): "Please Void the NCR first"
++  * QTS-NDA1-HL-NCR-000003  Void, cited by an ITR → refused (400): "referenced by 1 ITR record(s)"
++For the refusals, the NCR page closes the confirm prompt and shows the server's reason in its error banner.
++"""
++import os
++from core.startup_guard import guard_if_required
++
++if os.environ.get("QUALITAS_REQUIRE_ISOLATED_DB") != "1":
++    raise RuntimeError("Use isolated_stack.py seed")
++guard_if_required()
++
++import uuid
++import database, models
++from core.security import get_password_hash
++
++PW = os.environ.get("NCR_DELETE_REVIEW_PASSWORD")
++if not PW:
++    raise RuntimeError("NCR_DELETE_REVIEW_PASSWORD not set — refusing to seed with no password or a hardcoded fallback.")
++
++d = database.SessionLocal()
++
++
++def _perm(code):
++    p = d.query(models.Permission).filter_by(code=code).first()
++    if not p:
++        p = models.Permission(code=code, description=code)
++        d.add(p)
++        d.flush()
++    return p
++
++
++role = models.Role(name="NCRDeleteAuditReview")
++role.permissions_rel = [_perm(c) for c in ("ncr:view:all", "ncr:delete:all", "itr:view:all", "contractors:view:all")]
++d.add(role)
++d.flush()
++d.add(models.User(username="ncr_reviewer", email="ncr.reviewer@example.com", is_active=True,
++                  hashed_password=get_password_hash(PW), role_id=role.id, full_name="NCR Reviewer"))
++d.add(models.Project(id="NDA-P1", name="NCR Delete Audit Review", code="NDA1"))
++d.add(models.Contractor(id="NDA-V1", name="Hailong Construction", abbreviation="HL", status="active"))
++d.flush()
++
++
++def ncr(number, status, subject):
++    d.add(models.NCR(id=uuid.uuid4().hex, documentNumber=number, status=status, vendor_id="NDA-V1", project_id="NDA-P1",
++                     raiseDate="2026-10-12", severity="Minor", subject=subject, description=subject, rev="0", submit=""))
++
++
++ncr("QTS-NDA1-HL-NCR-000001", "Void", "Void, not cited — can be deleted")
++ncr("QTS-NDA1-HL-NCR-000002", "Open", "Open — must be voided before delete")
++ncr("QTS-NDA1-HL-NCR-000003", "Void", "Void, but cited by an ITR")
++d.add(models.ITR(id=uuid.uuid4().hex, documentNumber="QTS-NDA1-HL-ITR-000001", status="In Progress", vendor_id="NDA-V1",
++                 project_id="NDA-P1", raiseDate="2026-10-12", subject="Re-inspection for NCR-000003",
++                 description="Re-inspection", rev="0", submit="", ncrNumber="QTS-NDA1-HL-NCR-000003"))
++d.commit()
++print("seeded:", d.query(models.NCR).count(), "NCRs,", d.query(models.ITR).count(), "ITR")
+diff --git a/react-app/tests-browser/ncr-delete-audit-vite-launcher.mjs b/react-app/tests-browser/ncr-delete-audit-vite-launcher.mjs
+new file mode 100644
+index 00000000..3001eb57
+--- /dev/null
++++ b/react-app/tests-browser/ncr-delete-audit-vite-launcher.mjs
+@@ -0,0 +1,7 @@
++// Isolated preview server for NCR-DELETE-AUDIT-2026-001 (a refused NCR delete shows its reason), on this round's own ports (8341/3341)
++// — never the preserved 8240/3240 preview, the user's own dev ports (8198/3198) or another round's (8293/3293, 3291). Own dependency cache (git-ignored .vite/, since node_modules may be a read-only link to the main checkout's).
++import { createServer } from 'vite';
++const server = await createServer({ cacheDir: '.vite/ncr-delete-audit', server: { host: '127.0.0.1', port: 3341, strictPort: true,
++    proxy: { '/api': { target: 'http://127.0.0.1:8341' } } } });
++await server.listen();
++console.log('vite up');

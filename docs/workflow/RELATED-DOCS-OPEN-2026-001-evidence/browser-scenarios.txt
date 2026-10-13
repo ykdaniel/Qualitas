@@ -1,0 +1,7 @@
+PASS 1a NOI window open | open=QTS-RKS-RRV-NOI-000001
+PASS 1b clicking related ITP opens that ITP | url=http://127.0.0.1:3292/itp open=QTS-RKS-RRV-ITP-000002
+PASS 1c openId removed from URL | http://127.0.0.1:3292/itp
+PASS 1d closing returns to the NOI page | http://127.0.0.1:3292/noi
+PASS 2a clicking related NOI opens that NOI | url=http://127.0.0.1:3292/noi open=QTS-RKS-RRV-NOI-000001
+PASS 2b closing returns to the ITP page | http://127.0.0.1:3292/itp
+PASS 3 plain /itp opens no window | open=None

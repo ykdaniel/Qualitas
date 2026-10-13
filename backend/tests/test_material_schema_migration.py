@@ -109,7 +109,9 @@ def business_rows(db_path):
 
 def seed_business_rows(db_path):
     sql(db_path, "INSERT INTO projects (id, name, code) VALUES ('old-p', 'Old project', 'OP')")
-    sql(db_path, "INSERT INTO ncr (id, documentNumber, status) VALUES ('ncr-old', 'NCR-OLD-1', 'Open')")
+    # the NCR is already in the project: start-up step 25 (REF-PROJECT-SEQ-2026-001 B1) moves a project-less document into
+    # the only project, a deliberate change of its own - this suite checks that the MATERIAL upgrade touches no existing data
+    sql(db_path, "INSERT INTO ncr (id, project_id, documentNumber, status) VALUES ('ncr-old', 'old-p', 'NCR-OLD-1', 'Open')")
     sql(db_path, "INSERT INTO audit_logs (timestamp, action, entity_type, entity_id, entity_name, user_id, username) "
                  "VALUES ('2026-09-01T00:00:00', 'UPDATE', 'NCR', 'ncr-old', 'NCR-OLD-1', 1, 'legacy')")
 

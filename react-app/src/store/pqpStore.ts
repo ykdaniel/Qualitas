@@ -140,14 +140,9 @@ export const usePQPStore = create<PQPState>((set, get) => ({
     },
 
     deletePQP: async (id: string) => {
-        try {
-            await api.delete(`/pqp/${id}`);
-            set((state) => ({ pqpList: state.pqpList.filter(p => p.id !== id) }));
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to delete PQP');
-            set({ error: msg });
-            throw error;
-        }
+        // A refused or failed delete goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-001); the page's error banner is for list loads only.
+        await api.delete(`/pqp/${id}`);
+        set((state) => ({ pqpList: state.pqpList.filter(p => p.id !== id) }));
     },
 
     getPQPList: () => get().pqpList,

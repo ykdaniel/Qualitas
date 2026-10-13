@@ -1,0 +1,60 @@
+/* OBS Photos tab — Before / After side by side in pairs (OBS-PRINT-PHOTOS-2026-001), the same layout as the print. */
+.pairs { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+
+.columns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.colHead {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+    padding-bottom: 8px; border-bottom: 2px solid #e0e7ff;
+}
+.colTitle { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; color: #1e3a8a; }
+.colTitle small { font-weight: 500; font-size: 12px; color: #6b7280; }
+.colBar { width: 4px; height: 20px; border-radius: 2px; background: linear-gradient(135deg, #3b82f6 0%, #1e3a8a 100%); }
+
+.uploadInput { display: none; }
+.uploadButton {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 6px 14px; border: 2px dashed #d1d5db; border-radius: 8px;
+    background: #fff; color: #6b7280; cursor: pointer; font-size: 13px; font-weight: 500;
+}
+.uploadButton:hover { border-color: #93c5fd; color: #1e3a8a; }
+
+.hint { margin: 0; font-size: 12px; color: #92400e; }
+.empty { margin: 0; font-size: 13px; color: #9ca3af; }
+
+.pair { display: flex; flex-direction: column; gap: 4px; }
+.pairLabel { font-size: 12px; font-weight: 600; color: #6b7280; }
+
+.cell {
+    position: relative; height: 200px; border: 1px solid #e5e7eb; border-radius: 8px;
+    background: #f9fafb; overflow: hidden;
+}
+.cell img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.cell img.clickable { cursor: pointer; }
+.cell.missing {
+    border-style: dashed; background: #fff;
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    color: #9ca3af; font-size: 13px; padding: 8px;
+}
+
+.fileName {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 6px;
+    background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 11px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.badge {
+    position: absolute; top: 6px; left: 6px; padding: 2px 6px; border-radius: 4px;
+    background: #f59e0b; color: #fff; font-size: 10px; font-weight: 700;
+}
+.tools { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; }
+.tool {
+    width: 26px; height: 26px; border-radius: 50%; border: none; cursor: pointer;
+    background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 15px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+}
+.tool:disabled { opacity: 0.3; cursor: default; }
+
+@media (max-width: 600px) {
+    .cell { height: 140px; }
+    .colTitle { font-size: 14px; }
+}

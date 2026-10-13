@@ -32,6 +32,7 @@ from core.perms import ITR_APPROVE, ITR_CREATE, ITR_UPDATE, CHECKLIST_CREATE, CH
 import models
 from routers import itr as itr_router
 from routers import checklist as checklist_router
+from project_membership import TEST_PROJECT_ID, bind
 
 
 @pytest.fixture
@@ -66,6 +67,11 @@ def http_env():
     editor_user = models.User(id=1, username="editor", email="e@x.com", is_active=True, role_id=editor_role.id)
     approver_user = models.User(id=2, username="approver", email="a@x.com", is_active=True, role_id=approver_role.id)
     db.add_all([editor_user, approver_user])
+    db.flush()
+    # REF-PROJECT-SEQ-2026-001 B1: non-admin accounts work in one project; both work in the shared test project
+    # (records they create land there).
+    bind(db, editor_user, TEST_PROJECT_ID)
+    bind(db, approver_user, TEST_PROJECT_ID)
     db.commit()
 
     app = FastAPI()

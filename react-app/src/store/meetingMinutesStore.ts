@@ -162,13 +162,8 @@ export const useMeetingMinutesStore = create<MeetingMinutesState>((set, get) => 
     },
 
     deleteMeetingMinutes: async (id: string) => {
-        try {
-            await api.delete(`/meeting-minutes/${id}`);
-            set((state) => ({ meetingList: state.meetingList.filter(m => m.id !== id) }));
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to delete Meeting Minutes');
-            set({ error: msg });
-            throw error;
-        }
+        // A refused or failed delete goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-001); the page's error banner is for list loads only.
+        await api.delete(`/meeting-minutes/${id}`);
+        set((state) => ({ meetingList: state.meetingList.filter(m => m.id !== id) }));
     }
 }));

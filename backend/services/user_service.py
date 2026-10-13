@@ -13,6 +13,7 @@ from crud import log_audit  # Import existing audit logger to maintain legacy co
 # every other caller in this module.
 from core.utils import log_audit as strict_log_audit
 from core import validators
+from core.refusals import Refusal, RefusalHTTPException, refusal_http
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -47,6 +48,9 @@ _ADMIN_ONLY_ROLE = "Only an Admin can create, rename, modify or delete the Admin
 # existing account may not have it blanked. Older accounts without one can still
 # be edited (deactivated, password reset) without adding it.
 _COMPANY_REQUIRED = "Company name is required"
+# REF-PROJECT-SEQ-2026-001 B1 (business decisions D6/D8): every account that is not a system administrator — contractor
+# accounts included — works in a project; without one it is a "non project member" that sees nothing.
+_PROJECT_REQUIRED = "A non-admin account must be assigned to at least one project"
 _COMPANY_NOT_BLANK = "Company name cannot be cleared"
 
 
@@ -126,14 +130,9 @@ class UserService:
             current = self.get_user_scope(user_id)
             if set(project_ids) != set(current["project_ids"]) or (vendor_id or None) != current["vendor_id"]:
                 raise HTTPException(status_code=403, detail=_ADMIN_ONLY_MODIFY)
-        if project_ids:
-            found = {
-                p.id for p in self.repo.db.query(models.Project.id)
-                .filter(models.Project.id.in_(project_ids)).all()
-            }
-            missing = [pid for pid in project_ids if pid not in found]
-            if missing:
-                raise ValueError(f"Unknown project id(s): {', '.join(missing)}")
+        if not project_ids and not (user.role and self.repo.is_admin_role_name(user.role.name)):
+            raise Refusal("PROJECT_REQUIRED", _PROJECT_REQUIRED)
+        self._require_known_projects(project_ids, ValueError)
         if vendor_id:
             if not self.repo.db.query(models.Contractor.id).filter(
                 models.Contractor.id == vendor_id
@@ -181,6 +180,18 @@ class UserService:
             raise HTTPException(status_code=400, detail="Role not found")
         return role
 
+    def _require_known_projects(self, project_ids, error=None):
+        """Every id must name an existing project (HTTP 400 by default, or the given exception type)."""
+        if not project_ids:
+            return
+        found = {p.id for p in self.repo.db.query(models.Project.id).filter(models.Project.id.in_(project_ids)).all()}
+        missing = [pid for pid in project_ids if pid not in found]
+        if missing:
+            message = f"Unknown project id(s): {', '.join(missing)}"
+            if error is not None:
+                raise error(message)
+            raise HTTPException(status_code=400, detail=message)
+
     def create_user(
         self,
         user: schemas.UserCreate,
@@ -196,6 +207,8 @@ class UserService:
             raise HTTPException(status_code=400, detail=_COMPANY_REQUIRED)
         if user.role_id is not None:
             self._require_existing_role(user.role_id)
+        project_ids = list(dict.fromkeys(user.project_ids or []))   # dedupe, keep order
+        self._require_known_projects(project_ids)
 
         _validate_password_strength(user.password)
         hashed_password = pwd_context.hash(user.password)
@@ -213,6 +226,10 @@ class UserService:
                     self.repo.db.refresh(role)
                 if role is not None and self.repo.is_admin_role_name(role.name) and not self._actor_is_admin(current_user_id):
                     raise HTTPException(status_code=403, detail=_ADMIN_ONLY_ASSIGN)
+            else:
+                role = None
+            if not project_ids and not self.repo.is_admin_role_name(role.name if role else None):
+                raise RefusalHTTPException(400, _PROJECT_REQUIRED, "PROJECT_REQUIRED")
 
             new_user = models.User(
                 email=user.email,
@@ -225,10 +242,12 @@ class UserService:
                 created_at=date.today().isoformat(),  # stored as YYYY-MM-DD
             )
             created_user = self.repo.create(new_user, commit=False)   # flushed: id assigned
+            for pid in project_ids:                                    # same transaction as the account
+                self.repo.db.add(models.UserProject(user_id=created_user.id, project_id=pid))
 
             strict_log_audit(
                 self.repo.db, "CREATE", "User", str(created_user.id), created_user.username,
-                new_value={**self._user_audit_snapshot(created_user), "password_changed": True},
+                new_value={**self._user_audit_snapshot(created_user), "password_changed": True, "project_ids": project_ids},
                 user_id=current_user_id, username=current_username, reason=user.reason, strict=True,
             )
             self.repo.db.flush()
@@ -306,6 +325,10 @@ class UserService:
                     detail = ("Cannot deactivate the last active Admin user" if not still_active
                               else "Cannot change the role of the last active Admin user")
                     raise HTTPException(status_code=400, detail=detail)
+            # Checked after the last-Admin rule, which keeps its own reason (REF-PROJECT-SEQ-2026-001 B1).
+            if "role_id" in update_dict and not self.repo.is_admin_role_name(new_role.name if new_role else None) \
+                    and not self.repo.db.query(models.UserProject).filter(models.UserProject.user_id == user_id).first():
+                raise RefusalHTTPException(400, _PROJECT_REQUIRED, "PROJECT_REQUIRED")   # e.g. an Admin demoted with no project
 
             was_active = bool(db_user.is_active)
             if hashed_password:
@@ -498,14 +521,14 @@ class UserService:
             self.repo.db.refresh(db_role)
             if _admin_like_name(db_role.name) and not self._actor_is_admin(current_user_id):
                 self.repo.db.rollback()
-                raise HTTPException(status_code=403, detail=_ADMIN_ONLY_ROLE)
+                raise RefusalHTTPException(403, _ADMIN_ONLY_ROLE, 'ROLE_ADMIN_PROTECTED')
 
         # Existing restriction kept exactly as it was: a role still assigned to
         # users cannot be deleted. Raised before anything is written.
         try:
             validators.check_role_references(self.repo.db, role_id, db_role.name)
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            raise refusal_http(e)
 
         try:
             old_val = self._role_audit_snapshot(db_role)

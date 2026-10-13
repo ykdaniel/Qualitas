@@ -7,12 +7,14 @@ import { toast } from 'sonner';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
-import { Plus, Printer, Info, MapPin, CheckCircle, AlertCircle, Trash2, User, Signature, History, Search } from 'lucide-react';
+import { Plus, Printer, Info, MapPin, CheckCircle, AlertCircle, Trash2, User, Signature, History, Search, ArrowLeft, FileText } from 'lucide-react';
 import { useChecklistStore, ChecklistRecord, isTemplateHistoricallyProtected } from '../../store/checklistStore';
+import { showRefusal } from '../../store/refusalStore';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import ChecklistPrintTemplate from './ChecklistPrintTemplate';
 import { ResultSelect } from './ChecklistResultControls';
+import ChecklistCellInput from './ChecklistCellInput';
 import { withResult, deriveChecklistStatus, itemCounts } from '../../utils/checklistResult';
 import styles from './Checklist.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
@@ -23,6 +25,7 @@ import { useITPStore } from '../../store/itpStore';
 import { useITRStore } from '../../store/itrStore';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { getErrorMessage } from '../../utils/errorUtils';
+import { exportChecklistDocx } from '../../services/api';
 
 // --- ITP 資料庫定義 ---
 interface ItpItemDefinition {
@@ -99,9 +102,12 @@ const Checklist: React.FC = () => {
     }, [searchParams, records, setSearchParams]);
 
     const returnItpId = searchParams.get(RETURN_ITP_PARAM);
+    // Opened from an ITP edit window: Cancel goes back to that ITP, so it is labelled "Back to ITP"
+    // (CHECKLIST-BACK-LABEL-2026-001). Same condition as handleBack below, so label and destination agree.
+    const backToItp = fromSource === 'itp' && !!returnItpId;
 
     const handleBack = () => {
-        if (fromSource === 'itp' && returnItpId) {
+        if (backToItp && returnItpId) {
             // Back to the ITP edit window this Checklist was opened from (see utils/itpReturnLink).
             // replace: the Checklist entry is left behind, so the browser's own Back afterwards
             // does not bounce between the two pages.
@@ -171,8 +177,13 @@ const Checklist: React.FC = () => {
     }, []);
 
     const handleDelete = useCallback(async (id: string) => {
-        if (window.confirm(t('common.confirmDelete'))) {
+        if (!window.confirm(t('common.confirmDelete'))) return;
+        try {
             await deleteRecord(id);
+        } catch (err) {
+            // ITR-owned instance / has held results: it used to fail with no message at all; now shown in the refusal dialog
+            console.error('Failed to delete checklist:', err);
+            showRefusal(err, 'delete');
         }
     }, [deleteRecord, t]);
 
@@ -231,6 +242,7 @@ const Checklist: React.FC = () => {
                 <ChecklistEditor
                     record={editingRecord}
                     onCancel={handleBack}
+                    backToItp={backToItp}
                     saving={saving}
                     // §17: a bare template (itrId & templateId both null) must never take real
                     // pass/fail results directly — force read-only regardless of permission,
@@ -316,9 +328,10 @@ const Checklist: React.FC = () => {
 };
 
 
-const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, isBareTemplate = false, canReopen = false, onReopen, selectedItpIndex, dynamicItpDatabase }: {
+const ChecklistEditor = ({ record, onCancel, backToItp = false, onSave, saving, readOnly = false, isBareTemplate = false, canReopen = false, onReopen, selectedItpIndex, dynamicItpDatabase }: {
     record: ChecklistRecord | null,
     onCancel: () => void,
+    backToItp?: boolean,
     onSave: (data: any) => Promise<void>,
     saving?: boolean,
     readOnly?: boolean,
@@ -462,6 +475,26 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
     }, [isPrinting]);
 
     const handlePrint = () => setIsPrinting(true);
+
+    // Word export (CHECKLIST-BACK-LABEL-2026-001 R2): the server builds the file from the SAVED record, so a new
+    // template or unsaved edits would silently be missing from it — ask for a save first instead (as the Audit wizard).
+    const [exportingDocx, setExportingDocx] = useState(false);
+    const handleExportDocx = async () => {
+        if (exportingDocx || saving) return;
+        if (!record || leaveGuard.dirty) {
+            toast.warning(t('checklist.exportSaveFirst'));
+            return;
+        }
+        setExportingDocx(true);
+        try {
+            await exportChecklistDocx(record.id, record.recordsNo || 'Checklist');
+        } catch (err) {
+            console.error('Checklist Word export failed:', err);
+            toast.error(t('common.exportFailed') || 'Export failed. Please try again.');
+        } finally {
+            setExportingDocx(false);
+        }
+    };
 
     return (
         <div className={styles.editorWrapper}>
@@ -673,16 +706,26 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
                                 <Plus size={16} /> Add Row
                             </button>
                         </div>
-                        <div className={styles.cardContent} style={{ padding: 0 }}>
-                            <table className={styles.webTable}>
+                        <div className={`${styles.cardContent} ${styles.itemsTableWrap}`} style={{ padding: 0 }}>
+                            {/* Proportional columns (CHECKLIST-TEMPLATE-LAYOUT-2026-001): Criteria is usually the
+                                longest text, so it gets the widest share; the result columns take theirs when shown. */}
+                            <table className={`${styles.webTable} ${showResultColumns ? styles.webTableWithResults : ''}`}>
+                                <colgroup>
+                                    <col className={styles.colNo} />
+                                    <col className={styles.colItem} />
+                                    <col className={styles.colCriteria} />
+                                    {showResultColumns && <col />}
+                                    {showResultColumns && <col className={styles.colResult} />}
+                                    <col className={styles.colDelete} />
+                                </colgroup>
                                 <thead>
                                     <tr>
-                                        <th style={{ width: '60px' }}>#</th>
+                                        <th>#</th>
                                         <th>{t('checklist.item') || 'Inspection Item'}</th>
-                                        <th style={{ width: '200px' }}>{t('checklist.criteria') || 'Criteria'}</th>
-                                        {showResultColumns && <th style={{ width: '200px' }}>Actual Situation</th>}
-                                        {showResultColumns && <th style={{ width: '120px', textAlign: 'center' }}>Result</th>}
-                                        <th style={{ width: '50px' }}></th>
+                                        <th>{t('checklist.criteria') || 'Criteria'}</th>
+                                        {showResultColumns && <th>Actual Situation</th>}
+                                        {showResultColumns && <th>Result</th>}
+                                        <th></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -690,48 +733,43 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
                                         <tr key={idx}>
                                             <td className={styles.webItemNo}>{item.id}</td>
                                             <td>
-                                                <input
-                                                    className={styles.underlineInput}
-                                                    style={{ fontWeight: 600 }}
+                                                <ChecklistCellInput
+                                                    bold
                                                     value={item.item}
                                                     placeholder="Enter inspection item..."
-                                                    onChange={e => {
+                                                    onChange={value => {
                                                         const newItems = [...formData.items];
-                                                        newItems[idx].item = e.target.value;
+                                                        newItems[idx].item = value;
                                                         setFormData({ ...formData, items: newItems });
                                                     }}
                                                 />
                                             </td>
                                             <td>
-                                                <div className={styles.criteriaBox}>
-                                                    <input
-                                                        className="w-full bg-transparent border-none outline-none"
-                                                        value={item.criteria}
-                                                        placeholder="Enter criteria..."
-                                                        onChange={e => {
-                                                            const newItems = [...formData.items];
-                                                            newItems[idx].criteria = e.target.value;
-                                                            setFormData({ ...formData, items: newItems });
-                                                        }}
-                                                    />
-                                                </div>
+                                                <ChecklistCellInput
+                                                    value={item.criteria}
+                                                    placeholder="Enter criteria..."
+                                                    onChange={value => {
+                                                        const newItems = [...formData.items];
+                                                        newItems[idx].criteria = value;
+                                                        setFormData({ ...formData, items: newItems });
+                                                    }}
+                                                />
                                             </td>
                                             {showResultColumns && (
                                             <td>
-                                                <input
-                                                    className={styles.underlineInput}
+                                                <ChecklistCellInput
                                                     value={item.situation}
                                                     placeholder="Enter observation..."
-                                                    onChange={e => {
+                                                    onChange={value => {
                                                         const newItems = [...formData.items];
-                                                        newItems[idx].situation = e.target.value;
+                                                        newItems[idx].situation = value;
                                                         setFormData({ ...formData, items: newItems });
                                                     }}
                                                 />
                                             </td>
                                             )}
                                             {showResultColumns && (
-                                            <td>
+                                            <td className={styles.resultCell}>
                                                 {/* Same four-way control as the ITR snapshot (no cycling
                                                     button). For a historically-anomalous template this is
                                                     locked read-only, so the original values are simply shown. */}
@@ -753,7 +791,7 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
                                                 )}
                                             </td>
                                             )}
-                                            <td>
+                                            <td className={styles.webDeleteCell}>
                                                 <button
                                                     onClick={() => {
                                                         const newItems = formData.items.filter((_: any, i: number) => i !== idx);
@@ -882,11 +920,23 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
                     </>
                 )}
                 </fieldset>
-                <FormActions tools={<><button className={actionStyles.secondary}
-                    onClick={handlePrint}
-                >
-                    <Printer size={16} /> {t('common.print')}
-                </button></>}
+                {/* Navigation and output on the left, saving on the right (as the Audit wizard / NOI), user 2026-10-12. */}
+                <FormActions tools={<>
+                    <button className={actionStyles.secondary} onClick={requestCancel}>
+                        {backToItp
+                            ? <><ArrowLeft size={16} /> {t('checklist.backToItp') || 'Back to ITP'}</>
+                            : t('common.cancel')}
+                    </button>
+                    <button className={actionStyles.secondary} onClick={handlePrint}>
+                        <Printer size={16} /> {t('common.print')}
+                    </button>
+                    <button className={actionStyles.secondary} onClick={handleExportDocx} disabled={saving || exportingDocx}>
+                        <FileText size={16} /> {exportingDocx ? (t('common.exporting') || 'Exporting...') : (t('common.exportWord') || 'Export Word')}
+                    </button>
+                    {!readOnly && isBareTemplate && record && (
+                        <span className={styles.saveHint}>{t('checklist.updateTemplateNote') || 'Updating this template does not affect existing ITR references.'}</span>
+                    )}
+                </>}
                     secondary={<>{canReopen && onReopen && (
                         <button className={actionStyles.workflow}
                             disabled={saving}
@@ -896,11 +946,7 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
                             {t('checklist.reopen') || 'Reopen'}
                         </button>
                     )}</>}
-                    cancel={<><button className={actionStyles.secondary} onClick={requestCancel}>
-                        {t('common.cancel')}
-                    </button></>}
                     primary={<>{!readOnly && (
-                        <div className="flex flex-col items-end gap-1">
                             <button className={actionStyles.primary}
                                 disabled={saving}
                                 onClick={() => onSave(
@@ -959,10 +1005,6 @@ const ChecklistEditor = ({ record, onCancel, onSave, saving, readOnly = false, i
                                     ? (saving ? (t('checklist.savingTemplate') || 'Saving...') : (t('checklist.saveTemplate') || 'Save Template'))
                                     : (saving ? t('common.saving') : t('common.save'))}
                             </button>
-                            {isBareTemplate && record && (
-                                <span className={styles.saveHint}>{t('checklist.updateTemplateNote') || 'Updating this template does not affect existing ITR references.'}</span>
-                            )}
-                        </div>
                     )}</>} />
             </div>
 

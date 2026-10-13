@@ -60,6 +60,7 @@ def aenv(tmp_path, monkeypatch):
     database_module.engine, database_module.SessionLocal, db_migrations.engine, security_module.SessionLocal = engine, S, engine, S
     env = Env(app, S)
     env.root = root
+    env.default_projects = {"sV": "P-A"}     # sV works in P-A unless a test names P-B (it is bound to both)
     try:
         yield env
     finally:
@@ -101,15 +102,19 @@ def _seed(S):
         user("adm", admin)                       # unscoped
         user("sA", full, "C1", ["P-A"])          # the target's own project AND contractor
         user("sP", full, None, ["P-B"])          # another project only
-        user("sV", full, "C2", [])               # another contractor only
+        # another contractor only: same project as the target, other contractor. Bound to P-A and P-B (a contractor
+        # account without a project would be a non project member and see nothing — REF-PROJECT-SEQ-2026-001 D8).
+        user("sV", full, "C2", ["P-A", "P-B"])
         user("sB", full, "C2", ["P-B"])          # another project and contractor
-        user("noperm", r_none)                   # unscoped, no permission at all
-        user("viewer", r_view)                   # unscoped, view only
-        user("create_only", r_create)            # unscoped, view + create, no update
-        user("updater", r_update)                # unscoped, update but no view
+        # Permission-matrix accounts work in P-A, where every matrix record lives (REF-PROJECT-SEQ-2026-001: a non-admin
+        # without a project sees nothing — these used to be unscoped).
+        user("noperm", r_none, None, ["P-A"])                 # no permission at all
+        user("viewer", r_view, None, ["P-A"])                 # view only
+        user("create_only", r_create, None, ["P-A"])          # view + create, no update
+        user("updater", r_update, None, ["P-A"])              # update but no view
         # material revisions: material:manage for every category (M6); a view-only account may not change files
-        user("mat_manage", role("MatManage", [perms.MATERIAL_VIEW, perms.MATERIAL_MANAGE]))
-        user("mat_view", role("MatView", [perms.MATERIAL_VIEW]))
+        user("mat_manage", role("MatManage", [perms.MATERIAL_VIEW, perms.MATERIAL_MANAGE]), None, ["P-A"])
+        user("mat_view", role("MatView", [perms.MATERIAL_VIEW]), None, ["P-A"])
         for name, project, vendor in (("a", "P-A", "C1"), ("b", "P-B", "C2")):
             db.add(models.NCR(id=f"ncr-{name}", documentNumber=f"NCR-{name}", project_id=project, vendor_id=vendor, status="Open", description="d", rev="0", submit=""))
             db.add(models.OBS(id=f"obs-{name}", documentNumber=f"OBS-{name}", project_id=project, vendor_id=vendor, status="Open", description="d", rev="0", submit=""))
@@ -226,9 +231,10 @@ def test_upload_to_a_record_outside_the_callers_project_or_contractor_is_refused
 
 
 def test_the_legitimate_scoped_user_and_the_unscoped_admin_can_still_upload(aenv):
-    for who, eid in (("sA", "ncr-a"), ("adm", "ncr-a"), ("adm", "ncr-b"), ("sB", "ncr-b"), ("sP", "ncr-b"), ("sV", "ncr-b")):
+    for who, eid, project in (("sA", "ncr-a", None), ("adm", "ncr-a", None), ("adm", "ncr-b", None), ("sB", "ncr-b", None),
+                              ("sP", "ncr-b", None), ("sV", "ncr-b", "P-B")):
         before = len(rows(aenv))
-        assert up(aenv.login(who), "ncr", eid).status_code == 200, (who, eid)
+        assert up(aenv.login(who, project=project), "ncr", eid).status_code == 200, (who, eid)
         assert len(rows(aenv)) == before + 1
 
 
@@ -519,19 +525,45 @@ def test_checklist_is_frozen_when_its_parent_itr_is_approved_or_void_and_open_ot
 
 
 CATEGORY_LOCKS = [
-    ("obs", models.OBS, "obs-a", "defectPhoto", 409), ("obs", models.OBS, "obs-a", "improvementPhoto", 409), ("obs", models.OBS, "obs-a", "attachment", 200),
     ("ncr", models.NCR, "ncr-a", "improvementPhoto", 409), ("ncr", models.NCR, "ncr-a", "defectPhoto", 200),
     ("ncr", models.NCR, "ncr-a", "progressPhoto", 200), ("ncr", models.NCR, "ncr-a", "attachment", 200),
 ]
 
 
 @pytest.mark.parametrize("etype,model,rid,category,expect", CATEGORY_LOCKS, ids=[f"{c[0]}-closed-{c[3]}" for c in CATEGORY_LOCKS])
-def test_a_closed_ncr_or_obs_locks_only_the_photo_categories_its_own_rules_lock(aenv, etype, model, rid, category, expect):
+def test_a_closed_ncr_locks_only_the_photo_categories_its_own_rules_lock(aenv, etype, model, rid, category, expect):
     c = aenv.login("adm")
     alive = up(c, etype, rid, category=category).json()[0]
     _set_state(aenv, model, rid, status="Closed")
     assert up(c, etype, rid, category=category).status_code == expect
     assert c.delete(f"/api/files/{alive['id']}").status_code == (200 if expect == 200 else 409)
+
+
+OBS_CATEGORIES = ["defectPhoto", "improvementPhoto", "attachment"]
+
+
+@pytest.mark.parametrize("status", ["Closed", "Void"])
+@pytest.mark.parametrize("category", OBS_CATEGORIES)
+def test_a_closed_or_void_obs_locks_every_photo_and_attachment(aenv, status, category):
+    """OBS-ATTACH-LOCK-2026-001 (business decision 2026-10-12): Closed / Void freeze ALL of an observation's photos and attachments —
+    no upload and no delete, in any category (before: Closed locked only the two photo categories, Void nothing)."""
+    c = aenv.login("adm")
+    alive = up(c, "obs", "obs-a", category=category).json()[0]
+    _set_state(aenv, models.OBS, "obs-a", status=status)
+    refused = up(c, "obs", "obs-a", category=category)
+    assert refused.status_code == 409 and refused.json()["detail"] == f"Cannot change attachments of a {status} OBS: the record is locked."
+    gone = c.delete(f"/api/files/{alive['id']}")
+    assert gone.status_code == 409, gone.text
+    assert gone.json()["detail"] == f"Cannot change attachments of a {status} OBS: the record is locked."
+    _set_state(aenv, models.OBS, "obs-a", status="Open")              # reopened: open again
+    assert up(c, "obs", "obs-a", category=category).status_code == 200
+    assert c.delete(f"/api/files/{alive['id']}").status_code == 200
+
+
+def test_obs_locked_is_the_one_status_check():
+    from core.attachment_access import OBS_LOCKED_STATUSES, obs_locked
+    assert OBS_LOCKED_STATUSES == {"Closed", "Void"}
+    assert [s for s in ("Open", "In Progress", "Closed", "Void", None, "") if obs_locked(s)] == ["Closed", "Void"]
 
 
 def test_the_same_records_are_open_to_uploads_while_they_are_not_locked(aenv):
@@ -540,7 +572,7 @@ def test_the_same_records_are_open_to_uploads_while_they_are_not_locked(aenv):
         assert up(c, etype, MATRIX[etype]).status_code == 200, etype
 
 
-@pytest.mark.parametrize("etype,model,rid,status", [("ncr", models.NCR, "ncr-a", "Void"), ("obs", models.OBS, "obs-a", "Void"),
+@pytest.mark.parametrize("etype,model,rid,status", [("ncr", models.NCR, "ncr-a", "Void"),
                                                     ("pqp", models.PQP, "pqp-1", "Void"), ("noi", models.NOI, "noi-1", "Reject")])
 def test_PENDING_DECISION_states_without_an_attachment_policy_are_not_locked_yet(aenv, etype, model, rid, status):
     """Deliberately pins today's behaviour for states the records' own rules say nothing about (see core.attachment_access.PENDING_STATE_DECISIONS).

@@ -26,6 +26,7 @@ from core.utils import (
     WorkflowEngine
 )
 from core.perms import ITR_APPROVE
+from core.refusals import Refusal
 from services.checklist_service import _instance_has_historical_evidence, blank_inspection_detail_data, pass_support_problems
 
 
@@ -872,9 +873,11 @@ class ITRService:
             # An Approved or Void ITR is a locked record: it is never deleted, whatever its checklists
             # contain (historical/anomalous data may have none, or none that count as evidence).
             if db_itr.status in ('Approved', 'Void'):
-                raise ValueError(
+                raise Refusal(
+                    'ITR_DELETE_LOCKED',
                     f"Cannot delete ITR '{db_itr.documentNumber}': it is {db_itr.status} (a locked record). "
-                    f"Approved and Void ITRs are kept for the record."
+                    f"Approved and Void ITRs are kept for the record.",
+                    number=db_itr.documentNumber, status=db_itr.status,
                 )
 
             # History preservation (2026-09-20). Read on the locked, re-read state, before anything is written.
@@ -887,11 +890,13 @@ class ITRService:
             ).count()
             row_history = [f for f in ('approvedBy', 'approvedAt') if str(getattr(db_itr, f) or '').strip()]
             if event_count or row_history:
-                raise ValueError(
+                raise Refusal(
+                    'ITR_DELETE_APPROVAL_HISTORY',
                     f"Cannot delete ITR '{db_itr.documentNumber}': it has approval history "
                     f"({event_count} recorded approval/revocation event(s)"
                     f"{', plus ' + ' / '.join(row_history) + ' saved on the record' if row_history else ''}). "
-                    f"ITRs that were ever approved are kept for the record."
+                    f"ITRs that were ever approved are kept for the record.",
+                    number=db_itr.documentNumber, eventCount=event_count, rowHistory=row_history,
                 )
             # 勾稽鎖定：刪除 ITR 前確認沒有 NCR 透過 reInspectionNumber 參照此 ITR
             if db_itr.documentNumber:
@@ -900,10 +905,12 @@ class ITRService:
                 ).all()
                 if referencing_ncrs:
                     ncr_refs = [ncr.documentNumber or ncr.id for ncr in referencing_ncrs]
-                    raise ValueError(
+                    raise Refusal(
+                        'ITR_DELETE_REINSPECTION_CITED',
                         f"Cannot delete ITR '{db_itr.documentNumber}': "
                         f"referenced by NCR(s): {', '.join(ncr_refs)}. "
-                        f"Please remove the re-inspection reference from those NCRs first."
+                        f"Please remove the re-inspection reference from those NCRs first.",
+                        number=db_itr.documentNumber, ncrs=ncr_refs,
                     )
 
                 # NCRs raised from this ITR (create_ncr_from_itr sets NCR.itrNumber) and Observations that cite it
@@ -917,9 +924,11 @@ class ITRService:
                     visible = [str(c.documentNumber) for c in citers if record_in_scope(c, scope)]
                     hidden = len(citers) - len(visible)
                     parts = visible + ([f"{hidden} record(s) outside your access"] if hidden else [])
-                    raise ValueError(
+                    raise Refusal(
+                        'ITR_DELETE_SOURCE_CITED',
                         f"Cannot delete ITR '{db_itr.documentNumber}': it is cited as the source ITR by "
-                        f"{', '.join(parts)}. Void the ITR instead of deleting it."
+                        f"{', '.join(parts)}. Void the ITR instead of deleting it.",
+                        number=db_itr.documentNumber, refs=visible, hiddenCount=hidden,
                     )
 
             # (b) A re-inspection points at its original by originalItrId. Deleting the original would cut the
@@ -929,10 +938,12 @@ class ITRService:
                 models.ITR.originalItrId == itr_id
             ).all()
             if referencing_itrs:
-                raise ValueError(
+                raise Refusal(
+                    'ITR_DELETE_HAS_REINSPECTIONS',
                     f"Cannot delete ITR '{db_itr.documentNumber}': re-inspection ITR(s) "
                     f"{', '.join(str(r[0]) for r in referencing_itrs)} refer to it as their original. "
-                    f"The first-inspection -> re-inspection chain is kept."
+                    f"The first-inspection -> re-inspection chain is kept.",
+                    number=db_itr.documentNumber, children=[str(r[0]) for r in referencing_itrs],
                 )
 
             # Evidence-protection hardening (2026-09-19): deleting the ITR
@@ -949,11 +960,13 @@ class ITRService:
             ).all()                                            # fresh rows: evidence saved a moment ago counts
             evidence_instances = [c for c in owned_instances if _instance_has_historical_evidence(c)]
             if evidence_instances:
-                raise ValueError(
+                raise Refusal(
+                    'ITR_DELETE_CHECKLIST_EVIDENCE',
                     f"Cannot delete ITR '{db_itr.documentNumber}' — it has Checklist "
                     f"instance(s) holding inspection evidence: "
                     f"{', '.join(c.recordsNo for c in evidence_instances)}. "
-                    f"Void the ITR instead of deleting it."
+                    f"Void the ITR instead of deleting it.",
+                    number=db_itr.documentNumber, checklists=[c.recordsNo for c in evidence_instances],
                 )
 
             # Capture old values for audit
@@ -1137,9 +1150,11 @@ class ITRService:
             # instance outright — a stronger violation of "approved
             # evidence is protected" than merely editing it would be.
             if db_itr.status in ('Approved', 'Void'):
-                raise ValueError(
+                raise Refusal(
+                    'ITR_UNLINK_LOCKED',
                     f"Cannot unlink a checklist while ITR '{db_itr.documentNumber}' is "
-                    f"{db_itr.status}. Move it back to 'In Progress' first."
+                    f"{db_itr.status}. Move it back to 'In Progress' first.",
+                    number=db_itr.documentNumber, status=db_itr.status,
                 )
 
             instance = self.repo.db.query(models.Checklist).filter(
@@ -1167,11 +1182,13 @@ class ITRService:
                     f"first recorded {instance.evidence_recorded_at}" if instance.evidence_recorded_at
                     else f"status={instance.status}, passCount={instance.passCount}, failCount={instance.failCount}"
                 )
-                raise ValueError(
+                raise Refusal(
+                    'ITR_UNLINK_EVIDENCE',
                     f"Cannot unlink Checklist '{instance.recordsNo}' — it has held "
                     f"inspection evidence ({evidence_note}), even if its fields have since "
                     f"been cleared. Checklist has no archive/void state to route it through "
-                    f"instead; an instance that has ever held real results can never be removed."
+                    f"instead; an instance that has ever held real results can never be removed.",
+                    checklist=instance.recordsNo,
                 )
 
             # Delete + audit entry in ONE transaction (2026-09-20).

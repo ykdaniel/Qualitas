@@ -193,14 +193,9 @@ export const useITRStore = create<ITRState>((set, get) => ({
     },
 
     deleteITR: async (id: string) => {
-        try {
-            await api.delete(`/itr/${id}`);
-            set((state) => ({ itrList: state.itrList.filter(i => i.id !== id) }));
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to delete ITR');
-            set({ error: msg });
-            throw error;
-        }
+        // A refused or failed delete goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-001); the page's error banner is for list loads only.
+        await api.delete(`/itr/${id}`);
+        set((state) => ({ itrList: state.itrList.filter(i => i.id !== id) }));
     },
 
     getITRList: () => get().itrList,

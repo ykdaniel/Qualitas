@@ -18,6 +18,7 @@ from sqlalchemy import text
 import models
 from core import perms
 from core.security import get_password_hash
+from project_membership import TEST_PROJECT_ID, bind
 from test_itr_approval_events_http import (   # noqa: F401  (env is a fixture, re-exported on purpose)
     PW, TEMPLATE_ITEMS, _add_second_approver, _approve, _passing_items, _ready_itr, _state, _uid, env,
 )
@@ -35,8 +36,12 @@ def _add_readers(env):
             role.permissions_rel = [_get_or_create_perm(db, c) for c in codes]
             db.add(role); db.flush()
             uname = name.lower()
-            db.add(models.User(username=uname, email=f"{uname}@example.com", is_active=True, vendor_id=vendor,
-                               hashed_password=get_password_hash(PW), role_id=role.id))
+            user = models.User(username=uname, email=f"{uname}@example.com", is_active=True, vendor_id=vendor,
+                               hashed_password=get_password_hash(PW), role_id=role.id)
+            db.add(user); db.flush()
+            # REF-PROJECT-SEQ B1: every reader works in the ITRs' project, so what tells them apart is only what the
+            # tests check — contractor (vendor_id) and permission
+            bind(db, user, TEST_PROJECT_ID)
         db.commit()
     finally:
         db.close()
@@ -178,7 +183,7 @@ def test_permission_and_scope_gate_the_list_and_every_single_event(hist):
     ev = _state(env, itr_id)["events"][0]["id"]
     foreign_ev = _state(env, other_itr)["events"][0]["id"]
 
-    for who in ("histviewer", "histsamevendor"):                        # unscoped viewer, and a viewer scoped to the ITR's own contractor
+    for who in ("histviewer", "histsamevendor"):                        # project viewer with no contractor, and one scoped to the ITR's own contractor
         c = env.login(who)
         assert c.get(f"/api/itr/{itr_id}/approval-events").status_code == 200
         assert c.get(f"/api/itr/{itr_id}/approval-events/{ev}").status_code == 200

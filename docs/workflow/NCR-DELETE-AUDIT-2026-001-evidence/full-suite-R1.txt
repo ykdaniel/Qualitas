@@ -1,0 +1,349 @@
+........................................................................ [  2%]
+........................................................................ [  5%]
+........................................................................ [  8%]
+........................................................................ [ 11%]
+........................................................................ [ 14%]
+........................................................................ [ 16%]
+........................................................................ [ 19%]
+........................................................................ [ 22%]
+........................................................................ [ 25%]
+........................................................................ [ 28%]
+........................................................................ [ 30%]
+........................................................................ [ 33%]
+........................................................................ [ 36%]
+........................................................................ [ 39%]
+........................................................................ [ 42%]
+........................................................................ [ 45%]
+........................................................................ [ 47%]
+........................................................................ [ 50%]
+........................................................................ [ 53%]
+ss...................................................................... [ 56%]
+........................................................................ [ 59%]
+........................................................................ [ 61%]
+........................................................................ [ 64%]
+........................................................................ [ 67%]
+........................................................................ [ 70%]
+........................................................................ [ 73%]
+........................................................................ [ 75%]
+........................................................................ [ 78%]
+........................................................................ [ 81%]
+........................................................................ [ 84%]
+........................................................................ [ 87%]
+........................................................................ [ 90%]
+........................................................................ [ 92%]
+........................................................................ [ 95%]
+....................................s................................... [ 98%]
+......................................                                   [100%]
+=============================== warnings summary ===============================
+../../../../../../../../opt/homebrew/lib/python3.14/site-packages/fastapi/routing.py:211: 57 warnings
+tests/test_active_assignee_http.py: 610 warnings
+tests/test_attachment_authorization_http.py: 8526 warnings
+tests/test_attachment_hardening_http.py: 5344 warnings
+tests/test_audit_agenda_http.py: 144 warnings
+tests/test_audit_contractor_scope_http.py: 30 warnings
+tests/test_audit_export_docx_http.py: 195 warnings
+tests/test_audit_hardening_http.py: 495 warnings
+tests/test_audit_templates_http.py: 165 warnings
+tests/test_audit_void_lock_http.py: 75 warnings
+tests/test_checklist_na_reason_http.py: 459 warnings
+tests/test_checklist_pass_integrity_http.py: 1269 warnings
+tests/test_checklist_reopen_http.py: 108 warnings
+tests/test_checklist_status_rule_http.py: 1620 warnings
+tests/test_contractor_options_http.py: 250 warnings
+tests/test_contractor_personnel_http.py: 112 warnings
+tests/test_date_write_guard_http.py: 5008 warnings
+tests/test_docx_path_guard_http.py: 58 warnings
+tests/test_file_list_route_http.py: 70 warnings
+tests/test_iam_admin_role_boundary_http.py: 1824 warnings
+tests/test_iam_admin_takeover_http.py: 2223 warnings
+tests/test_iam_role_audit_http.py: 228 warnings
+tests/test_iam_user_security_http.py: 1672 warnings
+tests/test_itp_checklist_km_project_audit_http.py: 1102 warnings
+tests/test_itr_approval_events_http.py: 729 warnings
+tests/test_itr_approval_history_api_http.py: 243 warnings
+tests/test_itr_checklist_http_e2e.py: 84 warnings
+tests/test_itr_history_preservation_http.py: 378 warnings
+tests/test_itr_integrity_guards_http.py: 864 warnings
+tests/test_itr_revoke_approval_acceptance.py: 270 warnings
+tests/test_itr_state_protection_http.py: 675 warnings
+tests/test_itr_write_paths_atomic_http.py: 729 warnings
+tests/test_material_submittals_http.py: 656 warnings
+tests/test_materials_http.py: 221 warnings
+tests/test_meeting_minutes_carry_forward_http.py: 59 warnings
+tests/test_meeting_minutes_export_docx_http.py: 130 warnings
+tests/test_meeting_minutes_rev_http.py: 39 warnings
+tests/test_ncr_audit_atomic_http.py: 770 warnings
+tests/test_ncr_audit_delete_http.py: 455 warnings
+tests/test_ncr_close_permission_http.py: 805 warnings
+tests/test_ncr_closed_creation_http.py: 840 warnings
+tests/test_ncr_closure_photos_http.py: 945 warnings
+tests/test_ncr_late_closure_http.py: 910 warnings
+tests/test_noi_contractor_lock_http.py: 270 warnings
+tests/test_noi_create_atomic_http.py: 288 warnings
+tests/test_noi_delete_http.py: 180 warnings
+tests/test_noi_legacy_itp_read_http.py: 105 warnings
+tests/test_noi_qworkflow_backfill_rule_http.py: 270 warnings
+tests/test_remaining_audit_paths_http.py: 3198 warnings
+tests/test_reviewed_audit_paths_http.py: 1560 warnings
+tests/test_scope_instance_contractor_http.py: 972 warnings
+tests/test_user_company_label_http.py: 513 warnings
+tests/test_workflow_photo_evidence_http.py: 945 warnings
+tests/test_workflow_project_filter_http.py: 105 warnings
+  /opt/homebrew/lib/python3.14/site-packages/fastapi/routing.py:211: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    is_coroutine = asyncio.iscoroutinefunction(dependant.call)
+
+tests/test_active_assignee_http.py: 60 warnings
+tests/test_attachment_authorization_http.py: 2075 warnings
+tests/test_attachment_hardening_http.py: 1033 warnings
+tests/test_audit_agenda_http.py: 61 warnings
+tests/test_audit_contractor_scope_http.py: 10 warnings
+tests/test_audit_export_docx_http.py: 83 warnings
+tests/test_audit_hardening_http.py: 130 warnings
+tests/test_audit_templates_http.py: 104 warnings
+tests/test_audit_void_lock_http.py: 28 warnings
+tests/test_checklist_na_reason_http.py: 174 warnings
+tests/test_checklist_pass_integrity_http.py: 504 warnings
+tests/test_checklist_reopen_http.py: 67 warnings
+tests/test_checklist_status_rule_http.py: 642 warnings
+tests/test_contractor_options_http.py: 48 warnings
+tests/test_contractor_personnel_http.py: 74 warnings
+tests/test_date_write_guard_http.py: 927 warnings
+tests/test_docx_path_guard_http.py: 8 warnings
+tests/test_file_list_route_http.py: 19 warnings
+tests/test_iam_admin_role_boundary_http.py: 510 warnings
+tests/test_iam_admin_takeover_http.py: 720 warnings
+tests/test_iam_role_audit_http.py: 61 warnings
+tests/test_iam_user_security_http.py: 494 warnings
+tests/test_itp_checklist_km_project_audit_http.py: 121 warnings
+tests/test_itr_approval_events_http.py: 309 warnings
+tests/test_itr_approval_history_api_http.py: 220 warnings
+tests/test_itr_checklist_http_e2e.py: 34 warnings
+tests/test_itr_history_preservation_http.py: 125 warnings
+tests/test_itr_integrity_guards_http.py: 138 warnings
+tests/test_itr_revoke_approval_acceptance.py: 127 warnings
+tests/test_itr_state_protection_http.py: 310 warnings
+tests/test_itr_write_paths_atomic_http.py: 289 warnings
+tests/test_material_submittals_http.py: 613 warnings
+tests/test_materials_http.py: 228 warnings
+tests/test_meeting_minutes_carry_forward_http.py: 18 warnings
+tests/test_meeting_minutes_export_docx_http.py: 54 warnings
+tests/test_meeting_minutes_rev_http.py: 18 warnings
+tests/test_ncr_audit_atomic_http.py: 105 warnings
+tests/test_ncr_audit_delete_http.py: 59 warnings
+tests/test_ncr_close_permission_http.py: 105 warnings
+tests/test_ncr_closed_creation_http.py: 147 warnings
+tests/test_ncr_closure_photos_http.py: 151 warnings
+tests/test_ncr_late_closure_http.py: 125 warnings
+tests/test_noi_contractor_lock_http.py: 69 warnings
+tests/test_noi_create_atomic_http.py: 74 warnings
+tests/test_noi_delete_http.py: 48 warnings
+tests/test_noi_legacy_itp_read_http.py: 10 warnings
+tests/test_noi_qworkflow_backfill_rule_http.py: 49 warnings
+tests/test_remaining_audit_paths_http.py: 296 warnings
+tests/test_reviewed_audit_paths_http.py: 140 warnings
+tests/test_scope_instance_contractor_http.py: 352 warnings
+tests/test_user_company_label_http.py: 123 warnings
+tests/test_workflow_photo_evidence_http.py: 144 warnings
+tests/test_workflow_project_filter_http.py: 33 warnings
+  /opt/homebrew/lib/python3.14/site-packages/starlette/_utils.py:40: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    return asyncio.iscoroutinefunction(obj) or (
+
+tests/test_active_assignee_http.py: 11 warnings
+tests/test_attachment_authorization_http.py: 461 warnings
+tests/test_attachment_hardening_http.py: 273 warnings
+tests/test_audit_agenda_http.py: 9 warnings
+tests/test_audit_contractor_scope_http.py: 2 warnings
+tests/test_audit_export_docx_http.py: 13 warnings
+tests/test_audit_hardening_http.py: 33 warnings
+tests/test_audit_templates_http.py: 22 warnings
+tests/test_audit_void_lock_http.py: 5 warnings
+tests/test_checklist_na_reason_http.py: 51 warnings
+tests/test_checklist_pass_integrity_http.py: 141 warnings
+tests/test_checklist_reopen_http.py: 15 warnings
+tests/test_checklist_status_rule_http.py: 188 warnings
+tests/test_contractor_options_http.py: 10 warnings
+tests/test_contractor_personnel_http.py: 7 warnings
+tests/test_date_write_guard_http.py: 143 warnings
+tests/test_docx_path_guard_http.py: 2 warnings
+tests/test_file_list_route_http.py: 6 warnings
+tests/test_iam_admin_role_boundary_http.py: 123 warnings
+tests/test_iam_admin_takeover_http.py: 177 warnings
+tests/test_iam_role_audit_http.py: 13 warnings
+tests/test_iam_user_security_http.py: 121 warnings
+tests/test_itp_checklist_km_project_audit_http.py: 35 warnings
+tests/test_itr_approval_events_http.py: 75 warnings
+tests/test_itr_approval_history_api_http.py: 50 warnings
+tests/test_itr_checklist_http_e2e.py: 4 warnings
+tests/test_itr_history_preservation_http.py: 33 warnings
+tests/test_itr_integrity_guards_http.py: 33 warnings
+tests/test_itr_revoke_approval_acceptance.py: 24 warnings
+tests/test_itr_state_protection_http.py: 87 warnings
+tests/test_itr_write_paths_atomic_http.py: 84 warnings
+tests/test_material_submittals_http.py: 193 warnings
+tests/test_materials_http.py: 85 warnings
+tests/test_meeting_minutes_carry_forward_http.py: 4 warnings
+tests/test_meeting_minutes_export_docx_http.py: 13 warnings
+tests/test_meeting_minutes_rev_http.py: 3 warnings
+tests/test_ncr_audit_atomic_http.py: 26 warnings
+tests/test_ncr_audit_delete_http.py: 15 warnings
+tests/test_ncr_close_permission_http.py: 25 warnings
+tests/test_ncr_closed_creation_http.py: 30 warnings
+tests/test_ncr_closure_photos_http.py: 34 warnings
+tests/test_ncr_late_closure_http.py: 32 warnings
+tests/test_noi_contractor_lock_http.py: 15 warnings
+tests/test_noi_create_atomic_http.py: 20 warnings
+tests/test_noi_delete_http.py: 10 warnings
+tests/test_noi_legacy_itp_read_http.py: 3 warnings
+tests/test_noi_qworkflow_backfill_rule_http.py: 11 warnings
+tests/test_remaining_audit_paths_http.py: 82 warnings
+tests/test_reviewed_audit_paths_http.py: 40 warnings
+tests/test_scope_instance_contractor_http.py: 77 warnings
+tests/test_user_company_label_http.py: 33 warnings
+tests/test_workflow_photo_evidence_http.py: 27 warnings
+tests/test_workflow_project_filter_http.py: 6 warnings
+  /opt/homebrew/lib/python3.14/site-packages/starlette/_utils.py:41: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    callable(obj) and asyncio.iscoroutinefunction(obj.__call__)
+
+tests/test_active_assignee_http.py: 11 warnings
+tests/test_attachment_authorization_http.py: 461 warnings
+tests/test_attachment_hardening_http.py: 273 warnings
+tests/test_audit_agenda_http.py: 9 warnings
+tests/test_audit_contractor_scope_http.py: 2 warnings
+tests/test_audit_export_docx_http.py: 13 warnings
+tests/test_audit_hardening_http.py: 33 warnings
+tests/test_audit_templates_http.py: 22 warnings
+tests/test_audit_void_lock_http.py: 5 warnings
+tests/test_checklist_na_reason_http.py: 51 warnings
+tests/test_checklist_pass_integrity_http.py: 141 warnings
+tests/test_checklist_reopen_http.py: 15 warnings
+tests/test_checklist_status_rule_http.py: 188 warnings
+tests/test_contractor_options_http.py: 10 warnings
+tests/test_contractor_personnel_http.py: 7 warnings
+tests/test_date_write_guard_http.py: 143 warnings
+tests/test_docx_path_guard_http.py: 2 warnings
+tests/test_file_list_route_http.py: 6 warnings
+tests/test_iam_admin_role_boundary_http.py: 123 warnings
+tests/test_iam_admin_takeover_http.py: 177 warnings
+tests/test_iam_role_audit_http.py: 13 warnings
+tests/test_iam_user_security_http.py: 121 warnings
+tests/test_itp_checklist_km_project_audit_http.py: 35 warnings
+tests/test_itr_approval_events_http.py: 75 warnings
+tests/test_itr_approval_history_api_http.py: 50 warnings
+tests/test_itr_checklist_http_e2e.py: 4 warnings
+tests/test_itr_history_preservation_http.py: 33 warnings
+tests/test_itr_integrity_guards_http.py: 33 warnings
+tests/test_itr_revoke_approval_acceptance.py: 24 warnings
+tests/test_itr_state_protection_http.py: 87 warnings
+tests/test_itr_write_paths_atomic_http.py: 84 warnings
+tests/test_material_submittals_http.py: 193 warnings
+tests/test_materials_http.py: 85 warnings
+tests/test_meeting_minutes_carry_forward_http.py: 4 warnings
+tests/test_meeting_minutes_export_docx_http.py: 13 warnings
+tests/test_meeting_minutes_rev_http.py: 3 warnings
+tests/test_ncr_audit_atomic_http.py: 26 warnings
+tests/test_ncr_audit_delete_http.py: 15 warnings
+tests/test_ncr_close_permission_http.py: 25 warnings
+tests/test_ncr_closed_creation_http.py: 30 warnings
+tests/test_ncr_closure_photos_http.py: 34 warnings
+tests/test_ncr_late_closure_http.py: 32 warnings
+tests/test_noi_contractor_lock_http.py: 15 warnings
+tests/test_noi_create_atomic_http.py: 20 warnings
+tests/test_noi_delete_http.py: 10 warnings
+tests/test_noi_legacy_itp_read_http.py: 3 warnings
+tests/test_noi_qworkflow_backfill_rule_http.py: 11 warnings
+tests/test_remaining_audit_paths_http.py: 82 warnings
+tests/test_reviewed_audit_paths_http.py: 40 warnings
+tests/test_scope_instance_contractor_http.py: 77 warnings
+tests/test_user_company_label_http.py: 33 warnings
+tests/test_workflow_photo_evidence_http.py: 27 warnings
+tests/test_workflow_project_filter_http.py: 6 warnings
+  /Users/nook/Library/Python/3.14/lib/python/site-packages/httpx/_client.py:690: DeprecationWarning: The 'app' shortcut is now deprecated. Use the explicit style 'transport=WSGITransport(app=...)' instead.
+    warnings.warn(message, DeprecationWarning)
+
+tests/test_active_assignee_http.py: 25 warnings
+tests/test_attachment_authorization_http.py: 819 warnings
+tests/test_attachment_hardening_http.py: 303 warnings
+tests/test_audit_agenda_http.py: 33 warnings
+tests/test_audit_contractor_scope_http.py: 4 warnings
+tests/test_audit_export_docx_http.py: 43 warnings
+tests/test_audit_hardening_http.py: 46 warnings
+tests/test_audit_templates_http.py: 44 warnings
+tests/test_audit_void_lock_http.py: 15 warnings
+tests/test_checklist_na_reason_http.py: 59 warnings
+tests/test_checklist_pass_integrity_http.py: 175 warnings
+tests/test_checklist_reopen_http.py: 30 warnings
+tests/test_checklist_status_rule_http.py: 222 warnings
+tests/test_contractor_options_http.py: 16 warnings
+tests/test_contractor_personnel_http.py: 41 warnings
+tests/test_date_write_guard_http.py: 398 warnings
+tests/test_docx_path_guard_http.py: 4 warnings
+tests/test_file_list_route_http.py: 5 warnings
+tests/test_iam_admin_role_boundary_http.py: 156 warnings
+tests/test_iam_admin_takeover_http.py: 207 warnings
+tests/test_iam_role_audit_http.py: 27 warnings
+tests/test_iam_user_security_http.py: 158 warnings
+tests/test_itp_checklist_km_project_audit_http.py: 46 warnings
+tests/test_itr_approval_events_http.py: 135 warnings
+tests/test_itr_approval_history_api_http.py: 96 warnings
+tests/test_itr_history_preservation_http.py: 47 warnings
+tests/test_itr_integrity_guards_http.py: 44 warnings
+tests/test_itr_revoke_approval_acceptance.py: 63 warnings
+tests/test_itr_state_protection_http.py: 112 warnings
+tests/test_itr_write_paths_atomic_http.py: 107 warnings
+tests/test_material_submittals_http.py: 159 warnings
+tests/test_materials_http.py: 29 warnings
+tests/test_meeting_minutes_carry_forward_http.py: 10 warnings
+tests/test_meeting_minutes_export_docx_http.py: 25 warnings
+tests/test_meeting_minutes_rev_http.py: 11 warnings
+tests/test_ncr_audit_atomic_http.py: 46 warnings
+tests/test_ncr_audit_delete_http.py: 19 warnings
+tests/test_ncr_close_permission_http.py: 33 warnings
+tests/test_ncr_closed_creation_http.py: 50 warnings
+tests/test_ncr_closure_photos_http.py: 57 warnings
+tests/test_ncr_late_closure_http.py: 39 warnings
+tests/test_noi_contractor_lock_http.py: 31 warnings
+tests/test_noi_create_atomic_http.py: 30 warnings
+tests/test_noi_delete_http.py: 20 warnings
+tests/test_noi_legacy_itp_read_http.py: 3 warnings
+tests/test_noi_qworkflow_backfill_rule_http.py: 27 warnings
+tests/test_remaining_audit_paths_http.py: 120 warnings
+tests/test_reviewed_audit_paths_http.py: 55 warnings
+tests/test_scope_instance_contractor_http.py: 158 warnings
+tests/test_user_company_label_http.py: 42 warnings
+tests/test_workflow_photo_evidence_http.py: 79 warnings
+tests/test_workflow_project_filter_http.py: 21 warnings
+  /opt/homebrew/lib/python3.14/site-packages/jose/jwt.py:311: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    now = timegm(datetime.utcnow().utctimetuple())
+
+tests/test_checklist_template_cleanup.py::test_seeded_checklist_is_a_clean_template
+tests/test_checklist_template_cleanup.py::test_seeded_checklist_is_a_clean_template
+  /Users/nook/Documents/Qualitas/.claude/worktrees/angry-newton-4cae58/backend/crud.py:310: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    new_value=role.dict(exclude={"reason"}),
+
+tests/test_checklist_template_cleanup.py::test_seeded_checklist_is_a_clean_template
+  /Users/nook/Documents/Qualitas/.claude/worktrees/angry-newton-4cae58/backend/crud.py:225: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    new_value=user.dict(exclude={"password"}),
+
+tests/test_noi_create_atomic_http.py::test_backfill_still_fills_a_genuinely_missing_row_once_history_is_not_rewritten_by_the_create
+tests/test_noi_qworkflow_backfill_rule_http.py::test_a_historical_ordinary_noi_without_a_row_is_completed_exactly_once
+tests/test_noi_qworkflow_backfill_rule_http.py::test_mixed_history_only_genuinely_missing_ordinary_rows_are_added_and_reruns_are_stable
+tests/test_noi_qworkflow_backfill_rule_http.py::test_create_and_backfill_decide_identically_for_every_ncrnumber_value[None]
+tests/test_noi_qworkflow_backfill_rule_http.py::test_create_and_backfill_decide_identically_for_every_ncrnumber_value[]
+  /Users/nook/Documents/Qualitas/.claude/worktrees/angry-newton-4cae58/backend/db_migrations.py:869: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    now = datetime.utcnow().isoformat()
+
+tests/test_remaining_audit_paths_http.py::test_durable_audit_and_one_commit[fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_call-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_call-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_object-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_object-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_flush-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_flush-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[commit-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[commit-fat-details]
+  /Users/nook/Documents/Qualitas/.claude/worktrees/angry-newton-4cae58/backend/routers/fat.py:111: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    details_data = [item.dict() for item in details]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+2555 passed, 3 skipped, 72949 warnings in 3102.78s (0:51:42)
+exit 0

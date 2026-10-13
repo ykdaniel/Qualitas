@@ -25,6 +25,8 @@ const DeleteAuditModal: React.FC<DeleteAuditModalProps> = ({
     const [reason, setReason] = useState('');
     const [error, setError] = useState('');
 
+    // The reason is kept while the modal is open (a refused delete leaves it open to try again); the parent gives each
+    // delete its own `key`, so a new delete starts empty.
     if (!isOpen) return null;
 
     const handleConfirm = () => {
@@ -33,8 +35,6 @@ const DeleteAuditModal: React.FC<DeleteAuditModalProps> = ({
             return;
         }
         onConfirm(reason);
-        setReason('');
-        setError('');
     };
 
     return (

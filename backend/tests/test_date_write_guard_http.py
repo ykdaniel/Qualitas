@@ -91,12 +91,15 @@ def _seed(S):
             db.flush()
             for p in projects:
                 db.add(models.UserProject(user_id=u.id, project_id=p))
-        user("dt_a", full)
-        user("dt_view", view)
-        user("dt_noclose", no_close)
-        user("dt_closeonly", close_only)
-        user("dt_createclose", create_close)
-        user("dt_updateclose", update_close)
+        # These accounts work in P-A, where every row of these suites lives (REF-PROJECT-SEQ-2026-001 B1: a non-admin
+        # without a project sees nothing — they used to be unscoped). dt_admin is the one account that sees every project.
+        user("dt_a", full, None, ["P-A"])
+        user("dt_view", view, None, ["P-A"])
+        user("dt_noclose", no_close, None, ["P-A"])
+        user("dt_closeonly", close_only, None, ["P-A"])
+        user("dt_createclose", create_close, None, ["P-A"])
+        user("dt_updateclose", update_close, None, ["P-A"])
+        user("dt_admin", role("admin", mods + [perms.NCR_CLOSE]))
         user("dt_scoped", full, "ACC-V2", ["P-A"])
         user("dt_v1", full, "ACC-V1", ["P-A"])           # scoped like the NCR rows of these tests (contractor ACC-V1)
         db.add(models.ITP(id="itp-1", referenceNo="QTS-ACC-ITP-000001", vendor_id="ACC-V1", project_id="P-A", description="i", rev="R",
@@ -132,6 +135,7 @@ def _add_row(env, mod, ref, **cols):
         "noi": dict(vendor_id="ACC-V1", package="p", status="Open", issueDate="2026-09-02", inspectionTime="09:00", itpNo="QTS-ACC-ITP-000001",
                     inspectionDate="2026-09-12", type="Rebar"),
     }[mod]
+    defaults["project_id"] = "P-A"          # the project the suites' accounts work in (REF-PROJECT-SEQ-2026-001 B1)
     rid = uuid.uuid4().hex
     db = env.Session()
     try:

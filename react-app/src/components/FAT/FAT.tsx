@@ -14,6 +14,7 @@ import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { useFATStore, deriveFATResult } from '../../store/fatStore';
 import type { FATItem, FATDetailItem } from '../../store/fatStore';
+import { showRefusal } from '../../store/refusalStore';
 import ReactDOM from 'react-dom';
 import FATPrintTemplate from './FATPrintTemplate';
 import './FAT.print.css';
@@ -167,9 +168,12 @@ const FAT: React.FC = () => {
     if (deleteModal.id) {
       try {
         await deleteFAT(deleteModal.id);
+      } catch (err) {
+        // it used to fail with no message at all: now shown in the refusal dialog
+        console.error('Failed to delete FAT:', err);
+        showRefusal(err, 'delete');
+      } finally {
         setDeleteModal({ isOpen: false, id: null, message: '' });
-      } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
-        // Error handled in context
       }
     }
   };
