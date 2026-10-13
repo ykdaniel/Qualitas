@@ -29,9 +29,9 @@ def flow(env, tag, n=1, statuses=None, **cols):
     db = env.Session()
     try:
         db.add(models.NOI(id=noi_id, package=f"P-{tag}", referenceNo=ref, issueDate="2026-03-01", inspectionTime="10:00", itpNo="ITP-X", inspectionDate="2026-03-02",
-                          type="site", vendor_id="ACC-V1", status="In Progress"))
+                          type="site", vendor_id="ACC-V1", status="In Progress", project_id="P-A"))   # where dt_a works (REF-PROJECT-SEQ-2026-001 B1)
         db.add(models.QWorkflow(id=uuid.uuid4().hex, referenceNo=f"Q-WorkFlow-{tag}", noi_id=noi_id, createdAt="2026-03-01T00:00:00"))
-        db.add(models.ITR(id=f"itr-{tag}", vendor_id="ACC-V1", documentNumber=f"ITR-{tag}", description="x", rev="A", submit="s", status="In Progress", noiNumber=ref,
+        db.add(models.ITR(id=f"itr-{tag}", vendor_id="ACC-V1", project_id="P-A", documentNumber=f"ITR-{tag}", description="x", rev="A", submit="s", status="In Progress", noiNumber=ref,
                           raiseDate="2026-03-02"))
         db.commit()
     finally:

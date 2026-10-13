@@ -3,7 +3,7 @@ import logging
 import re
 from datetime import datetime
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from database import engine
 
@@ -173,6 +173,11 @@ def run_migrations():
     # names the wizard used to hard-code. Runs once (migration_flags); best effort. The table itself comes from start-up
     # create_all (models.AuditTemplate).
     _seed_initial_audit_templates()
+
+    # 25. Records saved before every document carried a project go to the system's ONE project (REF-PROJECT-SEQ-2026-001
+    # B1, business decision D13): non-admins now only ever see their own project. Runs once (migration_flags), only
+    # when exactly one project exists; best effort.
+    _assign_projectless_records_to_the_only_project()
 
     logger.info("Migrations completed.")
 
@@ -535,6 +540,69 @@ def _clean_legacy_bare_template_results():
             logger.info("Cleaned %d bare Checklist template(s) holding results: %s", len(cleaned), ", ".join(cleaned) or "none")
     except Exception as e:
         logger.error("Could not clean bare Checklist templates holding results: %s", e)
+
+
+PROJECTLESS_RECORDS_FLAG = "projectless_records_to_only_project_v1"
+# Documents that belong to a project. ITP is NOT here: an ITP without a project is a shared template every project may
+# use (business decision D10); materials / material_submittals always had a required project.
+PROJECTLESS_RECORD_TABLES = ("noi", "itr", "ncr", "checklist", "obs", "osd", "pqp", "followup", "meeting_minutes",
+                             "audits", "fat", "qworkflow")
+
+
+def _assign_projectless_records_to_the_only_project():
+    """Step 25 (REF-PROJECT-SEQ-2026-001 B1, D13). Every document with project_id NULL in PROJECTLESS_RECORD_TABLES is
+    assigned to the system's only project. Reference numbers are NOT touched.
+
+    * Only when exactly ONE project exists. With none, nothing happens and the step tries again on a later start; with
+      several, nothing is guessed — the counts are logged for an administrator, and the step tries again.
+    * One audit_logs row per table that changed (action ASSIGN_PROJECT, the ids moved in old_value) in the same
+      transaction as the updates, so the move can be reversed; the flag is written in that transaction too.
+    * Best effort: a failure is logged, nothing is half-written, and the next start tries again.
+    """
+    import json
+    from datetime import datetime, timezone
+    try:
+        with engine.connect() as conn:
+            if conn.execute(text("SELECT 1 FROM migration_flags WHERE flag_name = :f"),
+                            {"f": PROJECTLESS_RECORDS_FLAG}).first():
+                return
+            projects = conn.execute(text("SELECT id, name FROM projects")).fetchall()
+            pending = {}
+            for table in PROJECTLESS_RECORD_TABLES:
+                where = "project_id IS NULL"
+                if table == "checklist":
+                    # a bare Checklist template (no ITR, no template it was made from) is shared master data (D9): it
+                    # stays without a project; only checklist instances belong to a project (R1 P2-1)
+                    where += " AND (COALESCE(itrId, '') <> '' OR COALESCE(template_id, '') <> '')"
+                ids = [r[0] for r in conn.execute(text(f"SELECT id FROM {table} WHERE {where}")).fetchall()]
+                if ids:
+                    pending[table] = ids
+            if len(projects) != 1:
+                if pending:
+                    logger.warning("Records without a project were NOT assigned (%d projects exist, expected exactly 1): %s",
+                                   len(projects), {t: len(v) for t, v in pending.items()})
+                return
+            project_id, project_name = projects[0]
+            now = datetime.now(timezone.utc).isoformat()
+            for table, ids in pending.items():
+                # exactly the rows recorded in the audit entry below (R1 P3-1)
+                conn.execute(text(f"UPDATE {table} SET project_id = :p WHERE id IN :ids AND project_id IS NULL")
+                             .bindparams(bindparam("ids", expanding=True)), {"p": project_id, "ids": ids})
+                conn.execute(text(
+                    "INSERT INTO audit_logs (timestamp, user_id, username, action, entity_type, entity_id, entity_name, "
+                    "old_value, new_value, reason) VALUES (:ts, NULL, 'system-migration', 'ASSIGN_PROJECT', :t, :p, :n, "
+                    ":old, :new, :reason)"),
+                    {"ts": now, "t": table, "p": project_id, "n": project_name,
+                     "old": json.dumps({"project_id": None, "ids": ids}, ensure_ascii=False),
+                     "new": json.dumps({"project_id": project_id}, ensure_ascii=False),
+                     "reason": "Documents without a project go to the only project (REF-PROJECT-SEQ-2026-001, D13)"})
+            conn.execute(text("INSERT INTO migration_flags (flag_name, completed_at) VALUES (:f, :ts)"),
+                         {"f": PROJECTLESS_RECORDS_FLAG, "ts": now})
+            conn.commit()
+            logger.info("Assigned records without a project to %s: %s", project_name,
+                        {t: len(v) for t, v in pending.items()} or "none")
+    except Exception as e:
+        logger.error("Could not assign records without a project: %s", e)
 
 
 AUDIT_TEMPLATES_INITIAL_FLAG = "audit_templates_initial_v1"

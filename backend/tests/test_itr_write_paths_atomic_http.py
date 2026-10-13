@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 import models
 from core import perms
 from core.security import get_password_hash
+from project_membership import TEST_PROJECT_ID, bind
 from test_itr_revoke_approval_acceptance import (   # noqa: F401  (env is a fixture, re-exported on purpose)
     ITEM, PW, _get_or_create_perm, _mk_itr, env,
 )
@@ -35,8 +36,10 @@ def full(env):
             perms.ITR_VIEW, perms.ITR_CREATE, perms.ITR_UPDATE, perms.ITR_DELETE, perms.NCR_CREATE, perms.NCR_VIEW,
             perms.CHECKLIST_VIEW, perms.CHECKLIST_CREATE, perms.CHECKLIST_UPDATE)]
         db.add(role); db.flush()
-        db.add(models.User(username="acc_full", email="acc_full@example.com", full_name="Fay Full", is_active=True,
-                           hashed_password=get_password_hash(PW), role_id=role.id))
+        user = models.User(username="acc_full", email="acc_full@example.com", full_name="Fay Full", is_active=True,
+                           hashed_password=get_password_hash(PW), role_id=role.id)
+        db.add(user); db.flush()
+        bind(db, user, TEST_PROJECT_ID)              # REF-PROJECT-SEQ B1: works in the harness's project (where _mk_itr puts ITRs)
         db.commit()
     finally:
         db.close()

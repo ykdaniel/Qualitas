@@ -4,6 +4,7 @@ import { LeaveGuardProvider } from './components/Shared/LeaveGuard';
 import { Toaster } from 'sonner';
 import { useAuth } from './context/AuthContext';
 import { AppProviders } from './components/Shared/AppProviders';
+import ProjectGate from './components/Shared/ProjectGate';
 import AppLayout from './components/Shared/AppLayout';
 import RefusalDialog from './components/Shared/RefusalDialog';
 import './App.css';
@@ -70,9 +71,11 @@ const router = createBrowserRouter(createRoutesFromElements(
           {/* Protected Routes with Data Providers */}
           <Route element={
             <PrivateRoute>
-              <AppProviders>
-                <AppLayout />
-              </AppProviders>
+              <ProjectGate>
+                <AppProviders>
+                  <AppLayout />
+                </AppProviders>
+              </ProjectGate>
             </PrivateRoute>
           }>
             <Route path="/" element={<Home />} />

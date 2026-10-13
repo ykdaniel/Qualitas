@@ -489,9 +489,14 @@ async def serve_upload(
 
     # P0 data isolation: a scoped user may only download files whose parent
     # record is within their scope. Looks the file up by its stored path.
+    # KM is shared by every project (business decision D9), so a KM article image (stored without an attachment row) is
+    # not project-scoped; it still needs km:view:all below. Since every non-admin is now project-scoped
+    # (REF-PROJECT-SEQ-2026-001 B1), refusing it here would hide KM images from everyone but administrators.
     scope = compute_scope(current_user, db)
     if not scope.unrestricted:
-        if att is None or not entity_in_scope(db, att.entity_type, att.entity_id, scope):
+        if att is None and not is_km_image_path(file_path):
+            raise HTTPException(status_code=404, detail="File not found")
+        if att is not None and not entity_in_scope(db, att.entity_type, att.entity_id, scope):
             raise HTTPException(status_code=404, detail="File not found")
 
     # Resolve and validate to prevent path traversal (e.g. ../../etc/passwd)

@@ -57,7 +57,10 @@ def henv(tmp_path, monkeypatch):
     db.add(models.Project(id="P-A", name="P-A"))
     db.add(models.Contractor(id="C1", name="C One", abbreviation="C1"))
     db.flush()
-    db.add(models.User(username="editor", email="editor@example.com", is_active=True, hashed_password=get_password_hash(PW), role_id=role.id))
+    editor = models.User(username="editor", email="editor@example.com", is_active=True, hashed_password=get_password_hash(PW), role_id=role.id)
+    db.add(editor)
+    db.flush()
+    db.add(models.UserProject(user_id=editor.id, project_id="P-A"))   # REF-PROJECT-SEQ B1: works in P-A, the records' project
     db.add(models.ITR(id="itr-1", documentNumber="ITR-1", project_id="P-A", vendor_id="C1", status="Open", description="d", rev="0", submit=""))
     db.add(models.NCR(id="ncr-1", documentNumber="NCR-1", project_id="P-A", vendor_id="C1", status="Open", description="d", rev="0", submit=""))
     db.commit()

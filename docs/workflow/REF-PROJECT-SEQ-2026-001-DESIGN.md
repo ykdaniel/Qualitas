@@ -269,7 +269,8 @@
 ## 6. 舊單據歸到 Hailong（D13）
 - 一次性 migration，同樣用 `migration_flags`，在同一個交易內完成。
 - **歸到 Hailong**：把 noi、itr、ncr、checklist、obs、osd、pqp、followup、meeting_minutes、audits、qworkflow 的 `project_id IS NULL` 都設為 Hailong。正式站約 16 筆。
-- **不動**：ITP（共用範本）、Material（本來就必填）、FAT（0 筆）。
+- **不動**：ITP（共用範本）、Material（本來就必填）。FAT 屬於專案單據，B1 實作時一併列入歸類（正式站 0 筆）。
+- **釐清（R1 P2-1，由 D9 推得）**：checklist 只歸**實例**（itrId 或 template_id 不為空），Checklist 裸範本依 D9 維持沒有專案。
 - 號碼一律不改；記錄異動的 id 清單，作為回滾用。
 - 只在「正式站只有一個專案」時自動執行。如果有多個專案，就停止並列出清單，交給管理者決定。這是避免在其他部署環境把資料歸錯專案的防呆。
 

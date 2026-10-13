@@ -85,6 +85,10 @@ const UserModal: React.FC<UserModalProps> = ({ existingUser, readOnly = false, c
 
             const company = form.company_name.trim();
             if (companyRequired && !company) throw new Error(t('iam.companyRequired') || 'Company is required.');
+            // Every account except a system administrator works in a project (REF-PROJECT-SEQ-2026-001 B1, D8); the
+            // server refuses it too. An existing account's projects are saved by the scope section's own button.
+            const isAdminRole = (selectedRole?.name || '').toLowerCase() === 'admin';   // the one system administrator role, as the server decides it
+            if (!existingUser && !isAdminRole && pendingScope.project_ids.length === 0) throw new Error(t('iam.projectRequired'));
 
             const validationData = {
                 name: form.name,
@@ -93,7 +97,9 @@ const UserModal: React.FC<UserModalProps> = ({ existingUser, readOnly = false, c
                 status: form.status,
                 company_name: company || null,
                 password: (existingUser && !(resetPassword && canSetPassword)) ? undefined : (form.password || undefined),
-                reason: form.reason
+                reason: form.reason,
+                // saved with the new account itself (the contractor binding, if any, follows below)
+                project_ids: existingUser ? undefined : pendingScope.project_ids,
             };
 
             userSchema.parse(validationData);
@@ -104,9 +110,8 @@ const UserModal: React.FC<UserModalProps> = ({ existingUser, readOnly = false, c
 
             const savedId = await onSave(validationData, !!existingUser, existingUser ? parseInt(existingUser.id) : undefined);
 
-            // Create flow: persist the chosen data scope now that the user exists.
-            const hasScope = pendingScope.project_ids.length > 0 || !!pendingScope.vendor_id;
-            if (!existingUser && hasScope && typeof savedId === 'number') {
+            // Create flow: the projects were saved with the account; a contractor binding is saved now that it exists.
+            if (!existingUser && !!pendingScope.vendor_id && typeof savedId === 'number') {
                 try {
                     await setUserScope(savedId, pendingScope);
                 } catch (scopeErr: any) {

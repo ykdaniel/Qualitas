@@ -22,6 +22,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 import models
+from project_membership import TEST_PROJECT_ID, bind
 from core import perms
 from core.refusals import Refusal, RefusalHTTPException, refusal_exception_handler, refusal_http
 from core.security import get_password_hash
@@ -61,13 +62,17 @@ def env(tmp_path, monkeypatch):
         deleter.permissions_rel = [models.Permission(code=c, description=c) for c in DELETE_CODES]
         db.add_all([deleter, models.Role(name='Nobody')])
         db.flush()
-        db.add_all([
+        users = [
             models.User(username='deleter', email='deleter@example.test', is_active=True, role_id=deleter.id,
                         hashed_password=get_password_hash(password), company_name='QA'),
             models.User(username='nobody', email='nobody@example.test', is_active=True,
                         role_id=db.query(models.Role).filter_by(name='Nobody').one().id,
                         hashed_password=get_password_hash(password), company_name='QA'),
-        ])
+        ]
+        db.add_all(users)
+        db.flush()
+        for u in users:
+            bind(db, u)     # both work in the shared test project (REF-PROJECT-SEQ-2026-001 B1); refusals stay about the rule tested
         db.commit()
     clients = []
 
@@ -86,6 +91,10 @@ def env(tmp_path, monkeypatch):
 
 
 def _add(env, *rows):
+    """Rows without a project go into the shared test project, where the accounts work (REF-PROJECT-SEQ-2026-001 B1)."""
+    for row in rows:
+        if not isinstance(row, models.Project) and hasattr(row, 'project_id') and getattr(row, 'project_id', None) is None:
+            row.project_id = TEST_PROJECT_ID
     with env.Session() as db:
         db.add_all(rows)
         db.commit()

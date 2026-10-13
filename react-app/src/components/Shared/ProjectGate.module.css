@@ -1,0 +1,68 @@
+.page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 16px;
+  background: linear-gradient(135deg, #fbfaf6 0%, #f3ead8 100%);
+}
+
+.card {
+  width: 100%;
+  max-width: 440px;
+  background: #fff;
+  border: 1px solid rgba(184, 148, 90, 0.22);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(45, 42, 36, 0.12);
+  padding: 28px 24px;
+}
+
+.title {
+  margin: 0 0 8px;
+  font-size: 1.2rem;
+  color: #2d2a24;
+}
+
+.body {
+  margin: 0 0 20px;
+  color: #4a4238;
+  line-height: 1.6;
+}
+
+.projectList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.projectOption {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e3dccd;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.projectOption input {
+  margin: 0;
+}
+
+.projectCode {
+  font-weight: 600;
+  color: #8a6d3b;
+  min-width: 48px;
+}
+
+.error {
+  margin: 0 0 12px;
+  color: #b42318;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

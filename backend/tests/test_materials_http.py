@@ -43,15 +43,17 @@ def env(tmp_path, monkeypatch):
     with S() as db:
         db.add_all([models.Project(id="P1", name="Project One"), models.Project(id="P2", name="Project Two"),
                     models.Contractor(id="V1", name="Vendor One", abbreviation="V1")])
+        # REF-PROJECT-SEQ-2026-001 B1: only a role NAMED admin is unscoped ("admin" gets that role name); every other
+        # account works in one project - viewer / nobody in P1, where the materials under test live.
         users = {
             "admin": (MAT + PROJECT_ADMIN, None, []),
             "scoped": (MAT, None, ["P1"]),
-            "viewer": (["material:view:all"], None, []),
-            "nobody": (["itp:view:all"], None, []),
+            "viewer": (["material:view:all"], None, ["P1"]),
+            "nobody": (["itp:view:all"], None, ["P1"]),
             "vendor": (MAT, "V1", ["P1"]),           # material permissions granted BY MISTAKE to a contractor account
         }
         for name, (codes, vendor_id, projects) in users.items():
-            role = models.Role(name=f"role-{name}")
+            role = models.Role(name="admin" if name == "admin" else f"role-{name}")
             role.permissions_rel = [perm(c) for c in codes]
             db.add(role)
             db.flush()

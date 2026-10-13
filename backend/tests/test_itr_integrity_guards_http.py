@@ -24,6 +24,7 @@ import uuid
 import pytest
 
 import models
+from project_membership import TEST_PROJECT_ID
 from test_itr_revoke_approval_acceptance import env, _mk_itr  # noqa: F401  (fixture reuse)
 from test_itr_state_protection_http import full, _set  # noqa: F401  (fixture reuse)
 from test_scope_instance_contractor_http import _add_world, _itr as _scoped_itr
@@ -59,14 +60,16 @@ def _add(env, obj):
         db.close()
 
 
-def _noi(env, status="Open", project=None, vendor="ACC-V1"):
+# REF-PROJECT-SEQ-2026-001 B1: rows default to the harness's project (where _mk_itr puts ITRs and the shared
+# accounts work); a NULL-project row would be invisible to every non-admin account.
+def _noi(env, status="Open", project=TEST_PROJECT_ID, vendor="ACC-V1"):
     ref = f"NOI-{uuid.uuid4().hex[:6]}"
     _add(env, models.NOI(id=uuid.uuid4().hex, referenceNo=ref, status=status, project_id=project, vendor_id=vendor,
                          package="guard test", issueDate="2026-10-01", inspectionDate="2026-10-02"))
     return ref
 
 
-def _ncr(env, status="Open", project=None, vendor="ACC-V1", **cols):
+def _ncr(env, status="Open", project=TEST_PROJECT_ID, vendor="ACC-V1", **cols):
     doc = f"NCR-{uuid.uuid4().hex[:6]}"
     _add(env, models.NCR(id=uuid.uuid4().hex, documentNumber=doc, status=status, project_id=project, vendor_id=vendor,
                          description="guard test", **cols))
@@ -206,8 +209,20 @@ def test_the_related_graph_hides_records_outside_the_callers_scope(world):
     assert r.status_code == 200 and foreign_noi not in r.text
     r = sc.get(f"/api/itr/{fine}/related")
     assert r.status_code == 200 and own_noi in r.text
-    r = world.login("acc_editor").get(f"/api/itr/{leaky}/related")              # unscoped: unchanged
-    assert foreign_noi in r.text
+    # The hiding above is the caller's scope, not a lost link: an unscoped (admin-named role) account still sees a link
+    # the contractor account may not — another contractor's NOI in the same project.
+    other_tenant_noi = _noi(world, project="P-A", vendor="ACC-V2")
+    leaky_same_project = _scoped_itr(world, "P-A", "ACC-V1", noiNumber=other_tenant_noi)
+    r = sc.get(f"/api/itr/{leaky_same_project}/related")
+    assert r.status_code == 200 and other_tenant_noi not in r.text
+    admin = world.login("scU")
+    r = admin.get(f"/api/itr/{leaky_same_project}/related")                     # unscoped: unchanged
+    assert r.status_code == 200 and other_tenant_noi in r.text
+    # REF-PROJECT-SEQ-2026-001 B1 (G5, a deliberate rule change): related documents stay inside the ROOT record's
+    # project for everyone, admin included — so the cross-project link is no longer shown to the unscoped account
+    # either (it used to be: "assert foreign_noi in r.text").
+    r = admin.get(f"/api/itr/{leaky}/related")
+    assert r.status_code == 200 and foreign_noi not in r.text
 
 
 # ── #7 Raise NCR once ─────────────────────────────────────────────────────
@@ -246,7 +261,7 @@ def test_an_itr_cited_as_source_cannot_be_deleted(env, full, citing):
     else:
         ref = f"OBS-{uuid.uuid4().hex[:6]}"
         _add(env, models.OBS(id=uuid.uuid4().hex, documentNumber=ref, vendor_id="ACC-V1", itrNumber=doc,
-                             description="guard test", status="Open"))
+                             description="guard test", status="Open", project_id=TEST_PROJECT_ID))
     r = full.delete(f"/api/itr/{itr_id}")
     assert r.status_code == 400 and ref in r.text
     assert _row(env, models.ITR, itr_id) is not None

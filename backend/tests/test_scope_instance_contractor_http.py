@@ -11,7 +11,11 @@ Two independently reproduced gaps (an ISOLATED full-flow browser/API acceptance,
 Real logins, real routes, brand-new Sessions for every database assertion. Accounts:
     scA  project P-A + contractor V1          scB  project P-A + contractor V2 (same project, other contractor)
     scC  project P-B + contractor V1          scP  project P-A only (no contractor)
-    acc_editor  unscoped                      nobody  no ITR view permission
+    scU  unscoped (role named "admin", same permissions as acc_editor)
+    nobody  project P-A, no ITR view permission
+Since REF-PROJECT-SEQ-2026-001 B1 only an admin-named role is unscoped (every other account works in one project), so
+the "unscoped" account here is scU — a role NAMED admin carrying exactly the AcceptEditor permissions (the role name
+only decides scope; permissions still come from the role's permission rows). acc_editor now works in P-TEST.
 """
 import json
 import uuid
@@ -53,10 +57,15 @@ def _add_world(env):
         user("scB", "ACC-V2", ["P-A"])
         user("scC", "ACC-V1", ["P-B"])
         user("scP", None, ["P-A"])
+        unscoped_role = models.Role(name="admin")                     # name => unscoped; permissions => AcceptEditor's
+        unscoped_role.permissions_rel = list(editor_role.permissions_rel)
+        db.add(unscoped_role)
+        db.flush()
+        user("scU", None, [], role=unscoped_role)
         noview = models.Role(name="NoView")
         db.add(noview)
         db.flush()
-        user("nobody", None, [], role=noview)
+        user("nobody", None, ["P-A"], role=noview)                  # in the project: refused only for lacking the permission
         db.commit()
     finally:
         db.close()
@@ -76,8 +85,8 @@ def _itr(env, project, vendor, status="In Progress", due=FUTURE, **cols):
 
 
 def _template(env, activity="Rebar"):
-    """A blank template made by the unscoped editor (any account may reference a template by id)."""
-    r = env.login("acc_editor").post("/api/checklist/", json={
+    """A blank template made by the unscoped account (any account may reference a template by id)."""
+    r = env.login("scU").post("/api/checklist/", json={
         "activity": activity, "date": "2026-09-20", "status": "Ongoing",
         "detail_data": json.dumps({"items": [ITEM, ITEM2]})})
     assert r.status_code == 200, r.text
@@ -157,7 +166,7 @@ def test_project_only_and_unscoped_accounts_are_unaffected(world):
     itr = _itr(env, "P-A", "ACC-V1")
     assert _link(env.login("scA"), itr, _scoped_template(env)).status_code == 200
     (inst,) = _instances(env, itr)
-    for who in ("scP", "acc_editor"):                                                 # project-only account, unscoped account
+    for who in ("scP", "scU"):                                                        # project-only account, unscoped account
         c = env.login(who)
         assert [x["id"] for x in c.get("/api/checklist/", params={"itr_id": itr}).json()] == [inst["id"]]
         assert c.get(f"/api/checklist/{inst['id']}/").status_code == 200
@@ -344,7 +353,7 @@ def _all_visible(client):
         skip += 2
 
 
-@pytest.mark.parametrize("who,total", [("scA", 10), ("scB", 5), ("scC", 5), ("scP", 15), ("acc_editor", 20)])
+@pytest.mark.parametrize("who,total", [("scA", 10), ("scB", 5), ("scC", 5), ("scP", 15), ("scU", 20)])
 def test_stats_equal_the_whole_visible_set_not_the_first_page(world, who, total):
     env = world
     _stats_world(env)
@@ -377,7 +386,7 @@ def test_query_parameters_only_narrow_never_widen(world):
     assert a.get("/api/itr/stats", params={"vendor_id": "ACC-V2"}).json() == zeros     # another contractor's id gives nothing
     assert a.get("/api/itr/stats", params={"project_id": "P-A", "vendor_id": "ACC-V1"}).json() == own   # its own = same
     assert a.get("/api/itr/stats", params={"project_id": "P-A"}).json() == own
-    u = env.login("acc_editor")                                                       # unscoped: params narrow within everything
+    u = env.login("scU")                                                              # unscoped: params narrow within everything
     assert u.get("/api/itr/stats").json()["total"] == 20
     assert u.get("/api/itr/stats", params={"project_id": "P-B"}).json()["total"] == 5
     assert u.get("/api/itr/stats", params={"vendor_id": "ACC-V2"}).json()["total"] == 5
@@ -514,12 +523,12 @@ def test_source_readable_and_target_ownership_are_different_checks(world):
     ("scA", "P-A", None, 404),             # project matches but contractor NULL: contractor-scoped account still refused
     ("scP", "P-A", None, 200),             # project-only account: matches by project (existing record_in_scope rule)
     ("scP", None, None, 404),              # project-scoped account, template without project
-    ("acc_editor", None, None, 200),       # unscoped account: everything
+    ("scU", None, None, 200),              # unscoped account: everything
 ])
 def test_null_ownership_follows_the_existing_rule_for_the_read_and_for_the_link(world, who, project, vendor, expect):
     env = world
     db = env.Session()
-    tpl_id = _template(env)                                                           # made by the unscoped editor: NULL project / contractor
+    tpl_id = _template(env)                                                           # made by the unscoped account: NULL project / contractor
     t = db.get(models.Checklist, tpl_id)
     t.project_id, t.contractor_id = project, vendor
     db.commit(); db.close()

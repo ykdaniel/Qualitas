@@ -116,7 +116,7 @@ def _sequences(env):
 
 def test_the_expected_number_is_what_the_next_create_gets_and_reserves_nothing(noi_env):
     env, _ = noi_env
-    c = env.login("noi_a")
+    c = env.login("noi_admin")                                # an unrestricted caller (REF-PROJECT-SEQ B1: only an admin is)
     first = c.get("/api/noi/next-reference", params={"contractor": "Accept Co"})
     assert first.status_code == 200, first.text
     assert c.get("/api/noi/next-reference", params={"contractor": "Accept Co"}).json() == first.json()   # asking twice takes nothing
@@ -166,7 +166,8 @@ def test_a_caller_limited_to_projects_sees_only_the_format_never_the_count(noi_e
     for contractor, pattern in (("Accept Co", "QTS-ACC-NOI-######"), ("Beta Co", "QTS-BET-NOI-######")):
         r = p.get("/api/noi/next-reference", params={"contractor": contractor})
         assert r.status_code == 200 and r.json() == {"referenceNo": None, "pattern": pattern}, r.text
-    assert a.get("/api/noi/next-reference", params={"contractor": "Accept Co"}).json()["referenceNo"] == "QTS-ACC-NOI-000004"
+    unrestricted = env.login("noi_admin")                     # REF-PROJECT-SEQ B1: only an admin is unrestricted
+    assert unrestricted.get("/api/noi/next-reference", params={"contractor": "Accept Co"}).json()["referenceNo"] == "QTS-ACC-NOI-000004"
 
 
 def _noi_row(env, noi_id):

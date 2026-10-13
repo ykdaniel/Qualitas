@@ -87,6 +87,9 @@ class Env:
             db.close()
 
 
+IAM_PROJECT = "P-IAM"
+
+
 def _build(engine, admin_role_name):
     from database import Base, get_db
     from routers import auth as auth_router, iam as iam_router
@@ -106,11 +109,18 @@ def _build(engine, admin_role_name):
     for name, held in holders.items():
         role = models.Role(name=name); role.permissions_rel = [prows[c] for c in held]; db.add(role); db.flush()
     admin_rid = db.query(models.Role).filter_by(name=admin_role_name).one().id
+    # Every non-admin account must work in a project (REF-PROJECT-SEQ-2026-001 B1); accounts created through the API in
+    # these suites are given this one (see _new_user_body).
+    db.add(models.Project(id=IAM_PROJECT, name="IAM test project", code="IAM"))
     for uname, rname in [("theadmin", admin_role_name), ("usermgr", "UserMgr"),
                          ("roleusermgr", "RoleUserMgr"), ("ordinary", "Ordinary")]:
         rid = db.query(models.Role).filter_by(name=rname).one().id
-        db.add(models.User(username=uname, email=f"{uname}@example.com", full_name=uname.title(), is_active=True,
-                           hashed_password=get_password_hash(PW), role_id=rid))
+        u = models.User(username=uname, email=f"{uname}@example.com", full_name=uname.title(), is_active=True,
+                        hashed_password=get_password_hash(PW), role_id=rid)
+        db.add(u)
+        if rname != admin_role_name:
+            db.flush()
+            db.add(models.UserProject(user_id=u.id, project_id=IAM_PROJECT))
     db.commit(); db.close()
     assert admin_rid
 
@@ -154,6 +164,8 @@ def _new_user_body(env, username="newbie", role="Ordinary", **extra):
             "company_name": "Test Co"}   # required on create (IAM-USER-COMPANY-LABEL-2026-001)
     if role is not None:
         body["role_id"] = env.role_id(role)
+    if role != env.admin_role_name:
+        body["project_ids"] = [IAM_PROJECT]   # required for every non-admin account (REF-PROJECT-SEQ-2026-001 B1)
     body.update(extra)
     return body
 
@@ -237,7 +249,7 @@ def test_role_manager_can_still_create_with_a_role_and_it_is_audited(env):
     new = json.loads(a.new_value)
     assert new == {"id": u["id"], "username": "worker", "email": "worker@example.com", "full_name": "Wendy Worker",
                    "company_name": "Acme Ltd", "role_id": env.role_id("Ordinary"), "role_name": "Ordinary",
-                   "is_active": True, "password_changed": True}
+                   "is_active": True, "password_changed": True, "project_ids": [IAM_PROJECT]}   # projects saved with the account (REF-PROJECT-SEQ-2026-001 B1)
     blob = json.dumps([a.old_value, a.new_value, a.reason, a.details]).lower()
     assert PW.lower() not in blob and u["hashed_password"].lower() not in blob and "$2b$" not in blob
 

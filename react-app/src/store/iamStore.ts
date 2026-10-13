@@ -172,6 +172,7 @@ export const useIAMStore = create<IAMState>((set, get) => ({
             company_name: payload.company_name || null,
             // The form requires a change reason; it must reach the backend so the audit entry keeps it.
             reason: payload.reason || null,
+            project_ids: payload.project_ids || [],
         };
         const result = await apiService.createUser(apiPayload);
         const newUser: User = {

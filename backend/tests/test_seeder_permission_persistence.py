@@ -57,6 +57,12 @@ c = TestClient(main.app)
 assert c.post("/api/auth/login", data={"username": "admin", "password": admin_pw}).status_code == 200
 c.headers["X-CSRF-Token"] = c.cookies.get("csrf_token")
 roles = {r["name"]: r for r in c.get("/api/iam/roles/").json()}
+import database, models
+# REF-PROJECT-SEQ-2026-001 B1: a non-admin account must be created into a project (and only sees that project's records)
+_db = database.SessionLocal()
+if _db.get(models.Project, "P-SEED") is None:
+    _db.add(models.Project(id="P-SEED", name="Seed project")); _db.commit()
+_db.close()
 out = {}
 for op in ops:
     if op["op"] == "create_role":
@@ -68,7 +74,7 @@ for op in ops:
     elif op["op"] == "create_user":
         r = c.post("/api/iam/users/", json={"username": op["username"], "email": op["username"] + "@example.com",
                                           "password": pw, "full_name": op["username"], "role_id": roles[op["role"]]["id"],
-                                          "company_name": "Test Co"})
+                                          "company_name": "Test Co", "project_ids": ["P-SEED"]})
         assert r.status_code == 200, r.text
 import database, models
 db = database.SessionLocal()   # brand-new session: were the role changes really persisted / audited?
@@ -95,7 +101,7 @@ if not db.query(models.Contractor).filter_by(id="SEED-V1").first():
     db.add(models.Contractor(id="SEED-V1", name="Seed Co", abbreviation="SED")); db.commit()
 def closed_instance():
     itr = uuid.uuid4().hex
-    db.add(models.ITR(id=itr, vendor_id="SEED-V1", documentNumber="ITR-SEED-" + itr[:6], description="d", rev="Rev1.0",
+    db.add(models.ITR(id=itr, vendor_id="SEED-V1", project_id="P-SEED", documentNumber="ITR-SEED-" + itr[:6], description="d", rev="Rev1.0",
                       submit="2026-09-19", status="In Progress", raiseDate="2026-09-19")); db.commit()
     item = {"item": "Spacing", "criteria": "<=200mm", "situation": "", "result": ""}
     tpl = admin.post("/api/checklist/", json={"activity": "Seed", "date": "2026-09-19", "status": "Ongoing",

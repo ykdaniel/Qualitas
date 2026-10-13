@@ -119,6 +119,10 @@ class RelatedService:
         # cycle (it currently can't, but the cost of the guard is tiny).
         # We include the start node so it never reappears as a neighbour.
         visited: set = {(start_type, start_entity.id)}
+        # Related documents stay inside the root's project (REF-PROJECT-SEQ-2026-001 B1, G5): an admin looking at a
+        # project-A record must not be led into project B through its links. A shared ITP template (no project) may
+        # be linked from any project; a root without a project (a shared template) shows whatever the scope allows.
+        root_project = getattr(start_entity, "project_id", None)
         out: List[Dict[str, Any]] = []
 
         frontier: List[tuple] = [(start_entity, start_type, 0)]
@@ -148,6 +152,10 @@ class RelatedService:
                         # so the graph can't leak project/vendor-restricted
                         # data through further hops either.
                         if not record_in_scope(neighbour, scope):
+                            continue
+                        neighbour_project = getattr(neighbour, "project_id", None)
+                        if root_project is not None and neighbour_project != root_project \
+                                and not (edge.target_type == "itp" and neighbour_project is None):
                             continue
                         out.append(
                             self._serialize(neighbour, edge.target_type, level + 1, direction)

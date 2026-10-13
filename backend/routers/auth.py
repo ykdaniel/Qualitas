@@ -25,6 +25,8 @@ from core.security import (
     verify_password,
 )
 from core.dependencies import get_user_service
+from core.refusals import RefusalHTTPException
+from core.scope import bound_project_ids, is_admin_user, working_project_id
 from core.utils import log_audit
 from database import get_db
 from services.user_service import UserService
@@ -35,6 +37,23 @@ LOCKOUT_DURATION = timedelta(minutes=15)
 
 router = APIRouter(tags=["Auth"])
 logger = logging.getLogger(__name__)
+
+
+def _sign_in_project(user, db: Session) -> str | None:
+    """The project a fresh sign-in starts in (REF-PROJECT-SEQ-2026-001 B1): a non-admin bound to exactly ONE project
+    works in it straight away; bound to several, they choose it first (POST /auth/select-project); admins and
+    non-members get none."""
+    if is_admin_user(user):
+        return None
+    bound = bound_project_ids(user, db)
+    return next(iter(bound)) if len(bound) == 1 else None
+
+
+def _token_data(user, project_id: str | None) -> dict:
+    data = {"sub": user.username, "user_id": user.id}
+    if project_id:
+        data["project_id"] = project_id
+    return data
 
 @router.post("/auth/login", response_model=schemas.AuthResult)
 async def login_for_access_token(
@@ -162,7 +181,7 @@ async def login_for_access_token(
 
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-        token_data = {"sub": user.username, "user_id": user.id}
+        token_data = _token_data(user, _sign_in_project(user, db))
         access_token = create_access_token(data=token_data, expires_delta=access_token_expires)
         refresh_token = create_refresh_token(data=token_data, expires_delta=refresh_token_expires)
         # Deliver the JWTs as httpOnly cookies ONLY — never in the response body,
@@ -304,12 +323,70 @@ async def refresh_access_token(
 
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    token_data = {"sub": user.username, "user_id": user.id}
+    # The project chosen at sign-in carries over (still only honoured while the user is bound to it).
+    token_data = _token_data(user, payload.get("project_id"))
     new_access = create_access_token(data=token_data, expires_delta=access_token_expires)
     new_refresh = create_refresh_token(data=token_data, expires_delta=refresh_token_expires)
     set_auth_cookies(response, new_access, new_refresh)
     return {"token_type": "bearer"}
 
-@router.get("/user/profile", response_model=schemas.User)
-async def read_users_me(current_user: schemas.User = Depends(get_current_user)):
-    return current_user
+@router.post("/auth/select-project", response_model=schemas.AuthResult)
+async def select_project(
+    body: schemas.SelectProjectRequest,
+    request: Request,
+    response: Response,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """A non-admin bound to several projects chooses the ONE they work in for this session (business decision D5:
+    chosen once after sign-in, not switchable — switching means signing in again). Issues a new token pair carrying the
+    project and revokes the presented one."""
+    if is_admin_user(current_user):
+        raise RefusalHTTPException(400, "Administrators choose a project from the project menu; no project selection is needed.",
+                                   "ADMIN_NO_PROJECT_SELECTION")
+    if getattr(current_user, "token_project_id", None):
+        raise RefusalHTTPException(409, "This session already works in a project. To work in another project, sign out and sign in again.",
+                                   "PROJECT_ALREADY_CHOSEN")
+    bound = bound_project_ids(current_user, db)
+    if body.project_id not in bound:
+        raise RefusalHTTPException(403, "You are not a member of this project." if bound else
+                                   "You are not a member of any project. Ask a system administrator to assign you to a project.",
+                                   "NOT_PROJECT_MEMBER")
+    for name in (ACCESS_COOKIE_NAME, REFRESH_COOKIE_NAME):          # the project-less session ends here
+        presented = request.cookies.get(name)
+        if presented:
+            blacklist_token(presented)
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        blacklist_token(auth_header[7:])
+    token_data = _token_data(current_user, body.project_id)
+    set_auth_cookies(
+        response,
+        create_access_token(data=token_data, expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)),
+        create_refresh_token(data=token_data, expires_delta=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)),
+    )
+    log_audit(db, "SELECT_PROJECT", "User", str(current_user.id), entity_name=current_user.username,
+              user_id=current_user.id, username=current_user.username, reason=f"Works in project {body.project_id}")
+    db.commit()
+    return {"token_type": "bearer"}
+
+
+@router.get("/user/profile", response_model=schemas.UserProfile)
+async def read_users_me(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    import models
+    base = schemas.User.model_validate(current_user).model_dump()
+    if is_admin_user(current_user):
+        return schemas.UserProfile(**base, is_admin=True, project_status="admin")
+    bound = bound_project_ids(current_user, db)
+    projects = db.query(models.Project).filter(models.Project.id.in_(bound)).order_by(models.Project.name).all() if bound else []
+    current = working_project_id(current_user, db)
+    if current:
+        status_ = "working"
+    elif getattr(current_user, "token_project_id", None) and bound:
+        status_ = "relogin"          # the project this session was signed in to was taken away; sign in again
+    elif len(bound) > 1:
+        status_ = "choose"
+    else:
+        status_ = "non_member"
+    return schemas.UserProfile(**base, projects=[schemas.ProjectBrief.model_validate(p) for p in projects],
+                               current_project_id=current, project_status=status_)

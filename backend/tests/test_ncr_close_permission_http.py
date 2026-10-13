@@ -172,7 +172,12 @@ def test_a_role_called_admin_without_the_close_permission_gets_no_exception(denv
     role.permissions_rel = [p for p in db.query(models.Permission).filter(models.Permission.code.in_([perms.NCR_VIEW, perms.NCR_UPDATE, perms.NCR_CREATE])).all()]
     db.add(role)
     db.flush()
-    db.add(models.User(username="dt_adminish", email="adminish@example.com", is_active=True, hashed_password=get_password_hash(PW), role_id=role.id))
+    adminish = models.User(username="dt_adminish", email="adminish@example.com", is_active=True, hashed_password=get_password_hash(PW), role_id=role.id)
+    db.add(adminish)
+    db.flush()
+    # "Administrator" is an ordinary role (only "admin" is the system administrator), so the account works in P-A like the
+    # NCR (REF-PROJECT-SEQ-2026-001 B1, R1 P1-1); the 403 must come from the missing close permission.
+    db.add(models.UserProject(user_id=adminish.id, project_id="P-A"))
     db.commit()
     db.close()
     rid = _ready(denv, ref="NCR-ADMINISH")

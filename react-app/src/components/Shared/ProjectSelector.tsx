@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useProjectStore, Project } from '../../store/projectStore';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import { ChevronDown, Check, FolderOpen } from 'lucide-react';
 import styles from './ProjectSelector.module.css';
 
 const ProjectSelector = () => {
     const { projectList, currentProject, setCurrentProject, fetchProjects } = useProjectStore();
     const { t } = useLanguage();
+    const { user } = useAuth();
     const [open, setOpen] = useState(false);
     const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -24,6 +26,21 @@ const ProjectSelector = () => {
     const triggerLabel = currentProject
         ? currentProject.name
         : t('project.allProjects');
+
+    // Only a system administrator switches projects (business decision D4). Everyone else works in the ONE project
+    // chosen at sign-in and sees it here, read-only; switching means signing in again (D5).
+    if (!user?.is_admin) {
+        return (
+            <div className={styles.wrapper} title={t('project.switchNeedsRelogin')}>
+                <div className={`${styles.trigger} ${styles.readOnly}`} aria-label={`${t('project.current')}: ${currentProject?.name ?? ''}`}>
+                    <FolderOpen size={16} />
+                    <span className={styles.currentPrefix}>{t('project.current')}:</span>
+                    {currentProject && <span className={styles.triggerCode}>{currentProject.code}</span>}
+                    <span className={styles.triggerLabel}>{currentProject?.name ?? ''}</span>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className={styles.wrapper} ref={wrapperRef}>

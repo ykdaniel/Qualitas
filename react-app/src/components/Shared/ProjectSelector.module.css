@@ -155,3 +155,14 @@
   inset: 0;
   z-index: 999;
 }
+
+/* "Current project:" prefix for a non-admin's read-only label — never truncated (the project name truncates instead). */
+.currentPrefix {
+  flex-shrink: 0;
+  white-space: nowrap;
+  color: #6b7280;
+}
+
+.readOnly {
+  cursor: default;
+}

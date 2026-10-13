@@ -3,10 +3,12 @@
 A request's :class:`Scope` is derived from the authenticated user:
 
 * **Admin role** → unscoped (sees everything).
-* **No project rows and no vendor_id** → unscoped. This keeps every existing
-  internal user working unchanged after the migration (rollout safety).
-* **Has project rows and/or a vendor_id** → scoped. List queries are filtered
-  and single-record access is verified server-side.
+* **Everyone else works in ONE project at a time** (REF-PROJECT-SEQ-2026-001 B1, business decisions D4/D5/D6/D20):
+  the project chosen at sign-in, carried in the access token (``project_id`` claim, see routers/auth.py), and only
+  while the user is still bound to it (UserProject). A user bound to exactly one project works in it without choosing.
+  A user bound to none — or bound to several who has not chosen yet — gets an EMPTY scope: sees nothing, may create
+  nothing. (Before: a user with no project rows and no vendor_id was unscoped and saw everything.)
+* A ``vendor_id`` additionally confines a contractor account to its own contractor.
 
 `project_ids is None` means "all projects"; `vendor_id is None` means "all
 contractors". Enforcement lives at the repository layer via :func:`apply_scope`
@@ -26,8 +28,11 @@ import models
 from database import get_db
 from core.security import get_current_user
 
-# Role names that are never scoped. Matched case-insensitively.
-ADMIN_ROLE_NAMES = {"admin", "administrator"}
+# The system administrator role — the only role that is never scoped. Recognised exactly as IAM recognises an Admin
+# (UserRepository.is_admin_role_name: the name "admin", any letter case), so a role IAM treats as ordinary can never be
+# unscoped here (R1 P1-1, REF-PROJECT-SEQ-2026-001 B1: a non-admin role manager could otherwise create an
+# "Administrator" role, hand it out, and the holder would see every project).
+ADMIN_ROLE_NAMES = {"admin"}
 
 
 class ScopeForbidden(Exception):
@@ -49,26 +54,42 @@ class Scope:
 UNSCOPED = Scope(project_ids=None, vendor_id=None)
 
 
-def compute_scope(user: models.User, db: Session) -> Scope:
-    role_name = (getattr(getattr(user, "role", None), "name", None) or "").lower()
-    if role_name in ADMIN_ROLE_NAMES:
-        return UNSCOPED
+def is_admin_user(user) -> bool:
+    """System administrator: never scoped, and the only role that may use the project switcher / "All projects"."""
+    from repositories.user_repository import UserRepository
+    return UserRepository.is_admin_role_name(getattr(getattr(user, "role", None), "name", None))
 
+
+def bound_project_ids(user: models.User, db: Session) -> FrozenSet[str]:
+    """The projects the user is assigned to in IAM (UserProject)."""
     rows = (
         db.query(models.UserProject.project_id)
         .filter(models.UserProject.user_id == user.id)
         .all()
     )
-    project_ids = frozenset(r[0] for r in rows)
-    vendor_id = getattr(user, "vendor_id", None)
+    return frozenset(r[0] for r in rows)
 
-    # Nothing configured → unscoped (existing internal users keep full access).
-    if not project_ids and not vendor_id:
+
+def working_project_id(user: models.User, db: Session) -> Optional[str]:
+    """The ONE project a non-admin works in for this session, or None (not chosen yet / not a project member).
+
+    The project chosen at sign-in rides in the access token (``token_project_id``, set by
+    core.security.authenticate_access_token); it only counts while the user is still bound to it, so removing the
+    binding in IAM takes effect on the next request. Without a choice, a user bound to exactly one project works in it."""
+    bound = bound_project_ids(user, db)
+    chosen = getattr(user, "token_project_id", None)
+    if chosen:
+        return chosen if chosen in bound else None
+    return next(iter(bound)) if len(bound) == 1 else None
+
+
+def compute_scope(user: models.User, db: Session) -> Scope:
+    if is_admin_user(user):
         return UNSCOPED
-
+    project_id = working_project_id(user, db)
     return Scope(
-        project_ids=project_ids if project_ids else None,
-        vendor_id=vendor_id or None,
+        project_ids=frozenset({project_id}) if project_id else frozenset(),   # empty: sees nothing (not "everything")
+        vendor_id=getattr(user, "vendor_id", None) or None,
     )
 
 
@@ -122,6 +143,8 @@ def enforce_create_scope(data: dict, scope: Optional[Scope], vendor_field: str =
     if scope is None or scope.unrestricted:
         return
     if scope.project_ids is not None:
+        if not scope.project_ids:
+            raise ScopeForbidden("You are not working in any project (not a project member, or no project chosen at sign-in)")
         pid = data.get("project_id")
         if not pid:
             if len(scope.project_ids) == 1:

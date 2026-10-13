@@ -139,11 +139,12 @@ def _thread(env, variant):
     x = _create(c, package="ORIGINAL").json()
     db = env.Session()
     try:
-        itr1 = models.ITR(id=uuid.uuid4().hex, vendor_id="ACC-V1", documentNumber="ITR-ORIG", description="d", rev="R", submit="s",
+        # the thread's documents live in the NOI's project P-A (REF-PROJECT-SEQ B1: noi_a works in P-A only)
+        itr1 = models.ITR(id=uuid.uuid4().hex, vendor_id="ACC-V1", project_id="P-A", documentNumber="ITR-ORIG", description="d", rev="R", submit="s",
                           status="Void", raiseDate="2026-09-20", noiNumber=x["referenceNo"], inspectionResult="Fail")
         db.add(itr1)
         db.flush()
-        ncr = models.NCR(id=uuid.uuid4().hex, documentNumber="NCR-CHAIN-1", vendor_id="ACC-V1", noiNumber=x["referenceNo"], itrNumber="ITR-ORIG",
+        ncr = models.NCR(id=uuid.uuid4().hex, documentNumber="NCR-CHAIN-1", vendor_id="ACC-V1", project_id="P-A", noiNumber=x["referenceNo"], itrNumber="ITR-ORIG",
                          description="d", status="Closed", raiseDate="2026-09-20", rev="0", submit="",
                          repairMethodStatement="rebuild", improvementPhotos=json.dumps(["p.jpg"]),
                          reInspectionNumber="ITR-REINSP" if variant != "typed" else None)
@@ -155,7 +156,7 @@ def _thread(env, variant):
     r = _create(c, package="REINSPECTION", ncrNumber=ncr_no, type="Re-inspection").json()          # the re-inspection NOI (no own row)
     db = env.Session()
     try:
-        db.add(models.ITR(id=uuid.uuid4().hex, vendor_id="ACC-V1", documentNumber="ITR-REINSP", description="d", rev="R", submit="s",
+        db.add(models.ITR(id=uuid.uuid4().hex, vendor_id="ACC-V1", project_id="P-A", documentNumber="ITR-REINSP", description="d", rev="R", submit="s",
                           status="Approved", raiseDate="2026-09-21", inspectionResult="Pass", isReInspection=True, originalItrId=itr1_id,
                           noiNumber=r["referenceNo"] if variant == "under_R" else x["referenceNo"]))
         db.commit()

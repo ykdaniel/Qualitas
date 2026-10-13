@@ -3,7 +3,7 @@
 Real login/routes on a disposable file DB (fixture shared with test_audit_hardening_http); no main import, no development
 database access.
 """
-from test_audit_hardening_http import body, create, env, insert_raw, snapshot, stored  # noqa: F401  (env is a fixture)
+from test_audit_hardening_http import body, create, env, insert_raw, login_admin, snapshot, stored  # noqa: F401  (env is a fixture)
 
 
 def test_any_open_audit_can_be_voided_then_nothing_changes_it(env):
@@ -47,6 +47,9 @@ def test_project_id_from_the_wizard_is_saved_on_create_and_update(env):
     with env.Session() as db:
         db.add_all([models.Project(id='p1', name='Project One', code='P1'), models.Project(id='p2', name='Project Two', code='P2')])
         db.commit()
+    # moving an audit from one project to another is only possible for an unscoped account: since REF-PROJECT-SEQ B1
+    # every non-admin works in ONE project, so the wizard's project_id is exercised as a system administrator
+    login_admin(env)
     created = create(env, project_id='p1', project_name='Project One').json()
     assert created['project_id'] == 'p1'
     assert [a['id'] for a in env.client.get('/api/audit/', params={'project_id': 'p1'}).json()] == [created['id']]

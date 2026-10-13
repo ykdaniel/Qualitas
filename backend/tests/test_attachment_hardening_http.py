@@ -199,9 +199,14 @@ def test_a_km_looking_name_in_another_modules_directory_is_not_a_km_image(aenv):
     assert aenv.login("adm").get(f"/api/files/download/ncr/km_{HEX}.png").status_code == 404
 
 
-def test_scoped_accounts_keep_the_existing_rule_no_row_no_download(aenv):
+def test_a_scoped_account_with_km_view_is_served_km_images_but_no_other_row_less_file(aenv):
+    """Changed by REF-PROJECT-SEQ-2026-001 B1 (scope addition 11, business decision D9 — KM is shared by every project):
+    a project-scoped account used to get 404 for a row-less KM image; since every non-admin is now project-scoped, that
+    hid KM images from everyone but administrators. km:view:all is still required; any other row-less file stays 404."""
     _plant(aenv, f"km/km_{HEX}.png")
-    assert aenv.login("sV").get(f"/api/files/download/km/km_{HEX}.png").status_code == 404
+    _plant(aenv, f"ncr/km_{HEX}.png")
+    assert aenv.login("sV").get(f"/api/files/download/km/km_{HEX}.png").status_code == 200
+    assert aenv.login("sV").get(f"/api/files/download/ncr/km_{HEX}.png").status_code == 404
 
 
 def test_a_file_that_has_a_row_is_still_served_by_its_row_not_by_its_name(aenv):

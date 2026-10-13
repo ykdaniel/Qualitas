@@ -60,6 +60,7 @@ def aenv(tmp_path, monkeypatch):
     database_module.engine, database_module.SessionLocal, db_migrations.engine, security_module.SessionLocal = engine, S, engine, S
     env = Env(app, S)
     env.root = root
+    env.default_projects = {"sV": "P-A"}     # sV works in P-A unless a test names P-B (it is bound to both)
     try:
         yield env
     finally:
@@ -101,15 +102,19 @@ def _seed(S):
         user("adm", admin)                       # unscoped
         user("sA", full, "C1", ["P-A"])          # the target's own project AND contractor
         user("sP", full, None, ["P-B"])          # another project only
-        user("sV", full, "C2", [])               # another contractor only
+        # another contractor only: same project as the target, other contractor. Bound to P-A and P-B (a contractor
+        # account without a project would be a non project member and see nothing — REF-PROJECT-SEQ-2026-001 D8).
+        user("sV", full, "C2", ["P-A", "P-B"])
         user("sB", full, "C2", ["P-B"])          # another project and contractor
-        user("noperm", r_none)                   # unscoped, no permission at all
-        user("viewer", r_view)                   # unscoped, view only
-        user("create_only", r_create)            # unscoped, view + create, no update
-        user("updater", r_update)                # unscoped, update but no view
+        # Permission-matrix accounts work in P-A, where every matrix record lives (REF-PROJECT-SEQ-2026-001: a non-admin
+        # without a project sees nothing — these used to be unscoped).
+        user("noperm", r_none, None, ["P-A"])                 # no permission at all
+        user("viewer", r_view, None, ["P-A"])                 # view only
+        user("create_only", r_create, None, ["P-A"])          # view + create, no update
+        user("updater", r_update, None, ["P-A"])              # update but no view
         # material revisions: material:manage for every category (M6); a view-only account may not change files
-        user("mat_manage", role("MatManage", [perms.MATERIAL_VIEW, perms.MATERIAL_MANAGE]))
-        user("mat_view", role("MatView", [perms.MATERIAL_VIEW]))
+        user("mat_manage", role("MatManage", [perms.MATERIAL_VIEW, perms.MATERIAL_MANAGE]), None, ["P-A"])
+        user("mat_view", role("MatView", [perms.MATERIAL_VIEW]), None, ["P-A"])
         for name, project, vendor in (("a", "P-A", "C1"), ("b", "P-B", "C2")):
             db.add(models.NCR(id=f"ncr-{name}", documentNumber=f"NCR-{name}", project_id=project, vendor_id=vendor, status="Open", description="d", rev="0", submit=""))
             db.add(models.OBS(id=f"obs-{name}", documentNumber=f"OBS-{name}", project_id=project, vendor_id=vendor, status="Open", description="d", rev="0", submit=""))
@@ -226,9 +231,10 @@ def test_upload_to_a_record_outside_the_callers_project_or_contractor_is_refused
 
 
 def test_the_legitimate_scoped_user_and_the_unscoped_admin_can_still_upload(aenv):
-    for who, eid in (("sA", "ncr-a"), ("adm", "ncr-a"), ("adm", "ncr-b"), ("sB", "ncr-b"), ("sP", "ncr-b"), ("sV", "ncr-b")):
+    for who, eid, project in (("sA", "ncr-a", None), ("adm", "ncr-a", None), ("adm", "ncr-b", None), ("sB", "ncr-b", None),
+                              ("sP", "ncr-b", None), ("sV", "ncr-b", "P-B")):
         before = len(rows(aenv))
-        assert up(aenv.login(who), "ncr", eid).status_code == 200, (who, eid)
+        assert up(aenv.login(who, project=project), "ncr", eid).status_code == 200, (who, eid)
         assert len(rows(aenv)) == before + 1
 
 

@@ -1428,6 +1428,9 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str
     reason: str | None = None
+    # The projects the account works in, saved with the account itself. Required for every non-admin account
+    # (REF-PROJECT-SEQ-2026-001 B1, enforced in UserService.create_user).
+    project_ids: list[str] | None = None
 
 class UserUpdate(BaseModel):
     username: str | None = None
@@ -1450,6 +1453,30 @@ class User(UserBase):
     display_company: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ProjectBrief(BaseModel):
+    id: str
+    name: str
+    code: str | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserProfile(User):
+    """GET /user/profile — the account plus where it works (REF-PROJECT-SEQ-2026-001 B1).
+
+    project_status: "admin" (project switcher, may pick "All projects"), "working" (current_project_id is the ONE
+    project this session works in; switching needs a new sign-in), "choose" (bound to several projects, none chosen
+    yet — POST /auth/select-project), "relogin" (the project this session was signed in to is no longer assigned to the
+    user — sign in again), "non_member" (bound to no project: sees nothing)."""
+    is_admin: bool = False
+    projects: list[ProjectBrief] = []
+    current_project_id: str | None = None
+    project_status: str = "non_member"
+
+
+class SelectProjectRequest(BaseModel):
+    project_id: str
 
 
 class UserScope(BaseModel):

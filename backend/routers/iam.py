@@ -3,6 +3,7 @@ from passlib.context import CryptContext
 
 import schemas
 from core.dependencies import RoleChecker, get_user_service
+from core.refusals import refusal_http
 from core.perms import ROLE_MANAGE, ROLE_VIEW, USER_MANAGE, USER_VIEW
 from services.user_service import UserService
 
@@ -149,7 +150,7 @@ def set_user_scope(
             actor_id=current_user.id, actor_name=current_user.username,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)                      # coded when it is a Refusal (e.g. PROJECT_REQUIRED)
     if scope is None:
         raise HTTPException(status_code=404, detail="User not found")
     return scope

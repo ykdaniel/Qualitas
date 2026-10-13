@@ -357,7 +357,20 @@ export interface User {
    *  bound vendor when contractor-scoped, else `company_name`), or the full name / typed text
    *  when there is no abbreviation. Read-only. */
   display_company?: string | null;
+  /** Where the account works (GET /user/profile only; REF-PROJECT-SEQ-2026-001 B1). */
+  is_admin?: boolean;
+  /** The projects the account is assigned to (non-admins). */
+  projects?: { id: string; name: string; code?: string | null }[];
+  /** The ONE project this session works in (non-admins; switching needs a new sign-in). */
+  current_project_id?: string | null;
+  /** "admin" | "working" | "choose" (pick a project first) | "relogin" | "non_member" (sees nothing). */
+  project_status?: 'admin' | 'working' | 'choose' | 'relogin' | 'non_member';
 }
+
+/** A non-admin assigned to several projects picks the one this session works in (once; new tokens are set as cookies). */
+export const selectProject = async (projectId: string): Promise<void> => {
+  await api.post('/auth/select-project', { project_id: projectId });
+};
 
 export interface Role {
   id: number;
@@ -409,9 +422,11 @@ export interface CreateUserPayload {
   is_active: boolean;
   company_name?: string | null;
   reason?: string | null;
+  /** Projects the new account works in, saved with the account (required for every non-admin account). */
+  project_ids?: string[];
 }
 
-export type UpdateUserPayload = Partial<CreateUserPayload>
+export type UpdateUserPayload = Partial<Omit<CreateUserPayload, 'project_ids'>>
 
 export const createUser = async (data: CreateUserPayload): Promise<User> => {
   const response = await api.post<User>('/iam/users/', data);

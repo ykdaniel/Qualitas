@@ -110,8 +110,12 @@ def test_scope_precedes_assignee_check(assignment_env, module):
     with e.Session() as db:
         db.add(models.Project(id='own', name='Own project'))
         db.flush()
-        actor = db.query(models.User).filter_by(username='audit-writer').one()
-        db.add(models.UserProject(user_id=actor.id, project_id='own'))
+        # the record now belongs to ANOTHER project than the one the actor works in, so it is outside the actor's scope
+        # (REF-PROJECT-SEQ B1: every non-admin works in one project, and a session's project is fixed at sign-in, so the
+        # record is moved instead of the actor; the refusal is "other project", never "no project")
+        record_model = models.NCR if module == 'ncr' else models.FollowUp
+        assert db.get(record_model, rid).project_id != 'own'
+        db.get(record_model, rid).project_id = 'own'
         db.commit()
     before = snapshot(e)
     r = e.client.put(url(module, rid), json={field(module): 102})

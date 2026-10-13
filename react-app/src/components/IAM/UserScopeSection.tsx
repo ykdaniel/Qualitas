@@ -3,6 +3,7 @@ import FormActions from '../Shared/FormActions';
 import actionStyles from '../Shared/FormActions.module.css';
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { showRefusal } from '../../store/refusalStore';
 import {
     getProjects, getContractors, getUserScope, setUserScope,
     type ProjectApi, type Contractor,
@@ -186,13 +187,15 @@ const UserScopeSection: React.FC<UserScopeSectionProps> = ({ userId, t, value, o
             setBaseline(scopeKey);
             toast.success(t('iam.scope.saved') || 'Data scope saved');
         } catch (err: any) {
-            toast.error(err?.response?.data?.detail || t('iam.scope.saveFailed') || 'Failed to save scope');
+            if (err?.response?.data?.code) showRefusal(err, 'save');     // coded refusal (e.g. PROJECT_REQUIRED), in the user's language
+            else toast.error(err?.response?.data?.detail || t('iam.scope.saveFailed') || 'Failed to save scope');
         } finally {
             setSaving(false);
         }
     };
 
-    const unrestricted = selected.size === 0 && !vendorId;
+    // no project = sees nothing, even with a contractor binding (D8); only the Admin role is unrestricted
+    const unrestricted = selected.size === 0;
 
     const s: Record<string, React.CSSProperties> = {
         wrap: { border: '1px solid #e5e7eb', borderRadius: 8, padding: 14, background: '#fafaf8' },
@@ -236,7 +239,7 @@ const UserScopeSection: React.FC<UserScopeSectionProps> = ({ userId, t, value, o
             <div style={s.title}>
                 {t('iam.scope.title') || 'Data Scope'}
                 <span style={s.badge}>
-                    {unrestricted ? (t('iam.scope.fullAccess') || 'Full access') : (t('iam.scope.restricted') || 'Restricted')}
+                    {unrestricted ? t('iam.scope.noProject') : (t('iam.scope.restricted') || 'Restricted')}
                 </span>
             </div>
             <p style={s.hint}>

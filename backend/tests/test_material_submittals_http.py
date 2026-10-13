@@ -22,14 +22,16 @@ from core.security import get_password_hash
 from database import Base, get_db
 
 VIEW, MANAGE = "material:view:all", "material:manage:all"
+# REF-PROJECT-SEQ-2026-001 B1: only a role NAMED admin is unscoped ("admin" below gets that role name); every other
+# account works in one project - the internal accounts work in P1, where the records under test live.
 USERS = {
     "admin": ([VIEW, MANAGE, "contractors:view:all", "contractors:manage:all"], None, []),
-    "manager": ([VIEW, MANAGE], None, []),
-    "viewer": ([VIEW], None, []),
+    "manager": ([VIEW, MANAGE], None, ["P1"]),
+    "viewer": ([VIEW], None, ["P1"]),
     "scoped": ([VIEW, MANAGE], None, ["P1"]),
     "vendor": ([VIEW, MANAGE], "V1", ["P1"]),
-    "nobody": (["itp:view:all"], None, []),
-    "legacy": (["material:record_result:all"], None, []),     # R2: the retired code grants nothing
+    "nobody": (["itp:view:all"], None, ["P1"]),
+    "legacy": (["material:record_result:all"], None, ["P1"]),     # R2: the retired code grants nothing
 }
 PDF = b"%PDF-1.4\n% material test file\n"
 def _png():
@@ -64,7 +66,7 @@ def env(tmp_path, monkeypatch):
                     models.Contractor(id="V1", name="Vendor One", abbreviation="V1"),
                     models.Contractor(id="V2", name="Vendor Two", abbreviation="V2")])
         for name, (codes, vendor_id, projects) in USERS.items():
-            role = models.Role(name=f"r-{name}")
+            role = models.Role(name="admin" if name == "admin" else f"r-{name}")
             role.permissions_rel = [perms.setdefault(c, models.Permission(code=c, description=c)) for c in codes]
             db.add(role)
             db.flush()

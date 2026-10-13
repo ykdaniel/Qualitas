@@ -323,6 +323,17 @@ Result 的既有操作方式比拆開成縱向區塊更直覺）。
 影響範圍：backend/core/attachment_access.py（obs_locked、lock_refusal 的 OBS 分支、鎖定表）；測試 test_attachment_authorization_http.py、test_attachment_hardening_http.py。OBS 紀錄的照片欄位與調整順序由 OBS-PRINT-PHOTOS 對齊。前端 OBSModals 在 Closed／Void 時隱藏上傳與刪除（OBS-PRINT-PHOTOS）。
 依據：使用者 2026-10-12 經協調中心轉述同意；協調中心指定由 OBS-ATTACH-LOCK 與 OBS-PRINT-PHOTOS 分工（obs_service 缺口選 A）。
 
+### 專案隔離與依專案編號（REF-PROJECT-SEQ-2026-001，2026-10-12）
+日期：2026-10-12（使用者在協調中心和 NOI 工作階段定案）
+決策：設計 `docs/workflow/REF-PROJECT-SEQ-2026-001-DESIGN.md` 第 0 節的 D1–D21，全文以該設計為準。重點如下：
+1. 不同專案的號碼不能共用：格式為 `QTS-RKS-[PROJECT]-<類型>-######`，RKS 是公司代碼，不含承包商縮寫，序號依（專案, 類型）計算。
+2. 登入時就決定專案。只有系統管理者能用專案選單；綁了多個專案的人，登入後選一個，之後不能換。沒綁專案的帳號什麼都看不到（安全修正）。承包商帳號也必須綁專案。新建單據時，專案自動帶入目前的專案。
+3. 共用主檔不分專案：承包商、範本庫、模板庫、KM、命名規則。ITP 分成兩種：共用範本（沒有專案）和專案 ITP。
+4. 舊單據歸到 Hailong，號碼不改。系統編號的 ITP 共 63 筆改為 `QTS-RKS-STD-ITP-`，81 筆外部文件號保留原號。
+5. 釐清（R1 P2-1，由 D9 推得，不是新政策）：第 25 步只把 checklist **實例**（itrId 或 template_id 不為空）歸到專案；Checklist 裸範本依 D9 維持沒有專案。
+6. 釐清（R1 P1-1）：只有名稱為 admin（不分大小寫）的角色是系統管理者、不受範圍限制，和 IAM 的管理者判斷一致；名為「Administrator」等其他名稱的角色都是一般角色。
+延後：跨專案唯讀權限、NOI 軟刪除。
+
 ## 尚未決策（不得當成已核准規則）
 
 - ITR 核准是否須額外檢查 Inspection Result。
