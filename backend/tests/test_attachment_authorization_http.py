@@ -519,19 +519,45 @@ def test_checklist_is_frozen_when_its_parent_itr_is_approved_or_void_and_open_ot
 
 
 CATEGORY_LOCKS = [
-    ("obs", models.OBS, "obs-a", "defectPhoto", 409), ("obs", models.OBS, "obs-a", "improvementPhoto", 409), ("obs", models.OBS, "obs-a", "attachment", 200),
     ("ncr", models.NCR, "ncr-a", "improvementPhoto", 409), ("ncr", models.NCR, "ncr-a", "defectPhoto", 200),
     ("ncr", models.NCR, "ncr-a", "progressPhoto", 200), ("ncr", models.NCR, "ncr-a", "attachment", 200),
 ]
 
 
 @pytest.mark.parametrize("etype,model,rid,category,expect", CATEGORY_LOCKS, ids=[f"{c[0]}-closed-{c[3]}" for c in CATEGORY_LOCKS])
-def test_a_closed_ncr_or_obs_locks_only_the_photo_categories_its_own_rules_lock(aenv, etype, model, rid, category, expect):
+def test_a_closed_ncr_locks_only_the_photo_categories_its_own_rules_lock(aenv, etype, model, rid, category, expect):
     c = aenv.login("adm")
     alive = up(c, etype, rid, category=category).json()[0]
     _set_state(aenv, model, rid, status="Closed")
     assert up(c, etype, rid, category=category).status_code == expect
     assert c.delete(f"/api/files/{alive['id']}").status_code == (200 if expect == 200 else 409)
+
+
+OBS_CATEGORIES = ["defectPhoto", "improvementPhoto", "attachment"]
+
+
+@pytest.mark.parametrize("status", ["Closed", "Void"])
+@pytest.mark.parametrize("category", OBS_CATEGORIES)
+def test_a_closed_or_void_obs_locks_every_photo_and_attachment(aenv, status, category):
+    """OBS-ATTACH-LOCK-2026-001 (business decision 2026-10-12): Closed / Void freeze ALL of an observation's photos and attachments —
+    no upload and no delete, in any category (before: Closed locked only the two photo categories, Void nothing)."""
+    c = aenv.login("adm")
+    alive = up(c, "obs", "obs-a", category=category).json()[0]
+    _set_state(aenv, models.OBS, "obs-a", status=status)
+    refused = up(c, "obs", "obs-a", category=category)
+    assert refused.status_code == 409 and refused.json()["detail"] == f"Cannot change attachments of a {status} OBS: the record is locked."
+    gone = c.delete(f"/api/files/{alive['id']}")
+    assert gone.status_code == 409, gone.text
+    assert gone.json()["detail"] == f"Cannot change attachments of a {status} OBS: the record is locked."
+    _set_state(aenv, models.OBS, "obs-a", status="Open")              # reopened: open again
+    assert up(c, "obs", "obs-a", category=category).status_code == 200
+    assert c.delete(f"/api/files/{alive['id']}").status_code == 200
+
+
+def test_obs_locked_is_the_one_status_check():
+    from core.attachment_access import OBS_LOCKED_STATUSES, obs_locked
+    assert OBS_LOCKED_STATUSES == {"Closed", "Void"}
+    assert [s for s in ("Open", "In Progress", "Closed", "Void", None, "") if obs_locked(s)] == ["Closed", "Void"]
 
 
 def test_the_same_records_are_open_to_uploads_while_they_are_not_locked(aenv):
@@ -540,7 +566,7 @@ def test_the_same_records_are_open_to_uploads_while_they_are_not_locked(aenv):
         assert up(c, etype, MATRIX[etype]).status_code == 200, etype
 
 
-@pytest.mark.parametrize("etype,model,rid,status", [("ncr", models.NCR, "ncr-a", "Void"), ("obs", models.OBS, "obs-a", "Void"),
+@pytest.mark.parametrize("etype,model,rid,status", [("ncr", models.NCR, "ncr-a", "Void"),
                                                     ("pqp", models.PQP, "pqp-1", "Void"), ("noi", models.NOI, "noi-1", "Reject")])
 def test_PENDING_DECISION_states_without_an_attachment_policy_are_not_locked_yet(aenv, etype, model, rid, status):
     """Deliberately pins today's behaviour for states the records' own rules say nothing about (see core.attachment_access.PENDING_STATE_DECISIONS).

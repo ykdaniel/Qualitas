@@ -20,8 +20,10 @@ LOCKS — only where the existing rules of the record are explicit. Each entry n
                                                             checklists exactly like an Approved one (services/checklist_service.py)
     Checklist  parent ITR Approved or Void   services/checklist_service.py   "fully frozen"
     PQP      Approved             services/pqp_service.py       `attachments` is a locked field
+    OBS      Closed / Void        business decision 2026-10-12 (DECISIONS「OBS 結案或作廢後照片與附件全部鎖定」): every photo and
+                                  attachment category; OBS_LOCKED_STATUSES / obs_locked is the one check, shared with
+                                  any other OBS photo write (e.g. reordering)
   by category (the record's locked fields are photo fields; the general `attachment` category stays open)
-    OBS      Closed   defectPhoto, improvementPhoto     services/obs_service.py   _LOCKED_OBS_FIELDS
     NCR      Closed   improvementPhoto                  services/ncr_service.py   _LOCKED_QUALITY_FIELDS
 
 NOT locked, because the record's own rules do not say anything about attachments there — listed for a decision, see
@@ -75,6 +77,16 @@ IMAGE_ONLY_CATEGORIES = {("material_rev", "photo")}
 # approved and their photos must stay maintainable; permission and scope checks still apply.
 NEVER_LOCKED_CATEGORIES = {("material_rev", "photo")}
 
+# OBS: a Closed or Void observation freezes ALL its photos and attachments (upload, delete, and any other change to them such as
+# reordering) — business decision 2026-10-12, OBS-ATTACH-LOCK-2026-001. obs_locked() is the one check (shared with OBS-PRINT-PHOTOS'
+# reorder check; the text below is agreed word for word, whichever batch lands second drops its own copy). It looks at the SAVED
+# status only: reopening Closed -> Open is obs_service's update rule.
+OBS_LOCKED_STATUSES = frozenset({"Closed", "Void"})
+def obs_locked(status: str | None) -> bool:
+    """OBS records whose photos/attachments may no longer change (Closed or Void)."""
+    return (status or "") in OBS_LOCKED_STATUSES
+
+
 _UNCONDITIONAL_LOCKED_STATUSES = {
     "noi": {"Closed"},
     "audit": {"Closed"},
@@ -84,20 +96,18 @@ _UNCONDITIONAL_LOCKED_STATUSES = {
     "material_rev": {"Approved", "ApprovedWithComments", "ReviseAndResubmit", "Rejected"},   # a result is recorded: all frozen
 }
 _LOCKED_CATEGORIES = {
-    ("obs", "Closed"): {"defectPhoto", "improvementPhoto"},
     ("ncr", "Closed"): {"improvementPhoto"},
     ("material_rev", "Draft"): {"replyDocument"},                      # no reply before the revision is submitted
     ("material_rev", "Submitted"): set(MATERIAL_SUBMISSION_CATEGORIES),  # what was submitted is frozen; replies stay open
 }
 
 PENDING_STATE_DECISIONS = [
-    "NCR Void / OBS Void / PQP Void: the records' own rules do not say what may happen to attachments",
+    "NCR Void / PQP Void: the records' own rules do not say what may happen to attachments (OBS Void: decided 2026-10-12, fully locked)",
     "NCR Closed: only improvementPhoto is locked by the record's rules; defectPhoto / progressPhoto / attachment stay open",
-    "OBS Closed: only defectPhoto / improvementPhoto are locked; the general `attachment` category stays open",
     "NOI Reject: the record can be reopened by NOI approvers; nothing says whether attachments follow",
     "Checklist Pass / Fail: the lock is about results, not evidence files",
     "ITP, FAT, OSD, KM, Contractor: the records have no state lock at all",
-    "the category lock limits the LABEL only: `attachment` stays open on a closed NCR / OBS, and an image uploaded as `attachment` is accepted — the lock "
+    "the category lock limits the LABEL only: `attachment` stays open on a closed NCR, and an image uploaded as `attachment` is accepted — the lock "
     "does NOT guarantee that a closed record's evidence is unchanged",
 ]
 
@@ -158,14 +168,6 @@ def require_attachment_permission(user, entity_type: str, action: str, category:
         raise permission_denied(f"Operation not permitted. Required: {needed}", needed)
 
 
-OBS_LOCKED_STATUSES = frozenset({"Closed", "Void"})
-
-
-def obs_locked(status: str | None) -> bool:
-    """OBS records whose photos/attachments may no longer change (Closed or Void)."""
-    return (status or "") in OBS_LOCKED_STATUSES
-
-
 def lock_reason(db: Session, entity_type: str, record, category: Optional[str]) -> Optional[str]:
     """Why an upload / delete on this record's attachments is refused because of the record's STATE; None when it is allowed."""
     found = lock_refusal(db, entity_type, record, category)
@@ -178,6 +180,9 @@ def lock_refusal(db: Session, entity_type: str, record, category: Optional[str])
     status = getattr(record, "status", None)
     if (etype, category) in NEVER_LOCKED_CATEGORIES:
         return None
+    if etype == "obs" and obs_locked(status):
+        return (f"Cannot change attachments of a {status} {etype.upper()}: the record is locked.",
+                {"kind": "record", "docType": "OBS", "status": status})
     if etype in _UNCONDITIONAL_LOCKED_STATUSES and status in _UNCONDITIONAL_LOCKED_STATUSES[etype]:
         return (f"Cannot change attachments of a {status} {etype.upper()}: the record is locked.",
                 {"kind": "record", "docType": etype.upper(), "status": status})

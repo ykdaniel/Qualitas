@@ -29,7 +29,7 @@ from database import Base, get_db
 
 ROUTERS = ['auth', 'ncr', 'noi', 'itr', 'itp', 'checklist', 'audit', 'meeting_minutes', 'followup', 'contractors', 'projects',
            'iam', 'file_router']
-DELETE_CODES = [perms.NCR_DELETE, perms.NOI_DELETE, perms.ITR_DELETE, perms.ITR_UPDATE, perms.ITP_DELETE, perms.CHECKLIST_DELETE, perms.AUDIT_DELETE,
+DELETE_CODES = [perms.OBS_UPDATE, perms.NCR_DELETE, perms.NOI_DELETE, perms.ITR_DELETE, perms.ITR_UPDATE, perms.ITP_DELETE, perms.CHECKLIST_DELETE, perms.AUDIT_DELETE,
                 perms.MEETING_DELETE, perms.MEETING_VIEW, perms.MEETING_UPDATE, perms.FOLLOWUP_DELETE,
                 perms.CONTRACTOR_MANAGE, perms.ROLE_MANAGE]
 
@@ -292,6 +292,17 @@ def test_attachment_of_a_published_meeting_is_locked(env):
     body = _refused(env.login('deleter').delete('/api/files/att1'), 409, 'ATTACHMENT_LOCKED')
     assert body['params'] == {'kind': 'record', 'docType': 'MEETING', 'status': 'Published'}
     assert body['detail'] == 'Cannot change attachments of a Published MEETING: the record is locked.'
+
+
+@pytest.mark.parametrize('status', ['Closed', 'Void'])
+def test_attachment_of_a_closed_or_void_obs_is_locked(env, status):
+    # OBS-ATTACH-LOCK-2026-001: every category, Closed and Void alike
+    _add(env, models.OBS(id='b1', documentNumber='OBS-1', status=status),
+         models.Attachment(id='att2', entity_type='obs', entity_id='b1', file_name='a.pdf', file_path='x/a.pdf', category='attachment',
+                           uploaded_at='2026-10-01T00:00:00'))
+    body = _refused(env.login('deleter').delete('/api/files/att2'), 409, 'ATTACHMENT_LOCKED')
+    assert body['params'] == {'kind': 'record', 'docType': 'OBS', 'status': status}
+    assert body['detail'] == f'Cannot change attachments of a {status} OBS: the record is locked.'
 
 
 # ---- permission, compatibility --------------------------------------------------------------------------------------
