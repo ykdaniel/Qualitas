@@ -1,7 +1,6 @@
 import { useLeaveGuard } from '../Shared/LeaveGuard';
 import FormActions from '../Shared/FormActions';
 import actionStyles from '../Shared/FormActions.module.css';
-import { useCreationProjects } from '../../hooks/useCreationProjects';
 import { CreationProjectField } from '../Shared/CreationProjectField';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -114,6 +113,9 @@ export interface ITPDetailModalProps {
      * false so a user without it never sees a control guaranteed to fail. The backend remains
      * the actual enforcement; this is convenience/UX only. */
     canCreateChecklist?: boolean;
+    /** A shared template (an ITP without a project, D18) opened by someone who is not a system administrator: the caller
+     * passes canUpdate=false so the window opens read-only, and this shows why. */
+    sharedTemplateReadOnly?: boolean;
     onSave: (updates: Partial<ITPItem>, details?: any, pendingFiles?: File[], deletedFileIds?: string[], skipRecordWrite?: boolean) => Promise<SaveOutcome>;
     /** Returns whether the immediate detail-only write actually succeeded, so the persistent
      * save-status indicator can reflect the real outcome instead of assuming success. */
@@ -124,12 +126,11 @@ export interface ITPDetailModalProps {
     initialTab?: 'general' | 'plan';
 }
 
-export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingItem, defaultVendor, canApprove = false, canVoid = false, canCreate = false, canUpdate = false, canCreateChecklist = false, onSave, onApplyItems, onClose, initialTab = 'general' }) => {
+export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingItem, defaultVendor, canApprove = false, canVoid = false, canCreate = false, canUpdate = false, canCreateChecklist = false, sharedTemplateReadOnly = false, onSave, onApplyItems, onClose, initialTab = 'general' }) => {
     // New record (no existingItem yet): editable only with itp:create:all. Existing record:
     // editable only with itp:update:all. Attachment controls are separate (see attachmentReadOnly
     // below) because upload/delete always requires itp:update:all, even for a brand-new record.
     const formReadOnly = existingItem ? !canUpdate : !canCreate;
-    const creationProjects = useCreationProjects(!itpId);
     const attachmentReadOnly = !canUpdate;
     const editorRef = useRef<ITPAdvancedEditorRef>(null);
     const navigate = useNavigate();
@@ -243,7 +244,6 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
     };
 
     const validate = () => {
-        if (!itpId && (creationProjects.loading || creationProjects.error)) return false;
         const newErrors: { [key: string]: string } = {};
         if (!formData.vendor) newErrors.vendor = 'Contractor is required';
 
@@ -657,14 +657,18 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
 
                 <div className={formStyles.modalBody}>
                     <p className={formStyles.formRequiredHint}>{t('form.requiredHint')}</p>
+                    {sharedTemplateReadOnly && (
+                        <p style={{ fontSize: 12, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '8px 10px', marginBottom: 8 }}>
+                            {t('project.sharedTemplateReadOnly')}
+                        </p>
+                    )}
 
                     {activeTab === 'general' && (
                         <div className={formStyles.formSections}>
                             <fieldset disabled={formReadOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
                             <div className={formStyles.formSection}>
                                 <h3 className={formStyles.sectionTitle}>{t('itp.infoSection')}</h3>
-                                {!itpId && <CreationProjectField state={creationProjects} value={formData.project_id}
-                                    onChange={value => handleFieldChange('project_id', value)} />}
+                                {!itpId && <CreationProjectField />}
 
                                 <div className={formStyles.formGrid}>
                                     <div className={formStyles.formGroup}>
@@ -771,7 +775,7 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                                 backend behavior, not a policy this batch changes). Explained up front so a
                                 create-only user never selects files only to hit a 403 after Save. */}
                             <div className={formStyles.formSection}>
-                                {attachmentReadOnly && (
+                                {attachmentReadOnly && !sharedTemplateReadOnly && (
                                     <p style={{ fontSize: 12, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '8px 10px', marginBottom: 8 }}>
                                         {t('itp.attachmentsNeedUpdatePermission') || 'You can create the main record and inspection plan. Attachments require someone with update permission.'}
                                     </p>
@@ -947,20 +951,20 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                             {canApprove && !formReadOnly && (
                                 <button className={actionStyles.workflow}
                                     onClick={handlePublishClick}
-                                    disabled={saving || !!publishConfirm || (!itpId && (creationProjects.loading || creationProjects.error))}
+                                    disabled={saving || !!publishConfirm}
                                 >
                                     <ShieldCheck size={16} /> {t('itp.actionPublish') || 'Publish'}
                                 </button>
                             )}
                         </>}
                         cancel={<>
-                            <button className={actionStyles.secondary} onClick={handleClose} disabled={saving || (!itpId && (creationProjects.loading || creationProjects.error))}>
+                            <button className={actionStyles.secondary} onClick={handleClose} disabled={saving}>
                                 {formReadOnly ? t('common.close') : t('common.cancel')}
                             </button>
                         </>}
                         primary={<>
                             {!formReadOnly && (
-                                <button className={actionStyles.primary} onClick={handleSave} disabled={saving || (!itpId && (creationProjects.loading || creationProjects.error))}>
+                                <button className={actionStyles.primary} onClick={handleSave} disabled={saving}>
                                     {saving ? <LayoutTemplate size={16} className="animate-spin" /> : <Save size={16} />}
                                     {t('common.save')}
                                 </button>

@@ -36,7 +36,9 @@ export const createColumns = (
     navigate: (path: string) => void,
     t: (key: string) => string,
     activeContractors: { name: string }[],
-    noiList: any[] // We need noiList to check for related NOIs count
+    noiList: any[], // We need noiList to check for related NOIs count
+    // a shared template (no project, D18) is changed and deleted only by a system administrator
+    isAdmin = true,
 ): ColumnDef<ITPItem>[] => [
         {
             id: "index",
@@ -185,7 +187,7 @@ export const createColumns = (
                             {relatedNoiCount}
                         </Button>
 
-                        <Button
+                        {(isAdmin || !!itp.project_id) && <Button
                             variant="ghost"
                             size="sm"
                             className="h-8 w-8 p-0 text-slate-300 group-hover:text-red-500 focus-visible:text-red-500 hover:text-white hover:bg-red-500"
@@ -193,7 +195,7 @@ export const createColumns = (
                             title={t('itp.tooltip.delete')}
                         >
                             <Trash2 className="h-4 w-4" />
-                        </Button>
+                        </Button>}
                     </div>
                 );
             },

@@ -1,0 +1,142 @@
+# start 2026-10-13T13:36:01Z tree=/Users/nook/Documents/Qualitas head=d54be8a8
+Python 3.11.17
+pip_exit=0
+........................................................................ [  2%]
+........................................................................ [  5%]
+........................................................................ [  7%]
+........................................................................ [ 10%]
+........................................................................ [ 13%]
+........................................................................ [ 15%]
+........................................................................ [ 18%]
+..............................s......................................... [ 20%]
+........................................................................ [ 23%]
+........................................................................ [ 26%]
+........................................................................ [ 28%]
+........................................................................ [ 31%]
+........................................................................ [ 33%]
+........................................................................ [ 36%]
+........................................................................ [ 39%]
+........................................................................ [ 41%]
+........................................................................ [ 44%]
+........................................................................ [ 47%]
+........................................................................ [ 49%]
+..................................................ss.................... [ 52%]
+........................................................................ [ 54%]
+........................................................................ [ 57%]
+........................................................................ [ 60%]
+........................................................................ [ 62%]
+..s.ss...s......sssssssss............................................... [ 65%]
+........................................................................ [ 67%]
+........................................................................ [ 70%]
+........................................................................ [ 73%]
+........................................................................ [ 75%]
+........................................................................ [ 78%]
+........................................................................ [ 81%]
+........................................................................ [ 83%]
+........................................................................ [ 86%]
+........................................................................ [ 88%]
+........................................................................ [ 91%]
+........................................................................ [ 94%]
+........................................................................ [ 96%]
+................s....................................................... [ 99%]
+..................                                                       [100%]
+=============================== warnings summary ===============================
+../../usr/local/lib/python3.11/site-packages/starlette/testclient.py:31
+  /usr/local/lib/python3.11/site-packages/starlette/testclient.py:31: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+../../usr/local/lib/python3.11/site-packages/passlib/utils/__init__.py:854
+  /usr/local/lib/python3.11/site-packages/passlib/utils/__init__.py:854: DeprecationWarning: 'crypt' is deprecated and slated for removal in Python 3.13
+    from crypt import crypt as _crypt
+
+tests/test_active_assignee_http.py: 11 warnings
+tests/test_attachment_authorization_http.py: 463 warnings
+tests/test_attachment_hardening_http.py: 274 warnings
+tests/test_audit_agenda_http.py: 9 warnings
+tests/test_audit_contractor_scope_http.py: 2 warnings
+tests/test_audit_export_docx_http.py: 13 warnings
+tests/test_audit_hardening_http.py: 33 warnings
+tests/test_audit_templates_http.py: 22 warnings
+tests/test_audit_void_lock_http.py: 5 warnings
+tests/test_checklist_export_docx_http.py: 6 warnings
+tests/test_checklist_na_reason_http.py: 68 warnings
+tests/test_checklist_pass_integrity_http.py: 191 warnings
+tests/test_checklist_reopen_http.py: 20 warnings
+tests/test_checklist_status_rule_http.py: 251 warnings
+tests/test_contractor_options_http.py: 10 warnings
+tests/test_contractor_personnel_http.py: 7 warnings
+tests/test_date_write_guard_http.py: 143 warnings
+tests/test_docx_path_guard_http.py: 2 warnings
+tests/test_fat_supplier_null.py: 80 warnings
+tests/test_file_list_route_http.py: 6 warnings
+tests/test_iam_admin_role_boundary_http.py: 123 warnings
+tests/test_iam_admin_takeover_http.py: 177 warnings
+tests/test_iam_role_audit_http.py: 13 warnings
+tests/test_iam_user_security_http.py: 121 warnings
+tests/test_itp_checklist_km_project_audit_http.py: 69 warnings
+tests/test_itr_approval_events_http.py: 102 warnings
+tests/test_itr_approval_history_api_http.py: 58 warnings
+tests/test_itr_checklist_http_e2e.py: 4 warnings
+tests/test_itr_history_preservation_http.py: 35 warnings
+tests/test_itr_integrity_guards_http.py: 33 warnings
+tests/test_itr_revoke_approval_acceptance.py: 33 warnings
+tests/test_itr_state_protection_http.py: 92 warnings
+tests/test_itr_write_paths_atomic_http.py: 84 warnings
+tests/test_material_submittals_http.py: 193 warnings
+tests/test_materials_http.py: 85 warnings
+tests/test_meeting_minutes_carry_forward_http.py: 4 warnings
+tests/test_meeting_minutes_export_docx_http.py: 13 warnings
+tests/test_meeting_minutes_rev_http.py: 3 warnings
+tests/test_ncr_audit_atomic_http.py: 26 warnings
+tests/test_ncr_audit_delete_http.py: 17 warnings
+tests/test_ncr_close_permission_http.py: 25 warnings
+tests/test_ncr_closed_creation_http.py: 30 warnings
+tests/test_ncr_closure_photos_http.py: 34 warnings
+tests/test_ncr_late_closure_http.py: 32 warnings
+tests/test_noi_audit_delete_update_http.py: 16 warnings
+tests/test_noi_contractor_lock_http.py: 15 warnings
+tests/test_noi_create_atomic_http.py: 20 warnings
+tests/test_noi_delete_http.py: 10 warnings
+tests/test_noi_legacy_itp_read_http.py: 3 warnings
+tests/test_noi_qworkflow_backfill_rule_http.py: 11 warnings
+tests/test_ref_project_seq_b1_http.py: 20 warnings
+tests/test_ref_project_seq_b2_http.py: 24 warnings
+tests/test_refusal_codes_http.py: 28 warnings
+tests/test_remaining_audit_paths_http.py: 82 warnings
+tests/test_reviewed_audit_paths_http.py: 40 warnings
+tests/test_scope_instance_contractor_http.py: 81 warnings
+tests/test_user_company_label_http.py: 33 warnings
+tests/test_workflow_photo_evidence_http.py: 27 warnings
+tests/test_workflow_project_filter_http.py: 6 warnings
+  /usr/local/lib/python3.11/site-packages/httpx/_client.py:690: DeprecationWarning: The 'app' shortcut is now deprecated. Use the explicit style 'transport=WSGITransport(app=...)' instead.
+    warnings.warn(message, DeprecationWarning)
+
+tests/test_checklist_template_cleanup.py::test_seeded_checklist_is_a_clean_template
+tests/test_checklist_template_cleanup.py::test_seeded_checklist_is_a_clean_template
+  /q/backend/crud.py:310: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.14/migration/
+    new_value=role.dict(exclude={"reason"}),
+
+tests/test_checklist_template_cleanup.py::test_seeded_checklist_is_a_clean_template
+  /q/backend/crud.py:225: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.14/migration/
+    new_value=user.dict(exclude={"password"}),
+
+tests/test_ref_project_seq_b2_http.py::test_every_write_to_a_shared_itp_or_checklist_template_is_admin_only
+  /q/backend/routers/itp.py:162: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.14/migration/
+    db_itp = itp_service.update_itp_detail(itp_id=itp_id, detail_body=body.dict(), user_id=current_user.id, username=current_user.username, scope=scope)
+
+tests/test_remaining_audit_paths_http.py::test_durable_audit_and_one_commit[fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_call-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_call-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_object-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_object-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_flush-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_flush-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[commit-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[commit-fat-details]
+  /q/backend/routers/fat.py:116: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.14/migration/
+    details_data = [item.dict() for item in details]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+2737 passed, 17 skipped, 3453 warnings in 3605.92s (1:00:05)
+pytest_exit=0
+# end 2026-10-13T14:36:39Z

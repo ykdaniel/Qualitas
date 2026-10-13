@@ -15,7 +15,7 @@ from typing import List, Optional
 import models
 import schemas
 from repositories.itr_repository import ITRRepository
-from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
+from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope, require_same_project
 from core.utils import (
     _json_serialize,
     _resolve_vendor_id,
@@ -163,6 +163,7 @@ class ITRService:
             noi = self.repo.db.query(models.NOI).filter(models.NOI.referenceNo == noi_no).first()
             if not noi or not record_in_scope(noi, scope):
                 raise ValueError(f"NOI with reference number '{noi_no}' not found")
+            require_same_project(noi, data.get('project_id') or getattr(current, 'project_id', None), 'NOI', noi_no)
             if noi.status in ('Closed', 'Void'):
                 raise ValueError(f"NOI '{noi_no}' is {noi.status}; a new ITR cannot be filed under it.")
 
@@ -171,6 +172,7 @@ class ITRService:
             ncr = self.repo.db.query(models.NCR).filter(models.NCR.documentNumber == ncr_no).first()
             if not ncr or not record_in_scope(ncr, scope):
                 raise ValueError(f"NCR with document number '{ncr_no}' not found")
+            require_same_project(ncr, data.get('project_id') or getattr(current, 'project_id', None), 'NCR', ncr_no)
 
     def create_itr(self, itr_create: schemas.ITRCreate,
                    user_id: int = None, username: str = None, scope=None) -> models.ITR:
@@ -1052,13 +1054,16 @@ class ITRService:
                 models.Checklist.id == checklist_id
             ).first()
             # The SOURCE must be readable by the caller under exactly the rule GET /checklist/{id} applies
-            # (record_in_scope, unchanged: a NULL project / contractor is NOT a public template). This is a
+            # (record_in_scope: since REF-PROJECT-SEQ B2 a shared template — no project, no ITR, not made from a
+            # template — is readable in every project, and by every contractor when it names none). This is a
             # separate check from the target ITR's scope above and from the ownership the new instance gets
             # from that ITR below — none of the three can stand in for another. It runs before the
             # "not a blank template" message (which would otherwise confirm that an out-of-scope instance
             # id exists) and before any reference number, instance or audit entry is created.
             if not template or not record_in_scope(template, scope):
                 raise TemplateNotFoundError("Checklist template not found")
+            # a template that belongs to a project (made before shared templates existed) stays in it (G2, B2 R1 P2-1)
+            require_same_project(template, db_itr.project_id, 'Checklist', template.recordsNo)
 
             # A blank template has both itrId and template_id NULL (see the
             # §17 comment on the Checklist model) — anything else is itself an
@@ -1091,7 +1096,7 @@ class ITRService:
                 project_id=db_itr.project_id,
                 # Contractor ownership comes from the parent ITR as re-read under the write lock above (the real
                 # FK column, never a client value): a contractor-scoped user must be able to see the instance
-                # they just created. NULL is NOT "visible to everyone" — record_in_scope excludes it.
+                # they just created. An instance is never a shared template, so a NULL contractor would hide it.
                 contractor_id=db_itr.vendor_id,
                 itrId=db_itr.id,
                 itrNumber=db_itr.documentNumber,

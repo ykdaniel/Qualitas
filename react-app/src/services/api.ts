@@ -486,6 +486,7 @@ export const deleteRole = async (id: number, reason?: string): Promise<void> => 
 
 export interface ChecklistRecordApi {
   id: string;
+  project_id?: string | null; // null on a shared template (REF-PROJECT-SEQ-2026-001 B2, D10)
   recordsNo: string;
   activity: string;
   date: string;

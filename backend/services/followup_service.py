@@ -13,7 +13,14 @@ import schemas
 from core.assignees import validate_new_assignee
 from core.refusals import Refusal
 from repositories.followup_repository import FollowUpRepository
-from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
+from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope, require_same_project
+
+# source module → (model, number column), as core.validators.validate_followup_source_reference resolves it
+_FOLLOWUP_SOURCES = {
+    "NCR": (models.NCR, "documentNumber"), "NOI": (models.NOI, "referenceNo"), "ITR": (models.ITR, "documentNumber"),
+    "ITP": (models.ITP, "referenceNo"), "OBS": (models.OBS, "documentNumber"), "PQP": (models.PQP, "pqpNo"),
+    "FAT": (models.FAT, "equipment"), "AUDIT": (models.Audit, "auditNo"), "MEETING": (models.MeetingMinutes, "documentNumber"),
+}
 from core.utils import (
     _resolve_vendor_id,
     generate_reference_no,
@@ -40,6 +47,14 @@ class FollowUpService:
         obj = self.repo.get_by_id(followup_id)
         return obj if record_in_scope(obj, scope) else None
 
+    def _require_same_project_source(self, source_module, source_ref_no, project_id) -> None:
+        """A Follow-up's source document must belong to the Follow-up's project (G2, REF-PROJECT-SEQ-2026-001 B2)."""
+        source = _FOLLOWUP_SOURCES.get((source_module or '').upper().strip())
+        if source and source_ref_no:
+            model, column = source
+            linked = self.repo.db.query(model).filter(getattr(model, column) == source_ref_no).first()
+            require_same_project(linked, project_id, source_module.upper().strip(), source_ref_no)
+
     def create_followup(self, followup_create: schemas.FollowUpCreate,
                         user_id: int = None, username: str = None, scope=None) -> models.FollowUp:
         """Create a new FollowUp with business logic validation"""
@@ -61,6 +76,8 @@ class FollowUpService:
                 data.get('sourceModule'),
                 data.get('sourceReferenceNo')
             )
+            # the source document must belong to the same project (G2, REF-PROJECT-SEQ-2026-001 B2)
+            self._require_same_project_source(data.get('sourceModule'), data.get('sourceReferenceNo'), data.get('project_id'))
 
             if not data.get('issueNo'):
                 data['issueNo'] = generate_reference_no(
@@ -138,6 +155,9 @@ class FollowUpService:
                 source_module,
                 source_ref_no
             )
+            if (source_module, source_ref_no) != (db_followup.sourceModule, db_followup.sourceReferenceNo):
+                self._require_same_project_source(source_module, source_ref_no,
+                                                  data.get('project_id') or db_followup.project_id)   # G2 (B2 R1)
 
             updated = self.repo.update(db_followup, data)
 

@@ -167,6 +167,41 @@ def env():
 
 ITEM = {"item": "Spacing", "criteria": "<=200mm", "situation": "", "result": ""}
 
+# REF-PROJECT-SEQ-2026-001 B2 (user's decision 2026-10-13, DECISIONS 專案隔離與依專案編號 item 9): a bare Checklist
+# template is shared master data that only a system administrator creates (POST /api/checklist/ answers everyone else
+# 403 SHARED_TEMPLATE_ADMIN_ONLY) and it never belongs to a project. Suites therefore have the template AUTHORED by this
+# administrator account — same permissions as acc_editor, the account that used to author them — and the suite's own
+# acting account then links / fills it exactly as before. The role is spelled "ADMIN": any letter case of "admin" is the
+# system administrator (UserRepository.is_admin_role_name), and this spelling never collides with a suite's own role
+# named "admin" (role names are unique).
+TEMPLATE_ADMIN = "acc_tpl_admin"
+
+
+def ensure_template_admin(env):
+    """The system-administrator account that authors shared Checklist templates (created on first use). Returns its name."""
+    db = env.Session()
+    try:
+        if db.query(models.User).filter_by(username=TEMPLATE_ADMIN).first() is None:
+            role = db.query(models.Role).filter_by(name="ADMIN").first()
+            if role is None:
+                role = models.Role(name="ADMIN")
+                role.permissions_rel = [_get_or_create_perm(db, c) for c in (
+                    perms.ITR_VIEW, perms.ITR_CREATE, perms.ITR_UPDATE,
+                    perms.CHECKLIST_VIEW, perms.CHECKLIST_CREATE, perms.CHECKLIST_UPDATE)]   # = AcceptEditor's
+                db.add(role)
+                db.flush()
+            db.add(models.User(username=TEMPLATE_ADMIN, email=f"{TEMPLATE_ADMIN}@example.com", is_active=True,
+                               hashed_password=get_password_hash(PW), role_id=role.id))
+            db.commit()
+    finally:
+        db.close()
+    return TEMPLATE_ADMIN
+
+
+def create_template_as_admin(env, body):
+    """POST /api/checklist/ as the template administrator; returns the response (callers assert on it as before)."""
+    return env.login(ensure_template_admin(env)).post("/api/checklist/", json=body)
+
 
 def _mk_itr(env, status="In Progress", project_id=TEST_PROJECT_ID):
     db = env.Session()
@@ -184,11 +219,11 @@ def _mk_itr(env, status="In Progress", project_id=TEST_PROJECT_ID):
 
 
 def _approved_itr(env):
-    """editor builds template + links + fills Pass; approver approves."""
+    """the administrator authors the template (B2: templates are admin-only); editor links + fills Pass; approver approves."""
     editor = env.login("acc_editor")
     approver = env.login("acc_approver")
     itr_id = _mk_itr(env)
-    tpl = editor.post("/api/checklist/", json={
+    tpl = create_template_as_admin(env, {
         "activity": "Rebar", "date": "2026-09-19", "status": "Ongoing",
         "detail_data": json.dumps({"items": [ITEM]}),
     })

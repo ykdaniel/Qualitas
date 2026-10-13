@@ -20,7 +20,7 @@ from core import perms
 from core.security import get_password_hash
 from project_membership import TEST_PROJECT_ID, bind
 from test_itr_revoke_approval_acceptance import (   # noqa: F401  (env is a fixture, re-exported on purpose)
-    ITEM, PW, _get_or_create_perm, _mk_itr, env,
+    ITEM, PW, _get_or_create_perm, _mk_itr, env, create_template_as_admin,
 )
 
 VENDOR_BODY = {"vendor": "Accept Co", "description": "d", "rev": "Rev1.0", "submit": "2026-09-20", "status": "In Progress"}
@@ -49,7 +49,8 @@ def full(env):
 # ── builders ─────────────────────────────────────────────────────────────
 
 def _template(env, activity="Rebar"):
-    r = env.login("acc_editor").post("/api/checklist/", json={
+    """A bare template, authored by the system administrator (REF-PROJECT-SEQ B2: Checklist templates are admin-only)."""
+    r = create_template_as_admin(env, {
         "activity": activity, "date": "2026-09-20", "status": "Ongoing", "detail_data": json.dumps({"items": [ITEM]})})
     assert r.status_code == 200, r.text
     return r.json()["id"]

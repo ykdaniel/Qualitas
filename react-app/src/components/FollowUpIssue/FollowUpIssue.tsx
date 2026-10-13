@@ -2,7 +2,6 @@ import { useDraftGuard } from '../Shared/LeaveGuard';
 import FormActions from '../Shared/FormActions';
 import actionStyles from '../Shared/FormActions.module.css';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { Clock, CheckCircle2, BarChart3, Search, Printer } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
@@ -19,7 +18,8 @@ import styles from './FollowUpIssue.module.css';
 import formStyles from '../Shared/FormShell.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import api, { getUsers, formatUserLabel, type User as ApiUser } from '../../services/api';
-import { getProjectFilterParams, getCurrentProjectScopeId } from '../../utils/projectFilter';
+import { getProjectFilterParams, getCurrentProjectScopeId, withCurrentProject } from '../../utils/projectFilter';
+import { useCreateGate } from '../../hooks/useCreateGate';
 import { useProjectStore } from '../../store/projectStore';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
@@ -74,6 +74,7 @@ interface FollowUpIssueItem {
 const FollowUpIssue: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const createGate = useCreateGate();
   const [manualIssues, setManualIssues] = useState<FollowUpIssueItem[]>([]);
   const [, setLoading] = useState(true);
 
@@ -321,12 +322,15 @@ const FollowUpIssue: React.FC = () => {
           status: updates.status || 'Open',
           description: updates.description || ''
         };
-        await api.post('/followup/', newIssue);
+        await api.post('/followup/', withCurrentProject(newIssue));
       }
       fetchManualIssues();
     } catch (err) {
       console.error('Failed to save issue:', err);
-      toast.error(t('common.saveFailed') || '儲存失敗');
+      // A coded refusal (e.g. PROJECT_REQUIRED_FOR_CREATE, LINK_OTHER_PROJECT) shows its reason in the refusal dialog; the
+      // form stays open so the entry is not lost.
+      showRefusal(err, 'save');
+      throw err;
     }
   };
 
@@ -429,7 +433,8 @@ const FollowUpIssue: React.FC = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+          <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}
+            disabled={createGate.disabled} title={createGate.title}>
             {t('followup.addNew')}
           </button>
         </div>
@@ -575,8 +580,8 @@ const FollowUpIssueDetailModal: React.FC<FollowUpIssueDetailModalProps> = ({ exi
     try {
       await onSave(formData);
       onClose();
-    } catch (err) {
-      toast.error((err as Error)?.message || 'Save failed');
+    } catch {
+      // already reported by onSave (refusal dialog); keep the form open
     } finally { setSaving(false); }
   };
 

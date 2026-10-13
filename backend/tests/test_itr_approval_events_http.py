@@ -30,7 +30,7 @@ from core import perms
 from core.security import get_password_hash
 from project_membership import TEST_PROJECT_ID, bind
 from test_itr_revoke_approval_acceptance import (   # noqa: F401  (env is a fixture, re-exported on purpose)
-    ITEM, PW, Env, _mk_itr, _seed, env,
+    ITEM, PW, Env, _mk_itr, _seed, env, create_template_as_admin,
 )
 
 TEMPLATE_ITEMS = [
@@ -48,8 +48,9 @@ def _passing_items(situation="Measured 150mm"):
 
 def _link_and_pass(env, itr_id, activity="Rebar", situation="Measured 150mm"):
     editor = env.login("acc_editor")
-    tpl = editor.post("/api/checklist/", json={"activity": activity, "date": "2026-09-20", "status": "Ongoing",
-                                                "detail_data": json.dumps({"items": TEMPLATE_ITEMS})})
+    # the template is authored by the system administrator (REF-PROJECT-SEQ B2: Checklist templates are admin-only)
+    tpl = create_template_as_admin(env, {"activity": activity, "date": "2026-09-20", "status": "Ongoing",
+                                         "detail_data": json.dumps({"items": TEMPLATE_ITEMS})})
     assert tpl.status_code == 200, tpl.text
     r = editor.post(f"/api/itr/{itr_id}/link-checklist", params={"checklist_id": tpl.json()["id"]})
     assert r.status_code == 200, r.text
@@ -179,8 +180,8 @@ def test_legal_approval_records_the_approver_the_server_time_and_a_complete_snap
 def test_na_reason_and_other_item_fields_are_kept_in_the_snapshot(env):
     itr_id = _mk_itr(env)
     editor = env.login("acc_editor")
-    tpl = editor.post("/api/checklist/", json={"activity": "NA", "date": "2026-09-20", "status": "Ongoing",
-                                                "detail_data": json.dumps({"items": TEMPLATE_ITEMS})}).json()
+    tpl = create_template_as_admin(env, {"activity": "NA", "date": "2026-09-20", "status": "Ongoing",       # admin-authored (B2)
+                                         "detail_data": json.dumps({"items": TEMPLATE_ITEMS})}).json()
     editor.post(f"/api/itr/{itr_id}/link-checklist", params={"checklist_id": tpl["id"]})
     db = env.Session(); inst_id = db.query(models.Checklist).filter_by(itrId=itr_id).one().id; db.close()
     items = [{**TEMPLATE_ITEMS[0], "situation": "ok", "result": "O", "extra_field": "kept"},
@@ -589,8 +590,8 @@ def test_a_link_racing_an_approval_cannot_add_an_instance_the_snapshot_never_saw
     env, engine = file_env
     itr_id, (inst_id,) = _ready_itr(env)
     approver, editor = env.login("acc_approver"), env.login("acc_editor")
-    tpl = editor.post("/api/checklist/", json={"activity": "Late", "date": "2026-09-20", "status": "Ongoing",
-                                                "detail_data": json.dumps({"items": TEMPLATE_ITEMS})}).json()
+    tpl = create_template_as_admin(env, {"activity": "Late", "date": "2026-09-20", "status": "Ongoing",     # admin-authored (B2)
+                                         "detail_data": json.dumps({"items": TEMPLATE_ITEMS})}).json()
     window = _Window(engine, "insert into itr_approval_events")
     try:
         out = _run_pair(

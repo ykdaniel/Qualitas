@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import api from '../services/api';
 import { getErrorMessage } from '../utils/errorUtils';
-import { getProjectFilterParams } from '../utils/projectFilter';
+import { getProjectFilterParams, withCurrentProject } from '../utils/projectFilter';
 
 // One row of the audit's daily schedule (AUDIT-AGENDA-2026-001); the backend validates and sorts them.
 export interface AuditAgendaEntry {
@@ -94,7 +94,7 @@ export const useAuditStore = create<AuditState>((set, get) => ({
     addAudit: async (audit) => {
         try {
             set({ error: null });
-            const response = await api.post('/audit/', audit);
+            const response = await api.post('/audit/', withCurrentProject(audit));
             const newAudit = response.data;
             set((state) => ({
                 auditList: [...state.auditList, newAudit]

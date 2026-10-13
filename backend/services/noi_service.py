@@ -14,7 +14,7 @@ import models
 import schemas
 from repositories.noi_repository import NOIRepository
 from core import strict_dates
-from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
+from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope, require_same_project
 from core.utils import (
     _json_serialize,
     _reference_seq_lock,
@@ -122,6 +122,11 @@ class NOIService:
             # so failed creates don't leave gaps in the NOI sequence.
             if data.get('itpNo'):
                 validators.validate_itp_reference(self.repo.db, data['itpNo'])
+                cited_itp = self.repo.db.query(models.ITP).filter(models.ITP.referenceNo == data['itpNo']).first()
+                if not record_in_scope(cited_itp, scope):   # only an ITP the caller can see (B2 R1 P2-2)
+                    raise ValueError(error_messages.reference_not_found("ITP", "reference number", data['itpNo']))
+                # the ITP must be this project's or a shared template (G2 / D10, REF-PROJECT-SEQ-2026-001 B2)
+                require_same_project(cited_itp, data.get('project_id'), 'ITP', data['itpNo'])
 
             # final content validated before the write lock / any reference number (2026-09-20)
             strict_dates.validate_date_write(data, strict_dates.NOI_DATE_FIELDS, required=strict_dates.NOI_REQUIRED_DATE_FIELDS)
@@ -331,6 +336,10 @@ class NOIService:
                 ).first()
                 if not itp:
                     raise ValueError(error_messages.reference_not_found("ITP", "reference number", d['itpNo']))
+                if d['itpNo'] != db_noi.itpNo:      # only a changed link is checked (the UI resends every field)
+                    if not record_in_scope(itp, scope):   # only an ITP the caller can see (B2 R1 P2-2)
+                        raise ValueError(error_messages.reference_not_found("ITP", "reference number", d['itpNo']))
+                    require_same_project(itp, db_noi.project_id, 'ITP', d['itpNo'])   # G2 / D10 (B2)
 
             # 勾稽鎖定：關閉 NOI 前確認其下所有 ITR 已完結（Approved 或 Void）
             new_status = d.get('status') or (noi_update.status if noi_update.status else None)
@@ -433,6 +442,7 @@ class NOIService:
                 id=str(uuid.uuid4()),
                 referenceNo=next_ref,
                 noi_id=noi.id,
+                project_id=noi.project_id,          # the tracker belongs to its NOI's project (REF-PROJECT-SEQ-2026-001 B2)
                 createdAt=datetime.now(timezone.utc).isoformat(),
             )
             self.repo.db.add(qwf)

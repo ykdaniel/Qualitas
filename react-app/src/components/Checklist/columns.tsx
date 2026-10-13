@@ -1,5 +1,5 @@
 import { ColumnDef } from "@tanstack/react-table";
-import { ChecklistRecord, isTemplateHistoricallyProtected } from "../../store/checklistStore";
+import { ChecklistRecord, isTemplateHistoricallyProtected, isSharedChecklistTemplate } from "../../store/checklistStore";
 import { Trash2, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTableColumnHeader } from "@/components/Shared/DataTable/DataTableColumnHeader";
@@ -12,7 +12,9 @@ import { DataTableColumnHeader } from "@/components/Shared/DataTable/DataTableCo
 // the ITR module, never on this page (see Checklist.tsx's page intro).
 export const createColumns = (
     onDelete: (id: string) => void,
-    t: (key: string) => string
+    t: (key: string) => string,
+    // a shared template is deleted only by a system administrator (REF-PROJECT-SEQ-2026-001 B2)
+    isAdmin = true,
 ): ColumnDef<ChecklistRecord>[] => [
         {
             id: "index",
@@ -88,7 +90,7 @@ export const createColumns = (
                         outright (_instance_has_historical_evidence), but a
                         visible button that always fails is bad UX; per the
                         2026-09-19 fix, no delete entry point at all for these. */}
-                    {!isTemplateHistoricallyProtected(row.original) && (
+                    {!isTemplateHistoricallyProtected(row.original) && (isAdmin || !isSharedChecklistTemplate(row.original)) && (
                         <Button
                             variant="ghost"
                             size="icon"

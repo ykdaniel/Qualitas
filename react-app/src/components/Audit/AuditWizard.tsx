@@ -131,8 +131,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     auditTitle: existingItem?.title || '',
-    // A new audit starts in the project currently selected in the header (blank under "All
-    // projects"), so it doesn't vanish from the list it was created from; always changeable.
+    // A new audit is created in the project currently selected in the header (REF-PROJECT-SEQ-2026-001 B2, D3); the
+    // field is read-only. Under "All projects" it is blank and the server refuses the create (the page's "new" button
+    // is disabled there).
     projectId: existingItem ? (existingItem.project_id || '') : (currentProject?.id || ''),
     projectName: existingItem ? (existingItem.project_name || '') : (currentProject?.name || ''),
     findings: existingItem?.findings || '',
@@ -178,6 +179,11 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
   const selectedProjectId = formData.projectId
     || projectList.find(p => p.name === formData.projectName)?.id
     || '';
+  // "[code] name", or the legacy name when no project is linked — the picker label, the print and the Word export.
+  const selectedProjectLabel = (() => {
+    const project = projectList.find(p => p.id === selectedProjectId);
+    return project ? (project.code ? `[${project.code}] ${project.name}` : project.name) : formData.projectName;
+  })();
 
   const BLANK_NEW_ITEM = { no: '', clause: '', task: '', templateId: undefined as number | undefined, templateItemId: undefined as string | undefined };
   const [newItem, setNewItem] = useState(BLANK_NEW_ITEM);
@@ -417,12 +423,6 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     }
   };
 
-  const handleProjectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const projectId = e.target.value;
-    const selected = projectList.find(p => p.id === projectId);
-    setFormData(prev => ({ ...prev, projectId, projectName: selected?.name || '' }));
-  };
-
   const handleContractorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const vendorId = e.target.value;
     const selectedVendor = pickerContractors.find(v => v.id === vendorId);
@@ -626,11 +626,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     auditNo,
     status: formData.status,
     title: formData.auditTitle,
-    // Same label as the Word export and the project picker: "[code] name", or the legacy name when no project is linked.
-    projectLabel: (() => {
-      const project = projectList.find(p => p.id === selectedProjectId);
-      return project ? (project.code ? `[${project.code}] ${project.name}` : project.name) : formData.projectName;
-    })(),
+    projectLabel: selectedProjectLabel,
     // Legacy rows may hold only the contractor id; the Word export then falls back to the contractor's name too.
     contractor: formData.contractor || contractorOptions.find(c => c.id === formData.vendorId)?.name || '',
     startDate: formData.auditStartDate,
@@ -752,17 +748,10 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
                        <span className="text-sm font-bold text-slate-800">Project No / Name</span>
                        <span className="text-xs font-medium text-slate-400">(專案名稱)</span>
                     </label>
-                    <select
-                      name="projectId"
-                      value={selectedProjectId}
-                      onChange={handleProjectChange}
-                      className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-slate-800 font-medium appearance-none"
-                    >
-                      <option value="">{t('audit.wizard.selectProject')}</option>
-                      {projectList.map(p => (
-                        <option key={p.id} value={p.id}>{p.code ? `[${p.code}] ` : ''}{p.name}</option>
-                      ))}
-                    </select>
+                    {/* REF-PROJECT-SEQ-2026-001 B2 (D3): an audit belongs to the project the user works in — shown, not chosen. */}
+                    <input type="text" name="projectId" value={selectedProjectLabel} readOnly
+                      className="w-full px-4 py-3 bg-[#F5F7FA] border border-slate-200 rounded-xl outline-none text-slate-400 font-medium cursor-not-allowed"
+                      style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }} />
                   </div>
                   <div>
                     <label className="flex items-baseline gap-2 mb-2">

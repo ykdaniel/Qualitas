@@ -34,6 +34,8 @@ from routers import itr as itr_router
 from routers import checklist as checklist_router
 from project_membership import TEST_PROJECT_ID, bind
 
+TEMPLATE_ADMIN = "tpl_admin"
+
 
 @pytest.fixture
 def http_env():
@@ -61,12 +63,18 @@ def http_env():
     editor_role.permissions_rel = list(perms.values())  # no ITR_APPROVE
     approver_role = models.Role(name="Approver")
     approver_role.permissions_rel = list(perms.values()) + [approve_perm]
-    db.add_all([editor_role, approver_role])
+    # REF-PROJECT-SEQ-2026-001 B2 (user's decision 2026-10-13): a bare Checklist template is shared master data only a
+    # system administrator (a role named "admin", any case) creates. It authors the templates these tests link, with
+    # the permissions of the approver account that used to author them.
+    admin_role = models.Role(name="admin")
+    admin_role.permissions_rel = list(perms.values()) + [approve_perm]
+    db.add_all([editor_role, approver_role, admin_role])
     db.flush()
 
     editor_user = models.User(id=1, username="editor", email="e@x.com", is_active=True, role_id=editor_role.id)
     approver_user = models.User(id=2, username="approver", email="a@x.com", is_active=True, role_id=approver_role.id)
-    db.add_all([editor_user, approver_user])
+    admin_user = models.User(id=3, username=TEMPLATE_ADMIN, email="t@x.com", is_active=True, role_id=admin_role.id)
+    db.add_all([editor_user, approver_user, admin_user])
     db.flush()
     # REF-PROJECT-SEQ-2026-001 B1: non-admin accounts work in one project; both work in the shared test project
     # (records they create land there).
@@ -104,6 +112,21 @@ def http_env():
     db.close()
 
 
+def _template_as_admin(client, db, as_user, back_to):
+    """The bare template, created by the system administrator (B2: templates are admin-only); then the request user is
+    switched back to `back_to`, the account that links and fills it as before."""
+    as_user(db.query(models.User).filter_by(username=TEMPLATE_ADMIN).one())
+    try:
+        r = client.post("/api/checklist/", json={
+            "activity": "Spacing Check", "date": "2026-09-19", "status": "Ongoing",
+            "detail_data": json.dumps({"items": [{"item": "Spacing", "criteria": "x", "situation": "", "result": ""}]}),
+        })
+    finally:
+        as_user(back_to)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
 def _link_and_pass(client, itr_id, template_id):
     r = client.post(f"/api/itr/{itr_id}/link-checklist", params={"checklist_id": template_id})
     assert r.status_code == 200, r.text
@@ -131,10 +154,7 @@ def test_real_http_approver_can_approve_and_editor_cannot(http_env):
     client, db, editor, approver, as_user = http_env
     as_user(approver)
 
-    tpl = client.post("/api/checklist/", json={
-        "activity": "Spacing Check", "date": "2026-09-19", "status": "Ongoing",
-        "detail_data": json.dumps({"items": [{"item": "Spacing", "criteria": "x", "situation": "", "result": ""}]}),
-    }).json()
+    tpl = _template_as_admin(client, db, as_user, back_to=approver)
 
     itr = client.post("/api/itr/", json={
         "vendor": "Acme", "status": "In Progress", "description": "d", "rev": "0", "submit": "",
@@ -160,10 +180,7 @@ def test_real_http_approver_can_approve_and_editor_cannot(http_env):
 def test_real_http_unlink_rejected_with_json_detail_message(http_env):
     client, db, editor, approver, as_user = http_env
     as_user(approver)
-    tpl = client.post("/api/checklist/", json={
-        "activity": "Spacing Check", "date": "2026-09-19", "status": "Ongoing",
-        "detail_data": json.dumps({"items": [{"item": "Spacing", "criteria": "x", "situation": "", "result": ""}]}),
-    }).json()
+    tpl = _template_as_admin(client, db, as_user, back_to=approver)
     itr = client.post("/api/itr/", json={
         "vendor": "Acme", "status": "In Progress", "description": "d", "rev": "0", "submit": "",
     }).json()
@@ -179,10 +196,7 @@ def test_real_http_unlink_rejected_with_json_detail_message(http_env):
 def test_real_http_revoke_approval_requires_itr_approve_not_itr_update(http_env):
     client, db, editor, approver, as_user = http_env
     as_user(approver)
-    tpl = client.post("/api/checklist/", json={
-        "activity": "Spacing Check", "date": "2026-09-19", "status": "Ongoing",
-        "detail_data": json.dumps({"items": [{"item": "Spacing", "criteria": "x", "situation": "", "result": ""}]}),
-    }).json()
+    tpl = _template_as_admin(client, db, as_user, back_to=approver)
     itr = client.post("/api/itr/", json={
         "vendor": "Acme", "status": "In Progress", "description": "d", "rev": "0", "submit": "",
     }).json()

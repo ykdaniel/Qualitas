@@ -26,6 +26,8 @@ export interface ChecklistRecord {
     revision: number;
     noiNumber?: string;
     templateId?: string;
+    /** null/absent on a shared template (bare template: no project, no ITR, not made from a template). */
+    projectId?: string | null;
     // Read-only provenance — see api.ts's ChecklistRecordApi. Never sent on
     // create/update, only ever reflects what the backend last returned.
     version?: number | null;
@@ -69,6 +71,11 @@ export const recordCarriesInspectionEvidence = (
     return false;
 };
 
+// A shared Checklist template (REF-PROJECT-SEQ-2026-001 B2, D10 + the user's decision 2026-10-13): no project, no ITR,
+// not made from a template. Every project sees and cites it; only a system administrator creates, changes or deletes it.
+export const isSharedChecklistTemplate = (record: ChecklistRecord): boolean =>
+    !record.projectId && !record.itrId && !record.templateId;
+
 // True if this TEMPLATE (itrId/templateId both falsy) must be treated as
 // historically anomalous — either the backend already flagged it, or its
 // own current content shows it was never actually clean. Always false for
@@ -111,6 +118,7 @@ const normalizeRecord = (r: api.ChecklistRecordApi): ChecklistRecord => ({
     revision: safeJsonParse(r.detail_data).revision || 0,
     noiNumber: r.noiNumber,
     templateId: r.template_id,
+    projectId: r.project_id ?? null,
     version: r.version ?? null,
     sourceTemplateVersion: r.source_template_version ?? null,
     evidenceRecordedAt: r.evidence_recorded_at ?? null,

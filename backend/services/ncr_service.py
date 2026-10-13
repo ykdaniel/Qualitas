@@ -15,7 +15,7 @@ import schemas
 from core.assignees import validate_new_assignee
 from mail_service import send_ncr_rejection_notification
 from repositories.ncr_repository import NCRRepository
-from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
+from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope, require_same_project
 from core import strict_dates
 from core.refusals import Refusal
 from core.validators import delete_referenced
@@ -261,6 +261,11 @@ class NCRService:
                         data['noiNumber'],
                     )
                     data['noiNumber'] = ''
+                else:
+                    require_same_project(noi, data.get('project_id'), 'NOI', data['noiNumber'])   # G2 (B2)
+            if data.get('itrNumber'):
+                linked_itr = self.repo.db.query(models.ITR).filter(models.ITR.documentNumber == data['itrNumber']).first()
+                require_same_project(linked_itr, data.get('project_id'), 'ITR', data['itrNumber'])   # G2 (B2)
 
             # recurrenceRef is a traceability claim ("this is a repeat of that
             # prior NCR") — verify it actually resolves to an existing NCR,
@@ -508,6 +513,11 @@ class NCRService:
                         d['noiNumber'],
                     )
                     d['noiNumber'] = ''
+                elif d['noiNumber'] != db_ncr.noiNumber:     # only a changed link is checked (the UI resends every field)
+                    require_same_project(noi, d.get('project_id') or db_ncr.project_id, 'NOI', d['noiNumber'])   # G2 (B2 R1)
+            if d.get('itrNumber') and d['itrNumber'] != db_ncr.itrNumber:
+                linked_itr = self.repo.db.query(models.ITR).filter(models.ITR.documentNumber == d['itrNumber']).first()
+                require_same_project(linked_itr, d.get('project_id') or db_ncr.project_id, 'ITR', d['itrNumber'])   # G2 (B2 R1)
 
             # Owner/engineering rejection needs to reach the contractor right
             # away, not wait for the next scheduler.py batch run — capture the

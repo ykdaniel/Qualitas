@@ -43,6 +43,12 @@ BODIES = {
     'km': dict(title='Reviewed article', content='Body'),
     'project': dict(name='Reviewed project'),
 }
+# REF-PROJECT-SEQ-2026-001 B2 (user's decision 2026-10-13, DECISIONS 專案隔離與依專案編號 item 9): POST /api/checklist/
+# creates a bare template, shared master data only a system administrator (a role named "admin", any case) may create.
+# The Checklist case is therefore performed by 'audit-admin2' — a role named admin holding exactly AuditWriter2's
+# permission rows — with the same create / audit-atomicity assertions; every other case stays with 'audit-writer2'.
+ACTORS = dict(itp='audit-writer2', checklist='audit-admin2', km='audit-writer2', project='audit-writer2')
+ACTOR_ROLES = dict(itp='AuditWriter2', checklist='admin', km='AuditWriter2', project='AuditWriter2')
 
 
 @pytest.fixture
@@ -67,6 +73,12 @@ def env(tmp_path, monkeypatch):
         db.add(writer)
         db.flush()
         bind(db, writer)        # works in the shared test project (REF-PROJECT-SEQ-2026-001 B1)
+        admin_role = models.Role(name='admin')                       # name => system administrator; permissions => AuditWriter2's
+        admin_role.permissions_rel = list(role.permissions_rel)
+        db.add(admin_role)
+        db.flush()
+        db.add(models.User(username='audit-admin2', email='audit-admin2@example.test', is_active=True,
+                           role_id=admin_role.id, hashed_password=get_password_hash(password)))
         db.add(models.Contractor(id='vendor', name='Audit vendor', abbreviation='AV'))
         db.commit()
     app = FastAPI()
@@ -79,12 +91,15 @@ def env(tmp_path, monkeypatch):
     with TestClient(app, raise_server_exceptions=False) as client:
         response = client.post('/api/auth/login', data={'username': 'audit-writer2', 'password': password})
         assert response.status_code == 200, response.text
-        yield SimpleNamespace(client=client, Session=S, app=app)
+        with TestClient(app, raise_server_exceptions=False) as admin_client:
+            response = admin_client.post('/api/auth/login', data={'username': 'audit-admin2', 'password': password})
+            assert response.status_code == 200, response.text
+            yield SimpleNamespace(client=client, admin_client=admin_client, Session=S, app=app)
     engine.dispose()
 
 
 def write(env, case):
-    return env.client.post(PATHS[case], json=BODIES[case])
+    return (env.admin_client if ACTORS[case] == 'audit-admin2' else env.client).post(PATHS[case], json=BODIES[case])
 
 
 def snapshot(env):
@@ -103,7 +118,7 @@ def test_saved_data_has_matching_durable_audit(env, case):
         assert db.get(MODELS[case], rid) is not None
         audit = db.query(models.AuditLog).filter_by(entity_type=TYPES[case], entity_id=rid).one()
         assert audit.action == 'CREATE'
-        assert audit.username == 'audit-writer2'
+        assert audit.username == ACTORS[case]
         assert audit.user_id and audit.timestamp
         assert json.loads(audit.new_value)
 
@@ -161,7 +176,7 @@ def test_success_commits_exactly_once(env, case):
 @pytest.mark.parametrize('case', CASES)  # project is now permission-gated the same as the others
 def test_permission_refusal_changes_nothing(env, case):
     with env.Session() as db:
-        db.query(models.Role).filter_by(name='AuditWriter2').one().permissions_rel = []
+        db.query(models.Role).filter_by(name=ACTOR_ROLES[case]).one().permissions_rel = []   # the acting account's role
         db.commit()
     before = snapshot(env)
     assert write(env, case).status_code == 403

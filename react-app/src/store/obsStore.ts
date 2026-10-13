@@ -3,7 +3,7 @@ import api from '../services/api';
 import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
-import { getProjectFilterParams, getCurrentProjectScopeId } from '../utils/projectFilter';
+import { getProjectFilterParams, getCurrentProjectScopeId, withCurrentProject } from '../utils/projectFilter';
 
 import type { DateIssue } from '../utils/dateIssues';
 
@@ -110,7 +110,7 @@ export const useOBSStore = create<OBSState>((set, get) => ({
     addOBS: async (obs: Omit<OBSItem, 'id'>) => {
         // A failed add/update is not written to the list-level `error`: the record modal reports it itself, once. Writing it here
         // showed the same failure again as a page banner and made a failed save look like a failed list load.
-        const response = await api.post('/obs/', obs);
+        const response = await api.post('/obs/', withCurrentProject(obs));
         const newOBS = normalizeItem(response.data);
         set((state) => ({ obsList: [...state.obsList, newOBS] }));
         return newOBS;

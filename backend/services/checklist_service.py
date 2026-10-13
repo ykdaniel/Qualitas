@@ -14,7 +14,7 @@ from sqlalchemy import inspect
 import models
 import schemas
 from repositories.checklist_repository import ChecklistRepository
-from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
+from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope, require_shared_template_write, require_same_project
 from core.utils import (
     _json_serialize,
     lock_itr_for_write,
@@ -25,7 +25,7 @@ from core.utils import (
     WorkflowEngine
 )
 from core import validators
-from core.refusals import Refusal
+from core.refusals import Refusal, RefusalHTTPException
 
 logger = logging.getLogger(__name__)
 
@@ -523,12 +523,29 @@ class ChecklistService:
             if data.get('itrNumber'):
                 validators.validate_itr_reference(self.repo.db, data['itrNumber'])
 
+            # A bare template is shared by every project (D9) and only a system administrator creates one (user's
+            # decision 2026-10-13, REF-PROJECT-SEQ-2026-001 B2): it never belongs to a project.
+            if scope is not None and not scope.unrestricted:
+                raise RefusalHTTPException(403, "Only a system administrator can create a Checklist template (templates are "
+                                                "shared by every project).", "SHARED_TEMPLATE_ADMIN_ONLY")
+            data['project_id'] = None
+
+            # Handle contractor name -> contractor_id mapping (before numbering: the number follows the scope check)
+            contractor_name = data.get('contractor', '') or ''
+            if 'contractor' in data:
+                data.pop('contractor')
+                if contractor_name:
+                    data['contractor_id'] = _resolve_vendor_id(self.repo.db, contractor_name)
+
+            # P0 data isolation: confine the new record to the caller's scope. Checklist exposes its contractor FK as
+            # `contractor_id` (DB column is still `vendor_id`). Checked BEFORE a number is taken, so a refusal uses none.
+            enforce_create_scope(data, scope, vendor_field="contractor_id", allow_shared=True)
+
             # Generate recordsNo automatically if not provided.
             # The legacy "[AUTO-GENERATE]" sentinel is still accepted for
             # backwards compatibility with frontends that send it, but it
             # is deprecated — the frontend should send null/None instead so
             # we don't overload a string value with control semantics.
-            contractor_name = data.get('contractor', '')
             records_no = data.get('recordsNo')
             if records_no == "[AUTO-GENERATE]":
                 logger.info(
@@ -540,17 +557,6 @@ class ChecklistService:
                 data['recordsNo'] = generate_reference_no(
                     self.repo.db, contractor_name, 'CHECKLIST'
                 )
-
-            # Handle contractor name -> contractor_id mapping
-            if 'contractor' in data:
-                contractor_name = data.pop('contractor')
-                if contractor_name:
-                    data['contractor_id'] = _resolve_vendor_id(self.repo.db, contractor_name)
-
-            # P0 data isolation: confine the new record to the caller's scope.
-            # Checklist exposes its contractor FK as `contractor_id` (DB column
-            # is still `vendor_id`).
-            enforce_create_scope(data, scope, vendor_field="contractor_id")
 
             # Create Checklist object
             db_checklist = models.Checklist(**data)
@@ -604,6 +610,7 @@ class ChecklistService:
             db_checklist = self.repo.get_by_id(checklist_id)
             if not db_checklist or not record_in_scope(db_checklist, scope):
                 return None
+            require_shared_template_write(db_checklist, scope)     # shared templates: system administrators only (D18, B2)
 
             # An instance's writes must not interleave with its ITR's approval
             # (2026-09-20): take the ITR's write lock FIRST, then re-read this row and
@@ -819,12 +826,18 @@ class ChecklistService:
 
             if 'noiNumber' in d and d['noiNumber']:
                 validators.validate_noi_reference(self.repo.db, d['noiNumber'])
+                if d['noiNumber'] != db_checklist.noiNumber:   # G2 (B2 R1): only a changed link is checked
+                    require_same_project(self.repo.db.query(models.NOI).filter(models.NOI.referenceNo == d['noiNumber']).first(),
+                                         db_checklist.project_id, 'NOI', d['noiNumber'])
 
             if 'itrId' in d and d['itrId']:
                 validators.validate_itr_by_id(self.repo.db, d['itrId'])
 
             if 'itrNumber' in d and d['itrNumber']:
                 validators.validate_itr_reference(self.repo.db, d['itrNumber'])
+                if d['itrNumber'] != db_checklist.itrNumber:   # G2 (B2 R1)
+                    require_same_project(self.repo.db.query(models.ITR).filter(models.ITR.documentNumber == d['itrNumber']).first(),
+                                         db_checklist.project_id, 'ITR', d['itrNumber'])
 
             # Update the record and log the audit trail in ONE transaction
             # (2026-09-19 atomicity fix — this method previously called
@@ -876,6 +889,7 @@ class ChecklistService:
             db_checklist = self.repo.get_by_id(checklist_id)
             if not db_checklist or not record_in_scope(db_checklist, scope):
                 return False
+            require_shared_template_write(db_checklist, scope)     # shared templates: system administrators only (D18, B2)
 
             # §17 isolation hardening (2026-09-19): an ITR-owned instance
             # must only ever be removed via the ITR's own Unlink action

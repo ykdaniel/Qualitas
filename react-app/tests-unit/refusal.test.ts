@@ -137,8 +137,9 @@ test('every refusal code the backend raises has its wording in both languages', 
     const codes = new Set<string>();
     for (const f of files) {
         const text = fs.readFileSync(f, 'utf8');
-        for (const m of text.matchAll(/Refusal\(\s*'([A-Z_]+)'/g)) codes.add(m[1]);
-        for (const m of text.matchAll(/RefusalHTTPException\(\s*\d+,[^\n]*?'([A-Z_]+)'/g)) codes.add(m[1]);
+        // single or double quotes; a RefusalHTTPException may span lines (REF-PROJECT-SEQ-2026-001 B1/B2 write them so)
+        for (const m of text.matchAll(/Refusal\(\s*['"]([A-Z_]+)['"]/g)) codes.add(m[1]);
+        for (const m of text.matchAll(/RefusalHTTPException\((?:[^()]|\([^()]*\))*?['"]([A-Z][A-Z_]{3,})['"]/g)) codes.add(m[1]);
         for (const m of text.matchAll(/RefusalHTTPException\(\s*409,\s*locked\[0\],\s*'([A-Z_]+)'/g)) codes.add(m[1]);
     }
     // raised through helpers rather than literally
@@ -169,6 +170,14 @@ test('every refusal code the backend raises has its wording in both languages', 
         ROLE_ADMIN_PROTECTED: [],
         PERMISSION_DENIED: ['permissions'],
         ATTACHMENT_LOCKED: ['kind', 'docType', 'status', 'category'],
+        // REF-PROJECT-SEQ-2026-001
+        PROJECT_REQUIRED: [],
+        NOT_PROJECT_MEMBER: [],
+        PROJECT_ALREADY_CHOSEN: [],
+        ADMIN_NO_PROJECT_SELECTION: [],
+        PROJECT_REQUIRED_FOR_CREATE: [],
+        SHARED_TEMPLATE_ADMIN_ONLY: [],
+        LINK_OTHER_PROJECT: ['docType', 'number'],
         FAT_SUPPLIER_REQUIRED: [],
         FAT_SUPPLIER_NOT_FOUND: ['name'],
     };

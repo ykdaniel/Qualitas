@@ -3,7 +3,7 @@ import api from '../services/api';
 import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
-import { getProjectFilterParams, getCurrentProjectScopeId } from '../utils/projectFilter';
+import { getProjectFilterParams, getCurrentProjectScopeId, withCurrentProject } from '../utils/projectFilter';
 
 export interface ITRItem {
     id: string;
@@ -134,7 +134,7 @@ export const useITRStore = create<ITRState>((set, get) => ({
             // Always stringify detail_data for backend
             payload.detail_data = JSON.stringify(detailData);
 
-            const response = await api.post('/itr/', payload);
+            const response = await api.post('/itr/', withCurrentProject(payload));
             const newITR = normalizeItem(response.data);
             set((state) => ({ itrList: [...state.itrList, newITR] }));
             return newITR;

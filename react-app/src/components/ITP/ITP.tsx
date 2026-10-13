@@ -21,6 +21,7 @@ import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { ITPDetailModal, type SaveOutcome, ItpMainSavedError } from './ITPModals';
 import { useDebounce } from '../../hooks/useDebounce';
+import { useCreateGate } from '../../hooks/useCreateGate';
 import { useITPStats } from '../../hooks/useITPStats';
 import { REOPEN_ITP_PARAM } from '../../utils/itpReturnLink';
 
@@ -37,7 +38,9 @@ type StatusFilter =
 const ITP: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const { hasPermission } = useAuth();
+  const createGate = useCreateGate(true);
+  const { hasPermission, user } = useAuth();
+  const isAdmin = !!user?.is_admin;
   const canCreate = hasPermission('itp:create:all');
   const canUpdate = hasPermission('itp:update:all');
   const { getActiveContractors } = useContractorsStore();
@@ -186,13 +189,18 @@ const ITP: React.FC = () => {
     }
   };
 
+  const currentExistingItem = currentItpId ? itpList.find(item => item.id === currentItpId) : undefined;
+  // A shared template (no project, D18) is read-only for anyone but a system administrator; the server refuses the write.
+  const sharedTemplateReadOnly = !!currentExistingItem && !currentExistingItem.project_id && !isAdmin;
+
   const columns = useMemo(() => createColumns(
     confirmDelete,
     navigate,
     t,
     getActiveContractors(),
     noiList,
-  ), [t, getActiveContractors, noiList, navigate, confirmDelete]);
+    isAdmin,
+  ), [t, getActiveContractors, noiList, navigate, confirmDelete, isAdmin]);
 
   const chips: { id: StatusFilter; label: string; count: number }[] = [
     { id: 'all', label: t('common.all') || 'All', count: itpList.length },
@@ -289,7 +297,8 @@ const ITP: React.FC = () => {
             />
           </div>
           {canCreate && (
-            <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+            <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}
+              disabled={createGate.disabled} title={createGate.title}>
               {t('itp.addNew')}
             </button>
           )}
@@ -326,13 +335,15 @@ const ITP: React.FC = () => {
       {isEditModalOpen && (
         <ITPDetailModal
           itpId={currentItpId}
-          existingItem={currentItpId ? itpList.find(item => item.id === currentItpId) : undefined}
+          existingItem={currentExistingItem}
           defaultVendor={newItpDefaultVendor}
           canApprove={hasPermission('itp:approve:all')}
           canVoid={hasPermission('itp:void:all')}
           canCreate={canCreate}
-          canUpdate={canUpdate}
-          canCreateChecklist={hasPermission('checklist:create:all')}
+          canUpdate={canUpdate && !sharedTemplateReadOnly}
+          sharedTemplateReadOnly={sharedTemplateReadOnly}
+          // Generate Checklist POSTs /checklist/, which only creates a shared Checklist template: system administrators only.
+          canCreateChecklist={isAdmin && hasPermission('checklist:create:all')}
           initialTab={modalInitialTab}
           onApplyItems={async (detailPayload) => {
             if (!currentItpId) return false; // guarded by the modal itself (itpId falsy skips the call), kept here too for safety

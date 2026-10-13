@@ -3,7 +3,7 @@ import api from '../services/api';
 import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
-import { getProjectFilterParams, getCurrentProjectScopeId } from '../utils/projectFilter';
+import { getProjectFilterParams, getCurrentProjectScopeId, withCurrentProject } from '../utils/projectFilter';
 
 export interface OSDItem {
     id: string;
@@ -93,7 +93,7 @@ export const useOSDStore = create<OSDState>((set, get) => ({
 
     addOSD: async (osd: Omit<OSDItem, 'id'>) => {
         try {
-            const response = await api.post('/osd/', osd);
+            const response = await api.post('/osd/', withCurrentProject(osd));
             const newOSD = normalizeItem(response.data);
             set((state) => ({ osdList: [...state.osdList, newOSD] }));
             return newOSD;

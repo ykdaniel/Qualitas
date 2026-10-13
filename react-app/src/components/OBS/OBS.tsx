@@ -13,6 +13,7 @@ import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { OBSDetailModal, OBSDetailData, PendingUploads } from './OBSModals';
 import { useDebounce } from '../../hooks/useDebounce';
+import { useCreateGate } from '../../hooks/useCreateGate';
 import { uploadFiles, deleteFile } from '../../services/api';
 import { useOBSStats } from '../../hooks/useOBSStats';
 import { runSaveFlow, sameWrite, SaveOutcome } from '../../utils/saveFlow';
@@ -22,6 +23,7 @@ type StatusFilter = 'all' | 'open' | 'closed' | 'void';
 
 const OBS: React.FC = () => {
   const { t } = useLanguage();
+  const createGate = useCreateGate();
   const { hasPermission } = useAuth();
   const { getActiveContractors } = useContractorsStore();
   const { obsList, loading, error, refetch, addOBS, updateOBS, deleteOBS } = useOBSStore();
@@ -296,7 +298,8 @@ const OBS: React.FC = () => {
             />
           </div>
           {hasPermission('obs:create:all') && (
-            <button className={shellStyles.addNewButton} onClick={handleAddNew}>
+            <button className={shellStyles.addNewButton} onClick={handleAddNew}
+              disabled={createGate.disabled} title={createGate.title}>
               {t('obs.addNew')}
             </button>
           )}

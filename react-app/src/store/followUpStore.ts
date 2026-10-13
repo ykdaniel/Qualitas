@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import api from '../services/api';
 import { getErrorMessage } from '../utils/errorUtils';
-import { getProjectFilterParams, getCurrentProjectScopeId } from '../utils/projectFilter';
+import { getProjectFilterParams, getCurrentProjectScopeId, withCurrentProject } from '../utils/projectFilter';
 
 export interface FollowUpIssueItem {
     id: string;
@@ -75,7 +75,7 @@ export const useFollowUpStore = create<FollowUpState>((set, get) => ({
 
     addFollowUp: async (item) => {
         try {
-            const response = await api.post('/followup/', item);
+            const response = await api.post('/followup/', withCurrentProject(item));
             const newItem = response.data;
             set((state) => ({ followUpList: [...state.followUpList, newItem] }));
             return newItem;

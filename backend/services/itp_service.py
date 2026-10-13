@@ -5,7 +5,7 @@ from fastapi import HTTPException
 import models
 import schemas
 from repositories.itp_repository import ITPRepository
-from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
+from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope, require_shared_template_write
 from core.utils import _json_serialize, _resolve_vendor_id, begin_write_transaction, generate_reference_no, log_audit, WorkflowEngine
 from core import error_messages
 from core import validators
@@ -60,8 +60,9 @@ class ITPService:
                 data['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
 
             # P0 data isolation: confine the new record to the caller's scope
-            # (forces vendor_id for contractor users; validates project_id).
-            enforce_create_scope(data, scope)
+            # (forces vendor_id for contractor users; validates project_id). A system administrator in "All projects"
+            # creates a shared template (no project, D18); everyone else creates an ITP of their own project.
+            enforce_create_scope(data, scope, allow_shared=True)
 
             begin_write_transaction(self.repo.db)
 
@@ -92,6 +93,7 @@ class ITPService:
             db_itp = self.repo.get_by_id(itp_id)
             if not db_itp or not record_in_scope(db_itp, scope):
                 return None
+            require_shared_template_write(db_itp, scope)     # shared templates: system administrators only (D18, B2)
 
             # Entering Approved/Void requires the matching approve/void permission — checked
             # BEFORE the transition-legality check below (an unauthorized caller gets a
@@ -157,6 +159,7 @@ class ITPService:
             db_itp = self.repo.get_by_id(itp_id)
             if not db_itp or not record_in_scope(db_itp, scope):
                 return False
+            require_shared_template_write(db_itp, scope)     # shared templates: system administrators only (D18, B2)
 
             # Check for NOI references before deletion
             validators.check_itp_references(self.repo.db, db_itp.id, db_itp.referenceNo)
@@ -181,6 +184,7 @@ class ITPService:
             db_itp = self.repo.get_by_id(itp_id)
             if not db_itp or not record_in_scope(db_itp, scope):
                 return None
+            require_shared_template_write(db_itp, scope)     # shared templates: system administrators only (D18, B2)
             
             import json
             old_val = db_itp.detail_data
