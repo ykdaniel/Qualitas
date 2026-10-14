@@ -83,3 +83,31 @@ def test_update_naming_rules_accepts_valid_rules(db_session):
     doc_types = {r.doc_type: r.prefix for r in result}
     assert doc_types["ncr"] == "QTS-RKS-[PROJECT]-NCR-"
     assert doc_types["osd"] == "QTS-RKS-[PROJECT]-OSD-"
+
+
+def test_update_naming_rules_stores_the_prefix_trimmed(db_session):
+    # NAMING-RULES-CLEANUP-2026-001: the prefix is checked trimmed, so it is stored trimmed too — otherwise a stray
+    # space would end up inside every document number. Both an existing row and a new one.
+    db_session.add(models.DocumentNamingRule(doc_type="ncr", prefix="QTS-RKS-[PROJECT]-NCR-", sequence_digits=6))
+    db_session.commit()
+    rules = [
+        schemas.NamingRuleBase(doc_type="ncr", prefix="  QTS-RKS-[PROJECT]-NC- ", sequence_digits=6),
+        schemas.NamingRuleBase(doc_type="osd", prefix="QTS-RKS-[PROJECT]-OSD-\t", sequence_digits=6),
+    ]
+    result = update_naming_rules(rules=rules, db=db_session, _user=None)
+    stored = {r.doc_type: r.prefix for r in result}
+    assert stored["ncr"] == "QTS-RKS-[PROJECT]-NC-"
+    assert stored["osd"] == "QTS-RKS-[PROJECT]-OSD-"
+    db_session.expire_all()
+    assert db_session.query(models.DocumentNamingRule).filter_by(doc_type="ncr").one().prefix == "QTS-RKS-[PROJECT]-NC-"
+
+
+def test_update_naming_rules_rejects_prefixes_that_only_differ_by_spaces(db_session):
+    rules = [
+        schemas.NamingRuleBase(doc_type="ncr", prefix="QTS-RKS-[PROJECT]-DUP-", sequence_digits=6),
+        schemas.NamingRuleBase(doc_type="obs", prefix=" QTS-RKS-[PROJECT]-DUP- ", sequence_digits=6),
+    ]
+    with pytest.raises(HTTPException) as excinfo:
+        update_naming_rules(rules=rules, db=db_session, _user=None)
+    assert excinfo.value.status_code == 400
+    assert "collide" in excinfo.value.detail.lower()

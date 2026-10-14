@@ -5,41 +5,32 @@ import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { materialText } from '../MaterialSubmittal/materialText';
-import { getNamingRules, updateNamingRules, NamingRuleApi } from '../../services/api';
+import { getNamingRules, updateNamingRules } from '../../services/api';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { changedRules, exampleNumber, EXAMPLE_PROJECT, mergeRules, NamingRuleChange, NamingRuleValue, prefixProblem } from './namingRules';
+import {
+  buildRules, changedRules, exampleNumber, EXAMPLE_PROJECT, NamingRuleChange, NamingRuleValue, PageRule, prefixProblem, RuleDisplay, toPayload,
+} from './namingRules';
 import { useProjectStore } from '../../store/projectStore';
 import styles from './DocumentNamingRules.module.css';
 
-interface RuleDef extends NamingRuleValue {
-  moduleName: string;
-  /** Translated module name; acronyms (ITP, NCR, ...) read the same in both languages and have none. */
-  nameKey?: string;
-  /** Shown in the Notes column, only where there is something to say. */
-  noteKey?: string;
-  /** The rule exists but no module numbers anything with it: shown, not editable. */
-  unused?: boolean;
-}
-
-type NamingRuleItem = RuleDef;
-
-// Known doc types, in page order, with their names and notes. The backend seeds its own list (routers/settings.py
-// DEFAULT_NAMING_RULES); a type it has that is missing here is still shown, after these, under its code (see mergeRules).
-const DEFAULT_RULE_DEFS: RuleDef[] = [
-  { id: 'itp',       moduleName: 'ITP',              prefix: 'QTS-RKS-[PROJECT]-ITP-', sequenceDigits: 6 },
-  { id: 'noi',       moduleName: 'NOI',              prefix: 'QTS-RKS-[PROJECT]-NOI-', sequenceDigits: 6 },
-  { id: 'itr',       moduleName: 'ITR',              prefix: 'QTS-RKS-[PROJECT]-ITR-', sequenceDigits: 6 },
-  { id: 'ncr',       moduleName: 'NCR',              prefix: 'QTS-RKS-[PROJECT]-NCR-', sequenceDigits: 6 },
-  { id: 'obs',       moduleName: 'OBS',              prefix: 'QTS-RKS-[PROJECT]-OBS-', sequenceDigits: 6 },
-  { id: 'pqp',       moduleName: 'PQP',              prefix: 'QTS-RKS-[PROJECT]-PQP-', sequenceDigits: 6 },
-  { id: 'followup',  moduleName: 'Follow up Issue',  prefix: 'QTS-RKS-[PROJECT]-FUI-', sequenceDigits: 6, nameKey: 'followup.title' },
-  { id: 'fat',       moduleName: 'FAT',              prefix: 'QTS-RKS-[PROJECT]-FAT-', sequenceDigits: 6, noteKey: 'namingRules.note.fat', unused: true },
-  { id: 'audit',     moduleName: 'Audit',            prefix: 'QTS-RKS-[PROJECT]-AUD-', sequenceDigits: 6, nameKey: 'audit.title' },
-  { id: 'checklist', moduleName: 'Checklist',        prefix: 'QTS-RKS-[PROJECT]-CHK-', sequenceDigits: 6 },
-  { id: 'osd',       moduleName: 'OSD',              prefix: 'QTS-RKS-[PROJECT]-OSD-', sequenceDigits: 6 },
-  { id: 'meeting',   moduleName: 'Meeting Minutes',  prefix: 'QTS-RKS-[PROJECT]-MOM-', sequenceDigits: 6, nameKey: 'meetingMinutes.title', noteKey: 'namingRules.note.meeting' },
+// How the page shows the doc types it knows, in page order (NAMING-RULES-CLEANUP-2026-001). Which rules exist and their
+// values come from the backend (routers/settings.py DEFAULT_NAMING_RULES, seeded on GET); a type the backend has that
+// is missing here is still shown, after these, under its code (see buildRules).
+const RULE_DISPLAYS: RuleDisplay[] = [
+  { id: 'itp',       moduleName: 'ITP' },
+  { id: 'noi',       moduleName: 'NOI' },
+  { id: 'itr',       moduleName: 'ITR' },
+  { id: 'ncr',       moduleName: 'NCR' },
+  { id: 'obs',       moduleName: 'OBS' },
+  { id: 'pqp',       moduleName: 'PQP' },
+  { id: 'followup',  moduleName: 'Follow up Issue',  nameKey: 'followup.title' },
+  { id: 'fat',       moduleName: 'FAT',              noteKey: 'namingRules.note.fat', unused: true },
+  { id: 'audit',     moduleName: 'Audit',            nameKey: 'audit.title' },
+  { id: 'checklist', moduleName: 'Checklist' },
+  { id: 'osd',       moduleName: 'OSD' },
+  { id: 'meeting',   moduleName: 'Meeting Minutes',  nameKey: 'meetingMinutes.title', noteKey: 'namingRules.note.meeting' },
   // MATERIAL-SUBMITTAL: its name comes from the module's own text file, not from LanguageContext (see materialText.ts)
-  { id: 'msa',       moduleName: 'Material',         prefix: 'QTS-RKS-[PROJECT]-MSA-', sequenceDigits: 6 },
+  { id: 'msa',       moduleName: 'Material' },
 ];
 
 const toValues = (rules: NamingRuleValue[]): NamingRuleValue[] =>
@@ -52,13 +43,13 @@ const DocumentNamingRules: React.FC = () => {
   // examples show the current project's code (REF-PROJECT-SEQ-2026-001 B3); ABC in "All projects"
   const exampleCode = useProjectStore(state => state.currentProject?.code) || EXAMPLE_PROJECT;
 
-  const [rules, setRules] = useState<NamingRuleItem[]>(DEFAULT_RULE_DEFS);
+  const [rules, setRules] = useState<PageRule[]>([]);   // nothing until the backend has answered
   const [savedRules, setSavedRules] = useState<NamingRuleValue[] | null>(null);
   const [saved, setSaved] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [saveError, setSaveError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [pendingChanges, setPendingChanges] = useState<NamingRuleChange<NamingRuleItem>[] | null>(null);
+  const [pendingChanges, setPendingChanges] = useState<NamingRuleChange<PageRule>[] | null>(null);
   const changes = savedRules ? changedRules(savedRules, rules) : [];
   useLeaveGuard(changes.length > 0, saving);
 
@@ -66,8 +57,7 @@ const DocumentNamingRules: React.FC = () => {
     const fetchRules = async () => {
       try {
         setLoadError('');
-        const apiRules: NamingRuleApi[] = await getNamingRules();
-        const loadedRules = mergeRules(DEFAULT_RULE_DEFS, apiRules, (rule) => ({ ...rule, moduleName: rule.id.toUpperCase() }));
+        const loadedRules = buildRules(RULE_DISPLAYS, await getNamingRules());
         setRules(loadedRules);
         setSavedRules(toValues(loadedRules));
       } catch (e) {
@@ -80,7 +70,7 @@ const DocumentNamingRules: React.FC = () => {
     fetchRules();
   }, []);
 
-  const moduleLabel = (rule: RuleDef): string => {
+  const moduleLabel = (rule: RuleDisplay): string => {
     if (rule.id === 'msa') return materialText(language, 'title');
     return rule.nameKey ? t(rule.nameKey) : rule.moduleName;
   };
@@ -139,14 +129,10 @@ const DocumentNamingRules: React.FC = () => {
     setPendingChanges(null);
     setSaving(true);
     try {
-      // Unused rules are left out: they cannot be edited here, and the backend validates every rule it receives.
-      const payload = rules.filter((rule) => !rule.unused).map((rule) => ({
-        doc_type: rule.id,
-        prefix: rule.prefix ?? '',
-        sequence_digits: Math.min(6, Math.max(1, Number(rule.sequenceDigits) || 6)),
-      }));
-      await updateNamingRules(payload);
-      setSavedRules(toValues(rules));
+      // what the backend stored (prefixes trimmed) becomes the page's state, so the page shows exactly the saved rules
+      const storedRules = buildRules(RULE_DISPLAYS, await updateNamingRules(toPayload(rules)));
+      setRules(storedRules);
+      setSavedRules(toValues(storedRules));
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e: unknown) {
@@ -188,6 +174,11 @@ const DocumentNamingRules: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
+                {savedRules === null && !loadError && (
+                  <TableRow>
+                    <TableCell colSpan={5} className={styles.loadingCell}>{t('common.loading')}</TableCell>
+                  </TableRow>
+                )}
                 {rules.map((rule) => (
                   <TableRow key={rule.id} className={rule.unused ? styles.unusedRow : undefined}>
                     <TableCell className={styles.moduleCell}>{moduleLabel(rule)}</TableCell>

@@ -86,13 +86,15 @@ def update_naming_rules(
             doc_type_normalized = (rule.doc_type or "").strip().lower()
             if not doc_type_normalized: continue
             seq_digits = rule.sequence_digits if rule.sequence_digits and 1 <= rule.sequence_digits <= 6 else 6
+            # stored exactly as it was checked: a stray space would otherwise end up inside every document number
+            prefix = (rule.prefix or "").strip()
 
             db_rule = db.query(models.DocumentNamingRule).filter(models.DocumentNamingRule.doc_type == doc_type_normalized).first()
             if db_rule:
-                db_rule.prefix = rule.prefix or ""
+                db_rule.prefix = prefix
                 db_rule.sequence_digits = seq_digits
             else:
-                db.add(models.DocumentNamingRule(doc_type=doc_type_normalized, prefix=rule.prefix or "", sequence_digits=seq_digits))
+                db.add(models.DocumentNamingRule(doc_type=doc_type_normalized, prefix=prefix, sequence_digits=seq_digits))
         db.commit()
         return db.query(models.DocumentNamingRule).all()
     except Exception as e:

@@ -52,8 +52,6 @@ const zh = {
     unconfirmed: '無法確認登錄結果。請稍後重新開啟本送審確認；系統不會自動重送。',
     loading: '載入中…',
     required: '必填',
-    // naming rule
-    namingDesc: '材料參考編號',
     approvedResult: '核准結果',
     approvedDate: '核准日',
     approvedMaterial: '材料',
@@ -139,7 +137,6 @@ const en: Record<keyof typeof zh, string> = {
     unconfirmed: 'The result could not be confirmed. Reopen this submittal later to check; nothing is re-sent automatically.',
     loading: 'Loading…',
     required: 'required',
-    namingDesc: 'Material reference number',
     approvedResult: 'Result',
     approvedDate: 'Approved on',
     approvedMaterial: 'Material',
