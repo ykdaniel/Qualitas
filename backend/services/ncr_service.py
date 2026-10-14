@@ -300,7 +300,7 @@ class NCRService:
             # Generate Reference No automatically if not provided
             if not data.get('documentNumber'):
                 data['documentNumber'] = generate_reference_no(
-                    self.repo.db, vendor_name or '', 'NCR'
+                    self.repo.db, vendor_name or '', 'NCR', project_id=data.get('project_id')
                 )
 
             # Create NCR object

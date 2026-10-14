@@ -81,7 +81,7 @@ class PQPService:
 
             if not data.get('pqpNo'):
                 data['pqpNo'] = generate_reference_no(
-                    self.repo.db, vendor_name or '', 'PQP'
+                    self.repo.db, vendor_name or '', 'PQP', project_id=data.get('project_id')
                 )
 
             db_pqp = models.PQP(**data)

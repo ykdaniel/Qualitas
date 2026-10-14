@@ -23,6 +23,7 @@ _FOLLOWUP_SOURCES = {
 }
 from core.utils import (
     _resolve_vendor_id,
+    begin_write_transaction,
     generate_reference_no,
     log_audit,
     WorkflowEngine
@@ -79,9 +80,11 @@ class FollowUpService:
             # the source document must belong to the same project (G2, REF-PROJECT-SEQ-2026-001 B2)
             self._require_same_project_source(data.get('sourceModule'), data.get('sourceReferenceNo'), data.get('project_id'))
 
+            # take the write lock before the sequence is read, so two creates never get the same number (B3)
+            begin_write_transaction(self.repo.db)
             if not data.get('issueNo'):
                 data['issueNo'] = generate_reference_no(
-                    self.repo.db, vendor_name or data.get('assignedTo', ''), 'followup'
+                    self.repo.db, vendor_name or data.get('assignedTo', ''), 'followup', project_id=data.get('project_id')
                 )
 
             db_followup = models.FollowUp(**data)

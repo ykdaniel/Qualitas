@@ -5,7 +5,20 @@ import FormActions from '../Shared/FormActions';
 import actionStyles from '../Shared/FormActions.module.css';
 import React, { useMemo, useState } from 'react';
 import { Project } from '../../store/projectStore';
+import { showRefusal } from '../../store/refusalStore';
 import styles from './ProjectModal.module.css';
+
+// Every document number of a project carries its code: QTS-RKS-<code>-NOI-000001 (REF-PROJECT-SEQ-2026-001 B3, D14).
+// The server checks the same rules (and uniqueness); STD is the code of shared templates.
+const PROJECT_CODE_PATTERN = /^[A-Z0-9]{2,8}$/;
+const RESERVED_PROJECT_CODE = 'STD';
+
+export const projectCodeProblem = (code: string): string | null => {
+  if (!code) return 'Enter a project code.';
+  if (!PROJECT_CODE_PATTERN.test(code)) return 'Use 2 to 8 letters or digits.';
+  if (code === RESERVED_PROJECT_CODE) return 'STD is reserved for shared templates.';
+  return null;
+};
 
 interface ProjectModalProps {
   existing?: Project;
@@ -27,12 +40,20 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ existing, onSave, onClose }
   const [isClosing, setIsClosing] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const codeProblem = projectCodeProblem(form.code);
+  const codeChanged = !!existing?.code && form.code !== existing.code;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (saving) return;
+    if (saving || codeProblem) return;
     setSaving(true);
     try { await onSave(form); }
-    catch { toast.error(t('common.saveFailed')); }
+    catch (err: any) {
+      // a coded refusal (e.g. PROJECT_CODE_DUPLICATE) shows its reason in the refusal dialog
+      console.error('Saving the project failed:', err);
+      if (err?.response?.data?.code) showRefusal(err, 'save');
+      else toast.error(t('common.saveFailed'));
+    }
     finally { setSaving(false); }
   };
 
@@ -69,13 +90,23 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ existing, onSave, onClose }
             />
           </div>
           <div className={styles.formGroup}>
-            <label>Code / Abbreviation</label>
+            <label>Project Code <span className={styles.required}>*</span></label>
             <input
               type="text"
               value={form.code}
-              onChange={e => setForm({ ...form, code: e.target.value })}
-              placeholder="e.g. HAI, YL, GCH"
+              onChange={e => setForm({ ...form, code: e.target.value.toUpperCase().trim() })}
+              required
+              maxLength={8}
+              placeholder="e.g. HL, YL, GCH"
             />
+            <small>
+              {form.code && codeProblem
+                ? codeProblem
+                : `Every document number of this project carries it: QTS-RKS-${form.code || '<code>'}-NOI-000001. Set it once; do not change it after documents exist.`}
+            </small>
+            {codeChanged && !codeProblem && (
+              <small>Changing the code: new documents get the new code and continue the project's numbering; numbers already issued keep the old code.</small>
+            )}
           </div>
           <div className={styles.formGroup}>
             <label>Owner</label>
@@ -102,7 +133,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ existing, onSave, onClose }
                           </button>
                       </>}
                       primary={<>
-                          <button className={actionStyles.primary} type="submit" disabled={saving}>
+                          <button className={actionStyles.primary} type="submit" disabled={saving || !!codeProblem}>
                               {existing ? 'Save Changes' : 'Add Project'}
                           </button>
                       </>}

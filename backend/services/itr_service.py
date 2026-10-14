@@ -19,6 +19,7 @@ from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, en
 from core.utils import (
     _json_serialize,
     _resolve_vendor_id,
+    begin_write_transaction,
     generate_reference_no,
     log_audit,
     lock_itr_for_write,
@@ -249,10 +250,14 @@ class ITRService:
             # so failed creates don't leave gaps in the ITR sequence.
             self._check_reference_links(data, scope)
 
+            # Take the write lock before the sequence is read (B3, reported by the ITR module review): without it two
+            # ITRs created at once could read the same "next number" and one would fail on the unique index (a 500).
+            begin_write_transaction(self.repo.db)
+
             # Generate Reference No automatically if not provided
             if not data.get('documentNumber'):
                 data['documentNumber'] = generate_reference_no(
-                    self.repo.db, vendor_name or '', 'ITR'
+                    self.repo.db, vendor_name or '', 'ITR', project_id=data.get('project_id')
                 )
 
             # Create ITR object
@@ -1079,7 +1084,7 @@ class ITRService:
             itr_vendor = db_itr.vendor_ref.name if db_itr.vendor_ref else ''
             instance = models.Checklist(
                 id=str(uuid.uuid4()),
-                recordsNo=generate_reference_no(self.repo.db, itr_vendor, 'CHECKLIST'),
+                recordsNo=generate_reference_no(self.repo.db, itr_vendor, 'CHECKLIST', project_id=db_itr.project_id),
                 activity=template.activity,
                 date="",                          # the inspection date is entered on the instance (BACKLOG #22)
                 status='Ongoing',                 # fresh — not yet inspected
@@ -1300,7 +1305,7 @@ class ITRService:
 
             # Generate NCR documentNumber
             ncr_data['documentNumber'] = generate_reference_no(
-                self.repo.db, vendor_name or '', 'NCR'
+                self.repo.db, vendor_name or '', 'NCR', project_id=ncr_data.get('project_id')
             )
 
             db_ncr = models.NCR(**ncr_data)
@@ -1422,7 +1427,7 @@ class ITRService:
             vendor_name = db_itr.vendor  # uses the @property
 
             new_doc_number = generate_reference_no(
-                self.repo.db, vendor_name or '', 'ITR'
+                self.repo.db, vendor_name or '', 'ITR', project_id=db_itr.project_id
             )
 
             new_itr_data = {
@@ -1474,7 +1479,8 @@ class ITRService:
             for original_instance in original_instances:
                 snapshot = models.Checklist(
                     id=str(uuid.uuid4()),
-                    recordsNo=generate_reference_no(self.repo.db, vendor_name or '', 'CHECKLIST'),
+                    recordsNo=generate_reference_no(self.repo.db, vendor_name or '', 'CHECKLIST',
+                                                    project_id=db_new_itr.project_id),
                     activity=original_instance.activity,
                     date=original_instance.date,
                     status='Ongoing',

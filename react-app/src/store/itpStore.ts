@@ -22,6 +22,7 @@ export interface ITPItem {
     id: string;
     vendor: string;
     referenceNo?: string | null;  // 由後端自動產生
+    external_doc_no?: string | null;  // the document's own (e.g. contractor's) number, kept beside ours (REF-PROJECT-SEQ-2026-001 B3)
     description: string;
     rev: string;
     submit: string;

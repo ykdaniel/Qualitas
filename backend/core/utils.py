@@ -21,8 +21,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 import models
-from models import AuditLog, Contractor, DocumentNamingRule, ReferenceSequence
-from core.constants import PROJECT_CODE, MAX_PAGE_LIMIT, DEFAULT_PAGE_LIMIT
+from models import AuditLog, Contractor, DocumentNamingRule, Project, ReferenceSequence
+from core.constants import COMPANY_CODE, PROJECT_CODE, SHARED_CODE, SYSTEM_CODE, MAX_PAGE_LIMIT, DEFAULT_PAGE_LIMIT
 
 logger = logging.getLogger(__name__)
 
@@ -459,168 +459,116 @@ def _resolve_vendor_id(db: Session, vendor_name: str) -> Optional[str]:
     return contractor.id if contractor else None
 
 
-def generate_reference_no(db: Session, vendor_name: str, doc_type: str, project_code: str | None = None) -> str:
-    """
-    產生 Reference No
+# The type part of a number when no naming rule names one (the defaults of routers/settings.DEFAULT_NAMING_RULES).
+_DOC_LABELS = {"ITP": "ITP", "NOI": "NOI", "ITR": "ITR", "NCR": "NCR", "OBS": "OBS", "PQP": "PQP", "FOLLOWUP": "FUI",
+               "FAT": "FAT", "AUDIT": "AUD", "CHECKLIST": "CHK", "OSD": "OSD", "MEETING": "MOM", "MSA": "MSA"}
+_UNSET = object()
 
-    Generate reference number with auto-incrementing sequence
 
-    Format:
-    - If DocumentNamingRule exists: Uses custom prefix and sequence digits
-    - Otherwise: QTS-[VENDOR_ABBREV]-[DOC_TYPE]-[SEQUENCE]
+def numbering_code(db: Session, project_id: Optional[str]) -> str:
+    """The code a number carries for this project (REF-PROJECT-SEQ-2026-001 B3, D2): the project's own code, or
+    SHARED_CODE ("STD") for a shared template that belongs to no project. A project without a code cannot number
+    anything (400 PROJECT_CODE_MISSING) — an administrator gives it one first (D14)."""
+    if project_id is None:
+        return SHARED_CODE
+    project = db.query(Project).filter(Project.id == project_id).first()
+    code = ((project.code if project else None) or "").strip().upper()
+    if not code:
+        from core.refusals import RefusalHTTPException
+        raise RefusalHTTPException(400, "This project has no project code yet; a system administrator must set one before "
+                                        "documents can be numbered in it.", "PROJECT_CODE_MISSING")
+    return code
 
-    Args:
-        db: Database session
-        vendor_name: Vendor/contractor name
-        doc_type: Document type (ITP, NCR, NOI, ITR, PQP, OBS, etc.)
 
-    Returns:
-        Generated reference number
+def _reference_format(db: Session, doc_type: str, project_id: Optional[str]):
+    """(sequence project key, prefix, sequence digits) for numbering `doc_type` in `project_id` (None: shared).
 
-    Note:
-        Concurrency is protected by two layers:
-        - DB row-level lock via `.with_for_update()` (effective on Postgres/MySQL,
-          silently ignored on SQLite).
-        - Process-level `_reference_seq_lock` serialising callers in the same
-          Python process. This is the layer that actually protects SQLite
-          deployments — see the comment on _reference_seq_lock above.
-    """
-    code = project_code or PROJECT_CODE
-    vendor_abbrev = get_contractor_abbreviation(db, vendor_name)
+    Format QTS-RKS-[PROJECT]-<TYPE>-###### (D2): a naming rule's prefix with [PROJECT] replaced by the project code;
+    a rule that has no [PROJECT] (not yet migrated) or no rule at all falls back to the default format — never to a
+    number without the project. The sequence key is (project id or "STD", "*", doc type): one counter per project and
+    type, shared by every contractor (D2)."""
+    code = numbering_code(db, project_id)
+    if doc_type.upper() == "QWORKFLOW":
+        # The NOI's tracker row: Q-WorkFlow-<code>-###### (user's decision 2026-10-14), no naming rule. Earlier global
+        # numbers (Q-WorkFlow-000001) keep their number and never collide with this prefix.
+        return project_id, f"Q-WorkFlow-{code}-", 6
+    rule = db.query(DocumentNamingRule).filter(DocumentNamingRule.doc_type == doc_type.lower()).first()
+    if rule and rule.prefix and "[PROJECT]" in rule.prefix:
+        return (project_id or SHARED_CODE), rule.prefix.replace("[PROJECT]", code), (rule.sequence_digits or 6)
+    label = _DOC_LABELS.get(doc_type.upper(), doc_type.upper())
+    return (project_id or SHARED_CODE), f"{SYSTEM_CODE}-{COMPANY_CODE}-{code}-{label}-", 6
 
-    # 嘗試讀取文件命名規則（以 doc_type 小寫對應，如 ITP -> itp）
-    rule = db.query(DocumentNamingRule).filter(
-        DocumentNamingRule.doc_type == doc_type.lower()
-    ).first()
-    seq_digits = rule.sequence_digits if rule and rule.sequence_digits else 6
 
-    # 預先算出本次的編號 prefix，用於 self-heal 比對
-    if rule and rule.prefix:
-        expected_prefix = rule.prefix.replace('[ABBREV]', vendor_abbrev)
-    else:
-        expected_prefix = f"{code}-{vendor_abbrev}-{doc_type.upper()}-"
-
-    with _reference_seq_lock:
-        # 查詢或建立序號記錄
-        seq_record = db.query(ReferenceSequence).filter(
-            ReferenceSequence.project == code,
-            ReferenceSequence.vendor == vendor_abbrev,
-            ReferenceSequence.doc == doc_type
-        ).with_for_update().first()
-
-        # Self-heal: 跟實際資料表的最大序號比對，避免硬編碼 import 造成計數器落後
-        actual_max = _max_existing_seq(db, doc_type, expected_prefix)
-        existing_seq = seq_record.last_seq if seq_record else 0
-        base_seq = max(existing_seq, actual_max)
-        next_seq = base_seq + 1
-
+def _next_sequence(db: Session, doc_type: str, seq_key: str, prefix: str, take: bool) -> int:
+    doc_type = doc_type.upper()             # one counter per type, whatever case a caller spells it in ('meeting', 'audit')
+    seq_record = db.query(ReferenceSequence).filter(
+        ReferenceSequence.project == seq_key,
+        ReferenceSequence.vendor == "*",
+        ReferenceSequence.doc == doc_type,
+    ).with_for_update().first()
+    # Self-heal: never below the highest number already stored under this prefix (imports, older counters)
+    next_seq = max(seq_record.last_seq if seq_record else 0, _max_existing_seq(db, doc_type, prefix)) + 1
+    if take:
         if seq_record:
             seq_record.last_seq = next_seq
         else:
-            seq_record = ReferenceSequence(
-                project=code,
-                vendor=vendor_abbrev,
-                doc=doc_type,
-                last_seq=next_seq
-            )
-            db.add(seq_record)
-
-        db.flush()  # 確保序號已寫入
-
-    # 依規則組合編號；若沒有規則則走 fallback
-    if rule and rule.prefix:
-        seq_str = str(next_seq).zfill(seq_digits)
-        return f"{expected_prefix}{seq_str}"
-
-    # Fallback：維持舊有格式 QTS-ABBREV-DOC-000001
-    seq_str = str(next_seq).zfill(6)
-    return f"{expected_prefix}{seq_str}"
+            db.add(ReferenceSequence(project=seq_key, vendor="*", doc=doc_type, last_seq=next_seq))
+        db.flush()
+    return next_seq
 
 
-def _reference_format(db: Session, vendor_name: str, doc_type: str, project_code: str | None = None):
-    """(project code, contractor abbreviation, prefix, sequence digits) exactly as generate_reference_no() builds them."""
-    code = project_code or PROJECT_CODE
-    vendor_abbrev = get_contractor_abbreviation(db, vendor_name)
-    rule = db.query(DocumentNamingRule).filter(
-        DocumentNamingRule.doc_type == doc_type.lower()
-    ).first()
-    if rule and rule.prefix:
-        return code, vendor_abbrev, rule.prefix.replace('[ABBREV]', vendor_abbrev), rule.sequence_digits or 6
-    return code, vendor_abbrev, f"{code}-{vendor_abbrev}-{doc_type.upper()}-", 6
-
-
-def preview_reference_no(db: Session, vendor_name: str, doc_type: str, project_code: str | None = None) -> str:
+def generate_reference_no(db: Session, vendor_name: str, doc_type: str, project_id=_UNSET) -> str:
     """
-    The number generate_reference_no() WOULD hand out right now, without taking it: same prefix, rule and self-heal,
-    but nothing is written and the sequence is not advanced. Shown to the user as "expected" — someone else creating a
-    record for the same contractor first moves the real number on (NOI-REF-PREVIEW, 2026-10-12).
+    產生 Reference No — the next number of `doc_type` in a project (REF-PROJECT-SEQ-2026-001 B3, D1 / D2).
+
+    `project_id` is required (keyword): the project the record belongs to, or None for a shared template (ITP /
+    Checklist template), numbered QTS-RKS-STD-<TYPE>-. `vendor_name` is kept for the callers' signature; the number no
+    longer carries the contractor.
+
+    Concurrency: the caller holds the write lock (begin_write_transaction) on SQLite; the sequence row is locked
+    FOR UPDATE elsewhere; `_reference_seq_lock` serialises callers within one process.
     """
-    code, vendor_abbrev, expected_prefix, seq_digits = _reference_format(db, vendor_name, doc_type, project_code)
-    seq_record = db.query(ReferenceSequence).filter(
-        ReferenceSequence.project == code,
-        ReferenceSequence.vendor == vendor_abbrev,
-        ReferenceSequence.doc == doc_type
-    ).first()
-    next_seq = max(seq_record.last_seq if seq_record else 0, _max_existing_seq(db, doc_type, expected_prefix)) + 1
-    return f"{expected_prefix}{str(next_seq).zfill(seq_digits)}"
+    if project_id is _UNSET:
+        raise TypeError("generate_reference_no() needs project_id= (the record's project, or None for a shared template)")
+    seq_key, prefix, digits = _reference_format(db, doc_type, project_id)
+    with _reference_seq_lock:
+        return f"{prefix}{str(_next_sequence(db, doc_type, seq_key, prefix, take=True)).zfill(digits)}"
 
 
-def reference_pattern(db: Session, vendor_name: str, doc_type: str, project_code: str | None = None) -> str:
-    """The number's format with the sequence masked, e.g. QTS-ABC-NOI-###### — reveals no count."""
-    _, _, prefix, seq_digits = _reference_format(db, vendor_name, doc_type, project_code)
-    return prefix + '#' * seq_digits
+def preview_reference_no(db: Session, doc_type: str, project_id: Optional[str]) -> str:
+    """The number generate_reference_no() WOULD hand out right now, without taking it (nothing written). Shown to the
+    user as "expected" — someone else creating a record of the same type in the same project first moves it on."""
+    seq_key, prefix, digits = _reference_format(db, doc_type, project_id)
+    return f"{prefix}{str(_next_sequence(db, doc_type, seq_key, prefix, take=False)).zfill(digits)}"
 
 
-def reclaim_reference_no(db: Session, vendor_name: str, doc_type: str,
-                          project_code: str | None = None) -> bool:
+def reference_pattern(db: Session, doc_type: str, project_id: Optional[str]) -> str:
+    """The number's format with the sequence masked, e.g. QTS-RKS-HL-NOI-######."""
+    _, prefix, digits = _reference_format(db, doc_type, project_id)
+    return prefix + "#" * digits
+
+
+def reclaim_reference_no(db: Session, doc_type: str, project_id: Optional[str]) -> bool:
     """
-    Best-effort "give back" reference number(s) after a record is deleted
-    while still a Draft — i.e. it was never published/shared, so nobody
-    could have referenced its number externally, and re-issuing numbers
-    for this (project, vendor, doc) sequence is safe (see BACKLOG
-    discussion 2026-08-31: this is deliberately NOT available for
-    Published/Void records — generate_reference_no's "never reuse"
-    behavior stays the default for anything that was ever released).
+    Best-effort "give back" reference number(s) after a record is deleted while still a Draft — i.e. it was never
+    published/shared, so nobody could have referenced its number externally (BACKLOG 2026-08-31; NOT for
+    Published/Void records). Call AFTER the row is deleted and committed: resyncs the project's counter DOWN to the
+    real current max among the remaining rows (0 when none remain); a newer record past the deleted one keeps the gap.
 
-    Call this AFTER the row has actually been deleted+committed (so the
-    table scan below correctly excludes it). Resyncs the sequence counter
-    DOWN to whatever the real current max is among the *remaining* rows —
-    not a naive "decrement by one" — so it correctly handles both "deleted
-    the tail" (resyncs to the next-highest surviving number) and "deleted
-    the last remaining record" (resyncs all the way to 0, so the very next
-    create starts fresh at 1) in one operation. If a newer record still
-    exists past the one that was deleted, actual_max reflects that and the
-    counter is left alone (no lower resync needed) — that number stays a
-    permanent gap, same as before this function existed.
-
-    Returns True if the counter actually moved down, False otherwise
-    (nothing to reclaim, or the real max wasn't lower than the counter).
+    Returns True if the counter actually moved down, False otherwise.
     """
-    code = project_code or PROJECT_CODE
-    vendor_abbrev = get_contractor_abbreviation(db, vendor_name)
-
-    rule = db.query(DocumentNamingRule).filter(
-        DocumentNamingRule.doc_type == doc_type.lower()
-    ).first()
-    if rule and rule.prefix:
-        expected_prefix = rule.prefix.replace('[ABBREV]', vendor_abbrev)
-    else:
-        expected_prefix = f"{code}-{vendor_abbrev}-{doc_type.upper()}-"
-
+    seq_key, prefix, _digits = _reference_format(db, doc_type, project_id)
     with _reference_seq_lock:
         seq_record = db.query(ReferenceSequence).filter(
-            ReferenceSequence.project == code,
-            ReferenceSequence.vendor == vendor_abbrev,
-            ReferenceSequence.doc == doc_type
+            ReferenceSequence.project == seq_key,
+            ReferenceSequence.vendor == "*",
+            ReferenceSequence.doc == doc_type.upper(),
         ).with_for_update().first()
-
         if not seq_record:
             return False
-
-        actual_max = _max_existing_seq(db, doc_type, expected_prefix)
+        actual_max = _max_existing_seq(db, doc_type, prefix)
         if actual_max >= seq_record.last_seq:
             return False
-
         seq_record.last_seq = actual_max
         db.flush()
         return True
@@ -637,10 +585,12 @@ _DOC_TYPE_TABLES = {
     'PQP': ('pqp', 'pqpNo'),
     'OBS': ('obs', 'documentNumber'),
     'CHECKLIST': ('checklist', 'recordsNo'),
+    'FOLLOWUP': ('followup', 'issueNo'),
     'OSD': ('osd', 'documentNumber'),
     'MEETING': ('meeting_minutes', 'documentNumber'),
     'MSA': ('material_submittals', 'document_number'),
     'AUDIT': ('audits', 'auditNo'),
+    'QWORKFLOW': ('qworkflow', 'referenceNo'),
 }
 
 

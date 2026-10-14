@@ -180,6 +180,12 @@ test('every refusal code the backend raises has its wording in both languages', 
         LINK_OTHER_PROJECT: ['docType', 'number'],
         FAT_SUPPLIER_REQUIRED: [],
         FAT_SUPPLIER_NOT_FOUND: ['name'],
+        // REF-PROJECT-SEQ-2026-001 B3: project codes
+        PROJECT_CODE_MISSING: [],
+        PROJECT_CODE_REQUIRED: [],
+        PROJECT_CODE_INVALID: ['projectCode'],
+        PROJECT_CODE_RESERVED: ['projectCode'],
+        PROJECT_CODE_DUPLICATE: ['projectCode'],
     };
     assert.deepEqual([...codes].sort(), Object.keys(PARAMS).sort(), 'a backend code is missing from (or extra in) the PARAMS table');
     for (const lang of ['en', 'zh'] as const) {

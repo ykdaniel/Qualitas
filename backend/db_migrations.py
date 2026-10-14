@@ -184,6 +184,21 @@ def run_migrations():
     # flag; same rules (only when exactly one project exists; checklist instances only; ITP untouched).
     _assign_projectless_records_to_the_only_project(PROJECTLESS_RECORDS_FLAG_B2)
 
+    # 27. Shared ITP templates numbered by the system get QTS-RKS-STD-ITP- numbers; the others keep their own (external)
+    # number and it is also copied to external_doc_no (REF-PROJECT-SEQ-2026-001 B3, decisions D11 / D17 / D21 and item 8).
+    # Runs once (migration_flags), all in one transaction; best effort.
+    _renumber_shared_itps_to_std()
+
+    # 28. Project codes are unique (ignoring case) — every document number carries one (REF-PROJECT-SEQ-2026-001 B3,
+    # D14). Best effort: existing duplicates are logged and the index is left for an administrator to settle.
+    _create_unique_project_code_index()
+
+    # 29. Naming rules move to QTS-RKS-[PROJECT]-<TYPE>- and all 13 numbered types get a row (B3, D2 and the naming
+    # rules session's items 1-3); the old prefix of every changed row goes to audit_logs. Where a project's new prefix is
+    # the same text as an old contractor prefix (project HL / contractor HL), the project's counter starts after the
+    # old counter so no number is ever handed out twice. Runs once (migration_flags), one transaction; best effort.
+    _naming_rules_to_project_format()
+
     logger.info("Migrations completed.")
 
 class MigrationError(RuntimeError):
@@ -611,6 +626,237 @@ def _assign_projectless_records_to_the_only_project(flag=PROJECTLESS_RECORDS_FLA
         logger.error("Could not assign records without a project: %s", e)
 
 
+STD_ITP_RENUMBER_FLAG = "shared_itp_std_renumber_v1"
+STD_ITP_PREFIX = "QTS-RKS-STD-ITP-"
+
+
+def _std_itp_targets(rows):
+    """Split shared ITPs (id, referenceNo) into those the system numbered — renumbered to STD — and the rest.
+
+    System-numbered: no number, a QTS- number (not already STD), or a TEST- number. Order (decision D21, "照號碼排"):
+    QTS- numbers by their sequence value, then the other system numbers by text, then those without a number."""
+    import re
+    def seq(ref):
+        m = re.search(r"(\d+)$", ref)
+        return int(m.group(1)) if m else 0
+    qts = [r for r in rows if r[1] and r[1].startswith("QTS-") and not r[1].startswith(STD_ITP_PREFIX)]
+    other = [r for r in rows if r[1] and r[1].startswith("TEST-")]
+    nameless = [r for r in rows if not r[1]]
+    external = [r for r in rows if r[1] and r not in qts and r not in other and not r[1].startswith(STD_ITP_PREFIX)]
+    ordered = (sorted(qts, key=lambda r: (seq(r[1]), r[1])) + sorted(other, key=lambda r: r[1])
+               + sorted(nameless, key=lambda r: r[0]))
+    return ordered, external
+
+
+def _renumber_shared_itps_to_std():
+    """Step 27 (REF-PROJECT-SEQ-2026-001 B3). Every shared ITP (no project) the SYSTEM numbered gets
+    QTS-RKS-STD-ITP-<n>, in the order of _std_itp_targets; its content is not touched. In the same transaction:
+
+    * references follow: noi.itpNo, followup.sourceReferenceNo (sourceModule ITP), the itpNo key of itr.detail_data;
+      audit_logs and ITR approval snapshots keep history as it was;
+    * itp_renumber_map records old → new, and audit_logs gets one RENUMBER_STD row per ITP;
+    * every other shared ITP keeps its own number and gets it copied into external_doc_no when that is empty
+      (one COPY_EXTERNAL_DOC_NO audit row each);
+    * reference_sequences: ('STD', '*', 'ITP') = the highest STD number; for every project with a code,
+      (project id, '*', 'ITP') = the highest number its old prefix QTS-RKS-<code>-ITP- reached, so a new project ITP
+      never reuses a number that existed before.
+    Renumbering goes through temporary values first (the unique index on itp.referenceNo). Runs once (flag in the same
+    transaction); best effort — a failure is logged, nothing is half-written, and the next start tries again."""
+    import json
+    import re
+    from datetime import datetime, timezone
+    try:
+        with engine.connect() as conn:
+            if conn.execute(text("SELECT 1 FROM migration_flags WHERE flag_name = :f"), {"f": STD_ITP_RENUMBER_FLAG}).first():
+                return
+            now = datetime.now(timezone.utc).isoformat()
+            rows = [(r[0], r[1]) for r in conn.execute(text("SELECT id, referenceNo FROM itp WHERE project_id IS NULL")).fetchall()]
+            targets, external = _std_itp_targets(rows)
+
+            # highest number each project's old prefix reached, read BEFORE anything is renamed
+            old_max = {}
+            for pid, code in conn.execute(text("SELECT id, code FROM projects WHERE code IS NOT NULL AND code <> ''")).fetchall():
+                prefix = f"QTS-RKS-{code.upper()}-ITP-"
+                best = 0
+                for (ref,) in conn.execute(text("SELECT referenceNo FROM itp WHERE referenceNo LIKE :p"), {"p": prefix + "%"}).fetchall():
+                    m = re.fullmatch(re.escape(prefix) + r"(\d+)", ref or "")
+                    if m:
+                        best = max(best, int(m.group(1)))
+                old_max[pid] = best
+
+            std_max = 0
+            for (ref,) in conn.execute(text("SELECT referenceNo FROM itp WHERE referenceNo LIKE :p"), {"p": STD_ITP_PREFIX + "%"}).fetchall():
+                m = re.fullmatch(re.escape(STD_ITP_PREFIX) + r"(\d+)", ref or "")
+                if m:
+                    std_max = max(std_max, int(m.group(1)))
+
+            plan = []
+            for itp_id, old in targets:
+                std_max += 1
+                plan.append((itp_id, old, f"{STD_ITP_PREFIX}{std_max:06d}"))
+            for itp_id, _old, _new in plan:                                  # phase 1: out of the way of the unique index
+                conn.execute(text("UPDATE itp SET referenceNo = :t WHERE id = :i"), {"t": f"__STD_RENUMBER__{itp_id}", "i": itp_id})
+            for itp_id, old, new in plan:                                     # phase 2: the final number + its references
+                conn.execute(text("UPDATE itp SET referenceNo = :n WHERE id = :i"), {"n": new, "i": itp_id})
+                if old:
+                    conn.execute(text("UPDATE noi SET itpNo = :n WHERE itpNo = :o"), {"n": new, "o": old})
+                    conn.execute(text("UPDATE followup SET sourceReferenceNo = :n WHERE sourceReferenceNo = :o "
+                                      "AND UPPER(TRIM(sourceModule)) = 'ITP'"), {"n": new, "o": old})
+                    for rid, dd in conn.execute(text("SELECT id, detail_data FROM itr WHERE detail_data LIKE :p"),
+                                                {"p": f"%{old}%"}).fetchall():
+                        try:
+                            data = json.loads(dd)
+                        except (TypeError, ValueError):
+                            continue
+                        if isinstance(data, dict) and data.get("itpNo") == old:
+                            data["itpNo"] = new
+                            conn.execute(text("UPDATE itr SET detail_data = :d WHERE id = :i"),
+                                         {"d": json.dumps(data, ensure_ascii=False), "i": rid})
+                conn.execute(text("INSERT INTO itp_renumber_map (itp_id, old_referenceNo, new_referenceNo, migrated_at) "
+                                  "VALUES (:i, :o, :n, :ts)"), {"i": itp_id, "o": old, "n": new, "ts": now})
+                conn.execute(text(
+                    "INSERT INTO audit_logs (timestamp, user_id, username, action, entity_type, entity_id, entity_name, "
+                    "old_value, new_value, reason) VALUES (:ts, NULL, 'system-migration', 'RENUMBER_STD', 'ITP', :i, :n, "
+                    ":old, :new, :reason)"),
+                    {"ts": now, "i": itp_id, "n": new, "old": json.dumps({"referenceNo": old}, ensure_ascii=False),
+                     "new": json.dumps({"referenceNo": new}, ensure_ascii=False),
+                     "reason": "Shared ITP template renumbered to STD (REF-PROJECT-SEQ-2026-001, D11)"})
+
+            copied = 0
+            for itp_id, ref in external:
+                current = conn.execute(text("SELECT external_doc_no FROM itp WHERE id = :i"), {"i": itp_id}).scalar()
+                if current:
+                    continue                                                  # never overwrite an existing value
+                conn.execute(text("UPDATE itp SET external_doc_no = :r WHERE id = :i"), {"r": ref, "i": itp_id})
+                conn.execute(text(
+                    "INSERT INTO audit_logs (timestamp, user_id, username, action, entity_type, entity_id, entity_name, "
+                    "old_value, new_value, reason) VALUES (:ts, NULL, 'system-migration', 'COPY_EXTERNAL_DOC_NO', 'ITP', :i, "
+                    ":n, :old, :new, :reason)"),
+                    {"ts": now, "i": itp_id, "n": ref, "old": json.dumps({"external_doc_no": None}),
+                     "new": json.dumps({"external_doc_no": ref}, ensure_ascii=False),
+                     "reason": "External document number kept as external_doc_no (REF-PROJECT-SEQ-2026-001, D17)"})
+                copied += 1
+
+            def seed(project, last):
+                row = conn.execute(text("SELECT id, last_seq FROM reference_sequences WHERE project = :p AND vendor = '*' "
+                                        "AND doc = 'ITP'"), {"p": project}).first()
+                if row is None:
+                    conn.execute(text("INSERT INTO reference_sequences (project, vendor, doc, last_seq) VALUES (:p, '*', 'ITP', :l)"),
+                                 {"p": project, "l": last})
+                elif (row[1] or 0) < last:
+                    conn.execute(text("UPDATE reference_sequences SET last_seq = :l WHERE id = :i"), {"l": last, "i": row[0]})
+            seed("STD", std_max)
+            for pid, best in old_max.items():
+                if best:
+                    seed(pid, best)
+
+            conn.execute(text("INSERT INTO migration_flags (flag_name, completed_at) VALUES (:f, :ts)"),
+                         {"f": STD_ITP_RENUMBER_FLAG, "ts": now})
+            conn.commit()
+            logger.info("Shared ITPs renumbered to STD: %d; external numbers copied to external_doc_no: %d", len(plan), copied)
+    except Exception as e:
+        logger.error("Could not renumber shared ITPs to STD: %s", e)
+
+
+def _create_unique_project_code_index():
+    try:
+        with engine.connect() as conn:
+            dupes = conn.execute(text("SELECT UPPER(TRIM(code)), COUNT(*) FROM projects WHERE code IS NOT NULL AND TRIM(code) <> '' "
+                                      "GROUP BY UPPER(TRIM(code)) HAVING COUNT(*) > 1")).fetchall()
+            if dupes:
+                logger.error("Project codes used by more than one project, unique index not created: %s",
+                             {c: n for c, n in dupes})
+                return
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_projects_code_upper ON projects (UPPER(TRIM(code))) "
+                              "WHERE code IS NOT NULL AND TRIM(code) <> ''"))
+            conn.commit()
+    except Exception as e:
+        logger.error("Could not create the unique project code index: %s", e)
+
+
+NAMING_RULES_PROJECT_FORMAT_FLAG = "naming_rules_project_format_v1"
+
+
+def _naming_rules_to_project_format():
+    """Step 29 (REF-PROJECT-SEQ-2026-001 B3). See run_migrations. A rule is rewritten to its default only when it no
+    longer passes the settings check ([PROJECT] required, [ABBREV] refused; km exempt); the sequence digits are kept.
+    Counter seeds only ever move a (project id, '*', TYPE) counter up."""
+    import json
+    from datetime import datetime, timezone
+    from routers.settings import (DEFAULT_NAMING_RULES, NAMING_RULE_EXEMPT_TYPES, PROJECT_PLACEHOLDER,
+                                  RETIRED_PLACEHOLDER)
+    try:
+        with engine.connect() as conn:
+            if conn.execute(text("SELECT 1 FROM migration_flags WHERE flag_name = :f"),
+                            {"f": NAMING_RULES_PROJECT_FORMAT_FLAG}).first():
+                return
+            now = datetime.now(timezone.utc).isoformat()
+            before = {t: (p, d) for t, p, d in conn.execute(
+                text("SELECT doc_type, prefix, sequence_digits FROM document_naming_rules")).fetchall()}
+
+            def audit(doc_type, old, new, action):
+                conn.execute(text(
+                    "INSERT INTO audit_logs (timestamp, user_id, username, action, entity_type, entity_id, entity_name, "
+                    "old_value, new_value, reason) VALUES (:ts, NULL, 'system-migration', :a, 'NamingRule', :t, :t, "
+                    ":old, :new, :reason)"),
+                    {"ts": now, "a": action, "t": doc_type,
+                     "old": json.dumps({"prefix": old}, ensure_ascii=False) if action == "UPDATE" else None,
+                     "new": json.dumps({"prefix": new}, ensure_ascii=False),
+                     "reason": "Document numbers carry the project, not the contractor (REF-PROJECT-SEQ-2026-001, D2)"})
+
+            after = {}
+            changed = []
+            for rule in DEFAULT_NAMING_RULES:
+                doc_type, default = rule["doc_type"], rule["prefix"]
+                if doc_type not in before:
+                    conn.execute(text("INSERT INTO document_naming_rules (doc_type, prefix, sequence_digits) "
+                                      "VALUES (:t, :p, :d)"), {"t": doc_type, "p": default, "d": rule["sequence_digits"]})
+                    audit(doc_type, None, default, "CREATE")
+                    after[doc_type] = default
+                    changed.append(doc_type)
+                    continue
+                prefix = (before[doc_type][0] or "").strip()
+                if doc_type in NAMING_RULE_EXEMPT_TYPES or (PROJECT_PLACEHOLDER in prefix and RETIRED_PLACEHOLDER not in prefix):
+                    after[doc_type] = prefix
+                    continue
+                conn.execute(text("UPDATE document_naming_rules SET prefix = :p WHERE doc_type = :t"), {"p": default, "t": doc_type})
+                audit(doc_type, before[doc_type][0], default, "UPDATE")   # an existing row, even with an empty prefix (R1 P3-6)
+                after[doc_type] = default
+                changed.append(doc_type)
+
+            seeded = {}
+            for pid, code in conn.execute(text("SELECT id, UPPER(TRIM(code)) FROM projects WHERE code IS NOT NULL "
+                                               "AND TRIM(code) <> ''")).fetchall():
+                for doc_type, new_prefix in after.items():
+                    if doc_type == "fat" or doc_type in NAMING_RULE_EXEMPT_TYPES or PROJECT_PLACEHOLDER not in new_prefix:
+                        continue
+                    old_prefix = (before.get(doc_type, (None,))[0] or "").strip()
+                    if old_prefix.replace(RETIRED_PLACEHOLDER, code) != new_prefix.replace(PROJECT_PLACEHOLDER, code):
+                        continue                                              # different text: the old numbers cannot collide
+                    old_last = conn.execute(text("SELECT MAX(last_seq) FROM reference_sequences WHERE UPPER(vendor) = :v "
+                                                 "AND UPPER(doc) = :d"), {"v": code, "d": doc_type.upper()}).scalar() or 0
+                    if not old_last:
+                        continue
+                    row = conn.execute(text("SELECT id, last_seq FROM reference_sequences WHERE project = :p AND vendor = '*' "
+                                            "AND doc = :d"), {"p": pid, "d": doc_type.upper()}).first()
+                    if row is None:
+                        conn.execute(text("INSERT INTO reference_sequences (project, vendor, doc, last_seq) "
+                                          "VALUES (:p, '*', :d, :l)"), {"p": pid, "d": doc_type.upper(), "l": old_last})
+                    elif (row[1] or 0) < old_last:
+                        conn.execute(text("UPDATE reference_sequences SET last_seq = :l WHERE id = :i"), {"l": old_last, "i": row[0]})
+                    else:
+                        continue
+                    seeded[f"{code}/{doc_type.upper()}"] = old_last
+
+            conn.execute(text("INSERT INTO migration_flags (flag_name, completed_at) VALUES (:f, :ts)"),
+                         {"f": NAMING_RULES_PROJECT_FORMAT_FLAG, "ts": now})
+            conn.commit()
+            logger.info("Naming rules moved to [PROJECT]: %s; counters continued from old prefixes: %s",
+                        changed or "none", seeded or "none")
+    except Exception as e:
+        logger.error("Could not move naming rules to the project format: %s", e)
+
+
 AUDIT_TEMPLATES_INITIAL_FLAG = "audit_templates_initial_v1"
 
 
@@ -745,6 +991,7 @@ def _add_missing_columns():
             _add_column_if_missing(conn, "itp", "dueDate", "TEXT")
             _add_column_if_missing(conn, "itp", "last_reminded_at", "TEXT")
             _add_column_if_missing(conn, "itp", "attachments", "TEXT")
+            _add_column_if_missing(conn, "itp", "external_doc_no", "VARCHAR")      # D17 (REF-PROJECT-SEQ-2026-001 B3)
 
             # OBS
             _add_column_if_missing(conn, "obs", "dueDate", "TEXT")
@@ -1070,7 +1317,7 @@ def _migrate_itr_linked_checklists():
 
                 instance = models.Checklist(
                     id=str(uuid.uuid4()),
-                    recordsNo=generate_reference_no(db, itr_vendor, 'CHECKLIST'),
+                    recordsNo=generate_reference_no(db, itr_vendor, 'CHECKLIST', project_id=itr.project_id),
                     activity=snapshot.get('activity'),
                     date=snapshot.get('date'),
                     status=snapshot.get('status') or 'Ongoing',

@@ -163,7 +163,7 @@ class OBSService:
 
             if not data.get('documentNumber'):
                 data['documentNumber'] = generate_reference_no(
-                    self.repo.db, vendor_name or '', 'OBS'
+                    self.repo.db, vendor_name or '', 'OBS', project_id=data.get('project_id')
                 )
 
             db_obs = models.OBS(**data)

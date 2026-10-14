@@ -114,28 +114,33 @@ def _sequences(env):
         db.close()
 
 
+# REF-PROJECT-SEQ-2026-001 B3, design change: numbering is per project (D2), so the expected number is asked for a
+# project (the caller's sign-in project, or an administrator's chosen one), never for a contractor, and it is shown in
+# full to everyone who may create an NOI there (the 2026-10-12 mask is gone). Was: per contractor, masked for callers
+# limited to projects.
+
 def test_the_expected_number_is_what_the_next_create_gets_and_reserves_nothing(noi_env):
     env, _ = noi_env
-    c = env.login("noi_admin")                                # an unrestricted caller (REF-PROJECT-SEQ B1: only an admin is)
-    first = c.get("/api/noi/next-reference", params={"contractor": "Accept Co"})
+    c = env.login("noi_admin")                                # a system administrator: names the project
+    first = c.get("/api/noi/next-reference", params={"project_id": "P-A"})
     assert first.status_code == 200, first.text
-    assert c.get("/api/noi/next-reference", params={"contractor": "Accept Co"}).json() == first.json()   # asking twice takes nothing
+    assert first.json() == {"referenceNo": "QTS-RKS-PA-NOI-000001", "pattern": "QTS-RKS-PA-NOI-######"}
+    assert c.get("/api/noi/next-reference", params={"project_id": "P-A"}).json() == first.json()   # asking twice takes nothing
     assert _sequences(env) == []
     created = _create(c, project_id="P-A").json()           # an admin names the project it creates in (REF-PROJECT-SEQ B2, G1)
     assert created["referenceNo"] == first.json()["referenceNo"]
-    nxt = c.get("/api/noi/next-reference", params={"contractor": "Accept Co"}).json()["referenceNo"]
-    assert nxt != created["referenceNo"] and _create(c, project_id="P-A").json()["referenceNo"] == nxt
-    other = c.get("/api/noi/next-reference", params={"contractor": "Beta Co"}).json()["referenceNo"]
-    assert "-BET-" in other and other.endswith("000001")
+    nxt = c.get("/api/noi/next-reference", params={"project_id": "P-A"}).json()["referenceNo"]
+    assert nxt != created["referenceNo"] and _create(c, project_id="P-A", contractor="Beta Co").json()["referenceNo"] == nxt
+    assert c.get("/api/noi/next-reference").status_code == 400            # "All projects": choose a project first
 
 
-def test_the_expected_number_needs_create_permission_and_stays_in_the_callers_contractor(noi_env):
+def test_the_expected_number_needs_create_permission_and_stays_in_the_callers_project(noi_env):
     env, _ = noi_env
-    assert env.login("noi_view").get("/api/noi/next-reference", params={"contractor": "Accept Co"}).status_code == 403
-    s = env.login("noi_scoped")                               # contractor-scoped to Accept Co (and project P-A)
-    own = s.get("/api/noi/next-reference", params={"contractor": "Accept Co"})
-    assert own.status_code == 200 and own.json() == {"referenceNo": "QTS-ACC-NOI-000001", "pattern": "QTS-ACC-NOI-######"}
-    assert s.get("/api/noi/next-reference", params={"contractor": "Beta Co"}).status_code == 403
+    assert env.login("noi_view").get("/api/noi/next-reference").status_code == 403
+    s = env.login("noi_scoped")                               # contractor-scoped to Accept Co, works in project P-A
+    own = s.get("/api/noi/next-reference")
+    assert own.status_code == 200 and own.json() == {"referenceNo": "QTS-RKS-PA-NOI-000001", "pattern": "QTS-RKS-PA-NOI-######"}
+    assert s.get("/api/noi/next-reference", params={"project_id": "P-B"}).status_code == 403
 
 
 def _project_only_user(env, username="noi_project_only"):
@@ -155,19 +160,17 @@ def _project_only_user(env, username="noi_project_only"):
     return env.login(username)
 
 
-def test_a_caller_limited_to_projects_sees_only_the_format_never_the_count(noi_env):
-    """Business decision 2026-10-12: the sequence spans every project, so its next value tells how many NOIs a contractor
-    has had everywhere — a caller limited to projects (no contractor) gets the format with the sequence masked."""
+def test_a_caller_limited_to_projects_now_sees_the_full_number_of_its_project(noi_env):
+    """B3: the sequence is the project's own, so it tells only how many NOIs this project has had — the mask of 2026-10-12
+    (format only, referenceNo None) is gone."""
     env, _ = noi_env
     a = env.login("noi_a")
     for _ in range(3):
-        assert _create(a).status_code == 200                  # Accept Co now has 3 NOIs
+        assert _create(a).status_code == 200                  # project P-A now has 3 NOIs
     p = _project_only_user(env)
-    for contractor, pattern in (("Accept Co", "QTS-ACC-NOI-######"), ("Beta Co", "QTS-BET-NOI-######")):
-        r = p.get("/api/noi/next-reference", params={"contractor": contractor})
-        assert r.status_code == 200 and r.json() == {"referenceNo": None, "pattern": pattern}, r.text
-    unrestricted = env.login("noi_admin")                     # REF-PROJECT-SEQ B1: only an admin is unrestricted
-    assert unrestricted.get("/api/noi/next-reference", params={"contractor": "Accept Co"}).json()["referenceNo"] == "QTS-ACC-NOI-000004"
+    r = p.get("/api/noi/next-reference")
+    assert r.status_code == 200 and r.json() == {"referenceNo": "QTS-RKS-PA-NOI-000004", "pattern": "QTS-RKS-PA-NOI-######"}, r.text
+    assert env.login("noi_admin").get("/api/noi/next-reference", params={"project_id": "P-A"}).json()["referenceNo"] == "QTS-RKS-PA-NOI-000004"
 
 
 def _noi_row(env, noi_id):
@@ -180,7 +183,7 @@ def _noi_row(env, noi_id):
 
 
 @pytest.mark.parametrize("kind", ["audit", "commit"])
-@pytest.mark.parametrize("change", [{"package": "PKG-CHANGED"}, {"contractor": "Beta Co"}])   # the 2nd renumbers the NOI
+@pytest.mark.parametrize("change", [{"package": "PKG-CHANGED"}, {"contractor": "Beta Co"}])   # the 2nd changed the number until B3
 def test_a_failing_audit_or_commit_rolls_an_update_back_completely(noi_env, monkeypatch, kind, change):
     env, _ = noi_env
     c = env.login("noi_a")
@@ -200,4 +203,4 @@ def test_a_failing_audit_or_commit_rolls_an_update_back_completely(noi_env, monk
     assert _audits(env, "UPDATE", noi["id"]) == []
     if "contractor" in change:                                # and the same change still goes through afterwards
         r = c.put(f"/api/noi/{noi['id']}/", json=change)
-        assert r.status_code == 200 and "-BET-" in r.json()["referenceNo"], r.text
+        assert r.status_code == 200 and r.json()["referenceNo"] == noi["referenceNo"], r.text   # B3: no renumbering (was -BET-)

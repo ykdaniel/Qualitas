@@ -193,7 +193,8 @@ class AuditService:
             begin_write_transaction(db)
 
             # Always auto-generate auditNo server-side (ignore any value from frontend)
-            audit_data["auditNo"] = generate_reference_no(db, audit_data.get("contractor") or '', 'audit')
+            audit_data["auditNo"] = generate_reference_no(db, audit_data.get("contractor") or '', 'audit',
+                                                          project_id=audit_data.get("project_id"))
 
             db_audit = self.repo.create(audit_data)
 
@@ -313,7 +314,8 @@ class AuditService:
                 new_contractor = update_data["contractor"]
                 if new_contractor and not db_audit.auditNo:
                     begin_write_transaction(db)
-                    processed_data["auditNo"] = generate_reference_no(db, new_contractor, 'audit')
+                    processed_data["auditNo"] = generate_reference_no(
+                        db, new_contractor, 'audit', project_id=processed_data.get("project_id") or db_audit.project_id)   # a sent null keeps the audit's project (B3 R1 P3-2)
                     logger.info(f"Assigned new auditNo {processed_data['auditNo']} (first contractor assignment)")
 
             enforce_update_scope(processed_data, scope)

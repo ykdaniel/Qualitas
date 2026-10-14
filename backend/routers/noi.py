@@ -1,4 +1,6 @@
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from core.refusals import refusal_http
 from fastapi.responses import StreamingResponse
@@ -36,16 +38,17 @@ def read_noi_contractor_contact(
 
 @router.get("/next-reference", response_model=dict)
 def read_noi_next_reference(
-    contractor: str,
+    project_id: Optional[str] = None,
     noi_service: NOIService = Depends(get_noi_service),
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(NOI_CREATE))
 ):
-    """The reference number a new NOI for this contractor is expected to get — shown in the create form as "expected";
-    nothing is reserved, the number is fixed on save. A caller limited to projects gets only the masked format
-    (referenceNo null) — see NOIService.preview_reference_no (NOI-DEFECTS-2026-001)."""
+    """The reference number a new NOI in the current project is expected to get — shown in the create form as
+    "expected"; nothing is reserved, the number is fixed on save. Numbering is per project (REF-PROJECT-SEQ-2026-001
+    B3), so the number is shown in full to everyone who may create an NOI there; a system administrator passes the
+    chosen project (400 PROJECT_REQUIRED_FOR_CREATE in "All projects") — see NOIService.preview_reference_no."""
     try:
-        return noi_service.preview_reference_no(contractor, scope=scope)
+        return noi_service.preview_reference_no(project_id, scope=scope)
     except ScopeForbidden as e:
         raise HTTPException(status_code=403, detail=str(e))
 

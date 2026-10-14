@@ -61,7 +61,7 @@ import database, models
 # REF-PROJECT-SEQ-2026-001 B1: a non-admin account must be created into a project (and only sees that project's records)
 _db = database.SessionLocal()
 if _db.get(models.Project, "P-SEED") is None:
-    _db.add(models.Project(id="P-SEED", name="Seed project")); _db.commit()
+    _db.add(models.Project(id="P-SEED", name="Seed project", code="SEED")); _db.commit()   # B3: a project numbers nothing without a code
 _db.close()
 out = {}
 for op in ops:

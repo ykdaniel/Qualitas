@@ -138,7 +138,7 @@ class NOIService:
             # Generate Reference No automatically if not provided
             if not data.get('referenceNo'):
                 data['referenceNo'] = generate_reference_no(
-                    self.repo.db, vendor_name or '', 'NOI'
+                    self.repo.db, vendor_name or '', 'NOI', project_id=data.get('project_id')
                 )
 
             # Set default status
@@ -273,58 +273,18 @@ class NOIService:
                 vendor_name = d.pop('contractor')
                 new_vendor_id = _resolve_vendor_id(self.repo.db, vendor_name)
 
-                # Business decision 2026-10-10: once documents are filed under this NOI, its contractor is fixed.
-                # Changing it renumbers the NOI below, and ITR / NCR / OBS / Checklist / Follow-up cite the NOI by
-                # that number with nothing to carry the change over — they were cut loose (the ITR could not be
-                # saved again, the NOI close check and Q-Workflow stopped seeing it). Filling in a contractor that
-                # was never set (legacy data) is allowed, but the number is then kept (decision, same day).
-                keep_number = False
+                # Business decision 2026-10-10: once documents are filed under this NOI, its contractor is fixed
+                # (ITR / NCR / OBS / Checklist / Follow-up were filed for that contractor). Filling in a contractor that
+                # was never set (legacy data) is allowed. The number is never changed by a contractor change any more:
+                # since REF-PROJECT-SEQ-2026-001 B3 it carries the project, not the contractor (D2).
                 if new_vendor_id != db_noi.vendor_id and db_noi.referenceNo:
                     cited = self._documents_citing(db_noi.referenceNo)
-                    if cited and db_noi.vendor_id is None and new_vendor_id is not None:
-                        keep_number = True
-                    elif cited:
+                    if cited and not (db_noi.vendor_id is None and new_vendor_id is not None):
                         raise ValueError(
                             f"Cannot change the contractor of NOI '{db_noi.referenceNo}': "
-                            f"{', '.join(cited)} already filed under it. Changing the contractor would renumber the NOI "
-                            f"and cut those links."
+                            f"{', '.join(cited)} already filed under it."
                         )
 
-                # Determine if reference number needs regeneration
-                regenerate = False
-                if keep_number:
-                    pass
-                elif new_vendor_id and new_vendor_id != db_noi.vendor_id:
-                    regenerate = True
-                elif new_vendor_id and db_noi.referenceNo:
-                    # Check if vendor abbreviation changed (e.g., vendor was renamed but ID remains the same)
-                    from core.utils import get_contractor_abbreviation
-                    from models import DocumentNamingRule
-                    from core.config import settings
-                    
-                    vendor_abbrev = get_contractor_abbreviation(self.repo.db, vendor_name)
-                    rule = self.repo.db.query(DocumentNamingRule).filter(
-                        DocumentNamingRule.doc_type == 'noi'
-                    ).first()
-                    
-                    if rule and rule.prefix:
-                        expected_prefix = rule.prefix.replace('[ABBREV]', vendor_abbrev)
-                    else:
-                        project_code = getattr(settings, 'PROJECT_CODE', 'QTS')
-                        expected_prefix = f"{project_code}-{vendor_abbrev}-NOI-"
-                        
-                    # Same contractor, but its abbreviation (or the naming rule) changed since this NOI was numbered.
-                    # Business decision 2026-10-10: an NOI that already has documents filed under it keeps its number —
-                    # the UI resends the contractor on every save, so otherwise any ordinary save renumbered it and cut
-                    # those documents loose. An NOI with nothing under it is still brought in line, as before.
-                    if not db_noi.referenceNo.startswith(expected_prefix) \
-                            and not self._documents_citing(db_noi.referenceNo):
-                        regenerate = True
-
-                if regenerate:
-                    from core.utils import generate_reference_no
-                    d['referenceNo'] = generate_reference_no(self.repo.db, vendor_name, 'NOI')
-                
                 d['vendor_id'] = new_vendor_id
 
             enforce_update_scope(d, scope)
@@ -409,12 +369,14 @@ class NOIService:
     def _create_qworkflow_for_noi(self, noi: models.NOI) -> None:
         """Attach a fresh Q-WorkFlow row to a newly-created NOI.
 
-        Numbering is a simple MAX+1 on the ``qworkflow.referenceNo``
-        column: Q-WorkFlow numbers are a single global sequence, not
-        per-vendor or per-project, so we don't need the shared
-        reference_sequences table. Any parse failure on an existing
-        row is ignored (treated as 0) so a hand-edited DB can't break
-        startup. Only the flush happens here: the row is committed by the
+        Numbering is per project, ``Q-WorkFlow-<project code>-######``
+        (REF-PROJECT-SEQ-2026-001 B3, user's decision 2026-10-14), on the
+        shared reference_sequences counter (project id, '*', QWORKFLOW).
+        Numbers already issued in the old global format
+        (``Q-WorkFlow-000001``) keep their number. A NOI without a project
+        (only legacy rows) still gets the old global MAX+1 number; any
+        parse failure on an existing row is ignored (treated as 0) so a
+        hand-edited DB can't break it. Only the flush happens here: the row is committed by the
         caller together with the NOI and its audit entry. A failure is
         NOT swallowed any more (2026-09-20) — the whole NOI create rolls
         back, because a NOI without its tracker row would be silently
@@ -422,22 +384,26 @@ class NOIService:
         """
         from datetime import datetime, timezone
 
+        if noi.project_id:
+            next_ref = generate_reference_no(self.repo.db, "", "QWORKFLOW", project_id=noi.project_id)
+        else:
+            next_ref = None
         with _reference_seq_lock:
-            existing = (
-                self.repo.db.query(models.QWorkflow.referenceNo)
-                .with_for_update()
-                .all()
-            )
-            max_seq = 0
-            for (ref,) in existing:
-                if not ref or not ref.startswith("Q-WorkFlow-"):
-                    continue
-                try:
-                    max_seq = max(max_seq, int(ref.split("-")[-1]))
-                except ValueError:
-                    continue
-
-            next_ref = f"Q-WorkFlow-{max_seq + 1:06d}"
+            if next_ref is None:
+                existing = (
+                    self.repo.db.query(models.QWorkflow.referenceNo)
+                    .with_for_update()
+                    .all()
+                )
+                max_seq = 0
+                for (ref,) in existing:
+                    if not ref or not ref.startswith("Q-WorkFlow-"):
+                        continue
+                    try:
+                        max_seq = max(max_seq, int(ref.split("-")[-1]))
+                    except ValueError:
+                        continue
+                next_ref = f"Q-WorkFlow-{max_seq + 1:06d}"
             qwf = models.QWorkflow(
                 id=str(uuid.uuid4()),
                 referenceNo=next_ref,
@@ -509,23 +475,21 @@ class NOIService:
             logger.error(f"Error deleting NOI {noi_id}: {e}", exc_info=True)
             raise e
 
-    def preview_reference_no(self, contractor: str, scope=None) -> dict:
-        """The reference number a new NOI for this contractor is expected to get (create_noi numbers it the same way);
-        nothing is reserved. Returns {"referenceNo": str | None, "pattern": str}.
+    def preview_reference_no(self, project_id: Optional[str] = None, scope=None) -> dict:
+        """The reference number a new NOI in the current project is expected to get (create_noi numbers it the same
+        way); nothing is reserved. Returns {"referenceNo": str, "pattern": str}.
 
-        The sequence is per contractor across ALL projects, so the number tells how many NOIs that contractor has had
-        everywhere. Only callers entitled to that see it (business decision 2026-10-12): an unrestricted caller, and a
-        contractor-scoped caller for its own contractor (any other contractor is refused). A caller limited to projects
-        only gets the format with the sequence masked (referenceNo None)."""
+        REF-PROJECT-SEQ-2026-001 B3: the sequence is per project (D2), so the number only tells how many NOIs this
+        project has had — everyone who may create an NOI here sees it in full (the 2026-10-12 mask is gone). The
+        project is resolved exactly as create_noi resolves it: a project member's sign-in project, or the project a
+        system administrator has chosen; an administrator in "All projects" gets 400 PROJECT_REQUIRED_FOR_CREATE and a
+        project outside the caller's scope ScopeForbidden."""
         from core.utils import preview_reference_no, reference_pattern
-        restricted = scope is not None and not scope.unrestricted
-        if restricted and scope.vendor_id is not None \
-                and _resolve_vendor_id(self.repo.db, contractor) != scope.vendor_id:
-            raise ScopeForbidden("contractor is outside your scope")
-        pattern = reference_pattern(self.repo.db, contractor or '', 'NOI')
-        if restricted and scope.vendor_id is None:
-            return {"referenceNo": None, "pattern": pattern}
-        return {"referenceNo": preview_reference_no(self.repo.db, contractor or '', 'NOI'), "pattern": pattern}
+        data = {"project_id": project_id}
+        enforce_create_scope(data, scope)
+        pid = data.get("project_id") or None
+        return {"referenceNo": preview_reference_no(self.repo.db, 'NOI', pid),
+                "pattern": reference_pattern(self.repo.db, 'NOI', pid)}
 
     def delete_check(self, noi_id: str, scope=None) -> Optional[dict]:
         """What a delete of this NOI would run into, for the delete prompt: the documents that still cite it (the same

@@ -8,20 +8,27 @@ from database import get_db
 from core.dependencies import RoleChecker
 from core.security import get_current_user
 
+# Document numbers are QTS-RKS-<project code>-<type>-###### (REF-PROJECT-SEQ-2026-001 B3, D2): [PROJECT] is replaced
+# by the record's project code (STD for a shared template); the contractor is no longer part of the number, so
+# [ABBREV] is refused. KM numbers itself (QTS-KM-) and is exempt from both checks.
+PROJECT_PLACEHOLDER = "[PROJECT]"
+RETIRED_PLACEHOLDER = "[ABBREV]"
+NAMING_RULE_EXEMPT_TYPES = {"km"}
+
 DEFAULT_NAMING_RULES = [
-    {"doc_type": "itp", "prefix": "QTS-RKS-[ABBREV]-ITP-", "sequence_digits": 6},
-    {"doc_type": "noi", "prefix": "QTS-RKS-[ABBREV]-NOI-", "sequence_digits": 6},
-    {"doc_type": "itr", "prefix": "QTS-RKS-[ABBREV]-ITR-", "sequence_digits": 6},
-    {"doc_type": "ncr", "prefix": "QTS-RKS-[ABBREV]-NCR-", "sequence_digits": 6},
-    {"doc_type": "obs", "prefix": "QTS-RKS-[ABBREV]-OBS-", "sequence_digits": 6},
-    {"doc_type": "pqp", "prefix": "QTS-RKS-[ABBREV]-PQP-", "sequence_digits": 6},
-    {"doc_type": "followup", "prefix": "QTS-RKS-[ABBREV]-FUI-", "sequence_digits": 6},
-    {"doc_type": "fat", "prefix": "QTS-RKS-[ABBREV]-FAT-", "sequence_digits": 6},
-    {"doc_type": "audit", "prefix": "QTS-RKS-[ABBREV]-AUD-", "sequence_digits": 6},
-    {"doc_type": "checklist", "prefix": "QTS-RKS-[ABBREV]-CHK-", "sequence_digits": 6},
-    {"doc_type": "osd", "prefix": "QTS-RKS-[ABBREV]-OSD-", "sequence_digits": 6},
-    {"doc_type": "meeting", "prefix": "QTS-RKS-[ABBREV]-MOM-", "sequence_digits": 6},
-    {"doc_type": "msa", "prefix": "QTS-RKS-[ABBREV]-MSA-", "sequence_digits": 6},
+    {"doc_type": "itp", "prefix": "QTS-RKS-[PROJECT]-ITP-", "sequence_digits": 6},
+    {"doc_type": "noi", "prefix": "QTS-RKS-[PROJECT]-NOI-", "sequence_digits": 6},
+    {"doc_type": "itr", "prefix": "QTS-RKS-[PROJECT]-ITR-", "sequence_digits": 6},
+    {"doc_type": "ncr", "prefix": "QTS-RKS-[PROJECT]-NCR-", "sequence_digits": 6},
+    {"doc_type": "obs", "prefix": "QTS-RKS-[PROJECT]-OBS-", "sequence_digits": 6},
+    {"doc_type": "pqp", "prefix": "QTS-RKS-[PROJECT]-PQP-", "sequence_digits": 6},
+    {"doc_type": "followup", "prefix": "QTS-RKS-[PROJECT]-FUI-", "sequence_digits": 6},
+    {"doc_type": "fat", "prefix": "QTS-RKS-[PROJECT]-FAT-", "sequence_digits": 6},
+    {"doc_type": "audit", "prefix": "QTS-RKS-[PROJECT]-AUD-", "sequence_digits": 6},
+    {"doc_type": "checklist", "prefix": "QTS-RKS-[PROJECT]-CHK-", "sequence_digits": 6},
+    {"doc_type": "osd", "prefix": "QTS-RKS-[PROJECT]-OSD-", "sequence_digits": 6},
+    {"doc_type": "meeting", "prefix": "QTS-RKS-[PROJECT]-MOM-", "sequence_digits": 6},
+    {"doc_type": "msa", "prefix": "QTS-RKS-[PROJECT]-MSA-", "sequence_digits": 6},
 ]
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
@@ -61,8 +68,12 @@ def update_naming_rules(
         prefix = (rule.prefix or "").strip()
         if not prefix:
             raise HTTPException(status_code=400, detail=f"Prefix for '{doc_type_normalized}' cannot be empty.")
-        if "[ABBREV]" not in prefix:
-            raise HTTPException(status_code=400, detail=f"Prefix for '{doc_type_normalized}' must include the [ABBREV] placeholder.")
+        if doc_type_normalized not in NAMING_RULE_EXEMPT_TYPES:
+            if RETIRED_PLACEHOLDER in prefix:
+                raise HTTPException(status_code=400, detail=f"Prefix for '{doc_type_normalized}' cannot use [ABBREV]: document "
+                                                            "numbers no longer carry the contractor.")
+            if PROJECT_PLACEHOLDER not in prefix:
+                raise HTTPException(status_code=400, detail=f"Prefix for '{doc_type_normalized}' must include the [PROJECT] placeholder.")
         if prefix in seen_prefixes:
             raise HTTPException(
                 status_code=400,

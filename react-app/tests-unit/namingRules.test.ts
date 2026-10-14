@@ -1,14 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { changedRules, exampleNumber, mergeRules } from '../src/components/DocumentNamingRules/namingRules';
+import { changedRules, exampleNumber, mergeRules, prefixProblem } from '../src/components/DocumentNamingRules/namingRules';
 
-test('example number uses NA and pads to the digit count', () => {
-    assert.equal(exampleNumber('QTS-RKS-[ABBREV]-MOM-', 6), 'QTS-RKS-NA-MOM-000001');
-    assert.equal(exampleNumber('QTS-RKS-[ABBREV]-MOM-', 3), 'QTS-RKS-NA-MOM-001');
+// REF-PROJECT-SEQ-2026-001 B3 (D2): numbers carry the project code, no longer the contractor abbreviation.
+test('example number uses the project code (ABC when none) and pads to the digit count', () => {
+    assert.equal(exampleNumber('QTS-RKS-[PROJECT]-MOM-', 6), 'QTS-RKS-ABC-MOM-000001');
+    assert.equal(exampleNumber('QTS-RKS-[PROJECT]-MOM-', 3, 'HL'), 'QTS-RKS-HL-MOM-001');
+    assert.equal(exampleNumber('QTS-RKS-[ABBREV]-MOM-', 6, 'HL'), 'QTS-RKS-NA-MOM-000001');   // an old rule, shown before it is changed
 });
 
-test('example number replaces every [ABBREV], like the backend', () => {
-    assert.equal(exampleNumber('[ABBREV]-X-[ABBREV]-', 2, 'HL'), 'HL-X-HL-01');
+test('example number replaces every [PROJECT], like the backend', () => {
+    assert.equal(exampleNumber('[PROJECT]-X-[PROJECT]-', 2, 'HL'), 'HL-X-HL-01');
+});
+
+test('prefix checks match the backend: [PROJECT] required, [ABBREV] refused, KM exempt', () => {
+    assert.equal(prefixProblem('ncr', 'QTS-RKS-[PROJECT]-NCR-'), null);
+    assert.equal(prefixProblem('ncr', '  '), 'empty');
+    assert.equal(prefixProblem('ncr', 'QTS-RKS-NCR-'), 'project');
+    assert.equal(prefixProblem('ncr', 'QTS-[ABBREV]-[PROJECT]-NCR-'), 'abbrev');
+    assert.equal(prefixProblem('km', 'QTS-KM-'), null);
+    assert.equal(prefixProblem('KM', 'QTS-[ABBREV]-KM-'), null);
+    assert.equal(prefixProblem('km', ''), 'empty');
 });
 
 test('changed rules lists only edited rules, with their saved values', () => {

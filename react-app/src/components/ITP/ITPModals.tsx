@@ -186,6 +186,7 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
     const [formData, setFormData] = useState<Partial<ITPItem>>({
         vendor: existingItem?.vendor || defaultVendor || '',
         referenceNo: existingItem?.referenceNo || '',
+        external_doc_no: existingItem?.external_doc_no || '',
         description: existingItem?.description || '',
         rev: existingItem?.rev || 'Rev1.0',
         submit: existingItem?.submit || '',
@@ -697,6 +698,18 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                                             ))}
                                         </select>
                                         {errors.vendor && <span className={formStyles.errorMessage}>{errors.vendor}</span>}
+                                    </div>
+                                    {/* The document's own number from its author, kept beside the system number and searchable
+                                        (REF-PROJECT-SEQ-2026-001 B3, D17); a shared template's is edited by a system administrator. */}
+                                    <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>
+                                        <label>{t('itp.externalDocNo')}</label>
+                                        <input
+                                            type="text"
+                                            className={formStyles.formInput}
+                                            value={formData.external_doc_no || ''}
+                                            onChange={(e) => handleFieldChange('external_doc_no', e.target.value)}
+                                            placeholder={t('itp.externalDocNoPlaceholder')}
+                                        />
                                     </div>
                                     {/* Subject gets its own full row (ITP-SUBJECT-WIDTH-2026-001): same single-line input and data behaviour, just wider. */}
                                     <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>

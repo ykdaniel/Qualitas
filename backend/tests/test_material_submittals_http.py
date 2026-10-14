@@ -195,7 +195,7 @@ def test_api_surface_is_the_register_only(env):
 # ── register ────────────────────────────────────────────────────────────────────────────────────────────────
 def test_register_creates_an_approved_record_in_one_step(env):
     item = ok(register(env))
-    assert item["documentNumber"] == "QTS-V1-MSA-000001"
+    assert item["documentNumber"] == "QTS-RKS-P1-MSA-000001"   # project P1, not contractor V1 (REF-PROJECT-SEQ-2026-001 B3, D2)
     assert (item["revNo"], item["result"], item["approvedDate"], item["decisionMaker"], item["externalDocNo"]) == (
         0, "Approved", "2026-10-01", "Consultant A", "EXT-001")
     assert (item["name"], item["brand"], item["model"], item["category"], item["specReference"], item["vendorName"]) == (
@@ -312,7 +312,7 @@ def test_result_entries_are_append_only_in_the_orm(env):
 def test_detail_permission_scope_and_vendor(env):
     sid = ok(register(env))["submittalId"]
     p2 = ok(register(env, projectId="P2", name="Other project"))["submittalId"]
-    assert ok(env.c["viewer"].get(f"/api/material-submittals/{sid}"))["documentNumber"] == "QTS-V1-MSA-000001"
+    assert ok(env.c["viewer"].get(f"/api/material-submittals/{sid}"))["documentNumber"] == "QTS-RKS-P1-MSA-000001"
     assert env.c["nobody"].get(f"/api/material-submittals/{sid}").status_code == 403
     r = env.c["vendor"].get(f"/api/material-submittals/{sid}")
     assert r.status_code == 403 and r.json()["detail"] == VENDOR_REFUSAL

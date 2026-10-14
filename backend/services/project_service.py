@@ -4,18 +4,54 @@ Project Service
 Business logic layer for Project module
 """
 
+import re
 import uuid
 import logging
 from datetime import datetime, timezone
 from typing import List, Optional
 
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
+
 import models
 import schemas
 from repositories.project_repository import ProjectRepository
 from core import validators
+from core.constants import SHARED_CODE
+from core.refusals import Refusal
 from core.utils import log_audit
 
 logger = logging.getLogger(__name__)
+
+PROJECT_CODE_RE = re.compile(r"[A-Z0-9]{2,8}")
+
+
+def normalize_project_code(db, code, project_id: Optional[str] = None) -> str:
+    """The project code as stored (REF-PROJECT-SEQ-2026-001 B3, D14): required, 2–8 letters or digits, upper case,
+    unique (ignoring case), never the reserved SHARED_CODE ("STD", the number code of shared templates). Every
+    document number of the project carries it, so a Refusal (400) names the problem."""
+    value = (code or "").strip().upper()
+    if not value:
+        raise Refusal("PROJECT_CODE_REQUIRED", "A project code is required: every document number of the project carries it.")
+    if not PROJECT_CODE_RE.fullmatch(value):
+        raise Refusal("PROJECT_CODE_INVALID", f"Project code '{value}' must be 2 to 8 letters or digits.", projectCode=value)
+    if value == SHARED_CODE:
+        raise Refusal("PROJECT_CODE_RESERVED", f"Project code '{value}' is reserved for shared templates.", projectCode=value)
+    clash = db.query(models.Project).filter(func.upper(func.trim(models.Project.code)) == value)   # as the unique index (step 28)
+    if project_id is not None:
+        clash = clash.filter(models.Project.id != project_id)
+    if clash.first():
+        raise Refusal("PROJECT_CODE_DUPLICATE", f"Project code '{value}' is already used by another project.", projectCode=value)
+    return value
+
+
+def _code_clash(exc: Exception, code) -> Exception:
+    """A create/update that lost a race for the same code hits the unique index (migration step 28): the same 400 as the
+    check above, not a 500 (B3 R1 P3-4). Any other error is returned unchanged."""
+    if isinstance(exc, IntegrityError) and "ux_projects_code_upper" in str(exc):
+        value = (code or "").strip().upper()
+        return Refusal("PROJECT_CODE_DUPLICATE", f"Project code '{value}' is already used by another project.", projectCode=value)
+    return exc
 
 
 class ProjectService:
@@ -36,6 +72,7 @@ class ProjectService:
         # fixed this round: flush only, add the audit entry, commit once; any failure rolls both back.
         try:
             data = project_create.model_dump()
+            data["code"] = normalize_project_code(self.repo.db, data.get("code"))
             if not data.get("id"):
                 data["id"] = str(uuid.uuid4())
             data["created_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -50,7 +87,7 @@ class ProjectService:
         except Exception as e:
             self.repo.db.rollback()
             logger.error(f"Error creating Project: {e}", exc_info=True)
-            raise e
+            raise _code_clash(e, project_create.code)
 
     def update_project(self, project_id: str, project_update: schemas.ProjectUpdate, user_id: int = None, username: str = None) -> Optional[models.Project]:
         try:
@@ -59,6 +96,9 @@ class ProjectService:
                 return None
             old_val = {c.name: getattr(db_project, c.name) for c in db_project.__table__.columns}
             update_data = project_update.model_dump(exclude_unset=True)
+            if "code" in update_data:
+                # a code may change (the counter is keyed by project id, so numbering continues), but never to empty
+                update_data["code"] = normalize_project_code(self.repo.db, update_data["code"], project_id)
             updated = self.repo.update(db_project, update_data, commit=False)
             log_audit(
                 self.repo.db, "UPDATE", "Project", project_id, updated.name,
@@ -70,7 +110,7 @@ class ProjectService:
         except Exception as e:
             self.repo.db.rollback()
             logger.error(f"Error updating Project {project_id}: {e}", exc_info=True)
-            raise e
+            raise _code_clash(e, project_update.code)
 
     def delete_project(self, project_id: str, user_id: int = None, username: str = None) -> bool:
         try:

@@ -87,6 +87,9 @@ class ITPBase(BaseModel):
     project_id: str | None = None
     vendor: str | None = None
     referenceNo: str | None = None  # 由後端自動產生
+    # the document's own number from its author (e.g. a contractor's ITP number), kept beside the system number
+    # (REF-PROJECT-SEQ-2026-001 B3, D17); searchable, never used for numbering
+    external_doc_no: constr(max_length=MAX_SHORT_LENGTH) | None = None
     description: constr(max_length=MAX_TEXT_LENGTH) | None = ''
     rev: constr(max_length=MAX_SHORT_LENGTH) | None = ''
     submit: str | None = ''
@@ -148,6 +151,7 @@ class ITPUpdate(BaseModel):
     project_id: str | None = None
     vendor: str | None = None
     # referenceNo 不可更新（由後端自動產生，建立後不可變）
+    external_doc_no: constr(max_length=MAX_SHORT_LENGTH) | None = None
     description: str | None = None
     rev: str | None = None
     submit: str | None = None

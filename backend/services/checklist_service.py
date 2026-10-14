@@ -20,6 +20,7 @@ from core.utils import (
     lock_itr_for_write,
     reload_locked,
     _resolve_vendor_id,
+    begin_write_transaction,
     generate_reference_no,
     log_audit,
     WorkflowEngine
@@ -553,9 +554,12 @@ class ChecklistService:
                     "frontends should send null to request auto-generation"
                 )
                 records_no = None
+            # take the write lock before the sequence is read, so two creates never get the same number (B3)
+            begin_write_transaction(self.repo.db)
             if not records_no:
+                # a template is shared: numbered QTS-RKS-STD-CHK- (user's decision 2026-10-14, DECISIONS item 11)
                 data['recordsNo'] = generate_reference_no(
-                    self.repo.db, contractor_name, 'CHECKLIST'
+                    self.repo.db, contractor_name, 'CHECKLIST', project_id=None
                 )
 
             # Create Checklist object

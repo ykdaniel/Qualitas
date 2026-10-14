@@ -9,10 +9,26 @@ import os
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from database import Base
 import models
+
+
+def _project_code_from_id(project_id) -> str:
+    """A test project's default code: its id's letters and digits, upper case, at most 8 (PA, P1, PROJX...)."""
+    code = "".join(ch for ch in str(project_id or "") if ch.isalnum()).upper()[:8]
+    return code if len(code) >= 2 else f"T{code or 'P'}"
+
+
+@event.listens_for(models.Project, "before_insert")
+def _test_projects_have_a_code(mapper, connection, target):
+    """Every real project has a code (REF-PROJECT-SEQ-2026-001 B3, D14): every document number carries it, and a project
+    without one numbers nothing (PROJECT_CODE_MISSING). Test fixtures that build a Project with no code (None) get one
+    from its id, as an administrator would have set; a test about a project WITHOUT a code says so with code="".
+    Projects created through the API are not touched (the API itself requires the code)."""
+    if target.code is None:
+        target.code = _project_code_from_id(target.id)
 
 
 def _uploads_manifest(root: Path) -> dict:

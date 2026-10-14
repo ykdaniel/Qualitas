@@ -280,12 +280,38 @@ def seed_initial_data():
     finally:
         db.close()
 
+def _seed_itp_id(ref_no):
+    """A demo ITP's fixed id: how the seeder recognises its own row whatever number the row carries."""
+    return f"seed-itp-{ref_no}"
+
+
+def _seeded_itp_exists(db, ref_no):
+    """The demo ITP is already there: under its fixed seed id, under its old seed number (a row seeded before
+    REF-PROJECT-SEQ-2026-001 B3, random id), or under the number migration step 27 gave that row since (recorded in
+    itp_renumber_map). Without the last check the seeder, which runs right after the migrations, would recreate the
+    demo ITP under its retired number."""
+    if db.get(models.ITP, _seed_itp_id(ref_no)) is not None:
+        return True
+    if db.query(models.ITP).filter(models.ITP.referenceNo == ref_no).first():
+        return True
+    return db.query(models.ItpRenumberMap).filter(models.ItpRenumberMap.old_referenceNo == ref_no).first() is not None
+
+
+def _new_seeded_itp(db, itp_data, ref_no):
+    """A demo ITP is a shared template (no project), so it is numbered like one: QTS-RKS-STD-ITP-###### on the STD
+    counter (B3, D11) — never its old hard-coded QTS-RKS-HL-ITP- seed number, which on a new database would be a shared
+    template outside the STD series (step 27 has already run there and does not run again)."""
+    from core.utils import generate_reference_no
+    number = generate_reference_no(db, "", "ITP", project_id=None)
+    return models.ITP(**{**itp_data, "referenceNo": number}, id=_seed_itp_id(ref_no))
+
+
 def seed_rebar_itp():
     db = SessionLocal()
     try:
         # Check if exists
         ref_no = "QTS-RKS-HL-ITP-000001"
-        existing = db.query(models.ITP).filter(models.ITP.referenceNo == ref_no).first()
+        existing = _seeded_itp_exists(db, ref_no)
 
         detail_data = {
             "a": [
@@ -332,7 +358,7 @@ def seed_rebar_itp():
             logger.info(f"Rebar ITP already exists, skipping seed: {ref_no}")
         else:
             logger.info(f"Creating new Rebar ITP: {ref_no}")
-            new_itp = models.ITP(**itp_data, id=str(uuid.uuid4()))
+            new_itp = _new_seeded_itp(db, itp_data, ref_no)
             db.add(new_itp)
 
         db.commit()
@@ -349,7 +375,7 @@ def seed_piling_itp():
     try:
         # Check if exists
         ref_no = "ITP-PL-001"
-        existing = db.query(models.ITP).filter(models.ITP.referenceNo == ref_no).first()
+        existing = _seeded_itp_exists(db, ref_no)
 
         detail_data = {
              "a": [
@@ -394,7 +420,7 @@ def seed_piling_itp():
             logger.info(f"Piling ITP already exists, skipping seed: {ref_no}")
         else:
             logger.info(f"Creating new Piling ITP: {ref_no}")
-            new_itp = models.ITP(**itp_data, id=str(uuid.uuid4()))
+            new_itp = _new_seeded_itp(db, itp_data, ref_no)
             db.add(new_itp)
 
         db.commit()
@@ -410,7 +436,7 @@ def seed_formwork_itp():
     db = SessionLocal()
     try:
         ref_no = "QTS-RKS-HL-ITP-000002"
-        existing = db.query(models.ITP).filter(models.ITP.referenceNo == ref_no).first()
+        existing = _seeded_itp_exists(db, ref_no)
 
         detail_data = {
             "a": [
@@ -564,7 +590,7 @@ def seed_formwork_itp():
             logger.info(f"Formwork ITP already exists, skipping seed: {ref_no}")
         else:
             logger.info(f"Creating new Formwork ITP: {ref_no}")
-            new_itp = models.ITP(**itp_data, id=str(uuid.uuid4()))
+            new_itp = _new_seeded_itp(db, itp_data, ref_no)
             db.add(new_itp)
             db.commit()
             logger.info("Formwork ITP seeded successfully.")
@@ -580,7 +606,7 @@ def seed_excavation_itp():
     db = SessionLocal()
     try:
         ref_no = "QTS-RKS-HL-ITP-000018"
-        existing = db.query(models.ITP).filter(models.ITP.referenceNo == ref_no).first()
+        existing = _seeded_itp_exists(db, ref_no)
 
         detail_data = {
             "a": [
@@ -733,7 +759,7 @@ def seed_excavation_itp():
             logger.info(f"Excavation ITP already exists, skipping seed: {ref_no}")
         else:
             logger.info(f"Creating new Excavation ITP: {ref_no}")
-            new_itp = models.ITP(**itp_data, id=str(uuid.uuid4()))
+            new_itp = _new_seeded_itp(db, itp_data, ref_no)
             db.add(new_itp)
             db.commit()
             logger.info("Excavation ITP seeded successfully.")

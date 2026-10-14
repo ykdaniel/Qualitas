@@ -55,7 +55,7 @@ def test_an_ordinary_noi_has_its_row_at_once_and_repeated_backfills_add_nothing(
     c = env.login("noi_a")
     noi_id = _create(c).json()["id"]
     before = _rows(env)
-    assert list(before) == [noi_id] and before[noi_id][1] == "Q-WorkFlow-000001"
+    assert list(before) == [noi_id] and before[noi_id][1] == "Q-WorkFlow-PA-000001"   # per project (B3; was Q-WorkFlow-000001)
     for _ in range(3):
         _backfill()
     assert _rows(env) == before                                                        # same row, same id, same number, same timestamp

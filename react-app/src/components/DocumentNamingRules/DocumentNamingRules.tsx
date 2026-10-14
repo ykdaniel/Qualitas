@@ -7,7 +7,8 @@ import { useAuth } from '../../context/AuthContext';
 import { materialText } from '../MaterialSubmittal/materialText';
 import { getNamingRules, updateNamingRules, NamingRuleApi } from '../../services/api';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { changedRules, exampleNumber, mergeRules, NamingRuleChange, NamingRuleValue } from './namingRules';
+import { changedRules, exampleNumber, EXAMPLE_PROJECT, mergeRules, NamingRuleChange, NamingRuleValue, prefixProblem } from './namingRules';
+import { useProjectStore } from '../../store/projectStore';
 import styles from './DocumentNamingRules.module.css';
 
 interface RuleDef extends NamingRuleValue {
@@ -25,20 +26,20 @@ type NamingRuleItem = RuleDef;
 // Known doc types, in page order, with their names and notes. The backend seeds its own list (routers/settings.py
 // DEFAULT_NAMING_RULES); a type it has that is missing here is still shown, after these, under its code (see mergeRules).
 const DEFAULT_RULE_DEFS: RuleDef[] = [
-  { id: 'itp',       moduleName: 'ITP',              prefix: 'QTS-RKS-[ABBREV]-ITP-', sequenceDigits: 6 },
-  { id: 'noi',       moduleName: 'NOI',              prefix: 'QTS-RKS-[ABBREV]-NOI-', sequenceDigits: 6 },
-  { id: 'itr',       moduleName: 'ITR',              prefix: 'QTS-RKS-[ABBREV]-ITR-', sequenceDigits: 6 },
-  { id: 'ncr',       moduleName: 'NCR',              prefix: 'QTS-RKS-[ABBREV]-NCR-', sequenceDigits: 6 },
-  { id: 'obs',       moduleName: 'OBS',              prefix: 'QTS-RKS-[ABBREV]-OBS-', sequenceDigits: 6 },
-  { id: 'pqp',       moduleName: 'PQP',              prefix: 'QTS-RKS-[ABBREV]-PQP-', sequenceDigits: 6 },
-  { id: 'followup',  moduleName: 'Follow up Issue',  prefix: 'QTS-RKS-[ABBREV]-FUI-', sequenceDigits: 6, nameKey: 'followup.title' },
-  { id: 'fat',       moduleName: 'FAT',              prefix: 'QTS-RKS-[ABBREV]-FAT-', sequenceDigits: 6, noteKey: 'namingRules.note.fat', unused: true },
-  { id: 'audit',     moduleName: 'Audit',            prefix: 'QTS-RKS-[ABBREV]-AUD-', sequenceDigits: 6, nameKey: 'audit.title' },
-  { id: 'checklist', moduleName: 'Checklist',        prefix: 'QTS-RKS-[ABBREV]-CHK-', sequenceDigits: 6 },
-  { id: 'osd',       moduleName: 'OSD',              prefix: 'QTS-RKS-[ABBREV]-OSD-', sequenceDigits: 6 },
-  { id: 'meeting',   moduleName: 'Meeting Minutes',  prefix: 'QTS-RKS-[ABBREV]-MOM-', sequenceDigits: 6, nameKey: 'meetingMinutes.title', noteKey: 'namingRules.note.meeting' },
+  { id: 'itp',       moduleName: 'ITP',              prefix: 'QTS-RKS-[PROJECT]-ITP-', sequenceDigits: 6 },
+  { id: 'noi',       moduleName: 'NOI',              prefix: 'QTS-RKS-[PROJECT]-NOI-', sequenceDigits: 6 },
+  { id: 'itr',       moduleName: 'ITR',              prefix: 'QTS-RKS-[PROJECT]-ITR-', sequenceDigits: 6 },
+  { id: 'ncr',       moduleName: 'NCR',              prefix: 'QTS-RKS-[PROJECT]-NCR-', sequenceDigits: 6 },
+  { id: 'obs',       moduleName: 'OBS',              prefix: 'QTS-RKS-[PROJECT]-OBS-', sequenceDigits: 6 },
+  { id: 'pqp',       moduleName: 'PQP',              prefix: 'QTS-RKS-[PROJECT]-PQP-', sequenceDigits: 6 },
+  { id: 'followup',  moduleName: 'Follow up Issue',  prefix: 'QTS-RKS-[PROJECT]-FUI-', sequenceDigits: 6, nameKey: 'followup.title' },
+  { id: 'fat',       moduleName: 'FAT',              prefix: 'QTS-RKS-[PROJECT]-FAT-', sequenceDigits: 6, noteKey: 'namingRules.note.fat', unused: true },
+  { id: 'audit',     moduleName: 'Audit',            prefix: 'QTS-RKS-[PROJECT]-AUD-', sequenceDigits: 6, nameKey: 'audit.title' },
+  { id: 'checklist', moduleName: 'Checklist',        prefix: 'QTS-RKS-[PROJECT]-CHK-', sequenceDigits: 6 },
+  { id: 'osd',       moduleName: 'OSD',              prefix: 'QTS-RKS-[PROJECT]-OSD-', sequenceDigits: 6 },
+  { id: 'meeting',   moduleName: 'Meeting Minutes',  prefix: 'QTS-RKS-[PROJECT]-MOM-', sequenceDigits: 6, nameKey: 'meetingMinutes.title', noteKey: 'namingRules.note.meeting' },
   // MATERIAL-SUBMITTAL: its name comes from the module's own text file, not from LanguageContext (see materialText.ts)
-  { id: 'msa',       moduleName: 'Material',         prefix: 'QTS-RKS-[ABBREV]-MSA-', sequenceDigits: 6 },
+  { id: 'msa',       moduleName: 'Material',         prefix: 'QTS-RKS-[PROJECT]-MSA-', sequenceDigits: 6 },
 ];
 
 const toValues = (rules: NamingRuleValue[]): NamingRuleValue[] =>
@@ -48,6 +49,8 @@ const DocumentNamingRules: React.FC = () => {
   const { t, language } = useLanguage();
   const { hasPermission } = useAuth();
   const canEdit = hasPermission('settings:manage:all');
+  // examples show the current project's code (REF-PROJECT-SEQ-2026-001 B3); ABC in "All projects"
+  const exampleCode = useProjectStore(state => state.currentProject?.code) || EXAMPLE_PROJECT;
 
   const [rules, setRules] = useState<NamingRuleItem[]>(DEFAULT_RULE_DEFS);
   const [savedRules, setSavedRules] = useState<NamingRuleValue[] | null>(null);
@@ -101,15 +104,18 @@ const DocumentNamingRules: React.FC = () => {
 
     // An unused rule cannot be edited here, so its stored value must not be able to block saving the others.
     const editable = rules.filter((r) => !r.unused);
-    const emptyRule = editable.find((r) => !r.prefix || !r.prefix.trim());
-    if (emptyRule) {
-      setSaveError(`${moduleLabel(emptyRule)}: ${t('namingRules.errorEmptyPrefix') || 'Prefix cannot be empty.'}`);
-      return;
-    }
-    const missingAbbrev = editable.find((r) => !r.prefix.includes('[ABBREV]'));
-    if (missingAbbrev) {
-      setSaveError(`${moduleLabel(missingAbbrev)}: ${t('namingRules.errorMissingAbbrev') || 'Prefix must include the [ABBREV] placeholder.'}`);
-      return;
+    // the same checks as the backend (routers/settings.py): [PROJECT] required, [ABBREV] refused, KM exempt
+    const PROBLEM_TEXT = {
+      empty: t('namingRules.errorEmptyPrefix') || 'Prefix cannot be empty.',
+      project: t('namingRules.errorMissingProject'),
+      abbrev: t('namingRules.errorAbbrevRetired'),
+    };
+    for (const rule of editable) {
+      const problem = prefixProblem(rule.id, rule.prefix);
+      if (problem) {
+        setSaveError(`${moduleLabel(rule)}: ${PROBLEM_TEXT[problem]}`);
+        return;
+      }
     }
     const seenPrefixes = new Map<string, string>();
     for (const rule of rules) {
@@ -192,7 +198,7 @@ const DocumentNamingRules: React.FC = () => {
                         value={rule.prefix}
                         disabled={rule.unused}
                         onChange={(e) => handlePrefixChange(rule.id, e.target.value)}
-                        placeholder="e.g. QTS-RKS-[ABBREV]-NCR-"
+                        placeholder="e.g. QTS-RKS-[PROJECT]-NCR-"
                       />
                     </TableCell>
                     <TableCell>
@@ -206,7 +212,7 @@ const DocumentNamingRules: React.FC = () => {
                         onChange={(e) => handleSequenceDigitsChange(rule.id, Number(e.target.value))}
                       />
                     </TableCell>
-                    <TableCell><span className={styles.example}>{exampleNumber(rule.prefix, rule.sequenceDigits)}</span></TableCell>
+                    <TableCell><span className={styles.example}>{exampleNumber(rule.prefix, rule.sequenceDigits, exampleCode)}</span></TableCell>
                     <TableCell className={styles.noteCell}>{rule.noteKey ? t(rule.noteKey) : ''}</TableCell>
                   </TableRow>
                 ))}
@@ -220,7 +226,7 @@ const DocumentNamingRules: React.FC = () => {
           </button>
         ) : null} />
         <p className={styles.hint}>
-          <strong>{t('namingRules.hint')}：</strong> {t('namingRules.hintContent')}
+          <strong>{t('namingRules.hint')}：</strong> {t('namingRules.hintContentProject')}
         </p>
       </div>
 
@@ -233,9 +239,9 @@ const DocumentNamingRules: React.FC = () => {
               {pendingChanges.map(({ rule, before }) => (
                 <li key={rule.id}>
                   <strong>{moduleLabel(rule)}</strong>
-                  <span className={styles.example}>{exampleNumber(before.prefix, before.sequenceDigits)}</span>
+                  <span className={styles.example}>{exampleNumber(before.prefix, before.sequenceDigits, exampleCode)}</span>
                   →
-                  <span className={styles.example}>{exampleNumber(rule.prefix, rule.sequenceDigits)}</span>
+                  <span className={styles.example}>{exampleNumber(rule.prefix, rule.sequenceDigits, exampleCode)}</span>
                 </li>
               ))}
             </ul>

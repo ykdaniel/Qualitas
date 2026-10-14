@@ -60,7 +60,7 @@ class OSDService:
 
             if not data.get('documentNumber'):
                 data['documentNumber'] = generate_reference_no(
-                    self.repo.db, vendor_name or '', 'OSD'
+                    self.repo.db, vendor_name or '', 'OSD', project_id=data.get('project_id')
                 )
 
             db_osd = models.OSD(**data)

@@ -58,6 +58,10 @@ export const createColumns = (
                 return (
                     <div className={cn("text-center font-medium text-[#8a6a3a] underline-offset-2 group-hover:underline", isVoid && "line-through text-gray-400")}>
                         {row.getValue("referenceNo") || '-'}
+                        {/* the original document number (REF-PROJECT-SEQ-2026-001 B3), found by the list search too */}
+                        {row.original.external_doc_no && (
+                            <div className="text-xs font-normal text-gray-500 no-underline">{row.original.external_doc_no}</div>
+                        )}
                     </div>
                 );
             },
