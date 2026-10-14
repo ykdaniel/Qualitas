@@ -122,6 +122,8 @@ def update_itp(
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise                       # a refusal already shaped for HTTP (e.g. 403 SHARED_TEMPLATE_ADMIN_ONLY) keeps its status
     except Exception as e:
         import traceback
         logger.error(f"Error updating ITP {itp_id}: {str(e)}")

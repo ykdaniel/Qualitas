@@ -85,7 +85,8 @@ def _itr(env, project, vendor, status="In Progress", due=FUTURE, **cols):
 
 
 def _template(env, activity="Rebar"):
-    """A blank template made by the unscoped account (any account may reference a template by id)."""
+    """A blank template made by the unscoped account scU (a role named admin — since REF-PROJECT-SEQ B2 the only kind
+    of account that may create a Checklist template; it gets no project and no contractor)."""
     r = env.login("scU").post("/api/checklist/", json={
         "activity": activity, "date": "2026-09-20", "status": "Ongoing",
         "detail_data": json.dumps({"items": [ITEM, ITEM2]})})
@@ -94,10 +95,11 @@ def _template(env, activity="Rebar"):
 
 
 def _scoped_template(env, activity="Rebar"):
-    """A template made by contractor A in project P-A. Since 2026-09-20 the SOURCE template must be readable by the
-    account that links it, so scoped accounts link templates of their own scope (the unscoped editor's NULL-owner
-    template is deliberately NOT a public template — see section 5)."""
-    return _own_template(env.login("scA"), "P-A", "Accept Co", activity=activity)
+    """A template owned by project P-A and contractor A. Since 2026-09-20 the SOURCE template must be readable by the
+    account that links it, so scoped accounts link templates of their own scope (a template with no project and no
+    contractor is a shared template since REF-PROJECT-SEQ B2, readable in every project and — naming no contractor —
+    by every contractor too; see section 5)."""
+    return _own_template(env, "P-A", "Accept Co", activity=activity)
 
 
 def _instances(env, itr_id):
@@ -416,15 +418,25 @@ def test_stats_scope_is_what_makes_the_difference(world, monkeypatch):
 # checks now: target ITR scope (unchanged), source template readable (new, same rule as GET), and the new
 # instance's ownership from the target ITR (previous fix) — none stands in for another.
 
-def _own_template(client, project=None, contractor=None, activity="Scoped template"):
+def _own_template(env, project=None, contractor=None, activity="Scoped template"):
+    """A template OWNED by a project (and a contractor): the kind a project member created before REF-PROJECT-SEQ B2
+    (B1 filled in the member's project). Since B2 (user's decision 2026-10-13) only the system administrator creates a
+    template and a new one never belongs to a project, so the administrator scU authors it (the contractor through
+    the API, as before) and the project is then set on the row — exactly the ownership those earlier rows carry."""
     body = {"activity": activity, "date": "2026-09-20", "status": "Ongoing", "detail_data": json.dumps({"items": [ITEM, ITEM2]})}
-    if project:
-        body["project_id"] = project
     if contractor:
         body["contractor"] = contractor
-    r = client.post("/api/checklist/", json=body)
+    r = env.login("scU").post("/api/checklist/", json=body)
     assert r.status_code == 200, r.text
-    return r.json()["id"]
+    tpl_id = r.json()["id"]
+    if project:
+        db = env.Session()
+        try:
+            db.get(models.Checklist, tpl_id).project_id = project
+            db.commit()
+        finally:
+            db.close()
+    return tpl_id
 
 
 def _everything(env):
@@ -445,7 +457,7 @@ def _everything(env):
 
 def test_the_reproduced_gap_direct_read_404_means_link_404_and_nothing_is_written(world):
     env = world
-    tpl = _own_template(env.login("scA"), "P-A", "Accept Co")                          # A's own template
+    tpl = _own_template(env, "P-A", "Accept Co")                          # A's own template
     b = env.login("scB")
     itr_b = _itr(env, "P-A", "ACC-V2")                                                # B's own, in-scope ITR
     assert b.get(f"/api/checklist/{tpl}/").status_code == 404                          # direct read: refused
@@ -458,7 +470,7 @@ def test_the_reproduced_gap_direct_read_404_means_link_404_and_nothing_is_writte
 
 def test_missing_and_out_of_scope_templates_answer_identically_and_leak_nothing(world):
     env = world
-    tpl = _own_template(env.login("scA"), "P-A", "Accept Co", activity="Secret activity name")
+    tpl = _own_template(env, "P-A", "Accept Co", activity="Secret activity name")
     b = env.login("scB")
     itr_b = _itr(env, "P-A", "ACC-V2")
     out_of_scope = _link(b, itr_b, tpl)
@@ -471,7 +483,7 @@ def test_missing_and_out_of_scope_templates_answer_identically_and_leak_nothing(
 
 def test_a_template_from_another_project_is_refused_even_when_the_contractor_matches(world):
     env = world
-    tpl_c = _own_template(env.login("scC"), "P-B", "Accept Co")                       # project P-B, contractor V1
+    tpl_c = _own_template(env, "P-B", "Accept Co")                       # project P-B, contractor V1
     a = env.login("scA")                                                              # project P-A, contractor V1
     itr_a = _itr(env, "P-A", "ACC-V1")
     assert a.get(f"/api/checklist/{tpl_c}/").status_code == 404
@@ -483,7 +495,7 @@ def test_a_template_from_another_project_is_refused_even_when_the_contractor_mat
 def test_a_readable_template_does_not_open_an_itr_outside_the_scope(world):
     env = world
     a = env.login("scA")
-    tpl = _own_template(a, "P-A", "Accept Co")
+    tpl = _own_template(env, "P-A", "Accept Co")
     assert a.get(f"/api/checklist/{tpl}/").status_code == 200                          # source is fine ...
     for other_itr in (_itr(env, "P-A", "ACC-V2"), _itr(env, "P-B", "ACC-V1")):         # ... the TARGET is not A's to write to
         before = _everything(env)
@@ -494,7 +506,7 @@ def test_a_readable_template_does_not_open_an_itr_outside_the_scope(world):
 def test_a_legitimate_link_still_works_and_the_instance_takes_the_target_itrs_ownership(world):
     env = world
     a = env.login("scA")
-    tpl = _own_template(a, "P-A", "Accept Co")
+    tpl = _own_template(env, "P-A", "Accept Co")
     itr = _itr(env, "P-A", "ACC-V1")
     assert _link(a, itr, tpl).status_code == 200
     (inst,) = _instances(env, itr)
@@ -507,7 +519,7 @@ def test_source_readable_and_target_ownership_are_different_checks(world):
     """A project-only account can read a template of its project made by contractor V1 and link it into a V2 ITR of the
     same project: the instance gets the ITR's contractor (V2), NOT the template's."""
     env = world
-    tpl = _own_template(env.login("scA"), "P-A", "Accept Co")
+    tpl = _own_template(env, "P-A", "Accept Co")
     p = env.login("scP")
     assert p.get(f"/api/checklist/{tpl}/").status_code == 200
     itr_v2 = _itr(env, "P-A", "ACC-V2")
@@ -519,10 +531,10 @@ def test_source_readable_and_target_ownership_are_different_checks(world):
 
 
 @pytest.mark.parametrize("who,project,vendor,expect", [
-    ("scA", None, None, 404),              # no project, no contractor: NOT a public template for a scoped account
+    ("scA", None, None, 200),              # no project, no contractor: a SHARED template naming no contractor — every contractor may cite it (REF-PROJECT-SEQ B2)
     ("scA", "P-A", None, 404),             # project matches but contractor NULL: contractor-scoped account still refused
     ("scP", "P-A", None, 200),             # project-only account: matches by project (existing record_in_scope rule)
-    ("scP", None, None, 404),              # project-scoped account, template without project
+    ("scP", None, None, 200),              # project-scoped account, template without project: a SHARED template, visible in every project (D9/D10, REF-PROJECT-SEQ B2)
     ("scU", None, None, 200),              # unscoped account: everything
 ])
 def test_null_ownership_follows_the_existing_rule_for_the_read_and_for_the_link(world, who, project, vendor, expect):
@@ -556,7 +568,7 @@ def test_an_out_of_scope_instance_id_is_not_confirmed_as_an_instance(world):
 def test_the_target_itr_checks_still_apply_before_anything_else(world):
     env = world
     a = env.login("scA")
-    tpl = _own_template(a, "P-A", "Accept Co")
+    tpl = _own_template(env, "P-A", "Accept Co")
     approved = _itr(env, "P-A", "ACC-V1", status="Approved")
     nobody = env.login("nobody")                                                      # (a login itself writes an audit row: log in first)
     before = _everything(env)
@@ -570,7 +582,7 @@ def test_an_approved_itrs_history_is_untouched_by_a_refused_link(world):
     env = world
     a = env.login("scA")
     itr = _itr(env, "P-A", "ACC-V1")
-    assert _link(a, itr, _own_template(a, "P-A", "Accept Co")).status_code == 200
+    assert _link(a, itr, _own_template(env, "P-A", "Accept Co")).status_code == 200
     (inst,) = _instances(env, itr)
     assert a.put(f"/api/checklist/{inst['id']}/", json=_pass_body()).status_code == 200
     db = env.Session()
@@ -579,7 +591,7 @@ def test_an_approved_itrs_history_is_untouched_by_a_refused_link(world):
     db.add(approver); db.flush(); db.add(models.UserProject(user_id=approver.id, project_id="P-A")); db.commit(); db.close()
     appr = env.login("scAppr")
     assert appr.put(f"/api/itr/{itr}", json={"status": "Approved"}).status_code == 200
-    foreign = _own_template(env.login("scC"), "P-B", "Accept Co")
+    foreign = _own_template(env, "P-B", "Accept Co")
     before = _everything(env)
     assert _link(appr, itr, foreign).status_code in (400, 404)                        # Approved parent or foreign source — refused either way
     assert _everything(env) == before
@@ -589,7 +601,7 @@ def test_an_approved_itrs_history_is_untouched_by_a_refused_link(world):
 def test_removing_the_source_check_reopens_the_hole(world, monkeypatch):
     """Mutation check: make the service treat every Checklist as in scope and the reproduced 'read 404, link 200' returns."""
     env = world
-    tpl = _own_template(env.login("scA"), "P-A", "Accept Co")
+    tpl = _own_template(env, "P-A", "Accept Co")
     b = env.login("scB")
     itr_b = _itr(env, "P-A", "ACC-V2")
     assert _link(b, itr_b, tpl).status_code == 404

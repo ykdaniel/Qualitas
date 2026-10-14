@@ -16,6 +16,7 @@ import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { RowSelectionState } from '@tanstack/react-table';
 import { useDebounce } from '../../hooks/useDebounce';
+import { useCreateGate } from '../../hooks/useCreateGate';
 import { runSaveFlow, sameWrite, SaveOutcome } from '../../utils/saveFlow';
 import { describeSaveError } from '../../utils/saveErrors';
 
@@ -31,6 +32,7 @@ type StatusFilter = 'all' | 'open' | 'closed' | 'reject';
 
 const NOI: React.FC = () => {
   const { t } = useLanguage();
+  const createGate = useCreateGate();
   const { hasPermission } = useAuth();
   const { noiList, loading, error, refetch, addNOI, addBulkNOI, updateNOI, deleteNOI } = useNOIStore();
   // The last successful record write of the open modal (id + serialized payload) — see runSaveFlow / sameWrite.
@@ -357,12 +359,14 @@ const NOI: React.FC = () => {
             />
           </div>
           {hasPermission('noi:create:all') && (
-            <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+            <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}
+              disabled={createGate.disabled} title={createGate.title}>
               {t('noi.addNew')}
             </button>
           )}
           {hasPermission('noi:create:all') && (
-            <button type="button" className={shellStyles.addNewButtonAlt} onClick={() => setIsBulkModalOpen(true)}>
+            <button type="button" className={shellStyles.addNewButtonAlt} onClick={() => setIsBulkModalOpen(true)}
+              disabled={createGate.disabled} title={createGate.title}>
               {t('noi.bulkAdd')}
             </button>
           )}

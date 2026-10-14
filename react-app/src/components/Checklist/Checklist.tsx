@@ -8,7 +8,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { Plus, Printer, Info, MapPin, CheckCircle, AlertCircle, Trash2, User, Signature, History, Search, ArrowLeft, FileText } from 'lucide-react';
-import { useChecklistStore, ChecklistRecord, isTemplateHistoricallyProtected } from '../../store/checklistStore';
+import { useChecklistStore, ChecklistRecord, isTemplateHistoricallyProtected, isSharedChecklistTemplate } from '../../store/checklistStore';
 import { showRefusal } from '../../store/refusalStore';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
@@ -59,11 +59,15 @@ const itpDatabase: ItpItemDefinition[] = [
 
 const Checklist: React.FC = () => {
     const { t } = useLanguage();
-    const { hasPermission } = useAuth();
+    const { hasPermission, user } = useAuth();
+    // Checklist templates are shared by every project: only a system administrator creates, changes or deletes one
+    // (REF-PROJECT-SEQ-2026-001 B2; the server refuses anyone else with SHARED_TEMPLATE_ADMIN_ONLY).
+    const isAdmin = !!user?.is_admin;
     const navigate = useNavigate();
     const { records, deleteRecord, addRecord, updateRecord, refreshRecords } = useChecklistStore();
     const [view, setView] = useState<'list' | 'editor'>('list');
     const [editingRecord, setEditingRecord] = useState<ChecklistRecord | null>(null);
+    const sharedTemplateLocked = !!editingRecord && !isAdmin && isSharedChecklistTemplate(editingRecord);
     const [saving, setSaving] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const debouncedSearch = useDebounce(searchQuery, 500);
@@ -187,7 +191,7 @@ const Checklist: React.FC = () => {
         }
     }, [deleteRecord, t]);
 
-    const checklistColumns = useMemo(() => createColumns(handleDelete, t), [handleDelete, t]);
+    const checklistColumns = useMemo(() => createColumns(handleDelete, t, isAdmin), [handleDelete, t, isAdmin]);
 
     return (
         <div className={shellStyles.container}>
@@ -219,7 +223,8 @@ const Checklist: React.FC = () => {
                                 />
                             </div>
                             {hasPermission('checklist:create:all') && (
-                                <button type="button" onClick={handleAddNew} className={shellStyles.addNewButton}>
+                                <button type="button" onClick={handleAddNew} className={shellStyles.addNewButton}
+                                    disabled={!isAdmin} title={isAdmin ? undefined : t('refusal.code.SHARED_TEMPLATE_ADMIN_ONLY')}>
                                     <Plus size={16} /> {t('checklist.addNew') || 'New Template'}
                                 </button>
                             )}
@@ -258,8 +263,9 @@ const Checklist: React.FC = () => {
                     // unknown/evidence_recorded_at) can't be safely edited as if it
                     // were clean: locked read-only regardless of permission, with
                     // its original content preserved untouched.
+                    sharedTemplateReadOnly={sharedTemplateLocked}
                     readOnly={
-                        (!!editingRecord && isTemplateHistoricallyProtected(editingRecord))
+                        (!!editingRecord && isTemplateHistoricallyProtected(editingRecord)) || sharedTemplateLocked
                             ? true
                             : !(
                                 !editingRecord
@@ -328,13 +334,15 @@ const Checklist: React.FC = () => {
 };
 
 
-const ChecklistEditor = ({ record, onCancel, backToItp = false, onSave, saving, readOnly = false, isBareTemplate = false, canReopen = false, onReopen, selectedItpIndex, dynamicItpDatabase }: {
+const ChecklistEditor = ({ record, onCancel, backToItp = false, onSave, saving, readOnly = false, sharedTemplateReadOnly = false, isBareTemplate = false, canReopen = false, onReopen, selectedItpIndex, dynamicItpDatabase }: {
     record: ChecklistRecord | null,
     onCancel: () => void,
     backToItp?: boolean,
     onSave: (data: any) => Promise<void>,
     saving?: boolean,
     readOnly?: boolean,
+    /** a shared template opened by someone who is not a system administrator (shown as a notice; readOnly is set too) */
+    sharedTemplateReadOnly?: boolean,
     isBareTemplate?: boolean,
     canReopen?: boolean,
     onReopen?: () => Promise<void>,
@@ -548,6 +556,12 @@ const ChecklistEditor = ({ record, onCancel, backToItp = false, onSave, saving, 
                     <div className={styles.templateBanner}>
                         <Info size={16} />
                         {t('checklist.templateModeBanner') || 'Template Mode — maintain inspection items and acceptance criteria here. Fill in actual inspection results after linking this template within an ITR.'}
+                    </div>
+                )}
+                {sharedTemplateReadOnly && (
+                    <div className={styles.templateBanner}>
+                        <Info size={16} />
+                        {t('project.sharedTemplateReadOnly')}
                     </div>
                 )}
 

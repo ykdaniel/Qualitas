@@ -121,10 +121,10 @@ def test_the_expected_number_is_what_the_next_create_gets_and_reserves_nothing(n
     assert first.status_code == 200, first.text
     assert c.get("/api/noi/next-reference", params={"contractor": "Accept Co"}).json() == first.json()   # asking twice takes nothing
     assert _sequences(env) == []
-    created = _create(c).json()
+    created = _create(c, project_id="P-A").json()           # an admin names the project it creates in (REF-PROJECT-SEQ B2, G1)
     assert created["referenceNo"] == first.json()["referenceNo"]
     nxt = c.get("/api/noi/next-reference", params={"contractor": "Accept Co"}).json()["referenceNo"]
-    assert nxt != created["referenceNo"] and _create(c).json()["referenceNo"] == nxt
+    assert nxt != created["referenceNo"] and _create(c, project_id="P-A").json()["referenceNo"] == nxt
     other = c.get("/api/noi/next-reference", params={"contractor": "Beta Co"}).json()["referenceNo"]
     assert "-BET-" in other and other.endswith("000001")
 

@@ -17,6 +17,7 @@ import VendorStatsPanel from './VendorStatsPanel';
 import ScheduleMatrix from './ScheduleMatrix';
 import AuditTemplatesPanel from './AuditTemplatesPanel';
 import { Search, Plus, AlertCircle, X } from 'lucide-react';
+import { useCreateGate } from '../../hooks/useCreateGate';
 
 // Rows shown in the schedule (all of them when a vendor is selected).
 const SCHEDULE_VENDOR_LIMIT = 5;
@@ -32,6 +33,7 @@ const parseLocalDate = (value: string): Date | null => {
 
 const Audit: React.FC = () => {
     const { t, language } = useLanguage();
+    const createGate = useCreateGate();
     const locale = language === 'zh' ? 'zh-TW' : 'en-US';
     const { hasPermission } = useAuth();
     const { auditList, deleteAudit, error, clearError, loading } = useAuditStore();
@@ -290,7 +292,8 @@ const Audit: React.FC = () => {
                         />
                     </div>
                     {hasPermission('audit:create:all') && (
-                        <button className={shellStyles.addNewButton} onClick={handleAddNew}>
+                        <button className={shellStyles.addNewButton} onClick={handleAddNew}
+                            disabled={createGate.disabled} title={createGate.title}>
                             <Plus size={16} />
                             {t('audit.addNew') || 'Add New'}
                         </button>

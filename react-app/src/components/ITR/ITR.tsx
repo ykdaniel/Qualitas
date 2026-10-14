@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Hammer, CheckCircle2, XCircle, AlertTriangle, BarChart3, Search } from 'lucide-react';
 import { useDebounce } from '../../hooks/useDebounce';
+import { useCreateGate } from '../../hooks/useCreateGate';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useITRStats, isITROverdue } from '../../hooks/useITRStats';
@@ -24,6 +25,7 @@ type StatusFilter = 'all' | 'inProgress' | 'approved' | 'reject' | 'void' | 'ove
 
 const ITR: React.FC = () => {
     const { t } = useLanguage();
+    const createGate = useCreateGate();
     const { hasPermission } = useAuth();
     const canEdit = hasPermission('itr:update:all');
     const navigate = useNavigate();
@@ -358,7 +360,8 @@ const ITR: React.FC = () => {
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
                     </div>
-                    <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+                    <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}
+                        disabled={createGate.disabled} title={createGate.title}>
                         {t('itr.addNew') || '+ New ITR'}
                     </button>
                 </div>

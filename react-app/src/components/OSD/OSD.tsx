@@ -12,6 +12,7 @@ import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { OSDDetailModal, OSDDetailData, PendingUploads } from './OSDModals';
 import { useDebounce } from '../../hooks/useDebounce';
+import { useCreateGate } from '../../hooks/useCreateGate';
 import { uploadFiles, deleteFile } from '../../services/api';
 import { useOSDStats } from '../../hooks/useOSDStats';
 import { runSaveFlow, type SaveOutcome } from '../../utils/saveFlow';
@@ -21,6 +22,7 @@ type StatusFilter = 'all' | 'open' | 'closed' | 'void';
 
 const OSD: React.FC = () => {
   const { t } = useLanguage();
+  const createGate = useCreateGate();
   const { hasPermission } = useAuth();
   const { getActiveContractors } = useContractorsStore();
   const { osdList, loading, error, refetch, addOSD, updateOSD, deleteOSD } = useOSDStore();
@@ -252,7 +254,8 @@ const OSD: React.FC = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <button className={shellStyles.addNewButton} onClick={handleAddNew}>
+          <button className={shellStyles.addNewButton} onClick={handleAddNew}
+            disabled={createGate.disabled} title={createGate.title}>
             {t('osd.addNew')}
           </button>
         </div>

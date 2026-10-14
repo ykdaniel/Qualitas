@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import api from '../services/api';
 import { getErrorMessage } from '../utils/errorUtils';
-import { getProjectFilterParams, getCurrentProjectScopeId } from '../utils/projectFilter';
+import { getProjectFilterParams, getCurrentProjectScopeId, withCurrentProject } from '../utils/projectFilter';
 
 export interface FATItem {
     project_id?: string | null;
@@ -113,7 +113,7 @@ export const useFATStore = create<FATState>((set, get) => ({
 
     addFAT: async (fat) => {
         try {
-            const response = await api.post('/fat/', fat);
+            const response = await api.post('/fat/', withCurrentProject(fat));
             const newFAT = response.data;
             set((state) => ({ fatList: [...state.fatList, newFAT] }));
             return newFAT;

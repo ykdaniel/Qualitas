@@ -1,33 +1,30 @@
 import { useId } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
-import { useCreationProjects } from '../../hooks/useCreationProjects';
+import { useProjectStore } from '../../store/projectStore';
 import styles from './FormShell.module.css';
 
 type Props = {
-    state: ReturnType<typeof useCreationProjects>;
+    /** Kept for the callers' signature; the project is no longer chosen on the form. */
+    state?: unknown;
     value?: string | null;
-    onChange: (value: string) => void;
+    onChange?: (value: string) => void;
 };
 
-export function CreationProjectField({ state, value, onChange }: Props) {
-    const { language } = useLanguage();
+/**
+ * The project a new record is created in, shown read-only (REF-PROJECT-SEQ-2026-001 B2, D3): it is always the project
+ * the user works in (project menu for an admin, the sign-in project for everyone else) — never chosen per record.
+ * In "All projects" (admin) it reads "Shared template" (the ITP page, D18).
+ */
+export function CreationProjectField(_props: Props) {
+    const { t } = useLanguage();
     const id = useId();
-    const zh = language === 'zh';
+    const currentProject = useProjectStore(s => s.currentProject);
+    const label = currentProject
+        ? `${currentProject.code ? `${currentProject.code} — ` : ''}${currentProject.name}`
+        : t('project.sharedTemplate');
     return <div className={styles.formGroup}>
-        <label htmlFor={id}>{zh ? '專案' : 'Project'}</label>
-        <select id={id} className={styles.formSelect} value={value || ''}
-            disabled={state.loading || state.error} onChange={event => onChange(event.target.value)}>
-            <option value="">{zh ? '請選擇專案' : 'Select a project'}</option>
-            {state.projects.map(project => <option key={project.id} value={project.id}>
-                {project.code ? `${project.code} — ` : ''}{project.name}
-            </option>)}
-        </select>
-        {state.loading && <p role="status">{zh ? '正在載入專案…' : 'Loading projects…'}</p>}
-        {state.error ? <p role="alert">
-            {zh ? '專案清單載入失敗，請重試後再儲存。' : 'Projects could not be loaded. Retry before saving.'}
-            <button type="button" onClick={state.retry}>{zh ? '重試' : 'Retry'}</button>
-        </p> : <p>{zh
-            ? '若帳號限定於多個專案，請選擇本筆紀錄所屬專案；留空時沿用系統既有規則。'
-            : 'If your account is restricted to multiple projects, choose one for this record. Leaving this blank keeps the existing default rules.'}</p>}
+        <label htmlFor={id}>{t('project.label')}</label>
+        <input id={id} className={styles.formInput} value={label} readOnly
+            style={{ backgroundColor: '#D9D9D9', cursor: 'not-allowed' }} />
     </div>;
 }

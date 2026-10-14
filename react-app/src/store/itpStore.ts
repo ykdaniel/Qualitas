@@ -3,7 +3,7 @@ import api from '../services/api';
 import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
-import { getProjectFilterParams, getCurrentProjectScopeId } from '../utils/projectFilter';
+import { getProjectFilterParams, getCurrentProjectScopeId, withCurrentProject } from '../utils/projectFilter';
 
 export interface ITPInspectionItem {
     id: string;
@@ -137,7 +137,7 @@ export const useITPStore = create<ITPState>((set, get) => ({
                 detail_data: itp.detail_data as unknown,
             };
 
-            const response = await api.post('/itp/', payload);
+            const response = await api.post('/itp/', withCurrentProject(payload));
             const newITP = normalizeItem(response.data);
             set((state) => ({ itpList: [...state.itpList, newITP] }));
             return newITP;

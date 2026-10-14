@@ -3,7 +3,7 @@ import api from '../services/api';
 import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
-import { getProjectFilterParams, getCurrentProjectScopeId } from '../utils/projectFilter';
+import { getProjectFilterParams, getCurrentProjectScopeId, withCurrentProject } from '../utils/projectFilter';
 
 export interface Attendee {
     name: string;
@@ -138,7 +138,7 @@ export const useMeetingMinutesStore = create<MeetingMinutesState>((set, get) => 
 
     addMeetingMinutes: async (meeting: Omit<MeetingMinutesItem, 'id'>) => {
         try {
-            const response = await api.post('/meeting-minutes/', meeting);
+            const response = await api.post('/meeting-minutes/', withCurrentProject(meeting));
             const newMeeting = normalizeItem(response.data);
             set((state) => ({ meetingList: [...state.meetingList, newMeeting] }));
             return newMeeting;

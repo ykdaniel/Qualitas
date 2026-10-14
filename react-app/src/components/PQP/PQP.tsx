@@ -15,6 +15,7 @@ import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { PQPDetailModal, type SaveOutcome } from './PQPModals';
 import { useDebounce } from '../../hooks/useDebounce';
+import { useCreateGate } from '../../hooks/useCreateGate';
 import { uploadFiles, deleteFile } from '../../services/api';
 import { classifyDeleteResults } from '../../utils/attachmentOutcome';
 
@@ -22,6 +23,7 @@ type StatusFilter = 'all' | 'notSubmit' | 'underReview' | 'approved' | 'reject' 
 
 const PQP: React.FC = () => {
   const { t } = useLanguage();
+  const createGate = useCreateGate();
   const { hasPermission } = useAuth();
   const { getActiveContractors } = useContractorsStore();
   const { pqpList, loading, error, refetch, addPQP, updatePQP, publishPQP, deletePQP } = usePQPStore();
@@ -292,7 +294,8 @@ const PQP: React.FC = () => {
             />
           </div>
           {hasPermission('pqp:create:all') && (
-            <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+            <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}
+              disabled={createGate.disabled} title={createGate.title}>
               {t('pqp.addNew')}
             </button>
           )}

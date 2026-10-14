@@ -179,6 +179,11 @@ def run_migrations():
     # when exactly one project exists; best effort.
     _assign_projectless_records_to_the_only_project()
 
+    # 26. The same once more, for records created between batch 1 and batch 2 (REF-PROJECT-SEQ-2026-001 B2, R1 P3-2): an
+    # administrator in "All projects" could still create a project-less record until batch 2 required a project. Own
+    # flag; same rules (only when exactly one project exists; checklist instances only; ITP untouched).
+    _assign_projectless_records_to_the_only_project(PROJECTLESS_RECORDS_FLAG_B2)
+
     logger.info("Migrations completed.")
 
 class MigrationError(RuntimeError):
@@ -543,13 +548,14 @@ def _clean_legacy_bare_template_results():
 
 
 PROJECTLESS_RECORDS_FLAG = "projectless_records_to_only_project_v1"
+PROJECTLESS_RECORDS_FLAG_B2 = "projectless_records_to_only_project_b2"
 # Documents that belong to a project. ITP is NOT here: an ITP without a project is a shared template every project may
 # use (business decision D10); materials / material_submittals always had a required project.
 PROJECTLESS_RECORD_TABLES = ("noi", "itr", "ncr", "checklist", "obs", "osd", "pqp", "followup", "meeting_minutes",
                              "audits", "fat", "qworkflow")
 
 
-def _assign_projectless_records_to_the_only_project():
+def _assign_projectless_records_to_the_only_project(flag=PROJECTLESS_RECORDS_FLAG):
     """Step 25 (REF-PROJECT-SEQ-2026-001 B1, D13). Every document with project_id NULL in PROJECTLESS_RECORD_TABLES is
     assigned to the system's only project. Reference numbers are NOT touched.
 
@@ -564,7 +570,7 @@ def _assign_projectless_records_to_the_only_project():
     try:
         with engine.connect() as conn:
             if conn.execute(text("SELECT 1 FROM migration_flags WHERE flag_name = :f"),
-                            {"f": PROJECTLESS_RECORDS_FLAG}).first():
+                            {"f": flag}).first():
                 return
             projects = conn.execute(text("SELECT id, name FROM projects")).fetchall()
             pending = {}
@@ -597,9 +603,9 @@ def _assign_projectless_records_to_the_only_project():
                      "new": json.dumps({"project_id": project_id}, ensure_ascii=False),
                      "reason": "Documents without a project go to the only project (REF-PROJECT-SEQ-2026-001, D13)"})
             conn.execute(text("INSERT INTO migration_flags (flag_name, completed_at) VALUES (:f, :ts)"),
-                         {"f": PROJECTLESS_RECORDS_FLAG, "ts": now})
+                         {"f": flag, "ts": now})
             conn.commit()
-            logger.info("Assigned records without a project to %s: %s", project_name,
+            logger.info("Assigned records without a project to %s (%s): %s", project_name, flag,
                         {t: len(v) for t, v in pending.items()} or "none")
     except Exception as e:
         logger.error("Could not assign records without a project: %s", e)

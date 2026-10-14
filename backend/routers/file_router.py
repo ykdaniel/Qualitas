@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 import schemas
 from database import get_db
-from core.scope import Scope, get_scope, compute_scope, entity_in_scope, attachment_target, find_attachment_record
+from core.scope import Scope, get_scope, compute_scope, entity_in_scope, attachment_target, find_attachment_record, require_shared_template_write
 from core.attachment_access import (
     ENTITY_PERMISSIONS, IMAGE_ONLY_CATEGORIES, is_km_image_path, lock_reason, lock_refusal, require_attachment_permission, validate_category,
 )
@@ -238,6 +238,7 @@ async def upload_files(
     target = attachment_target(db, entity_type, entity_id, scope)
     if target is None:
         raise HTTPException(status_code=404, detail="Attachment target not found")
+    require_shared_template_write(target, scope)        # a shared ITP / Checklist template: system administrators only (B2)
 
     # ── The record's state may forbid changing its attachments ──
     reason = lock_reason(db, entity_type, target, category)
@@ -447,6 +448,12 @@ def delete_file(
             db.rollback()
             raise HTTPException(status_code=404, detail="Attachment not found")
     record = find_attachment_record(db, attachment.entity_type, attachment.entity_id)
+    if record is not None:
+        try:
+            require_shared_template_write(record, scope)   # a shared ITP / Checklist template: system administrators only (B2)
+        except Exception:
+            db.rollback()
+            raise
     locked = lock_refusal(db, attachment.entity_type, record, attachment.category) if record is not None else None
     if locked:
         db.rollback()

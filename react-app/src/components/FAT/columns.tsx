@@ -42,7 +42,8 @@ export const createColumns = (
                     filterOptions={activeContractors.map(c => ({ label: c.name, value: c.name }))}
                 />
             ),
-            cell: ({ row }) => <div className="text-center">{row.getValue("supplier")}</div>,
+            // no supplier: its contractor was deleted, or a record saved before FAT-SUPPLIER-NULL-2026-001
+            cell: ({ row }) => <div className="text-center">{row.getValue<string | null>("supplier") || '-'}</div>,
             filterFn: (row, id, value) => {
                 return !value || row.getValue(id) === value;
             },

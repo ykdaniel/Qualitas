@@ -9,7 +9,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 import models
-from core.scope import apply_scope
+from core.scope import apply_scope, shared_template_clause
 from core.utils import sanitize_pagination, sanitize_search_term
 
 
@@ -56,7 +56,8 @@ class ChecklistRepository:
             joinedload(models.Checklist.vendor_ref)
         )
         if project_id:
-            query = query.filter(models.Checklist.project_id == project_id)
+            # a project's checklists plus the shared bare templates (D9, REF-PROJECT-SEQ-2026-001 B2)
+            query = query.filter(or_(models.Checklist.project_id == project_id, shared_template_clause(models.Checklist)))
 
         # Search filter (recordsNo, activity, packageName)
         if filters.get('search'):

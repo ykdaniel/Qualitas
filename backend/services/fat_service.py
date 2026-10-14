@@ -12,6 +12,7 @@ from datetime import datetime
 import models
 import schemas
 from repositories.fat_repository import FATRepository
+from core.refusals import Refusal
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
 from core.utils import (
     _resolve_vendor_id,
@@ -20,6 +21,24 @@ from core.utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _supplier_vendor_id(db, supplier) -> str:
+    """The contractor id a submitted supplier name stands for (FAT-SUPPLIER-NULL-2026-001).
+
+    An empty / missing name, or one that is not a contractor, used to be written as vendor_id NULL without a word,
+    which then broke every FAT list read. Both are now coded refusals (HTTP 400 via the router).
+    """
+    if supplier is None or not str(supplier).strip():
+        raise Refusal('FAT_SUPPLIER_REQUIRED', "Supplier is required. Choose a contractor from the list.")
+    vendor_id = _resolve_vendor_id(db, supplier)
+    if vendor_id is None:
+        raise Refusal('FAT_SUPPLIER_NOT_FOUND',
+                      f"Supplier '{supplier}' is not a contractor in the system (it may have been renamed or deleted). "
+                      "Choose a contractor from the list.",
+                      name=supplier)
+    return vendor_id
+
 
 class FATService:
     """Service layer for FAT business logic"""
@@ -39,15 +58,18 @@ class FATService:
     def create_fat(self, fat_create: schemas.FATCreate,
                    user_id: int = None, username: str = None, scope=None) -> models.FAT:
         """Create a new FAT with business logic validation"""
+        # a refused supplier writes nothing, so it is checked before the transaction. A contractor account's records
+        # are always its own contractor's (enforce_create_scope below), whatever it submits — as before.
+        own_contractor = scope is not None and scope.vendor_id is not None
+        vendor_id = None if own_contractor else _supplier_vendor_id(self.repo.db, fat_create.supplier)
         try:
             data = fat_create.model_dump()
             
             # Serialize array fields to string
             data = _json_serialize(data, ['detail_data', 'attachments'])
 
-            vendor_name = data.pop('supplier', None)
-            if vendor_name:
-                data['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
+            data.pop('supplier', None)
+            data['vendor_id'] = vendor_id
 
             # P0 data isolation: confine the new record to the caller's scope
             # (forces vendor_id for contractor users; validates project_id).
@@ -89,8 +111,7 @@ class FATService:
             data = _json_serialize(data, ['detail_data', 'attachments'])
 
             if 'supplier' in data:
-                vendor_name = data.pop('supplier')
-                data['vendor_id'] = _resolve_vendor_id(self.repo.db, vendor_name)
+                data['vendor_id'] = _supplier_vendor_id(self.repo.db, data.pop('supplier'))
 
             enforce_update_scope(data, scope)
 
@@ -106,6 +127,9 @@ class FATService:
 
             self.repo.db.commit()
             return updated
+        except Refusal:
+            self.repo.db.rollback()
+            raise
         except Exception as e:
             self.repo.db.rollback()
             logger.error(f"Error updating FAT {fat_id}: {e}", exc_info=True)

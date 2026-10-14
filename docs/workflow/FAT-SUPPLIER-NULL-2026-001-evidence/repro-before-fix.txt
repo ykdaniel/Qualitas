@@ -1,0 +1,61 @@
+# BEFORE the fix — code tree 26e454d9 (== 2589c8d6), isolated stack port 8263
+## seed base: project FSN-P1, contractors FSN-V1 'FAT Supplier Co' / FSN-V2 'FAT Gone Co', FAT FSN-OK (V1), FSN-GONE (V2)
+SEED base ok
+FAT rows: [('FSN-GONE', 'FSN-V2'), ('FSN-OK', 'FSN-V1')]
+list: GET /fat/ 
+  -> HTTP 200 [{"id": "FSN-OK", "equipment": "Transformer T1 (normal)", "supplier": "FAT Supplier Co", "startDate": "2026-10-01", "endDate": "2026-10-05"}, {"id": "FSN-GONE", "equipment": "Switchgear S1 (contractor will be deleted)", "supplier": "FAT Gone Co", "startDate": "2026-10-01", "endDate": "2026-10-05"}]
+search: GET /fat/?search=Supplier 
+  -> HTTP 500 {"detail":"Internal Server Error: 'property' object has no attribute 'ilike'"}
+
+## case 1: create with supplier ""
+create-empty: POST /fat/ {"project_id": "FSN-P1", "equipment": "Probe equipment", "startDate": "2026-10-01", "endDate": "2026-10-02", "supplier": ""}
+  -> HTTP 500 {"detail":"Internal Server Error: 1 validation errors:\n  {'type': 'string_type', 'loc': ('response', 'supplier'), 'msg': 'Input should be a valid string', 'input': None, 'url': 'https://errors.pydantic.dev/2.12/v/string_type'}\n"}
+  db: [('5c230d8a-05cf-4c94-9b72-9a225a90eaf5', None)]
+list: GET /fat/ 
+  -> HTTP 500 {"detail":"Internal Server Error: 1 validation errors:\n  {'type': 'string_type', 'loc': ('response', 2, 'supplier'), 'msg': 'Input should be a valid string', 'input': None, 'url': 'https://errors.pydantic.dev/2.12/v/string_type'}\n"}
+
+
+## case 2: create with supplier "No Such Co"
+create-unknown: POST /fat/ {"project_id": "FSN-P1", "equipment": "Probe equipment", "startDate": "2026-10-01", "endDate": "2026-10-02", "supplier": "No Such Co"}
+  -> HTTP 500 {"detail":"Internal Server Error: 1 validation errors:\n  {'type': 'string_type', 'loc': ('response', 'supplier'), 'msg': 'Input should be a valid string', 'input': None, 'url': 'https://errors.pydantic.dev/2.12/v/string_type'}\n"}
+  db: [('bf0221c6-d5fb-4237-9cc0-bc3a20e6c7eb', None)]
+list: GET /fat/ 
+  -> HTTP 500 {"detail":"Internal Server Error: 1 validation errors:\n  {'type': 'string_type', 'loc': ('response', 2, 'supplier'), 'msg': 'Input should be a valid string', 'input': None, 'url': 'https://errors.pydantic.dev/2.12/v/string_type'}\n"}
+
+
+## case 1b / 2b: update FSN-OK with supplier "" / "No Such Co" / null
+update-empty: PUT /fat/FSN-OK {"supplier": ""}
+  -> HTTP 500 {"detail":"Internal Server Error: 1 validation errors:\n  {'type': 'string_type', 'loc': ('response', 'supplier'), 'msg': 'Input should be a valid string', 'input': None, 'url': 'https://errors.pydantic.dev/2.12/v/string_type'}\n"}
+  db: [('FSN-OK', None)]
+list: GET /fat/ 
+  -> HTTP 500 {"detail":"Internal Server Error: 1 validation errors:\n  {'type': 'string_type', 'loc': ('response', 0, 'supplier'), 'msg': 'Input should be a valid string', 'input': None, 'url': 'https://errors.pydantic.dev/2.12/v/string_type'}\n"}
+
+update-unknown: PUT /fat/FSN-OK {"supplier": "No Such Co"}
+  -> HTTP 500 {"detail":"Internal Server Error: 1 validation errors:\n  {'type': 'string_type', 'loc': ('response', 'supplier'), 'msg': 'Input should be a valid string', 'input': None, 'url': 'https://errors.pydantic.dev/2.12/v/string_type'}\n"}
+  db: [('FSN-OK', None)]
+list: GET /fat/ 
+  -> HTTP 500 {"detail":"Internal Server Error: 1 validation errors:\n  {'type': 'string_type', 'loc': ('response', 0, 'supplier'), 'msg': 'Input should be a valid string', 'input': None, 'url': 'https://errors.pydantic.dev/2.12/v/string_type'}\n"}
+
+
+## case 3: contractor deleted (directly in the db; the API refuses to delete a contractor a FAT cites)
+SEED drop-contractor ok
+FAT rows: [('FSN-GONE', 'FSN-V2'), ('FSN-OK', 'FSN-V1')]
+  db: [('FSN-GONE', 'FSN-V2', None)]
+list: GET /fat/ 
+  -> HTTP 500 {"detail":"Internal Server Error: 1 validation errors:\n  {'type': 'string_type', 'loc': ('response', 1, 'supplier'), 'msg': 'Input should be a valid string', 'input': None, 'url': 'https://errors.pydantic.dev/2.12/v/string_type'}\n"}
+get: GET /fat/FSN-GONE 
+  -> HTTP 500 {"detail":"Internal Server Error: 1 validation errors:\n  {'type': 'string_type', 'loc': ('response', 'supplier'), 'msg': 'Input should be a valid string', 'input': None, 'url': 'https://errors.pydantic.dev/2.12/v/string_type'}\n"}
+
+
+## related: update with null supplier / equipment / startDate / endDate (one request each)
+update-null:supplier: PUT /fat/FSN-OK {"supplier": null}
+  -> HTTP 500 {"detail":"Internal Server Error: 1 validation errors:\n  {'type': 'string_type', 'loc': ('response', 'supplier'), 'msg': 'Input should be a valid string', 'input': None, 'url': 'https://errors.pydantic.dev/2.12/v/string_type'}\n"}
+update-null:equipment: PUT /fat/FSN-OK {"equipment": null}
+  -> HTTP 500 {"detail":"Internal Server Error: 2 validation errors:\n  {'type': 'string_type', 'loc': ('response', 'equipment'), 'msg': 'Input should be a valid string', 'input': None, 'url': 'https://errors.pydantic.dev/2.12/v/string_type'}\n  {'type': 'string_type', 'loc': ('response', 'supplier'), 'msg': 'Input should be a valid string', 'input': None, 'url': 'https://errors.pydantic.dev/2.12/v/string_type'}\n"}
+update-null:startDate: PUT /fat/FSN-OK {"startDate": null}
+  -> HTTP 500 {"detail":"Internal Server Error: 3 validation errors:\n  {'type': 'string_type', 'loc': ('response', 'equipment'), 'msg': 'Input should be a valid string', 'input': None, 'url': 'https://errors.pydantic.dev/2.12/v/string_type'}\n  {'type': 'string_type', 'loc': ('response', 'supplier'), 'msg': 'Input should be a valid string', 'input': None, 'url': 'https://errors.pydantic.dev/2.12/v/string_type'}\n  {'type': 'string_type', 'loc': ('response', 'startDate'), 'msg': 'Input should be a valid string', 'input': None, 'url': 'https://errors.pydantic.dev/2.12/v/string_type'}\n"}
+update-null:endDate: PUT /fat/FSN-OK {"endDate": null}
+  -> HTTP 500 {"detail":"Internal Server Error: 4 validation errors:\n  {'type': 'string_type', 'loc': ('response', 'equipment'), 'msg': 'Input should be a valid string', 'input': None, 'url': 'https://errors.pydantic.dev/2.12/v/string_type'}\n  {'type': 'string_type', 'loc': ('response', 'supplier'), 'msg': 'Input should be a valid string', 'input': None, 'url': 'https://errors.pydantic.dev/2.12/v/string_type'}\n  {'type': 'string_type', 'loc': ('response', 'startDate'), 'msg': 'Input should be a valid string', 'input': None, 'url': 'https://errors.pydantic.dev/2.12/v/string_type'}\n  {'type': 'string_type
+  db: [('FSN-OK', None, None, None, None)]
+list: GET /fat/ 
+  -> HTTP 500 {"detail":"Internal Server Error: 4 validation errors:\n  {'type': 'string_type', 'loc': ('response', 0, 'equipment'), 'msg': 'Input should be a valid string', 'input': None, 'url': 'https://errors.pydantic.dev/2.12/v/string_type'}\n  {'type': 'string_type', 'loc': ('response', 0, 'supplier'), 'msg': 'Input should be a valid string', 'input': None, 'url': 'https://errors.pydantic.dev/2.12/v/string_type'}\n  {'type': 'string_type', 'loc': ('response', 0, 'startDate'), 'msg': 'Input should be a valid string', 'input': None, 'url': 'https://errors.pydantic.dev/2.12/v/string_type'}\n  {'type': 'st

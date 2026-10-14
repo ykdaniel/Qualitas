@@ -1899,12 +1899,42 @@ class FATUpdate(BaseModel):
                 return []
         return v
 
+    # FAT-SUPPLIER-NULL-2026-001: leaving a field out keeps it, but an explicit null used to be written to the row and
+    # then broke every list read. These three are required on create, so an update cannot clear them either.
+    # (`supplier` null / "" is refused by FATService with a coded refusal.)
+    @field_validator('equipment', 'startDate', 'endDate', mode='before')
+    @classmethod
+    def reject_null(cls, v, info):
+        if v is None:
+            raise ValueError(f'{info.field_name} cannot be null; leave it out to keep the current value')
+        return v
+
 class FAT(FATBase):
+    """FAT as read back (FAT-SUPPLIER-NULL-2026-001): the response does not re-apply the create-time rules. No supplier
+    (its contractor is gone, or a legacy row with none), no equipment or dates, dates out of order or not YYYY-MM-DD
+    are shown as stored instead of failing the whole list with 500. (A malformed detail_data / attachments value
+    written outside the API still fails validation; the API never writes one.)"""
     id: str
+    equipment: str | None = None
+    supplier: str | None = None
+    startDate: str | None = None
+    endDate: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator('startDate', 'endDate', 'moveInDate', mode='before')
+    @classmethod
+    def check_dates(cls, v):        # replaces FATBase.check_dates: normalise when possible, never refuse a stored value
+        try:
+            return validate_date_format(v)
+        except ValueError:
+            return v
+
+    @model_validator(mode='after')
+    def check_date_ranges(self):    # replaces FATBase.check_date_ranges: the order is checked on write, not on read
+        return self
 
 # --- KM Schemas ---
 class KMAttachment(BaseModel):

@@ -116,6 +116,9 @@ def create_noi(
         raise HTTPException(status_code=403, detail=str(e))
     except DateValidationError as e:
         raise HTTPException(status_code=422, detail=e.http_detail())
+    except ValueError as e:
+        # e.g. the ITP is unknown or not one the caller can see: a business refusal (400), never a 500 (B2 R1)
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/bulk/", response_model=list[schemas.NOI])
 def create_nois_bulk(
@@ -136,6 +139,9 @@ def create_nois_bulk(
         raise HTTPException(status_code=403, detail=str(e))
     except DateValidationError as e:
         raise HTTPException(status_code=422, detail=e.http_detail())
+    except ValueError as e:
+        # e.g. the ITP is unknown or not one the caller can see: a business refusal (400), never a 500 (B2 R1)
+        raise HTTPException(status_code=400, detail=str(e))
     return created
 
 @router.put("/{noi_id}/", response_model=schemas.NOI)

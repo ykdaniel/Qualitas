@@ -15,7 +15,7 @@ import pytest
 
 import models
 from services import checklist_service as svc
-from test_itr_revoke_approval_acceptance import env, ITEM  # noqa: F401
+from test_itr_revoke_approval_acceptance import env, ITEM, create_template_as_admin  # noqa: F401
 from test_checklist_pass_integrity_http import (  # noqa: F401
     ITEM2, _linked, _row, _seed_row, _audit_total, _valid_pass, _itr_row,
 )
@@ -279,11 +279,12 @@ def test_inventory_lists_legacy_fail_without_x_separating_templates_from_instanc
     from scripts.verification.checklist_itr_inventory import find_fail_without_x
     editor, _, _, itr_id, inst = _linked(env)
     _legacy_fail_without_x(env, inst)                                           # an ITR instance: O + N/A saved as Fail
-    tpl_id = editor.post("/api/checklist/", json={"activity": "Old template", "date": "2026-09-20", "status": "Ongoing",
-                                                  "detail_data": json.dumps({"items": [ITEM]})}).json()["id"]
+    # bare templates are authored by the system administrator (REF-PROJECT-SEQ B2: Checklist templates are admin-only)
+    tpl_id = create_template_as_admin(env, {"activity": "Old template", "date": "2026-09-20", "status": "Ongoing",
+                                            "detail_data": json.dumps({"items": [ITEM]})}).json()["id"]
     _seed_row(env, tpl_id, status="Fail", passCount=0, failCount=0, detail_data=_body(["/"]))   # a bare template (anomalous)
-    good_id = editor.post("/api/checklist/", json={"activity": "Real fail", "date": "2026-09-20", "status": "Ongoing",
-                                                   "detail_data": json.dumps({"items": [ITEM]})}).json()["id"]
+    good_id = create_template_as_admin(env, {"activity": "Real fail", "date": "2026-09-20", "status": "Ongoing",
+                                             "detail_data": json.dumps({"items": [ITEM]})}).json()["id"]
     _seed_row(env, good_id, status="Fail", passCount=0, failCount=1, detail_data=_body(["X"]))  # has an X: not reported
     before = (_row(env, inst), _row(env, tpl_id), _row(env, good_id), _audit_total(env))
     db = env.Session()

@@ -14,6 +14,7 @@ import { NCRDetailModal, NCRDetailData, PendingUploads } from './NCRModals';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import { useDebounce } from '../../hooks/useDebounce';
+import { useCreateGate } from '../../hooks/useCreateGate';
 import { uploadFiles, deleteFile } from '../../services/api';
 import { useNCRStats } from '../../hooks/useNCRStats';
 import { runSaveFlow, sameWrite, SaveOutcome } from '../../utils/saveFlow';
@@ -24,6 +25,7 @@ type StatusFilter = 'all' | 'open' | 'inProgress' | 'resolved' | 'closed' | 'voi
 
 const NCR: React.FC = () => {
   const { t } = useLanguage();
+  const createGate = useCreateGate();
   const { hasPermission } = useAuth();
 
   const { ncrList, loading, error, refetch, addNCR, updateNCR, deleteNCR } = useNCRStore();
@@ -363,7 +365,8 @@ const NCR: React.FC = () => {
             />
           </div>
           {hasPermission('ncr:create:all') && (
-            <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+            <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}
+              disabled={createGate.disabled} title={createGate.title}>
               {t('ncr.addNew')}
             </button>
           )}

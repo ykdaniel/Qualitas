@@ -1,7 +1,8 @@
 from typing import Optional, List
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 import models
-from core.scope import apply_scope
+from core.scope import apply_scope, shared_template_clause
 from core.utils import sanitize_pagination, sanitize_search_term
 
 class ITPRepository:
@@ -17,7 +18,8 @@ class ITPRepository:
 
         query = self.db.query(models.ITP).options(joinedload(models.ITP.vendor_ref))
         if project_id:
-            query = query.filter(models.ITP.project_id == project_id)
+            # a project's ITPs plus the shared templates every project uses (D10, REF-PROJECT-SEQ-2026-001 B2)
+            query = query.filter(or_(models.ITP.project_id == project_id, shared_template_clause(models.ITP)))
         if search:
             search = sanitize_search_term(search)
             if search:

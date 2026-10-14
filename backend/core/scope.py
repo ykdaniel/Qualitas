@@ -21,12 +21,14 @@ from dataclasses import dataclass
 from typing import Optional, FrozenSet
 
 from fastapi import Depends
+from sqlalchemy import and_, func, or_
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
 import models
 from database import get_db
 from core.security import get_current_user
+from core.refusals import RefusalHTTPException
 
 # The system administrator role — the only role that is never scoped. Recognised exactly as IAM recognises an Admin
 # (UserRepository.is_admin_role_name: the name "admin", any letter case), so a role IAM treats as ordinary can never be
@@ -118,29 +120,90 @@ def vendor_attr(model):
     return None
 
 
+def is_shared_template(record) -> bool:
+    """A shared template (business decisions D9 / D10): an ITP without a project, or a bare Checklist template (no
+    project, no ITR, not made from a template). Every project sees and cites it; only a system administrator writes it."""
+    if isinstance(record, models.ITP):
+        return record.project_id is None
+    if isinstance(record, models.Checklist):
+        # no .strip(): the same test as shared_template_clause's COALESCE(...) = '' (B2 R1 P3-3)
+        return (record.project_id is None and not (record.itrId or "")
+                and not (getattr(record, "template_id", None) or ""))
+    return False
+
+
+def shared_template_clause(model):
+    """SQL form of is_shared_template for `model`, or None when the model has no shared templates."""
+    if model is models.ITP:
+        return models.ITP.project_id.is_(None)
+    if model is models.Checklist:
+        return and_(models.Checklist.project_id.is_(None), func.coalesce(models.Checklist.itrId, "") == "",
+                    func.coalesce(models.Checklist.template_id, "") == "")
+    return None
+
+
+def require_shared_template_write(record, scope: Optional[Scope]) -> None:
+    """Only a system administrator changes a shared template (D18; Checklist templates: user's decision 2026-10-13)."""
+    if scope is not None and not scope.unrestricted and is_shared_template(record):
+        raise RefusalHTTPException(403, "Only a system administrator can change a shared template (ITP or Checklist template).",
+                                   "SHARED_TEMPLATE_ADMIN_ONLY")
+
+
+def require_same_project(linked, project_id: Optional[str], doc_type: str, number: str) -> None:
+    """A link to another document must stay inside the record's project (G2, REF-PROJECT-SEQ-2026-001 B2). A shared
+    template (an ITP without a project) may be cited from any project. Nothing to compare when either side has no
+    project (an internal call, or legacy data)."""
+    if linked is None or not project_id or is_shared_template(linked):
+        return
+    linked_project = getattr(linked, "project_id", None)
+    if linked_project is not None and linked_project != project_id:
+        raise RefusalHTTPException(400, f"{doc_type} '{number}' belongs to another project; a document can only be "
+                                        f"linked to documents of its own project.", "LINK_OTHER_PROJECT",
+                                   {"docType": doc_type, "number": number})
+
+
 def apply_scope(query, model, scope: Optional[Scope]):
-    """Filter a list query down to the rows the scope may see."""
+    """Filter a list query down to the rows the scope may see. Shared templates are visible in every project."""
     if scope is None or scope.unrestricted:
         return query
     if scope.project_ids is not None:
-        query = query.filter(model.project_id.in_(scope.project_ids))
+        in_project = model.project_id.in_(scope.project_ids)
+        shared = shared_template_clause(model)
+        query = query.filter(in_project if shared is None else or_(in_project, shared))
     if scope.vendor_id is not None:
         vattr = vendor_attr(model)
         if vattr is not None:
-            query = query.filter(vattr == scope.vendor_id)
+            shared = shared_template_clause(model)
+            own = vattr == scope.vendor_id
+            # a shared template that names no contractor is for every contractor (B2: a contractor account must be able
+            # to cite a generic template); one that names a contractor stays that contractor's
+            query = query.filter(own if shared is None else or_(own, and_(shared, vattr.is_(None))))
     return query
 
 
-def enforce_create_scope(data: dict, scope: Optional[Scope], vendor_field: str = "vendor_id") -> None:
+def enforce_create_scope(data: dict, scope: Optional[Scope], vendor_field: str = "vendor_id",
+                         allow_shared: bool = False) -> None:
     """Validate/normalise a to-be-created record's project_id / contractor against
     the caller's scope. Mutates ``data`` in place; raises :class:`ScopeForbidden`
-    on violation. No-op for unscoped callers.
+    on violation.
+
+    Every record a person creates belongs to a project (REF-PROJECT-SEQ-2026-001 B2, G1 / D3 / D7): a system
+    administrator must name it too (working in "All projects" creates nothing — 400 PROJECT_REQUIRED_FOR_CREATE), except
+    where ``allow_shared`` says a project-less record is a shared template only an administrator may create (an ITP in
+    "All projects", D18). ``scope=None`` (an internal call, e.g. a record derived from another) is left as it was.
 
     ``vendor_field`` is the dict key under which the contractor FK is written for
     this model (``vendor_id`` for most; ``contractor_id`` for Checklist).
     Call AFTER vendor name → id mapping so the contractor key is already set.
     """
-    if scope is None or scope.unrestricted:
+    if scope is None:
+        return
+    if scope.unrestricted:
+        if not data.get("project_id"):
+            if not allow_shared:
+                raise RefusalHTTPException(400, "Choose a project before creating a record: a system administrator working in "
+                                                "All projects cannot create one.", "PROJECT_REQUIRED_FOR_CREATE")
+            data["project_id"] = None          # a shared template: "" would be neither shared nor any project's (B2 R1 P3-2)
         return
     if scope.project_ids is not None:
         if not scope.project_ids:
@@ -186,10 +249,12 @@ def record_in_scope(record, scope: Optional[Scope]) -> bool:
         return False
     if scope is None or scope.unrestricted:
         return True
-    if scope.project_ids is not None and getattr(record, "project_id", None) not in scope.project_ids:
+    if scope.project_ids is not None and getattr(record, "project_id", None) not in scope.project_ids \
+            and not is_shared_template(record):
         return False
     if scope.vendor_id is not None and hasattr(record, "vendor_id") \
-            and getattr(record, "vendor_id", None) != scope.vendor_id:
+            and getattr(record, "vendor_id", None) != scope.vendor_id \
+            and not (is_shared_template(record) and getattr(record, "vendor_id", None) is None):
         return False
     return True
 

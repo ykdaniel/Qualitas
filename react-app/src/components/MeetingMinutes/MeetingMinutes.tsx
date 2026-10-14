@@ -14,6 +14,7 @@ import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns, createItemColumns } from './columns';
 import { MeetingMinutesDetailModal, MeetingMinutesDetailData, MeetingSaveResult } from './MeetingMinutesModals';
 import { useDebounce } from '../../hooks/useDebounce';
+import { useCreateGate } from '../../hooks/useCreateGate';
 import { collectRegisterItems } from './discussionLog';
 import { uploadFiles } from '../../services/api';
 import { getErrorMessage } from '../../utils/errorUtils';
@@ -27,6 +28,7 @@ const LOCKING_STATUSES = ['Published', 'Void'];
 
 const MeetingMinutes: React.FC = () => {
   const { t } = useLanguage();
+  const createGate = useCreateGate();
   const { hasPermission } = useAuth();
   const { getActiveContractors } = useContractorsStore();
   const { meetingList, loading, error, refetch, addMeetingMinutes, updateMeetingMinutes, deleteMeetingMinutes } = useMeetingMinutesStore();
@@ -351,7 +353,8 @@ const MeetingMinutes: React.FC = () => {
             />
           </div>
           {view === 'meetings' && hasPermission('meeting:create:all') && (
-            <button className={shellStyles.addNewButton} onClick={handleAddNew}>
+            <button className={shellStyles.addNewButton} onClick={handleAddNew}
+              disabled={createGate.disabled} title={createGate.title}>
               {t('meetingMinutes.addNew')}
             </button>
           )}

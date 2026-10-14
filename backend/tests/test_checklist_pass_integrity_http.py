@@ -20,7 +20,7 @@ import json
 import pytest
 
 import models
-from test_itr_revoke_approval_acceptance import env, _mk_itr, ITEM  # noqa: F401  (fixture reuse)
+from test_itr_revoke_approval_acceptance import env, _mk_itr, ITEM, create_template_as_admin  # noqa: F401  (fixture reuse)
 
 ITEM2 = {**ITEM, "item": "Cover", "criteria": ">=40mm"}
 
@@ -28,10 +28,11 @@ ITEM2 = {**ITEM, "item": "Cover", "criteria": ">=40mm"}
 # ── helpers ───────────────────────────────────────────────────────────────
 
 def _linked(env, items=None, tpl_items=None):
-    """editor links a template with `items`; returns (editor, approver, closer, itr_id, inst_id)."""
+    """the administrator authors a template with `items` (B2: templates are admin-only), editor links it; returns
+    (editor, approver, closer, itr_id, inst_id)."""
     editor, approver, closer = env.login("acc_editor"), env.login("acc_approver"), env.login("acc_closer")
     itr_id = _mk_itr(env)
-    tpl = editor.post("/api/checklist/", json={
+    tpl = create_template_as_admin(env, {
         "activity": "Rebar", "date": "2026-09-19", "status": "Ongoing",
         "detail_data": json.dumps({"items": items if items is not None else [ITEM, ITEM2]}),
     })
@@ -50,7 +51,7 @@ def _inst_id(env, itr_id):
 
 
 def _extra_instance(env, editor, itr_id, items):
-    tpl = editor.post("/api/checklist/", json={
+    tpl = create_template_as_admin(env, {                    # authored by the administrator (B2), linked by the editor
         "activity": "Second", "date": "2026-09-19", "status": "Ongoing",
         "detail_data": json.dumps({"items": items})}).json()
     assert editor.post(f"/api/itr/{itr_id}/link-checklist", params={"checklist_id": tpl["id"]}).status_code == 200

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import api from '../services/api';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
-import { getProjectFilterParams, getCurrentProjectScopeId } from '../utils/projectFilter';
+import { getProjectFilterParams, getCurrentProjectScopeId, withCurrentProject } from '../utils/projectFilter';
 
 import type { DateIssue } from '../utils/dateIssues';
 
@@ -88,7 +88,7 @@ export const useNOIStore = create<NOIState>((set, get) => ({
     addNOI: async (noi: Omit<NOIItem, 'id'>, id?: string) => {
         // A failed add/update is not written to the list-level `error`: the record modal reports it itself, once. Writing it here
         // showed the same failure again as a page banner and made a failed save look like a failed list load.
-        const response = await api.post('/noi/', id ? { ...noi, id } : noi);
+        const response = await api.post('/noi/', withCurrentProject(id ? { ...noi, id } : noi));
         const newNOI = response.data;
         set((state) => ({ noiList: [...state.noiList, newNOI] }));
         return newNOI;
@@ -96,7 +96,7 @@ export const useNOIStore = create<NOIState>((set, get) => ({
 
     addBulkNOI: async (nois: Omit<NOIItem, 'id'>[]) => {
         try {
-            const response = await api.post('/noi/bulk/', nois);
+            const response = await api.post('/noi/bulk/', nois.map(n => withCurrentProject(n)));
             const newNOIs = response.data;
             set((state) => ({ noiList: [...state.noiList, ...newNOIs] }));
             return newNOIs;

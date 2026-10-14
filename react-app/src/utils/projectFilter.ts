@@ -19,3 +19,14 @@ export const getProjectFilterParams = (): { project_id: string } | Record<string
 export const CURRENT_SCOPE_ALL = '__all__';
 export const getCurrentProjectScopeId = (): string =>
     useProjectStore.getState().currentProject?.id ?? CURRENT_SCOPE_ALL;
+
+/**
+ * The project a new record is created in (REF-PROJECT-SEQ-2026-001 B2, D3): the project the user works in — a
+ * non-admin's sign-in project, an admin's project menu choice. A payload that already names one keeps it (a record
+ * derived from another). null when an admin works in "All projects": the server then refuses the create (D7), except
+ * for an ITP, which becomes a shared template (D18).
+ */
+export const withCurrentProject = <T extends object>(payload: T): T & { project_id: string | null } => {
+    const named = (payload as { project_id?: string | null }).project_id;
+    return { ...payload, project_id: named || useProjectStore.getState().currentProject?.id || null };
+};

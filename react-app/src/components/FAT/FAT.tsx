@@ -1,7 +1,6 @@
 import { useDraftGuard } from '../Shared/LeaveGuard';
 import FormActions from '../Shared/FormActions';
 import actionStyles from '../Shared/FormActions.module.css';
-import { useCreationProjects } from '../../hooks/useCreationProjects';
 import { CreationProjectField } from '../Shared/CreationProjectField';
 import React, { useState, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -23,6 +22,7 @@ import styles from './FAT.module.css';
 import formStyles from '../Shared/FormShell.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import { useFATStats } from '../../hooks/useFATStats';
+import { useCreateGate } from '../../hooks/useCreateGate';
 import { checkDateOrder } from '../../utils/dateValidation';
 
 type StatusFilter = 'all' | 'scheduled' | 'inProgress' | 'completed' | 'cancelled';
@@ -32,6 +32,7 @@ type StatusFilter = 'all' | 'scheduled' | 'inProgress' | 'completed' | 'cancelle
 
 const FAT: React.FC = () => {
   const { t } = useLanguage();
+  const createGate = useCreateGate();
   const { hasPermission } = useAuth();
   const canCreate = hasPermission('fat:create:all');
   const canEdit = hasPermission('fat:update:all');
@@ -70,14 +71,16 @@ const FAT: React.FC = () => {
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
+      // any of these can be null in a stored record (e.g. no supplier: its contractor was deleted — FAT-SUPPLIER-NULL-2026-001)
+      const matches = (value?: string | null) => (value ?? '').toLowerCase().includes(query);
       filtered = filtered.filter(item =>
-        item.equipment.toLowerCase().includes(query) ||
-        item.supplier.toLowerCase().includes(query) ||
-        item.procedure.toLowerCase().includes(query) ||
-        item.location.toLowerCase().includes(query) ||
-        item.deliveryFrom.toLowerCase().includes(query) ||
-        item.deliveryTo.toLowerCase().includes(query) ||
-        item.siteReadiness.toLowerCase().includes(query)
+        matches(item.equipment) ||
+        matches(item.supplier) ||
+        matches(item.procedure) ||
+        matches(item.location) ||
+        matches(item.deliveryFrom) ||
+        matches(item.deliveryTo) ||
+        matches(item.siteReadiness)
       );
     }
 
@@ -111,12 +114,12 @@ const FAT: React.FC = () => {
     if (currentFatId) {
       await updateFAT(currentFatId, updates);
     } else {
-      const activeContractors = getActiveContractors();
-      const defaultSupplier = activeContractors.length > 0 ? activeContractors[0].name : '';
       const newItem: Omit<FATItem, 'id'> = {
         project_id: updates.project_id || undefined,
         equipment: updates.equipment || '',
-        supplier: updates.supplier || defaultSupplier,
+        // required, no default (FAT-SUPPLIER-NULL-2026-001): an empty choice is refused by the server
+        // (FAT_SUPPLIER_REQUIRED) and shown once, by FATEditModal.handleSave's showRefusal
+        supplier: updates.supplier || '',
         procedure: updates.procedure || '',
         location: updates.location || '',
         startDate: updates.startDate || '',
@@ -254,7 +257,8 @@ const FAT: React.FC = () => {
             />
           </div>
           {hasPermission('fat:create:all') && (
-            <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}>
+            <button type="button" className={shellStyles.addNewButton} onClick={handleAddNew}
+              disabled={createGate.disabled} title={createGate.title}>
               {t('fat.addNew')}
             </button>
           )}
@@ -571,7 +575,6 @@ interface FATEditModalProps {
   readOnly?: boolean;
 }
 const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem, onSave, onClose, readOnly = false }) => {
-  const creationProjects = useCreationProjects(!existingItem);
   const { t } = useLanguage();
   const { getActiveContractors } = useContractorsStore();
   const [formData, setFormData] = useState<Partial<FATItem>>({
@@ -609,11 +612,13 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
   const handleSave = async () => {
     setSaving(true);
     try {
-      if (!existingItem && (creationProjects.loading || creationProjects.error)) return;
       await onSave(formData);
       onClose(); // only reached on success — formData/modal are left untouched on any rejection
     } catch (err) {
-      toast.error((err as Error)?.message || 'Save failed');
+      // a coded refusal (e.g. PROJECT_REQUIRED_FOR_CREATE) shows its reason in the refusal dialog
+      // e.g. no supplier chosen / the chosen contractor no longer exists (FAT_SUPPLIER_*): shown in the user's language
+      console.error('Failed to save FAT:', err);
+      showRefusal(err, 'save');
     } finally {
       setSaving(false);
     }
@@ -631,8 +636,7 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
           <div className={formStyles.formSections}>
             <div className={formStyles.formSection}>
               <h3 className={formStyles.sectionTitle}>{t('fat.sectionInfo')}</h3>
-              {!existingItem && <CreationProjectField state={creationProjects} value={formData.project_id}
-                onChange={value => handleFieldChange('project_id', value)} />}
+              {!existingItem && <CreationProjectField />}
 
               <div className={formStyles.formGrid}>
                 <div className={formStyles.formGroup}>
@@ -775,7 +779,7 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
                   </>}
                   primary={<>
                       {!readOnly && (
-                          <button className={actionStyles.primary} onClick={handleSave} disabled={saving || (!existingItem && (creationProjects.loading || creationProjects.error))}>
+                          <button className={actionStyles.primary} onClick={handleSave} disabled={saving}>
                               {t('common.save')}
                           </button>
                       )}

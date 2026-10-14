@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import api from '../services/api';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
-import { getProjectFilterParams, getCurrentProjectScopeId } from '../utils/projectFilter';
+import { getProjectFilterParams, getCurrentProjectScopeId, withCurrentProject } from '../utils/projectFilter';
 
 export interface PQPItem {
     id: string;
@@ -93,7 +93,7 @@ export const usePQPStore = create<PQPState>((set, get) => ({
 
     addPQP: async (pqp: Omit<PQPItem, 'id'>) => {
         try {
-            const response = await api.post('/pqp/', pqp);
+            const response = await api.post('/pqp/', withCurrentProject(pqp));
             const newPQP = response.data;
             set((state) => ({ pqpList: [...state.pqpList, newPQP] }));
             return newPQP;
