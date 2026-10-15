@@ -145,6 +145,7 @@ test('every refusal code the backend raises has its wording in both languages', 
     // raised through helpers rather than literally
     codes.add('DELETE_REFERENCED');
     codes.add('PERMISSION_DENIED');
+    codes.add('SCOPE_FORBIDDEN');          // core/scope.py ScopeForbidden (REFUSAL-DIALOG-2026-002)
     assert.ok(codes.size >= 16, `expected the batch-1 codes, found ${[...codes].join(', ')}`);
     for (const code of codes) {
         for (const lang of ['en', 'zh'] as const) {
@@ -186,6 +187,13 @@ test('every refusal code the backend raises has its wording in both languages', 
         PROJECT_CODE_INVALID: ['projectCode'],
         PROJECT_CODE_RESERVED: ['projectCode'],
         PROJECT_CODE_DUPLICATE: ['projectCode'],
+        // REFUSAL-DIALOG-2026-002: refused saves
+        SCOPE_FORBIDDEN: ['reason'],
+        INVALID_TRANSITION: ['docType', 'fromStatus', 'toStatus'],
+        RECORD_LOCKED: ['docType', 'number', 'status', 'kind'],
+        REFERENCE_NOT_FOUND: ['docType', 'field', 'value'],
+        ASSIGNEE_UNAVAILABLE: ['field'],
+        VERSION_CONFLICT: ['docType', 'number'],
     };
     assert.deepEqual([...codes].sort(), Object.keys(PARAMS).sort(), 'a backend code is missing from (or extra in) the PARAMS table');
     for (const lang of ['en', 'zh'] as const) {

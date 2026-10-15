@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 
 import schemas
 from repositories.km_repository import KMRepository
+from core.refusals import refusal_http
 from core.utils import log_audit
 
 
@@ -62,7 +63,7 @@ class KMService:
             return updated
         except ValueError as e:
             self.repo.db.rollback()
-            raise HTTPException(status_code=409, detail=str(e))
+            raise refusal_http(e, 409)          # coded when it is a Refusal (VERSION_CONFLICT), same 409 as before otherwise
         except Exception:
             self.repo.db.rollback()
             raise

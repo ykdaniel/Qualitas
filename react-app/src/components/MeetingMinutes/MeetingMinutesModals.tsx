@@ -10,7 +10,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useMeetingMinutesStore } from '../../store/meetingMinutesStore';
-import { describeSaveError } from '../../utils/saveErrors';
+import { showRefusal } from '../../store/refusalStore';
 import { getUsers, getEntityFiles, getAuthenticatedFileUrl, createMeetingMinutesOccurrence, exportMeetingMinutesDocx, type User as ApiUser } from '../../services/api';
 import type { MeetingMinutesItem, Attendee, DiscussionLogEntry } from '../../store/meetingMinutesStore';
 import FileAttachment from '../Shared/FileAttachment';
@@ -55,7 +55,7 @@ export type MeetingSaveResult =
         /** the pending files reached the server — drop them so a retry does not upload them twice */
         attachmentsUploaded: boolean;
     }
-    | { status: 'failed'; message: string };
+    | { status: 'failed'; message: string; error?: unknown };
 
 // Four tabs: Action Items was removed (MEETING-TABS-2026-001 R7, user decision 2026-10-11) — every discussion item is
 // tracked in the register itself and "Action by" names who acts; Follow-ups opened from meetings before stay in Follow Up.
@@ -192,7 +192,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                 pendingFiles,
             );
             if (result.status === 'failed') {
-                toast.error(t('saveFlow.failedKeep', { message: result.message }), { duration: 10000 });
+                showRefusal(result.error, 'save', { keepsInput: true });
             } else if (result.status === 'saved-incomplete') {
                 // The meeting exists now: keep only what is left, so Save finishes it without redoing anything.
                 if (result.attachmentsUploaded) {
@@ -205,7 +205,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
             }
             // 'saved': the page closes the modal.
         } catch (err) {
-            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
+            showRefusal(err, 'save', { keepsInput: true });
         } finally {
             setSaving(false);
         }
@@ -225,7 +225,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
         try {
             await onVoid();
         } catch (err) {
-            toast.error(describeSaveError(err, t));
+            showRefusal(err, 'save');
         } finally {
             setSaving(false);
         }
@@ -243,8 +243,8 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
             leaveGuard.release();
             (onDismiss || onClose)();
             navigate(`/meeting-minutes?openId=${created.id}`);
-        } catch (err: any) {
-            toast.error(err?.response?.data?.detail || t('common.saveFailed'));
+        } catch (err) {
+            showRefusal(err, 'save');
         } finally {
             setSpawningOccurrence(false);
         }

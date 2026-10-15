@@ -1,0 +1,6 @@
+# merge onto 9da76d9f 2026-10-14T15:27:02Z: git apply --3way of the frozen rd2a2 diff (65 files) — no conflicts
+# CRLF intact (LanguageContext 3609/3609; every CRLF file checked)
+tsc exit 0
+ℹ tests 212
+ℹ pass 212
+ℹ fail 0

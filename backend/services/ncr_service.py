@@ -375,8 +375,10 @@ class NCRService:
             if ncr_update.status and not WorkflowEngine.validate_transition(
                 "NCR", db_ncr.status, ncr_update.status
             ):
-                raise ValueError(
-                    f"Invalid status transition from {db_ncr.status} to {ncr_update.status}"
+                raise Refusal(
+                    "INVALID_TRANSITION",
+                    f"Invalid status transition from {db_ncr.status} to {ncr_update.status}",
+                    docType="NCR", fromStatus=db_ncr.status, toStatus=ncr_update.status,
                 )
 
             # Capture old values for audit
@@ -455,7 +457,8 @@ class NCRService:
                 if 'ownerApproval' in changed_locked and d.get('ownerApproval') == 'Rejected':
                     changed_locked.discard('ownerApproval')
                 if changed_locked:
-                    raise ValueError("Cannot modify quality fields on a Closed NCR")
+                    raise Refusal("RECORD_LOCKED", "Cannot modify quality fields on a Closed NCR",
+                                  docType="NCR", number=db_ncr.documentNumber, status=db_ncr.status, kind="qualityFields")
 
             # Handle vendor name -> vendor_id mapping
             if 'vendor' in d:

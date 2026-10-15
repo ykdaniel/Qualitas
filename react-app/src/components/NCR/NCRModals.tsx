@@ -29,7 +29,8 @@ import { NCR_DATE_FIELDS, hasValueIssue, preserveHistoricalDates } from '../../u
 import { followUpOf } from '../../utils/saveFlow';
 import { lateClosureDays } from '../../utils/ncrOverdue';
 import type { FollowUp, SaveOutcome } from '../../utils/saveFlow';
-import { describeSaveError, presentOutcome } from '../../utils/saveErrors';
+import { presentOutcome } from '../../utils/saveErrors';
+import { showRefusal } from '../../store/refusalStore';
 
 // NCRDetailData now lives with the zod schema (single source of truth). Re-export
 // it so existing importers (NCR.tsx, NCRPrintTemplate) keep working unchanged.
@@ -408,7 +409,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
             await uploadFiles('ncr', existingItem.id, pendingImprovementPhotos, 'improvementPhoto');
         } catch (err) {
             // The upload itself failed: nothing is cleared — the pending files and every other field the user typed stay exactly as they were.
-            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
+            showRefusal(err, 'save', { keepsInput: true });
             setUploadingPhotosOnly(false);
             return;
         }
@@ -447,7 +448,8 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         } else if (outcome.status !== 'failed') {
             setFollowUp(null);
         }
-        const { close, notice } = presentOutcome(outcome, t);
+        const { close, notice, refusal } = presentOutcome(outcome, t);
+        if (refusal) showRefusal(refusal.error, 'save', { keepsInput: true });
         if (notice) (notice.level === 'error' ? toast.error : toast.warning)(notice.text, { duration: 10000 });
         if (close) { leaveGuard.release(); onClose(); }
     };
@@ -460,7 +462,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
             applyOutcome(outcome, !existingItem);
             return outcome;
         } catch (err) {
-            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
+            showRefusal(err, 'save', { keepsInput: true });
             return null;
         } finally {
             setSaving(false);
@@ -473,7 +475,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
         try {
             applyOutcome(await onRetryFiles(uploadGroups(), deletedFileIds), false);
         } catch (err) {
-            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
+            showRefusal(err, 'save', { keepsInput: true });
         } finally {
             setSaving(false);
         }

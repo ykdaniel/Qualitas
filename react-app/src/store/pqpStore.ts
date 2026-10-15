@@ -91,41 +91,24 @@ export const usePQPStore = create<PQPState>((set, get) => ({
         await get().fetchPQPs(params);
     },
 
+    // A refused or failed save / publish goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-002); the page's error banner is for list loads only.
     addPQP: async (pqp: Omit<PQPItem, 'id'>) => {
-        try {
-            const response = await api.post('/pqp/', withCurrentProject(pqp));
-            const newPQP = response.data;
-            set((state) => ({ pqpList: [...state.pqpList, newPQP] }));
-            return newPQP;
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to add PQP');
-            set({ error: msg });
-            throw error;
-        }
+        const response = await api.post('/pqp/', withCurrentProject(pqp));
+        const newPQP = response.data;
+        set((state) => ({ pqpList: [...state.pqpList, newPQP] }));
+        return newPQP;
     },
 
     updatePQP: async (id: string, updates: Partial<PQPItem>) => {
-        try {
-            const response = await api.put(`/pqp/${id}`, updates);
-            set((state) => ({ pqpList: state.pqpList.map(p => (p.id === id ? response.data : p)) }));
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to update PQP');
-            set({ error: msg });
-            throw error;
-        }
+        const response = await api.put(`/pqp/${id}`, updates);
+        set((state) => ({ pqpList: state.pqpList.map(p => (p.id === id ? response.data : p)) }));
     },
 
     publishPQP: async (id: string, changeSummary?: string) => {
-        try {
-            const response = await api.post(`/pqp/${id}/publish`, { change_summary: changeSummary });
-            const published = response.data;
-            set((state) => ({ pqpList: state.pqpList.map(p => (p.id === id ? published : p)) }));
-            return published;
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to publish PQP');
-            set({ error: msg });
-            throw error;
-        }
+        const response = await api.post(`/pqp/${id}/publish`, { change_summary: changeSummary });
+        const published = response.data;
+        set((state) => ({ pqpList: state.pqpList.map(p => (p.id === id ? published : p)) }));
+        return published;
     },
 
     getHistory: async (id: string) => {

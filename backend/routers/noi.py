@@ -50,7 +50,7 @@ def read_noi_next_reference(
     try:
         return noi_service.preview_reference_no(project_id, scope=scope)
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
 
 # 讀取操作 - 無需認證
 @router.get("/", response_model=list[schemas.NOI])
@@ -116,12 +116,12 @@ def create_noi(
             scope=scope,
         )
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except DateValidationError as e:
         raise HTTPException(status_code=422, detail=e.http_detail())
     except ValueError as e:
         # e.g. the ITP is unknown or not one the caller can see: a business refusal (400), never a 500 (B2 R1)
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
 
 @router.post("/bulk/", response_model=list[schemas.NOI])
 def create_nois_bulk(
@@ -139,12 +139,12 @@ def create_nois_bulk(
                 scope=scope,
             ))
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except DateValidationError as e:
         raise HTTPException(status_code=422, detail=e.http_detail())
     except ValueError as e:
         # e.g. the ITP is unknown or not one the caller can see: a business refusal (400), never a 500 (B2 R1)
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
     return created
 
 @router.put("/{noi_id}/", response_model=schemas.NOI)
@@ -161,11 +161,11 @@ def update_noi(
             scope=scope,
         )
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except DateValidationError as e:
         raise HTTPException(status_code=422, detail=e.http_detail())
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
     if db_noi is None:
         raise HTTPException(status_code=404, detail="NOI not found")
     return db_noi
@@ -183,7 +183,7 @@ def delete_noi(
             scope=scope,
         )
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except ValueError as e:
         # a business refusal (e.g. the NOI is still referenced by ITR / NCR records) is a 400, never a 500
         raise refusal_http(e)

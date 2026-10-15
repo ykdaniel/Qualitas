@@ -95,16 +95,11 @@ export const useNOIStore = create<NOIState>((set, get) => ({
     },
 
     addBulkNOI: async (nois: Omit<NOIItem, 'id'>[]) => {
-        try {
-            const response = await api.post('/noi/bulk/', nois.map(n => withCurrentProject(n)));
-            const newNOIs = response.data;
-            set((state) => ({ noiList: [...state.noiList, ...newNOIs] }));
-            return newNOIs;
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to add bulk NOI');
-            set({ error: msg });
-            throw error;
-        }
+        // Like add/update: a refused or failed bulk add goes to the caller (the refusal dialog, REFUSAL-DIALOG-2026-002), not the page banner.
+        const response = await api.post('/noi/bulk/', nois.map(n => withCurrentProject(n)));
+        const newNOIs = response.data;
+        set((state) => ({ noiList: [...state.noiList, ...newNOIs] }));
+        return newNOIs;
     },
 
     updateNOI: async (id: string, updates: Partial<NOIItem>) => {

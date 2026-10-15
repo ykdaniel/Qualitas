@@ -27,6 +27,7 @@ from core.utils import (
 )
 from core import error_messages
 from core import validators
+from core.refusals import Refusal
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +125,8 @@ class NOIService:
                 validators.validate_itp_reference(self.repo.db, data['itpNo'])
                 cited_itp = self.repo.db.query(models.ITP).filter(models.ITP.referenceNo == data['itpNo']).first()
                 if not record_in_scope(cited_itp, scope):   # only an ITP the caller can see (B2 R1 P2-2)
-                    raise ValueError(error_messages.reference_not_found("ITP", "reference number", data['itpNo']))
+                    raise Refusal("REFERENCE_NOT_FOUND", error_messages.reference_not_found("ITP", "reference number", data['itpNo']),
+                                  docType="ITP", field="reference number", value=data['itpNo'])
                 # the ITP must be this project's or a shared template (G2 / D10, REF-PROJECT-SEQ-2026-001 B2)
                 require_same_project(cited_itp, data.get('project_id'), 'ITP', data['itpNo'])
 
@@ -241,7 +243,8 @@ class NOIService:
             if noi_update.status and not WorkflowEngine.validate_transition(
                 "NOI", db_noi.status, noi_update.status
             ):
-                raise ValueError(error_messages.invalid_status_transition("NOI", db_noi.status, noi_update.status))
+                raise Refusal("INVALID_TRANSITION", error_messages.invalid_status_transition("NOI", db_noi.status, noi_update.status),
+                              docType="NOI", fromStatus=db_noi.status, toStatus=noi_update.status)
 
             # Capture old values for audit
             old_val = {c.name: getattr(db_noi, c.name) for c in db_noi.__table__.columns}
@@ -295,10 +298,12 @@ class NOIService:
                     models.ITP.referenceNo == d['itpNo']
                 ).first()
                 if not itp:
-                    raise ValueError(error_messages.reference_not_found("ITP", "reference number", d['itpNo']))
+                    raise Refusal("REFERENCE_NOT_FOUND", error_messages.reference_not_found("ITP", "reference number", d['itpNo']),
+                                  docType="ITP", field="reference number", value=d['itpNo'])
                 if d['itpNo'] != db_noi.itpNo:      # only a changed link is checked (the UI resends every field)
                     if not record_in_scope(itp, scope):   # only an ITP the caller can see (B2 R1 P2-2)
-                        raise ValueError(error_messages.reference_not_found("ITP", "reference number", d['itpNo']))
+                        raise Refusal("REFERENCE_NOT_FOUND", error_messages.reference_not_found("ITP", "reference number", d['itpNo']),
+                                  docType="ITP", field="reference number", value=d['itpNo'])
                     require_same_project(itp, db_noi.project_id, 'ITP', d['itpNo'])   # G2 / D10 (B2)
 
             # 勾稽鎖定：關閉 NOI 前確認其下所有 ITR 已完結（Approved 或 Void）
@@ -340,9 +345,11 @@ class NOIService:
             if db_noi.status == 'Closed':
                 changed_fields = {f for f in d if d[f] != old_val.get(f)}
                 if changed_fields:
-                    raise ValueError(
+                    raise Refusal(
+                        "RECORD_LOCKED",
                         f"Cannot modify a closed NOI '{db_noi.referenceNo}' — "
-                        f"no fields can be changed once an NOI is closed."
+                        f"no fields can be changed once an NOI is closed.",
+                        docType="NOI", number=db_noi.referenceNo, status=db_noi.status, kind="record",
                     )
 
             # Update the record and its audit entry: ONE commit, strict audit (the repository's update() commits on its own,

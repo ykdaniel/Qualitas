@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { getErrorStatusCode } from '../utils/errorUtils';
-import type { RefusalAction } from '../utils/refusal';
+import type { RefusalAction, RefusalOptions } from '../utils/refusal';
 
 /**
  * The one "operation refused / failed" dialog (REFUSAL-DIALOG-2026-001), mounted once in App.tsx next to the Toaster.
@@ -14,6 +14,8 @@ interface RefusalEntry {
     error?: unknown;
     /** a refusal already known without a failed request, e.g. NOI's delete-check */
     coded?: { code: string; params: Record<string, unknown> };
+    /** a failed save whose form is still open with the user's input (adds the "input kept" line) */
+    keepsInput?: boolean;
 }
 
 interface RefusalState {
@@ -30,10 +32,13 @@ export const useRefusalStore = create<RefusalState>((set) => ({
     close: () => set({ current: null }),
 }));
 
-/** Show a refused or failed delete / save in the dialog. Not for 401: the API client is already logging the user out. */
-export function showRefusal(error: unknown, action: RefusalAction): void {
+/**
+ * Show a refused or failed delete / save in the dialog. Not for 401: the API client is already logging the user out.
+ * Pass `{ keepsInput: true }` only when the form stays open with everything the user typed (REFUSAL-DIALOG-2026-002 D3).
+ */
+export function showRefusal(error: unknown, action: RefusalAction, options: RefusalOptions = {}): void {
     if (getErrorStatusCode(error) === 401) return;
-    useRefusalStore.getState().show({ error, action });
+    useRefusalStore.getState().show({ error, action, keepsInput: options.keepsInput });
 }
 
 /** Show a refusal the page already knows about (same codes and wording as the backend's coded refusals). */

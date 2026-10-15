@@ -113,64 +113,47 @@ export const useITPStore = create<ITPState>((set, get) => ({
         await get().fetchITPs(params);
     },
 
+    // A refused or failed save goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-002); the page's error banner is for list loads only.
     addITP: async (itp: Omit<ITPItem, 'id'>) => {
-        try {
-            const payload = {
-                project_id: itp.project_id || undefined,
-                vendor: itp.vendor,
-                description: itp.description,
-                rev: itp.rev,
-                submit: itp.submit,
-                status: itp.status,
-                remark: itp.remark,
-                submissionDate: itp.submissionDate,
-                attachments: itp.attachments || [],
-                dueDate: itp.dueDate || null,
-                // schemas.ITPCreate.detail_data is `Any` on the backend — stored as-is (JSON
-                // serialized), same as updateITPDetail's PUT below. Passed through unchanged: the
-                // caller (ITP.tsx) supplies the SAME phase-split {a,b,c,checklist,self_inspection}
-                // shape used everywhere else in this module (ITPModals.tsx's
-                // prepareDetailPayload), not the flat ITPInspectionItem[] this field's own TS type
-                // suggests — a prior per-field remapping here assumed that flat shape and was
-                // never actually exercised (no call site ever passed detail_data through addITP
-                // before this), so it is removed rather than fixed to avoid re-introducing the
-                // same shape mismatch.
-                detail_data: itp.detail_data as unknown,
-            };
+        const payload = {
+            project_id: itp.project_id || undefined,
+            vendor: itp.vendor,
+            description: itp.description,
+            rev: itp.rev,
+            submit: itp.submit,
+            status: itp.status,
+            remark: itp.remark,
+            submissionDate: itp.submissionDate,
+            attachments: itp.attachments || [],
+            dueDate: itp.dueDate || null,
+            // schemas.ITPCreate.detail_data is `Any` on the backend — stored as-is (JSON
+            // serialized), same as updateITPDetail's PUT below. Passed through unchanged: the
+            // caller (ITP.tsx) supplies the SAME phase-split {a,b,c,checklist,self_inspection}
+            // shape used everywhere else in this module (ITPModals.tsx's
+            // prepareDetailPayload), not the flat ITPInspectionItem[] this field's own TS type
+            // suggests — a prior per-field remapping here assumed that flat shape and was
+            // never actually exercised (no call site ever passed detail_data through addITP
+            // before this), so it is removed rather than fixed to avoid re-introducing the
+            // same shape mismatch.
+            detail_data: itp.detail_data as unknown,
+        };
 
-            const response = await api.post('/itp/', withCurrentProject(payload));
-            const newITP = normalizeItem(response.data);
-            set((state) => ({ itpList: [...state.itpList, newITP] }));
-            return newITP;
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to add ITP');
-            set({ error: msg });
-            throw error;
-        }
+        const response = await api.post('/itp/', withCurrentProject(payload));
+        const newITP = normalizeItem(response.data);
+        set((state) => ({ itpList: [...state.itpList, newITP] }));
+        return newITP;
     },
 
     updateITP: async (id: string, updates: Partial<ITPItem>) => {
-        try {
-            const response = await api.put(`/itp/${id}/`, updates);
-            const updated = normalizeItem(response.data);
-            set((state) => ({ itpList: state.itpList.map(item => item.id === id ? updated : item) }));
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to update ITP');
-            set({ error: msg });
-            throw error;
-        }
+        const response = await api.put(`/itp/${id}/`, updates);
+        const updated = normalizeItem(response.data);
+        set((state) => ({ itpList: state.itpList.map(item => item.id === id ? updated : item) }));
     },
 
     updateITPDetail: async (id: string, detail: any) => {
-        try {
-            await api.put(`/itp/${id}/detail`, detail);
-            // Backend doesn't return the full ITP, so fetch again to keep state synced
-            await get().fetchITPs();
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to update ITP details');
-            set({ error: msg });
-            throw error;
-        }
+        await api.put(`/itp/${id}/detail`, detail);
+        // Backend doesn't return the full ITP, so fetch again to keep state synced
+        await get().fetchITPs();
     },
 
     deleteITP: async (id: string) => {

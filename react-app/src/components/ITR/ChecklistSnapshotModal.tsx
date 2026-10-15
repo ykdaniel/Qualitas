@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import styles from './ITR.module.css'; // Corrected import
 
 import { useLanguage } from '../../context/LanguageContext';
+import { showRefusal } from '../../store/refusalStore';
 import { CheckCircle, XCircle, HelpCircle, AlertCircle, Lock } from 'lucide-react';
 import { ResultSelect } from '../Checklist/ChecklistResultControls';
 import {
@@ -88,7 +89,6 @@ export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
     }, [leaveGuard.dirty, onDirtyChange]);
     useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);   // a closed panel holds nothing unsaved
     const [confirmingReopen, setConfirmingReopen] = useState(false);
-    const [reopenError, setReopenError] = useState<string | null>(null);
     const [reopenStale, setReopenStale] = useState(false);
 
     if (!isOpen) return null;
@@ -102,13 +102,11 @@ export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
     const handleReopen = async () => {
         if (reopening || !onReopen) return;       // no double submit
         setReopening(true);
-        setReopenError(null);
         try {
             const outcome = await onReopen();
             if (outcome && outcome.reloaded === false) setReopenStale(true);   // reopened, but NOT unlocked until reloaded
-        } catch (e: any) {
-            const detail = e?.response?.data?.detail;
-            setReopenError(t('checklist.reopen.failed', { message: typeof detail === 'string' ? detail : (e?.message || '') }));
+        } catch (e) {
+            showRefusal(e, 'save');            // REFUSAL-DIALOG-2026-002: the panel stays locked
         } finally {
             setReopening(false);
             setConfirmingReopen(false);
@@ -154,10 +152,9 @@ export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
         try {
             await onSave(payload);
             onClose();
-        } catch (e: any) {
-            const detail = e?.response?.data?.detail;
-            const message = typeof detail === 'string' ? detail : (e?.message || '');
-            setSaveError(t('checklist.saveFailedKeep', { message }));
+        } catch (e) {
+            // refused or failed: the refusal dialog (REFUSAL-DIALOG-2026-002); the panel stays open with every entry
+            showRefusal(e, 'save', { keepsInput: true });
         } finally {
             setSaving(false);
         }
@@ -220,7 +217,7 @@ export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
                             <button className={actionStyles.workflow}
                                 type="button"
                                 data-reopen-button
-                                onClick={() => { setReopenError(null); setConfirmingReopen(true); }}
+                                onClick={() => setConfirmingReopen(true)}
                                 disabled={reopening}
                             >
                                 {t('checklist.reopen.button')}
@@ -247,9 +244,6 @@ export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
                                     </button>
                                 </div>
                             </div>
-                        )}
-                        {reopenError && (
-                            <div data-reopen-error className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-red-700">{reopenError}</div>
                         )}
                     </div>
                 )}

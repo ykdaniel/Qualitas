@@ -13,6 +13,7 @@ import models
 import schemas
 from repositories.pqp_repository import PQPRepository
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
+from core.refusals import Refusal
 from core.utils import (
     _json_serialize,
     _resolve_vendor_id,
@@ -115,8 +116,10 @@ class PQPService:
                 self._normalize_pqp_status(db_pqp.status) or db_pqp.status,
                 self._normalize_pqp_status(pqp_update.status) or pqp_update.status,
             ):
-                raise ValueError(
-                    f"Invalid status transition from {db_pqp.status} to {pqp_update.status}"
+                raise Refusal(
+                    "INVALID_TRANSITION",
+                    f"Invalid status transition from {db_pqp.status} to {pqp_update.status}",
+                    docType="PQP", fromStatus=db_pqp.status, toStatus=pqp_update.status,
                 )
 
             old_val = {c.name: getattr(db_pqp, c.name) for c in db_pqp.__table__.columns}
@@ -141,9 +144,11 @@ class PQPService:
                     if d[f] != getattr(db_pqp, f, None)
                 }
                 if changed_locked:
-                    raise ValueError(
+                    raise Refusal(
+                        "RECORD_LOCKED",
                         "Cannot modify document content on an Approved PQP — "
-                        "use Publish to create a new revision instead."
+                        "use Publish to create a new revision instead.",
+                        docType="PQP", number=db_pqp.pqpNo, status=db_pqp.status, kind="publish",
                     )
 
             if 'vendor' in d:

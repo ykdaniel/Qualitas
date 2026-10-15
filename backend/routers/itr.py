@@ -193,9 +193,9 @@ def create_itr(
             scope=scope,
         )
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
 
 @router.put("/{itr_id}", response_model=schemas.ITR)
 def update_itr(
@@ -219,9 +219,9 @@ def update_itr(
             scope=scope,
         )
     except (ScopeForbidden, ApprovalAuthorityError) as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
     if db_itr is None:
         raise HTTPException(status_code=404, detail="ITR not found")
     return db_itr
@@ -243,9 +243,9 @@ def revoke_itr_approval(
             scope=scope,
         )
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
     if db_itr is None:
         raise HTTPException(status_code=404, detail="ITR not found")
     return db_itr
@@ -266,7 +266,7 @@ def create_ncr_from_itr(
             scope=scope,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
     if ncr is None:
         raise HTTPException(status_code=404, detail="ITR not found")
     return ncr
@@ -288,7 +288,7 @@ def create_reinspection(
             scope=scope,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
     if new_itr is None:
         raise HTTPException(status_code=404, detail="ITR not found")
     return new_itr
@@ -307,7 +307,7 @@ def delete_itr(
             scope=scope,
         )
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except ValueError as e:
         raise refusal_http(e)
     if not deleted:
@@ -351,7 +351,7 @@ def link_checklist_to_itr(
         # missing and out-of-scope look identical (same status, same body)
         raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
     if db_itr is None:
         raise HTTPException(status_code=404, detail="ITR not found")
     return db_itr

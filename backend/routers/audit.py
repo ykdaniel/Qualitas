@@ -114,13 +114,13 @@ def create_audit_route(
             scope=scope
         )
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except DateValidationError as e:
         raise HTTPException(status_code=422, detail=e.http_detail())
     except AuditConflict as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
 
 @router.put("/{audit_id}", response_model=schemas.Audit)
 def update_audit_route(
@@ -140,13 +140,13 @@ def update_audit_route(
             scope=scope
         )
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except DateValidationError as e:
         raise HTTPException(status_code=422, detail=e.http_detail())
     except AuditConflict as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
     if db_audit is None:
         raise HTTPException(status_code=404, detail="Audit not found")
     return db_audit
@@ -167,7 +167,7 @@ def delete_audit_route(
             scope=scope
         )
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except ValueError as e:
         raise refusal_http(e)
     if not success:

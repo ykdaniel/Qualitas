@@ -284,8 +284,10 @@ class MeetingMinutesService:
             if meeting_update.status and not WorkflowEngine.validate_transition(
                 "MeetingMinutes", db_meeting.status, meeting_update.status
             ):
-                raise ValueError(
-                    f"Invalid status transition from {db_meeting.status} to {meeting_update.status}"
+                raise Refusal(
+                    "INVALID_TRANSITION",
+                    f"Invalid status transition from {db_meeting.status} to {meeting_update.status}",
+                    docType="MeetingMinutes", fromStatus=db_meeting.status, toStatus=meeting_update.status,
                 )
 
             old_val = {c.name: getattr(db_meeting, c.name) for c in db_meeting.__table__.columns}
@@ -307,9 +309,11 @@ class MeetingMinutesService:
                 changed_fields = {f for f in d if d[f] != old_val.get(f)}
                 disallowed = changed_fields - ({'status'} if voiding else set())
                 if disallowed:
-                    raise ValueError(
+                    raise Refusal(
+                        "RECORD_LOCKED",
                         f"Cannot modify meeting minute '{db_meeting.documentNumber}' "
-                        f"(status: {db_meeting.status})."
+                        f"(status: {db_meeting.status}).",
+                        docType="MeetingMinutes", number=db_meeting.documentNumber, status=db_meeting.status, kind="record",
                     )
 
             if 'vendor' in d:

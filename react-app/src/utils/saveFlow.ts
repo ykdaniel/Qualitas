@@ -40,8 +40,9 @@ export type SaveOutcome =
         uploaded: Record<string, unknown[]>;
         reloadFailed: boolean;
     }
-    /** the record was not saved — keep the modal open, keep everything */
-    | { status: 'failed'; message: string };
+    /** the record was not saved — keep the modal open, keep everything. `error` is the original failure, for the refusal dialog
+     *  (absent when the page refused before any request, e.g. no record id: the dialog then says "unexpected error"). */
+    | { status: 'failed'; message: string; error?: unknown };
 
 export interface SaveFlowSteps {
     /** Writes the record and returns its id. Not called when `reuseId` is given. */
@@ -67,7 +68,7 @@ export async function runSaveFlow(s: SaveFlowSteps): Promise<SaveOutcome> {
         try {
             id = await s.writeRecord();
         } catch (e) {
-            return { status: 'failed', message: s.describe(e) };
+            return { status: 'failed', message: s.describe(e), error: e };
         }
     }
     s.onRecordSaved?.(id);

@@ -10,6 +10,7 @@ from core.utils import _json_serialize, _resolve_vendor_id, begin_write_transact
 from core import error_messages
 from core import validators
 from core.perms import ITP_APPROVE, ITP_VOID, PermissionDenied
+from core.refusals import Refusal
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +127,8 @@ class ITPService:
 
             # State transition check
             if itp_update.status and not WorkflowEngine.validate_transition("ITP", db_itp.status, itp_update.status):
-                raise ValueError(error_messages.invalid_status_transition("ITP", db_itp.status, itp_update.status))
+                raise Refusal("INVALID_TRANSITION", error_messages.invalid_status_transition("ITP", db_itp.status, itp_update.status),
+                          docType="ITP", fromStatus=db_itp.status, toStatus=itp_update.status)
 
             old_val = {c.name: getattr(db_itp, c.name) for c in db_itp.__table__.columns}
             d = itp_update.model_dump(exclude_unset=True)

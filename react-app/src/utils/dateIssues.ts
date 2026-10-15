@@ -80,7 +80,7 @@ export const preserveHistoricalDates = <T extends object>(payload: T, original: 
 /** i18n key for an issue code (unknown codes fall back to the generic one). */
 export const issueMessageKey = (code: string): string =>
     ['invalid_format', 'invalid_calendar', 'timestamp', 'trailing_characters', 'whitespace', 'whitespace_only', 'missing_required',
-        'raise_after_closeout', 'raise_after_due', 'closeout_after_due', 'due_fixed_at_closure'].includes(code) ? `dateIssue.${code}` : 'dateIssue.unknown';
+        'raise_after_closeout', 'raise_after_due', 'closeout_after_due', 'due_fixed_at_closure', 'start_after_end'].includes(code) ? `dateIssue.${code}` : 'dateIssue.unknown';
 
 export const NCR_DATE_FIELDS = ['raiseDate', 'closeoutDate', 'dueDate', 'effectivenessVerifiedDate', 'correctiveActionTargetDate', 'preventiveActionTargetDate', 'ownerApprovalDate'] as const;
 export const OBS_DATE_FIELDS = ['raiseDate', 'closeoutDate', 'dueDate', 'verifiedDate', 'qualityEngineerApprovalDate', 'constructionEngineerApprovalDate'] as const;

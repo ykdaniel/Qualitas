@@ -1,0 +1,1304 @@
+diff --git a/react-app/src/components/Audit/AuditWizard.tsx b/react-app/src/components/Audit/AuditWizard.tsx
+index c8d86bc6..a099c1c5 100755
+--- a/react-app/src/components/Audit/AuditWizard.tsx
++++ b/react-app/src/components/Audit/AuditWizard.tsx
+@@ -16,6 +16,7 @@ import AutoGrowTextarea from './AutoGrowTextarea';
+ import { useContractorsStore } from '../../store/contractorsStore';
+ import { useProjectStore } from '../../store/projectStore';
+ import { useLanguage } from '../../context/LanguageContext';
++import { showRefusal } from '../../store/refusalStore';
+ import { checkDateOrder } from '../../utils/dateValidation';
+ import { exportAuditDocx } from '../../services/api';
+ import AuditPrintTemplate, { AuditPrintKind, AuditPrintData, auditProgress } from './AuditPrintTemplate';
+@@ -109,7 +110,6 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+   React.useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
+ 
+   const [isSaving, setIsSaving] = useState(false);
+-  const [saveError, setSaveError] = useState('');
+   const [isDraftSaving, setIsDraftSaving] = useState(false);
+   const [draftMessage, setDraftMessage] = useState('');
+   const [exportingDocx, setExportingDocx] = useState(false);
+@@ -538,7 +538,6 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+     if (readOnly) return;
+     if (blockSaveForUnconfirmedNewItem()) return;
+     setIsDraftSaving(true);
+-    setSaveError('');
+     setDraftMessage('');
+     const formAtSave = formData;
+ 
+@@ -566,10 +565,10 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+       setDraftMessage(`${t('audit.wizard.draftSaved')} ${time}`);
+       setTimeout(() => setDraftMessage(''), 4000);
+       // Don't call onSaveSuccess() here — draft save should keep the wizard open
+-    } catch (err: any) {
+-      // auditStore rethrows getErrorMessage(): the backend's reason for a refusal, a friendly line for a server error.
++    } catch (err) {
++      // auditStore rethrows the axios error as is: the refusal dialog (REFUSAL-DIALOG-2026-002 D2) translates it; the wizard stays open
+       console.error("草稿儲存失敗: ", err);
+-      setSaveError(`${t('audit.wizard.saveFailedPrefix')}${err?.message || ''}`);
++      showRefusal(err, 'save', { keepsInput: true });
+     } finally {
+       setIsDraftSaving(false);
+     }
+@@ -580,7 +579,6 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+     if (readOnly) return;
+     if (blockSaveForUnconfirmedNewItem()) return;
+     setIsSaving(true);
+-    setSaveError('');
+ 
+     try {
+       const updates = prepareAuditData(formData.status);
+@@ -594,9 +592,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+ 
+       leaveGuard.release();
+       onSaveSuccess();
+-    } catch (err: any) {
++    } catch (err) {
+       console.error("資料庫寫入失敗: ", err);
+-      setSaveError(`${t('audit.wizard.saveFailedPrefix')}${err?.message || ''}`);
++      showRefusal(err, 'save', { keepsInput: true });
+     } finally {
+       setIsSaving(false);
+     }
+@@ -716,11 +714,6 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
+             <span>{t(readOnlyReason)}</span>
+           </div>
+         )}
+-        {saveError && (
+-          <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-center font-medium shadow-sm no-print">
+-            {saveError}
+-          </div>
+-        )}
+ 
+         {/* overflow-clip (not -hidden) keeps the rounded corners without making the card a scroll container, so the sticky
+             footer below sticks to the wizard's own scroll area */}
+diff --git a/react-app/src/components/ITR/ChecklistSnapshotModal.tsx b/react-app/src/components/ITR/ChecklistSnapshotModal.tsx
+index 23ae3811..6ceeb117 100755
+--- a/react-app/src/components/ITR/ChecklistSnapshotModal.tsx
++++ b/react-app/src/components/ITR/ChecklistSnapshotModal.tsx
+@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from 'react';
+ import styles from './ITR.module.css'; // Corrected import
+ 
+ import { useLanguage } from '../../context/LanguageContext';
++import { showRefusal } from '../../store/refusalStore';
+ import { CheckCircle, XCircle, HelpCircle, AlertCircle, Lock } from 'lucide-react';
+ import { ResultSelect } from '../Checklist/ChecklistResultControls';
+ import {
+@@ -88,7 +89,6 @@ export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
+     }, [leaveGuard.dirty, onDirtyChange]);
+     useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);   // a closed panel holds nothing unsaved
+     const [confirmingReopen, setConfirmingReopen] = useState(false);
+-    const [reopenError, setReopenError] = useState<string | null>(null);
+     const [reopenStale, setReopenStale] = useState(false);
+ 
+     if (!isOpen) return null;
+@@ -102,13 +102,11 @@ export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
+     const handleReopen = async () => {
+         if (reopening || !onReopen) return;       // no double submit
+         setReopening(true);
+-        setReopenError(null);
+         try {
+             const outcome = await onReopen();
+             if (outcome && outcome.reloaded === false) setReopenStale(true);   // reopened, but NOT unlocked until reloaded
+-        } catch (e: any) {
+-            const detail = e?.response?.data?.detail;
+-            setReopenError(t('checklist.reopen.failed', { message: typeof detail === 'string' ? detail : (e?.message || '') }));
++        } catch (e) {
++            showRefusal(e, 'save');            // REFUSAL-DIALOG-2026-002: the panel stays locked
+         } finally {
+             setReopening(false);
+             setConfirmingReopen(false);
+@@ -154,10 +152,9 @@ export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
+         try {
+             await onSave(payload);
+             onClose();
+-        } catch (e: any) {
+-            const detail = e?.response?.data?.detail;
+-            const message = typeof detail === 'string' ? detail : (e?.message || '');
+-            setSaveError(t('checklist.saveFailedKeep', { message }));
++        } catch (e) {
++            // refused or failed: the refusal dialog (REFUSAL-DIALOG-2026-002); the panel stays open with every entry
++            showRefusal(e, 'save', { keepsInput: true });
+         } finally {
+             setSaving(false);
+         }
+@@ -220,7 +217,7 @@ export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
+                             <button className={actionStyles.workflow}
+                                 type="button"
+                                 data-reopen-button
+-                                onClick={() => { setReopenError(null); setConfirmingReopen(true); }}
++                                onClick={() => setConfirmingReopen(true)}
+                                 disabled={reopening}
+                             >
+                                 {t('checklist.reopen.button')}
+@@ -248,9 +245,6 @@ export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
+                                 </div>
+                             </div>
+                         )}
+-                        {reopenError && (
+-                            <div data-reopen-error className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-red-700">{reopenError}</div>
+-                        )}
+                     </div>
+                 )}
+ 
+diff --git a/react-app/src/components/ITR/ITR.tsx b/react-app/src/components/ITR/ITR.tsx
+index 5891296c..77c2336b 100755
+--- a/react-app/src/components/ITR/ITR.tsx
++++ b/react-app/src/components/ITR/ITR.tsx
+@@ -18,7 +18,6 @@ import { createColumns } from './columns';
+ import { ITRDetailModal, ITRDetailData, PendingUploads } from './ITRModals';
+ import ConfirmModal from '../Shared/ConfirmModal';
+ import { uploadFiles, deleteFile } from '../../services/api';
+-import { describeSaveError } from '../../utils/saveErrors';
+ import shellStyles from '../Shared/ModuleShell.module.css';
+ 
+ type StatusFilter = 'all' | 'inProgress' | 'approved' | 'reject' | 'void' | 'overdue';
+@@ -142,7 +141,7 @@ const ITR: React.FC = () => {
+                 setIsEditModalOpen(false);
+             } catch (error) {
+                 console.error('Error publishing ITR:', error);
+-                toast.error('Failed to publish ITR.');
++                showRefusal(error, 'save');
+             }
+             return;
+         }
+@@ -236,20 +235,10 @@ const ITR: React.FC = () => {
+             setIsEditModalOpen(false);
+             setCurrentItrId(null);
+         } catch (error: any) {
+-            // FORMS-CONSISTENCY-2026-003: this used to show error.response.data.detail
+-            // verbatim, including for 5xx — the raw backend detail text (e.g. a stack
+-            // trace or validation dump) went straight to the user. Routed through
+-            // describeSaveError (never exposes the raw body for 5xx) so the message text
+-            // stays friendly, same as NOI/NCR.
+-            //
+-            // FORMS-CONSISTENCY-2026-004: the wrapper itself is deliberately NOT the
+-            // shared saveFlow.failedKeep ("Not saved — ..."). This catch also covers a
+-            // 5xx or a network error with no response at all — those do not prove the
+-            // write never reached the server, only that this client never got
+-            // confirmation. Asserting "Not saved" here would be a guess dressed up as
+-            // fact. ITR gets its own itr.saveNotConfirmed wording instead; NOI/NCR keep
+-            // saveFlow.failedKeep as-is (not touched by this round).
+-            toast.error(t('itr.saveNotConfirmed', { message: describeSaveError(error, t) }), { duration: 10000 });
++            // REFUSAL-DIALOG-2026-002: shown in the refusal dialog. It never shows a 5xx body, and for a 5xx or a network error
++            // (which does not prove the write never reached the server) it says it could not confirm the save, instead of "not
++            // saved" — what FORMS-CONSISTENCY-2026-004's itr.saveNotConfirmed wording used to say. The page banner is for list loads only.
++            showRefusal(error, 'save', { keepsInput: true });
+             // Re-throw (2026-09-19 fix): the modal's own handleSave awaits
+             // this onSave call and only closes on success — swallowing the
+             // error here made every failed save (e.g. approving without
+diff --git a/react-app/src/components/ITR/ITRModals.tsx b/react-app/src/components/ITR/ITRModals.tsx
+index b293d54c..19569819 100755
+--- a/react-app/src/components/ITR/ITRModals.tsx
++++ b/react-app/src/components/ITR/ITRModals.tsx
+@@ -306,8 +306,8 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
+         try {
+             await linkChecklistToITR(persistedItrId, templateId);
+             await refreshInstances();
+-        } catch (e: any) {
+-            toast.error(e?.response?.data?.detail || (e as Error)?.message || 'Failed to link checklist');
++        } catch (e) {
++            showRefusal(e, 'save');
+         }
+     };
+ 
+@@ -317,23 +317,18 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
+         // Counts are exactly the number of O / X items — the backend rejects
+         // any other value, and never trusts these for a Pass on their own.
+         const { passCount, failCount } = itemCounts(items);
+-        try {
+-            await updateChecklist(instanceId, {
+-                status: snap.status,
+-                location: snap.location,
+-                date: snap.date,
+-                detail_data: JSON.stringify({ ...(snap.data || {}), items }),
+-                passCount,
+-                failCount,
+-            });
+-            setExpandedInstanceId(null);
+-            await refreshInstances();
+-        } catch (e: any) {
+-            toast.error(e?.response?.data?.detail || (e as Error)?.message || 'Failed to save checklist');
+-            // Rethrow so the snapshot panel stays open with every entry
+-            // (including any N/A reasons) intact instead of closing on failure.
+-            throw e;
+-        }
++        // A failure is left to throw: the snapshot panel stays open with every entry (including any N/A reasons)
++        // intact instead of closing, and shows the refusal dialog (REFUSAL-DIALOG-2026-002).
++        await updateChecklist(instanceId, {
++            status: snap.status,
++            location: snap.location,
++            date: snap.date,
++            detail_data: JSON.stringify({ ...(snap.data || {}), items }),
++            passCount,
++            failCount,
++        });
++        setExpandedInstanceId(null);
++        await refreshInstances();
+     };
+ 
+     // Reopen a closed (Pass/Fail) instance. Sends ONLY the status change — the
+@@ -596,9 +591,8 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
+         setRevokeError(null);
+         try {
+             await revokeItrApproval(existingItem.id, 'In Progress', reason);
+-        } catch (e: any) {
+-            const raw = e?.response?.data?.detail;
+-            setRevokeError(typeof raw === 'string' ? raw : (e?.message || t('itr.revokeFailed')));
++        } catch (e) {
++            showRefusal(e, 'save');
+             setRevoking(false);
+             return; // dialog stays open with the reason intact
+         }
+@@ -630,8 +624,8 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
+             leaveGuard.release();
+             (onDismiss || onClose)();
+             navigate(`/ncr?openId=${ncr.id}`);
+-        } catch (err: any) {
+-            toast.error(err?.response?.data?.detail || t('common.saveFailed'));
++        } catch (err) {
++            showRefusal(err, 'save');
+         } finally {
+             setSpawning(null);
+         }
+@@ -660,8 +654,8 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
+             leaveGuard.release();
+             (onDismiss || onClose)();
+             navigate(`/itr?openId=${newItr.id}`);
+-        } catch (err: any) {
+-            toast.error(err?.response?.data?.detail || t('common.saveFailed'));
++        } catch (err) {
++            showRefusal(err, 'save');
+         } finally {
+             setSpawning(null);
+         }
+diff --git a/react-app/src/components/MaterialSubmittal/RegisterDialog.tsx b/react-app/src/components/MaterialSubmittal/RegisterDialog.tsx
+index a149528a..307a3288 100644
+--- a/react-app/src/components/MaterialSubmittal/RegisterDialog.tsx
++++ b/react-app/src/components/MaterialSubmittal/RegisterDialog.tsx
+@@ -34,6 +34,7 @@ import {
+ } from '../../services/materialApi';
+ import { runSaveFlow, type SaveOutcome } from '../../utils/saveFlow';
+ import { describeSaveError, presentOutcome } from '../../utils/saveErrors';
++import { showRefusal } from '../../store/refusalStore';
+ import { classifyWriteFailure } from '../../utils/materialSubmittal';
+ import { useMaterialText, type MaterialTextKey } from './materialText';
+ 
+@@ -140,7 +141,8 @@ const RegisterDialog: React.FC<{
+             toast.warning(mt('unknownRetrySafe'), { duration: 10000 });
+             return;
+         }
+-        const { close, notice } = presentOutcome(outcome, t);
++        const { close, notice, refusal } = presentOutcome(outcome, t);
++        if (refusal) showRefusal(refusal.error, 'save', { keepsInput: true });
+         if (notice) (notice.level === 'error' ? toast.error : toast.warning)(notice.text, { duration: 10000 });
+         if (close && written.current) {
+             leaveGuard.release();
+diff --git a/react-app/src/components/MeetingMinutes/MeetingMinutes.tsx b/react-app/src/components/MeetingMinutes/MeetingMinutes.tsx
+index 532f3790..f1286dfe 100644
+--- a/react-app/src/components/MeetingMinutes/MeetingMinutes.tsx
++++ b/react-app/src/components/MeetingMinutes/MeetingMinutes.tsx
+@@ -1,6 +1,5 @@
+ import React, { useState, useMemo, useRef, useEffect } from 'react';
+ import { useSearchParams, useNavigate } from 'react-router-dom';
+-import { toast } from 'sonner';
+ import { Search } from 'lucide-react';
+ import { useLanguage } from '../../context/LanguageContext';
+ import { useAuth } from '../../context/AuthContext';
+@@ -17,7 +16,6 @@ import { useDebounce } from '../../hooks/useDebounce';
+ import { useCreateGate } from '../../hooks/useCreateGate';
+ import { collectRegisterItems } from './discussionLog';
+ import { uploadFiles } from '../../services/api';
+-import { getErrorMessage } from '../../utils/errorUtils';
+ import { describeSaveError } from '../../utils/saveErrors';
+ import { runSaveFlow, sameWrite } from '../../utils/saveFlow';
+ 
+@@ -192,7 +190,7 @@ const MeetingMinutes: React.FC = () => {
+         }
+       },
+     });
+-    if (outcome.status === 'failed') return { status: 'failed', message: outcome.message };
++    if (outcome.status === 'failed') return { status: 'failed', message: outcome.message, error: outcome.error };
+ 
+     const id = lastWriteRef.current?.id || currentId;
+     if (!documentNumber) {
+@@ -278,7 +276,7 @@ const MeetingMinutes: React.FC = () => {
+         await updateMeetingMinutes(voidModal.id, { status: 'Void' });
+       } catch (err) {
+         console.error('Failed to void Meeting Minutes:', err);
+-        toast.error(getErrorMessage(err, t('common.saveFailed')));
++        showRefusal(err, 'save');
+       }
+       setVoidModal({ isOpen: false, id: null, message: '' });
+     }
+diff --git a/react-app/src/components/MeetingMinutes/MeetingMinutesModals.tsx b/react-app/src/components/MeetingMinutes/MeetingMinutesModals.tsx
+index c2caedce..19e8e9d7 100644
+--- a/react-app/src/components/MeetingMinutes/MeetingMinutesModals.tsx
++++ b/react-app/src/components/MeetingMinutes/MeetingMinutesModals.tsx
+@@ -10,7 +10,7 @@ import { useLanguage } from '../../context/LanguageContext';
+ import { useAuth } from '../../context/AuthContext';
+ import { useContractorsStore } from '../../store/contractorsStore';
+ import { useMeetingMinutesStore } from '../../store/meetingMinutesStore';
+-import { describeSaveError } from '../../utils/saveErrors';
++import { showRefusal } from '../../store/refusalStore';
+ import { getUsers, getEntityFiles, getAuthenticatedFileUrl, createMeetingMinutesOccurrence, exportMeetingMinutesDocx, type User as ApiUser } from '../../services/api';
+ import type { MeetingMinutesItem, Attendee, DiscussionLogEntry } from '../../store/meetingMinutesStore';
+ import FileAttachment from '../Shared/FileAttachment';
+@@ -55,7 +55,7 @@ export type MeetingSaveResult =
+         /** the pending files reached the server — drop them so a retry does not upload them twice */
+         attachmentsUploaded: boolean;
+     }
+-    | { status: 'failed'; message: string };
++    | { status: 'failed'; message: string; error?: unknown };
+ 
+ // Four tabs: Action Items was removed (MEETING-TABS-2026-001 R7, user decision 2026-10-11) — every discussion item is
+ // tracked in the register itself and "Action by" names who acts; Follow-ups opened from meetings before stay in Follow Up.
+@@ -192,7 +192,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
+                 pendingFiles,
+             );
+             if (result.status === 'failed') {
+-                toast.error(t('saveFlow.failedKeep', { message: result.message }), { duration: 10000 });
++                showRefusal(result.error, 'save', { keepsInput: true });
+             } else if (result.status === 'saved-incomplete') {
+                 // The meeting exists now: keep only what is left, so Save finishes it without redoing anything.
+                 if (result.attachmentsUploaded) {
+@@ -205,7 +205,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
+             }
+             // 'saved': the page closes the modal.
+         } catch (err) {
+-            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
++            showRefusal(err, 'save', { keepsInput: true });
+         } finally {
+             setSaving(false);
+         }
+@@ -225,7 +225,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
+         try {
+             await onVoid();
+         } catch (err) {
+-            toast.error(describeSaveError(err, t));
++            showRefusal(err, 'save');
+         } finally {
+             setSaving(false);
+         }
+@@ -243,8 +243,8 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
+             leaveGuard.release();
+             (onDismiss || onClose)();
+             navigate(`/meeting-minutes?openId=${created.id}`);
+-        } catch (err: any) {
+-            toast.error(err?.response?.data?.detail || t('common.saveFailed'));
++        } catch (err) {
++            showRefusal(err, 'save');
+         } finally {
+             setSpawningOccurrence(false);
+         }
+diff --git a/react-app/src/components/NCR/NCRModals.tsx b/react-app/src/components/NCR/NCRModals.tsx
+index 1fb07a7d..cd1be5e9 100644
+--- a/react-app/src/components/NCR/NCRModals.tsx
++++ b/react-app/src/components/NCR/NCRModals.tsx
+@@ -29,7 +29,8 @@ import { NCR_DATE_FIELDS, hasValueIssue, preserveHistoricalDates } from '../../u
+ import { followUpOf } from '../../utils/saveFlow';
+ import { lateClosureDays } from '../../utils/ncrOverdue';
+ import type { FollowUp, SaveOutcome } from '../../utils/saveFlow';
+-import { describeSaveError, presentOutcome } from '../../utils/saveErrors';
++import { presentOutcome } from '../../utils/saveErrors';
++import { showRefusal } from '../../store/refusalStore';
+ 
+ // NCRDetailData now lives with the zod schema (single source of truth). Re-export
+ // it so existing importers (NCR.tsx, NCRPrintTemplate) keep working unchanged.
+@@ -408,7 +409,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
+             await uploadFiles('ncr', existingItem.id, pendingImprovementPhotos, 'improvementPhoto');
+         } catch (err) {
+             // The upload itself failed: nothing is cleared — the pending files and every other field the user typed stay exactly as they were.
+-            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
++            showRefusal(err, 'save', { keepsInput: true });
+             setUploadingPhotosOnly(false);
+             return;
+         }
+@@ -447,7 +448,8 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
+         } else if (outcome.status !== 'failed') {
+             setFollowUp(null);
+         }
+-        const { close, notice } = presentOutcome(outcome, t);
++        const { close, notice, refusal } = presentOutcome(outcome, t);
++        if (refusal) showRefusal(refusal.error, 'save', { keepsInput: true });
+         if (notice) (notice.level === 'error' ? toast.error : toast.warning)(notice.text, { duration: 10000 });
+         if (close) { leaveGuard.release(); onClose(); }
+     };
+@@ -460,7 +462,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
+             applyOutcome(outcome, !existingItem);
+             return outcome;
+         } catch (err) {
+-            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
++            showRefusal(err, 'save', { keepsInput: true });
+             return null;
+         } finally {
+             setSaving(false);
+@@ -473,7 +475,7 @@ export const NCRDetailModal: React.FC<NCRDetailModalProps> = ({ ncrId: _ncrId, e
+         try {
+             applyOutcome(await onRetryFiles(uploadGroups(), deletedFileIds), false);
+         } catch (err) {
+-            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
++            showRefusal(err, 'save', { keepsInput: true });
+         } finally {
+             setSaving(false);
+         }
+diff --git a/react-app/src/components/OBS/OBSModals.tsx b/react-app/src/components/OBS/OBSModals.tsx
+index b8d6b470..fd9f7fbd 100755
+--- a/react-app/src/components/OBS/OBSModals.tsx
++++ b/react-app/src/components/OBS/OBSModals.tsx
+@@ -30,7 +30,8 @@ import { moveKey, orderPhotos } from '../../utils/obsPhotoOrder';
+ import type { OrderedPhoto, PhotoCategory, PhotoOrder } from '../../utils/obsPhotoOrder';
+ import OBSPhotoPairs from './OBSPhotoPairs';
+ import type { FollowUp, SaveOutcome } from '../../utils/saveFlow';
+-import { describeSaveError, presentOutcome } from '../../utils/saveErrors';
++import { presentOutcome } from '../../utils/saveErrors';
++import { showRefusal } from '../../store/refusalStore';
+ 
+ export type { OBSDetailData };
+ 
+@@ -268,7 +269,8 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
+         } else if (outcome.status !== 'failed') {
+             setFollowUp(null);
+         }
+-        const { close, notice } = presentOutcome(outcome, t);
++        const { close, notice, refusal } = presentOutcome(outcome, t);
++        if (refusal) showRefusal(refusal.error, 'save', { keepsInput: true });
+         if (notice) (notice.level === 'error' ? toast.error : toast.warning)(notice.text, { duration: 10000 });
+         if (close) { leaveGuard.release(); onClose(); }
+     };
+@@ -334,7 +336,7 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
+             const outcome = await onSave(preserveHistoricalDates({ ...values, status: finalStatus, closeoutDate, qualityEngineerApprovalDate, constructionEngineerApprovalDate }, existingItem, OBS_DATE_FIELDS), uploadGroups(), deletedFileIds);
+             applyOutcome(outcome, !existingItem);
+         } catch (err) {
+-            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
++            showRefusal(err, 'save', { keepsInput: true });
+         } finally {
+             setSaving(false);
+         }
+@@ -346,7 +348,7 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
+         try {
+             applyOutcome(await onRetryFiles(uploadGroups(), deletedFileIds), false);
+         } catch (err) {
+-            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
++            showRefusal(err, 'save', { keepsInput: true });
+         } finally {
+             setSaving(false);
+         }
+diff --git a/react-app/src/components/OSD/OSDModals.tsx b/react-app/src/components/OSD/OSDModals.tsx
+index 3d419449..26eeb7f6 100644
+--- a/react-app/src/components/OSD/OSDModals.tsx
++++ b/react-app/src/components/OSD/OSDModals.tsx
+@@ -21,6 +21,7 @@ import { checkDateOrder } from '../../utils/dateValidation';
+ import type { OSDDetailData } from './osdFormSchema';
+ import type { SaveOutcome } from '../../utils/saveFlow';
+ import { presentOutcome } from '../../utils/saveErrors';
++import { showRefusal } from '../../store/refusalStore';
+ 
+ export type { OSDDetailData };
+ export type { SaveOutcome };
+@@ -157,7 +158,8 @@ export const OSDDetailModal: React.FC<OSDDetailModalProps> = ({ osdId: _osdId, e
+             toast.warning(`主資料已保存，但附件處理尚未完成：${detail}`, { duration: 10000 });
+             return;
+         }
+-        const { close, notice } = presentOutcome(outcome, t);
++        const { close, notice, refusal } = presentOutcome(outcome, t);
++        if (refusal) showRefusal(refusal.error, 'save', { keepsInput: true });
+         if (notice) (notice.level === 'error' ? toast.error : toast.warning)(notice.text, { duration: 10000 });
+         if (close) {
+             leaveGuard.release();
+@@ -180,9 +182,9 @@ export const OSDDetailModal: React.FC<OSDDetailModalProps> = ({ osdId: _osdId, e
+             ], deletedFileIds);
+             applyOutcome(outcome);
+         } catch (err) {
+-            // The record write itself threw (not routed through runSaveFlow) — keep the
+-            // modal open, preserve input, single friendly error.
+-            toast.error((err as Error)?.message || t('common.saveFailed'));
++            // The save itself threw (not routed through runSaveFlow) — keep the modal open,
++            // preserve input, one refusal dialog.
++            showRefusal(err, 'save', { keepsInput: true });
+         } finally {
+             setSaving(false);
+         }
+diff --git a/react-app/src/components/PQP/PQP.tsx b/react-app/src/components/PQP/PQP.tsx
+index 7877a0fb..1c630d03 100644
+--- a/react-app/src/components/PQP/PQP.tsx
++++ b/react-app/src/components/PQP/PQP.tsx
+@@ -106,7 +106,7 @@ const PQP: React.FC = () => {
+ 
+     // Phase 1: persist the record itself. Left to throw straight through —
+     // the modal's own handleSave is the single owner of "record failed to
+-    // save" (shown via its saveError state, kept open, input untouched).
++    // save" (shown in the refusal dialog, kept open, input untouched).
+     //
+     // skipRecordWrite (set by PQPModals.tsx via isUnchangedSincePriorWrite: true when
+     // JSON.stringify(formData) is string-equal to the last successfully written attempt's — a
+diff --git a/react-app/src/components/PQP/PQPModals.tsx b/react-app/src/components/PQP/PQPModals.tsx
+index 12c19ed9..62f6f445 100644
+--- a/react-app/src/components/PQP/PQPModals.tsx
++++ b/react-app/src/components/PQP/PQPModals.tsx
+@@ -11,7 +11,7 @@ import type { PQPItem, PQPHistoryItem } from '../../store/pqpStore';
+ import FileAttachment from '../Shared/FileAttachment';
+ import ImagePreviewOverlay from '../Shared/ImagePreviewOverlay';
+ import PQPPrintTemplate from './PQPPrintTemplate';
+-import { getErrorMessage } from '../../utils/errorUtils';
++import { showRefusal } from '../../store/refusalStore';
+ import { isUnchangedSincePriorWrite } from '../../utils/attachmentOutcome';
+ import styles from './PQP.module.css';
+ import './PQP.print.css';
+@@ -183,7 +183,9 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
+             onClose();
+             }
+         } catch (err) {
+-            setSaveError(getErrorMessage(err, t('pqp.saveError')));
++            // the record itself was not saved: the refusal dialog (REFUSAL-DIALOG-2026-002 D2); saveError stays for the
++            // two notices that are not refusals (save before publishing, record saved but attachments unfinished)
++            showRefusal(err, 'save', { keepsInput: true });
+         } finally {
+             setSaving(false);
+         }
+@@ -220,6 +222,7 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
+         const changeSummary = window.prompt(t('pqp.publishChangeSummary') || 'Change summary (optional):');
+         if (changeSummary === null) return; // cancelled
+         setSaving(true);
++        setSaveError('');
+         try {
+             if (onPublish) {
+                 await onPublish(existingItem.id, changeSummary || undefined);
+@@ -227,7 +230,7 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
+             leaveGuard.release();
+             onClose();
+         } catch (err) {
+-            setSaveError(getErrorMessage(err, t('pqp.saveError')));
++            showRefusal(err, 'save');
+         } finally {
+             setSaving(false);
+         }
+diff --git a/react-app/src/components/Shared/RefusalDialog.module.css b/react-app/src/components/Shared/RefusalDialog.module.css
+index 660af4dc..3aff5607 100644
+--- a/react-app/src/components/Shared/RefusalDialog.module.css
++++ b/react-app/src/components/Shared/RefusalDialog.module.css
+@@ -101,6 +101,11 @@
+   font-size: 13px;
+ }
+ 
++.note {
++  margin: 12px 0 0;
++  color: #5c5346;
++}
++
+ .footer {
+   padding: 12px 22px;
+   background: #faf7f1;
+diff --git a/react-app/src/components/Shared/RefusalDialog.tsx b/react-app/src/components/Shared/RefusalDialog.tsx
+index 904dac58..09343c0b 100644
+--- a/react-app/src/components/Shared/RefusalDialog.tsx
++++ b/react-app/src/components/Shared/RefusalDialog.tsx
+@@ -19,7 +19,7 @@ export default function RefusalDialog() {
+     const dialogRef = useRef<HTMLDivElement>(null);
+     const view = !current ? null : current.coded
+         ? describeCoded(current.coded.code, current.coded.params, t, current.action)
+-        : describeRefusal(current.error, t, current.action, language);
++        : describeRefusal(current.error, t, current.action, language, { keepsInput: current.keepsInput });
+     const visible = view !== null;
+ 
+     useEffect(() => {
+@@ -79,6 +79,7 @@ export default function RefusalDialog() {
+                         </ul>
+                     )}
+                     {view.original && <p className={styles.original} lang="en">{view.original}</p>}
++                    {view.note && <p className={styles.note}>{view.note}</p>}
+                 </div>
+                 <div className={styles.footer}>
+                     <button ref={okRef} type="button" className={actionStyles.primary} onClick={close}>
+diff --git a/react-app/src/store/auditStore.ts b/react-app/src/store/auditStore.ts
+index c3e2703b..995bab9c 100755
+--- a/react-app/src/store/auditStore.ts
++++ b/react-app/src/store/auditStore.ts
+@@ -91,37 +91,25 @@ export const useAuditStore = create<AuditState>((set, get) => ({
+         await get().fetchAudits();
+     },
+ 
++    // A refused or failed save goes to the caller (the wizard), which shows it in the refusal dialog (REFUSAL-DIALOG-2026-002).
++    // Not put in the page banner (it is for list loads only), and the axios error is rethrown as is (not wrapped in a new Error)
++    // so the dialog still sees its status and refusal code.
+     addAudit: async (audit) => {
+-        try {
+-            set({ error: null });
+-            const response = await api.post('/audit/', withCurrentProject(audit));
+-            const newAudit = response.data;
+-            set((state) => ({
+-                auditList: [...state.auditList, newAudit]
+-            }));
+-            return newAudit;
+-        } catch (err: any) {
+-            // Not put in the page banner: the wizard (covering the page) shows it, and a banner left
+-            // behind it would still be there, stale, after the wizard closes.
+-            const errorMessage = getErrorMessage(err, 'Failed to create audit');
+-            console.error('Failed to create audit:', err);
+-            throw new Error(errorMessage);
+-        }
++        set({ error: null });
++        const response = await api.post('/audit/', withCurrentProject(audit));
++        const newAudit = response.data;
++        set((state) => ({
++            auditList: [...state.auditList, newAudit]
++        }));
++        return newAudit;
+     },
+ 
+     updateAudit: async (id, updates) => {
+-        try {
+-            set({ error: null });
+-            const response = await api.put(`/audit/${id}`, updates);
+-            set((state) => ({
+-                auditList: state.auditList.map(a => (a.id === id ? response.data : a))
+-            }));
+-        } catch (err: any) {
+-            // Shown by the wizard, not the page banner (see addAudit).
+-            const errorMessage = getErrorMessage(err, 'Failed to update audit');
+-            console.error('Failed to update audit:', err);
+-            throw new Error(errorMessage);
+-        }
++        set({ error: null });
++        const response = await api.put(`/audit/${id}`, updates);
++        set((state) => ({
++            auditList: state.auditList.map(a => (a.id === id ? response.data : a))
++        }));
+     },
+ 
+     deleteAudit: async (id) => {
+diff --git a/react-app/src/store/itrStore.ts b/react-app/src/store/itrStore.ts
+index 53e01efd..7b600b28 100755
+--- a/react-app/src/store/itrStore.ts
++++ b/react-app/src/store/itrStore.ts
+@@ -111,85 +111,74 @@ export const useITRStore = create<ITRState>((set, get) => ({
+         await get().fetchITRs(params);
+     },
+ 
++    // A refused or failed save goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-002); the page's error banner is for list loads only.
+     addITR: async (itr: Omit<ITRItem, 'id'>) => {
+-        try {
+-            // Pack linkedChecklists into detail_data
+-            const payload = { ...itr } as any;
+-
+-            let detailData: any = {};
+-            if (payload.detail_data) {
+-                try {
+-                    detailData = typeof payload.detail_data === 'string'
+-                        ? JSON.parse(payload.detail_data)
+-                        : payload.detail_data;
+-                } catch (e) {
+-                    console.error("Failed to parse payload.detail_data in addITR", e);
+-                }
++        // Pack linkedChecklists into detail_data
++        const payload = { ...itr } as any;
++
++        let detailData: any = {};
++        if (payload.detail_data) {
++            try {
++                detailData = typeof payload.detail_data === 'string'
++                    ? JSON.parse(payload.detail_data)
++                    : payload.detail_data;
++            } catch (e) {
++                console.error("Failed to parse payload.detail_data in addITR", e);
+             }
+-
+-            // §17: checklists are now standalone instance rows (itrId FK), not
+-            // packed into detail_data. Drop any stray linkedChecklists field.
+-            delete payload.linkedChecklists;
+-
+-            // Always stringify detail_data for backend
+-            payload.detail_data = JSON.stringify(detailData);
+-
+-            const response = await api.post('/itr/', withCurrentProject(payload));
+-            const newITR = normalizeItem(response.data);
+-            set((state) => ({ itrList: [...state.itrList, newITR] }));
+-            return newITR;
+-        } catch (error: any) {
+-            const msg = getErrorMessage(error, 'Failed to add ITR');
+-            set({ error: msg });
+-            throw error;
+         }
++
++        // §17: checklists are now standalone instance rows (itrId FK), not
++        // packed into detail_data. Drop any stray linkedChecklists field.
++        delete payload.linkedChecklists;
++
++        // Always stringify detail_data for backend
++        payload.detail_data = JSON.stringify(detailData);
++
++        const response = await api.post('/itr/', withCurrentProject(payload));
++        const newITR = normalizeItem(response.data);
++        set((state) => ({ itrList: [...state.itrList, newITR] }));
++        return newITR;
+     },
+ 
+     updateITR: async (id: string, updates: Partial<ITRItem>) => {
+-        try {
+-            const payload = { ...updates } as any;
+-            const { itrList } = get();
+-
+-            // §17: checklists are standalone instance rows now, not packed into
+-            // detail_data. Drop any stray linkedChecklists field.
+-            delete payload.linkedChecklists;
+-
+-            // Merge detail_data with the existing record so we don't clobber
+-            // other extended fields the form didn't touch.
+-            if (payload.detail_data) {
+-                const existingItem = itrList.find(i => i.id === id);
+-                let existingDetail = {};
+-
+-                if (existingItem?.detail_data) {
+-                    try {
+-                        existingDetail = typeof existingItem.detail_data === 'string'
+-                            ? JSON.parse(existingItem.detail_data)
+-                            : existingItem.detail_data;
+-                    } catch (e) {
+-                        console.error("Failed to parse existing detail_data", e);
+-                    }
+-                }
++        const payload = { ...updates } as any;
++        const { itrList } = get();
++
++        // §17: checklists are standalone instance rows now, not packed into
++        // detail_data. Drop any stray linkedChecklists field.
++        delete payload.linkedChecklists;
+ 
+-                let newDetail = {};
++        // Merge detail_data with the existing record so we don't clobber
++        // other extended fields the form didn't touch.
++        if (payload.detail_data) {
++            const existingItem = itrList.find(i => i.id === id);
++            let existingDetail = {};
++
++            if (existingItem?.detail_data) {
+                 try {
+-                    newDetail = typeof payload.detail_data === 'string'
+-                        ? JSON.parse(payload.detail_data)
+-                        : payload.detail_data;
++                    existingDetail = typeof existingItem.detail_data === 'string'
++                        ? JSON.parse(existingItem.detail_data)
++                        : existingItem.detail_data;
+                 } catch (e) {
+-                    console.error("Failed to parse payload detail_data", e);
++                    console.error("Failed to parse existing detail_data", e);
+                 }
++            }
+ 
+-                payload.detail_data = JSON.stringify({ ...existingDetail, ...newDetail });
++            let newDetail = {};
++            try {
++                newDetail = typeof payload.detail_data === 'string'
++                    ? JSON.parse(payload.detail_data)
++                    : payload.detail_data;
++            } catch (e) {
++                console.error("Failed to parse payload detail_data", e);
+             }
+ 
+-            const response = await api.put(`/itr/${id}`, payload);
+-            const updated = normalizeItem(response.data);
+-            set((state) => ({ itrList: state.itrList.map(i => i.id === id ? updated : i) }));
+-        } catch (error: any) {
+-            const msg = getErrorMessage(error, 'Failed to update ITR');
+-            set({ error: msg });
+-            throw error;
++            payload.detail_data = JSON.stringify({ ...existingDetail, ...newDetail });
+         }
++
++        const response = await api.put(`/itr/${id}`, payload);
++        const updated = normalizeItem(response.data);
++        set((state) => ({ itrList: state.itrList.map(i => i.id === id ? updated : i) }));
+     },
+ 
+     deleteITR: async (id: string) => {
+diff --git a/react-app/src/store/meetingMinutesStore.ts b/react-app/src/store/meetingMinutesStore.ts
+index c6e578b2..311e8697 100644
+--- a/react-app/src/store/meetingMinutesStore.ts
++++ b/react-app/src/store/meetingMinutesStore.ts
+@@ -136,29 +136,18 @@ export const useMeetingMinutesStore = create<MeetingMinutesState>((set, get) =>
+         await get().fetchMeetingMinutes(params);
+     },
+ 
++    // A refused or failed save goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-002); the page's error banner is for list loads only.
+     addMeetingMinutes: async (meeting: Omit<MeetingMinutesItem, 'id'>) => {
+-        try {
+-            const response = await api.post('/meeting-minutes/', withCurrentProject(meeting));
+-            const newMeeting = normalizeItem(response.data);
+-            set((state) => ({ meetingList: [...state.meetingList, newMeeting] }));
+-            return newMeeting;
+-        } catch (error: any) {
+-            const msg = getErrorMessage(error, 'Failed to add Meeting Minutes');
+-            set({ error: msg });
+-            throw error;
+-        }
++        const response = await api.post('/meeting-minutes/', withCurrentProject(meeting));
++        const newMeeting = normalizeItem(response.data);
++        set((state) => ({ meetingList: [...state.meetingList, newMeeting] }));
++        return newMeeting;
+     },
+ 
+     updateMeetingMinutes: async (id: string, updates: Partial<MeetingMinutesItem>) => {
+-        try {
+-            const response = await api.put(`/meeting-minutes/${id}`, updates);
+-            const updated = normalizeItem(response.data);
+-            set((state) => ({ meetingList: state.meetingList.map(m => m.id === id ? updated : m) }));
+-        } catch (error: any) {
+-            const msg = getErrorMessage(error, 'Failed to update Meeting Minutes');
+-            set({ error: msg });
+-            throw error;
+-        }
++        const response = await api.put(`/meeting-minutes/${id}`, updates);
++        const updated = normalizeItem(response.data);
++        set((state) => ({ meetingList: state.meetingList.map(m => m.id === id ? updated : m) }));
+     },
+ 
+     deleteMeetingMinutes: async (id: string) => {
+diff --git a/react-app/src/store/osdStore.ts b/react-app/src/store/osdStore.ts
+index ae0c30a3..0116b016 100644
+--- a/react-app/src/store/osdStore.ts
++++ b/react-app/src/store/osdStore.ts
+@@ -91,29 +91,18 @@ export const useOSDStore = create<OSDState>((set, get) => ({
+         await get().fetchOSDs(params);
+     },
+ 
++    // A refused or failed save goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-002); the page's error banner is for list loads only.
+     addOSD: async (osd: Omit<OSDItem, 'id'>) => {
+-        try {
+-            const response = await api.post('/osd/', withCurrentProject(osd));
+-            const newOSD = normalizeItem(response.data);
+-            set((state) => ({ osdList: [...state.osdList, newOSD] }));
+-            return newOSD;
+-        } catch (error: any) {
+-            const msg = getErrorMessage(error, 'Failed to add OSD');
+-            set({ error: msg });
+-            throw error;
+-        }
++        const response = await api.post('/osd/', withCurrentProject(osd));
++        const newOSD = normalizeItem(response.data);
++        set((state) => ({ osdList: [...state.osdList, newOSD] }));
++        return newOSD;
+     },
+ 
+     updateOSD: async (id: string, updates: Partial<OSDItem>) => {
+-        try {
+-            const response = await api.put(`/osd/${id}`, updates);
+-            const updated = normalizeItem(response.data);
+-            set((state) => ({ osdList: state.osdList.map(o => o.id === id ? updated : o) }));
+-        } catch (error: any) {
+-            const msg = getErrorMessage(error, 'Failed to update OSD');
+-            set({ error: msg });
+-            throw error;
+-        }
++        const response = await api.put(`/osd/${id}`, updates);
++        const updated = normalizeItem(response.data);
++        set((state) => ({ osdList: state.osdList.map(o => o.id === id ? updated : o) }));
+     },
+ 
+     deleteOSD: async (id: string) => {
+diff --git a/react-app/src/store/pqpStore.ts b/react-app/src/store/pqpStore.ts
+index 2f48aa29..ab7afe86 100755
+--- a/react-app/src/store/pqpStore.ts
++++ b/react-app/src/store/pqpStore.ts
+@@ -91,41 +91,24 @@ export const usePQPStore = create<PQPState>((set, get) => ({
+         await get().fetchPQPs(params);
+     },
+ 
++    // A refused or failed save / publish goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-002); the page's error banner is for list loads only.
+     addPQP: async (pqp: Omit<PQPItem, 'id'>) => {
+-        try {
+-            const response = await api.post('/pqp/', withCurrentProject(pqp));
+-            const newPQP = response.data;
+-            set((state) => ({ pqpList: [...state.pqpList, newPQP] }));
+-            return newPQP;
+-        } catch (error: any) {
+-            const msg = getErrorMessage(error, 'Failed to add PQP');
+-            set({ error: msg });
+-            throw error;
+-        }
++        const response = await api.post('/pqp/', withCurrentProject(pqp));
++        const newPQP = response.data;
++        set((state) => ({ pqpList: [...state.pqpList, newPQP] }));
++        return newPQP;
+     },
+ 
+     updatePQP: async (id: string, updates: Partial<PQPItem>) => {
+-        try {
+-            const response = await api.put(`/pqp/${id}`, updates);
+-            set((state) => ({ pqpList: state.pqpList.map(p => (p.id === id ? response.data : p)) }));
+-        } catch (error: any) {
+-            const msg = getErrorMessage(error, 'Failed to update PQP');
+-            set({ error: msg });
+-            throw error;
+-        }
++        const response = await api.put(`/pqp/${id}`, updates);
++        set((state) => ({ pqpList: state.pqpList.map(p => (p.id === id ? response.data : p)) }));
+     },
+ 
+     publishPQP: async (id: string, changeSummary?: string) => {
+-        try {
+-            const response = await api.post(`/pqp/${id}/publish`, { change_summary: changeSummary });
+-            const published = response.data;
+-            set((state) => ({ pqpList: state.pqpList.map(p => (p.id === id ? published : p)) }));
+-            return published;
+-        } catch (error: any) {
+-            const msg = getErrorMessage(error, 'Failed to publish PQP');
+-            set({ error: msg });
+-            throw error;
+-        }
++        const response = await api.post(`/pqp/${id}/publish`, { change_summary: changeSummary });
++        const published = response.data;
++        set((state) => ({ pqpList: state.pqpList.map(p => (p.id === id ? published : p)) }));
++        return published;
+     },
+ 
+     getHistory: async (id: string) => {
+diff --git a/react-app/src/store/refusalStore.ts b/react-app/src/store/refusalStore.ts
+index e8f3381c..2a3e3881 100644
+--- a/react-app/src/store/refusalStore.ts
++++ b/react-app/src/store/refusalStore.ts
+@@ -1,6 +1,6 @@
+ import { create } from 'zustand';
+ import { getErrorStatusCode } from '../utils/errorUtils';
+-import type { RefusalAction } from '../utils/refusal';
++import type { RefusalAction, RefusalOptions } from '../utils/refusal';
+ 
+ /**
+  * The one "operation refused / failed" dialog (REFUSAL-DIALOG-2026-001), mounted once in App.tsx next to the Toaster.
+@@ -14,6 +14,8 @@ interface RefusalEntry {
+     error?: unknown;
+     /** a refusal already known without a failed request, e.g. NOI's delete-check */
+     coded?: { code: string; params: Record<string, unknown> };
++    /** a failed save whose form is still open with the user's input (adds the "input kept" line) */
++    keepsInput?: boolean;
+ }
+ 
+ interface RefusalState {
+@@ -30,10 +32,13 @@ export const useRefusalStore = create<RefusalState>((set) => ({
+     close: () => set({ current: null }),
+ }));
+ 
+-/** Show a refused or failed delete / save in the dialog. Not for 401: the API client is already logging the user out. */
+-export function showRefusal(error: unknown, action: RefusalAction): void {
++/**
++ * Show a refused or failed delete / save in the dialog. Not for 401: the API client is already logging the user out.
++ * Pass `{ keepsInput: true }` only when the form stays open with everything the user typed (REFUSAL-DIALOG-2026-002 D3).
++ */
++export function showRefusal(error: unknown, action: RefusalAction, options: RefusalOptions = {}): void {
+     if (getErrorStatusCode(error) === 401) return;
+-    useRefusalStore.getState().show({ error, action });
++    useRefusalStore.getState().show({ error, action, keepsInput: options.keepsInput });
+ }
+ 
+ /** Show a refusal the page already knows about (same codes and wording as the backend's coded refusals). */
+diff --git a/react-app/src/utils/refusal.ts b/react-app/src/utils/refusal.ts
+index 59c71a97..0313661e 100644
+--- a/react-app/src/utils/refusal.ts
++++ b/react-app/src/utils/refusal.ts
+@@ -5,15 +5,22 @@
+  * Rules:
+  * - the backend's coded refusal (`{detail, code, params}`, backend/core/refusals.py) is translated from `refusal.code.<CODE>`;
+  * - a refusal without a code: the Chinese UI shows a short Chinese line plus the server's English text, the English UI that text;
+- * - 404 always gets the "no longer exists" line; 422 field errors reuse describeSaveError's per-field lines; 403 / 409 without a usable text get a generic line;
++ * - 404 always gets the "no longer exists" line; 422 field errors are listed one per line (describeSaveError's field labels); 403 / 409 without a usable text get a generic line;
+  * - 5xx and network failures are "failed" (not "refused"): a generic line, never the response body;
+- * - 401 returns null: the API client is already logging the user out.
++ * - 401 returns null: the API client is already logging the user out;
++ * - a failed save whose form stayed open (`keepsInput`, REFUSAL-DIALOG-2026-002 D3) adds a line saying the input is kept: for a refusal
++ *   "correct it and save again", for a 5xx / network failure "could not confirm whether it was saved" (the server may have stored it).
+  */
+ import { isAxiosError } from './errorUtils';
+-import { describeSaveError, type Translate } from './saveErrors';
++import { fieldErrorLines, type Translate } from './saveErrors';
+ 
+ export type RefusalAction = 'delete' | 'save';
+ 
++export interface RefusalOptions {
++    /** the form the user was filling in is still open with everything they typed (failed saves only) */
++    keepsInput?: boolean;
++}
++
+ export interface RefusalView {
+     title: string;
+     message: string;
+@@ -21,6 +28,8 @@ export interface RefusalView {
+     items?: string[];
+     /** the server's own text, shown under the message when there is no translation for it */
+     original?: string;
++    /** the last line: what happened to the user's input (a failed save with `keepsInput`) */
++    note?: string;
+ }
+ 
+ type Params = Record<string, unknown>;
+@@ -82,7 +91,20 @@ export function describeCoded(code: string, rawParams: unknown, t: Translate, ac
+     return { title: t(action === 'delete' ? 'refusal.title.delete' : 'refusal.title.save'), message, items: referenceItems(t, params) };
+ }
+ 
+-export function describeRefusal(error: unknown, t: Translate, action: RefusalAction, language: 'en' | 'zh'): RefusalView | null {
++/** 5xx, network or a non-HTTP error: the request may or may not have been carried out ("failed", not "refused"). */
++const isFailure = (error: unknown): boolean => {
++    if (!isAxiosError(error)) return true;
++    const status = error.response?.status;
++    return status === undefined || status >= 500;
++};
++
++export function describeRefusal(error: unknown, t: Translate, action: RefusalAction, language: 'en' | 'zh', options: RefusalOptions = {}): RefusalView | null {
++    const view = refusalView(error, t, action, language);
++    if (!view || action !== 'save' || !options.keepsInput) return view;
++    return { ...view, note: t(isFailure(error) ? 'refusal.keptInputUnconfirmed' : 'refusal.keptInput') };
++}
++
++function refusalView(error: unknown, t: Translate, action: RefusalAction, language: 'en' | 'zh'): RefusalView | null {
+     const refusedTitle = t(action === 'delete' ? 'refusal.title.delete' : 'refusal.title.save');
+     const failedTitle = t(action === 'delete' ? 'refusal.title.deleteFailed' : 'refusal.title.saveFailed');
+ 
+@@ -103,7 +125,12 @@ export function describeRefusal(error: unknown, t: Translate, action: RefusalAct
+ 
+     // the record is gone (deleted elsewhere, or no longer in this account's scope): the server's "X not found" adds nothing
+     if (status === 404) return { title: refusedTitle, message: t('refusal.notFound') };
+-    if (Array.isArray(data.detail)) return { title: refusedTitle, message: describeSaveError(error, t) };
++    if (Array.isArray(data.detail)) {
++        const items = fieldErrorLines(data.detail, t);
++        return items.length > 0
++            ? { title: refusedTitle, message: t('refusal.fieldErrors'), items }
++            : { title: refusedTitle, message: t('refusal.unexpected') };
++    }
+ 
+     if (detail) {
+         return language === 'zh'
+diff --git a/react-app/src/utils/saveErrors.ts b/react-app/src/utils/saveErrors.ts
+index f3c57c7c..0350a701 100644
+--- a/react-app/src/utils/saveErrors.ts
++++ b/react-app/src/utils/saveErrors.ts
+@@ -18,6 +18,18 @@ const translated = (t: Translate, key: string): string | null => {
+ 
+ const fieldLabel = (t: Translate, field: string): string => translated(t, `dateField.${field}`) ?? field;
+ 
++/** One line per field of a FastAPI 422 list: "Raise date: not a real calendar date" (de-duplicated). */
++export function fieldErrorLines(detail: unknown[], t: Translate): string[] {
++    const lines = detail.map((e) => {
++        const item = (e ?? {}) as { msg?: string; loc?: unknown[]; code?: string };
++        const field = Array.isArray(item.loc) && item.loc.length > 0 ? String(item.loc[item.loc.length - 1]) : '';
++        if (item.code && field) return `${fieldLabel(t, field)}：${t(issueMessageKey(item.code))}`;
++        if (field && item.msg) return `${fieldLabel(t, field)}：${item.msg}`;
++        return item.msg || '';
++    }).filter(Boolean);
++    return [...new Set(lines)];
++}
++
+ export function describeSaveError(error: unknown, t: Translate): string {
+     const fallback = t('common.saveFailed');
+     if (!isAxiosError(error)) return fallback;
+@@ -30,13 +42,7 @@ export function describeSaveError(error: unknown, t: Translate): string {
+     if (typeof detail === 'string' && detail.trim()) return detail;
+ 
+     if (Array.isArray(detail)) {
+-        const lines = detail.map((e: { msg?: string; loc?: unknown[]; code?: string }) => {
+-            const field = Array.isArray(e?.loc) && e.loc.length > 0 ? String(e.loc[e.loc.length - 1]) : '';
+-            if (e?.code && field) return `${fieldLabel(t, field)}：${t(issueMessageKey(e.code))}`;
+-            if (field && e?.msg) return `${fieldLabel(t, field)}：${e.msg}`;
+-            return e?.msg || '';
+-        }).filter(Boolean);
+-        const unique = [...new Set(lines)];
++        const unique = fieldErrorLines(detail, t);
+         if (unique.length > 0) return unique.join('；');
+     }
+ 
+@@ -48,11 +54,13 @@ export function describeSaveError(error: unknown, t: Translate): string {
+ export interface OutcomeNotice {
+     /** whether the modal may close */
+     close: boolean;
+-    /** toast to show (absent for clean success and banner-owned file failures) */
++    /** toast to show (absent for clean success, banner-owned file failures and refusals) */
+     notice?: { level: 'error' | 'warning'; text: string };
++    /** the record was not saved: show this error in the refusal dialog (REFUSAL-DIALOG-2026-002), the modal keeps everything */
++    refusal?: { error: unknown };
+ }
+ 
+-/** Turns a SaveOutcome into "close or stay" plus an optional toast; incomplete file work is explained in the banner. */
++/** Turns a SaveOutcome into "close or stay" plus an optional toast or refusal; incomplete file work is explained in the banner. */
+ export function presentOutcome(outcome: SaveOutcome, t: Translate): OutcomeNotice {
+     switch (outcome.status) {
+         case 'saved':
+@@ -63,6 +71,6 @@ export function presentOutcome(outcome: SaveOutcome, t: Translate): OutcomeNotic
+         case 'saved-incomplete':
+             return { close: false };
+         case 'failed':
+-            return { close: false, notice: { level: 'error', text: t('saveFlow.failedKeep', { message: outcome.message }) } };
++            return { close: false, refusal: { error: outcome.error } };
+     }
+ }
+diff --git a/react-app/src/utils/saveFlow.ts b/react-app/src/utils/saveFlow.ts
+index 28441edc..e5abc66b 100644
+--- a/react-app/src/utils/saveFlow.ts
++++ b/react-app/src/utils/saveFlow.ts
+@@ -40,8 +40,9 @@ export type SaveOutcome =
+         uploaded: Record<string, unknown[]>;
+         reloadFailed: boolean;
+     }
+-    /** the record was not saved — keep the modal open, keep everything */
+-    | { status: 'failed'; message: string };
++    /** the record was not saved — keep the modal open, keep everything. `error` is the original failure, for the refusal dialog
++     *  (absent when the page refused before any request, e.g. no record id: the dialog then says "unexpected error"). */
++    | { status: 'failed'; message: string; error?: unknown };
+ 
+ export interface SaveFlowSteps {
+     /** Writes the record and returns its id. Not called when `reuseId` is given. */
+@@ -67,7 +68,7 @@ export async function runSaveFlow(s: SaveFlowSteps): Promise<SaveOutcome> {
+         try {
+             id = await s.writeRecord();
+         } catch (e) {
+-            return { status: 'failed', message: s.describe(e) };
++            return { status: 'failed', message: s.describe(e), error: e };
+         }
+     }
+     s.onRecordSaved?.(id);
+diff --git a/react-app/tests-unit/refusalSave.test.ts b/react-app/tests-unit/refusalSave.test.ts
+new file mode 100644
+index 00000000..7299ff79
+--- /dev/null
++++ b/react-app/tests-unit/refusalSave.test.ts
+@@ -0,0 +1,106 @@
++// REFUSAL-DIALOG-2026-002: refused / failed saves in the refusal dialog (utils/refusal.ts).
++// D1 a 422 lists its fields one per line; D3 a save whose form stayed open says the input is kept, worded differently
++// for a refusal (4xx: "correct it and save again") and a failure (5xx / network: "could not confirm whether it was saved").
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { describeRefusal } from '../src/utils/refusal';
++import { describeSaveError, fieldErrorLines } from '../src/utils/saveErrors';
++
++const fs = await import('node:fs');
++
++// a stub dictionary: just enough to prove which keys are used (the real wording is checked at the end)
++const DICT: Record<string, string> = {
++    'refusal.title.save': '無法儲存',
++    'refusal.title.saveFailed': '儲存失敗',
++    'refusal.title.delete': '無法刪除',
++    'refusal.title.deleteFailed': '刪除失敗',
++    'refusal.fieldErrors': 'FIELDS',
++    'refusal.keptInput': 'KEPT',
++    'refusal.keptInputUnconfirmed': 'KEPT?',
++    'refusal.uncoded': 'UNCODED',
++    'refusal.unexpected': 'UNEXPECTED',
++    'refusal.network': 'NETWORK',
++    'refusal.server': 'SERVER {status}',
++    'refusal.notFound': 'GONE',
++    'refusal.forbidden': 'FORBIDDEN',
++    'refusal.conflict': 'CONFLICT',
++    'refusal.listSep': '、',
++    'refusal.code.PERMISSION_DENIED': 'NO PERMISSION {permissions}',
++    'common.saveFailed': '儲存失敗',
++    'dateField.raiseDate': '提出日期',
++    'dateField.closeoutDate': '結案日期',
++    'dateIssue.invalid_calendar': '不是有效日期',
++    'dateIssue.closeout_after_due': '晚於到期日',
++    'dateIssue.unknown': '有問題',
++};
++const t = (key: string, params?: Record<string, string | number>) => {
++    let v = DICT[key] ?? key;
++    for (const [k, val] of Object.entries(params ?? {})) v = v.replace(new RegExp(`{${k}}`, 'g'), String(val));
++    return v;
++};
++const axiosErr = (status: number | undefined, data?: unknown) => ({ isAxiosError: true, message: 'Request failed with status code 422', response: status === undefined ? undefined : { status, data } });
++const dateErrors = axiosErr(422, { detail: [
++    { loc: ['body', 'raiseDate'], code: 'invalid_calendar', msg: 'date is not a real calendar date' },
++    { loc: ['body', 'closeoutDate'], code: 'closeout_after_due', msg: 'x' },
++    { loc: ['body', 'raiseDate'], code: 'invalid_calendar', msg: 'again' },
++] });
++
++test('D1: a 422 is one line per field (de-duplicated), never the raw list or the axios message', () => {
++    const v = describeRefusal(dateErrors, t, 'save', 'zh')!;
++    assert.deepEqual(v, { title: '無法儲存', message: 'FIELDS', items: ['提出日期：不是有效日期', '結案日期：晚於到期日'] });
++    // a Pydantic item without a code: label (or raw field name) plus its own message
++    const plain = describeRefusal(axiosErr(422, { detail: [{ loc: ['body', 'weird'], msg: 'field required' }] }), t, 'save', 'en')!;
++    assert.deepEqual(plain.items, ['weird：field required']);
++    // an empty list says something generic rather than an empty dialog
++    assert.deepEqual(describeRefusal(axiosErr(422, { detail: [] }), t, 'save', 'zh'), { title: '無法儲存', message: 'UNEXPECTED' });
++});
++
++test('fieldErrorLines and describeSaveError agree (describeSaveError joins the same lines)', () => {
++    const detail = (dateErrors.response!.data as { detail: unknown[] }).detail;
++    assert.deepEqual(fieldErrorLines(detail, t), ['提出日期：不是有效日期', '結案日期：晚於到期日']);
++    assert.equal(describeSaveError(dateErrors, t), '提出日期：不是有效日期；結案日期：晚於到期日');
++    assert.deepEqual(fieldErrorLines([null, { msg: '' }, 'x'], t), []);
++});
++
++test('D3: a refused save whose form stayed open says the input is kept: "correct it and save again"', () => {
++    for (const err of [
++        dateErrors,
++        axiosErr(400, { detail: 'Cannot close: missing fields' }),
++        axiosErr(403, { detail: 'x', code: 'PERMISSION_DENIED', params: { permissions: ['ncr:close:all'] } }),
++        axiosErr(409, {}),
++        axiosErr(404, { detail: 'NCR not found' }),
++    ]) {
++        const v = describeRefusal(err, t, 'save', 'zh', { keepsInput: true })!;
++        assert.equal(v.title, '無法儲存');
++        assert.equal(v.note, 'KEPT', JSON.stringify(err.response));
++    }
++    // the coded reason itself is unchanged by the note
++    const coded = describeRefusal(axiosErr(403, { detail: 'x', code: 'PERMISSION_DENIED', params: { permissions: ['ncr:close:all'] } }), t, 'save', 'zh', { keepsInput: true })!;
++    assert.equal(coded.message, 'NO PERMISSION ncr:close:all');
++});
++
++test('D3: a failed save (5xx, network, unexpected) says it could not confirm the save, and still never shows the body', () => {
++    const server = describeRefusal(axiosErr(500, { detail: 'Traceback ...' }), t, 'save', 'zh', { keepsInput: true })!;
++    assert.deepEqual(server, { title: '儲存失敗', message: 'SERVER 500', note: 'KEPT?' });
++    assert.equal(describeRefusal(axiosErr(undefined), t, 'save', 'en', { keepsInput: true })!.note, 'KEPT?');
++    assert.equal(describeRefusal(new Error('boom'), t, 'save', 'zh', { keepsInput: true })!.note, 'KEPT?');
++    assert.equal(describeRefusal(undefined, t, 'save', 'zh', { keepsInput: true })!.note, 'KEPT?');   // a page-side "failed" without an error
++});
++
++test('D3: no note unless asked, never for a delete, and never for a 401', () => {
++    assert.equal(describeRefusal(axiosErr(400, { detail: 'x' }), t, 'save', 'zh')!.note, undefined);
++    assert.equal(describeRefusal(axiosErr(400, { detail: 'x' }), t, 'save', 'zh', { keepsInput: false })!.note, undefined);
++    assert.equal(describeRefusal(axiosErr(400, { detail: 'x' }), t, 'delete', 'zh', { keepsInput: true })!.note, undefined);
++    assert.equal(describeRefusal(axiosErr(401, { detail: 'x' }), t, 'save', 'zh', { keepsInput: true }), null);
++});
++
++test('the new wording exists in both languages (LanguageContext)', () => {
++    const src = fs.readFileSync('src/context/LanguageContext.tsx', 'utf8').replace(/\r\n/g, '\n');
++    const zhStart = src.indexOf('\n  zh: {');
++    assert.ok(zhStart > 0, 'zh block not found');
++    for (const [lang, part] of [['en', src.slice(0, zhStart)], ['zh', src.slice(zhStart)]] as const) {
++        for (const key of ['refusal.fieldErrors', 'refusal.keptInput', 'refusal.keptInputUnconfirmed']) {
++            assert.match(part, new RegExp(`^ {4}'${key.replace(/\./g, '\\.')}': '[^']+',$`, 'm'), `${lang} ${key}`);
++        }
++    }
++});
+diff --git a/react-app/tests-unit/saveFlow.test.ts b/react-app/tests-unit/saveFlow.test.ts
+index 1271741b..e2eaf4be 100644
+--- a/react-app/tests-unit/saveFlow.test.ts
++++ b/react-app/tests-unit/saveFlow.test.ts
+@@ -54,11 +54,13 @@ test('clean success: write, deletes, uploads, reload — and the outcome says sa
+ 
+ test('record write fails: nothing else is attempted and the outcome is failed with the described message', async () => {
+     const base = steps();
+-    base.s.writeRecord = async () => { base.calls.push('write'); throw new Error('422'); };
++    const writeError = new Error('422');
++    base.s.writeRecord = async () => { base.calls.push('write'); throw writeError; };
+     base.s.uploads = [{ category: 'attachment', files: [file('a')] }];
+     base.s.deletedFileIds = ['d1'];
+     const out = await runSaveFlow(base.s);
+-    assert.deepEqual(out, { status: 'failed', message: 'E(422)' });
++    assert.deepEqual(out, { status: 'failed', message: 'E(422)', error: writeError });
++    if (out.status === 'failed') assert.equal(out.error, writeError, 'the original error is kept as is, for the refusal dialog');
+     assert.deepEqual(base.calls, ['write']);        // no delete, no upload, no reload
+ });
+ 
+@@ -171,10 +173,15 @@ test('network failure, server error and unknown errors: friendly fixed lines, th
+ 
+ // ---- presentOutcome -------------------------------------------------------------------------------------------------------
+ 
+-test('presentOutcome: incomplete saves use the banner only; other outcomes keep their toast', () => {
++test('presentOutcome: incomplete saves use the banner only; a failed save goes to the refusal dialog; a stale list keeps its toast', () => {
+     assert.deepEqual(presentOutcome({ status: 'saved' }, t), { close: true });
+     assert.deepEqual(presentOutcome({ status: 'saved-reload-failed', id: 'A' }, t), { close: true, notice: { level: 'warning', text: '已保存，重新載入失敗' } });
+-    assert.deepEqual(presentOutcome({ status: 'failed', message: '提出日期：不是有效日期' }, t), { close: false, notice: { level: 'error', text: '尚未保存，內容已保留。提出日期：不是有效日期' } });
++    // REFUSAL-DIALOG-2026-002: no toast any more; the original error is handed over for the dialog
++    const err = axiosErr(422, { detail: [{ loc: ['body', 'raiseDate'], code: 'invalid_calendar' }] });
++    const failed = presentOutcome({ status: 'failed', message: '提出日期：不是有效日期', error: err }, t);
++    assert.deepEqual(failed, { close: false, refusal: { error: err } });
++    assert.equal(failed.refusal?.error, err);
++    assert.equal(failed.notice, undefined);
+     const inc = presentOutcome({
+         status: 'saved-incomplete', id: 'A', reloadFailed: false, remainingDeletes: [], uploadedCategories: [], uploaded: {}, remainingUploads: [],
+         failures: [{ step: 'upload', category: 'attachment', message: 'E(net)' }, { step: 'delete', message: 'E(gone)' }],

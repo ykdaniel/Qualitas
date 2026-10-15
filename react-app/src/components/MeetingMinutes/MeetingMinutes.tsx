@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
 import { Search } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
@@ -17,7 +16,6 @@ import { useDebounce } from '../../hooks/useDebounce';
 import { useCreateGate } from '../../hooks/useCreateGate';
 import { collectRegisterItems } from './discussionLog';
 import { uploadFiles } from '../../services/api';
-import { getErrorMessage } from '../../utils/errorUtils';
 import { describeSaveError } from '../../utils/saveErrors';
 import { runSaveFlow, sameWrite } from '../../utils/saveFlow';
 
@@ -192,7 +190,7 @@ const MeetingMinutes: React.FC = () => {
         }
       },
     });
-    if (outcome.status === 'failed') return { status: 'failed', message: outcome.message };
+    if (outcome.status === 'failed') return { status: 'failed', message: outcome.message, error: outcome.error };
 
     const id = lastWriteRef.current?.id || currentId;
     if (!documentNumber) {
@@ -278,7 +276,7 @@ const MeetingMinutes: React.FC = () => {
         await updateMeetingMinutes(voidModal.id, { status: 'Void' });
       } catch (err) {
         console.error('Failed to void Meeting Minutes:', err);
-        toast.error(getErrorMessage(err, t('common.saveFailed')));
+        showRefusal(err, 'save');
       }
       setVoidModal({ isOpen: false, id: null, message: '' });
     }

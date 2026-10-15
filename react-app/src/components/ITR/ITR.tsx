@@ -18,7 +18,6 @@ import { createColumns } from './columns';
 import { ITRDetailModal, ITRDetailData, PendingUploads } from './ITRModals';
 import ConfirmModal from '../Shared/ConfirmModal';
 import { uploadFiles, deleteFile } from '../../services/api';
-import { describeSaveError } from '../../utils/saveErrors';
 import shellStyles from '../Shared/ModuleShell.module.css';
 
 type StatusFilter = 'all' | 'inProgress' | 'approved' | 'reject' | 'void' | 'overdue';
@@ -142,7 +141,7 @@ const ITR: React.FC = () => {
                 setIsEditModalOpen(false);
             } catch (error) {
                 console.error('Error publishing ITR:', error);
-                toast.error('Failed to publish ITR.');
+                showRefusal(error, 'save');
             }
             return;
         }
@@ -236,20 +235,10 @@ const ITR: React.FC = () => {
             setIsEditModalOpen(false);
             setCurrentItrId(null);
         } catch (error: any) {
-            // FORMS-CONSISTENCY-2026-003: this used to show error.response.data.detail
-            // verbatim, including for 5xx — the raw backend detail text (e.g. a stack
-            // trace or validation dump) went straight to the user. Routed through
-            // describeSaveError (never exposes the raw body for 5xx) so the message text
-            // stays friendly, same as NOI/NCR.
-            //
-            // FORMS-CONSISTENCY-2026-004: the wrapper itself is deliberately NOT the
-            // shared saveFlow.failedKeep ("Not saved — ..."). This catch also covers a
-            // 5xx or a network error with no response at all — those do not prove the
-            // write never reached the server, only that this client never got
-            // confirmation. Asserting "Not saved" here would be a guess dressed up as
-            // fact. ITR gets its own itr.saveNotConfirmed wording instead; NOI/NCR keep
-            // saveFlow.failedKeep as-is (not touched by this round).
-            toast.error(t('itr.saveNotConfirmed', { message: describeSaveError(error, t) }), { duration: 10000 });
+            // REFUSAL-DIALOG-2026-002: shown in the refusal dialog. It never shows a 5xx body, and for a 5xx or a network error
+            // (which does not prove the write never reached the server) it says it could not confirm the save, instead of "not
+            // saved" — what FORMS-CONSISTENCY-2026-004's itr.saveNotConfirmed wording used to say. The page banner is for list loads only.
+            showRefusal(error, 'save', { keepsInput: true });
             // Re-throw (2026-09-19 fix): the modal's own handleSave awaits
             // this onSave call and only closes on success — swallowing the
             // error here made every failed save (e.g. approving without

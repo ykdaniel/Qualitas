@@ -1,5 +1,6 @@
 
 from fastapi import APIRouter, Depends, HTTPException
+from core.refusals import refusal_http
 from sqlalchemy.orm import Session
 
 import schemas
@@ -63,7 +64,7 @@ def create_osd(
     try:
         return osd_service.create_osd(osd_create=osd, user_id=current_user.id, username=current_user.username, scope=scope)
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
 
 @router.put("/{osd_id}", response_model=schemas.OSD)
 def update_osd(
@@ -76,9 +77,9 @@ def update_osd(
     try:
         db_osd = osd_service.update_osd(osd_id=osd_id, osd_update=osd, user_id=current_user.id, username=current_user.username, scope=scope)
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
     if db_osd is None:
         raise HTTPException(status_code=404, detail="OSD not found")
     return db_osd

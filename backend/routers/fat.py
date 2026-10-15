@@ -27,7 +27,7 @@ def create_fat(
             scope=scope,
         )
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except Refusal as e:    # FAT_SUPPLIER_REQUIRED / FAT_SUPPLIER_NOT_FOUND
         raise refusal_http(e, 400)
 
@@ -83,7 +83,7 @@ def update_fat(
             scope=scope,
         )
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except Refusal as e:    # FAT_SUPPLIER_REQUIRED / FAT_SUPPLIER_NOT_FOUND
         raise refusal_http(e, 400)
     if db_fat is None:
@@ -121,7 +121,7 @@ def update_fat_detail(
             scope=scope,
         )
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     if db_fat is None:
         raise HTTPException(status_code=404, detail="FAT not found")
     return db_fat

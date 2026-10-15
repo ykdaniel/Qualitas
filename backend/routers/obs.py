@@ -65,7 +65,7 @@ def create_obs(
     try:
         return obs_service.create_obs(obs_create=obs, user_id=current_user.id, username=current_user.username, scope=scope)
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except DateValidationError as e:
         raise HTTPException(status_code=422, detail=e.http_detail())
 
@@ -80,14 +80,14 @@ def update_obs(
     try:
         db_obs = obs_service.update_obs(obs_id=obs_id, obs_update=obs, user_id=current_user.id, username=current_user.username, scope=scope)
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except DateValidationError as e:
         raise HTTPException(status_code=422, detail=e.http_detail())
     except OBSAttachmentsLocked as e:
         # Closed / Void: photos, attachments and their pairing order are locked — 409 ATTACHMENT_LOCKED, like /api/files.
         raise refusal_http(e, 409)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
     if db_obs is None:
         raise HTTPException(status_code=404, detail="OBS not found")
     return db_obs

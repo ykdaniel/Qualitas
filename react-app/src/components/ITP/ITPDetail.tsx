@@ -15,6 +15,7 @@ import {
 import { BackButton } from '../ui/BackButton';
 import { useLanguage } from '../../context/LanguageContext';
 import { toast } from 'sonner';
+import { showRefusal } from '../../store/refusalStore';
 import { InspectionItem } from '../../types/itp';
 import { PHASES, EMPTY_ITEM } from '../../constants/itp';
 import { getNextRevision } from '../../utils/revision';
@@ -112,7 +113,7 @@ const ITPDetail: React.FC = () => {
       toast.success(`Published successfully as Revision ${nextRev}!`);
     } catch (error) {
       console.error("Failed to publish ITP:", error);
-      toast.error("Failed to publish document.");
+      showRefusal(error, 'save');
     } finally {
       setSaving(false);
     }
@@ -188,7 +189,7 @@ const ITPDetail: React.FC = () => {
       toast.success("Saved successfully!");
     } catch (error) {
       console.error("Failed to save ITP:", error);
-      toast.error("Failed to save document.");
+      showRefusal(error, 'save', { keepsInput: true });
     } finally {
       setSaving(false);
     }
@@ -213,7 +214,7 @@ const ITPDetail: React.FC = () => {
       toast.success(t('itp.saveStatusSaved') || 'Saved');
     } catch (error) {
       console.error("Failed to save ITP inspection plan:", error);
-      toast.error(t('itp.updateError') || 'Failed to update. Please try again later.');
+      showRefusal(error, 'save');
     } finally {
       setItemSaves(n => n - 1);
     }

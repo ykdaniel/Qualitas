@@ -163,7 +163,8 @@ class ITRService:
         if noi_no and (current is None or noi_no != current.noiNumber):
             noi = self.repo.db.query(models.NOI).filter(models.NOI.referenceNo == noi_no).first()
             if not noi or not record_in_scope(noi, scope):
-                raise ValueError(f"NOI with reference number '{noi_no}' not found")
+                raise Refusal("REFERENCE_NOT_FOUND", f"NOI with reference number '{noi_no}' not found",
+                              docType="NOI", field="reference number", value=noi_no)
             require_same_project(noi, data.get('project_id') or getattr(current, 'project_id', None), 'NOI', noi_no)
             if noi.status in ('Closed', 'Void'):
                 raise ValueError(f"NOI '{noi_no}' is {noi.status}; a new ITR cannot be filed under it.")
@@ -172,7 +173,8 @@ class ITRService:
         if ncr_no and (current is None or ncr_no != current.ncrNumber):
             ncr = self.repo.db.query(models.NCR).filter(models.NCR.documentNumber == ncr_no).first()
             if not ncr or not record_in_scope(ncr, scope):
-                raise ValueError(f"NCR with document number '{ncr_no}' not found")
+                raise Refusal("REFERENCE_NOT_FOUND", f"NCR with document number '{ncr_no}' not found",
+                              docType="NCR", field="document number", value=ncr_no)
             require_same_project(ncr, data.get('project_id') or getattr(current, 'project_id', None), 'NCR', ncr_no)
 
     def create_itr(self, itr_create: schemas.ITRCreate,
@@ -439,26 +441,32 @@ class ITRService:
                     incoming_version = incoming_detail.pop("_version", None)
 
             if incoming_version is not None and incoming_version != db_version:
-                raise ValueError(
+                raise Refusal(
+                    "VERSION_CONFLICT",
                     f"Optimistic lock conflict: expected version {incoming_version}, "
                     f"but current version is {db_version}. "
-                    f"Another user may have modified this record."
+                    f"Another user may have modified this record.",
+                    docType="ITR", number=db_itr.documentNumber,
                 )
 
             # Workflow validation: Check status transition
             if itr_update.status and not WorkflowEngine.validate_transition(
                 "ITR", db_itr.status, itr_update.status
             ):
-                raise ValueError(
-                    f"Invalid status transition from {db_itr.status} to {itr_update.status}"
+                raise Refusal(
+                    "INVALID_TRANSITION",
+                    f"Invalid status transition from {db_itr.status} to {itr_update.status}",
+                    docType="ITR", fromStatus=db_itr.status, toStatus=itr_update.status,
                 )
 
             # A Void ITR is cancelled for good (Void has no way out in the workflow — any status change was already
             # refused just above) and is treated as locked everywhere else: delete, link/unlink, Raise NCR, its
             # checklists and attachments. Its own fields were still writable here (2026-10-10).
             if db_itr.status == 'Void':
-                raise ValueError(
-                    f"Cannot modify ITR '{db_itr.documentNumber}': it is Void (a locked record)."
+                raise Refusal(
+                    "RECORD_LOCKED",
+                    f"Cannot modify ITR '{db_itr.documentNumber}': it is Void (a locked record).",
+                    docType="ITR", number=db_itr.documentNumber, status=db_itr.status, kind="record",
                 )
 
             # --- Approval validation: require passing checklists ---

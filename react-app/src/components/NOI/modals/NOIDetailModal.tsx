@@ -27,7 +27,8 @@ import { AttachmentsBlockedNotice, SaveFollowUpBanner } from '../../Shared/SaveF
 import { NOI_DATE_FIELDS, preserveHistoricalDates } from '../../../utils/dateIssues';
 import { followUpOf } from '../../../utils/saveFlow';
 import type { FollowUp, SaveOutcome } from '../../../utils/saveFlow';
-import { describeSaveError, presentOutcome } from '../../../utils/saveErrors';
+import { presentOutcome } from '../../../utils/saveErrors';
+import { showRefusal } from '../../../store/refusalStore';
 
 export interface NOIDetailModalProps {
     noiId: string | null;
@@ -315,7 +316,8 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
         } else if (outcome.status !== 'failed') {
             setFollowUp(null);
         }
-        const { close, notice } = presentOutcome(outcome, t);
+        const { close, notice, refusal } = presentOutcome(outcome, t);
+        if (refusal) showRefusal(refusal.error, 'save', { keepsInput: true });
         if (notice) (notice.level === 'error' ? toast.error : toast.warning)(notice.text, { duration: 10000 });
         if (close) { leaveGuard.release(); onClose(); }
     };
@@ -358,7 +360,7 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
             }, existingItem, NOI_DATE_FIELDS);
             applyOutcome(await onSave(dataToSave, pendingFiles, deletedFileIds), !existingItem);
         } catch (err) {
-            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
+            showRefusal(err, 'save', { keepsInput: true });
         } finally {
             setSaving(false);
         }
@@ -370,7 +372,7 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
         try {
             applyOutcome(await onRetryFiles(pendingFiles, deletedFileIds), false);
         } catch (err) {
-            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
+            showRefusal(err, 'save', { keepsInput: true });
         } finally {
             setSaving(false);
         }

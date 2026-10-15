@@ -39,9 +39,9 @@ def create_itp(
     try:
         return itp_service.create_itp(itp_create=itp, user_id=current_user.id, username=current_user.username, scope=scope, user_permissions=user_permissions)
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except PermissionDenied as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
 
 @router.get("/")
 def read_itps(
@@ -117,11 +117,11 @@ def update_itp(
     try:
         db_itp = itp_service.update_itp(itp_id=itp_id, itp_update=itp, user_id=current_user.id, username=current_user.username, scope=scope, user_permissions=user_permissions)
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except PermissionDenied as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
     except HTTPException:
         raise                       # a refusal already shaped for HTTP (e.g. 403 SHARED_TEMPLATE_ADMIN_ONLY) keeps its status
     except Exception as e:
@@ -161,7 +161,7 @@ def update_itp_detail(
     try:
         db_itp = itp_service.update_itp_detail(itp_id=itp_id, detail_body=body.dict(), user_id=current_user.id, username=current_user.username, scope=scope)
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     if db_itp is None:
         raise HTTPException(status_code=404, detail="ITP not found")
     return db_itp

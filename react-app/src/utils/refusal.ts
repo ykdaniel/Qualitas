@@ -5,14 +5,22 @@
  * Rules:
  * - the backend's coded refusal (`{detail, code, params}`, backend/core/refusals.py) is translated from `refusal.code.<CODE>`;
  * - a refusal without a code: the Chinese UI shows a short Chinese line plus the server's English text, the English UI that text;
- * - 404 always gets the "no longer exists" line; 422 field errors reuse describeSaveError's per-field lines; 403 / 409 without a usable text get a generic line;
+ * - 404 always gets the "no longer exists" line; 422 field errors are listed one per line (describeSaveError's field labels); 403 / 409 without a usable text get a generic line;
  * - 5xx and network failures are "failed" (not "refused"): a generic line, never the response body;
- * - 401 returns null: the API client is already logging the user out.
+ * - 401 returns null: the API client is already logging the user out;
+ * - a failed save whose form stayed open (`keepsInput`, REFUSAL-DIALOG-2026-002 D3) adds a line saying the input is kept: for a refusal
+ *   "correct it and save again" (a locked record: only "kept"; a 404 or a version conflict: no line), for a 5xx / network failure
+ *   "could not confirm whether it was saved" (the server may have stored it).
  */
 import { isAxiosError } from './errorUtils';
-import { describeSaveError, type Translate } from './saveErrors';
+import { fieldErrorLines, type Translate } from './saveErrors';
 
 export type RefusalAction = 'delete' | 'save';
+
+export interface RefusalOptions {
+    /** the form the user was filling in is still open with everything they typed (failed saves only) */
+    keepsInput?: boolean;
+}
 
 export interface RefusalView {
     title: string;
@@ -21,6 +29,8 @@ export interface RefusalView {
     items?: string[];
     /** the server's own text, shown under the message when there is no translation for it */
     original?: string;
+    /** the last line: what happened to the user's input (a failed save with `keepsInput`) */
+    note?: string;
 }
 
 type Params = Record<string, unknown>;
@@ -41,6 +51,9 @@ const asList = (v: unknown): string[] => (Array.isArray(v) ? v.map((x) => String
 function variantOf(code: string, params: Params): string {
     if (code === 'DELETE_NOT_VOID' && asList(params.allowed).includes('Draft')) return `${code}.draft`;
     if (code === 'ATTACHMENT_LOCKED' && typeof params.kind === 'string') return `${code}.${params.kind}`;
+    // REFUSAL-DIALOG-2026-002: which scope rule refused, and what kind of lock (a whole locked record is the plain code)
+    if (code === 'SCOPE_FORBIDDEN' && typeof params.reason === 'string') return `${code}.${params.reason}`;
+    if (code === 'RECORD_LOCKED' && typeof params.kind === 'string' && params.kind !== 'record') return `${code}.${params.kind}`;
     // AnyPermissionChecker: any ONE of the listed permissions would do
     if (code === 'PERMISSION_DENIED' && asList(params.permissions).length > 1) return `${code}.anyOf`;
     return code;
@@ -82,7 +95,32 @@ export function describeCoded(code: string, rawParams: unknown, t: Translate, ac
     return { title: t(action === 'delete' ? 'refusal.title.delete' : 'refusal.title.save'), message, items: referenceItems(t, params) };
 }
 
-export function describeRefusal(error: unknown, t: Translate, action: RefusalAction, language: 'en' | 'zh'): RefusalView | null {
+/** 5xx, network or a non-HTTP error: the request may or may not have been carried out ("failed", not "refused"). */
+const isFailure = (error: unknown): boolean => {
+    if (!isAxiosError(error)) return true;
+    const status = error.response?.status;
+    return status === undefined || status >= 500;
+};
+
+/** "Correct it and save again" would be wrong advice: the record is gone (404), or it changed meanwhile (VERSION_CONFLICT, which
+ *  says to reload first) — saving the kept input again cannot succeed, so no note (review R1 P2). */
+const codeOf = (error: unknown): unknown => (isAxiosError(error) ? (error.response?.data as { code?: unknown } | undefined)?.code : undefined);
+
+const correctable = (error: unknown): boolean => {
+    if (!isAxiosError(error)) return true;
+    if (error.response?.status === 404) return false;
+    return codeOf(error) !== 'VERSION_CONFLICT';
+};
+
+export function describeRefusal(error: unknown, t: Translate, action: RefusalAction, language: 'en' | 'zh', options: RefusalOptions = {}): RefusalView | null {
+    const view = refusalView(error, t, action, language);
+    if (!view || action !== 'save' || !options.keepsInput || !correctable(error)) return view;
+    if (isFailure(error)) return { ...view, note: t('refusal.keptInputUnconfirmed') };
+    // a locked record cannot take the change at all: say the input is kept, but not "correct it and save again" (user's choice 2026-10-14)
+    return { ...view, note: t(codeOf(error) === 'RECORD_LOCKED' ? 'refusal.keptInputOnly' : 'refusal.keptInput') };
+}
+
+function refusalView(error: unknown, t: Translate, action: RefusalAction, language: 'en' | 'zh'): RefusalView | null {
     const refusedTitle = t(action === 'delete' ? 'refusal.title.delete' : 'refusal.title.save');
     const failedTitle = t(action === 'delete' ? 'refusal.title.deleteFailed' : 'refusal.title.saveFailed');
 
@@ -103,7 +141,12 @@ export function describeRefusal(error: unknown, t: Translate, action: RefusalAct
 
     // the record is gone (deleted elsewhere, or no longer in this account's scope): the server's "X not found" adds nothing
     if (status === 404) return { title: refusedTitle, message: t('refusal.notFound') };
-    if (Array.isArray(data.detail)) return { title: refusedTitle, message: describeSaveError(error, t) };
+    if (Array.isArray(data.detail)) {
+        const items = fieldErrorLines(data.detail, t);
+        return items.length > 0
+            ? { title: refusedTitle, message: t('refusal.fieldErrors'), items }
+            : { title: refusedTitle, message: t('refusal.unexpected') };
+    }
 
     if (detail) {
         return language === 'zh'

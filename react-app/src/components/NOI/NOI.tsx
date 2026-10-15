@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import ReactDOM from 'react-dom';
-import { toast } from 'sonner';
 import { Clock, CheckCircle2, BarChart3, Zap, Search } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
@@ -474,9 +473,9 @@ const NOI: React.FC = () => {
             try {
               await addBulkNOI(nois);
               setIsBulkModalOpen(false);
-            } catch (err: any) {
-              const msg = err instanceof Error ? err.message : (t('common.unknownError') || 'Unknown Error');
-              toast.error(`${t('noi.bulkAddFailed') || 'Bulk add failed'}: ${msg}`);
+            } catch (err) {
+              // refused or failed: the refusal dialog (REFUSAL-DIALOG-2026-002); the bulk form stays open with its rows
+              showRefusal(err, 'save', { keepsInput: true });
             }
           }}
           onClose={() => setIsBulkModalOpen(false)}

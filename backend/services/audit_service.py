@@ -256,8 +256,10 @@ class AuditService:
         # Validate status transition if status is being changed
         if 'status' in update_data and update_data['status'] != db_audit.status:
             if not WorkflowEngine.validate_transition("Audit", db_audit.status, update_data['status']):
-                raise ValueError(
-                    f"Invalid status transition from '{db_audit.status}' to '{update_data['status']}'"
+                raise Refusal(
+                    "INVALID_TRANSITION",
+                    f"Invalid status transition from '{db_audit.status}' to '{update_data['status']}'",
+                    docType="Audit", fromStatus=db_audit.status, toStatus=update_data['status'],
                 )
 
         # Store old values for audit log
@@ -277,9 +279,11 @@ class AuditService:
                 if _comparable(k, v) != _comparable(k, old_value.get(k))
             }
             if changed_fields:
-                raise ValueError(
+                raise Refusal(
+                    "RECORD_LOCKED",
                     f"Cannot modify Audit '{db_audit.auditNo}' with status '{db_audit.status}' — "
-                    f"no fields can be changed once an audit is closed or void."
+                    f"no fields can be changed once an audit is closed or void.",
+                    docType="Audit", number=db_audit.auditNo, status=db_audit.status, kind="record",
                 )
             return db_audit  # an unchanged resave: nothing to write, no audit-log row
 

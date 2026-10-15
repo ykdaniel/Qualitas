@@ -306,8 +306,8 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         try {
             await linkChecklistToITR(persistedItrId, templateId);
             await refreshInstances();
-        } catch (e: any) {
-            toast.error(e?.response?.data?.detail || (e as Error)?.message || 'Failed to link checklist');
+        } catch (e) {
+            showRefusal(e, 'save');
         }
     };
 
@@ -317,23 +317,18 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         // Counts are exactly the number of O / X items — the backend rejects
         // any other value, and never trusts these for a Pass on their own.
         const { passCount, failCount } = itemCounts(items);
-        try {
-            await updateChecklist(instanceId, {
-                status: snap.status,
-                location: snap.location,
-                date: snap.date,
-                detail_data: JSON.stringify({ ...(snap.data || {}), items }),
-                passCount,
-                failCount,
-            });
-            setExpandedInstanceId(null);
-            await refreshInstances();
-        } catch (e: any) {
-            toast.error(e?.response?.data?.detail || (e as Error)?.message || 'Failed to save checklist');
-            // Rethrow so the snapshot panel stays open with every entry
-            // (including any N/A reasons) intact instead of closing on failure.
-            throw e;
-        }
+        // A failure is left to throw: the snapshot panel stays open with every entry (including any N/A reasons)
+        // intact instead of closing, and shows the refusal dialog (REFUSAL-DIALOG-2026-002).
+        await updateChecklist(instanceId, {
+            status: snap.status,
+            location: snap.location,
+            date: snap.date,
+            detail_data: JSON.stringify({ ...(snap.data || {}), items }),
+            passCount,
+            failCount,
+        });
+        setExpandedInstanceId(null);
+        await refreshInstances();
     };
 
     // Reopen a closed (Pass/Fail) instance. Sends ONLY the status change — the
@@ -596,9 +591,8 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         setRevokeError(null);
         try {
             await revokeItrApproval(existingItem.id, 'In Progress', reason);
-        } catch (e: any) {
-            const raw = e?.response?.data?.detail;
-            setRevokeError(typeof raw === 'string' ? raw : (e?.message || t('itr.revokeFailed')));
+        } catch (e) {
+            showRefusal(e, 'save');
             setRevoking(false);
             return; // dialog stays open with the reason intact
         }
@@ -630,8 +624,8 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
             leaveGuard.release();
             (onDismiss || onClose)();
             navigate(`/ncr?openId=${ncr.id}`);
-        } catch (err: any) {
-            toast.error(err?.response?.data?.detail || t('common.saveFailed'));
+        } catch (err) {
+            showRefusal(err, 'save');
         } finally {
             setSpawning(null);
         }
@@ -660,8 +654,8 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
             leaveGuard.release();
             (onDismiss || onClose)();
             navigate(`/itr?openId=${newItr.id}`);
-        } catch (err: any) {
-            toast.error(err?.response?.data?.detail || t('common.saveFailed'));
+        } catch (err) {
+            showRefusal(err, 'save');
         } finally {
             setSpawning(null);
         }

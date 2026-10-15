@@ -11,7 +11,7 @@ import type { PQPItem, PQPHistoryItem } from '../../store/pqpStore';
 import FileAttachment from '../Shared/FileAttachment';
 import ImagePreviewOverlay from '../Shared/ImagePreviewOverlay';
 import PQPPrintTemplate from './PQPPrintTemplate';
-import { getErrorMessage } from '../../utils/errorUtils';
+import { showRefusal } from '../../store/refusalStore';
 import { isUnchangedSincePriorWrite } from '../../utils/attachmentOutcome';
 import styles from './PQP.module.css';
 import './PQP.print.css';
@@ -183,7 +183,9 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
             onClose();
             }
         } catch (err) {
-            setSaveError(getErrorMessage(err, t('pqp.saveError')));
+            // the record itself was not saved: the refusal dialog (REFUSAL-DIALOG-2026-002 D2); saveError stays for the
+            // two notices that are not refusals (save before publishing, record saved but attachments unfinished)
+            showRefusal(err, 'save', { keepsInput: true });
         } finally {
             setSaving(false);
         }
@@ -227,7 +229,7 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
             leaveGuard.release();
             onClose();
         } catch (err) {
-            setSaveError(getErrorMessage(err, t('pqp.saveError')));
+            showRefusal(err, 'save');
         } finally {
             setSaving(false);
         }

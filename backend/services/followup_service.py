@@ -120,8 +120,10 @@ class FollowUpService:
             if followup_update.status and not WorkflowEngine.validate_transition(
                 "FollowUp", db_followup.status, followup_update.status
             ):
-                raise ValueError(
-                    f"Invalid status transition from {db_followup.status} to {followup_update.status}"
+                raise Refusal(
+                    "INVALID_TRANSITION",
+                    f"Invalid status transition from {db_followup.status} to {followup_update.status}",
+                    docType="FollowUp", fromStatus=db_followup.status, toStatus=followup_update.status,
                 )
 
             old_val = {c.name: getattr(db_followup, c.name) for c in db_followup.__table__.columns}
@@ -137,9 +139,11 @@ class FollowUpService:
                     k for k, v in data.items() if v != old_val.get(k)
                 }
                 if changed_fields:
-                    raise ValueError(
+                    raise Refusal(
+                        "RECORD_LOCKED",
                         f"Cannot modify a closed FollowUp '{db_followup.issueNo}' — "
-                        f"no fields can be changed once it is closed."
+                        f"no fields can be changed once it is closed.",
+                        docType="FollowUp", number=db_followup.issueNo, status=db_followup.status, kind="record",
                     )
 
             if 'vendor' in data:

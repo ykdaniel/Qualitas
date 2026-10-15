@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 import models
 from database import get_db
 from core.security import get_current_user
-from core.refusals import RefusalHTTPException
+from core.refusals import Coded, RefusalHTTPException
 
 # The system administrator role — the only role that is never scoped. Recognised exactly as IAM recognises an Admin
 # (UserRepository.is_admin_role_name: the name "admin", any letter case), so a role IAM treats as ordinary can never be
@@ -37,9 +37,14 @@ from core.refusals import RefusalHTTPException
 ADMIN_ROLE_NAMES = {"admin"}
 
 
-class ScopeForbidden(Exception):
+class ScopeForbidden(Coded, Exception):
     """Raised when a scoped user tries to create/move a record outside their
-    allowed projects/contractor. Routers map this to HTTP 403."""
+    allowed projects/contractor. Routers map this to HTTP 403 with `refusal_http(e, 403)`:
+    code SCOPE_FORBIDDEN, params {reason} (REFUSAL-DIALOG-2026-002). Not a ValueError on purpose
+    (a router's `except ValueError -> 400` must not catch it)."""
+
+    def __init__(self, message: str, reason: str):
+        super().__init__("SCOPE_FORBIDDEN", message, reason=reason)
 
 
 @dataclass(frozen=True)
@@ -207,15 +212,15 @@ def enforce_create_scope(data: dict, scope: Optional[Scope], vendor_field: str =
         return
     if scope.project_ids is not None:
         if not scope.project_ids:
-            raise ScopeForbidden("You are not working in any project (not a project member, or no project chosen at sign-in)")
+            raise ScopeForbidden("You are not working in any project (not a project member, or no project chosen at sign-in)", "noWorkingProject")
         pid = data.get("project_id")
         if not pid:
             if len(scope.project_ids) == 1:
                 data["project_id"] = next(iter(scope.project_ids))
             else:
-                raise ScopeForbidden("project_id is required and must be one of your projects")
+                raise ScopeForbidden("project_id is required and must be one of your projects", "projectRequired")
         elif pid not in scope.project_ids:
-            raise ScopeForbidden("project_id is outside your allowed projects")
+            raise ScopeForbidden("project_id is outside your allowed projects", "projectOutsideScope")
     if scope.vendor_id is not None:
         # A contractor-scoped user can only ever create records for their own
         # contractor — force it regardless of what was submitted.
@@ -236,10 +241,10 @@ def enforce_update_scope(data: dict, scope: Optional[Scope], vendor_field: str =
     # as an out-of-scope move, not silently allowed through.
     if scope.project_ids is not None and "project_id" in data:
         if data["project_id"] not in scope.project_ids:
-            raise ScopeForbidden("cannot move record to a project outside your scope")
+            raise ScopeForbidden("cannot move record to a project outside your scope", "moveProjectOutsideScope")
     if scope.vendor_id is not None and vendor_field in data:
         if data[vendor_field] != scope.vendor_id:
-            raise ScopeForbidden("cannot reassign record to another contractor")
+            raise ScopeForbidden("cannot reassign record to another contractor", "reassignContractor")
 
 
 def record_in_scope(record, scope: Optional[Scope]) -> bool:
