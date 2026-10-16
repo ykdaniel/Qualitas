@@ -25,6 +25,7 @@ class ITPRepository:
             if search:
                 query = query.filter(
                     (models.ITP.referenceNo.ilike(f"%{search}%")) |
+                    (models.ITP.external_doc_no.ilike(f"%{search}%")) |      # the original document number (B3, D17)
                     (models.ITP.description.ilike(f"%{search}%"))
                 )
         if status:

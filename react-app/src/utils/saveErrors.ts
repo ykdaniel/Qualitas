@@ -18,6 +18,18 @@ const translated = (t: Translate, key: string): string | null => {
 
 const fieldLabel = (t: Translate, field: string): string => translated(t, `dateField.${field}`) ?? field;
 
+/** One line per field of a FastAPI 422 list: "Raise date: not a real calendar date" (de-duplicated). */
+export function fieldErrorLines(detail: unknown[], t: Translate): string[] {
+    const lines = detail.map((e) => {
+        const item = (e ?? {}) as { msg?: string; loc?: unknown[]; code?: string };
+        const field = Array.isArray(item.loc) && item.loc.length > 0 ? String(item.loc[item.loc.length - 1]) : '';
+        if (item.code && field) return `${fieldLabel(t, field)}：${t(issueMessageKey(item.code))}`;
+        if (field && item.msg) return `${fieldLabel(t, field)}：${item.msg}`;
+        return item.msg || '';
+    }).filter(Boolean);
+    return [...new Set(lines)];
+}
+
 export function describeSaveError(error: unknown, t: Translate): string {
     const fallback = t('common.saveFailed');
     if (!isAxiosError(error)) return fallback;
@@ -30,13 +42,7 @@ export function describeSaveError(error: unknown, t: Translate): string {
     if (typeof detail === 'string' && detail.trim()) return detail;
 
     if (Array.isArray(detail)) {
-        const lines = detail.map((e: { msg?: string; loc?: unknown[]; code?: string }) => {
-            const field = Array.isArray(e?.loc) && e.loc.length > 0 ? String(e.loc[e.loc.length - 1]) : '';
-            if (e?.code && field) return `${fieldLabel(t, field)}：${t(issueMessageKey(e.code))}`;
-            if (field && e?.msg) return `${fieldLabel(t, field)}：${e.msg}`;
-            return e?.msg || '';
-        }).filter(Boolean);
-        const unique = [...new Set(lines)];
+        const unique = fieldErrorLines(detail, t);
         if (unique.length > 0) return unique.join('；');
     }
 
@@ -48,11 +54,13 @@ export function describeSaveError(error: unknown, t: Translate): string {
 export interface OutcomeNotice {
     /** whether the modal may close */
     close: boolean;
-    /** toast to show (absent for clean success and banner-owned file failures) */
+    /** toast to show (absent for clean success, banner-owned file failures and refusals) */
     notice?: { level: 'error' | 'warning'; text: string };
+    /** the record was not saved: show this error in the refusal dialog (REFUSAL-DIALOG-2026-002), the modal keeps everything */
+    refusal?: { error: unknown };
 }
 
-/** Turns a SaveOutcome into "close or stay" plus an optional toast; incomplete file work is explained in the banner. */
+/** Turns a SaveOutcome into "close or stay" plus an optional toast or refusal; incomplete file work is explained in the banner. */
 export function presentOutcome(outcome: SaveOutcome, t: Translate): OutcomeNotice {
     switch (outcome.status) {
         case 'saved':
@@ -63,6 +71,6 @@ export function presentOutcome(outcome: SaveOutcome, t: Translate): OutcomeNotic
         case 'saved-incomplete':
             return { close: false };
         case 'failed':
-            return { close: false, notice: { level: 'error', text: t('saveFlow.failedKeep', { message: outcome.message }) } };
+            return { close: false, refusal: { error: outcome.error } };
     }
 }

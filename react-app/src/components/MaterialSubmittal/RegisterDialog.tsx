@@ -34,6 +34,7 @@ import {
 } from '../../services/materialApi';
 import { runSaveFlow, type SaveOutcome } from '../../utils/saveFlow';
 import { describeSaveError, presentOutcome } from '../../utils/saveErrors';
+import { showRefusal } from '../../store/refusalStore';
 import { classifyWriteFailure } from '../../utils/materialSubmittal';
 import { useMaterialText, type MaterialTextKey } from './materialText';
 
@@ -140,7 +141,8 @@ const RegisterDialog: React.FC<{
             toast.warning(mt('unknownRetrySafe'), { duration: 10000 });
             return;
         }
-        const { close, notice } = presentOutcome(outcome, t);
+        const { close, notice, refusal } = presentOutcome(outcome, t);
+        if (refusal) showRefusal(refusal.error, 'save', { keepsInput: true });
         if (notice) (notice.level === 'error' ? toast.error : toast.warning)(notice.text, { duration: 10000 });
         if (close && written.current) {
             leaveGuard.release();

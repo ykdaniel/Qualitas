@@ -10,6 +10,13 @@ Qualitas Backend 常量定義
 PROJECT_CODE = "QTS"
 PROJECT_NAME = "Qualitas"
 
+# Document numbers QTS-RKS-[PROJECT]-<TYPE>-###### (REF-PROJECT-SEQ-2026-001 B3, decision D2): the system, the company
+# (Rokusumi co. Ltd., fixed), then the project code; shared templates (no project) carry SHARED_CODE, which no project
+# may use as its code (D11 / D14).
+SYSTEM_CODE = "QTS"
+COMPANY_CODE = "RKS"
+SHARED_CODE = "STD"
+
 
 # ==========================================
 # 文件類型常量

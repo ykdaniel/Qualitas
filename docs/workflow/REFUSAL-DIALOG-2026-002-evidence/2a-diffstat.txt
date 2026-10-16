@@ -1,0 +1,56 @@
+ react-app/src/components/Audit/AuditWizard.tsx     |  19 ++--
+ .../src/components/ITR/ChecklistSnapshotModal.tsx  |  20 ++--
+ react-app/src/components/ITR/ITR.tsx               |  21 +---
+ react-app/src/components/ITR/ITRModals.tsx         |  46 ++++----
+ .../MaterialSubmittal/RegisterDialog.tsx           |   4 +-
+ .../components/MeetingMinutes/MeetingMinutes.tsx   |   6 +-
+ .../MeetingMinutes/MeetingMinutesModals.tsx        |  14 +--
+ react-app/src/components/NCR/NCRModals.tsx         |  12 ++-
+ react-app/src/components/OBS/OBSModals.tsx         |  10 +-
+ react-app/src/components/OSD/OSDModals.tsx         |  10 +-
+ react-app/src/components/PQP/PQP.tsx               |   2 +-
+ react-app/src/components/PQP/PQPModals.tsx         |   9 +-
+ .../src/components/Shared/RefusalDialog.module.css |   5 +
+ react-app/src/components/Shared/RefusalDialog.tsx  |   3 +-
+ react-app/src/store/auditStore.ts                  |  42 +++-----
+ react-app/src/store/itrStore.ts                    | 119 ++++++++++-----------
+ react-app/src/store/meetingMinutesStore.ts         |  27 ++---
+ react-app/src/store/osdStore.ts                    |  27 ++---
+ react-app/src/store/pqpStore.ts                    |  39 ++-----
+ react-app/src/store/refusalStore.ts                |  13 ++-
+ react-app/src/utils/refusal.ts                     |  37 ++++++-
+ react-app/src/utils/saveErrors.ts                  |  28 +++--
+ react-app/src/utils/saveFlow.ts                    |   7 +-
+ react-app/tests-unit/saveFlow.test.ts              |  15 ++-
+ 24 files changed, 253 insertions(+), 282 deletions(-)
+ M src/components/Audit/AuditWizard.tsx
+ M src/components/ITR/ChecklistSnapshotModal.tsx
+ M src/components/ITR/ITR.tsx
+ M src/components/ITR/ITRModals.tsx
+ M src/components/MaterialSubmittal/RegisterDialog.tsx
+ M src/components/MeetingMinutes/MeetingMinutes.tsx
+ M src/components/MeetingMinutes/MeetingMinutesModals.tsx
+ M src/components/NCR/NCRModals.tsx
+ M src/components/OBS/OBSModals.tsx
+ M src/components/OSD/OSDModals.tsx
+ M src/components/PQP/PQP.tsx
+ M src/components/PQP/PQPModals.tsx
+ M src/components/Shared/RefusalDialog.module.css
+ M src/components/Shared/RefusalDialog.tsx
+ M src/store/auditStore.ts
+ M src/store/itrStore.ts
+ M src/store/meetingMinutesStore.ts
+ M src/store/osdStore.ts
+ M src/store/pqpStore.ts
+ M src/store/refusalStore.ts
+ M src/utils/refusal.ts
+ M src/utils/saveErrors.ts
+ M src/utils/saveFlow.ts
+ M tests-unit/saveFlow.test.ts
+?? ../docs/workflow/REFUSAL-DIALOG-2026-002-DESIGN.md
+?? ../docs/workflow/REFUSAL-DIALOG-2026-002-REVIEW.md
+?? ../docs/workflow/REFUSAL-DIALOG-2026-002-STATUS.md
+?? ../docs/workflow/REFUSAL-DIALOG-2026-002-TASK.md
+?? ../docs/workflow/REFUSAL-DIALOG-2026-002-evidence/
+?? node_modules
+?? tests-unit/refusalSave.test.ts

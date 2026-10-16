@@ -30,7 +30,8 @@ import { moveKey, orderPhotos } from '../../utils/obsPhotoOrder';
 import type { OrderedPhoto, PhotoCategory, PhotoOrder } from '../../utils/obsPhotoOrder';
 import OBSPhotoPairs from './OBSPhotoPairs';
 import type { FollowUp, SaveOutcome } from '../../utils/saveFlow';
-import { describeSaveError, presentOutcome } from '../../utils/saveErrors';
+import { presentOutcome } from '../../utils/saveErrors';
+import { showRefusal } from '../../store/refusalStore';
 
 export type { OBSDetailData };
 
@@ -268,7 +269,8 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
         } else if (outcome.status !== 'failed') {
             setFollowUp(null);
         }
-        const { close, notice } = presentOutcome(outcome, t);
+        const { close, notice, refusal } = presentOutcome(outcome, t);
+        if (refusal) showRefusal(refusal.error, 'save', { keepsInput: true });
         if (notice) (notice.level === 'error' ? toast.error : toast.warning)(notice.text, { duration: 10000 });
         if (close) { leaveGuard.release(); onClose(); }
     };
@@ -334,7 +336,7 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
             const outcome = await onSave(preserveHistoricalDates({ ...values, status: finalStatus, closeoutDate, qualityEngineerApprovalDate, constructionEngineerApprovalDate }, existingItem, OBS_DATE_FIELDS), uploadGroups(), deletedFileIds);
             applyOutcome(outcome, !existingItem);
         } catch (err) {
-            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
+            showRefusal(err, 'save', { keepsInput: true });
         } finally {
             setSaving(false);
         }
@@ -346,7 +348,7 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
         try {
             applyOutcome(await onRetryFiles(uploadGroups(), deletedFileIds), false);
         } catch (err) {
-            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
+            showRefusal(err, 'save', { keepsInput: true });
         } finally {
             setSaving(false);
         }

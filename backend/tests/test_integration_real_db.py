@@ -89,9 +89,10 @@ def test_create_itp_generates_sequential_reference_numbers(db_session, vendor):
         db_session.commit()
         created.append(itp.referenceNo)
 
-    # All three should exist, be unique, and share the same prefix.
+    # All three should exist, be unique, and share the same prefix. Created with no project they are shared templates:
+    # STD, not the contractor's abbreviation (REF-PROJECT-SEQ-2026-001 B3, D2 / D11; was QTS-ACM-ITP-).
     assert len(set(created)) == 3
-    assert all(ref.startswith("QTS-ACM-ITP-") for ref in created), created
+    assert all(ref.startswith("QTS-RKS-STD-ITP-") for ref in created), created
 
     # Sequence numbers embedded in the ref should be strictly increasing.
     tails = [int(ref.split("-")[-1]) for ref in created]
@@ -146,6 +147,8 @@ def test_ncr_create_with_dangling_noi_drops_it_and_keeps_sequence_intact(db_sess
 
 
 def test_noi_create_with_real_itp_reference(db_session, vendor):
+    db_session.add(models.Project(id="p-acme", name="Acme site", code="AS"))
+    db_session.commit()
     itp_service = ITPService(ITPRepository(db_session))
     noi_service = NOIService(NOIRepository(db_session))
 
@@ -168,13 +171,14 @@ def test_noi_create_with_real_itp_reference(db_session, vendor):
             inspectionDate="2026-01-02",
             type="Initial",
             contractor="Acme Co",
+            project_id="p-acme",
         )
     )
     db_session.commit()
 
     assert noi.id is not None
     assert noi.itpNo == itp.referenceNo
-    assert noi.referenceNo.startswith("QTS-ACM-NOI-")
+    assert noi.referenceNo == "QTS-RKS-AS-NOI-000001"          # the project's code (B3, D2; was QTS-ACM-NOI-)
 
 
 def test_noi_create_with_nonexistent_itp_raises(db_session, vendor):
@@ -433,8 +437,9 @@ def test_ncr_delete_blocked_by_itr_reference(db_session, vendor):
         ncr_service.delete_ncr(ncr.id, user_id=1, username="tester")
 
 
-def test_contractor_abbreviation_drives_reference_prefix(db_session):
-    """Different contractors should get different reference prefixes."""
+def test_the_contractor_no_longer_drives_the_reference_prefix(db_session):
+    """REF-PROJECT-SEQ-2026-001 B3 (D2), design change: numbers carry the project (here: none, so STD), not the contractor's
+    abbreviation, and every contractor shares the project's counter (was: -ALP- / -BET-, each from 000001)."""
     db_session.add(models.Contractor(id="v-a", name="Alpha", abbreviation="ALP"))
     db_session.add(models.Contractor(id="v-b", name="Beta", abbreviation="BET"))
     db_session.commit()
@@ -449,11 +454,7 @@ def test_contractor_abbreviation_drives_reference_prefix(db_session):
     )
     db_session.commit()
 
-    assert "-ALP-" in alpha.referenceNo
-    assert "-BET-" in beta.referenceNo
-    # Each vendor has its own sequence, so both should start at 000001.
-    assert alpha.referenceNo.endswith("000001")
-    assert beta.referenceNo.endswith("000001")
+    assert (alpha.referenceNo, beta.referenceNo) == ("QTS-RKS-STD-ITP-000001", "QTS-RKS-STD-ITP-000002")
 
 
 def test_delete_draft_meeting_minutes_reclaims_tail_number(db_session, vendor):

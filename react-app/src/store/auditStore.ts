@@ -91,37 +91,25 @@ export const useAuditStore = create<AuditState>((set, get) => ({
         await get().fetchAudits();
     },
 
+    // A refused or failed save goes to the caller (the wizard), which shows it in the refusal dialog (REFUSAL-DIALOG-2026-002).
+    // Not put in the page banner (it is for list loads only), and the axios error is rethrown as is (not wrapped in a new Error)
+    // so the dialog still sees its status and refusal code.
     addAudit: async (audit) => {
-        try {
-            set({ error: null });
-            const response = await api.post('/audit/', withCurrentProject(audit));
-            const newAudit = response.data;
-            set((state) => ({
-                auditList: [...state.auditList, newAudit]
-            }));
-            return newAudit;
-        } catch (err: any) {
-            // Not put in the page banner: the wizard (covering the page) shows it, and a banner left
-            // behind it would still be there, stale, after the wizard closes.
-            const errorMessage = getErrorMessage(err, 'Failed to create audit');
-            console.error('Failed to create audit:', err);
-            throw new Error(errorMessage);
-        }
+        set({ error: null });
+        const response = await api.post('/audit/', withCurrentProject(audit));
+        const newAudit = response.data;
+        set((state) => ({
+            auditList: [...state.auditList, newAudit]
+        }));
+        return newAudit;
     },
 
     updateAudit: async (id, updates) => {
-        try {
-            set({ error: null });
-            const response = await api.put(`/audit/${id}`, updates);
-            set((state) => ({
-                auditList: state.auditList.map(a => (a.id === id ? response.data : a))
-            }));
-        } catch (err: any) {
-            // Shown by the wizard, not the page banner (see addAudit).
-            const errorMessage = getErrorMessage(err, 'Failed to update audit');
-            console.error('Failed to update audit:', err);
-            throw new Error(errorMessage);
-        }
+        set({ error: null });
+        const response = await api.put(`/audit/${id}`, updates);
+        set((state) => ({
+            auditList: state.auditList.map(a => (a.id === id ? response.data : a))
+        }));
     },
 
     deleteAudit: async (id) => {

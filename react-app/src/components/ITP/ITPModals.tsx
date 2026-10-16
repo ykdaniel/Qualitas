@@ -23,7 +23,8 @@ import ConfirmModal from '../Shared/ConfirmModal';
 
 import { Printer, ShieldCheck, Save, LayoutTemplate, Plus, ClipboardList } from 'lucide-react';
 import { toast } from 'sonner';
-import { getErrorMessage, getErrorStatusCode } from '../../utils/errorUtils';
+import { showRefusal } from '../../store/refusalStore';
+import { getErrorStatusCode } from '../../utils/errorUtils';
 import { isUnchangedSincePriorWrite } from '../../utils/attachmentOutcome';
 import { preferEnglishText } from '../../utils/itpItemValidation';
 import api from '../../services/api';
@@ -186,6 +187,7 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
     const [formData, setFormData] = useState<Partial<ITPItem>>({
         vendor: existingItem?.vendor || defaultVendor || '',
         referenceNo: existingItem?.referenceNo || '',
+        external_doc_no: existingItem?.external_doc_no || '',
         description: existingItem?.description || '',
         rev: existingItem?.rev || 'Rev1.0',
         submit: existingItem?.submit || '',
@@ -347,13 +349,15 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                 applyOutcome(outcome);
             } catch (err) {
                 if (err instanceof ItpMainSavedError) {
+                    // the record IS saved, only the plan is unconfirmed: not a refusal, its own notice
                     setMainStatus('saved');
                     setPlanStatus('unconfirmed');
+                    toast.error(err.message);
                 } else {
                     setMainStatus('failed');
                     setPlanStatus('failed');
+                    showRefusal(err, 'save', { keepsInput: true });
                 }
-                toast.error(getErrorMessage(err, t('common.saveFailed')));
             } finally {
                 setSaving(false);
             }
@@ -426,11 +430,12 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
             if (err instanceof ItpMainSavedError) {
                 setMainStatus('saved');
                 setPlanStatus('unconfirmed');
+                toast.error(err.message);
             } else {
                 setMainStatus('failed');
                 setPlanStatus('failed');
+                showRefusal(err, 'save');
             }
-            toast.error(getErrorMessage(err, t('common.saveFailed')));
         } finally {
             setSaving(false);
         }
@@ -521,13 +526,13 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
             // A 403 here means checklist:create:all was revoked between the button rendering and
             // this click — the raw backend detail string names the required permission code
             // verbatim (e.g. "Operation not permitted. Required: checklist:create:all"), which
-            // must never be shown to the user. Every other failure (network, 5xx, validation) uses
-            // the existing friendly getErrorMessage helper. Nothing in the form is cleared or
+            // must never be shown to the user. Every other failure (network, 5xx, validation) goes to
+            // the refusal dialog (REFUSAL-DIALOG-2026-002). Nothing in the form is cleared or
             // reset either way — the user's inspection plan input is untouched.
             if (getErrorStatusCode(err) === 403) {
                 toast.error(t('itp.generateChecklistPermissionLost') || 'You no longer have permission to create a checklist.');
             } else {
-                toast.error(getErrorMessage(err, t('itp.generateChecklistFailed') || 'Failed to generate checklist'));
+                showRefusal(err, 'save');
             }
         } finally {
             setGeneratingChecklist(false);
@@ -697,6 +702,18 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                                             ))}
                                         </select>
                                         {errors.vendor && <span className={formStyles.errorMessage}>{errors.vendor}</span>}
+                                    </div>
+                                    {/* The document's own number from its author, kept beside the system number and searchable
+                                        (REF-PROJECT-SEQ-2026-001 B3, D17); a shared template's is edited by a system administrator. */}
+                                    <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>
+                                        <label>{t('itp.externalDocNo')}</label>
+                                        <input
+                                            type="text"
+                                            className={formStyles.formInput}
+                                            value={formData.external_doc_no || ''}
+                                            onChange={(e) => handleFieldChange('external_doc_no', e.target.value)}
+                                            placeholder={t('itp.externalDocNoPlaceholder')}
+                                        />
                                     </div>
                                     {/* Subject gets its own full row (ITP-SUBJECT-WIDTH-2026-001): same single-line input and data behaviour, just wider. */}
                                     <div className={`${formStyles.formGroup} ${formStyles.formGroupFull}`}>

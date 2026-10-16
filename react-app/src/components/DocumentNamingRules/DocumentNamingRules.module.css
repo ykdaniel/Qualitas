@@ -149,6 +149,11 @@
   white-space: nowrap;
 }
 
+.table tbody td.loadingCell {
+  color: #6b7280;
+  padding: 16px;
+}
+
 .table tbody td.noteCell {
   text-align: left;
 }

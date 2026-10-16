@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { FileText, Printer } from 'lucide-react';
 import { useLanguage } from '../../../context/LanguageContext';
 import { useContractorsStore } from '../../../store/contractorsStore';
+import { useProjectStore } from '../../../store/projectStore';
 import { useITPStore } from '../../../store/itpStore';
 import { useNCRStore } from '../../../store/ncrStore';
 import { useOBSStore } from '../../../store/obsStore';
@@ -26,7 +27,8 @@ import { AttachmentsBlockedNotice, SaveFollowUpBanner } from '../../Shared/SaveF
 import { NOI_DATE_FIELDS, preserveHistoricalDates } from '../../../utils/dateIssues';
 import { followUpOf } from '../../../utils/saveFlow';
 import type { FollowUp, SaveOutcome } from '../../../utils/saveFlow';
-import { describeSaveError, presentOutcome } from '../../../utils/saveErrors';
+import { presentOutcome } from '../../../utils/saveErrors';
+import { showRefusal } from '../../../store/refusalStore';
 
 export interface NOIDetailModalProps {
     noiId: string | null;
@@ -160,24 +162,25 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
         }
     };
 
-    // A new NOI (no number yet) shows the number it is expected to get for the selected contractor
+    // A new NOI (no number yet) shows the number it is expected to get in the current project
     // (GET /noi/next-reference, needs NOI create). Nothing is reserved: the real number is fixed on save.
-    // A user limited to projects only gets the format (the sequence would reveal the contractor's count everywhere).
+    // Numbering is per project (REF-PROJECT-SEQ-2026-001 B3), so the number no longer depends on the contractor.
     const [expectedRefNo, setExpectedRefNo] = useState<NoiNextReference | null>(null);
     const canCreate = hasPermission('noi:create:all');
+    const currentProjectId = useProjectStore(state => state.currentProject?.id ?? null);
     useEffect(() => {
         setExpectedRefNo(null);
         // only a record being created gets a number on save (an existing NOI without one is not renumbered)
-        if (existingData || existingItem || formData.referenceNo || readOnly || !formData.contractor || !canCreate) return;
+        if (existingData || existingItem || formData.referenceNo || readOnly || !canCreate) return;
         let cancelled = false;
-        getNoiNextReference(formData.contractor)
+        getNoiNextReference(currentProjectId)
             .then(ref => { if (!cancelled) setExpectedRefNo(ref); })
             .catch(err => {
                 // The field falls back to "Auto Generated"; the number is still assigned on save.
                 if (!cancelled) console.error('Failed to load the expected NOI reference number:', err);
             });
         return () => { cancelled = true; };
-    }, [existingData, existingItem, formData.contractor, formData.referenceNo, readOnly, canCreate]);
+    }, [existingData, existingItem, formData.referenceNo, readOnly, canCreate, currentProjectId]);
 
     // A brand-new NOI pre-selects the first active contractor: fetch its contact details once.
     useEffect(() => {
@@ -313,7 +316,8 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
         } else if (outcome.status !== 'failed') {
             setFollowUp(null);
         }
-        const { close, notice } = presentOutcome(outcome, t);
+        const { close, notice, refusal } = presentOutcome(outcome, t);
+        if (refusal) showRefusal(refusal.error, 'save', { keepsInput: true });
         if (notice) (notice.level === 'error' ? toast.error : toast.warning)(notice.text, { duration: 10000 });
         if (close) { leaveGuard.release(); onClose(); }
     };
@@ -356,7 +360,7 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
             }, existingItem, NOI_DATE_FIELDS);
             applyOutcome(await onSave(dataToSave, pendingFiles, deletedFileIds), !existingItem);
         } catch (err) {
-            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
+            showRefusal(err, 'save', { keepsInput: true });
         } finally {
             setSaving(false);
         }
@@ -368,7 +372,7 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
         try {
             applyOutcome(await onRetryFiles(pendingFiles, deletedFileIds), false);
         } catch (err) {
-            toast.error(t('saveFlow.failedKeep', { message: describeSaveError(err, t) }), { duration: 10000 });
+            showRefusal(err, 'save', { keepsInput: true });
         } finally {
             setSaving(false);
         }
@@ -398,7 +402,7 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
                                 <div className={formStyles.formGroup}>
                                     <label>{t('common.referenceNo')}</label>
                                     <input type="text" className={formStyles.formInput} value={formData.referenceNo || (expectedRefNo?.referenceNo ? t('noi.expectedReferenceNo', { ref: expectedRefNo.referenceNo }) : expectedRefNo ? t('noi.referencePattern', { pattern: expectedRefNo.pattern }) : t('form.autoGenerated'))} readOnly style={{ backgroundColor: '#D9D9D9', cursor: 'not-allowed', color: formData.referenceNo ? '#000000' : '#666666' }} />
-                                    {!formData.referenceNo && expectedRefNo?.referenceNo && <small className={formStyles.fieldHint}>{t('noi.expectedReferenceHint')}</small>}
+                                    {!formData.referenceNo && expectedRefNo?.referenceNo && <small className={formStyles.fieldHint}>{t('noi.expectedReferenceHintProject')}</small>}
                                 </div>
                                 <div className={formStyles.formGroup}>
                                     <label className={formStyles.requiredLabel}>{t('common.contractor')}</label>

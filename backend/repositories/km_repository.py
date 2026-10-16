@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 
 import models
 import schemas
+from core.refusals import Refusal
 from core.utils import _reference_seq_lock, sanitize_pagination, sanitize_search_term
 
 
@@ -136,8 +137,10 @@ class KMRepository:
         # Optimistic locking: verify version_no matches before updating
         expected_version = update_data.pop("version_no", None)
         if expected_version is not None and db_article.version_no != expected_version:
-            raise ValueError(
-                "This article has been modified by another user. Please refresh and try again."
+            raise Refusal(
+                "VERSION_CONFLICT",
+                "This article has been modified by another user. Please refresh and try again.",
+                docType="KM", number=db_article.title,
             )
 
         update_data["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

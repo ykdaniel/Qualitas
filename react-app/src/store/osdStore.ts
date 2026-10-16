@@ -91,29 +91,18 @@ export const useOSDStore = create<OSDState>((set, get) => ({
         await get().fetchOSDs(params);
     },
 
+    // A refused or failed save goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-002); the page's error banner is for list loads only.
     addOSD: async (osd: Omit<OSDItem, 'id'>) => {
-        try {
-            const response = await api.post('/osd/', withCurrentProject(osd));
-            const newOSD = normalizeItem(response.data);
-            set((state) => ({ osdList: [...state.osdList, newOSD] }));
-            return newOSD;
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to add OSD');
-            set({ error: msg });
-            throw error;
-        }
+        const response = await api.post('/osd/', withCurrentProject(osd));
+        const newOSD = normalizeItem(response.data);
+        set((state) => ({ osdList: [...state.osdList, newOSD] }));
+        return newOSD;
     },
 
     updateOSD: async (id: string, updates: Partial<OSDItem>) => {
-        try {
-            const response = await api.put(`/osd/${id}`, updates);
-            const updated = normalizeItem(response.data);
-            set((state) => ({ osdList: state.osdList.map(o => o.id === id ? updated : o) }));
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to update OSD');
-            set({ error: msg });
-            throw error;
-        }
+        const response = await api.put(`/osd/${id}`, updates);
+        const updated = normalizeItem(response.data);
+        set((state) => ({ osdList: state.osdList.map(o => o.id === id ? updated : o) }));
     },
 
     deleteOSD: async (id: string) => {

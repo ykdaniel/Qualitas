@@ -106,7 +106,7 @@ const PQP: React.FC = () => {
 
     // Phase 1: persist the record itself. Left to throw straight through —
     // the modal's own handleSave is the single owner of "record failed to
-    // save" (shown via its saveError state, kept open, input untouched).
+    // save" (shown in the refusal dialog, kept open, input untouched).
     //
     // skipRecordWrite (set by PQPModals.tsx via isUnchangedSincePriorWrite: true when
     // JSON.stringify(formData) is string-equal to the last successfully written attempt's — a

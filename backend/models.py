@@ -34,6 +34,9 @@ class ITP(Base):
     attachments = Column(Text, nullable=True)
     last_reminded_at = Column(String, nullable=True)
     dueDate = Column(String, nullable=True)
+    # The document's own number from an owner / document system (e.g. an Aconex number), kept apart from the system's
+    # referenceNo (business decision D17, REF-PROJECT-SEQ-2026-001 B3). Searchable; never generated.
+    external_doc_no = Column(String, nullable=True)   # searched with ILIKE %x%, so no index (B3 R1 P3-5)
 
     # Relationships
     vendor_ref = relationship("Contractor", back_populates="itps")
@@ -623,6 +626,18 @@ class ContractorPersonnel(Base):
         # one name per company, whatever the case (the service says so first; this stops two requests at once)
         Index("uq_contractor_personnel_name", "contractor_id", text("lower(name)"), unique=True),
     )
+
+
+class ItpRenumberMap(Base):
+    """Old → new reference number of every shared ITP renumbered to QTS-RKS-STD-ITP- (REF-PROJECT-SEQ-2026-001 B3,
+    business decisions D11 / D21): the record that lets any old number (printouts, bookmarks, history) be traced."""
+    __tablename__ = "itp_renumber_map"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    itp_id = Column(String, nullable=False, index=True)
+    old_referenceNo = Column(String, nullable=True, index=True)    # NULL: the ITP had no number
+    new_referenceNo = Column(String, nullable=False, unique=True)
+    migrated_at = Column(String, nullable=False)
 
 
 class ReferenceSequence(Base):

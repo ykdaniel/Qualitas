@@ -46,7 +46,7 @@ def test_create_followup_auto_issue_no(followup_service, mock_repo):
         assert result.id == "fw-123"
         assert result.issueNo == "FW-QTS-001"
         assert result.vendor_id == "vendor-123"
-        mock_gen_ref.assert_called_once_with(mock_repo.db, "Test Vendor", "followup")
+        mock_gen_ref.assert_called_once_with(mock_repo.db, "Test Vendor", "followup", project_id=None)   # B3: numbered per project
         mock_repo.create.assert_called_once()
         mock_log.assert_called_once()
 

@@ -1,5 +1,6 @@
 
 from fastapi import APIRouter, Depends, HTTPException
+from core.refusals import refusal_http
 from sqlalchemy.orm import Session
 
 import schemas
@@ -74,7 +75,7 @@ def create_pqp(
             scope=scope,
         )
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
 
 @router.put("/{pqp_id}", response_model=schemas.PQP)
 def update_pqp(
@@ -101,9 +102,9 @@ def update_pqp(
             scope=scope,
         )
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
     if db_pqp is None:
         raise HTTPException(status_code=404, detail="PQP not found")
     return db_pqp
@@ -125,7 +126,7 @@ def publish_pqp(
             scope=scope,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
     if db_pqp is None:
         raise HTTPException(status_code=404, detail="PQP not found")
     return db_pqp

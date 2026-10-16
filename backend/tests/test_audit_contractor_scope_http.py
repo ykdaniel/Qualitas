@@ -43,8 +43,10 @@ def test_contractor_scoped_create_uses_its_own_contractor_for_name_and_number(en
     assert response.status_code == 200, response.text
     body = response.json()
     assert (body['vendor_id'], body['contractor']) == ('alpha', 'Alpha Build')
-    assert body['auditNo'].split('-')[1] == 'AB'  # Alpha Build's abbreviation, not the vendor named in the request
+    # REF-PROJECT-SEQ-2026-001 B3 (D2): the number carries the project code, no contractor (was: Alpha Build's 'AB')
     with env.Session() as db:
+        code = db.get(models.Project, TEST_PROJECT_ID).code
+        assert body['auditNo'] == f'QTS-RKS-{code}-AUD-000001'
         assert db.query(models.ReferenceSequence).filter_by(vendor='AV').count() == 0  # no number drawn from the other sequence
 
 

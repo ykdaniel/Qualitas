@@ -46,7 +46,7 @@ def test_create_checklist_auto_records_no(checklist_service, mock_repo):
         assert result.recordsNo == "QTS-A-CHK-000001"
         assert result.contractor_id == "vendor-123"
         assert result.detail_data == json.dumps({"key": "value"})
-        mock_gen_ref.assert_called_once_with(mock_repo.db, "Vendor A", "CHECKLIST")
+        mock_gen_ref.assert_called_once_with(mock_repo.db, "Vendor A", "CHECKLIST", project_id=None)   # a template: STD (B3)
         mock_repo.create.assert_called_once()
         mock_log.assert_called_once()
 

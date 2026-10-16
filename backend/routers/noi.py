@@ -1,4 +1,6 @@
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from core.refusals import refusal_http
 from fastapi.responses import StreamingResponse
@@ -36,18 +38,19 @@ def read_noi_contractor_contact(
 
 @router.get("/next-reference", response_model=dict)
 def read_noi_next_reference(
-    contractor: str,
+    project_id: Optional[str] = None,
     noi_service: NOIService = Depends(get_noi_service),
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(NOI_CREATE))
 ):
-    """The reference number a new NOI for this contractor is expected to get — shown in the create form as "expected";
-    nothing is reserved, the number is fixed on save. A caller limited to projects gets only the masked format
-    (referenceNo null) — see NOIService.preview_reference_no (NOI-DEFECTS-2026-001)."""
+    """The reference number a new NOI in the current project is expected to get — shown in the create form as
+    "expected"; nothing is reserved, the number is fixed on save. Numbering is per project (REF-PROJECT-SEQ-2026-001
+    B3), so the number is shown in full to everyone who may create an NOI there; a system administrator passes the
+    chosen project (400 PROJECT_REQUIRED_FOR_CREATE in "All projects") — see NOIService.preview_reference_no."""
     try:
-        return noi_service.preview_reference_no(contractor, scope=scope)
+        return noi_service.preview_reference_no(project_id, scope=scope)
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
 
 # 讀取操作 - 無需認證
 @router.get("/", response_model=list[schemas.NOI])
@@ -113,12 +116,12 @@ def create_noi(
             scope=scope,
         )
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except DateValidationError as e:
         raise HTTPException(status_code=422, detail=e.http_detail())
     except ValueError as e:
         # e.g. the ITP is unknown or not one the caller can see: a business refusal (400), never a 500 (B2 R1)
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
 
 @router.post("/bulk/", response_model=list[schemas.NOI])
 def create_nois_bulk(
@@ -136,12 +139,12 @@ def create_nois_bulk(
                 scope=scope,
             ))
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except DateValidationError as e:
         raise HTTPException(status_code=422, detail=e.http_detail())
     except ValueError as e:
         # e.g. the ITP is unknown or not one the caller can see: a business refusal (400), never a 500 (B2 R1)
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
     return created
 
 @router.put("/{noi_id}/", response_model=schemas.NOI)
@@ -158,11 +161,11 @@ def update_noi(
             scope=scope,
         )
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except DateValidationError as e:
         raise HTTPException(status_code=422, detail=e.http_detail())
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
     if db_noi is None:
         raise HTTPException(status_code=404, detail="NOI not found")
     return db_noi
@@ -180,7 +183,7 @@ def delete_noi(
             scope=scope,
         )
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except ValueError as e:
         # a business refusal (e.g. the NOI is still referenced by ITR / NCR records) is a 400, never a 500
         raise refusal_http(e)

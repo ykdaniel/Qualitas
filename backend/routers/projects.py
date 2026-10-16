@@ -66,7 +66,11 @@ def create_project(
     service: ProjectService = Depends(get_project_service),
     current_user: schemas.User = Depends(RoleChecker(CONTRACTOR_MANAGE)),
 ):
-    return service.create_project(project, user_id=current_user.id, username=current_user.username)
+    try:
+        return service.create_project(project, user_id=current_user.id, username=current_user.username)
+    except ValueError as e:
+        # project code missing / malformed / reserved / taken (REF-PROJECT-SEQ-2026-001 B3, D14): a coded 400
+        raise refusal_http(e)
 
 
 @router.put("/{project_id}", response_model=schemas.Project)
@@ -76,7 +80,10 @@ def update_project(
     service: ProjectService = Depends(get_project_service),
     current_user: schemas.User = Depends(RoleChecker(CONTRACTOR_MANAGE)),
 ):
-    updated = service.update_project(project_id, project, user_id=current_user.id, username=current_user.username)
+    try:
+        updated = service.update_project(project_id, project, user_id=current_user.id, username=current_user.username)
+    except ValueError as e:
+        raise refusal_http(e)
     if updated is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return updated

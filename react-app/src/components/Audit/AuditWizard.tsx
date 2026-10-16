@@ -16,6 +16,7 @@ import AutoGrowTextarea from './AutoGrowTextarea';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useProjectStore } from '../../store/projectStore';
 import { useLanguage } from '../../context/LanguageContext';
+import { showRefusal } from '../../store/refusalStore';
 import { checkDateOrder } from '../../utils/dateValidation';
 import { exportAuditDocx } from '../../services/api';
 import AuditPrintTemplate, { AuditPrintKind, AuditPrintData, auditProgress } from './AuditPrintTemplate';
@@ -109,7 +110,6 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
   React.useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
 
   const [isSaving, setIsSaving] = useState(false);
-  const [saveError, setSaveError] = useState('');
   const [isDraftSaving, setIsDraftSaving] = useState(false);
   const [draftMessage, setDraftMessage] = useState('');
   const [exportingDocx, setExportingDocx] = useState(false);
@@ -538,7 +538,6 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     if (readOnly) return;
     if (blockSaveForUnconfirmedNewItem()) return;
     setIsDraftSaving(true);
-    setSaveError('');
     setDraftMessage('');
     const formAtSave = formData;
 
@@ -566,10 +565,10 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
       setDraftMessage(`${t('audit.wizard.draftSaved')} ${time}`);
       setTimeout(() => setDraftMessage(''), 4000);
       // Don't call onSaveSuccess() here — draft save should keep the wizard open
-    } catch (err: any) {
-      // auditStore rethrows getErrorMessage(): the backend's reason for a refusal, a friendly line for a server error.
+    } catch (err) {
+      // auditStore rethrows the axios error as is: the refusal dialog (REFUSAL-DIALOG-2026-002 D2) translates it; the wizard stays open
       console.error("草稿儲存失敗: ", err);
-      setSaveError(`${t('audit.wizard.saveFailedPrefix')}${err?.message || ''}`);
+      showRefusal(err, 'save', { keepsInput: true });
     } finally {
       setIsDraftSaving(false);
     }
@@ -580,7 +579,6 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     if (readOnly) return;
     if (blockSaveForUnconfirmedNewItem()) return;
     setIsSaving(true);
-    setSaveError('');
 
     try {
       const updates = prepareAuditData(formData.status);
@@ -594,9 +592,9 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
 
       leaveGuard.release();
       onSaveSuccess();
-    } catch (err: any) {
+    } catch (err) {
       console.error("資料庫寫入失敗: ", err);
-      setSaveError(`${t('audit.wizard.saveFailedPrefix')}${err?.message || ''}`);
+      showRefusal(err, 'save', { keepsInput: true });
     } finally {
       setIsSaving(false);
     }
@@ -714,11 +712,6 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
           <div role="status" data-readonly-banner={readOnlyReason} className="mb-6 p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl font-medium shadow-sm no-print flex items-center justify-center gap-2 text-center">
             <Lock size={18} className="shrink-0" />
             <span>{t(readOnlyReason)}</span>
-          </div>
-        )}
-        {saveError && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-center font-medium shadow-sm no-print">
-            {saveError}
           </div>
         )}
 

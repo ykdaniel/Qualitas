@@ -136,29 +136,18 @@ export const useMeetingMinutesStore = create<MeetingMinutesState>((set, get) => 
         await get().fetchMeetingMinutes(params);
     },
 
+    // A refused or failed save goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-002); the page's error banner is for list loads only.
     addMeetingMinutes: async (meeting: Omit<MeetingMinutesItem, 'id'>) => {
-        try {
-            const response = await api.post('/meeting-minutes/', withCurrentProject(meeting));
-            const newMeeting = normalizeItem(response.data);
-            set((state) => ({ meetingList: [...state.meetingList, newMeeting] }));
-            return newMeeting;
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to add Meeting Minutes');
-            set({ error: msg });
-            throw error;
-        }
+        const response = await api.post('/meeting-minutes/', withCurrentProject(meeting));
+        const newMeeting = normalizeItem(response.data);
+        set((state) => ({ meetingList: [...state.meetingList, newMeeting] }));
+        return newMeeting;
     },
 
     updateMeetingMinutes: async (id: string, updates: Partial<MeetingMinutesItem>) => {
-        try {
-            const response = await api.put(`/meeting-minutes/${id}`, updates);
-            const updated = normalizeItem(response.data);
-            set((state) => ({ meetingList: state.meetingList.map(m => m.id === id ? updated : m) }));
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to update Meeting Minutes');
-            set({ error: msg });
-            throw error;
-        }
+        const response = await api.put(`/meeting-minutes/${id}`, updates);
+        const updated = normalizeItem(response.data);
+        set((state) => ({ meetingList: state.meetingList.map(m => m.id === id ? updated : m) }));
     },
 
     deleteMeetingMinutes: async (id: string) => {

@@ -114,6 +114,7 @@ export default function ComponentName({ prop1, prop2 }: Props) {
 - 沿用現有 SQLAlchemy Base；新表時間欄位依需求設計，既有表不可為補齊範例欄位而擅自改 schema
 - 禁止在 Model 寫業務邏輯，放在 `services.py`
 - 資料庫 migration 必須有描述性名稱
+- 新增會產生文件編號的模組時，要在 `backend/routers/settings.py` 的 `DEFAULT_NAMING_RULES` 加一條規則，並附上測試確認第一筆編號的格式
 
 **錯誤處理：**
 - HTTP 層使用 FastAPI HTTPException；服務層沿用專案既有領域例外，由 router 映射狀態碼

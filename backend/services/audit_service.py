@@ -193,7 +193,8 @@ class AuditService:
             begin_write_transaction(db)
 
             # Always auto-generate auditNo server-side (ignore any value from frontend)
-            audit_data["auditNo"] = generate_reference_no(db, audit_data.get("contractor") or '', 'audit')
+            audit_data["auditNo"] = generate_reference_no(db, audit_data.get("contractor") or '', 'audit',
+                                                          project_id=audit_data.get("project_id"))
 
             db_audit = self.repo.create(audit_data)
 
@@ -255,8 +256,10 @@ class AuditService:
         # Validate status transition if status is being changed
         if 'status' in update_data and update_data['status'] != db_audit.status:
             if not WorkflowEngine.validate_transition("Audit", db_audit.status, update_data['status']):
-                raise ValueError(
-                    f"Invalid status transition from '{db_audit.status}' to '{update_data['status']}'"
+                raise Refusal(
+                    "INVALID_TRANSITION",
+                    f"Invalid status transition from '{db_audit.status}' to '{update_data['status']}'",
+                    docType="Audit", fromStatus=db_audit.status, toStatus=update_data['status'],
                 )
 
         # Store old values for audit log
@@ -276,9 +279,11 @@ class AuditService:
                 if _comparable(k, v) != _comparable(k, old_value.get(k))
             }
             if changed_fields:
-                raise ValueError(
+                raise Refusal(
+                    "RECORD_LOCKED",
                     f"Cannot modify Audit '{db_audit.auditNo}' with status '{db_audit.status}' — "
-                    f"no fields can be changed once an audit is closed or void."
+                    f"no fields can be changed once an audit is closed or void.",
+                    docType="Audit", number=db_audit.auditNo, status=db_audit.status, kind="record",
                 )
             return db_audit  # an unchanged resave: nothing to write, no audit-log row
 
@@ -313,7 +318,8 @@ class AuditService:
                 new_contractor = update_data["contractor"]
                 if new_contractor and not db_audit.auditNo:
                     begin_write_transaction(db)
-                    processed_data["auditNo"] = generate_reference_no(db, new_contractor, 'audit')
+                    processed_data["auditNo"] = generate_reference_no(
+                        db, new_contractor, 'audit', project_id=processed_data.get("project_id") or db_audit.project_id)   # a sent null keeps the audit's project (B3 R1 P3-2)
                     logger.info(f"Assigned new auditNo {processed_data['auditNo']} (first contractor assignment)")
 
             enforce_update_scope(processed_data, scope)

@@ -144,7 +144,9 @@ def test_a_created_noi_is_saved_with_its_qworkflow_and_audit_and_needs_no_restar
         (n,) = db.query(models.NOI).all()
         assert n.referenceNo == noi["referenceNo"] and n.id == noi["id"]
         (q,) = db.query(models.QWorkflow).all()                                         # exactly one, bound 1:1
-        assert q.noi_id == n.id and q.referenceNo == "Q-WorkFlow-000001"
+        # REF-PROJECT-SEQ-2026-001 B3: Q-WorkFlow-<project code>-###### on the project's own counter (was Q-WorkFlow-000001);
+        # a create now writes two counters (NOI and QWORKFLOW), hence "sequences": 2 below
+        assert q.noi_id == n.id and q.referenceNo == "Q-WorkFlow-PA-000001"
         (a,) = db.query(models.AuditLog).filter_by(entity_type="NOI", action="CREATE").all()
         assert (a.entity_id, a.entity_name, a.username) == (n.id, n.referenceNo, "noi_a")
         assert a.user_id == db.query(models.User).filter_by(username="noi_a").one().id
@@ -156,7 +158,7 @@ def test_a_created_noi_is_saved_with_its_qworkflow_and_audit_and_needs_no_restar
         db.close()
     # visible on the tracker at once — no restart, no back-fill call
     rows = c.get("/api/workflow/").json()
-    assert [w["noi_reference_no"] for w in rows] == [noi["referenceNo"]] and rows[0]["reference_no"] == "Q-WorkFlow-000001"
+    assert [w["noi_reference_no"] for w in rows] == [noi["referenceNo"]] and rows[0]["reference_no"] == "Q-WorkFlow-PA-000001"
     assert c.get("/api/workflow/stats").json()["total"] == 1
 
 
@@ -168,7 +170,7 @@ def test_qworkflow_and_noi_numbers_stay_sequential_across_creates(noi_env):
     db = env.Session()
     try:
         assert [q.referenceNo for q in db.query(models.QWorkflow).order_by(models.QWorkflow.referenceNo)] == \
-            ["Q-WorkFlow-000001", "Q-WorkFlow-000002", "Q-WorkFlow-000003"]
+            ["Q-WorkFlow-PA-000001", "Q-WorkFlow-PA-000002", "Q-WorkFlow-PA-000003"]
         assert db.query(models.AuditLog).filter_by(entity_type="NOI", action="CREATE").count() == 3
     finally:
         db.close()
@@ -212,7 +214,7 @@ def test_a_failing_qworkflow_or_audit_insert_rolls_back_the_noi_the_audit_and_th
     # and the system is healthy: the next create succeeds and takes the very number the failed one would have had
     ok = _create(c)
     assert ok.status_code == 200 and ok.json()["referenceNo"].endswith("000001")
-    assert _counts(env) == {"noi": 1, "qworkflow": 1, "audits": 1, "sequences": 1}
+    assert _counts(env) == {"noi": 1, "qworkflow": 1, "audits": 1, "sequences": 2}
 
 
 def test_a_failing_commit_leaves_nothing_behind(noi_env):
@@ -382,7 +384,7 @@ def test_two_simultaneous_creates_both_succeed_with_distinct_numbers(noi_env):
     try:
         nois = db.query(models.NOI).all()
         assert len(nois) == 2 and len({n.referenceNo for n in nois}) == 2
-        assert sorted(q.referenceNo for q in db.query(models.QWorkflow).all()) == ["Q-WorkFlow-000001", "Q-WorkFlow-000002"]
+        assert sorted(q.referenceNo for q in db.query(models.QWorkflow).all()) == ["Q-WorkFlow-PA-000001", "Q-WorkFlow-PA-000002"]
         assert db.query(models.AuditLog).filter_by(entity_type="NOI", action="CREATE").count() == 2
         assert {q.noi_id for q in db.query(models.QWorkflow).all()} == {n.id for n in nois}
     finally:
@@ -396,7 +398,7 @@ def test_bulk_create_is_one_unit_per_noi_not_one_unit_per_batch(noi_env):
     c = env.login("noi_a")
     ok = c.post("/api/noi/bulk/", json=[_noi_body(package="B1"), _noi_body(package="B2")])
     assert ok.status_code == 200 and len(ok.json()) == 2
-    assert _counts(env) == {"noi": 2, "qworkflow": 2, "audits": 2, "sequences": 1}
+    assert _counts(env) == {"noi": 2, "qworkflow": 2, "audits": 2, "sequences": 2}
     hook, state = _fail_on_statement(engine, "insert into qworkflow")
     event.remove(engine, "before_cursor_execute", hook)
     seen = {"n": 0}
@@ -412,4 +414,4 @@ def test_bulk_create_is_one_unit_per_noi_not_one_unit_per_batch(noi_env):
             c.post("/api/noi/bulk/", json=[_noi_body(package="B3"), _noi_body(package="B4")])
     finally:
         event.remove(engine, "before_cursor_execute", second_fails)
-    assert _counts(env) == {"noi": 3, "qworkflow": 3, "audits": 3, "sequences": 1}      # B3 complete, B4 absent
+    assert _counts(env) == {"noi": 3, "qworkflow": 3, "audits": 3, "sequences": 2}      # B3 complete, B4 absent

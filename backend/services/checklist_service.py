@@ -20,6 +20,7 @@ from core.utils import (
     lock_itr_for_write,
     reload_locked,
     _resolve_vendor_id,
+    begin_write_transaction,
     generate_reference_no,
     log_audit,
     WorkflowEngine
@@ -515,7 +516,8 @@ class ChecklistService:
             if data.get('itpId'):
                 itp = self.repo.db.query(models.ITP).filter(models.ITP.id == data['itpId']).first()
                 if not itp:
-                    raise ValueError(f"ITP with ID '{data['itpId']}' not found")
+                    raise Refusal("REFERENCE_NOT_FOUND", f"ITP with ID '{data['itpId']}' not found",
+                                  docType="ITP", field="ID", value=data['itpId'])
 
             if data.get('noiNumber'):
                 validators.validate_noi_reference(self.repo.db, data['noiNumber'])
@@ -553,9 +555,12 @@ class ChecklistService:
                     "frontends should send null to request auto-generation"
                 )
                 records_no = None
+            # take the write lock before the sequence is read, so two creates never get the same number (B3)
+            begin_write_transaction(self.repo.db)
             if not records_no:
+                # a template is shared: numbered QTS-RKS-STD-CHK- (user's decision 2026-10-14, DECISIONS item 11)
                 data['recordsNo'] = generate_reference_no(
-                    self.repo.db, contractor_name, 'CHECKLIST'
+                    self.repo.db, contractor_name, 'CHECKLIST', project_id=None
                 )
 
             # Create Checklist object
@@ -626,8 +631,10 @@ class ChecklistService:
             if checklist_update.status and not WorkflowEngine.validate_transition(
                 "Checklist", db_checklist.status, checklist_update.status
             ):
-                raise ValueError(
-                    f"Invalid status transition from {db_checklist.status} to {checklist_update.status}"
+                raise Refusal(
+                    "INVALID_TRANSITION",
+                    f"Invalid status transition from {db_checklist.status} to {checklist_update.status}",
+                    docType="Checklist", fromStatus=db_checklist.status, toStatus=checklist_update.status,
                 )
 
             # Capture old values for audit using inspect
@@ -822,7 +829,8 @@ class ChecklistService:
             if 'itpId' in d and d['itpId']:
                 itp = self.repo.db.query(models.ITP).filter(models.ITP.id == d['itpId']).first()
                 if not itp:
-                    raise ValueError(f"ITP with ID '{d['itpId']}' not found")
+                    raise Refusal("REFERENCE_NOT_FOUND", f"ITP with ID '{d['itpId']}' not found",
+                                  docType="ITP", field="ID", value=d['itpId'])
 
             if 'noiNumber' in d and d['noiNumber']:
                 validators.validate_noi_reference(self.repo.db, d['noiNumber'])

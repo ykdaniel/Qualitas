@@ -13,7 +13,6 @@ import { useChecklistStore } from '../../store/checklistStore';
 import { checkITPReferences, checkITPChecklistReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
 import { uploadFiles, deleteFile } from '../../services/api';
 import { classifyDeleteResults } from '../../utils/attachmentOutcome';
-import { getErrorMessage } from '../../utils/errorUtils';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './ITP.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
@@ -351,9 +350,8 @@ const ITP: React.FC = () => {
               await updateITPDetail(currentItpId, detailPayload);
               refetch();
               return true;
-            } catch (error: any) {
-              if (error?.response?.status === 401) return false;
-              toast.error(getErrorMessage(error, t('itp.updateError')));
+            } catch (error) {
+              showRefusal(error, 'save');           // nothing for a 401 (the API client is logging the user out)
               return false;
             }
           }}

@@ -65,7 +65,7 @@ def create_meeting_minutes(
     try:
         return meeting_service.create_meeting_minutes(meeting_create=meeting, user_id=current_user.id, username=current_user.username, scope=scope)
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
 
 @router.post("/{meeting_id}/new-occurrence", response_model=schemas.MeetingMinutes)
 def create_new_occurrence(
@@ -83,9 +83,9 @@ def create_new_occurrence(
             username=current_user.username, scope=scope
         )
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
     if new_meeting is None:
         raise HTTPException(status_code=404, detail="Meeting Minutes not found")
     return new_meeting
@@ -101,9 +101,9 @@ def update_meeting_minutes(
     try:
         db_meeting = meeting_service.update_meeting_minutes(meeting_id=meeting_id, meeting_update=meeting, user_id=current_user.id, username=current_user.username, scope=scope)
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
     if db_meeting is None:
         raise HTTPException(status_code=404, detail="Meeting Minutes not found")
     return db_meeting

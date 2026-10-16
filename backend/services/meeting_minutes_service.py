@@ -21,6 +21,7 @@ from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, en
 from core.utils import (
     _json_serialize,
     _resolve_vendor_id,
+    begin_write_transaction,
     generate_reference_no,
     reclaim_reference_no,
     log_audit,
@@ -141,9 +142,11 @@ class MeetingMinutesService:
             # (forces vendor_id for contractor users; validates project_id).
             enforce_create_scope(data, scope)
 
+            # take the write lock before the sequence is read, so two creates never get the same number (B3)
+            begin_write_transaction(self.repo.db)
             if not data.get('documentNumber'):
                 data['documentNumber'] = generate_reference_no(
-                    self.repo.db, vendor_name or '', 'meeting'
+                    self.repo.db, vendor_name or '', 'meeting', project_id=data.get('project_id')
                 )
             # First occurrence of a series starts at "1.0" (BACKLOG #18) —
             # create_new_occurrence bumps this for subsequent ones.
@@ -281,8 +284,10 @@ class MeetingMinutesService:
             if meeting_update.status and not WorkflowEngine.validate_transition(
                 "MeetingMinutes", db_meeting.status, meeting_update.status
             ):
-                raise ValueError(
-                    f"Invalid status transition from {db_meeting.status} to {meeting_update.status}"
+                raise Refusal(
+                    "INVALID_TRANSITION",
+                    f"Invalid status transition from {db_meeting.status} to {meeting_update.status}",
+                    docType="MeetingMinutes", fromStatus=db_meeting.status, toStatus=meeting_update.status,
                 )
 
             old_val = {c.name: getattr(db_meeting, c.name) for c in db_meeting.__table__.columns}
@@ -304,9 +309,11 @@ class MeetingMinutesService:
                 changed_fields = {f for f in d if d[f] != old_val.get(f)}
                 disallowed = changed_fields - ({'status'} if voiding else set())
                 if disallowed:
-                    raise ValueError(
+                    raise Refusal(
+                        "RECORD_LOCKED",
                         f"Cannot modify meeting minute '{db_meeting.documentNumber}' "
-                        f"(status: {db_meeting.status})."
+                        f"(status: {db_meeting.status}).",
+                        docType="MeetingMinutes", number=db_meeting.documentNumber, status=db_meeting.status, kind="record",
                     )
 
             if 'vendor' in d:
@@ -383,7 +390,11 @@ class MeetingMinutesService:
                 # the row that was just removed — see its docstring for why
                 # this resyncs to the actual remaining max rather than a
                 # naive decrement.
-                reclaim_reference_no(self.repo.db, vendor_name, 'meeting')
+                try:
+                    reclaim_reference_no(self.repo.db, 'meeting', db_meeting.project_id)
+                except Exception as e:
+                    # best effort: the delete is already committed and must still be audited (B3 R1 P3-3)
+                    logger.warning(f"Could not give back the number of deleted Meeting Minutes {meeting_id}: {e}")
 
             log_audit(
                 self.repo.db, "DELETE", "MeetingMinutes", meeting_id, db_meeting.documentNumber,

@@ -21,6 +21,7 @@ import { checkDateOrder } from '../../utils/dateValidation';
 import type { OSDDetailData } from './osdFormSchema';
 import type { SaveOutcome } from '../../utils/saveFlow';
 import { presentOutcome } from '../../utils/saveErrors';
+import { showRefusal } from '../../store/refusalStore';
 
 export type { OSDDetailData };
 export type { SaveOutcome };
@@ -157,7 +158,8 @@ export const OSDDetailModal: React.FC<OSDDetailModalProps> = ({ osdId: _osdId, e
             toast.warning(`主資料已保存，但附件處理尚未完成：${detail}`, { duration: 10000 });
             return;
         }
-        const { close, notice } = presentOutcome(outcome, t);
+        const { close, notice, refusal } = presentOutcome(outcome, t);
+        if (refusal) showRefusal(refusal.error, 'save', { keepsInput: true });
         if (notice) (notice.level === 'error' ? toast.error : toast.warning)(notice.text, { duration: 10000 });
         if (close) {
             leaveGuard.release();
@@ -180,9 +182,9 @@ export const OSDDetailModal: React.FC<OSDDetailModalProps> = ({ osdId: _osdId, e
             ], deletedFileIds);
             applyOutcome(outcome);
         } catch (err) {
-            // The record write itself threw (not routed through runSaveFlow) — keep the
-            // modal open, preserve input, single friendly error.
-            toast.error((err as Error)?.message || t('common.saveFailed'));
+            // The save itself threw (not routed through runSaveFlow) — keep the modal open,
+            // preserve input, one refusal dialog.
+            showRefusal(err, 'save', { keepsInput: true });
         } finally {
             setSaving(false);
         }

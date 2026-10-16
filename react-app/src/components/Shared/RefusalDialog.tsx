@@ -19,7 +19,7 @@ export default function RefusalDialog() {
     const dialogRef = useRef<HTMLDivElement>(null);
     const view = !current ? null : current.coded
         ? describeCoded(current.coded.code, current.coded.params, t, current.action)
-        : describeRefusal(current.error, t, current.action, language);
+        : describeRefusal(current.error, t, current.action, language, { keepsInput: current.keepsInput });
     const visible = view !== null;
 
     useEffect(() => {
@@ -79,6 +79,7 @@ export default function RefusalDialog() {
                         </ul>
                     )}
                     {view.original && <p className={styles.original} lang="en">{view.original}</p>}
+                    {view.note && <p className={styles.note}>{view.note}</p>}
                 </div>
                 <div className={styles.footer}>
                     <button ref={okRef} type="button" className={actionStyles.primary} onClick={close}>

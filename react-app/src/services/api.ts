@@ -211,15 +211,17 @@ export const getNoiContractorContact = async (contractorId: string): Promise<Con
 };
 
 export interface NoiNextReference {
-  /** The expected number, or null when the caller may only see the format (a user limited to projects). */
+  /** The expected number (numbering is per project, so everyone who may create an NOI there sees it in full). */
   referenceNo: string | null;
-  /** The number's format with the sequence masked, e.g. QTS-ABC-NOI-###### */
+  /** The number's format with the sequence masked, e.g. QTS-RKS-HL-NOI-###### */
   pattern: string;
 }
 
-/** The reference number a new NOI for this contractor is expected to get (nothing is reserved; fixed on save). */
-export const getNoiNextReference = async (contractor: string): Promise<NoiNextReference> => {
-  const response = await api.get<NoiNextReference>('/noi/next-reference', { params: { contractor } });
+/** The reference number a new NOI in this project is expected to get (nothing is reserved; fixed on save).
+ *  REF-PROJECT-SEQ-2026-001 B3: a system administrator passes the project chosen in the menu; a project member's
+ *  sign-in project is used when none is passed. */
+export const getNoiNextReference = async (projectId: string | null): Promise<NoiNextReference> => {
+  const response = await api.get<NoiNextReference>('/noi/next-reference', { params: projectId ? { project_id: projectId } : {} });
   return response.data;
 };
 

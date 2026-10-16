@@ -54,11 +54,13 @@ test('clean success: write, deletes, uploads, reload — and the outcome says sa
 
 test('record write fails: nothing else is attempted and the outcome is failed with the described message', async () => {
     const base = steps();
-    base.s.writeRecord = async () => { base.calls.push('write'); throw new Error('422'); };
+    const writeError = new Error('422');
+    base.s.writeRecord = async () => { base.calls.push('write'); throw writeError; };
     base.s.uploads = [{ category: 'attachment', files: [file('a')] }];
     base.s.deletedFileIds = ['d1'];
     const out = await runSaveFlow(base.s);
-    assert.deepEqual(out, { status: 'failed', message: 'E(422)' });
+    assert.deepEqual(out, { status: 'failed', message: 'E(422)', error: writeError });
+    if (out.status === 'failed') assert.equal(out.error, writeError, 'the original error is kept as is, for the refusal dialog');
     assert.deepEqual(base.calls, ['write']);        // no delete, no upload, no reload
 });
 
@@ -171,10 +173,15 @@ test('network failure, server error and unknown errors: friendly fixed lines, th
 
 // ---- presentOutcome -------------------------------------------------------------------------------------------------------
 
-test('presentOutcome: incomplete saves use the banner only; other outcomes keep their toast', () => {
+test('presentOutcome: incomplete saves use the banner only; a failed save goes to the refusal dialog; a stale list keeps its toast', () => {
     assert.deepEqual(presentOutcome({ status: 'saved' }, t), { close: true });
     assert.deepEqual(presentOutcome({ status: 'saved-reload-failed', id: 'A' }, t), { close: true, notice: { level: 'warning', text: '已保存，重新載入失敗' } });
-    assert.deepEqual(presentOutcome({ status: 'failed', message: '提出日期：不是有效日期' }, t), { close: false, notice: { level: 'error', text: '尚未保存，內容已保留。提出日期：不是有效日期' } });
+    // REFUSAL-DIALOG-2026-002: no toast any more; the original error is handed over for the dialog
+    const err = axiosErr(422, { detail: [{ loc: ['body', 'raiseDate'], code: 'invalid_calendar' }] });
+    const failed = presentOutcome({ status: 'failed', message: '提出日期：不是有效日期', error: err }, t);
+    assert.deepEqual(failed, { close: false, refusal: { error: err } });
+    assert.equal(failed.refusal?.error, err);
+    assert.equal(failed.notice, undefined);
     const inc = presentOutcome({
         status: 'saved-incomplete', id: 'A', reloadFailed: false, remainingDeletes: [], uploadedCategories: [], uploaded: {}, remainingUploads: [],
         failures: [{ step: 'upload', category: 'attachment', message: 'E(net)' }, { step: 'delete', message: 'E(gone)' }],

@@ -203,7 +203,7 @@ def test_project_reply_days_rejects_invalid(env, value):
 
 def test_project_reply_days_has_no_default_and_can_be_cleared(env):
     assert env.c["admin"].get("/api/projects/P1").json()["materialReplyDays"] is None
-    assert env.c["admin"].post("/api/projects/", json={"name": "New"}).json()["materialReplyDays"] is None
+    assert env.c["admin"].post("/api/projects/", json={"name": "New", "code": "NEW"}).json()["materialReplyDays"] is None
     env.c["admin"].put("/api/projects/P1", json={"materialReplyDays": 10})
     r = env.c["admin"].put("/api/projects/P1", json={"materialReplyDays": None})
     assert r.json()["materialReplyDays"] is None

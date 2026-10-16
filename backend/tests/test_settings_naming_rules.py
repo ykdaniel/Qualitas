@@ -39,18 +39,34 @@ def test_update_naming_rules_rejects_empty_prefix(db_session):
     assert "empty" in excinfo.value.detail.lower()
 
 
-def test_update_naming_rules_rejects_missing_abbrev_placeholder(db_session):
+# REF-PROJECT-SEQ-2026-001 B3 (D2): numbers carry the project code, so [PROJECT] is required and [ABBREV] is refused
+# (was: [ABBREV] required); KM numbers itself and is exempt.
+def test_update_naming_rules_rejects_missing_project_placeholder(db_session):
     rules = [schemas.NamingRuleBase(doc_type="ncr", prefix="QTS-RKS-NCR-", sequence_digits=6)]
     with pytest.raises(HTTPException) as excinfo:
         update_naming_rules(rules=rules, db=db_session, _user=None)
     assert excinfo.value.status_code == 400
-    assert "abbrev" in excinfo.value.detail.lower()
+    assert "[project]" in excinfo.value.detail.lower()
+
+
+def test_update_naming_rules_rejects_the_retired_abbrev_placeholder(db_session):
+    rules = [schemas.NamingRuleBase(doc_type="ncr", prefix="QTS-RKS-[ABBREV]-[PROJECT]-NCR-", sequence_digits=6)]
+    with pytest.raises(HTTPException) as excinfo:
+        update_naming_rules(rules=rules, db=db_session, _user=None)
+    assert excinfo.value.status_code == 400
+    assert "[abbrev]" in excinfo.value.detail.lower()
+
+
+def test_update_naming_rules_km_is_exempt(db_session):
+    result = update_naming_rules(rules=[schemas.NamingRuleBase(doc_type="km", prefix="QTS-KM-", sequence_digits=6)],
+                                 db=db_session, _user=None)
+    assert {r.doc_type: r.prefix for r in result}["km"] == "QTS-KM-"
 
 
 def test_update_naming_rules_rejects_duplicate_prefix(db_session):
     rules = [
-        schemas.NamingRuleBase(doc_type="ncr", prefix="QTS-RKS-[ABBREV]-DUP-", sequence_digits=6),
-        schemas.NamingRuleBase(doc_type="obs", prefix="QTS-RKS-[ABBREV]-DUP-", sequence_digits=6),
+        schemas.NamingRuleBase(doc_type="ncr", prefix="QTS-RKS-[PROJECT]-DUP-", sequence_digits=6),
+        schemas.NamingRuleBase(doc_type="obs", prefix="QTS-RKS-[PROJECT]-DUP-", sequence_digits=6),
     ]
     with pytest.raises(HTTPException) as excinfo:
         update_naming_rules(rules=rules, db=db_session, _user=None)
@@ -60,10 +76,38 @@ def test_update_naming_rules_rejects_duplicate_prefix(db_session):
 
 def test_update_naming_rules_accepts_valid_rules(db_session):
     rules = [
-        schemas.NamingRuleBase(doc_type="ncr", prefix="QTS-RKS-[ABBREV]-NCR-", sequence_digits=6),
-        schemas.NamingRuleBase(doc_type="osd", prefix="QTS-RKS-[ABBREV]-OSD-", sequence_digits=6),
+        schemas.NamingRuleBase(doc_type="ncr", prefix="QTS-RKS-[PROJECT]-NCR-", sequence_digits=6),
+        schemas.NamingRuleBase(doc_type="osd", prefix="QTS-RKS-[PROJECT]-OSD-", sequence_digits=6),
     ]
     result = update_naming_rules(rules=rules, db=db_session, _user=None)
     doc_types = {r.doc_type: r.prefix for r in result}
-    assert doc_types["ncr"] == "QTS-RKS-[ABBREV]-NCR-"
-    assert doc_types["osd"] == "QTS-RKS-[ABBREV]-OSD-"
+    assert doc_types["ncr"] == "QTS-RKS-[PROJECT]-NCR-"
+    assert doc_types["osd"] == "QTS-RKS-[PROJECT]-OSD-"
+
+
+def test_update_naming_rules_stores_the_prefix_trimmed(db_session):
+    # NAMING-RULES-CLEANUP-2026-001: the prefix is checked trimmed, so it is stored trimmed too — otherwise a stray
+    # space would end up inside every document number. Both an existing row and a new one.
+    db_session.add(models.DocumentNamingRule(doc_type="ncr", prefix="QTS-RKS-[PROJECT]-NCR-", sequence_digits=6))
+    db_session.commit()
+    rules = [
+        schemas.NamingRuleBase(doc_type="ncr", prefix="  QTS-RKS-[PROJECT]-NC- ", sequence_digits=6),
+        schemas.NamingRuleBase(doc_type="osd", prefix="QTS-RKS-[PROJECT]-OSD-\t", sequence_digits=6),
+    ]
+    result = update_naming_rules(rules=rules, db=db_session, _user=None)
+    stored = {r.doc_type: r.prefix for r in result}
+    assert stored["ncr"] == "QTS-RKS-[PROJECT]-NC-"
+    assert stored["osd"] == "QTS-RKS-[PROJECT]-OSD-"
+    db_session.expire_all()
+    assert db_session.query(models.DocumentNamingRule).filter_by(doc_type="ncr").one().prefix == "QTS-RKS-[PROJECT]-NC-"
+
+
+def test_update_naming_rules_rejects_prefixes_that_only_differ_by_spaces(db_session):
+    rules = [
+        schemas.NamingRuleBase(doc_type="ncr", prefix="QTS-RKS-[PROJECT]-DUP-", sequence_digits=6),
+        schemas.NamingRuleBase(doc_type="obs", prefix=" QTS-RKS-[PROJECT]-DUP- ", sequence_digits=6),
+    ]
+    with pytest.raises(HTTPException) as excinfo:
+        update_naming_rules(rules=rules, db=db_session, _user=None)
+    assert excinfo.value.status_code == 400
+    assert "collide" in excinfo.value.detail.lower()

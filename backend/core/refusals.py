@@ -12,7 +12,9 @@ it carries a stable `code` and its `params`, so the frontend can show the reason
 
 - Services raise `Refusal(code, message, **params)`. It IS a ValueError, so a router that still maps ValueError -> 400
   with `str(e)` answers exactly as before (no code, same detail).
-- Routers turn it into HTTP with `refusal_http(e, status)`; anything that is not a Refusal maps exactly as the old
+- core.scope.ScopeForbidden (403) carries a code the same way (`Coded`) but is NOT a ValueError, so a router's
+  `except ValueError` never turns it into a 400 (REFUSAL-DIALOG-2026-002).
+- Routers turn it into HTTP with `refusal_http(e, status)`; anything that is not coded maps exactly as the old
   `HTTPException(status, detail=str(e))` did.
 - `refusal_exception_handler` (registered in main.py) writes `code` and `params` next to `detail`. Without the handler
   a RefusalHTTPException is still an HTTPException and answers `{"detail": ...}`.
@@ -25,11 +27,16 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 
-class Refusal(ValueError):
+class Coded:
+    """A stable `code` and its `params` next to the English message (shared by Refusal and core.scope.ScopeForbidden)."""
     def __init__(self, code: str, message: str, **params: Any):
         super().__init__(message)
         self.code = code
         self.params: Dict[str, Any] = params
+
+
+class Refusal(Coded, ValueError):
+    pass
 
 
 class RefusalHTTPException(HTTPException):
@@ -41,8 +48,9 @@ class RefusalHTTPException(HTTPException):
 
 
 def refusal_http(exc: Exception, status_code: int = 400) -> HTTPException:
-    """The HTTP form of a service refusal: coded when it is a Refusal, else the plain `HTTPException(status, str(e))`."""
-    if isinstance(exc, Refusal):
+    """The HTTP form of a service refusal: coded when it carries a code (a Refusal, a ScopeForbidden), else the plain
+    `HTTPException(status, str(e))`."""
+    if isinstance(exc, Coded):
         return RefusalHTTPException(status_code, str(exc), exc.code, exc.params)
     return HTTPException(status_code=status_code, detail=str(exc))
 

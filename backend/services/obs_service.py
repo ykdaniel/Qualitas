@@ -163,7 +163,7 @@ class OBSService:
 
             if not data.get('documentNumber'):
                 data['documentNumber'] = generate_reference_no(
-                    self.repo.db, vendor_name or '', 'OBS'
+                    self.repo.db, vendor_name or '', 'OBS', project_id=data.get('project_id')
                 )
 
             db_obs = models.OBS(**data)
@@ -198,8 +198,10 @@ class OBSService:
             if obs_update.status and not WorkflowEngine.validate_transition(
                 "OBS", db_obs.status, obs_update.status
             ):
-                raise ValueError(
-                    f"Invalid status transition from {db_obs.status} to {obs_update.status}"
+                raise Refusal(
+                    "INVALID_TRANSITION",
+                    f"Invalid status transition from {db_obs.status} to {obs_update.status}",
+                    docType="OBS", fromStatus=db_obs.status, toStatus=obs_update.status,
                 )
 
             old_val = {c.name: getattr(db_obs, c.name) for c in db_obs.__table__.columns}
@@ -241,7 +243,8 @@ class OBSService:
                     if d[f] != getattr(db_obs, f, None)
                 }
                 if changed_locked:
-                    raise ValueError("Cannot modify improvement/photo evidence on a Closed observation")
+                    raise Refusal("RECORD_LOCKED", "Cannot modify improvement/photo evidence on a Closed observation",
+                                  docType="OBS", number=db_obs.documentNumber, status=db_obs.status, kind="evidence")
 
             if 'vendor' in d:
                 vendor_name = d.pop('vendor')

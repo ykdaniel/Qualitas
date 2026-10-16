@@ -7,6 +7,10 @@ nothing under it can still change contractor (and is renumbered, as before), and
 Likewise, when the SAME contractor's abbreviation changed after the NOI was numbered, an NOI with documents under it
 keeps its number on save (the UI resends the contractor every time); one with nothing under it is still renumbered.
 
+REF-PROJECT-SEQ-2026-001 B3 (D2), design change: the number no longer carries the contractor, so a contractor change (or
+a changed abbreviation) never renumbers an NOI any more — the three "renumbered" cases below now assert the number stays.
+The lock on an NOI with documents under it is unchanged.
+
 In-memory DB, real routes and logins, nothing imports `main`.
 """
 import uuid
@@ -90,7 +94,7 @@ def test_an_noi_with_nothing_under_it_can_still_change_contractor(noi_env):
     r = c.put(f"/api/noi/{noi['id']}", json={"contractor": "Beta Co"})
     assert r.status_code == 200, r.text
     row = _noi_row(env, noi["id"])
-    assert row["vendor_id"] == "ACC-V2" and row["referenceNo"] != noi["referenceNo"]       # renumbered, as before
+    assert row["vendor_id"] == "ACC-V2" and row["referenceNo"] == noi["referenceNo"]       # B3: no longer renumbered
 
 
 # ── same contractor, abbreviation changed since the NOI was numbered (business decision, 2026-10-10) ──
@@ -115,14 +119,14 @@ def test_an_noi_with_documents_keeps_its_number_when_its_contractor_abbreviation
     assert row["referenceNo"] == noi["referenceNo"] and row["package"] == "PKG-edited"
 
 
-def test_an_noi_with_nothing_under_it_is_still_renumbered_to_the_new_abbreviation(noi_env):
+def test_an_noi_with_nothing_under_it_keeps_its_number_when_the_abbreviation_changes(noi_env):
     env, _ = noi_env
     c, noi = _new_noi(env)
     _rename_abbreviation(env, "ACC-V1", "ACX")
     r = c.put(f"/api/noi/{noi['id']}", json={"contractor": "Accept Co"})
     assert r.status_code == 200, r.text
     row = _noi_row(env, noi["id"])
-    assert row["referenceNo"] != noi["referenceNo"] and "-ACX-" in row["referenceNo"]
+    assert row["referenceNo"] == noi["referenceNo"] and "-ACX-" not in row["referenceNo"]     # B3: was renumbered to -ACX-
 
 
 # ── independent review follow-ups (decisions 2026-10-10) ──────────────────
@@ -174,14 +178,14 @@ def test_filling_in_a_missing_contractor_is_allowed_and_keeps_the_number_when_do
     assert row["vendor_id"] == "ACC-V2" and row["referenceNo"] == noi["referenceNo"]
 
 
-def test_filling_in_a_missing_contractor_with_nothing_under_it_renumbers_as_before(noi_env):
+def test_filling_in_a_missing_contractor_with_nothing_under_it_keeps_the_number(noi_env):
     env, _ = noi_env
     c, noi = _new_noi(env)
     _clear_contractor(env, noi["id"])
     r = c.put(f"/api/noi/{noi['id']}", json={"contractor": "Beta Co"})
     assert r.status_code == 200, r.text
     row = _noi_row(env, noi["id"])
-    assert row["vendor_id"] == "ACC-V2" and row["referenceNo"] != noi["referenceNo"]
+    assert row["vendor_id"] == "ACC-V2" and row["referenceNo"] == noi["referenceNo"]       # B3: was renumbered
 
 
 def test_a_refused_change_releases_the_write_lock(noi_env):

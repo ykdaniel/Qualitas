@@ -263,7 +263,7 @@ class MaterialSubmittalService:
                                        created_at=now, **fields)
             self.db.add(material)
             self.db.flush()
-            number = generate_reference_no(self.db, vendor.name, "MSA")
+            number = generate_reference_no(self.db, vendor.name, "MSA", project_id=body.project_id)
             approved = body.approved_date.isoformat()
             sub = models.MaterialSubmittal(id=str(uuid.uuid4()), project_id=body.project_id, vendor_id=vendor.id,
                                            material_id=material.id, document_number=number, latest_rev_no=0,

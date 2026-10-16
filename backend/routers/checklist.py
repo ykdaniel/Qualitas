@@ -39,9 +39,9 @@ def create_checklist(
     try:
         return service.create_checklist(chk, user_id=current_user.id, username=current_user.username, scope=scope)
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
 
 @router.get("/", response_model=list[schemas.Checklist])
 def read_checklists(
@@ -112,9 +112,9 @@ def update_checklist(
     try:
         db_chk = service.update_checklist(chk_id, chk, user_id=current_user.id, username=current_user.username, scope=scope)
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
     if db_chk is None:
         raise HTTPException(status_code=404, detail="Checklist not found")
     return db_chk
@@ -130,7 +130,7 @@ def delete_checklist(
     try:
         deleted = service.delete_checklist(chk_id, user_id=current_user.id, username=current_user.username, reason=reason, scope=scope)
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except ValueError as e:
         raise refusal_http(e)
     if not deleted:

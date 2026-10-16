@@ -108,11 +108,11 @@ def create_ncr(
             scope=scope, permissions=_permission_codes(current_user),
         )
     except (ScopeForbidden, NCRCloseNotPermitted) as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except DateValidationError as e:
         raise HTTPException(status_code=422, detail=e.http_detail())
     except ValueError as e:                     # e.g. created as Closed without meeting the closure conditions
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
 
 @router.put("/{ncr_id}/", response_model=schemas.NCR)
 def update_ncr(
@@ -144,11 +144,11 @@ def update_ncr(
             scope=scope, background_tasks=background_tasks, permissions=_permission_codes(current_user),
         )
     except (ScopeForbidden, NCRCloseNotPermitted) as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except DateValidationError as e:
         raise HTTPException(status_code=422, detail=e.http_detail())
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
     if db_ncr is None:
         raise HTTPException(status_code=404, detail="NCR not found")
     return db_ncr

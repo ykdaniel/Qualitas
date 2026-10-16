@@ -57,9 +57,9 @@ def create_followup(
     try:
         return followup_service.create_followup(followup_create=followup, user_id=current_user.id, username=current_user.username, scope=scope)
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
 
 @router.post("/bulk/", response_model=list[schemas.FollowUp])
 def create_followups_bulk(
@@ -77,9 +77,9 @@ def create_followups_bulk(
                 username=current_user.username, scope=scope,
             ))
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
     return created
 
 @router.put("/{followup_id}", response_model=schemas.FollowUp)
@@ -93,9 +93,9 @@ def update_followup(
     try:
         db_f = followup_service.update_followup(followup_id=followup_id, followup_update=followup, user_id=current_user.id, username=current_user.username, scope=scope)
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e, 400)
     if db_f is None:
         raise HTTPException(status_code=404, detail="FollowUp not found")
     return db_f
@@ -110,7 +110,7 @@ def delete_followup(
     try:
         deleted = followup_service.delete_followup(followup_id=followup_id, user_id=current_user.id, username=current_user.username, scope=scope)
     except ScopeForbidden as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise refusal_http(e, 403)
     except ValueError as e:
         raise refusal_http(e)
     if not deleted:

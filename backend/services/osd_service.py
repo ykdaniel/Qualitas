@@ -12,6 +12,7 @@ import models
 import schemas
 from repositories.osd_repository import OSDRepository
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
+from core.refusals import Refusal
 from core.utils import (
     _json_serialize,
     _resolve_vendor_id,
@@ -60,7 +61,7 @@ class OSDService:
 
             if not data.get('documentNumber'):
                 data['documentNumber'] = generate_reference_no(
-                    self.repo.db, vendor_name or '', 'OSD'
+                    self.repo.db, vendor_name or '', 'OSD', project_id=data.get('project_id')
                 )
 
             db_osd = models.OSD(**data)
@@ -92,8 +93,10 @@ class OSDService:
             if osd_update.status and not WorkflowEngine.validate_transition(
                 "OSD", db_osd.status, osd_update.status
             ):
-                raise ValueError(
-                    f"Invalid status transition from {db_osd.status} to {osd_update.status}"
+                raise Refusal(
+                    "INVALID_TRANSITION",
+                    f"Invalid status transition from {db_osd.status} to {osd_update.status}",
+                    docType="OSD", fromStatus=db_osd.status, toStatus=osd_update.status,
                 )
 
             old_val = {c.name: getattr(db_osd, c.name) for c in db_osd.__table__.columns}

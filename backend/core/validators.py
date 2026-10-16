@@ -42,7 +42,7 @@ def validate_reference_exists(
         The found entity
 
     Raises:
-        ValueError: If entity not found
+        Refusal (a ValueError): REFERENCE_NOT_FOUND {docType, field, value} if the entity is not found
 
     Example:
         itp = validate_reference_exists(
@@ -58,9 +58,9 @@ def validate_reference_exists(
     ).first()
 
     if not entity:
-        raise ValueError(error_messages.reference_not_found(
+        raise Refusal("REFERENCE_NOT_FOUND", error_messages.reference_not_found(
             entity_type, display_name, field_value
-        ))
+        ), docType=entity_type, field=display_name, value=field_value)
 
     return entity
 

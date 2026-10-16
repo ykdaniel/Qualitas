@@ -61,7 +61,7 @@ await page.goto(`${BASE}/document-naming-rules`);
 await page.waitForTimeout(700);
 await osdPrefixField().waitFor({ state: 'visible' });
 const originalPrefix = await osdPrefixField().inputValue();
-await osdPrefixField().fill('QTS-RKS-[ABBREV]-OSDEDIT-');
+await osdPrefixField().fill('QTS-RKS-[PROJECT]-OSDEDIT-');
 await page.locator('a,button').filter({ hasText: 'Dashboard' }).first().click();
 await page.waitForTimeout(500);
 await page.screenshot({ path: `${OUT}/naming-02-dirty-navigate-prompt.png` });
@@ -70,7 +70,7 @@ check(await stayBtn.count() > 0, 'NamingRules: dirty in-app navigation shows con
 await stayBtn.click();
 await page.waitForTimeout(300);
 check(page.url().includes('/document-naming-rules'), 'NamingRules: Stay keeps user on the naming-rules page');
-check((await osdPrefixField().inputValue()) === 'QTS-RKS-[ABBREV]-OSDEDIT-', 'NamingRules: Stay preserves the edited field');
+check((await osdPrefixField().inputValue()) === 'QTS-RKS-[PROJECT]-OSDEDIT-', 'NamingRules: Stay preserves the edited field');
 await page.locator('a,button').filter({ hasText: 'Dashboard' }).first().click();
 await page.waitForTimeout(400);
 await page.getByRole('button', { name: /^Leave/i }).click();
@@ -95,7 +95,8 @@ let saveResponse = null;
 page.on('response', async (r) => {
     if (r.url().includes('/api/settings/naming-rules') && r.request().method() === 'PUT') saveResponse = { status: r.status(), body: await r.json().catch(() => null) };
 });
-await osdPrefixField().fill('QTS-RKS-[ABBREV]-OSDSAVED-');
+// NAMING-RULES-CLEANUP-2026-001: typed with stray spaces — saved and shown trimmed
+await osdPrefixField().fill('  QTS-RKS-[PROJECT]-OSDSAVED- ');
 apiCalls.length = 0;
 await page.getByRole('button', { name: /^(Save|Saved)$/ }).click();
 await page.getByRole('dialog', { name: 'Confirm naming rule changes' }).waitFor({ state: 'visible' });
@@ -109,16 +110,18 @@ await confirmSave();
 await page.waitForTimeout(1000);
 check(apiCalls.length === 1, `NamingRules: exactly one save request sent (got ${apiCalls.length})`);
 check(apiCalls[0].postData?.includes('OSDSAVED'), 'NamingRules: save request body contains new value');
+check(apiCalls[0].postData?.includes('"QTS-RKS-[PROJECT]-OSDSAVED-"'), 'NamingRules: the prefix is sent trimmed');
+check((await osdPrefixField().inputValue()) === 'QTS-RKS-[PROJECT]-OSDSAVED-', 'NamingRules: after saving the page shows the stored (trimmed) prefix');
 check(saveResponse?.status >= 200 && saveResponse?.status < 300, `NamingRules: save response status is 2xx (got ${saveResponse?.status})`);
 const savedPqpRule = Array.isArray(saveResponse?.body) ? saveResponse.body.find(r => r.doc_type === 'pqp') : null;
-check(savedPqpRule?.prefix === 'QTS-RKS-[ABBREV]-OSDSAVED-', `NamingRules: save response BODY reflects the new prefix for the pqp rule (got "${savedPqpRule?.prefix}")`);
+check(savedPqpRule?.prefix === 'QTS-RKS-[PROJECT]-OSDSAVED-', `NamingRules: save response BODY reflects the new prefix for the pqp rule (got "${savedPqpRule?.prefix}")`);
 check(await page.getByRole('button', { name: /Stay/i }).count() === 0, 'NamingRules: no leftover unsaved-changes prompt after save (page stays, existing design)');
 await page.screenshot({ path: `${OUT}/naming-03-after-normal-save.png` });
 await page.reload();
 await page.waitForTimeout(700);
 await osdPrefixField().waitFor({ state: 'visible' });
 const reopenedPrefix = await osdPrefixField().inputValue();
-check(reopenedPrefix === 'QTS-RKS-[ABBREV]-OSDSAVED-', `NamingRules: reread after reload matches saved value (got "${reopenedPrefix}")`);
+check(reopenedPrefix === 'QTS-RKS-[PROJECT]-OSDSAVED-', `NamingRules: reread after reload matches saved value (got "${reopenedPrefix}")`);
 await page.screenshot({ path: `${OUT}/naming-04-after-reload-reread.png` });
 
 // ── 3b. R3: click REAL in-app navigation WHILE save is pending (not after) ──
@@ -140,7 +143,7 @@ await page.route('**/api/settings/naming-rules', async (route) => {
         await route.continue();
     } else await route.continue();
 });
-await osdPrefixField().fill('QTS-RKS-[ABBREV]-PENDINGNAV-');
+await osdPrefixField().fill('QTS-RKS-[PROJECT]-PENDINGNAV-');
 await page.getByRole('button', { name: /^(Save|Saved)$/ }).click();
 await confirmSave();
 await page.waitForTimeout(200); // the PUT is now in flight, held by delayPromise — genuinely pending
@@ -180,7 +183,7 @@ await page.goto(`${BASE}/document-naming-rules`);
 await page.waitForTimeout(700);
 await osdPrefixField().waitFor({ state: 'visible' });
 const afterPendingNavPrefix = await osdPrefixField().inputValue();
-check(afterPendingNavPrefix === 'QTS-RKS-[ABBREV]-PENDINGNAV-', `NamingRules pending-nav: the save that was pending during navigation actually persisted (got "${afterPendingNavPrefix}")`);
+check(afterPendingNavPrefix === 'QTS-RKS-[PROJECT]-PENDINGNAV-', `NamingRules pending-nav: the save that was pending during navigation actually persisted (got "${afterPendingNavPrefix}")`);
 
 // ── 4. Simulated save failure + retry ──
 log('=== NAMING RULES 4. simulated save failure + retry ===');
@@ -192,13 +195,13 @@ await page.route('**/api/settings/naming-rules', async (route) => {
         await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ detail: simulatedDetail }) });
     } else await route.continue();
 });
-await osdPrefixField().fill('QTS-RKS-[ABBREV]-OSDFAIL-');
+await osdPrefixField().fill('QTS-RKS-[PROJECT]-OSDFAIL-');
 const saveBtn = page.getByRole('button', { name: /^Save$/ });
 await saveBtn.click();
 await confirmSave();
 await page.waitForTimeout(1000);
 await page.screenshot({ path: `${OUT}/naming-05-save-failure.png` });
-check((await osdPrefixField().inputValue()) === 'QTS-RKS-[ABBREV]-OSDFAIL-', 'NamingRules: input preserved after failed save');
+check((await osdPrefixField().inputValue()) === 'QTS-RKS-[PROJECT]-OSDFAIL-', 'NamingRules: input preserved after failed save');
 check(await saveBtn.isEnabled(), 'NamingRules: Save button re-enabled after failure');
 // R3 (FORMS-2026-004): DocumentNamingRules.tsx's catch (non-403 branch) builds
 // `命名規則儲存失敗：${err.response?.data?.detail ?? err.message ?? ...}` — unlike every other
@@ -209,7 +212,7 @@ check(await errorTextEls.count() === 1, `NamingRules: EXACTLY one inline error m
 const errorText = await errorTextEls.first().innerText();
 const expectedErrorText = `命名規則儲存失敗：${simulatedDetail}`;
 check(errorText === expectedErrorText, `NamingRules: the inline error message matches exactly (got "${errorText}", expected "${expectedErrorText}")`);
-await osdPrefixField().fill('QTS-RKS-[ABBREV]-OSDRETRY-');
+await osdPrefixField().fill('QTS-RKS-[PROJECT]-OSDRETRY-');
 apiCalls.length = 0;
 await saveBtn.click();
 await confirmSave();
@@ -221,7 +224,7 @@ await page.reload();
 await page.waitForTimeout(700);
 await osdPrefixField().waitFor({ state: 'visible' });
 const finalPrefix = await osdPrefixField().inputValue();
-check(finalPrefix === 'QTS-RKS-[ABBREV]-OSDRETRY-', `NamingRules retry: DB reflects retried save (got "${finalPrefix}")`);
+check(finalPrefix === 'QTS-RKS-[PROJECT]-OSDRETRY-', `NamingRules retry: DB reflects retried save (got "${finalPrefix}")`);
 await page.screenshot({ path: `${OUT}/naming-06-after-retry-reread.png` });
 
 log(`===== NAMING RULES DONE: ${checks} checks passed =====`);

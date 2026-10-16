@@ -41,7 +41,7 @@ BODIES = {
     'checklist': dict(activity='Weld', date='2026-09-01', status='Ongoing', packageName='P', contractor='Audit vendor',
                       detail_data=json.dumps({"items": [{"description": "d", "criteria": "c", "result": ""}]})),
     'km': dict(title='Reviewed article', content='Body'),
-    'project': dict(name='Reviewed project'),
+    'project': dict(name='Reviewed project', code='RVW'),   # a project code is required (REF-PROJECT-SEQ-2026-001 B3, D14)
 }
 # REF-PROJECT-SEQ-2026-001 B2 (user's decision 2026-10-13, DECISIONS 專案隔離與依專案編號 item 9): POST /api/checklist/
 # creates a bare template, shared master data only a system administrator (a role named "admin", any case) may create.

@@ -10,6 +10,7 @@ from core.utils import _json_serialize, _resolve_vendor_id, begin_write_transact
 from core import error_messages
 from core import validators
 from core.perms import ITP_APPROVE, ITP_VOID, PermissionDenied
+from core.refusals import Refusal
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,7 @@ class ITPService:
             _require_itp_permission(user_permissions, ITP_VOID)
         try:
             data = _json_serialize(itp_create.model_dump(), ['attachments', 'detail_data'])
+            data['external_doc_no'] = (data.get('external_doc_no') or '').strip() or None
 
             # Handle Vendor Name -> ID mapping
             vendor_name = data.pop('vendor', None)
@@ -68,7 +70,9 @@ class ITPService:
 
             # Generate Reference No
             if not data.get('referenceNo'):
-                data['referenceNo'] = generate_reference_no(self.repo.db, vendor_name or '', 'ITP')
+                # a project's ITP: QTS-RKS-<project>-ITP-; a shared template (no project): QTS-RKS-STD-ITP- (D11, B3)
+                data['referenceNo'] = generate_reference_no(self.repo.db, vendor_name or '', 'ITP',
+                                                            project_id=data.get('project_id'))
 
             db_itp = models.ITP(**data)
             if not db_itp.id:
@@ -123,11 +127,14 @@ class ITPService:
 
             # State transition check
             if itp_update.status and not WorkflowEngine.validate_transition("ITP", db_itp.status, itp_update.status):
-                raise ValueError(error_messages.invalid_status_transition("ITP", db_itp.status, itp_update.status))
+                raise Refusal("INVALID_TRANSITION", error_messages.invalid_status_transition("ITP", db_itp.status, itp_update.status),
+                          docType="ITP", fromStatus=db_itp.status, toStatus=itp_update.status)
 
             old_val = {c.name: getattr(db_itp, c.name) for c in db_itp.__table__.columns}
             d = itp_update.model_dump(exclude_unset=True)
             d = _json_serialize(d, ['attachments', 'detail_data'])
+            if 'external_doc_no' in d:
+                d['external_doc_no'] = (d['external_doc_no'] or '').strip() or None    # blank clears it (B3, D17)
 
             # Handle Vendor Name -> ID mapping
             if 'vendor' in d:

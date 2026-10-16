@@ -111,85 +111,74 @@ export const useITRStore = create<ITRState>((set, get) => ({
         await get().fetchITRs(params);
     },
 
+    // A refused or failed save goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-002); the page's error banner is for list loads only.
     addITR: async (itr: Omit<ITRItem, 'id'>) => {
-        try {
-            // Pack linkedChecklists into detail_data
-            const payload = { ...itr } as any;
+        // Pack linkedChecklists into detail_data
+        const payload = { ...itr } as any;
 
-            let detailData: any = {};
-            if (payload.detail_data) {
-                try {
-                    detailData = typeof payload.detail_data === 'string'
-                        ? JSON.parse(payload.detail_data)
-                        : payload.detail_data;
-                } catch (e) {
-                    console.error("Failed to parse payload.detail_data in addITR", e);
-                }
+        let detailData: any = {};
+        if (payload.detail_data) {
+            try {
+                detailData = typeof payload.detail_data === 'string'
+                    ? JSON.parse(payload.detail_data)
+                    : payload.detail_data;
+            } catch (e) {
+                console.error("Failed to parse payload.detail_data in addITR", e);
             }
-
-            // §17: checklists are now standalone instance rows (itrId FK), not
-            // packed into detail_data. Drop any stray linkedChecklists field.
-            delete payload.linkedChecklists;
-
-            // Always stringify detail_data for backend
-            payload.detail_data = JSON.stringify(detailData);
-
-            const response = await api.post('/itr/', withCurrentProject(payload));
-            const newITR = normalizeItem(response.data);
-            set((state) => ({ itrList: [...state.itrList, newITR] }));
-            return newITR;
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to add ITR');
-            set({ error: msg });
-            throw error;
         }
+
+        // §17: checklists are now standalone instance rows (itrId FK), not
+        // packed into detail_data. Drop any stray linkedChecklists field.
+        delete payload.linkedChecklists;
+
+        // Always stringify detail_data for backend
+        payload.detail_data = JSON.stringify(detailData);
+
+        const response = await api.post('/itr/', withCurrentProject(payload));
+        const newITR = normalizeItem(response.data);
+        set((state) => ({ itrList: [...state.itrList, newITR] }));
+        return newITR;
     },
 
     updateITR: async (id: string, updates: Partial<ITRItem>) => {
-        try {
-            const payload = { ...updates } as any;
-            const { itrList } = get();
+        const payload = { ...updates } as any;
+        const { itrList } = get();
 
-            // §17: checklists are standalone instance rows now, not packed into
-            // detail_data. Drop any stray linkedChecklists field.
-            delete payload.linkedChecklists;
+        // §17: checklists are standalone instance rows now, not packed into
+        // detail_data. Drop any stray linkedChecklists field.
+        delete payload.linkedChecklists;
 
-            // Merge detail_data with the existing record so we don't clobber
-            // other extended fields the form didn't touch.
-            if (payload.detail_data) {
-                const existingItem = itrList.find(i => i.id === id);
-                let existingDetail = {};
+        // Merge detail_data with the existing record so we don't clobber
+        // other extended fields the form didn't touch.
+        if (payload.detail_data) {
+            const existingItem = itrList.find(i => i.id === id);
+            let existingDetail = {};
 
-                if (existingItem?.detail_data) {
-                    try {
-                        existingDetail = typeof existingItem.detail_data === 'string'
-                            ? JSON.parse(existingItem.detail_data)
-                            : existingItem.detail_data;
-                    } catch (e) {
-                        console.error("Failed to parse existing detail_data", e);
-                    }
-                }
-
-                let newDetail = {};
+            if (existingItem?.detail_data) {
                 try {
-                    newDetail = typeof payload.detail_data === 'string'
-                        ? JSON.parse(payload.detail_data)
-                        : payload.detail_data;
+                    existingDetail = typeof existingItem.detail_data === 'string'
+                        ? JSON.parse(existingItem.detail_data)
+                        : existingItem.detail_data;
                 } catch (e) {
-                    console.error("Failed to parse payload detail_data", e);
+                    console.error("Failed to parse existing detail_data", e);
                 }
-
-                payload.detail_data = JSON.stringify({ ...existingDetail, ...newDetail });
             }
 
-            const response = await api.put(`/itr/${id}`, payload);
-            const updated = normalizeItem(response.data);
-            set((state) => ({ itrList: state.itrList.map(i => i.id === id ? updated : i) }));
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to update ITR');
-            set({ error: msg });
-            throw error;
+            let newDetail = {};
+            try {
+                newDetail = typeof payload.detail_data === 'string'
+                    ? JSON.parse(payload.detail_data)
+                    : payload.detail_data;
+            } catch (e) {
+                console.error("Failed to parse payload detail_data", e);
+            }
+
+            payload.detail_data = JSON.stringify({ ...existingDetail, ...newDetail });
         }
+
+        const response = await api.put(`/itr/${id}`, payload);
+        const updated = normalizeItem(response.data);
+        set((state) => ({ itrList: state.itrList.map(i => i.id === id ? updated : i) }));
     },
 
     deleteITR: async (id: string) => {
