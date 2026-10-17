@@ -39,7 +39,7 @@ TASK_ID: REFUSAL-DIALOG-2026-003
 
 - **2b-1 本地 commit**：247ee771（父 124f6c14，63 個檔，tree c6bbf50a）。分支 ref 不動，等使用者看完預覽。
 
-## 2b-2（以 247ee771 為父，未提交）
+## 2b-2（以 247ee771 為父；已提交 a411072d）
 - 修改內容見 DESIGN 第 5 節。
 - tsc：0。npm test：217/217。改過的前端檔，lint 問題數都 ≤ 2b-1 commit；OBS 和會議記錄各 1 個 set-state-in-effect 是既有的。
 
@@ -50,3 +50,13 @@ TASK_ID: REFUSAL-DIALOG-2026-003
 - **審查**：R1 PASS WITH NOTES（見 REVIEW）。
 - **預覽**：localhost:3375／8375。使用者 2026-10-17 晚上確認「2b 預覽（3375）可以」（協調中心轉達）。預覽已經關閉。
 - **2b-1 commit**：247ee771 定案，不重建。
+
+## 上線與結案（2026-10-17）
+- **2b-2 本地 commit**：a411072d（父 247ee771，25 個檔，tree b905dfbf，指紋 52b01f19e66e66f5，和 3.11 跑的 tree 相同）。
+- **上線**：2026-10-17 15:52Z（台灣 23:52），由協調中心部署，和 ITP-VP-CODES 同一次重建。
+  - 正式站＝分支 HEAD **1b37ce9d**：a411072d 之上重放 ITP 的 3 個 commit。
+  - 協調中心回報：啟動 0 ERROR；前端 bundle index-c5DPYlfw.js 含新代碼；合併後的 tree 跑 3.11 全套 2829 passed。
+  - 未做登入後的功能測試。
+- **R1 P3-2**（提示行加 `data-refusal-note`）：記入 BACKLOG #60（NOI 用了 #59）。
+- **工作目錄清理**：rd2b worktree 已經移除，preview 的埠也都已關閉。
+- **本任務（REFUSAL-DIALOG-2026-003，第 2 批 2b）結案。**

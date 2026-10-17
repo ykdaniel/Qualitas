@@ -2949,3 +2949,15 @@ Construction Engineer 核准欄位都還是 Pending——跟 `obsFormSchema.ts::
 （「命名規則存檔時 strip 前綴」原本也在清單，已由 NAMING-RULES-CLEANUP-2026-001（9da76d9f）完成。）
 
 **狀態：** 2026-10-17 完成（B4，父 247ee771）：R1 PASS with notes、3.11 全套 2835 passed；待主要調度部署，上線後補日期。
+
+---
+
+## 60. 拒絕彈窗的提示行沒有穩定的測試標記 · NOT STARTED · 【優先度：低】
+
+**Where:** `react-app/src/components/Shared/RefusalDialog.tsx`（提示行 `view.note` 的 `<p>`），以及 8 支 tests-browser 腳本的 `readRefusalDialog`。
+
+**Found:** 2026-10-17，REFUSAL-DIALOG-2026-003 2b-2 獨立審查 R1 P3-2。
+
+**問題：** 腳本用 CSS module 類名裡的 "note"（例如 `_note_<hash>`）找提示行。開發伺服器下可以用；打包後如果類名只剩雜湊，就找不到提示行，腳本會誤判。
+
+**建議做法：** 在提示行加上 `data-refusal-note`（標題和訊息已經有 id，可以比照），8 支腳本改用這個屬性來找。
