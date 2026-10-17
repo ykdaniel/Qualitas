@@ -10,6 +10,9 @@ import UserScopeSection, { type ScopeValue } from './UserScopeSection';
 import { setUserScope } from '../../services/api';
 import { getErrorMessage } from '../../utils/errorUtils';
 import styles from './UserModal.module.css';
+import { showRefusal } from '../../store/refusalStore';
+import { describeSaveError } from '../../utils/saveErrors';
+import { isAxiosError } from '../../utils/errorUtils';
 
 const userSchema = z.object({
     name: z.string().min(3, "Username must be at least 3 characters"),
@@ -115,7 +118,8 @@ const UserModal: React.FC<UserModalProps> = ({ existingUser, readOnly = false, c
                 try {
                     await setUserScope(savedId, pendingScope);
                 } catch (scopeErr: any) {
-                    toast.error(scopeErr?.response?.data?.detail || t('iam.scope.saveFailed') || 'User created, but failed to save data scope');
+                    // the account IS created: not a refusal of this save, a part left undone — said as such, with the reason in words
+                    toast.error(t('iam.scope.createdButScopeFailed'), { description: describeSaveError(scopeErr, t), duration: 10000 });
                 }
             }
 
@@ -139,10 +143,10 @@ const UserModal: React.FC<UserModalProps> = ({ existingUser, readOnly = false, c
                     toast.error(`Validation failed: ${error.message || 'Unknown error'}`);
                 }
             } else {
-                // Surface the backend's reason (e.g. "Password must contain both
-                // letters and digits", "Email already registered") instead of the
-                // generic axios "Request failed with status code 400".
-                toast.error(getErrorMessage(err, "An error occurred"));
+                // A refused or failed request: the refusal dialog (e.g. DUPLICATE_NAME for the e-mail, in the user's language;
+                // REFUSAL-DIALOG-2026-003). A check of this form itself (role, company, project, password match) stays a toast.
+                if (isAxiosError(err)) showRefusal(err, 'save', { keepsInput: true });
+                else toast.error(getErrorMessage(err, "An error occurred"));
             }
         }
     };

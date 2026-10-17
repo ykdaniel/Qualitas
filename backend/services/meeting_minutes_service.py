@@ -332,9 +332,11 @@ class MeetingMinutesService:
                 # only a rev that actually changed can collide; anything else keeps its own error
                 if 'rev' not in d or d['rev'] == old_val.get('rev'):
                     raise
-                raise ValueError(
+                raise Refusal(
+                    "MEETING_REV_DUPLICATE",
                     f"Rev '{d.get('rev')}' already exists for meeting minute "
-                    f"'{db_meeting.documentNumber}' — choose another rev."
+                    f"'{db_meeting.documentNumber}' — choose another rev.",
+                    number=db_meeting.documentNumber, rev=d.get('rev'),
                 )
 
             log_audit(

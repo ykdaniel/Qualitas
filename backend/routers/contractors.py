@@ -57,7 +57,7 @@ def update_personnel(
     try:
         person = service.update_personnel(personnel_id, data, user_id=current_user.id, username=current_user.username, scope=scope)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e)
     if person is None:
         raise HTTPException(status_code=404, detail="Person not found")
     return person
@@ -86,7 +86,7 @@ def create_personnel(
     try:
         person = service.create_personnel(contractor_id, data, user_id=current_user.id, username=current_user.username, scope=scope)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise refusal_http(e)
     if person is None:
         raise HTTPException(status_code=404, detail="Contractor not found")
     return person
@@ -108,7 +108,10 @@ def create_contractor(
     service: ContractorService = Depends(get_contractor_service),
     current_user: schemas.User = Depends(RoleChecker(CONTRACTOR_MANAGE))
 ):
-    return service.create_contractor(contractor, user_id=current_user.id, username=current_user.username)
+    try:
+        return service.create_contractor(contractor, user_id=current_user.id, username=current_user.username)
+    except ValueError as e:     # DUPLICATE_NAME (a duplicate company name used to be a 500), any other refusal: 400 (REFUSAL-DIALOG-2026-003)
+        raise refusal_http(e)
 
 @router.put("/{contractor_id}", response_model=schemas.Contractor)
 def update_contractor(
@@ -117,7 +120,10 @@ def update_contractor(
     service: ContractorService = Depends(get_contractor_service),
     current_user: schemas.User = Depends(RoleChecker(CONTRACTOR_MANAGE))
 ):
-    db_c = service.update_contractor(contractor_id, contractor, user_id=current_user.id, username=current_user.username)
+    try:
+        db_c = service.update_contractor(contractor_id, contractor, user_id=current_user.id, username=current_user.username)
+    except ValueError as e:     # DUPLICATE_NAME (a duplicate company name used to be a 500), any other refusal: 400 (REFUSAL-DIALOG-2026-003)
+        raise refusal_http(e)
     if db_c is None:
         raise HTTPException(status_code=404, detail="Contractor not found")
     return db_c

@@ -66,6 +66,8 @@ def create_meeting_minutes(
         return meeting_service.create_meeting_minutes(meeting_create=meeting, user_id=current_user.id, username=current_user.username, scope=scope)
     except ScopeForbidden as e:
         raise refusal_http(e, 403)
+    except ValueError as e:     # a service refusal is a 400, never a 500 (REFUSAL-DIALOG-2026-003)
+        raise refusal_http(e)
 
 @router.post("/{meeting_id}/new-occurrence", response_model=schemas.MeetingMinutes)
 def create_new_occurrence(

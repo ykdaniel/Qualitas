@@ -16,7 +16,7 @@ import AuditWizard from './AuditWizard';
 import VendorStatsPanel from './VendorStatsPanel';
 import ScheduleMatrix from './ScheduleMatrix';
 import AuditTemplatesPanel from './AuditTemplatesPanel';
-import { Search, Plus, AlertCircle, X } from 'lucide-react';
+import { Search, Plus } from 'lucide-react';
 import { useCreateGate } from '../../hooks/useCreateGate';
 
 // Rows shown in the schedule (all of them when a vendor is selected).
@@ -36,7 +36,7 @@ const Audit: React.FC = () => {
     const createGate = useCreateGate();
     const locale = language === 'zh' ? 'zh-TW' : 'en-US';
     const { hasPermission } = useAuth();
-    const { auditList, deleteAudit, error, clearError, loading } = useAuditStore();
+    const { auditList, deleteAudit, error, fetchAudits, loading } = useAuditStore();
     const [searchQuery, setSearchQuery] = useState<string>('');
     // Deferred value prevents search typing from lagging due to expensive re-renders
     const deferredSearchQuery = useDeferredValue(searchQuery);
@@ -255,15 +255,12 @@ const Audit: React.FC = () => {
 
     return (
         <div className={shellStyles.container}>
-            {/* Error Notification Toast */}
+            {/* List loads only (a refused save or delete goes to the refusal dialog): retry reloads the list, like NCR (REFUSAL-DIALOG-2026-003) */}
             {error && (
                 <div className={shellStyles.errorBanner + hideWhenPrintingWizard}>
-                    <div className={styles.errorContent}>
-                        <AlertCircle size={18} />
-                        <span>{error}</span>
-                    </div>
-                    <button onClick={clearError} className={styles.closeBtn} aria-label="Dismiss error">
-                        <X size={16} />
+                    <span>{error}</span>
+                    <button type="button" className={shellStyles.retryButton} onClick={() => fetchAudits()}>
+                        {t('common.retry')}
                     </button>
                 </div>
             )}

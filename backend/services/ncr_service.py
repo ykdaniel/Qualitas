@@ -17,7 +17,7 @@ from mail_service import send_ncr_rejection_notification
 from repositories.ncr_repository import NCRRepository
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope, require_same_project
 from core import strict_dates
-from core.refusals import Refusal
+from core.refusals import Coded, Refusal
 from core.validators import delete_referenced
 from core.perms import NCR_CLOSE
 from core.ncr_photo_evidence import ncr_photo_evidence, photo_list
@@ -35,11 +35,12 @@ from core.utils import (
 logger = logging.getLogger(__name__)
 
 
-class NCRCloseNotPermitted(Exception):
-    """Closing an NCR needs ncr:close:all on top of ncr:update:all (2026-09-21). Not a ValueError on purpose: the router answers 403, not 400."""
+class NCRCloseNotPermitted(Coded, Exception):
+    """Closing an NCR needs ncr:close:all on top of ncr:update:all (2026-09-21). Not a ValueError on purpose: the router answers 403, not 400.
+    Coded PERMISSION_DENIED like RoleChecker's 403 (REFUSAL-DIALOG-2026-003)."""
 
     def __init__(self):
-        super().__init__(f"Operation not permitted. Required: {NCR_CLOSE}")
+        super().__init__("PERMISSION_DENIED", f"Operation not permitted. Required: {NCR_CLOSE}", permissions=[NCR_CLOSE])
 
 
 def _may_close(permissions) -> bool:
@@ -93,6 +94,14 @@ def improvement_photo_evidence(db, ncr_id: str):
     return ev.usable, list(ev.problems)
 
 
+# English names of the closure fields, for the coded refusal (REFUSAL-DIALOG-2026-003); the Chinese ones are in the missing-field labels
+_NCR_CLOSE_FIELD_EN = {
+    'productDisposition': 'Product disposition', 'repairMethodStatement': 'Repair method statement', 'reInspectionNumber': 'Re-inspection number',
+    'drawingNo': 'Drawing No.', 'specNo': 'Spec No.', 'qtyAffected': 'Quantity affected', 'extent': 'Extent',
+    'improvementPhotos': 'Improvement photos', 'recurrenceRef': 'Previous NCR reference',
+}
+
+
 def assert_closure_conditions(final, photos, *, photos_on_saved_record: bool = True) -> None:
     """THE closure conditions of an NCR — the single copy, used when an existing NCR enters Closed (update) and when one is created as Closed.
     `final` is the FINAL content (stored row merged with the request, or the create body with its defaults); raises ValueError (-> 400).
@@ -139,11 +148,18 @@ def assert_closure_conditions(final, photos, *, photos_on_saved_record: bool = T
                     + (f'. Uploaded but unusable: {"; ".join(photo_problems)}' if photo_problems else ''))
         else:
             hint = ''
-        raise ValueError(f"Cannot close NCR: the following required fields are missing: {', '.join(missing)}{hint}")
+        # coded (REFUSAL-DIALOG-2026-003): the dialog lists the fields in the user's language; the English detail is unchanged
+        keys = [m.split(' ', 1)[0] for m in missing]
+        reason = 'createDirect' if not photos_on_saved_record else ('noPhoto' if usable < 1 else 'none')
+        raise Refusal("NCR_CLOSE_MISSING_FIELDS",
+                      f"Cannot close NCR: the following required fields are missing: {', '.join(missing)}{hint}",
+                      fields=keys, labelsZh=[m.split(' (', 1)[1].rstrip(')') for m in missing],
+                      labelsEn=[_NCR_CLOSE_FIELD_EN.get(k, k) for k in keys], reason=reason, photoProblems=list(photo_problems))
 
     # Corrective-action effectiveness gate (BACKLOG #13 #3): an NCR cannot be Closed until its effectiveness has been verified = Yes.
     if final.get('effectivenessVerified') != 'Yes':
-        raise ValueError(
+        raise Refusal(
+            "NCR_CLOSE_NOT_VERIFIED",
             "Cannot close NCR: corrective-action effectiveness must be "
             "verified (effectivenessVerified = 'Yes') before closing."
         )
@@ -151,10 +167,12 @@ def assert_closure_conditions(final, photos, *, photos_on_saved_record: bool = T
     # Owner / Engineering-Design authority sign-off gate (BACKLOG #14 item e): "Use As Is" / "Repair" are technical changes to the accepted
     # product and need explicit approval before closing — the print report's disposition note references this (見 6.3).
     if final_disposition in ('Use As Is', 'Repair') and final.get('ownerApproval') != 'Approved':
-        raise ValueError(
+        raise Refusal(
+            "NCR_CLOSE_NEEDS_OWNER_APPROVAL",
             "Cannot close NCR: disposition 'Use As Is' or 'Repair' "
             "requires owner/engineering authority approval "
-            "(ownerApproval = 'Approved') before closing."
+            "(ownerApproval = 'Approved') before closing.",
+            disposition=final_disposition,
         )
 
 

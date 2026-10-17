@@ -168,14 +168,10 @@ def require_attachment_permission(user, entity_type: str, action: str, category:
         raise permission_denied(f"Operation not permitted. Required: {needed}", needed)
 
 
-def lock_reason(db: Session, entity_type: str, record, category: Optional[str]) -> Optional[str]:
-    """Why an upload / delete on this record's attachments is refused because of the record's STATE; None when it is allowed."""
-    found = lock_refusal(db, entity_type, record, category)
-    return found[0] if found else None
-
-
 def lock_refusal(db: Session, entity_type: str, record, category: Optional[str]) -> Optional[Tuple[str, dict]]:
-    """lock_reason's text plus the ATTACHMENT_LOCKED params (`kind`: record / pqp / parentItr / evidence)."""
+    """Why an upload / delete on this record's attachments is refused because of the record's STATE — the English text plus the
+    ATTACHMENT_LOCKED params (`kind`: record / pqp / parentItr / evidence) — or None when it is allowed. (The text-only
+    `lock_reason` it used to back was removed with its last caller, REFUSAL-DIALOG-2026-003.)"""
     etype = (entity_type or "").lower()
     status = getattr(record, "status", None)
     if (etype, category) in NEVER_LOCKED_CATEGORIES:

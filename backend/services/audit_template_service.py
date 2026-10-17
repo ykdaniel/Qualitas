@@ -21,10 +21,15 @@ from sqlalchemy.orm import Session
 
 import models
 import schemas
+from core.refusals import Coded
 
 
-class AuditTemplateConflict(Exception):
-    """Another template already has this name (compared trimmed, case-insensitively)."""
+class AuditTemplateConflict(Coded, Exception):
+    """Another template already has this name (compared trimmed, case-insensitively). Answered 409 with code DUPLICATE_NAME
+    (REFUSAL-DIALOG-2026-003); not a ValueError, so it never turns into a 400."""
+
+    def __init__(self, message: str, name: str):
+        super().__init__("DUPLICATE_NAME", message, docType="auditTemplate", name=name)
 
 
 # ISO 9001:2015 starts with the company's own checklist (supplied by the user 2026-10-11, 116 questions over clauses 4–10):
@@ -79,7 +84,7 @@ class AuditTemplateService:
         if exclude_id is not None:
             q = q.filter(models.AuditTemplate.id != exclude_id)
         if q.first():
-            raise AuditTemplateConflict(f"A template named '{name}' already exists.")
+            raise AuditTemplateConflict(f"A template named '{name}' already exists.", name)
 
     def _log(self, action, tpl, old, new, user_id, username):
         self.db.add(models.AuditLog(
@@ -92,7 +97,7 @@ class AuditTemplateService:
             self.db.commit()
         except IntegrityError:  # a concurrent save took the name between the check and the commit (unique index)
             self.db.rollback()
-            raise AuditTemplateConflict(f"A template named '{name}' already exists.")
+            raise AuditTemplateConflict(f"A template named '{name}' already exists.", name)
 
     @staticmethod
     def _snapshot(tpl):

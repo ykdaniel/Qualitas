@@ -176,3 +176,51 @@ test('D1 with the real wording: an Audit start/end 422 names both the field and 
     });
     assert.deepEqual(describeRefusal(err, REAL.en, 'save', 'en')!.items, ['End date：is earlier than the start date']);
 });
+
+// ---- REFUSAL-DIALOG-2026-003 (2b-1): duplicates, NCR closure, locks, the generic `date` label ----------------------------
+test('DUPLICATE_NAME: the record type and name, and its own wording for an account e-mail / username', () => {
+    assert.equal(describeRefusal(coded(400, 'DUPLICATE_NAME', { docType: 'contractor', name: 'Hailong' }), REAL.zh, 'save', 'zh')!.message,
+        '承包商「Hailong」已經存在，請改用其他名稱。');
+    assert.equal(describeRefusal(coded(409, 'DUPLICATE_NAME', { docType: 'auditTemplate', name: 'ISO 9001' }), REAL.en, 'save', 'en')!.message,
+        'Audit template "ISO 9001" already exists. Use another name.');
+    assert.equal(describeRefusal(coded(400, 'DUPLICATE_NAME', { docType: 'user', field: 'email', name: 'a@b.com' }), REAL.zh, 'save', 'zh')!.message,
+        'Email a@b.com 已經被其他帳號使用。');
+    assert.equal(describeRefusal(coded(400, 'DUPLICATE_NAME', { docType: 'personnel', name: 'Lee' }), REAL.zh, 'save', 'zh')!.message, '人員「Lee」已經存在，請改用其他名稱。');
+});
+
+test('NCR_CLOSE_MISSING_FIELDS lists the fields in the UI language, with the reason as a variant', () => {
+    const params = { fields: ['productDisposition', 'improvementPhotos'], labelsZh: ['產品處置', '改善照片'], labelsEn: ['Product disposition', 'Improvement photos'], photoProblems: [] };
+    assert.equal(describeRefusal(coded(400, 'NCR_CLOSE_MISSING_FIELDS', { ...params, reason: 'none' }), REAL.zh, 'save', 'zh')!.message,
+        '這張 NCR 還不能結案，請先填寫：產品處置、改善照片。');
+    assert.match(describeRefusal(coded(400, 'NCR_CLOSE_MISSING_FIELDS', { ...params, reason: 'noPhoto' }), REAL.zh, 'save', 'zh')!.message, /在「改善照片」上傳至少一張照片後再結案。$/);
+    assert.match(describeRefusal(coded(400, 'NCR_CLOSE_MISSING_FIELDS', { ...params, reason: 'createDirect' }), REAL.en, 'save', 'en')!.message, /^An NCR cannot be created already Closed/);
+});
+
+test('module codes read their parameters (NOI, ITR, Checklist, meeting Rev)', () => {
+    assert.equal(describeRefusal(coded(400, 'NOI_CLOSE_OPEN_NCRS', { number: 'NOI-1', count: 2, ncrs: ['NCR-1', 'NCR-2'] }), REAL.zh, 'save', 'zh')!.message,
+        'NOI NOI-1 不能結案：還有 2 筆 NCR 未結（NCR-1、NCR-2），請先結案或作廢。');
+    assert.equal(describeRefusal(coded(400, 'ITR_APPROVE_CHECKLIST_NOT_PASSED', { checklists: ['CHK-1 (Ongoing)'] }), REAL.zh, 'save', 'zh')!.message,
+        'ITR 不能核准：下列檢查表尚未通過：CHK-1 (Ongoing)。');
+    assert.equal(describeRefusal(coded(400, 'MEETING_REV_DUPLICATE', { number: 'MOM-1', rev: '1.0' }), REAL.zh, 'save', 'zh')!.message,
+        '會議記錄 MOM-1 已經有 Rev 1.0，請改用其他版次。');
+    assert.equal(describeRefusal(coded(400, 'NCR_CLOSE_NEEDS_OWNER_APPROVAL', { disposition: 'Repair' }), REAL.en, 'save', 'en')!.message,
+        'Disposition "Repair" needs the owner / engineering approval (Owner approval = Approved) before the NCR can be closed.');
+});
+
+test('a locked Checklist result is a lock: the note only says the input is kept', () => {
+    const v = describeRefusal(coded(400, 'CHECKLIST_RESULTS_LOCKED', { number: 'CHK-1', status: 'Pass' }), REAL.zh, 'save', 'zh', { keepsInput: true })!;
+    assert.equal(v.message, '檢查表 CHK-1 的狀態為「Pass」，檢驗結果不能修改。請先按「重開檢查表」，再儲存結果。');
+    assert.equal(v.note, '您填寫的內容都已保留。');
+    // not a lock: still "correct it and save again"
+    const locked = describeRefusal(coded(400, 'NOI_CONTRACTOR_LOCKED', { number: 'NOI-1', references: [{ type: 'ITR', count: 2 }, { type: 'Follow-up', count: 1 }] }),
+        REAL.zh, 'save', 'zh', { keepsInput: true })!;
+    assert.equal(locked.message, 'NOI NOI-1 底下已有下列文件，不能更換承包商：');
+    assert.deepEqual(locked.items, [REAL.zh('refusal.refItem', { count: 2, type: 'ITR' }), REAL.zh('refusal.refItem', { count: 1, type: 'Follow-up' })]);
+    assert.equal(locked.note, '您填寫的內容都已保留，修正後再按儲存即可。');
+});
+
+test('`date` is labelled generically now (R3 P3-1): a Checklist or agenda date is not called a start date', () => {
+    const err = axiosErr(422, { detail: [{ loc: ['body', 'date'], code: 'invalid_calendar', msg: 'x' }] });
+    assert.deepEqual(describeRefusal(err, REAL.zh, 'save', 'zh')!.items, ['日期：不是有效的日期'.replace('不是有效的日期', REAL.zh('dateIssue.invalid_calendar'))]);
+    assert.deepEqual(describeRefusal(err, REAL.en, 'save', 'en')!.items, [`Date：${REAL.en('dateIssue.invalid_calendar')}`]);
+});

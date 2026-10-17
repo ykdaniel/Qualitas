@@ -194,6 +194,20 @@ test('every refusal code the backend raises has its wording in both languages', 
         REFERENCE_NOT_FOUND: ['docType', 'field', 'value'],
         ASSIGNEE_UNAVAILABLE: ['field'],
         VERSION_CONFLICT: ['docType', 'number'],
+        // REFUSAL-DIALOG-2026-003: duplicates, meeting Rev, module codes
+        DUPLICATE_NAME: ['docType', 'name', 'field'],
+        MEETING_REV_DUPLICATE: ['number', 'rev'],
+        NCR_CLOSE_MISSING_FIELDS: ['fields', 'labelsZh', 'labelsEn', 'reason', 'photoProblems'],
+        NCR_CLOSE_NOT_VERIFIED: [],
+        NCR_CLOSE_NEEDS_OWNER_APPROVAL: ['disposition'],
+        NOI_CLOSE_OPEN_ITRS: ['number', 'count'],
+        NOI_CLOSE_OPEN_NCRS: ['number', 'count', 'ncrs'],
+        NOI_CONTRACTOR_LOCKED: ['number', 'references'],
+        ITR_APPROVE_NO_CHECKLIST: [],
+        ITR_APPROVE_CHECKLIST_NOT_PASSED: ['checklists'],
+        ITR_APPROVE_PASS_UNSUPPORTED: ['checklists'],
+        CHECKLIST_RESULTS_LOCKED: ['number', 'status'],
+        CHECKLIST_RESULTS_INCONSISTENT: ['number', 'status', 'problems'],
     };
     assert.deepEqual([...codes].sort(), Object.keys(PARAMS).sort(), 'a backend code is missing from (or extra in) the PARAMS table');
     for (const lang of ['en', 'zh'] as const) {

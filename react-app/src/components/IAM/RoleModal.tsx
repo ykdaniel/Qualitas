@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { Role } from '../../store/iamStore';
 import { getErrorMessage } from '../../utils/errorUtils';
 import styles from './RoleModal.module.css';
+import { showRefusal } from '../../store/refusalStore';
+import { isAxiosError } from '../../utils/errorUtils';
 
 const roleSchema = z.object({
     name: z.string().min(2, "Role name must be at least 2 characters"),
@@ -80,8 +82,9 @@ const RoleModal: React.FC<RoleModalProps> = ({ existingRole, readOnly = false, p
                     toast.error(`Validation failed: ${error.message || 'Unknown error'}`);
                 }
             } else {
-                // The backend's own reason (e.g. "Only an Admin can ..."), not axios's generic status text.
-                toast.error(getErrorMessage(err, "An error occurred"));
+                // A refused or failed request (e.g. "Role already exists" → DUPLICATE_NAME): the refusal dialog (REFUSAL-DIALOG-2026-003)
+                if (isAxiosError(err)) showRefusal(err, 'save', { keepsInput: true });
+                else toast.error(getErrorMessage(err, "An error occurred"));
             }
         }
     };

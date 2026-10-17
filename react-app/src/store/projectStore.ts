@@ -75,26 +75,17 @@ export const useProjectStore = create<ProjectState>((set, _get) => ({
         }
     },
 
+    // A refused or failed save goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-003); `error` is for list loads only.
     addProject: async (data) => {
-        try {
-            const newProject = await createProject(data);
-            set(state => ({ projectList: [...state.projectList, mapApiToInternal(newProject)] }));
-        } catch (err: any) {
-            set({ error: err?.message || 'Failed to add project' });
-            throw err;
-        }
+        const newProject = await createProject(data);
+        set(state => ({ projectList: [...state.projectList, mapApiToInternal(newProject)] }));
     },
 
     updateProject: async (id, data) => {
-        try {
-            const updated = await updateProjectApi(id, data);
-            set(state => ({
-                projectList: state.projectList.map(p => p.id === id ? mapApiToInternal(updated) : p),
-            }));
-        } catch (err: any) {
-            set({ error: err?.message || 'Failed to update project' });
-            throw err;
-        }
+        const updated = await updateProjectApi(id, data);
+        set(state => ({
+            projectList: state.projectList.map(p => p.id === id ? mapApiToInternal(updated) : p),
+        }));
     },
 
     deleteProject: async (id) => {

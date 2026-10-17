@@ -1,0 +1,2 @@
+2b-1 tree fingerprint (sha1, backend+react-app, excl node_modules/dist/__pycache__): cf27177c599565cc
+2b-1 after R2: e27fe0281cfefe3a (2026-10-17T09:05:28Z)

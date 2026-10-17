@@ -1,4 +1,5 @@
 # Permission Constants (Enterprise Format: module:action:scope:level)
+from core.refusals import Coded
 
 # ITP Permissions
 ITP_VIEW = "itp:view:all"
@@ -199,7 +200,7 @@ ALL_PERMISSIONS = [
 ]
 
 
-class PermissionDenied(Exception):
+class PermissionDenied(Coded, Exception):
     """Raised by a SERVICE layer when a specific permission code — supplied by the router as an
     explicit, trusted set derived from the authenticated user's own role.permissions_rel (never
     inferred from role NAME, and never client-supplied) — is missing for the write being
@@ -207,4 +208,5 @@ class PermissionDenied(Exception):
     never as "skip this check" — callers must not default it to "allow"."""
     def __init__(self, required_permission: str):
         self.required_permission = required_permission
-        super().__init__(f"Operation not permitted. Required: {required_permission}")
+        # coded PERMISSION_DENIED like RoleChecker's 403 (REFUSAL-DIALOG-2026-003); still not a ValueError, same English text
+        super().__init__("PERMISSION_DENIED", f"Operation not permitted. Required: {required_permission}", permissions=[required_permission])

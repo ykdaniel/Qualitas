@@ -21,6 +21,36 @@ const log = (...a) => console.log(new Date().toISOString(), ...a);
 let checks = 0;
 const check = (v, msg) => { if (!v) throw new Error(`FAILED: ${msg}`); checks++; log('PASS', msg); };
 
+// REFUSAL-DIALOG-2026-003: a failed save no longer shows a sonner toast; it opens the shared refusal
+// dialog (react-app/src/components/Shared/RefusalDialog.tsx). Reads its parts; null if it never shows.
+async function readRefusalDialog(p, timeout = 5000) {
+    const dlg = p.locator('[data-testid="refusal-dialog"]');
+    try { await dlg.waitFor({ state: 'visible', timeout }); } catch { return null; }
+    return dlg.evaluate((el) => {
+        const text = (n) => (n ? (n.textContent || '').trim() : '');
+        const msg = el.querySelector('#refusal-dialog-message');
+        const body = msg ? msg.parentElement : null;
+        const paras = body ? Array.from(body.querySelectorAll(':scope > p')) : [];
+        const original = paras.find((n) => n.getAttribute('lang') === 'en');
+        const note = paras.find((n) => n !== msg && n !== original && /note/i.test(n.className));
+        return {
+            title: text(el.querySelector('#refusal-dialog-title')),
+            message: text(msg),
+            items: body ? Array.from(body.querySelectorAll('li')).map(text) : [],
+            original: original ? text(original) : null,
+            note: note ? text(note) : null,
+            all: text(el),
+        };
+    });
+}
+// REFUSAL-DIALOG-2026-003: the dialog only closes on OK / × / Esc — close it so later steps are not blocked.
+async function closeRefusalDialog(p) {
+    const dlg = p.locator('[data-testid="refusal-dialog"]');
+    if (await dlg.count() === 0) return;
+    await dlg.getByRole('button', { name: 'OK', exact: true }).click();
+    await dlg.waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+}
+
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 page.setDefaultTimeout(15000);
@@ -203,15 +233,22 @@ await page.waitForTimeout(1000);
 await page.screenshot({ path: `${OUT}/naming-05-save-failure.png` });
 check((await osdPrefixField().inputValue()) === 'QTS-RKS-[PROJECT]-OSDFAIL-', 'NamingRules: input preserved after failed save');
 check(await saveBtn.isEnabled(), 'NamingRules: Save button re-enabled after failure');
-// R3 (FORMS-2026-004): DocumentNamingRules.tsx's catch (non-403 branch) builds
-// `命名規則儲存失敗：${err.response?.data?.detail ?? err.message ?? ...}` — unlike every other
-// form in this batch, it does NOT hide a 5xx body, so the exact text below is traceable straight
-// to that line, not a loose "any error-looking text" match.
+// REFUSAL-DIALOG-2026-003: DocumentNamingRules.tsx no longer builds the inline
+// `命名規則儲存失敗：${detail}` text (which echoed the 5xx body); a failed save now opens the shared
+// refusal dialog (keepsInput: the page keeps the edits). describeRefusal() never shows a 5xx body,
+// so the simulated detail must NOT appear, and there must be NO inline errorText element any more.
 const errorTextEls = page.locator('[class*="errorText"]');
-check(await errorTextEls.count() === 1, `NamingRules: EXACTLY one inline error message element is shown (got ${await errorTextEls.count()})`);
-const errorText = await errorTextEls.first().innerText();
-const expectedErrorText = `命名規則儲存失敗：${simulatedDetail}`;
-check(errorText === expectedErrorText, `NamingRules: the inline error message matches exactly (got "${errorText}", expected "${expectedErrorText}")`);
+check(await errorTextEls.count() === 0, `NamingRules: NO inline error message element is shown for a failed save (got ${await errorTextEls.count()})`);
+const failDialog = await readRefusalDialog(page);
+check(failDialog !== null, 'NamingRules: the refusal dialog is shown after the failed save');
+const expectedFailTitle = 'Save failed';
+const expectedFailMessage = 'The server ran into a problem (HTTP 500). Try again later; if it keeps happening, contact an administrator.';
+const expectedFailNote = 'Could not confirm whether it was saved. What you entered is still here; reload the list to check before trying again.';
+check(failDialog?.title === expectedFailTitle, `NamingRules: the dialog title matches exactly (got "${failDialog?.title}", expected "${expectedFailTitle}")`);
+check(failDialog?.message === expectedFailMessage, `NamingRules: the dialog message matches exactly (got "${failDialog?.message}", expected "${expectedFailMessage}")`);
+check(failDialog?.note === expectedFailNote, `NamingRules: the dialog note is the 5xx kept-input line (got "${failDialog?.note}", expected "${expectedFailNote}")`);
+check(!(failDialog?.all ?? '').includes(simulatedDetail), 'NamingRules: the dialog does NOT echo the simulated 5xx detail');
+await closeRefusalDialog(page);
 await osdPrefixField().fill('QTS-RKS-[PROJECT]-OSDRETRY-');
 apiCalls.length = 0;
 await saveBtn.click();

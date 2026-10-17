@@ -23,6 +23,7 @@ import { useDebounce } from '../../hooks/useDebounce';
 import { useCreateGate } from '../../hooks/useCreateGate';
 import { useITPStats } from '../../hooks/useITPStats';
 import { REOPEN_ITP_PARAM } from '../../utils/itpReturnLink';
+import { describeSaveError } from '../../utils/saveErrors';
 
 type StatusFilter =
   | 'all'
@@ -439,9 +440,9 @@ const ITP: React.FC = () => {
               try {
                 await uploadFiles('itp', workingId, pendingUploads, 'attachment');
                 uploadedPending = true;
-              } catch (err: any) {
-                const detail = err?.response?.data?.detail || err?.message;
-                errors.push(`上傳附件：${detail || '上傳失敗'}`);
+              } catch (err) {
+                // the reason in words (a 5xx never shows its body) — REFUSAL-DIALOG-2026-003
+                errors.push(`上傳附件：${describeSaveError(err, t)}`);
               }
             }
 

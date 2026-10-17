@@ -17,6 +17,7 @@ import { KMAttachment } from '../../types/km';
 import styles from './KMModals.module.css';
 import formStyles from '../Shared/FormShell.module.css';
 import './kmArticle.css';
+import { showRefusal } from '../../store/refusalStore';
 
 interface KMModalProps {
     id: string | null;
@@ -655,8 +656,8 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
                     attachments: [...currentAttachments, newAttachment]
                 };
             });
-        } catch {
-            toast.error('File upload failed');
+        } catch (err) {
+            showRefusal(err, 'save');
         } finally {
             setLoading(false);
             e.target.value = ''; // Reset input
@@ -803,7 +804,10 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
             onClose();
 
         } catch (err: any) {
-            toast.error(t(mainSaved ? 'km.chaptersSaveUnconfirmed' : 'common.saveFailed'));
+            // the main article stored but a chapter not: a part left undone, not a refusal of the save — its own message.
+            // Otherwise the save was refused or failed: the refusal dialog (REFUSAL-DIALOG-2026-003; e.g. the 409 VERSION_CONFLICT).
+            if (mainSaved) toast.error(t('km.chaptersSaveUnconfirmed'));
+            else showRefusal(err, 'save', { keepsInput: true });
         } finally {
             saveInFlight.current = false;
             setSaving(false);

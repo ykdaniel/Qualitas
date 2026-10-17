@@ -21,6 +21,14 @@ from core.refusals import Refusal
 logger = logging.getLogger(__name__)
 
 
+def _name_clash(exc: Exception, name) -> Exception:
+    """contractors.name is unique: a duplicate company name used to fall through to a 500. It is a 400 DUPLICATE_NAME now
+    (REFUSAL-DIALOG-2026-003). Any other error is returned unchanged."""
+    if isinstance(exc, IntegrityError) and ("UNIQUE constraint failed: contractors.name" in str(exc) or "ix_contractors_name" in str(exc)):
+        return Refusal("DUPLICATE_NAME", f"A contractor named '{name}' already exists.", docType="contractor", name=name)
+    return exc
+
+
 class ContractorService:
     """Service layer for Contractor business logic"""
 
@@ -110,7 +118,7 @@ class ContractorService:
         except Exception as e:
             self.repo.db.rollback()
             logger.error(f"Error creating Contractor: {e}", exc_info=True)
-            raise e
+            raise _name_clash(e, contractor_create.name)
 
     def update_contractor(self, contractor_id: str, contractor_update: schemas.ContractorUpdate,
                          user_id: int = None, username: str = None) -> Optional[models.Contractor]:
@@ -155,7 +163,7 @@ class ContractorService:
         except Exception as e:
             self.repo.db.rollback()
             logger.error(f"Error updating Contractor {contractor_id}: {e}", exc_info=True)
-            raise e
+            raise _name_clash(e, contractor_update.name)
 
     def delete_contractor(self, contractor_id: str, user_id: int = None, username: str = None) -> bool:
         """
@@ -240,7 +248,7 @@ class ContractorService:
         same = self.repo.db.query(models.ContractorPersonnel).filter(
             models.ContractorPersonnel.contractor_id == contractor_id).all()
         if any(p.id != exclude_id and (p.name or '').strip().lower() == name.strip().lower() for p in same):
-            raise ValueError(f"'{name}' is already on this company's personnel list.")
+            raise Refusal("DUPLICATE_NAME", f"'{name}' is already on this company's personnel list.", docType="personnel", name=name)
 
     def create_personnel(self, contractor_id: str, data: schemas.ContractorPersonnelCreate, user_id: int = None,
                          username: str = None, scope=None):
@@ -260,7 +268,8 @@ class ContractorService:
             try:
                 self.repo.db.flush()
             except IntegrityError:          # the same name added at the same moment by someone else
-                raise ValueError(f"'{data.name.strip()}' is already on this company's personnel list.")
+                raise Refusal("DUPLICATE_NAME", f"'{data.name.strip()}' is already on this company's personnel list.",
+                              docType="personnel", name=data.name.strip())
             log_audit(self.repo.db, "CREATE", "ContractorPersonnel", person.id, f"{company.name} / {person.name}",
                       new_value={"contractor_id": contractor_id, "name": person.name, "position": person.position},
                       user_id=user_id, username=username, strict=True)
@@ -297,7 +306,8 @@ class ContractorService:
             try:
                 self.repo.db.flush()
             except IntegrityError:
-                raise ValueError(f"'{person.name}' is already on this company's personnel list.")
+                raise Refusal("DUPLICATE_NAME", f"'{person.name}' is already on this company's personnel list.",
+                              docType="personnel", name=person.name)
             log_audit(self.repo.db, "UPDATE", "ContractorPersonnel", person.id, person.name, old_value=old,
                       new_value={k: getattr(person, k) for k in old}, user_id=user_id, username=username, strict=True)
             self.repo.db.commit()
