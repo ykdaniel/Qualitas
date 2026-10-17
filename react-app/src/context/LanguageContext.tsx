@@ -635,6 +635,8 @@ const translations: Record<Language, Record<string, string>> = {
     'refusal.code.PROJECT_CODE_INVALID': 'Project code {projectCode} must be 2 to 8 letters or digits.',
     'refusal.code.PROJECT_CODE_RESERVED': 'Project code {projectCode} is reserved for shared templates. Choose another code.',
     'refusal.code.PROJECT_CODE_DUPLICATE': 'Project code {projectCode} is already used by another project.',
+    'refusal.code.NUMBERING_PROJECT_REQUIRED': 'A {docType} must belong to a project before it gets a number; only shared ITP and Checklist templates are numbered without a project.',
+    'refusal.code.PROJECT_ID_RESERVED': 'Project id {projectId} is reserved for shared templates. Choose another id.',
     // REFUSAL-DIALOG-2026-002: refused saves
     'refusal.code.SCOPE_FORBIDDEN': 'This is outside the projects or contractor you work for.',
     'refusal.code.SCOPE_FORBIDDEN.noWorkingProject': 'You are not working in any project (you are not a member of one, or no project was chosen at sign-in). Sign in again and choose a project.',
@@ -3109,6 +3111,8 @@ const translations: Record<Language, Record<string, string>> = {
     'refusal.code.PROJECT_CODE_INVALID': '專案代碼 {projectCode} 必須是 2 到 8 個英文字母或數字。',
     'refusal.code.PROJECT_CODE_RESERVED': '專案代碼 {projectCode} 保留給共用範本使用，請改用其他代碼。',
     'refusal.code.PROJECT_CODE_DUPLICATE': '專案代碼 {projectCode} 已經被其他專案使用。',
+    'refusal.code.NUMBERING_PROJECT_REQUIRED': '{docType} 必須先屬於某個專案才能編號；只有共用的 ITP 和 Checklist 範本可以沒有專案。',
+    'refusal.code.PROJECT_ID_RESERVED': '專案 id {projectId} 保留給共用範本使用，請改用其他 id。',
     'refusal.code.SCOPE_FORBIDDEN': '這不在您所屬的專案或承包商範圍內。',
     'refusal.code.SCOPE_FORBIDDEN.noWorkingProject': '您目前沒有在任何專案中工作（不是專案成員，或登入時沒有選擇專案）。請重新登入並選擇專案。',
     'refusal.code.SCOPE_FORBIDDEN.projectRequired': '請為這筆資料選擇一個您所屬的專案。',

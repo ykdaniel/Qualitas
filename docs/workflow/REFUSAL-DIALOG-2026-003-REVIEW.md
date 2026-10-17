@@ -43,7 +43,7 @@ TASK_ID: REFUSAL-DIALOG-2026-003
 - **tests-browser 8 支**：都通過 `node --check`。逐一核對各呼叫端的 keepsInput 和是否傳原始 axios 錯誤，預期的標題、訊息、提示行都和實際程式一致；中文腳本的確認按鈕「我知道了」也已處理。
 - **P3（都不改程式；tree 已凍結、3.11 已通過、使用者已確認預覽）**：
   - P3-1：Audit 的 × 拿掉後，清單載入失敗的橫幅要按「重試」或切換專案才會消失。這是設計，和其他模組一致。
-  - P3-2：腳本靠 CSS module 類名裡的 "note" 找提示行，打包後的雜湊類名會讓它失效。可以在 RefusalDialog 加 `data-refusal-note`。→ 記入 BACKLOG #59 之後的下一號，由協調中心排號。
+  - P3-2：腳本靠 CSS module 類名裡的 "note" 找提示行，打包後的雜湊類名會讓它失效。可以在 RefusalDialog 加 `data-refusal-note`。→ 記入 BACKLOG #60（協調中心排號；NOI 用了 #59）。
   - P3-3：3.11 輸出檔已換成綠燈那次（見 STATUS）。
   - P3-4：tests-unit/saveFlow.test.ts 的假字典還留著已刪除的 `saveFlow.failedKeep`。不影響結果，下次碰到這個檔再清。
 - tsc 0；npm test 217/217；只有既有的 2 個 eslint 錯誤。

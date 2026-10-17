@@ -1,0 +1,537 @@
+# start 2026-10-17T09:23:11Z tree=/private/tmp/claude-501/-Users-nook-Documents-Qualitas/f1310aaf-e05d-41ab-aaf2-8b326024b634/scratchpad/b4 head=247ee771 staged=/Users/nook/.qualitas-py311.fRzREF
+Python 3.11.17
+pip_exit=0
+........................................................................ [  2%]
+........................................................................ [  5%]
+........................................................................ [  7%]
+........................................................................ [ 10%]
+........................................................................ [ 12%]
+........................................................................ [ 15%]
+.....................................................................F.. [ 17%]
+..............................s..................................FF..... [ 20%]
+.F...................................................................... [ 22%]
+........................................................................ [ 25%]
+........................................................................ [ 27%]
+........................................................................ [ 30%]
+........................................................................ [ 32%]
+........................................................................ [ 35%]
+........................................................................ [ 37%]
+........................................................................ [ 40%]
+........................................................................ [ 42%]
+........................................................................ [ 45%]
+........................................................................ [ 47%]
+..................................................ss.................... [ 50%]
+........................................................................ [ 53%]
+........................................................................ [ 55%]
+...........................................F............................ [ 58%]
+........................................................................ [ 60%]
+..s.ss...s......sssssssss............................................... [ 63%]
+........................................................................ [ 65%]
+........................................................................ [ 68%]
+........................................................................ [ 70%]
+........................................................................ [ 73%]
+...................F.................................................... [ 75%]
+........................................................................ [ 78%]
+........................................................................ [ 80%]
+........................................................................ [ 83%]
+........................................................................ [ 85%]
+........................................................................ [ 88%]
+........................................................................ [ 90%]
+........................................................................ [ 93%]
+........................................................................ [ 95%]
+..........................................s............................. [ 98%]
+............................................                             [100%]
+=================================== FAILURES ===================================
+_________________ test_concurrent_creates_get_distinct_numbers _________________
+
+env = namespace(client=<starlette.testclient.TestClient object at 0xec33692cead0>, Session=sessionmaker(class_='Session', bi...commit=True), engine=Engine(sqlite:////tmp/pytest-of-root/pytest-0/test_concurrent_creates_get_di0/audit-hardening.db))
+
+    def test_concurrent_creates_get_distinct_numbers(env):
+        n = 6
+        gate = threading.Barrier(n)
+        results, errors = [], []
+    
+        def worker():
+            with env.Session() as db:
+                service = AuditService(AuditRepository(db))
+                gate.wait()
+                try:
+                    results.append(service.create_audit(schemas.AuditCreate(**body()), user_id=1, username='auditor').auditNo)
+                except Exception as e:  # noqa: BLE001 — collected and asserted below
+                    errors.append(repr(e))
+        threads = [threading.Thread(target=worker) for _ in range(n)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+>       assert errors == []
+E       assert ["RefusalHTTP...thout one.')"] == []
+E         
+E         Left contains 6 more items, first extra item: "RefusalHTTPException(status_code=400, detail='A AUD must belong to a project before it can be numbered; only shared ITP and Checklist templates are numbered without one.')"
+E         Use -v to get more diff
+
+tests/test_audit_hardening_http.py:290: AssertionError
+______ test_reinspection_preserves_original_failure_and_before_after_link ______
+
+itr_service = <services.itr_service.ITRService object at 0xec3368f406d0>
+checklist_service = <services.checklist_service.ChecklistService object at 0xec335a2d1f50>
+vendor = <models.Contractor object at 0xec33715e16d0>
+
+    def test_reinspection_preserves_original_failure_and_before_after_link(itr_service, checklist_service, vendor):
+        itr = _make_itr(itr_service, vendor, inspectionResult="Fail")
+        template = _make_template(checklist_service, vendor)
+        itr_service.link_checklist(itr.id, template.id, user_id=1, username="tester")
+        original_instance = checklist_service.repo.get_all(itr_id=itr.id)[0]
+    
+        checklist_service.update_checklist(
+            original_instance.id,
+            schemas.ChecklistUpdate(
+                status="Fail", passCount=0, failCount=1,
+                detail_data=json.dumps({"items": [{"item": "Spacing", "criteria": "<=200mm", "situation": "", "result": "X"}]}),
+            ),
+            user_id=1, username="tester",
+        )
+    
+        # Edit the template *after* the failure, before re-inspecting — the
+        # re-inspection must NOT silently pick up this new content/version.
+        checklist_service.update_checklist(
+            template.id,
+            schemas.ChecklistUpdate(detail_data=json.dumps(
+                {"items": [{"item": "Totally Different Check", "criteria": "n/a", "situation": "", "result": ""}]}
+            )),
+            user_id=1, username="tester",
+        )
+        refreshed_template = checklist_service.get_checklist(template.id)
+        assert refreshed_template.version == 2
+    
+>       new_itr = itr_service.create_reinspection(itr.id, user_id=1, username="tester")
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_checklist_itr_isolation_integration.py:237: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+services/itr_service.py:1549: in create_reinspection
+    raise e
+services/itr_service.py:1441: in create_reinspection
+    new_doc_number = generate_reference_no(
+core/utils.py:543: in generate_reference_no
+    seq_key, prefix, digits = _reference_format(db, doc_type, project_id)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db = <sqlalchemy.orm.session.Session object at 0xec336a967f10>, doc_type = 'ITR'
+project_id = None
+
+    def _reference_format(db: Session, doc_type: str, project_id: Optional[str]):
+        """(sequence project key, prefix, sequence digits) for numbering `doc_type` in `project_id` (None: shared).
+    
+        Format QTS-RKS-[PROJECT]-<TYPE>-###### (D2): a naming rule's prefix with [PROJECT] replaced by the project code;
+        a rule that has no [PROJECT] (not yet migrated) or no rule at all falls back to the default format — never to a
+        number without the project. The sequence key is (project id or "STD", "*", doc type): one counter per project and
+        type, shared by every contractor (D2). Without a project only a shared template (SHARED_TEMPLATE_TYPES) is
+        numbered — STD is theirs; any other type is refused (400 NUMBERING_PROJECT_REQUIRED, B4)."""
+        if project_id is None and doc_type.upper() not in SHARED_TEMPLATE_TYPES:
+            from core.refusals import RefusalHTTPException
+            label = _DOC_LABELS.get(doc_type.upper(), doc_type.upper())
+>           raise RefusalHTTPException(400, f"A {label} must belong to a project before it can be numbered; only shared ITP "
+                                            "and Checklist templates are numbered without one.",
+                                       "NUMBERING_PROJECT_REQUIRED", {"docType": label})
+E           core.refusals.RefusalHTTPException: 400: A ITR must belong to a project before it can be numbered; only shared ITP and Checklist templates are numbered without one.
+
+core/utils.py:497: RefusalHTTPException
+------------------------------ Captured log call -------------------------------
+ERROR    services.itr_service:itr_service.py:1548 Error creating re-inspection from ITR ec9ca69d5d564b02abc2aa1a8e01ed60: 400: A ITR must belong to a project before it can be numbered; only shared ITP and Checklist templates are numbered without one.
+Traceback (most recent call last):
+  File "/q/backend/services/itr_service.py", line 1441, in create_reinspection
+    new_doc_number = generate_reference_no(
+                     ^^^^^^^^^^^^^^^^^^^^^^
+  File "/q/backend/core/utils.py", line 543, in generate_reference_no
+    seq_key, prefix, digits = _reference_format(db, doc_type, project_id)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/q/backend/core/utils.py", line 497, in _reference_format
+    raise RefusalHTTPException(400, f"A {label} must belong to a project before it can be numbered; only shared ITP "
+core.refusals.RefusalHTTPException: 400: A ITR must belong to a project before it can be numbered; only shared ITP and Checklist templates are numbered without one.
+____________ test_chained_reinspections_trace_back_to_first_failure ____________
+
+itr_service = <services.itr_service.ITRService object at 0xec33597feed0>
+checklist_service = <services.checklist_service.ChecklistService object at 0xec335ad89010>
+vendor = <models.Contractor object at 0xec33597c0590>
+
+    def test_chained_reinspections_trace_back_to_first_failure(itr_service, checklist_service, vendor):
+        """Two re-inspections deep — the very first failure must still be
+        reachable by walking originalItrId repeatedly (no new fields added
+        for query convenience, per the requirement)."""
+        itr_1 = _make_itr(itr_service, vendor, inspectionResult="Fail")
+        template = _make_template(checklist_service, vendor)
+        itr_service.link_checklist(itr_1.id, template.id, user_id=1, username="tester")
+        instance_1 = checklist_service.repo.get_all(itr_id=itr_1.id)[0]
+        checklist_service.update_checklist(
+            instance_1.id,
+            schemas.ChecklistUpdate(status="Fail", passCount=0, failCount=1,
+                                     detail_data=json.dumps({"items": [{"item": "Spacing", "criteria": "<=200mm", "situation": "", "result": "X"}]})),
+            user_id=1, username="tester",
+        )
+    
+>       itr_2 = itr_service.create_reinspection(itr_1.id, user_id=1, username="tester")
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_checklist_itr_isolation_integration.py:293: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+services/itr_service.py:1549: in create_reinspection
+    raise e
+services/itr_service.py:1441: in create_reinspection
+    new_doc_number = generate_reference_no(
+core/utils.py:543: in generate_reference_no
+    seq_key, prefix, digits = _reference_format(db, doc_type, project_id)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db = <sqlalchemy.orm.session.Session object at 0xec336a23ca10>, doc_type = 'ITR'
+project_id = None
+
+    def _reference_format(db: Session, doc_type: str, project_id: Optional[str]):
+        """(sequence project key, prefix, sequence digits) for numbering `doc_type` in `project_id` (None: shared).
+    
+        Format QTS-RKS-[PROJECT]-<TYPE>-###### (D2): a naming rule's prefix with [PROJECT] replaced by the project code;
+        a rule that has no [PROJECT] (not yet migrated) or no rule at all falls back to the default format — never to a
+        number without the project. The sequence key is (project id or "STD", "*", doc type): one counter per project and
+        type, shared by every contractor (D2). Without a project only a shared template (SHARED_TEMPLATE_TYPES) is
+        numbered — STD is theirs; any other type is refused (400 NUMBERING_PROJECT_REQUIRED, B4)."""
+        if project_id is None and doc_type.upper() not in SHARED_TEMPLATE_TYPES:
+            from core.refusals import RefusalHTTPException
+            label = _DOC_LABELS.get(doc_type.upper(), doc_type.upper())
+>           raise RefusalHTTPException(400, f"A {label} must belong to a project before it can be numbered; only shared ITP "
+                                            "and Checklist templates are numbered without one.",
+                                       "NUMBERING_PROJECT_REQUIRED", {"docType": label})
+E           core.refusals.RefusalHTTPException: 400: A ITR must belong to a project before it can be numbered; only shared ITP and Checklist templates are numbered without one.
+
+core/utils.py:497: RefusalHTTPException
+------------------------------ Captured log call -------------------------------
+ERROR    services.itr_service:itr_service.py:1548 Error creating re-inspection from ITR ca02f81ccb474f8c8a65091dc5656954: 400: A ITR must belong to a project before it can be numbered; only shared ITP and Checklist templates are numbered without one.
+Traceback (most recent call last):
+  File "/q/backend/services/itr_service.py", line 1441, in create_reinspection
+    new_doc_number = generate_reference_no(
+                     ^^^^^^^^^^^^^^^^^^^^^^
+  File "/q/backend/core/utils.py", line 543, in generate_reference_no
+    seq_key, prefix, digits = _reference_format(db, doc_type, project_id)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/q/backend/core/utils.py", line 497, in _reference_format
+    raise RefusalHTTPException(400, f"A {label} must belong to a project before it can be numbered; only shared ITP "
+core.refusals.RefusalHTTPException: 400: A ITR must belong to a project before it can be numbered; only shared ITP and Checklist templates are numbered without one.
+_ test_reinspection_preserves_original_criteria_blanks_result_leaves_original_failure_untouched _
+
+itr_service = <services.itr_service.ITRService object at 0xec335f093e10>
+checklist_service = <services.checklist_service.ChecklistService object at 0xec335d2a5fd0>
+vendor = <models.Contractor object at 0xec335f9f6dd0>
+
+    def test_reinspection_preserves_original_criteria_blanks_result_leaves_original_failure_untouched(
+        itr_service, checklist_service, vendor
+    ):
+        """Business rule check: a re-inspection reuses the original snapshot's
+        item/criteria unchanged, starts with observation/result blanked, and
+        never touches the original (still-failing) instance."""
+        itr_1 = _make_itr(itr_service, vendor, inspectionResult="Fail")
+        template = _make_template(checklist_service, vendor)
+        itr_service.link_checklist(itr_1.id, template.id, user_id=1, username="tester")
+        instance_1 = checklist_service.repo.get_all(itr_id=itr_1.id)[0]
+        checklist_service.update_checklist(
+            instance_1.id,
+            schemas.ChecklistUpdate(status="Fail", passCount=0, failCount=1,
+                                     detail_data=json.dumps({"items": [
+                                         {"item": "Spacing", "criteria": "<=200mm", "situation": "Measured 350mm", "result": "X"},
+                                     ]})),
+            user_id=1, username="tester",
+        )
+    
+>       itr_2 = itr_service.create_reinspection(itr_1.id, user_id=1, username="tester")
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_checklist_itr_isolation_integration.py:470: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+services/itr_service.py:1549: in create_reinspection
+    raise e
+services/itr_service.py:1441: in create_reinspection
+    new_doc_number = generate_reference_no(
+core/utils.py:543: in generate_reference_no
+    seq_key, prefix, digits = _reference_format(db, doc_type, project_id)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db = <sqlalchemy.orm.session.Session object at 0xec337215f410>, doc_type = 'ITR'
+project_id = None
+
+    def _reference_format(db: Session, doc_type: str, project_id: Optional[str]):
+        """(sequence project key, prefix, sequence digits) for numbering `doc_type` in `project_id` (None: shared).
+    
+        Format QTS-RKS-[PROJECT]-<TYPE>-###### (D2): a naming rule's prefix with [PROJECT] replaced by the project code;
+        a rule that has no [PROJECT] (not yet migrated) or no rule at all falls back to the default format — never to a
+        number without the project. The sequence key is (project id or "STD", "*", doc type): one counter per project and
+        type, shared by every contractor (D2). Without a project only a shared template (SHARED_TEMPLATE_TYPES) is
+        numbered — STD is theirs; any other type is refused (400 NUMBERING_PROJECT_REQUIRED, B4)."""
+        if project_id is None and doc_type.upper() not in SHARED_TEMPLATE_TYPES:
+            from core.refusals import RefusalHTTPException
+            label = _DOC_LABELS.get(doc_type.upper(), doc_type.upper())
+>           raise RefusalHTTPException(400, f"A {label} must belong to a project before it can be numbered; only shared ITP "
+                                            "and Checklist templates are numbered without one.",
+                                       "NUMBERING_PROJECT_REQUIRED", {"docType": label})
+E           core.refusals.RefusalHTTPException: 400: A ITR must belong to a project before it can be numbered; only shared ITP and Checklist templates are numbered without one.
+
+core/utils.py:497: RefusalHTTPException
+------------------------------ Captured log call -------------------------------
+ERROR    services.itr_service:itr_service.py:1548 Error creating re-inspection from ITR 83925df2d44b4e34b3530fd5b4f2b19b: 400: A ITR must belong to a project before it can be numbered; only shared ITP and Checklist templates are numbered without one.
+Traceback (most recent call last):
+  File "/q/backend/services/itr_service.py", line 1441, in create_reinspection
+    new_doc_number = generate_reference_no(
+                     ^^^^^^^^^^^^^^^^^^^^^^
+  File "/q/backend/core/utils.py", line 543, in generate_reference_no
+    seq_key, prefix, digits = _reference_format(db, doc_type, project_id)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/q/backend/core/utils.py", line 497, in _reference_format
+    raise RefusalHTTPException(400, f"A {label} must belong to a project before it can be numbered; only shared ITP "
+core.refusals.RefusalHTTPException: 400: A ITR must belong to a project before it can be numbered; only shared ITP and Checklist templates are numbered without one.
+____ test_reinspection_clears_situation_and_result_keeps_item_and_criteria _____
+
+engine = Engine(sqlite:///%3Amemory%3A)
+vendor = <models.Contractor object at 0xec3358b9e410>
+
+    def test_reinspection_clears_situation_and_result_keeps_item_and_criteria(engine, vendor):
+        session = sessionmaker(bind=engine)()
+        itr_svc, chk_svc = _services(session)
+        itr = itr_svc.repo.create(models.ITR(
+            id="itr-4", vendor_id=vendor.id, documentNumber="ITR-4", status="In Progress", inspectionResult="Fail",
+        ))
+        template = models.Checklist(
+            id="tpl-4", recordsNo="CHK-TPL-4", status="Ongoing", version=1,
+            detail_data=json.dumps({"items": [{"item": "Spacing", "criteria": "<=200mm", "situation": "", "result": ""}]}),
+        )
+        session.add(template)
+        session.commit()
+        itr_svc.link_checklist(itr.id, template.id, user_id=1, username="tester")
+        original_instance = chk_svc.repo.get_all(itr_id=itr.id)[0]
+        chk_svc.update_checklist(
+            original_instance.id,
+            schemas.ChecklistUpdate(
+                status="Fail", passCount=0, failCount=1,
+                detail_data=json.dumps({"items": [{"item": "Spacing", "criteria": "<=200mm", "situation": "Measured 250mm — over spec", "result": "X"}]}),
+            ),
+            user_id=1, username="tester",
+        )
+        original_detail_before = chk_svc.get_checklist(original_instance.id).detail_data
+    
+>       new_itr = itr_svc.create_reinspection(itr.id, user_id=1, username="tester")
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_itr_revoke_approval_evidence_integrity.py:383: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+services/itr_service.py:1549: in create_reinspection
+    raise e
+services/itr_service.py:1441: in create_reinspection
+    new_doc_number = generate_reference_no(
+core/utils.py:543: in generate_reference_no
+    seq_key, prefix, digits = _reference_format(db, doc_type, project_id)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db = <sqlalchemy.orm.session.Session object at 0xec335fbce3d0>, doc_type = 'ITR'
+project_id = None
+
+    def _reference_format(db: Session, doc_type: str, project_id: Optional[str]):
+        """(sequence project key, prefix, sequence digits) for numbering `doc_type` in `project_id` (None: shared).
+    
+        Format QTS-RKS-[PROJECT]-<TYPE>-###### (D2): a naming rule's prefix with [PROJECT] replaced by the project code;
+        a rule that has no [PROJECT] (not yet migrated) or no rule at all falls back to the default format — never to a
+        number without the project. The sequence key is (project id or "STD", "*", doc type): one counter per project and
+        type, shared by every contractor (D2). Without a project only a shared template (SHARED_TEMPLATE_TYPES) is
+        numbered — STD is theirs; any other type is refused (400 NUMBERING_PROJECT_REQUIRED, B4)."""
+        if project_id is None and doc_type.upper() not in SHARED_TEMPLATE_TYPES:
+            from core.refusals import RefusalHTTPException
+            label = _DOC_LABELS.get(doc_type.upper(), doc_type.upper())
+>           raise RefusalHTTPException(400, f"A {label} must belong to a project before it can be numbered; only shared ITP "
+                                            "and Checklist templates are numbered without one.",
+                                       "NUMBERING_PROJECT_REQUIRED", {"docType": label})
+E           core.refusals.RefusalHTTPException: 400: A ITR must belong to a project before it can be numbered; only shared ITP and Checklist templates are numbered without one.
+
+core/utils.py:497: RefusalHTTPException
+------------------------------ Captured log call -------------------------------
+ERROR    services.itr_service:itr_service.py:1548 Error creating re-inspection from ITR itr-4: 400: A ITR must belong to a project before it can be numbered; only shared ITP and Checklist templates are numbered without one.
+Traceback (most recent call last):
+  File "/q/backend/services/itr_service.py", line 1441, in create_reinspection
+    new_doc_number = generate_reference_no(
+                     ^^^^^^^^^^^^^^^^^^^^^^
+  File "/q/backend/core/utils.py", line 543, in generate_reference_no
+    seq_key, prefix, digits = _reference_format(db, doc_type, project_id)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/q/backend/core/utils.py", line 497, in _reference_format
+    raise RefusalHTTPException(400, f"A {label} must belong to a project before it can be numbered; only shared ITP "
+core.refusals.RefusalHTTPException: 400: A ITR must belong to a project before it can be numbered; only shared ITP and Checklist templates are numbered without one.
+_____________ test_create_strips_any_client_submitted_approved_by ______________
+
+db_session = <sqlalchemy.orm.session.Session object at 0xec3353b40c10>
+
+    def test_create_strips_any_client_submitted_approved_by(db_session):
+        alice = _make_user(db_session, username="alice", full_name="Alice Wu")
+        service = _service(db_session)
+    
+        create = schemas.OBSCreate(
+            vendor="TestVendor", description="d", rev="0", submit="v", status="Open",
+            subject="s", foundLocation="Site A",
+            qualityEngineerApproval="Approved",
+            qualityEngineerApprovalBy="Forged Approver",
+        )
+>       created = service.create_obs(create, user_id=alice.id, username=alice.username)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_obs_engineer_approval_identity.py:139: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+services/obs_service.py:188: in create_obs
+    raise e
+services/obs_service.py:165: in create_obs
+    data['documentNumber'] = generate_reference_no(
+core/utils.py:543: in generate_reference_no
+    seq_key, prefix, digits = _reference_format(db, doc_type, project_id)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db = <sqlalchemy.orm.session.Session object at 0xec3353b40c10>, doc_type = 'OBS'
+project_id = None
+
+    def _reference_format(db: Session, doc_type: str, project_id: Optional[str]):
+        """(sequence project key, prefix, sequence digits) for numbering `doc_type` in `project_id` (None: shared).
+    
+        Format QTS-RKS-[PROJECT]-<TYPE>-###### (D2): a naming rule's prefix with [PROJECT] replaced by the project code;
+        a rule that has no [PROJECT] (not yet migrated) or no rule at all falls back to the default format — never to a
+        number without the project. The sequence key is (project id or "STD", "*", doc type): one counter per project and
+        type, shared by every contractor (D2). Without a project only a shared template (SHARED_TEMPLATE_TYPES) is
+        numbered — STD is theirs; any other type is refused (400 NUMBERING_PROJECT_REQUIRED, B4)."""
+        if project_id is None and doc_type.upper() not in SHARED_TEMPLATE_TYPES:
+            from core.refusals import RefusalHTTPException
+            label = _DOC_LABELS.get(doc_type.upper(), doc_type.upper())
+>           raise RefusalHTTPException(400, f"A {label} must belong to a project before it can be numbered; only shared ITP "
+                                            "and Checklist templates are numbered without one.",
+                                       "NUMBERING_PROJECT_REQUIRED", {"docType": label})
+E           core.refusals.RefusalHTTPException: 400: A OBS must belong to a project before it can be numbered; only shared ITP and Checklist templates are numbered without one.
+
+core/utils.py:497: RefusalHTTPException
+------------------------------ Captured log call -------------------------------
+ERROR    services.obs_service:obs_service.py:187 Error creating OBS: 400: A OBS must belong to a project before it can be numbered; only shared ITP and Checklist templates are numbered without one.
+Traceback (most recent call last):
+  File "/q/backend/services/obs_service.py", line 165, in create_obs
+    data['documentNumber'] = generate_reference_no(
+                             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/q/backend/core/utils.py", line 543, in generate_reference_no
+    seq_key, prefix, digits = _reference_format(db, doc_type, project_id)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/q/backend/core/utils.py", line 497, in _reference_format
+    raise RefusalHTTPException(400, f"A {label} must belong to a project before it can be numbered; only shared ITP "
+core.refusals.RefusalHTTPException: 400: A OBS must belong to a project before it can be numbered; only shared ITP and Checklist templates are numbered without one.
+=============================== warnings summary ===============================
+../../usr/local/lib/python3.11/site-packages/starlette/testclient.py:31
+  /usr/local/lib/python3.11/site-packages/starlette/testclient.py:31: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+../../usr/local/lib/python3.11/site-packages/passlib/utils/__init__.py:854
+  /usr/local/lib/python3.11/site-packages/passlib/utils/__init__.py:854: DeprecationWarning: 'crypt' is deprecated and slated for removal in Python 3.13
+    from crypt import crypt as _crypt
+
+tests/test_active_assignee_http.py: 11 warnings
+tests/test_attachment_authorization_http.py: 463 warnings
+tests/test_attachment_hardening_http.py: 274 warnings
+tests/test_audit_agenda_http.py: 9 warnings
+tests/test_audit_contractor_scope_http.py: 2 warnings
+tests/test_audit_export_docx_http.py: 13 warnings
+tests/test_audit_hardening_http.py: 33 warnings
+tests/test_audit_templates_http.py: 22 warnings
+tests/test_audit_void_lock_http.py: 5 warnings
+tests/test_checklist_export_docx_http.py: 6 warnings
+tests/test_checklist_na_reason_http.py: 68 warnings
+tests/test_checklist_pass_integrity_http.py: 191 warnings
+tests/test_checklist_reopen_http.py: 20 warnings
+tests/test_checklist_status_rule_http.py: 251 warnings
+tests/test_contractor_options_http.py: 10 warnings
+tests/test_contractor_personnel_http.py: 7 warnings
+tests/test_date_write_guard_http.py: 143 warnings
+tests/test_docx_path_guard_http.py: 2 warnings
+tests/test_fat_supplier_null.py: 80 warnings
+tests/test_file_list_route_http.py: 6 warnings
+tests/test_iam_admin_role_boundary_http.py: 123 warnings
+tests/test_iam_admin_takeover_http.py: 177 warnings
+tests/test_iam_role_audit_http.py: 13 warnings
+tests/test_iam_user_security_http.py: 121 warnings
+tests/test_itp_checklist_km_project_audit_http.py: 69 warnings
+tests/test_itr_approval_events_http.py: 102 warnings
+tests/test_itr_approval_history_api_http.py: 58 warnings
+tests/test_itr_checklist_http_e2e.py: 4 warnings
+tests/test_itr_history_preservation_http.py: 35 warnings
+tests/test_itr_integrity_guards_http.py: 33 warnings
+tests/test_itr_revoke_approval_acceptance.py: 33 warnings
+tests/test_itr_state_protection_http.py: 92 warnings
+tests/test_itr_write_paths_atomic_http.py: 84 warnings
+tests/test_material_submittals_http.py: 193 warnings
+tests/test_materials_http.py: 85 warnings
+tests/test_meeting_minutes_carry_forward_http.py: 4 warnings
+tests/test_meeting_minutes_export_docx_http.py: 13 warnings
+tests/test_meeting_minutes_rev_http.py: 3 warnings
+tests/test_ncr_audit_atomic_http.py: 26 warnings
+tests/test_ncr_audit_delete_http.py: 17 warnings
+tests/test_ncr_close_permission_http.py: 25 warnings
+tests/test_ncr_closed_creation_http.py: 30 warnings
+tests/test_ncr_closure_photos_http.py: 34 warnings
+tests/test_ncr_late_closure_http.py: 32 warnings
+tests/test_noi_audit_delete_update_http.py: 16 warnings
+tests/test_noi_contractor_lock_http.py: 15 warnings
+tests/test_noi_create_atomic_http.py: 20 warnings
+tests/test_noi_delete_http.py: 10 warnings
+tests/test_noi_legacy_itp_read_http.py: 3 warnings
+tests/test_noi_qworkflow_backfill_rule_http.py: 11 warnings
+tests/test_ref_project_seq_b1_http.py: 20 warnings
+tests/test_ref_project_seq_b2_http.py: 24 warnings
+tests/test_ref_project_seq_b3_http.py: 37 warnings
+tests/test_ref_project_seq_b4_http.py: 7 warnings
+tests/test_refusal_codes_http.py: 28 warnings
+tests/test_refusal_dialog_2026_002_http.py: 18 warnings
+tests/test_refusal_dialog_2026_003_http.py: 33 warnings
+tests/test_remaining_audit_paths_http.py: 82 warnings
+tests/test_reviewed_audit_paths_http.py: 40 warnings
+tests/test_scope_instance_contractor_http.py: 81 warnings
+tests/test_user_company_label_http.py: 33 warnings
+tests/test_workflow_photo_evidence_http.py: 27 warnings
+tests/test_workflow_project_filter_http.py: 6 warnings
+  /usr/local/lib/python3.11/site-packages/httpx/_client.py:690: DeprecationWarning: The 'app' shortcut is now deprecated. Use the explicit style 'transport=WSGITransport(app=...)' instead.
+    warnings.warn(message, DeprecationWarning)
+
+tests/test_checklist_template_cleanup.py::test_seeded_checklist_is_a_clean_template
+tests/test_checklist_template_cleanup.py::test_seeded_checklist_is_a_clean_template
+  /q/backend/crud.py:238: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.14/migration/
+    new_value=role.dict(exclude={"reason"}),
+
+tests/test_checklist_template_cleanup.py::test_seeded_checklist_is_a_clean_template
+  /q/backend/crud.py:153: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.14/migration/
+    new_value=user.dict(exclude={"password"}),
+
+tests/test_ref_project_seq_b2_http.py::test_every_write_to_a_shared_itp_or_checklist_template_is_admin_only
+tests/test_refusal_dialog_2026_003_http.py::test_a_service_value_error_is_a_plain_400_not_a_500[update_itp_detail]
+  /q/backend/routers/itp.py:164: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.14/migration/
+    db_itp = itp_service.update_itp_detail(itp_id=itp_id, detail_body=body.dict(), user_id=current_user.id, username=current_user.username, scope=scope)
+
+tests/test_remaining_audit_paths_http.py::test_durable_audit_and_one_commit[fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_call-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_call-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_object-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_object-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_flush-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_flush-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[commit-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[commit-fat-details]
+  /q/backend/routers/fat.py:119: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.14/migration/
+    details_data = [item.dict() for item in details]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_audit_hardening_http.py::test_concurrent_creates_get_distinct_numbers
+FAILED tests/test_checklist_itr_isolation_integration.py::test_reinspection_preserves_original_failure_and_before_after_link
+FAILED tests/test_checklist_itr_isolation_integration.py::test_chained_reinspections_trace_back_to_first_failure
+FAILED tests/test_checklist_itr_isolation_integration.py::test_reinspection_preserves_original_criteria_blanks_result_leaves_original_failure_untouched
+FAILED tests/test_itr_revoke_approval_evidence_integrity.py::test_reinspection_clears_situation_and_result_keeps_item_and_criteria
+FAILED tests/test_obs_engineer_approval_identity.py::test_create_strips_any_client_submitted_approved_by
+6 failed, 2829 passed, 17 skipped, 3549 warnings in 3717.45s (1:01:57)
+pytest_exit=1
+# end 2026-10-17T10:25:29Z

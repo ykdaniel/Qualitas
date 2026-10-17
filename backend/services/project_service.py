@@ -19,7 +19,7 @@ from repositories.project_repository import ProjectRepository
 from core import validators
 from core.constants import SHARED_CODE
 from core.refusals import Refusal
-from core.utils import log_audit
+from core.utils import continue_counters_from_legacy_abbreviation, log_audit
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,20 @@ def normalize_project_code(db, code, project_id: Optional[str] = None) -> str:
     if clash.first():
         raise Refusal("PROJECT_CODE_DUPLICATE", f"Project code '{value}' is already used by another project.", projectCode=value)
     return value
+
+
+RESERVED_PROJECT_IDS = {SHARED_CODE}
+
+
+def normalize_project_id(project_id) -> Optional[str]:
+    """A client may name a new project's id (rehearsal scripts do). The id of the shared templates' counter
+    (SHARED_CODE, "STD") is refused: a project with that id would share the counter key of every shared template
+    (REF-PROJECT-SEQ-2026-001 B4, B3 R1 P3-10; decision D-B4-3: only the reserved id is refused, a chosen id stays
+    allowed). Blank means "generate one"."""
+    value = (project_id or "").strip()
+    if value.upper() in RESERVED_PROJECT_IDS:
+        raise Refusal("PROJECT_ID_RESERVED", f"Project id '{value}' is reserved for shared templates.", projectId=value)
+    return value or None
 
 
 def _code_clash(exc: Exception, code, name=None) -> Exception:
@@ -76,11 +90,14 @@ class ProjectService:
         try:
             data = project_create.model_dump()
             data["code"] = normalize_project_code(self.repo.db, data.get("code"))
+            data["id"] = normalize_project_id(data.get("id"))
             if not data.get("id"):
                 data["id"] = str(uuid.uuid4())
             data["created_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             db_project = models.Project(**data)
             created = self.repo.create(db_project, commit=False)
+            # a code equal to an old contractor abbreviation continues that abbreviation's numbering (B4, P3-9)
+            continue_counters_from_legacy_abbreviation(self.repo.db, created.id, created.code)
             log_audit(
                 self.repo.db, "CREATE", "Project", created.id, created.name,
                 new_value=project_create.model_dump(), user_id=user_id, username=username, strict=True,
@@ -103,6 +120,8 @@ class ProjectService:
                 # a code may change (the counter is keyed by project id, so numbering continues), but never to empty
                 update_data["code"] = normalize_project_code(self.repo.db, update_data["code"], project_id)
             updated = self.repo.update(db_project, update_data, commit=False)
+            if "code" in update_data and update_data["code"] != ((old_val.get("code") or "").strip().upper()):
+                continue_counters_from_legacy_abbreviation(self.repo.db, project_id, updated.code)   # recoded (B4, P3-9)
             log_audit(
                 self.repo.db, "UPDATE", "Project", project_id, updated.name,
                 old_value=old_val, new_value=project_update.model_dump(exclude_unset=True),

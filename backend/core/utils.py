@@ -462,6 +462,9 @@ def _resolve_vendor_id(db: Session, vendor_name: str) -> Optional[str]:
 # The type part of a number when no naming rule names one (the defaults of routers/settings.DEFAULT_NAMING_RULES).
 _DOC_LABELS = {"ITP": "ITP", "NOI": "NOI", "ITR": "ITR", "NCR": "NCR", "OBS": "OBS", "PQP": "PQP", "FOLLOWUP": "FUI",
                "FAT": "FAT", "AUDIT": "AUD", "CHECKLIST": "CHK", "OSD": "OSD", "MEETING": "MOM", "MSA": "MSA"}
+# Numbered without a project: a shared template's number uses SHARED_CODE. Every other type must belong to a project
+# before it gets a number (REF-PROJECT-SEQ-2026-001 B4, D-B4-1: QWORKFLOW included).
+SHARED_TEMPLATE_TYPES = frozenset({"ITP", "CHECKLIST"})
 _UNSET = object()
 
 
@@ -486,7 +489,14 @@ def _reference_format(db: Session, doc_type: str, project_id: Optional[str]):
     Format QTS-RKS-[PROJECT]-<TYPE>-###### (D2): a naming rule's prefix with [PROJECT] replaced by the project code;
     a rule that has no [PROJECT] (not yet migrated) or no rule at all falls back to the default format — never to a
     number without the project. The sequence key is (project id or "STD", "*", doc type): one counter per project and
-    type, shared by every contractor (D2)."""
+    type, shared by every contractor (D2). Without a project only a shared template (SHARED_TEMPLATE_TYPES) is
+    numbered — STD is theirs; any other type is refused (400 NUMBERING_PROJECT_REQUIRED, B4)."""
+    if project_id is None and doc_type.upper() not in SHARED_TEMPLATE_TYPES:
+        from core.refusals import RefusalHTTPException
+        label = _DOC_LABELS.get(doc_type.upper(), doc_type.upper())
+        raise RefusalHTTPException(400, f"A {label} must belong to a project before it can be numbered; only shared ITP "
+                                        "and Checklist templates are numbered without one.",
+                                   "NUMBERING_PROJECT_REQUIRED", {"docType": label})
     code = numbering_code(db, project_id)
     if doc_type.upper() == "QWORKFLOW":
         # The NOI's tracker row: Q-WorkFlow-<code>-###### (user's decision 2026-10-14), no naming rule. Earlier global
@@ -572,6 +582,47 @@ def reclaim_reference_no(db: Session, doc_type: str, project_id: Optional[str]) 
         seq_record.last_seq = actual_max
         db.flush()
         return True
+
+
+def continue_counters_from_legacy_abbreviation(db: Session, project_id: str, code: str) -> dict:
+    """Start a project's counters after the numbers an old contractor abbreviation equal to its code already reached
+    (REF-PROJECT-SEQ-2026-001 B4, B3 R1 P3-9).
+
+    Before batch 3 a counter was keyed (QTS, <contractor abbreviation>, <type>) and its numbers read
+    QTS-RKS-<abbreviation>-<TYPE>-. A project whose code equals such an abbreviation shares that text, so its own
+    counter (project id, '*', TYPE) must never hand out a number the abbreviation already used — including numbers
+    whose records were deleted since, which self-heal (the highest number still stored) cannot see. Migration step 29
+    did this once for the projects that had a code then; this does the same for a project created or recoded later.
+    Counters only ever move up. The caller commits. Returns {TYPE: last_seq} for the counters it moved.
+
+    Unlike step 29 this cannot compare the old and new prefix texts (the old rules are gone), so it continues the
+    counter whenever such an old row exists: where the old prefix had been customised to a different text, the project
+    starts after that counter and leaves unused numbers behind — a gap, never a collision (R1 P3-2)."""
+    code = (code or "").strip().upper()
+    if not code:
+        return {}
+    moved = {}
+    with _reference_seq_lock:
+        for doc_type in _DOC_TYPE_TABLES:
+            if doc_type == "QWORKFLOW":
+                continue                                            # was never numbered per contractor
+            old_last = db.execute(text("SELECT MAX(last_seq) FROM reference_sequences WHERE vendor <> '*' "
+                                       "AND UPPER(vendor) = :v AND UPPER(doc) = :d"),
+                                  {"v": code, "d": doc_type}).scalar() or 0
+            if not old_last:
+                continue
+            row = db.query(ReferenceSequence).filter(
+                ReferenceSequence.project == project_id, ReferenceSequence.vendor == "*", ReferenceSequence.doc == doc_type,
+            ).with_for_update().first()
+            if row is None:
+                db.add(ReferenceSequence(project=project_id, vendor="*", doc=doc_type, last_seq=old_last))
+            elif (row.last_seq or 0) < old_last:
+                row.last_seq = old_last
+            else:
+                continue
+            moved[doc_type] = old_last
+        db.flush()
+    return moved
 
 
 # 白名單：doc_type → (實體 table name, 編號欄位名)（避免 SQL 注入，且只 self-heal 已知文件類型）

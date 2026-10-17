@@ -1147,14 +1147,14 @@ def _create_qworkflow_table():
 
 
 def _backfill_qworkflows():
-    """For every existing NOI without a qworkflow row, create one with
-    the next sequential Q-WorkFlow reference number. Ordering is by
-    NOI.id so the assignment is deterministic across reruns — existing
-    Q-WorkFlow numbers stay stable even if new NOIs are added later.
+    """For every existing NOI without a qworkflow row, create one. A NOI that belongs to a project gets the project's
+    next Q-WorkFlow-<code>-###### on the shared counter (REF-PROJECT-SEQ-2026-001 B4, D-B4-2), with project_id set;
+    a NOI without a project (only rows from before every NOI had one) gets the next global Q-WorkFlow-######.
+    Ordering is by NOI.id so the assignment is deterministic across reruns — existing Q-WorkFlow numbers stay stable
+    even if new NOIs are added later.
 
-    Safe to rerun: existing rows are detected via LEFT JOIN and
-    skipped. Numbering continues from the current max sequence so
-    backfills and ordinary creates can't collide.
+    Safe to rerun: existing rows are detected via LEFT JOIN and skipped. A NOI whose project cannot number yet (no
+    project code) is left without a row and retried at the next start; it does not stop the others.
 
     Re-inspection NOIs are skipped (2026-09-20): the create path gives a NOI with an ``ncrNumber`` no Q-WorkFlow of its
     own (it shares the original NOI's tracker), so completing "every NOI without a row" here used to recreate, at
@@ -1162,52 +1162,62 @@ def _backfill_qworkflows():
     create path calls (``noi_has_own_qworkflow``) — not a second, SQL-side copy of the rule. Rows that already exist are
     never touched, whatever kind of NOI they belong to.
     """
+    import re
     import uuid
-    from datetime import datetime
+    from datetime import datetime, timezone
+
+    import models
+    from core.utils import begin_write_transaction, generate_reference_no
+    from database import SessionLocal
     from services.noi_service import noi_has_own_qworkflow
 
+    db = SessionLocal()
     try:
-        with engine.connect() as conn:
-            candidates = conn.execute(text(
-                'SELECT n.id, n."ncrNumber" FROM noi n '
-                "LEFT JOIN qworkflow q ON q.noi_id = n.id "
-                "WHERE q.id IS NULL ORDER BY n.id"
-            )).fetchall()
-            rows = [(nid,) for nid, ncr_number in candidates if noi_has_own_qworkflow(ncr_number)]
-            if not rows:
-                return
+        # the write lock before anything is read (begin_write_transaction's contract): the candidates and the project
+        # counters are read, then written, in this one transaction (REF-PROJECT-SEQ-2026-001 B4, R1 P3-1)
+        begin_write_transaction(db)
+        candidates = db.execute(text(
+            'SELECT n.id, n."ncrNumber", n.project_id FROM noi n '
+            "LEFT JOIN qworkflow q ON q.noi_id = n.id "
+            "WHERE q.id IS NULL ORDER BY n.id"
+        )).fetchall()
+        rows = [(nid, pid) for nid, ncr_number, pid in candidates if noi_has_own_qworkflow(ncr_number)]
+        if not rows:
+            return                                              # the rollback in `finally` releases the lock
 
-            # Pull the current max sequence from existing Q-WorkFlow
-            # numbers so we never reuse one. Parsing is forgiving —
-            # anything that doesn't match the expected shape is
-            # ignored rather than breaking startup.
-            existing = conn.execute(text(
-                'SELECT "referenceNo" FROM qworkflow'
-            )).fetchall()
-            max_seq = 0
-            for (ref,) in existing:
-                if not ref or not ref.startswith("Q-WorkFlow-"):
-                    continue
+        # The global sequence is only for NOIs that belong to no project (rows from before every NOI had one): the
+        # highest Q-WorkFlow-###### number stored. Per-project numbers (Q-WorkFlow-<code>-######) are not part of it.
+        max_seq = 0
+        for (ref,) in db.execute(text('SELECT "referenceNo" FROM qworkflow')).fetchall():
+            m = re.fullmatch(r"Q-WorkFlow-(\d+)", ref or "")
+            if m:
+                max_seq = max(max_seq, int(m.group(1)))
+
+        now = datetime.now(timezone.utc).isoformat()
+        done, skipped = 0, []
+        for noi_id, project_id in rows:
+            if project_id:
                 try:
-                    max_seq = max(max_seq, int(ref.split("-")[-1]))
-                except ValueError:
+                    ref = generate_reference_no(db, "", "QWORKFLOW", project_id=project_id)
+                except Exception as e:                      # e.g. the project has no code yet: this NOI waits, the rest go on
+                    skipped.append((noi_id, str(getattr(e, "detail", e))))
                     continue
-
-            now = datetime.utcnow().isoformat()
-            for (noi_id,) in rows:
+            else:
                 max_seq += 1
                 ref = f"Q-WorkFlow-{max_seq:06d}"
-                conn.execute(
-                    text(
-                        'INSERT INTO qworkflow (id, "referenceNo", noi_id, "createdAt") '
-                        "VALUES (:id, :ref, :noi_id, :created)"
-                    ),
-                    {"id": str(uuid.uuid4()), "ref": ref, "noi_id": noi_id, "created": now},
-                )
-            conn.commit()
-            logger.info(f"Backfilled {len(rows)} Q-WorkFlow rows for existing NOIs.")
+            db.add(models.QWorkflow(id=str(uuid.uuid4()), referenceNo=ref, noi_id=noi_id, project_id=project_id, createdAt=now))
+            done += 1
+        db.commit()
+        logger.info(f"Backfilled {done} Q-WorkFlow rows for existing NOIs.")
+        if skipped:
+            logger.warning("Q-WorkFlow backfill left %d NOI(s) without a row (fix the cause, it is retried at the next "
+                           "start): %s", len(skipped), skipped[:5])
     except Exception as e:
+        db.rollback()
         logger.warning(f"Q-WorkFlow backfill skipped: {e}")
+    finally:
+        db.rollback()                                           # a no-op after commit; releases the lock on an early return
+        db.close()
 
 
 def _create_token_blacklist_table():

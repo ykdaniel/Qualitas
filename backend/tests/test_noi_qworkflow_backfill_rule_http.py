@@ -79,7 +79,7 @@ def test_a_historical_ordinary_noi_without_a_row_is_completed_exactly_once(noi_e
     nid = _add_noi(env, "QTS-ACC-NOI-800001")
     _backfill()
     first = _rows(env)
-    assert list(first) == [nid] and first[nid][1] == "Q-WorkFlow-000001"
+    assert list(first) == [nid] and first[nid][1] == "Q-WorkFlow-PA-000001"   # the NOI is P-A's: its project's counter (B4; was global 000001)
     _backfill()
     _backfill()
     assert _rows(env) == first
@@ -110,7 +110,9 @@ def test_mixed_history_only_genuinely_missing_ordinary_rows_are_added_and_reruns
     assert set(after) - set(existing) == {miss_none, miss_empty}                       # ONLY the two ordinary ones were added
     assert miss_re not in after and miss_ws not in after
     numbers = sorted(v[1] for k, v in after.items() if k in (miss_none, miss_empty))
-    assert numbers == ["Q-WorkFlow-000010", "Q-WorkFlow-000011"]                      # numbering continues after the highest existing
+    # REF-PROJECT-SEQ-2026-001 B4 (by design): both NOIs belong to P-A, so the back-fill numbers them on P-A's counter,
+    # not after the highest GLOBAL number (was Q-WorkFlow-000010 / 000011); the global rows 000005 / 000009 are untouched
+    assert numbers == ["Q-WorkFlow-PA-000001", "Q-WorkFlow-PA-000002"]
     for _ in range(3):
         _backfill()
     assert _rows(env) == after                                                        # re-running changes nothing

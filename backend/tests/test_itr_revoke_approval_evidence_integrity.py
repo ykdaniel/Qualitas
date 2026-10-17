@@ -71,6 +71,8 @@ def db_session(engine, monkeypatch):
 def vendor(db_session):
     c = models.Contractor(id="vendor-1", name="Acme Co", abbreviation="ACM")
     db_session.add(c)
+    # the approved ITR built below belongs to project p-rev: its re-inspection is numbered, which needs a project (REF-PROJECT-SEQ-2026-001 B4: a record that belongs to no project is refused a number (only shared ITP / Checklist templates are numbered without one))
+    db_session.add(models.Project(id="p-rev", name="Revoke site", code="REV"))
     db_session.commit()
     return c
 
@@ -88,7 +90,7 @@ def _make_approved_itr_with_evidence(engine, vendor_id, situation="Measured 14mm
     session = Session()
     itr_svc, chk_svc = _services(session)
     itr = itr_svc.repo.create(models.ITR(
-        id="itr-1", vendor_id=vendor_id, documentNumber="ITR-1", status="In Progress",
+        id="itr-1", vendor_id=vendor_id, documentNumber="ITR-1", status="In Progress", project_id="p-rev",
     ))
     template = models.Checklist(
         id="tpl-1", recordsNo="CHK-TPL-1", status="Ongoing", version=1,
@@ -360,7 +362,7 @@ def test_reinspection_clears_situation_and_result_keeps_item_and_criteria(engine
     session = sessionmaker(bind=engine)()
     itr_svc, chk_svc = _services(session)
     itr = itr_svc.repo.create(models.ITR(
-        id="itr-4", vendor_id=vendor.id, documentNumber="ITR-4", status="In Progress", inspectionResult="Fail",
+        id="itr-4", vendor_id=vendor.id, documentNumber="ITR-4", status="In Progress", inspectionResult="Fail", project_id="p-rev",
     ))
     template = models.Checklist(
         id="tpl-4", recordsNo="CHK-TPL-4", status="Ongoing", version=1,

@@ -2931,3 +2931,33 @@ Construction Engineer 核准欄位都還是 Pending——跟 `obsFormSchema.ts::
 **問題：** 攔截器遇到任何 401 都會先刷新 token 再重送，所以這個請求很可能一直沒有結果。就算有結果，共用的拒絕彈窗依設計也不顯示 401（401 交給登出流程）。結果是使用者輸錯密碼時看不到任何說明；以前的小提示還會顯示「Incorrect password」。
 
 **建議做法：** 「重新輸入密碼確認身分」失敗時，後端改回 400 或 403（可加代碼，例如 `REAUTH_FAILED`）；或讓攔截器對這類請求不做刷新重送。改完補一個瀏覽器檢查。
+
+## 59. 依專案編號的收尾（REF-PROJECT-SEQ-2026-001 B4）· FIXED，待部署 · 【優先度：低】
+
+**Where:** `backend/core/utils.py`（取號）、`services/project_service.py`、`services/noi_service.py`、`db_migrations.py` 的 Q-WorkFlow 補建、`crud.py`、`scripts/verification/export_itp_renumber_map.py`。
+
+**Found:** 2026-10-14，B3（097ae3b8）R1 獨立審查 P3-1／P3-7／P3-9／P3-10 與 naming rules 第二審查建議 (1)，以及上線收尾。正式站當時都碰不到。使用者 2026-10-17 決定「2b 提交後先派第 1 組（B4 收尾）」。
+
+**問題與處理（決定見 DECISIONS「第 4 批編號收尾」）：**
+1. 沒有專案的非範本單據會拿到 STD 號 → 只有 ITP／Checklist 範本可以沒有專案，其他回 400 `NUMBERING_PROJECT_REQUIRED`。
+2. 啟動時補建 Q-WorkFlow 仍發全域號、不寫 project_id → 有專案的 NOI 用 `Q-WorkFlow-<代碼>-`，寫入專案；無專案的舊 NOI 才用全域號。NOI 建立的無專案分支拿掉。
+3. 之後新建或改代碼的專案，代碼等於舊承包商縮寫時可能重發已刪除的號碼 → 建立／改代碼時沿用舊計數（只往上調）。
+4. 客戶端可指定專案 id "STD"，與共用範本共用計數 → 只拒絕 `STD`（400 `PROJECT_ID_RESERVED`），仍接受指定 id。
+5. `crud.py` 舊的依承包商取號沒有呼叫端 → 刪除。
+6. 正式站的 ITP 改號對照表還沒匯出 → 新增唯讀匯出腳本，由主要調度在 NAS 執行，CSV 不放進 repo。
+
+（「命名規則存檔時 strip 前綴」原本也在清單，已由 NAMING-RULES-CLEANUP-2026-001（9da76d9f）完成。）
+
+**狀態：** 2026-10-17 完成（B4，父 247ee771）：R1 PASS with notes、3.11 全套 2835 passed；待主要調度部署，上線後補日期。
+
+---
+
+## 60. 拒絕彈窗的提示行沒有穩定的測試標記 · NOT STARTED · 【優先度：低】
+
+**Where:** `react-app/src/components/Shared/RefusalDialog.tsx`（提示行 `view.note` 的 `<p>`），以及 8 支 tests-browser 腳本的 `readRefusalDialog`。
+
+**Found:** 2026-10-17，REFUSAL-DIALOG-2026-003 2b-2 獨立審查 R1 P3-2。
+
+**問題：** 腳本用 CSS module 類名裡的 "note"（例如 `_note_<hash>`）找提示行。開發伺服器下可以用；打包後如果類名只剩雜湊，就找不到提示行，腳本會誤判。
+
+**建議做法：** 在提示行加上 `data-refusal-note`（標題和訊息已經有 id，可以比照），8 支腳本改用這個屬性來找。

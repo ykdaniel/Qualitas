@@ -56,6 +56,8 @@ def db_session(monkeypatch):
 def vendor(db_session):
     contractor = models.Contractor(id="vendor-1", name="Acme Co", abbreviation="ACM")
     db_session.add(contractor)
+    # the ITRs below belong to project p-iso: a re-inspection is numbered, and that needs a project (REF-PROJECT-SEQ-2026-001 B4: a record that belongs to no project is refused a number (only shared ITP / Checklist templates are numbered without one))
+    db_session.add(models.Project(id="p-iso", name="Isolation site", code="ISO"))
     db_session.commit()
     return contractor
 
@@ -74,6 +76,7 @@ def _make_itr(itr_service, vendor, **overrides):
     data = {
         "status": "In Progress",
         "raiseDate": "2026-09-19",
+        "project_id": "p-iso",
     }
     data.update(overrides)
     documentNumber = data.pop("documentNumber", None)
