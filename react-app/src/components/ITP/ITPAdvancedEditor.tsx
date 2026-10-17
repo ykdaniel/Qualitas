@@ -8,7 +8,7 @@ import { PHASES, EMPTY_ITEM } from '../../constants/itp';
 import { useITRStore } from '../../store/itrStore';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import VPBadge from './VPBadge';
+import VPBadge, { VPOptions } from './VPBadge';
 import { resolveItpRecordLink } from '../../utils/itpRecordLink';
 import { checklistFromItpPath } from '../../utils/itpReturnLink';
 import { useLanguage } from '../../context/LanguageContext';
@@ -676,7 +676,7 @@ export const ITPAdvancedEditor = React.forwardRef<ITPAdvancedEditorRef, ITPAdvan
                                                 <div key={key} className="flex flex-col items-center bg-white p-3 rounded-lg border border-indigo-100 shadow-sm">
                                                     <div className="text-[10px] uppercase font-bold text-slate-400 mb-2 flex items-center gap-1">{icon} {label}</div>
                                                     <select className="w-full border-0 bg-slate-50 rounded-md text-sm font-bold py-1.5 text-center" value={editingItem.vp[key]} onChange={(e) => handleVPChange(key, e.target.value)}>
-                                                        <option value="">-</option><option value="H">H</option><option value="W">W</option><option value="R">R</option><option value="※">※</option>
+                                                        <VPOptions value={editingItem.vp[key]} />
                                                     </select>
                                                 </div>
                                             ))}

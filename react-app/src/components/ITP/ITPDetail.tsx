@@ -19,7 +19,7 @@ import { showRefusal } from '../../store/refusalStore';
 import { InspectionItem } from '../../types/itp';
 import { PHASES, EMPTY_ITEM } from '../../constants/itp';
 import { getNextRevision } from '../../utils/revision';
-import VPBadge from './VPBadge';
+import VPBadge, { VPOptions } from './VPBadge';
 import { resolveItpRecordLink } from '../../utils/itpRecordLink';
 import { parseInspectionItems } from '../../utils/itpParser';
 import { missingRequiredItemFields, preferEnglishText } from '../../utils/itpItemValidation';
@@ -583,7 +583,7 @@ const ITPDetail: React.FC = () => {
                       <div key={key} className="flex flex-col items-center bg-white p-3 rounded-lg border border-indigo-100 shadow-sm">
                         <div className="text-[10px] uppercase font-bold text-slate-400 mb-2 flex items-center gap-1">{icon} {label}</div>
                         <select className="w-full border-0 bg-slate-50 rounded-md text-sm font-bold py-1.5 text-center" value={editingItem.vp[key]} onChange={(e) => handleVPChange(key, e.target.value)}>
-                          <option value="">-</option><option value="H">H</option><option value="W">W</option><option value="R">R</option><option value="※">※</option>
+                          <VPOptions value={editingItem.vp[key]} />
                         </select>
                       </div>
                     ))}
