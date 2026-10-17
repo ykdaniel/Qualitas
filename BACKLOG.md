@@ -2869,3 +2869,65 @@ Construction Engineer 核准欄位都還是 Pending——跟 `obsFormSchema.ts::
 - 本地已重現：同前綴兄弟目錄（`..` 或根目錄內 symlink）被放行，且內容嵌入 .docx（`docs/workflow/unrecorded-work-reconciliation-2026-10-07-evidence/`）。未在正式站重現，不代表已發生洩漏。
 - 嚴重度由「低」上調為**應優先修復**；修復與回歸測試見 `DOCX-PATH-GUARD-2026-001`（目前為工作樹變更，未提交、未部署，待獨立審查）。
 - **2026-10-10 狀態**：已修復並上線——DOCX-PATH-GUARD-2026-001 PASS，後端 2026-10-09 12:14:09Z 部署（`DEPLOY-EXEC-2026-001-docx-deploy-record.md`），程式 `52986ac2` 已合併進 main。NOI 匯出另案 NOI-EXPORT-DOCX-2026-001 仍未結。
+
+---
+
+## 54. 客戶端自帶單號撞號時回 500 · NOT STARTED · 【優先度：低】
+
+**Where:** `routers/itp.py` create、`routers/pqp.py` create、`routers/osd.py` create、`routers/meeting_minutes.py` create（以及對應 service 的寫入）。
+
+**Found:** 2026-10-17，REFUSAL-DIALOG-2026-003（2b）後端盤點（讀碼，未實測）。
+
+**問題：** 請求本文如果自帶 `referenceNo`／`pqpNo`／`documentNumber`，而且和既有單號相同，資料庫唯一索引會丟 IntegrityError，沒有被轉成拒絕，最後回 500。會議記錄是 (documentNumber, rev) 撞號。
+
+**影響：** 前端從不送單號（一律由後端產號），只有直接呼叫 API 才會遇到。
+
+**建議做法：** create 時忽略或拒絕客戶端單號，或把該唯一索引的 IntegrityError 轉成 400（例如 `DUPLICATE_NAME` 或專屬代碼），並補 HTTP 測試。
+
+---
+
+## 55. ITR 批次更新的失敗清單只有英文原文 · NOT STARTED · 【優先度：低】
+
+**Where:** `routers/itr.py` batch-update（約第 113–116 行）。
+
+**Found:** 2026-10-17，REFUSAL-DIALOG-2026-003（2b）盤點。
+
+**問題：** 每一筆失敗以 `str(e)` 放進回應的 `failed[]`，HTTP 200，所以拒絕代碼與參數（例如 INVALID_TRANSITION）都丟失了，前端只能顯示英文原文。
+
+**建議做法：** `failed[]` 每筆另外帶 `code`、`params`（沿用 `Coded` 的屬性），前端依代碼翻譯。需要時再評估。
+
+---
+
+## 56. 材料送審的 409 衝突沒有拒絕代碼 · NOT STARTED · 【優先度：低】
+
+**Where:** `routers/material_submittals.py::_call` 把 `Conflict` 轉成 409；訊息在 `services/material_submittal_service.py`（例如「A concurrent change was made; reload and try again.」）。
+
+**Found:** 2026-10-17，REFUSAL-DIALOG-2026-003（2b）盤點。
+
+**問題：** 回應只有英文 `detail`，前端材料模組用自己的說明處理，沒有代碼可以翻譯。
+
+**建議做法：** 改用 `VERSION_CONFLICT` 或材料專屬代碼（英文 detail 不改），並對齊材料前端的說明。
+
+---
+
+## 57. 文字編輯器圖片上傳失敗只有英文通用句 · NOT STARTED · 【優先度：低】
+
+**Where:** `react-app/src/components/ui/RichTextEditor.tsx`（約第 131 行，`'Image upload failed'`）。
+
+**Found:** 2026-10-17，REFUSAL-DIALOG-2026-003（2b）前端盤點。
+
+**問題：** 上傳失敗時只顯示寫死的英文，原因（例如 403、檔案太大、5xx）都丟失了。
+
+**建議做法：** 改用共用的拒絕彈窗（`showRefusal(err, 'save')`），或至少用 `describeSaveError` 顯示翻譯過的原因。
+
+---
+
+## 58. 關閉 2FA 時輸入錯誤密碼，畫面沒有任何提示 · NOT STARTED · 【優先度：低】
+
+**Where:** 後端 `/auth/2fa/disable`（密碼錯誤時回 401 "Incorrect password"）；前端 `react-app/src/services/api.ts` 的回應攔截器（約第 73 行），以及 `components/Security/SecuritySettings.tsx`。
+
+**Found:** 2026-10-17，REFUSAL-DIALOG-2026-003（2b-1）獨立審查 R1 P3-7（讀碼，未實測）。這個問題在本批之前就存在。
+
+**問題：** 攔截器遇到任何 401 都會先刷新 token 再重送，所以這個請求很可能一直沒有結果。就算有結果，共用的拒絕彈窗依設計也不顯示 401（401 交給登出流程）。結果是使用者輸錯密碼時看不到任何說明；以前的小提示還會顯示「Incorrect password」。
+
+**建議做法：** 「重新輸入密碼確認身分」失敗時，後端改回 400 或 403（可加代碼，例如 `REAUTH_FAILED`）；或讓攔截器對這類請求不做刷新重送。改完補一個瀏覽器檢查。

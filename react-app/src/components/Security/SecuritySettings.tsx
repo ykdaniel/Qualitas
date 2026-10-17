@@ -5,6 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import api from '../../services/api';
 import shellStyles from '../Shared/ModuleShell.module.css';
+import { showRefusal } from '../../store/refusalStore';
 
 interface SetupResponse {
   secret: string;
@@ -37,8 +38,8 @@ const SecuritySettings: React.FC = () => {
     try {
       const res = await api.post<SetupResponse>('/auth/2fa/setup');
       setSetup(res.data);
-    } catch (e: any) {
-      toast.error(e?.response?.data?.detail || 'Failed to start 2FA setup');
+    } catch (e) {
+      showRefusal(e, 'save');       // refused or failed: the refusal dialog (REFUSAL-DIALOG-2026-003)
     } finally {
       setLoading(false);
     }
@@ -53,8 +54,8 @@ const SecuritySettings: React.FC = () => {
       setSetup(null);
       setEnrollOtp('');
       fetchStatus();
-    } catch (e: any) {
-      toast.error(e?.response?.data?.detail || 'Failed to enable 2FA');
+    } catch (e) {
+      showRefusal(e, 'save');       // refused or failed: the refusal dialog (REFUSAL-DIALOG-2026-003)
     } finally {
       setLoading(false);
     }
@@ -69,8 +70,8 @@ const SecuritySettings: React.FC = () => {
       setDisablePassword('');
       setDisableOtp('');
       fetchStatus();
-    } catch (e: any) {
-      toast.error(e?.response?.data?.detail || 'Failed to disable 2FA');
+    } catch (e) {
+      showRefusal(e, 'save');       // refused or failed: the refusal dialog (REFUSAL-DIALOG-2026-003)
     } finally {
       setLoading(false);
     }
@@ -82,8 +83,8 @@ const SecuritySettings: React.FC = () => {
       await api.post('/auth/logout-all');
       toast.success('Signed out everywhere');
       window.location.href = '/login';
-    } catch (e: any) {
-      toast.error(e?.response?.data?.detail || 'Failed');
+    } catch (e) {
+      showRefusal(e, 'save');       // refused or failed: the refusal dialog (REFUSAL-DIALOG-2026-003)
     }
   };
 

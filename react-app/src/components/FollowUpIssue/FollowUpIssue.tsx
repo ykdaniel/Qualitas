@@ -329,7 +329,7 @@ const FollowUpIssue: React.FC = () => {
       console.error('Failed to save issue:', err);
       // A coded refusal (e.g. PROJECT_REQUIRED_FOR_CREATE, LINK_OTHER_PROJECT) shows its reason in the refusal dialog; the
       // form stays open so the entry is not lost.
-      showRefusal(err, 'save');
+      showRefusal(err, 'save', { keepsInput: true });
       throw err;
     }
   };

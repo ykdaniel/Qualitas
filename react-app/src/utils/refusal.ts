@@ -54,6 +54,9 @@ function variantOf(code: string, params: Params): string {
     // REFUSAL-DIALOG-2026-002: which scope rule refused, and what kind of lock (a whole locked record is the plain code)
     if (code === 'SCOPE_FORBIDDEN' && typeof params.reason === 'string') return `${code}.${params.reason}`;
     if (code === 'RECORD_LOCKED' && typeof params.kind === 'string' && params.kind !== 'record') return `${code}.${params.kind}`;
+    // REFUSAL-DIALOG-2026-003: which account field clashed; why an NCR cannot be closed yet
+    if (code === 'DUPLICATE_NAME' && typeof params.field === 'string') return `${code}.${params.field}`;
+    if (code === 'NCR_CLOSE_MISSING_FIELDS' && typeof params.reason === 'string' && params.reason !== 'none') return `${code}.${params.reason}`;
     // AnyPermissionChecker: any ONE of the listed permissions would do
     if (code === 'PERMISSION_DENIED' && asList(params.permissions).length > 1) return `${code}.anyOf`;
     return code;
@@ -102,10 +105,14 @@ const isFailure = (error: unknown): boolean => {
     return status === undefined || status >= 500;
 };
 
-/** "Correct it and save again" would be wrong advice: the record is gone (404), or it changed meanwhile (VERSION_CONFLICT, which
- *  says to reload first) — saving the kept input again cannot succeed, so no note (review R1 P2). */
 const codeOf = (error: unknown): unknown => (isAxiosError(error) ? (error.response?.data as { code?: unknown } | undefined)?.code : undefined);
 
+/** Locks: the record (or its results) cannot take the change at all — the note says the input is kept, but not "correct it and save
+ *  again" (user's choice 2026-10-14; Checklist results locked counts as a lock, REFUSAL-DIALOG-2026-003). */
+const LOCK_CODES = new Set(['RECORD_LOCKED', 'CHECKLIST_RESULTS_LOCKED']);
+
+/** "Correct it and save again" would be wrong advice: the record is gone (404), or it changed meanwhile (VERSION_CONFLICT, which
+ *  says to reload first) — saving the kept input again cannot succeed, so no note (review R1 P2). */
 const correctable = (error: unknown): boolean => {
     if (!isAxiosError(error)) return true;
     if (error.response?.status === 404) return false;
@@ -116,8 +123,7 @@ export function describeRefusal(error: unknown, t: Translate, action: RefusalAct
     const view = refusalView(error, t, action, language);
     if (!view || action !== 'save' || !options.keepsInput || !correctable(error)) return view;
     if (isFailure(error)) return { ...view, note: t('refusal.keptInputUnconfirmed') };
-    // a locked record cannot take the change at all: say the input is kept, but not "correct it and save again" (user's choice 2026-10-14)
-    return { ...view, note: t(codeOf(error) === 'RECORD_LOCKED' ? 'refusal.keptInputOnly' : 'refusal.keptInput') };
+    return { ...view, note: t(LOCK_CODES.has(String(codeOf(error))) ? 'refusal.keptInputOnly' : 'refusal.keptInput') };
 }
 
 function refusalView(error: unknown, t: Translate, action: RefusalAction, language: 'en' | 'zh'): RefusalView | null {

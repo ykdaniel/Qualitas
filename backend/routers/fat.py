@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 import schemas
 from core.dependencies import RoleChecker, get_fat_service
 from core.perms import FAT_CREATE, FAT_DELETE, FAT_UPDATE, FAT_VIEW
-from core.refusals import Refusal, refusal_http
+from core.refusals import refusal_http
 from core.scope import Scope, ScopeForbidden, get_scope
 from services.fat_service import FATService
 
@@ -28,7 +28,7 @@ def create_fat(
         )
     except ScopeForbidden as e:
         raise refusal_http(e, 403)
-    except Refusal as e:    # FAT_SUPPLIER_REQUIRED / FAT_SUPPLIER_NOT_FOUND
+    except ValueError as e:    # FAT_SUPPLIER_REQUIRED / FAT_SUPPLIER_NOT_FOUND, and any other service refusal: 400, never 500 (REFUSAL-DIALOG-2026-003)
         raise refusal_http(e, 400)
 
 @router.get("/", response_model=list[schemas.FAT])
@@ -84,7 +84,7 @@ def update_fat(
         )
     except ScopeForbidden as e:
         raise refusal_http(e, 403)
-    except Refusal as e:    # FAT_SUPPLIER_REQUIRED / FAT_SUPPLIER_NOT_FOUND
+    except ValueError as e:    # FAT_SUPPLIER_REQUIRED / FAT_SUPPLIER_NOT_FOUND, and any other service refusal: 400, never 500 (REFUSAL-DIALOG-2026-003)
         raise refusal_http(e, 400)
     if db_fat is None:
         raise HTTPException(status_code=404, detail="FAT not found")
@@ -97,10 +97,13 @@ def delete_fat(
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(FAT_DELETE))
 ):
-    deleted = fat_service.delete_fat(
-        fat_id=fat_id, user_id=current_user.id, username=current_user.username,
-        scope=scope,
-    )
+    try:
+        deleted = fat_service.delete_fat(
+            fat_id=fat_id, user_id=current_user.id, username=current_user.username,
+            scope=scope,
+        )
+    except ValueError as e:     # a service refusal is a 400, never a 500 (REFUSAL-DIALOG-2026-003)
+        raise refusal_http(e)
     if not deleted:
         raise HTTPException(status_code=404, detail="FAT not found")
     return {"ok": True}
@@ -122,6 +125,8 @@ def update_fat_detail(
         )
     except ScopeForbidden as e:
         raise refusal_http(e, 403)
+    except ValueError as e:     # a service refusal is a 400, never a 500 (REFUSAL-DIALOG-2026-003)
+        raise refusal_http(e)
     if db_fat is None:
         raise HTTPException(status_code=404, detail="FAT not found")
     return db_fat

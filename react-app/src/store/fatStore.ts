@@ -111,30 +111,19 @@ export const useFATStore = create<FATState>((set, get) => ({
         await get().fetchFATs();
     },
 
+    // A refused or failed save goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-003); `error` is for list loads only.
     addFAT: async (fat) => {
-        try {
-            const response = await api.post('/fat/', withCurrentProject(fat));
-            const newFAT = response.data;
-            set((state) => ({ fatList: [...state.fatList, newFAT] }));
-            return newFAT;
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to add FAT');
-            set({ error: msg });
-            throw error;
-        }
+        const response = await api.post('/fat/', withCurrentProject(fat));
+        const newFAT = response.data;
+        set((state) => ({ fatList: [...state.fatList, newFAT] }));
+        return newFAT;
     },
 
     updateFAT: async (id, updates) => {
-        try {
-            const response = await api.put(`/fat/${id}`, updates);
-            set((state) => ({
-                fatList: state.fatList.map(f => (f.id === id ? response.data : f)),
-            }));
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to update FAT');
-            set({ error: msg });
-            throw error;
-        }
+        const response = await api.put(`/fat/${id}`, updates);
+        set((state) => ({
+            fatList: state.fatList.map(f => (f.id === id ? response.data : f)),
+        }));
     },
 
     deleteFAT: async (id) => {
@@ -149,18 +138,12 @@ export const useFATStore = create<FATState>((set, get) => ({
     },
 
     saveFATDetails: async (fatId, details) => {
-        try {
-            await api.put(`/fat/${fatId}/details`, details);
-            set((state) => ({
-                fatDetails: { ...state.fatDetails, [fatId]: details },
-                fatList: state.fatList.map(f =>
-                    f.id === fatId ? { ...f, hasDetails: details.length > 0 } : f
-                ),
-            }));
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to save FAT details');
-            set({ error: msg });
-            throw error;
-        }
+        await api.put(`/fat/${fatId}/details`, details);
+        set((state) => ({
+            fatDetails: { ...state.fatDetails, [fatId]: details },
+            fatList: state.fatList.map(f =>
+                f.id === fatId ? { ...f, hasDetails: details.length > 0 } : f
+            ),
+        }));
     },
 }));

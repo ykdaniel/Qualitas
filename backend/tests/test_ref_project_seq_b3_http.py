@@ -245,8 +245,13 @@ def test_losing_a_race_for_the_same_code_is_the_same_coded_400_not_a_500():
     err = IntegrityError("INSERT", {}, Exception("UNIQUE constraint failed: index 'ux_projects_code_upper'"))
     refusal = _code_clash(err, " ab ")
     assert isinstance(refusal, Refusal) and (refusal.code, refusal.params) == ("PROJECT_CODE_DUPLICATE", {"projectCode": "AB"})
-    other = IntegrityError("INSERT", {}, Exception("UNIQUE constraint failed: projects.name"))
-    assert _code_clash(other, "AB") is other                                   # anything else is left as it was
+    # REFUSAL-DIALOG-2026-003 (by design, not loosened): a duplicate project NAME is now its own coded 400 too (it used to be a 500)
+    name_clash = IntegrityError("INSERT", {}, Exception("UNIQUE constraint failed: projects.name"))
+    by_name = _code_clash(name_clash, "AB", "Tower")
+    assert isinstance(by_name, Refusal) and (by_name.code, by_name.params) == ("DUPLICATE_NAME", {"docType": "project", "name": "Tower"})
+    assert str(by_name) == "A project named 'Tower' already exists."
+    other = IntegrityError("INSERT", {}, Exception("UNIQUE constraint failed: projects.id"))
+    assert _code_clash(other, "AB", "Tower") is other                          # anything else is left as it was
 
 
 def test_the_unique_project_code_index_ignores_case(env_engine):

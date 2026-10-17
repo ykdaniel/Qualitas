@@ -1,5 +1,3 @@
-import { useLanguage } from '../../context/LanguageContext';
-import { toast } from 'sonner';
 import { useDraftGuard } from '../Shared/LeaveGuard';
 import FormActions from '../Shared/FormActions';
 import actionStyles from '../Shared/FormActions.module.css';
@@ -27,7 +25,6 @@ interface ProjectModalProps {
 }
 
 const ProjectModal: React.FC<ProjectModalProps> = ({ existing, onSave, onClose }) => {
-  const { t } = useLanguage();
   const initialForm = useMemo(() => ({
     name: existing?.name || '',
     code: existing?.code || '',
@@ -49,10 +46,9 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ existing, onSave, onClose }
     setSaving(true);
     try { await onSave(form); }
     catch (err: any) {
-      // a coded refusal (e.g. PROJECT_CODE_DUPLICATE) shows its reason in the refusal dialog
+      // refused or failed (e.g. PROJECT_CODE_DUPLICATE, DUPLICATE_NAME): the refusal dialog, the form keeps the input (REFUSAL-DIALOG-2026-003)
       console.error('Saving the project failed:', err);
-      if (err?.response?.data?.code) showRefusal(err, 'save');
-      else toast.error(t('common.saveFailed'));
+      showRefusal(err, 'save', { keepsInput: true });
     }
     finally { setSaving(false); }
   };

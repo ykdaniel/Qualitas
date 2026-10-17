@@ -402,7 +402,7 @@ const FATDetailModal: React.FC<FATDetailModalProps> = ({ fatId, details, onSave,
       await onSave(detailList);
       onClose(); // only reached on success — detailList/modal are left untouched on any rejection
     } catch (err) {
-      toast.error((err as Error)?.message || 'Save failed');
+      showRefusal(err, 'save', { keepsInput: true });     // refused or failed: the refusal dialog, never axios's status text (REFUSAL-DIALOG-2026-003)
     } finally {
       setSaving(false);
     }
@@ -618,7 +618,7 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
       // a coded refusal (e.g. PROJECT_REQUIRED_FOR_CREATE) shows its reason in the refusal dialog
       // e.g. no supplier chosen / the chosen contractor no longer exists (FAT_SUPPLIER_*): shown in the user's language
       console.error('Failed to save FAT:', err);
-      showRefusal(err, 'save');
+      showRefusal(err, 'save', { keepsInput: true });
     } finally {
       setSaving(false);
     }

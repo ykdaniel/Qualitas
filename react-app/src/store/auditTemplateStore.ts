@@ -4,8 +4,8 @@ import { getErrorMessage } from '../utils/errorUtils';
 
 // The audit template library (AUDIT-TEMPLATES-2026-001). In the wizard a template is an audit type; its questions are
 // COPIED into an audit when picked (each copy tagged templateId / templateItemId), so editing a template never changes
-// an existing audit. Templates are never deleted: is_active=false hides one from the wizard. Errors carry the HTTP
-// status (409 = duplicate name).
+// an existing audit. Templates are never deleted: is_active=false hides one from the wizard. A failed save rethrows the
+// axios error as is (409 DUPLICATE_NAME = duplicate name), for the refusal dialog.
 export interface AuditTemplateItem {
     id?: string;  // stable key assigned by the server; a new item has none
     no: string;
@@ -70,7 +70,7 @@ export const useAuditTemplateStore = create<AuditTemplateState>((set) => ({
             return response.data;
         } catch (err: any) {
             console.error('Failed to create audit template:', err);
-            throw Object.assign(new Error(getErrorMessage(err, 'Failed to create the template')), { status: err?.response?.status });
+            throw err;      // as is, so the refusal dialog sees its status and code (DUPLICATE_NAME, 409) — REFUSAL-DIALOG-2026-003
         }
     },
 
@@ -81,7 +81,7 @@ export const useAuditTemplateStore = create<AuditTemplateState>((set) => ({
             return response.data;
         } catch (err: any) {
             console.error('Failed to update audit template:', err);
-            throw Object.assign(new Error(getErrorMessage(err, 'Failed to save the template')), { status: err?.response?.status });
+            throw err;
         }
     },
 }));

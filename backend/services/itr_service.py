@@ -325,14 +325,16 @@ class ITRService:
             checklists = self._load_instances_for_approval(itr_id)
 
         if not checklists:
-            raise ValueError("Cannot approve ITR without any linked checklists")
+            raise Refusal("ITR_APPROVE_NO_CHECKLIST", "Cannot approve ITR without any linked checklists")
 
         not_passed = [
             f"{cl.recordsNo} ({cl.status})" for cl in checklists if cl.status != "Pass"
         ]
         if not_passed:
-            raise ValueError(
-                f"Cannot approve ITR — checklist(s) not passed: {', '.join(not_passed)}"
+            raise Refusal(
+                "ITR_APPROVE_CHECKLIST_NOT_PASSED",
+                f"Cannot approve ITR — checklist(s) not passed: {', '.join(not_passed)}",
+                checklists=not_passed,
             )
 
         # A stored 'Pass' is only a claim — re-check it against the actual
@@ -347,9 +349,11 @@ class ITRService:
             if problems:
                 unsupported.append(f"{cl.recordsNo}: " + "; ".join(problems))
         if unsupported:
-            raise ValueError(
+            raise Refusal(
+                "ITR_APPROVE_PASS_UNSUPPORTED",
                 "Cannot approve ITR — checklist(s) marked Pass are not supported by "
-                "their actual items: " + " | ".join(unsupported)
+                "their actual items: " + " | ".join(unsupported),
+                checklists=[u.split(':', 1)[0] for u in unsupported],
             )
 
     def update_itr(self, itr_id: str, itr_update: schemas.ITRUpdate,

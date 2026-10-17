@@ -119,37 +119,26 @@ export const useContractorsStore = create<ContractorsState>((set, get) => ({
         }
     },
 
+    // A refused or failed save goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-003); `error` is for list loads only.
     addContractor: async (contractor) => {
-        try {
-            const payload = mapInternalToApi(contractor);
-            const newContractor = await createContractor(payload);
-            set((state) => ({ contractors: [...state.contractors, mapApiToInternal(newContractor)] }));
-            void get().fetchOptions();  // keep every module's pickers in step with the management page
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to add contractor');
-            set({ error: msg });
-            throw error;
-        }
+        const payload = mapInternalToApi(contractor);
+        const newContractor = await createContractor(payload);
+        set((state) => ({ contractors: [...state.contractors, mapApiToInternal(newContractor)] }));
+        void get().fetchOptions();  // keep every module's pickers in step with the management page
     },
 
     updateContractor: async (id, updates) => {
-        try {
-            const { contractors } = get();
-            const current = contractors.find(c => c.id === id);
-            if (!current) return;
+        const { contractors } = get();
+        const current = contractors.find(c => c.id === id);
+        if (!current) return;
 
-            const merged = { ...current, ...updates };
-            const payload = mapInternalToApi(merged);
-            const updated = await updateContractorApi(id, payload);
-            set((state) => ({
-                contractors: state.contractors.map(c => (c.id === id ? mapApiToInternal(updated) : c)),
-            }));
-            void get().fetchOptions();
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to update contractor');
-            set({ error: msg });
-            throw error;
-        }
+        const merged = { ...current, ...updates };
+        const payload = mapInternalToApi(merged);
+        const updated = await updateContractorApi(id, payload);
+        set((state) => ({
+            contractors: state.contractors.map(c => (c.id === id ? mapApiToInternal(updated) : c)),
+        }));
+        void get().fetchOptions();
     },
 
     deleteContractor: async (id) => {

@@ -283,9 +283,13 @@ class NOIService:
                 if new_vendor_id != db_noi.vendor_id and db_noi.referenceNo:
                     cited = self._documents_citing(db_noi.referenceNo)
                     if cited and not (db_noi.vendor_id is None and new_vendor_id is not None):
-                        raise ValueError(
+                        raise Refusal(
+                            "NOI_CONTRACTOR_LOCKED",
                             f"Cannot change the contractor of NOI '{db_noi.referenceNo}': "
-                            f"{', '.join(cited)} already filed under it."
+                            f"{', '.join(cited)} already filed under it.",
+                            number=db_noi.referenceNo,
+                            # the same {type, count} list as DELETE_REFERENCED, so the dialog lists them in the user's language
+                            references=[{"type": c.split(' ', 1)[1][:-3], "count": int(c.split(' ', 1)[0])} for c in cited],
                         )
 
                 d['vendor_id'] = new_vendor_id
@@ -314,10 +318,12 @@ class NOIService:
                     models.ITR.status.notin_(['Approved', 'Void'])
                 ).count()
                 if open_itr_count > 0:
-                    raise ValueError(
+                    raise Refusal(
+                        "NOI_CLOSE_OPEN_ITRS",
                         f"Cannot close NOI '{db_noi.referenceNo}': "
                         f"{open_itr_count} ITR(s) still in progress. "
-                        f"Please ensure all linked ITRs are Approved or Void first."
+                        f"Please ensure all linked ITRs are Approved or Void first.",
+                        number=db_noi.referenceNo, count=open_itr_count,
                     )
 
                 # 勾稽鎖定：關閉 NOI 前確認其下所有 NCR 已完結（Closed 或 Void）
@@ -327,10 +333,12 @@ class NOIService:
                 ).all()
                 if open_ncrs:
                     open_refs = [ncr.documentNumber or ncr.id for ncr in open_ncrs]
-                    raise ValueError(
+                    raise Refusal(
+                        "NOI_CLOSE_OPEN_NCRS",
                         f"Cannot close NOI '{db_noi.referenceNo}': "
                         f"{len(open_ncrs)} NCR(s) still open: {', '.join(open_refs)}. "
-                        f"Please ensure all linked NCRs are Closed or Void first."
+                        f"Please ensure all linked NCRs are Closed or Void first.",
+                        number=db_noi.referenceNo, count=len(open_ncrs), ncrs=list(open_refs),
                     )
 
             # Guard: a Closed NOI is a true dead end — WorkflowEngine's NOI

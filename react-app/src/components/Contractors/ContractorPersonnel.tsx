@@ -6,7 +6,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import {
     createContractorPersonnel, getContractorPersonnel, updateContractorPersonnel, type ContractorPersonnelApi,
 } from '../../services/api';
-import { getErrorMessage } from '../../utils/errorUtils';
+import { showRefusal } from '../../store/refusalStore';
 
 type Draft = { name: string; position: string; email: string; phone: string };
 
@@ -58,7 +58,7 @@ const ContractorPersonnel: React.FC<Props> = ({ contractorId }) => {
             return true;
         } catch (err) {
             console.error('Saving the personnel list failed:', err);
-            toast.error(getErrorMessage(err, t('contractors.personnel.saveFailed')));
+            showRefusal(err, 'save');           // e.g. DUPLICATE_NAME, in the user's language (REFUSAL-DIALOG-2026-003)
             return false;
         } finally {
             setBusy(false);

@@ -188,63 +188,52 @@ export const useChecklistStore = create<ChecklistState>((set, get) => ({
         await get().fetchRecords(params);
     },
 
+    // A refused or failed save goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-003); `error` is for list loads only.
     addRecord: async (record) => {
-        try {
-            const payload: api.CreateChecklistPayload = {
-                recordsNo: AUTO_GENERATE_RECORDS_NO,
-                activity: record.activity,
-                date: record.date,
-                status: record.status,
-                packageName: record.packageName,
-                contractor: record.contractor,
-                itpId: record.itpId,
-                itpVersion: record.itpVersion,
-                passCount: record.passCount,
-                failCount: record.failCount,
-                itrId: record.itrId,
-                itrNumber: record.itrNumber,
-                location: record.location,
-                itpIndex: record.itpIndex,
-                detail_data: JSON.stringify(record.data),
-            };
+        const payload: api.CreateChecklistPayload = {
+            recordsNo: AUTO_GENERATE_RECORDS_NO,
+            activity: record.activity,
+            date: record.date,
+            status: record.status,
+            packageName: record.packageName,
+            contractor: record.contractor,
+            itpId: record.itpId,
+            itpVersion: record.itpVersion,
+            passCount: record.passCount,
+            failCount: record.failCount,
+            itrId: record.itrId,
+            itrNumber: record.itrNumber,
+            location: record.location,
+            itpIndex: record.itpIndex,
+            detail_data: JSON.stringify(record.data),
+        };
 
-            const created = await api.createChecklist(payload);
-            const newRecord = normalizeRecord(created);
-            // NOTE: 本地直接附加新記錄，避免不必要的全量 refetch
-            set((state) => ({ records: [...state.records, newRecord] }));
-            return newRecord;
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to add checklist record');
-            set({ error: msg });
-            throw error;
-        }
+        const created = await api.createChecklist(payload);
+        const newRecord = normalizeRecord(created);
+        // NOTE: 本地直接附加新記錄，避免不必要的全量 refetch
+        set((state) => ({ records: [...state.records, newRecord] }));
+        return newRecord;
     },
 
     updateRecord: async (id, updates) => {
-        try {
-            // NOTE: 優雅地過濾掉 undefined 屬性，取代冗長的 14 行 if 判斷
-            const { data: recordData, ...restUpdates } = updates;
-            const payload: Record<string, any> = Object.fromEntries(
-                Object.entries(restUpdates).filter(([_, v]) => v !== undefined)
-            );
+        // NOTE: 優雅地過濾掉 undefined 屬性，取代冗長的 14 行 if 判斷
+        const { data: recordData, ...restUpdates } = updates;
+        const payload: Record<string, any> = Object.fromEntries(
+            Object.entries(restUpdates).filter(([_, v]) => v !== undefined)
+        );
 
-            // NOTE: data 需要特別序列化為 detail_data 字串傳給後端
-            if (recordData !== undefined) {
-                payload.detail_data = JSON.stringify(recordData);
-            }
-
-            const updatedApi = await api.updateChecklist(id, payload);
-            const updatedRecord = normalizeRecord(updatedApi);
-            // NOTE: 本地記憶體直接替換該筆記錄，不影響使用者目前的搜尋/過濾狀態
-            set((state) => ({
-                records: state.records.map((r) => (r.id === id ? updatedRecord : r)),
-            }));
-            return updatedRecord;
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to update checklist record');
-            set({ error: msg });
-            throw error;
+        // NOTE: data 需要特別序列化為 detail_data 字串傳給後端
+        if (recordData !== undefined) {
+            payload.detail_data = JSON.stringify(recordData);
         }
+
+        const updatedApi = await api.updateChecklist(id, payload);
+        const updatedRecord = normalizeRecord(updatedApi);
+        // NOTE: 本地記憶體直接替換該筆記錄，不影響使用者目前的搜尋/過濾狀態
+        set((state) => ({
+            records: state.records.map((r) => (r.id === id ? updatedRecord : r)),
+        }));
+        return updatedRecord;
     },
 
     deleteRecord: async (id) => {

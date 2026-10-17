@@ -76,6 +76,8 @@ def create_pqp(
         )
     except ScopeForbidden as e:
         raise refusal_http(e, 403)
+    except ValueError as e:     # a service refusal is a 400, never a 500 (REFUSAL-DIALOG-2026-003)
+        raise refusal_http(e)
 
 @router.put("/{pqp_id}", response_model=schemas.PQP)
 def update_pqp(
@@ -152,10 +154,13 @@ def delete_pqp(
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(PQP_DELETE))
 ):
-    deleted = pqp_service.delete_pqp(
-        pqp_id=pqp_id, user_id=current_user.id, username=current_user.username,
-        scope=scope,
-    )
+    try:
+        deleted = pqp_service.delete_pqp(
+            pqp_id=pqp_id, user_id=current_user.id, username=current_user.username,
+            scope=scope,
+        )
+    except ValueError as e:     # a service refusal is a 400, never a 500 (REFUSAL-DIALOG-2026-003)
+        raise refusal_http(e)
     if not deleted:
         raise HTTPException(status_code=404, detail="PQP not found")
     return {"ok": True}

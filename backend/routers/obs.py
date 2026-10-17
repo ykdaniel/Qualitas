@@ -68,6 +68,8 @@ def create_obs(
         raise refusal_http(e, 403)
     except DateValidationError as e:
         raise HTTPException(status_code=422, detail=e.http_detail())
+    except ValueError as e:     # a service refusal is a 400, never a 500 (REFUSAL-DIALOG-2026-003)
+        raise refusal_http(e)
 
 @router.put("/{obs_id}", response_model=schemas.OBS)
 def update_obs(
@@ -99,7 +101,10 @@ def delete_obs(
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(OBS_DELETE))
 ):
-    deleted = obs_service.delete_obs(obs_id=obs_id, user_id=current_user.id, username=current_user.username, scope=scope)
+    try:
+        deleted = obs_service.delete_obs(obs_id=obs_id, user_id=current_user.id, username=current_user.username, scope=scope)
+    except ValueError as e:     # a service refusal is a 400, never a 500 (REFUSAL-DIALOG-2026-003)
+        raise refusal_http(e)
     if not deleted:
         raise HTTPException(status_code=404, detail="OBS not found")
     return {"ok": True}
