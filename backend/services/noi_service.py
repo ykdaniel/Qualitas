@@ -17,7 +17,6 @@ from core import strict_dates
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope, require_same_project
 from core.utils import (
     _json_serialize,
-    _reference_seq_lock,
     _resolve_vendor_id,
     begin_write_transaction,
     generate_reference_no,
@@ -388,10 +387,10 @@ class NOIService:
         (REF-PROJECT-SEQ-2026-001 B3, user's decision 2026-10-14), on the
         shared reference_sequences counter (project id, '*', QWORKFLOW).
         Numbers already issued in the old global format
-        (``Q-WorkFlow-000001``) keep their number. A NOI without a project
-        (only legacy rows) still gets the old global MAX+1 number; any
-        parse failure on an existing row is ignored (treated as 0) so a
-        hand-edited DB can't break it. Only the flush happens here: the row is committed by the
+        (``Q-WorkFlow-000001``) keep their number. Every NOI belongs to a
+        project (B2), so there is no project-less path any more: numbering
+        a tracker without a project is refused (B4, D-B4-1 / D-B4-2).
+        Only the flush happens here: the row is committed by the
         caller together with the NOI and its audit entry. A failure is
         NOT swallowed any more (2026-09-20) — the whole NOI create rolls
         back, because a NOI without its tracker row would be silently
@@ -399,35 +398,16 @@ class NOIService:
         """
         from datetime import datetime, timezone
 
-        if noi.project_id:
-            next_ref = generate_reference_no(self.repo.db, "", "QWORKFLOW", project_id=noi.project_id)
-        else:
-            next_ref = None
-        with _reference_seq_lock:
-            if next_ref is None:
-                existing = (
-                    self.repo.db.query(models.QWorkflow.referenceNo)
-                    .with_for_update()
-                    .all()
-                )
-                max_seq = 0
-                for (ref,) in existing:
-                    if not ref or not ref.startswith("Q-WorkFlow-"):
-                        continue
-                    try:
-                        max_seq = max(max_seq, int(ref.split("-")[-1]))
-                    except ValueError:
-                        continue
-                next_ref = f"Q-WorkFlow-{max_seq + 1:06d}"
-            qwf = models.QWorkflow(
-                id=str(uuid.uuid4()),
-                referenceNo=next_ref,
-                noi_id=noi.id,
-                project_id=noi.project_id,          # the tracker belongs to its NOI's project (REF-PROJECT-SEQ-2026-001 B2)
-                createdAt=datetime.now(timezone.utc).isoformat(),
-            )
-            self.repo.db.add(qwf)
-            self.repo.db.flush()
+        next_ref = generate_reference_no(self.repo.db, "", "QWORKFLOW", project_id=noi.project_id)
+        qwf = models.QWorkflow(
+            id=str(uuid.uuid4()),
+            referenceNo=next_ref,
+            noi_id=noi.id,
+            project_id=noi.project_id,          # the tracker belongs to its NOI's project (REF-PROJECT-SEQ-2026-001 B2)
+            createdAt=datetime.now(timezone.utc).isoformat(),
+        )
+        self.repo.db.add(qwf)
+        self.repo.db.flush()
 
     def delete_noi(self, noi_id: str, user_id: int = None, username: str = None, scope=None) -> bool:
         """

@@ -348,7 +348,9 @@ def test_backfill_still_fills_a_genuinely_missing_row_once_history_is_not_rewrit
     db = env.Session()
     try:
         rows = {q.noi_id: q.referenceNo for q in db.query(models.QWorkflow).all()}
-        assert len(rows) == 2 and rows["legacy-1"] == "Q-WorkFlow-000002"
+        # B4: the legacy NOI has no project, so it gets the next GLOBAL number; the created NOI's Q-WorkFlow-PA-000001 is a
+        # per-project number and no longer counts towards the global sequence (was Q-WorkFlow-000002)
+        assert len(rows) == 2 and rows["legacy-1"] == "Q-WorkFlow-000001"
     finally:
         db.close()
 

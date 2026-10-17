@@ -358,6 +358,16 @@ Result 的既有操作方式比拆開成縱向區塊更直覺）。
 影響範圍：前端 utils/refusal.ts、store/refusalStore.ts、Shared/RefusalDialog、utils/saveFlow.ts、utils/saveErrors.ts 與各模組的存檔處理；後端 core/refusals.py 的拒絕代碼（設計見 docs/workflow/REFUSAL-DIALOG-2026-002-DESIGN.md、REFUSAL-DIALOG-2026-003-DESIGN.md）。
 依據：使用者 2026-10-12、2026-10-14（2a 的 D1／D2／D3、選項 (a)）、2026-10-17（ITR 範圍、Q1 (a)、P2-1 (a)），皆經協調中心轉述。
 
+### 第 4 批編號收尾（REF-PROJECT-SEQ-2026-001 B4，2026-10-17）
+日期：2026-10-17
+決策（協調中心依使用者「自動回應」授權、依 B4 TASK 的建議值決定，使用者已知；若使用者改口再更新）：
+1. D-B4-1：沒有專案時，只有共用的 ITP 和 Checklist 範本可以編號（STD）；其他類型（含 Q-WorkFlow）一律拒絕，回 400 `NUMBERING_PROJECT_REQUIRED`。
+2. D-B4-2：NOI 建立時不再有「沒有專案就發全域 Q-WorkFlow 號」的分支；啟動時補建 Q-WorkFlow 列，有專案的 NOI 用 `Q-WorkFlow-<專案代碼>-######` 並寫入專案，只有沒有專案的舊 NOI 才沿用全域號。
+3. D-B4-3：建立專案時仍接受客戶端指定 id，只拒絕保留值 `STD`（400 `PROJECT_ID_RESERVED`）。
+理由：B3 審查 P3-1／P3-7／P3-10 與第二審查建議 (1)；STD 只應給共用範本，正式站目前碰不到這些情況。
+影響範圍：後端 core/utils.py、services/project_service.py、services/noi_service.py、db_migrations.py 的 Q-WorkFlow 補建；前端只新增兩個拒絕代碼的文字。
+依據：主要調度 2026-10-17 轉述。
+
 ## 尚未決策（不得當成已核准規則）
 
 - ITR 核准是否須額外檢查 Inspection Result。

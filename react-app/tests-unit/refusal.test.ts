@@ -187,6 +187,9 @@ test('every refusal code the backend raises has its wording in both languages', 
         PROJECT_CODE_INVALID: ['projectCode'],
         PROJECT_CODE_RESERVED: ['projectCode'],
         PROJECT_CODE_DUPLICATE: ['projectCode'],
+        // REF-PROJECT-SEQ-2026-001 B4
+        NUMBERING_PROJECT_REQUIRED: ['docType'],
+        PROJECT_ID_RESERVED: ['projectId'],
         // REFUSAL-DIALOG-2026-002: refused saves
         SCOPE_FORBIDDEN: ['reason'],
         INVALID_TRANSITION: ['docType', 'fromStatus', 'toStatus'],

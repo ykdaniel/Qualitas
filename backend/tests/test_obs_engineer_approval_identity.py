@@ -129,8 +129,11 @@ def test_update_rejects_approval_from_a_deactivated_user(db_session):
 def test_create_strips_any_client_submitted_approved_by(db_session):
     alice = _make_user(db_session, username="alice", full_name="Alice Wu")
     service = _service(db_session)
+    db_session.add(models.Project(id="p-obs", name="OBS site", code="OBS"))   # a created OBS is numbered: it needs a project (B4)
+    db_session.commit()
 
     create = schemas.OBSCreate(
+        project_id="p-obs",
         vendor="TestVendor", description="d", rev="0", submit="v", status="Open",
         subject="s", foundLocation="Site A",
         qualityEngineerApproval="Approved",

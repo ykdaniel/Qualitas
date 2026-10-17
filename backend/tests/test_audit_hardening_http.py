@@ -279,7 +279,8 @@ def test_concurrent_creates_get_distinct_numbers(env):
             service = AuditService(AuditRepository(db))
             gate.wait()
             try:
-                results.append(service.create_audit(schemas.AuditCreate(**body()), user_id=1, username='auditor').auditNo)
+                # the audit must belong to a project to be numbered (REF-PROJECT-SEQ-2026-001 B4)
+                results.append(service.create_audit(schemas.AuditCreate(**body(project_id=TEST_PROJECT_ID)), user_id=1, username='auditor').auditNo)
             except Exception as e:  # noqa: BLE001 — collected and asserted below
                 errors.append(repr(e))
     threads = [threading.Thread(target=worker) for _ in range(n)]

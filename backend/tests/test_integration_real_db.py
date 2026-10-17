@@ -60,13 +60,16 @@ def db_session(monkeypatch):
 
 @pytest.fixture
 def vendor(db_session):
-    """A committed contractor row that services can resolve by name."""
+    """A committed contractor row that services can resolve by name — and the project the records below are created
+    in: since REF-PROJECT-SEQ-2026-001 B4 a record that belongs to no project is refused a number (only shared ITP /
+    Checklist templates are numbered without one), so the NCR / meeting-minutes tests name project p-int (code INT)."""
     contractor = models.Contractor(
         id="vendor-1",
         name="Acme Co",
         abbreviation="ACM",
     )
     db_session.add(contractor)
+    db_session.add(models.Project(id="p-int", name="Integration site", code="INT"))
     db_session.commit()
     return contractor
 
@@ -113,7 +116,7 @@ def test_ncr_create_with_dangling_noi_drops_it_and_keeps_sequence_intact(db_sess
 
     # Attempt 1: dangling noiNumber → succeeds, noiNumber cleared, gets seq 1.
     first = ncr_service.create_ncr(
-        schemas.NCRCreate(
+        schemas.NCRCreate(project_id="p-int",
             description="Bad reference",
             vendor="Acme Co",
             rev="0",
@@ -130,7 +133,7 @@ def test_ncr_create_with_dangling_noi_drops_it_and_keeps_sequence_intact(db_sess
 
     # Attempt 2: valid create should get the next number, not skip one.
     second = ncr_service.create_ncr(
-        schemas.NCRCreate(
+        schemas.NCRCreate(project_id="p-int",
             description="Good reference",
             vendor="Acme Co",
             rev="0",
@@ -202,7 +205,7 @@ def test_ncr_status_transition_allows_direct_close(db_session, vendor):
     ncr_service = NCRService(NCRRepository(db_session))
 
     ncr = ncr_service.create_ncr(
-        schemas.NCRCreate(
+        schemas.NCRCreate(project_id="p-int",
             description="Track me",
             vendor="Acme Co",
             rev="0",
@@ -273,7 +276,7 @@ def test_ncr_use_as_is_requires_owner_approval_to_close(db_session, vendor):
     ncr_service = NCRService(NCRRepository(db_session))
 
     ncr = ncr_service.create_ncr(
-        schemas.NCRCreate(
+        schemas.NCRCreate(project_id="p-int",
             description="Weld accepted as-is",
             vendor="Acme Co",
             rev="0",
@@ -322,7 +325,7 @@ def test_ncr_rework_disposition_does_not_need_owner_approval(db_session, vendor)
     ncr_service = NCRService(NCRRepository(db_session))
 
     ncr = ncr_service.create_ncr(
-        schemas.NCRCreate(
+        schemas.NCRCreate(project_id="p-int",
             description="Rework instead of accept",
             vendor="Acme Co",
             rev="0",
@@ -357,7 +360,7 @@ def test_ncr_repair_disposition_requires_repair_method_statement(db_session, ven
     ncr_service = NCRService(NCRRepository(db_session))
 
     ncr = ncr_service.create_ncr(
-        schemas.NCRCreate(
+        schemas.NCRCreate(project_id="p-int",
             description="Weld repaired",
             vendor="Acme Co",
             rev="0",
@@ -402,7 +405,7 @@ def test_ncr_delete_blocked_by_itr_reference(db_session, vendor):
     itr_service = ITRService(ITRRepository(db_session))
 
     ncr = ncr_service.create_ncr(
-        schemas.NCRCreate(
+        schemas.NCRCreate(project_id="p-int",
             description="Parent NCR",
             vendor="Acme Co",
             rev="0",
@@ -413,7 +416,7 @@ def test_ncr_delete_blocked_by_itr_reference(db_session, vendor):
     db_session.commit()
 
     itr = itr_service.create_itr(
-        schemas.ITRCreate(
+        schemas.ITRCreate(project_id="p-int",
             description="Child ITR",
             vendor="Acme Co",
             rev="0",
@@ -465,7 +468,7 @@ def test_delete_draft_meeting_minutes_reclaims_tail_number(db_session, vendor):
     service = MeetingMinutesService(MeetingMinutesRepository(db_session))
 
     first = service.create_meeting_minutes(
-        schemas.MeetingMinutesCreate(vendor="Acme Co", status="Draft", title="mistake")
+        schemas.MeetingMinutesCreate(project_id="p-int", vendor="Acme Co", status="Draft", title="mistake")
     )
     db_session.commit()
 
@@ -473,7 +476,7 @@ def test_delete_draft_meeting_minutes_reclaims_tail_number(db_session, vendor):
     db_session.commit()
 
     second = service.create_meeting_minutes(
-        schemas.MeetingMinutesCreate(vendor="Acme Co", status="Draft", title="redo")
+        schemas.MeetingMinutesCreate(project_id="p-int", vendor="Acme Co", status="Draft", title="redo")
     )
     db_session.commit()
 
@@ -487,10 +490,10 @@ def test_delete_draft_meeting_minutes_does_not_reclaim_non_tail_number(db_sessio
     service = MeetingMinutesService(MeetingMinutesRepository(db_session))
 
     first = service.create_meeting_minutes(
-        schemas.MeetingMinutesCreate(vendor="Acme Co", status="Draft", title="first")
+        schemas.MeetingMinutesCreate(project_id="p-int", vendor="Acme Co", status="Draft", title="first")
     )
     second = service.create_meeting_minutes(
-        schemas.MeetingMinutesCreate(vendor="Acme Co", status="Draft", title="second")
+        schemas.MeetingMinutesCreate(project_id="p-int", vendor="Acme Co", status="Draft", title="second")
     )
     db_session.commit()
 
@@ -498,7 +501,7 @@ def test_delete_draft_meeting_minutes_does_not_reclaim_non_tail_number(db_sessio
     db_session.commit()
 
     third = service.create_meeting_minutes(
-        schemas.MeetingMinutesCreate(vendor="Acme Co", status="Draft", title="third")
+        schemas.MeetingMinutesCreate(project_id="p-int", vendor="Acme Co", status="Draft", title="third")
     )
     db_session.commit()
 
@@ -520,7 +523,7 @@ def test_deleting_every_draft_resets_the_sequence_to_zero(db_session, vendor):
     created = []
     for i in range(3):
         item = service.create_meeting_minutes(
-            schemas.MeetingMinutesCreate(vendor="Acme Co", status="Draft", title=f"item {i}")
+            schemas.MeetingMinutesCreate(project_id="p-int", vendor="Acme Co", status="Draft", title=f"item {i}")
         )
         db_session.commit()
         created.append(item)
@@ -532,7 +535,7 @@ def test_deleting_every_draft_resets_the_sequence_to_zero(db_session, vendor):
         db_session.commit()
 
     fresh = service.create_meeting_minutes(
-        schemas.MeetingMinutesCreate(vendor="Acme Co", status="Draft", title="fresh start")
+        schemas.MeetingMinutesCreate(project_id="p-int", vendor="Acme Co", status="Draft", title="fresh start")
     )
     db_session.commit()
 
@@ -560,7 +563,7 @@ def test_new_occurrence_shares_document_number_across_composite_unique(db_sessio
     service = MeetingMinutesService(MeetingMinutesRepository(db_session))
 
     first = service.create_meeting_minutes(
-        schemas.MeetingMinutesCreate(vendor="Acme Co", status="Draft", title="Weekly Sync")
+        schemas.MeetingMinutesCreate(project_id="p-int", vendor="Acme Co", status="Draft", title="Weekly Sync")
     )
     db_session.commit()
     assert first.rev == "1.0"

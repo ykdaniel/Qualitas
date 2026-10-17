@@ -1,6 +1,5 @@
 import json
 import logging
-import re
 import uuid
 from datetime import datetime
 
@@ -21,17 +20,13 @@ from models import (
     AuditLog,
     Checklist,
     Contractor,
-    DocumentNamingRule,
     FollowUp,
     KPIWeight,
     OwnerPerformance,
-    ReferenceSequence,
 )
 
-# NOTE: 移除重複的 import (uuid, json, re 已在上方匯入)
-
-# 固定專案代碼
-PROJECT_CODE = "QTS"
+# Document numbering lives in core/utils.py (REF-PROJECT-SEQ-2026-001); the per-contractor numbering that used to sit
+# here had no callers left and was removed in batch 4.
 
 def _json_serialize(d: dict, list_fields: list):
     d = d.copy()
@@ -72,73 +67,6 @@ def log_audit(db: Session, action: str, entity_type: str, entity_id: str,
         # 日誌記錄失敗不應中斷主流程，僅記錄錯誤
         logger.error(f"Error logging audit: {e}")
 
-
-def get_contractor_abbreviation(db: Session, vendor_name: str) -> str:
-    """根據廠商名稱取得縮寫，若找不到則用名稱前 3 字元大寫"""
-    if not vendor_name:
-        return "NA"
-    contractor = db.query(Contractor).filter(Contractor.name == vendor_name).first()
-    if contractor and contractor.abbreviation:
-        return contractor.abbreviation.upper()
-    # fallback: 用名稱前 3 字元
-    return re.sub(r'[^A-Z0-9]', '', vendor_name.upper()[:10]) or "NA"
-
-def _resolve_vendor_id(db: Session, vendor_name: str) -> str:
-    """Helper: Resolve vendor name to ID"""
-    if not vendor_name:
-        return None
-    contractor = db.query(Contractor).filter(Contractor.name == vendor_name).first()
-    return contractor.id if contractor else None
-
-
-def generate_reference_no(db: Session, vendor_name: str, doc_type: str) -> str:
-    """
-    產生 Reference No：
-    - 先依 doc_type 讀取 DocumentNamingRule（若存在則依規則組前綴與流水號位數）
-    - 若無規則則 fallback 為 QTS-[VENDOR]-[DOC]-[SEQ6]
-    - 序號以 (PROJECT, VENDOR, DOC) 為 key 各自累加
-    - 使用交易確保不撞號
-    """
-    vendor_abbrev = get_contractor_abbreviation(db, vendor_name)
-
-    # 嘗試讀取文件命名規則（以 doc_type 小寫對應，如 ITP -> itp）
-    rule = db.query(DocumentNamingRule).filter(
-        DocumentNamingRule.doc_type == doc_type.lower()
-    ).first()
-    seq_digits = rule.sequence_digits if rule and rule.sequence_digits else 6
-
-    # 查詢或建立序號記錄
-    seq_record = db.query(ReferenceSequence).filter(
-        ReferenceSequence.project == PROJECT_CODE,
-        ReferenceSequence.vendor == vendor_abbrev,
-        ReferenceSequence.doc == doc_type
-    ).with_for_update().first()  # 加鎖防止並發
-
-    if seq_record:
-        seq_record.last_seq += 1
-        next_seq = seq_record.last_seq
-    else:
-        # 第一次建立該組合，檢查既有資料中是否有符合新格式的編號
-        next_seq = 1
-        seq_record = ReferenceSequence(
-            project=PROJECT_CODE,
-            vendor=vendor_abbrev,
-            doc=doc_type,
-            last_seq=next_seq
-        )
-        db.add(seq_record)
-
-    db.flush()  # 確保序號已寫入
-
-    # 依規則組合編號；若沒有規則則走 fallback
-    if rule and rule.prefix:
-        seq_str = str(next_seq).zfill(seq_digits)
-        prefix = rule.prefix.replace('[ABBREV]', vendor_abbrev)
-        return f"{prefix}{seq_str}"
-
-    # Fallback：維持舊有格式 QTS-A-DOC-000001
-    seq_str = str(next_seq).zfill(6)
-    return f"{PROJECT_CODE}-{vendor_abbrev}-{doc_type.upper()}-{seq_str}"
 
 # ---- Contractor ----
 def get_contractor(db: Session, contractor_id: str):
