@@ -19,7 +19,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.11'  # match backend/Dockerfile (python:3.11-slim), the production runtime
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
