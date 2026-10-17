@@ -36,3 +36,17 @@ TASK_ID: REFUSAL-DIALOG-2026-003
 - 已記入 DECISIONS 第 6 點，並寫好 PREVIEW-CHECKLIST 的草稿（ITR-1、ITR-2）。
 
 ### 審查 R2：PASS（見 REVIEW）
+
+- **2b-1 本地 commit**：247ee771（父 124f6c14，63 個檔，tree c6bbf50a）。分支 ref 不動，等使用者看完預覽。
+
+## 2b-2（以 247ee771 為父，未提交）
+- 修改內容見 DESIGN 第 5 節。
+- tsc：0。npm test：217/217。改過的前端檔，lint 問題數都 ≤ 2b-1 commit；OBS 和會議記錄各 1 個 set-state-in-effect 是既有的。
+
+### 2b-2 驗證
+- **凍結**：2026-10-17T09:15Z，指紋 52b01f19e66e66f5。預覽期間 react-app 底下多了 `.rd3-vite-launcher.mjs` 和 `.vite-rd2b/`；排除這兩項後指紋相同，它們不提交，預覽結束後已刪除。
+- **3.11 全套**：`evidence/2b2-py311-full-suite.txt`，2026-10-17 09:20–10:23Z，跑在凍結的 rd2b（HEAD 124f6c14 加 2b-1、2b-2 的工作區修改）。結果 2825 passed、17 skipped，pytest_exit=0、pip_exit=0。
+  - 09:15Z 那次因為 colima 沒有執行，一個測試都沒跑，已改名為 `2b2-py311-full-suite-void-colima-down.txt`，作廢。
+- **審查**：R1 PASS WITH NOTES（見 REVIEW）。
+- **預覽**：localhost:3375／8375。使用者 2026-10-17 晚上確認「2b 預覽（3375）可以」（協調中心轉達）。預覽已經關閉。
+- **2b-1 commit**：247ee771 定案，不重建。

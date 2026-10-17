@@ -21,6 +21,36 @@ const log = (...a) => console.log(new Date().toISOString(), ...a);
 let checks = 0;
 const check = (v, msg) => { if (!v) throw new Error(`FAILED: ${msg}`); checks++; log('PASS', msg); };
 
+// REFUSAL-DIALOG-2026-003: a failed save no longer shows a sonner toast; it opens the shared refusal
+// dialog (react-app/src/components/Shared/RefusalDialog.tsx). Reads its parts; null if it never shows.
+async function readRefusalDialog(p, timeout = 5000) {
+    const dlg = p.locator('[data-testid="refusal-dialog"]');
+    try { await dlg.waitFor({ state: 'visible', timeout }); } catch { return null; }
+    return dlg.evaluate((el) => {
+        const text = (n) => (n ? (n.textContent || '').trim() : '');
+        const msg = el.querySelector('#refusal-dialog-message');
+        const body = msg ? msg.parentElement : null;
+        const paras = body ? Array.from(body.querySelectorAll(':scope > p')) : [];
+        const original = paras.find((n) => n.getAttribute('lang') === 'en');
+        const note = paras.find((n) => n !== msg && n !== original && /note/i.test(n.className));
+        return {
+            title: text(el.querySelector('#refusal-dialog-title')),
+            message: text(msg),
+            items: body ? Array.from(body.querySelectorAll('li')).map(text) : [],
+            original: original ? text(original) : null,
+            note: note ? text(note) : null,
+            all: text(el),
+        };
+    });
+}
+// REFUSAL-DIALOG-2026-003: the dialog only closes on OK / × / Esc — close it so later steps are not blocked.
+async function closeRefusalDialog(p) {
+    const dlg = p.locator('[data-testid="refusal-dialog"]');
+    if (await dlg.count() === 0) return;
+    await dlg.getByRole('button', { name: 'OK', exact: true }).click();
+    await dlg.waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+}
+
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 page.setDefaultTimeout(15000);
@@ -147,18 +177,27 @@ await reasonField().fill('FORMS-2026-001 verification — simulated failure');
 const saveBtn = page.getByRole('button', { name: /^Save$/ });
 await saveBtn.click();
 await page.waitForTimeout(1000);
-await page.screenshot({ path: `${OUT}/role-04-save-failure-toast.png` });
+await page.screenshot({ path: `${OUT}/role-04-save-failure-dialog.png` });
 check(await modal().count() === 1, 'Role: modal stays open after simulated failure');
 check((await descField().inputValue()) === 'SHOULD FAIL — role retry test', 'Role: input preserved after failure');
 check(await saveBtn.isEnabled(), 'Role: Save button re-enabled after failure');
-const roleFailToastCount = await page.locator('[data-sonner-toast]').count();
-check(roleFailToastCount === 1, `Role: EXACTLY one error toast shown (got ${roleFailToastCount}, not just >=1)`);
-const roleFailToastText = await page.locator('[data-sonner-toast]').first().innerText();
-// RoleManagement.tsx/RoleModal.tsx's save catch runs getErrorMessage(err, "An error occurred"),
-// which for any 5xx (errorUtils.ts) always returns this one fixed bilingual string regardless
-// of the response body — our simulated "Simulated 500" detail never appears in it.
-const expectedRoleFailText = '伺服器處理資料時發生錯誤（HTTP 500），請稍後重試或聯絡管理員。 / Server error (HTTP 500), please retry later or contact an administrator.';
-check(roleFailToastText === expectedRoleFailText, `Role: the toast's exact text matches getErrorMessage's 5xx line (got "${roleFailToastText}")`);
+// REFUSAL-DIALOG-2026-003: RoleModal.tsx's save catch no longer toasts getErrorMessage()'s bilingual
+// 5xx line; an axios error goes to showRefusal(err, 'save', { keepsInput: true }), i.e. the shared
+// refusal dialog: "Save failed", the 5xx message (the "Simulated 500" body never appears) and the 5xx
+// kept-input note (English strings from context/LanguageContext.tsx).
+const roleFailDialogCount = await page.locator('[data-testid="refusal-dialog"]').count();
+check(roleFailDialogCount === 1, `Role: EXACTLY one refusal dialog shown (got ${roleFailDialogCount})`);
+const roleFailErrorToasts = await page.locator('[data-sonner-toast][data-type="error"]').count();
+check(roleFailErrorToasts === 0, `Role: no sonner error toast shown (got ${roleFailErrorToasts})`);
+const roleFailDialog = await readRefusalDialog(page);
+const expectedRoleFailTitle = 'Save failed';
+const expectedRoleFailText = 'The server ran into a problem (HTTP 500). Try again later; if it keeps happening, contact an administrator.';
+const expectedRoleFailNote = 'Could not confirm whether it was saved. What you entered is still here; reload the list to check before trying again.';
+check(roleFailDialog?.title === expectedRoleFailTitle, `Role: the dialog title matches exactly (got "${roleFailDialog?.title}")`);
+check(roleFailDialog?.message === expectedRoleFailText, `Role: the dialog message matches the 5xx text (got "${roleFailDialog?.message}")`);
+check(roleFailDialog?.note === expectedRoleFailNote, `Role: the dialog note is the 5xx kept-input line (got "${roleFailDialog?.note}")`);
+check(!(roleFailDialog?.all ?? '').includes('Simulated 500'), 'Role: the dialog does not echo the 5xx response body');
+await closeRefusalDialog(page);
 await descField().fill('RETRY SUCCEEDED — role final');
 apiCalls.length = 0;
 await saveBtn.click();

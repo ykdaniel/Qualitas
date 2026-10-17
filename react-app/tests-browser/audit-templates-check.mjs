@@ -42,6 +42,36 @@ const pickClause = async (p, no) => {
 };
 const pickQuestion = async (p, label) => { await p.selectOption('[data-question-pick]', { label }); await p.waitForTimeout(250); };
 const visibleRecords = p => p.evaluate(() => [...document.querySelectorAll('tbody tr')].some(tr => !tr.closest('[data-audit-templates]') && tr.offsetParent !== null));
+// REFUSAL-DIALOG-2026-003: a failed save no longer shows a sonner toast; it opens the shared refusal
+// dialog (react-app/src/components/Shared/RefusalDialog.tsx). Reads its parts; null if it never shows.
+async function readRefusalDialog(p, timeout = 5000) {
+    const dlg = p.locator('[data-testid="refusal-dialog"]');
+    try { await dlg.waitFor({ state: 'visible', timeout }); } catch { return null; }
+    return dlg.evaluate((el) => {
+        const text = (n) => (n ? (n.textContent || '').trim() : '');
+        const msg = el.querySelector('#refusal-dialog-message');
+        const body = msg ? msg.parentElement : null;
+        const paras = body ? Array.from(body.querySelectorAll(':scope > p')) : [];
+        const original = paras.find((n) => n.getAttribute('lang') === 'en');
+        const note = paras.find((n) => n !== msg && n !== original && /note/i.test(n.className));
+        return {
+            title: text(el.querySelector('#refusal-dialog-title')),
+            message: text(msg),
+            items: body ? Array.from(body.querySelectorAll('li')).map(text) : [],
+            original: original ? text(original) : null,
+            note: note ? text(note) : null,
+            all: text(el),
+        };
+    });
+}
+// REFUSAL-DIALOG-2026-003: the dialog only closes on OK / × / Esc — close it so later steps are not blocked.
+// Its OK button reads 'OK' in the English UI and '我知道了' in the Chinese UI (this script mostly runs zh).
+async function closeRefusalDialog(p) {
+    const dlg = p.locator('[data-testid="refusal-dialog"]');
+    if (await dlg.count() === 0) return;
+    await dlg.getByRole('button', { name: /^(OK|我知道了)$/ }).click();
+    await dlg.waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+}
 
 // 1. without audit:template:manage: no tab, templates readable, not writable; the wizard offers the 4 types
 {
@@ -97,7 +127,15 @@ const visibleRecords = p => p.evaluate(() => [...document.querySelectorAll('tbod
   await p.fill('[data-template-name]', ' site qa ');
   await p.locator('[data-template-item]').nth(0).locator('textarea').nth(1).fill('x');
   await p.locator('[data-template-save]').click(); await p.waitForTimeout(800);
-  result('a duplicate name (other case, spaces) is refused with a friendly message (not the raw backend text)', await sawToast(p, '已有同名的模板') && !(await toasts(p)).some(t => /already exists/.test(t)), JSON.stringify(await toasts(p)));
+  // REFUSAL-DIALOG-2026-003: the duplicate is a coded 409 DUPLICATE_NAME (docType auditTemplate, the trimmed name) shown in
+  // the refusal dialog in the UI language (zh here), not the old '已有同名的模板' toast; the panel keeps the draft
+  // (keepsInput), so the "correct it and save again" note follows. No raw backend text, no error toast.
+  const dup = await readRefusalDialog(p);
+  const dupErrorToasts = await p.locator('[data-sonner-toast][data-type="error"]').count();
+  result('a duplicate name (other case, spaces) is refused in the refusal dialog with the translated message (not the raw backend text)',
+    dup?.title === '無法儲存' && dup?.message === '稽核範本「site qa」已經存在，請改用其他名稱。' && dup?.note === '您填寫的內容都已保留，修正後再按儲存即可。'
+    && dup?.original === null && !/already exists/.test(dup?.all ?? '') && dupErrorToasts === 0, JSON.stringify({ dup, dupErrorToasts }));
+  await closeRefusalDialog(p);
   await p.locator('[data-template-row="ISO 45001"]').click(); await p.waitForTimeout(300);
   if (await p.locator('[class*=modalOverlay]').count()) { await p.locator('[class*=modalOverlay] button', { hasText: '離開' }).click(); await p.waitForTimeout(300); }
 

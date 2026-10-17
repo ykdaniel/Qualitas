@@ -34,5 +34,16 @@ TASK_ID: REFUSAL-DIALOG-2026-003
 - CRLF：LanguageContext 3659/3659，以及 noi、user、contractor、project 的 service 與 fat.py，都仍是 CRLF。
 - tsc 0；npm test 217/217；後端 6 個檔 110 passed（3.14）。
 
-## 2b-2
-待審。
+## 2b-2 R1 — PASS WITH NOTES（沒有 P1、P2）
+- 審查範圍：以臨時 index（read-tree 247ee771）得出的 2b-2 差異。
+- **橫幅**：四頁都改成 `<span>` 加「重試」，各自呼叫正確的重新載入（稽核 fetchAudits；OBS／OSD 帶目前的搜尋字串；會議記錄帶 listSearch）。四個 store 的 `error` 只由清單載入寫入。auditStore 不再清空 error，沒有任何地方依賴這個行為。
+- **翻譯鍵**：刪掉 32 個鍵（中英文各刪一次，共 70 行），逐一 grep 過 src、tests-unit、tests-browser、scripts、backend，都沒有人用，也沒有用動態方式組出的鍵。CRLF 3589/3589。
+  - 中英文本來就有 18 個鍵不一致（只有英文有），2b-2 沒有改變這件事。
+- **lock_reason**：已經沒有任何引用。附件相關測試加新測試 472 passed（3.14）。
+- **tests-browser 8 支**：都通過 `node --check`。逐一核對各呼叫端的 keepsInput 和是否傳原始 axios 錯誤，預期的標題、訊息、提示行都和實際程式一致；中文腳本的確認按鈕「我知道了」也已處理。
+- **P3（都不改程式；tree 已凍結、3.11 已通過、使用者已確認預覽）**：
+  - P3-1：Audit 的 × 拿掉後，清單載入失敗的橫幅要按「重試」或切換專案才會消失。這是設計，和其他模組一致。
+  - P3-2：腳本靠 CSS module 類名裡的 "note" 找提示行，打包後的雜湊類名會讓它失效。可以在 RefusalDialog 加 `data-refusal-note`。→ 記入 BACKLOG #59 之後的下一號，由協調中心排號。
+  - P3-3：3.11 輸出檔已換成綠燈那次（見 STATUS）。
+  - P3-4：tests-unit/saveFlow.test.ts 的假字典還留著已刪除的 `saveFlow.failedKeep`。不影響結果，下次碰到這個檔再清。
+- tsc 0；npm test 217/217；只有既有的 2 個 eslint 錯誤。

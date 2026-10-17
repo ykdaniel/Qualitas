@@ -5,6 +5,8 @@
 // 500 + no-response, nothing else. Does NOT re-run the full 144-check
 // forms-consistency-review.mjs suite — that remains accepted from FORMS-CONSISTENCY-
 // 2026-003 and is not reopened here.
+// REFUSAL-DIALOG-2026-003: the wording now lives in the shared refusal dialog (title / message / note),
+// not in a sonner toast; the intent (never claim "Not saved" for an unconfirmed failure) is unchanged.
 import { readFileSync, mkdirSync } from 'node:fs';
 import { chromium } from 'playwright';
 const state = JSON.parse(readFileSync(process.argv[2], 'utf8'));
@@ -26,6 +28,36 @@ const assertTrue = (cond, msg) => {
     if (!cond) { failures++; log(`FAIL: ${msg}`); } else { log(`PASS: ${msg}`); }
 };
 
+// REFUSAL-DIALOG-2026-003: a failed save no longer shows a sonner toast; it opens the shared refusal
+// dialog (react-app/src/components/Shared/RefusalDialog.tsx). Reads its parts; null if it never shows.
+async function readRefusalDialog(p, timeout = 5000) {
+    const dlg = p.locator('[data-testid="refusal-dialog"]');
+    try { await dlg.waitFor({ state: 'visible', timeout }); } catch { return null; }
+    return dlg.evaluate((el) => {
+        const text = (n) => (n ? (n.textContent || '').trim() : '');
+        const msg = el.querySelector('#refusal-dialog-message');
+        const body = msg ? msg.parentElement : null;
+        const paras = body ? Array.from(body.querySelectorAll(':scope > p')) : [];
+        const original = paras.find((n) => n.getAttribute('lang') === 'en');
+        const note = paras.find((n) => n !== msg && n !== original && /note/i.test(n.className));
+        return {
+            title: text(el.querySelector('#refusal-dialog-title')),
+            message: text(msg),
+            items: body ? Array.from(body.querySelectorAll('li')).map(text) : [],
+            original: original ? text(original) : null,
+            note: note ? text(note) : null,
+            all: text(el),
+        };
+    });
+}
+// REFUSAL-DIALOG-2026-003: the dialog only closes on OK / × / Esc — close it so later steps are not blocked.
+async function closeRefusalDialog(p) {
+    const dlg = p.locator('[data-testid="refusal-dialog"]');
+    if (await dlg.count() === 0) return;
+    await dlg.getByRole('button', { name: 'OK', exact: true }).click();
+    await dlg.waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+}
+
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
 page.setDefaultTimeout(15000);
@@ -38,7 +70,11 @@ await page.click('button[type=submit]');
 await page.waitForURL(u => !u.pathname.includes('/login'));
 log('LOGIN OK');
 
-const EXPECTED_PREFIX = 'Could not confirm the save completed — what you entered is still kept here.';
+// REFUSAL-DIALOG-2026-003: the failure now opens the shared refusal dialog (no sonner toast). A 5xx or
+// a no-response failure cannot be confirmed as "not saved": the title is "Save failed" and the note
+// (the form stays open, keepsInput) is the UNCONFIRMED kept-input line — never "Not saved".
+const EXPECTED_TITLE = 'Save failed';
+const EXPECTED_NOTE = 'Could not confirm whether it was saved. What you entered is still here; reload the list to check before trying again.';
 
 async function openItrOpenRecord() {
     await page.goto(`${BASE}/itr`);
@@ -86,16 +122,21 @@ await openItrOpenRecord();
     await page.waitForTimeout(900);
     await page.unroute('**/api/itr/**');
 
-    const EXPECTED_500_TEXT = `${EXPECTED_PREFIX} Server error (HTTP 500). Try again later or contact an administrator.`;
-    const toastLocator = page.locator('[data-sonner-toast]').first();
-    const toastCount = await toastLocator.count();
-    const toastText = toastCount > 0 ? (await toastLocator.innerText()).trim() : '';
+    // REFUSAL-DIALOG-2026-003: refusal dialog instead of the old ITR-specific toast wording
+    const EXPECTED_500_TEXT = 'The server ran into a problem (HTTP 500). Try again later; if it keeps happening, contact an administrator.';
+    const dialog = await readRefusalDialog(page);
+    const dialogText = dialog?.all ?? '';
     await page.screenshot({ path: `${OUT}/a-500-after-failure.png` });
 
-    assertTrue(toastCount > 0, 'A: a visible toast appears after the simulated 500');
-    assertTrue(toastText === EXPECTED_500_TEXT, `A: toast text is EXACTLY the new ITR-specific wording (expected "${EXPECTED_500_TEXT}", got "${toastText}")`);
-    assertTrue(!toastText.includes(RAW_DETAIL), 'A: toast does NOT contain the raw backend detail string');
-    assertTrue(!toastText.toLowerCase().includes('not saved'), 'A: toast does NOT assert certain non-save ("Not saved")');
+    assertTrue(dialog !== null, 'A: the refusal dialog appears after the simulated 500');
+    assertTrue(dialog?.title === EXPECTED_TITLE, `A: dialog title is EXACTLY "${EXPECTED_TITLE}" (got "${dialog?.title}")`);
+    assertTrue(dialog?.message === EXPECTED_500_TEXT, `A: dialog message is EXACTLY the 5xx wording (expected "${EXPECTED_500_TEXT}", got "${dialog?.message}")`);
+    assertTrue(dialog?.note === EXPECTED_NOTE, `A: dialog note is the unconfirmed kept-input line (expected "${EXPECTED_NOTE}", got "${dialog?.note}")`);
+    assertTrue(!dialogText.includes(RAW_DETAIL), 'A: dialog does NOT contain the raw backend detail string');
+    assertTrue(!dialogText.toLowerCase().includes('not saved'), 'A: dialog does NOT assert certain non-save ("Not saved")');
+    const errorToastsA = await page.locator('[data-sonner-toast][data-type="error"]').count();
+    assertTrue(errorToastsA === 0, `A: no sonner error toast is shown (got ${errorToastsA})`);
+    await closeRefusalDialog(page);
 
     await checkRecoveryAndClose(marker);
 }
@@ -115,16 +156,21 @@ await openItrOpenRecord();
     await page.waitForTimeout(900);
     await page.unroute('**/api/itr/**');
 
-    const EXPECTED_NETWORK_TEXT = `${EXPECTED_PREFIX} Network error. Check the connection and try again.`;
-    const toastLocator = page.locator('[data-sonner-toast]').first();
-    const toastCount = await toastLocator.count();
-    const toastText = toastCount > 0 ? (await toastLocator.innerText()).trim() : '';
+    // REFUSAL-DIALOG-2026-003: refusal dialog instead of the old ITR-specific toast wording
+    const EXPECTED_NETWORK_TEXT = 'Could not reach the server. Check the connection and try again.';
+    const dialog = await readRefusalDialog(page);
+    const dialogText = dialog?.all ?? '';
     await page.screenshot({ path: `${OUT}/b-noresponse-after-failure.png` });
 
-    assertTrue(toastCount > 0, 'B: a visible toast appears after the simulated network failure');
-    assertTrue(toastText === EXPECTED_NETWORK_TEXT, `B: toast text is EXACTLY the new ITR-specific wording for a no-response failure (expected "${EXPECTED_NETWORK_TEXT}", got "${toastText}")`);
-    assertTrue(!toastText.toLowerCase().includes('not saved'), 'B: toast does NOT assert certain non-save ("Not saved") for a failure it cannot confirm reached the server');
-    assertTrue(!/\{.*\}/.test(toastText) && !toastText.includes('AxiosError') && !toastText.includes('Traceback'), `B: toast does not leak a raw error object/stack (got "${toastText.slice(0, 160)}")`);
+    assertTrue(dialog !== null, 'B: the refusal dialog appears after the simulated network failure');
+    assertTrue(dialog?.title === EXPECTED_TITLE, `B: dialog title is EXACTLY "${EXPECTED_TITLE}" (got "${dialog?.title}")`);
+    assertTrue(dialog?.message === EXPECTED_NETWORK_TEXT, `B: dialog message is EXACTLY the no-response wording (expected "${EXPECTED_NETWORK_TEXT}", got "${dialog?.message}")`);
+    assertTrue(dialog?.note === EXPECTED_NOTE, `B: dialog note is the unconfirmed kept-input line (expected "${EXPECTED_NOTE}", got "${dialog?.note}")`);
+    assertTrue(!dialogText.toLowerCase().includes('not saved'), 'B: dialog does NOT assert certain non-save ("Not saved") for a failure it cannot confirm reached the server');
+    assertTrue(!/\{.*\}/.test(dialogText) && !dialogText.includes('AxiosError') && !dialogText.includes('Traceback'), `B: dialog does not leak a raw error object/stack (got "${dialogText.slice(0, 160)}")`);
+    const errorToastsB = await page.locator('[data-sonner-toast][data-type="error"]').count();
+    assertTrue(errorToastsB === 0, `B: no sonner error toast is shown (got ${errorToastsB})`);
+    await closeRefusalDialog(page);
 
     await checkRecoveryAndClose(marker);
 }

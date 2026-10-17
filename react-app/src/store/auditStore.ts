@@ -94,8 +94,8 @@ export const useAuditStore = create<AuditState>((set, get) => ({
     // A refused or failed save goes to the caller (the wizard), which shows it in the refusal dialog (REFUSAL-DIALOG-2026-002).
     // Not put in the page banner (it is for list loads only), and the axios error is rethrown as is (not wrapped in a new Error)
     // so the dialog still sees its status and refusal code.
+    // A save never touches the list-load banner either way (REFUSAL-DIALOG-2026-003: it no longer clears it).
     addAudit: async (audit) => {
-        set({ error: null });
         const response = await api.post('/audit/', withCurrentProject(audit));
         const newAudit = response.data;
         set((state) => ({
@@ -105,7 +105,6 @@ export const useAuditStore = create<AuditState>((set, get) => ({
     },
 
     updateAudit: async (id, updates) => {
-        set({ error: null });
         const response = await api.put(`/audit/${id}`, updates);
         set((state) => ({
             auditList: state.auditList.map(a => (a.id === id ? response.data : a))

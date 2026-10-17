@@ -88,7 +88,16 @@
 - **LanguageContext**：新增 `itr.publishNeedsSaveFirst`、`saveFlow.category.drawing`／`.certificate`。
 - **不動**：itrStore、ITR 的欄位與版面、Checklist 面板、撤回、開 NCR、複檢。
 
-## 5. 2b-2（未開工）
-- 橫幅統一：Audit（× 改成重試）、OBS、OSD、會議記錄加上「重試」；auditStore 的 add／update 不再清空 error。
-- 清理沒用到的翻譯鍵。
-- tests-browser 8 支腳本。
+## 5. 2b-2（以 2b-1 commit 247ee771 為父）
+- **橫幅統一**：Audit（× 改成「重試」，呼叫 fetchAudits）、OBS、OSD、會議記錄的頁面橫幅只用於清單載入失敗，改成和 NCR 相同的 `<span>` 加「重試」（OBS／OSD 帶目前的搜尋字串，會議記錄帶 listSearch）。auditStore 的 add／update 不再清空 `error`（`clearError` 留在 store 的介面上）。
+- **清理翻譯鍵**（LanguageContext，CRLF，刪 70 行）：
+  - saveFlow.failedKeep、itr.saveNotConfirmed（含上方 6 行說明註解）、itr.revokeFailed、checklist.saveFailedKeep、checklist.reopen.failed。
+  - audit.wizard.saveFailedPrefix／saveError／submitError、pqp.saveError、noi.deleteBlocked、noi.citedBy.*（5 個）、contractors.personnel.blocksDelete／saveFailed。
+  - itp.deleteError／addError／updateError／detail.saveError／detail.saveErrorGeneric／generateChecklistFailed、itr.saveError、workflow.loadError、common.deleteFailed。
+  - iam.deleteError／scope.loadFailed／scope.saveFailed、kpi.weightsSaveFailed、audit.templates.duplicateName／saveFailed。
+  - 每個鍵刪除前都 grep 確認 src 內沒有使用，也沒有用動態方式組出這些前綴的鍵。km.chaptersSaveUnconfirmed 仍在使用，保留。
+- **後端死碼**：core/attachment_access.lock_reason（R1 P3-2）已經沒有呼叫者，刪除，並把說明併入 lock_refusal。
+- **tests-browser 8 支**（R1 P3-4、P3-8）：forms-consistency-review、forms-consistency-itr-save-wording-review、forms-leave-guard-review-osd、forms-leave-guard-review-naming-rules（第 4 段）、forms-leave-guard-review-contractor-project、forms-leave-guard-review-role、contractor-personnel-review、audit-templates-check。
+  - 舊的小提示和表單內紅字預期，改成檢查彈窗的標題、訊息和提示行，並確認沒有 sonner 錯誤小提示。
+  - contractor-personnel-review 原本對刪除承包商的預期在第 1 批就已經過時，改成 CONTRACTOR_DELETE_HAS_PERSONNEL 的彈窗。
+  - 8 支都通過 `node --check`；需要隔離環境才能實跑，本批沒有實跑。

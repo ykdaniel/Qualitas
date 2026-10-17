@@ -26,6 +26,36 @@ const log = (...a) => console.log(new Date().toISOString(), ...a);
 let checks = 0;
 const check = (v, msg) => { if (!v) throw new Error(`FAILED: ${msg}`); checks++; log('PASS', msg); };
 
+// REFUSAL-DIALOG-2026-003: a failed save no longer shows a sonner toast; it opens the shared refusal
+// dialog (react-app/src/components/Shared/RefusalDialog.tsx). Reads its parts; null if it never shows.
+async function readRefusalDialog(p, timeout = 5000) {
+    const dlg = p.locator('[data-testid="refusal-dialog"]');
+    try { await dlg.waitFor({ state: 'visible', timeout }); } catch { return null; }
+    return dlg.evaluate((el) => {
+        const text = (n) => (n ? (n.textContent || '').trim() : '');
+        const msg = el.querySelector('#refusal-dialog-message');
+        const body = msg ? msg.parentElement : null;
+        const paras = body ? Array.from(body.querySelectorAll(':scope > p')) : [];
+        const original = paras.find((n) => n.getAttribute('lang') === 'en');
+        const note = paras.find((n) => n !== msg && n !== original && /note/i.test(n.className));
+        return {
+            title: text(el.querySelector('#refusal-dialog-title')),
+            message: text(msg),
+            items: body ? Array.from(body.querySelectorAll('li')).map(text) : [],
+            original: original ? text(original) : null,
+            note: note ? text(note) : null,
+            all: text(el),
+        };
+    });
+}
+// REFUSAL-DIALOG-2026-003: the dialog only closes on OK / × / Esc — close it so later steps are not blocked.
+async function closeRefusalDialog(p) {
+    const dlg = p.locator('[data-testid="refusal-dialog"]');
+    if (await dlg.count() === 0) return;
+    await dlg.getByRole('button', { name: 'OK', exact: true }).click();
+    await dlg.waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+}
+
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 1200 } });
 page.setDefaultTimeout(15000);
@@ -109,7 +139,7 @@ check(rawAfterSave.status === 200, `OSD: raw GET /osd/ status 200 (got ${rawAfte
 check(persistedRow?.damageDescription === 'SAVED VALUE — normal save test', `OSD: raw GET (bypassing UI/store entirely) confirms DB persistence (got "${persistedRow?.damageDescription}")`);
 await page.screenshot({ path: `${OUT}/osd-04-after-normal-save.png` });
 
-// ── 4. Simulated save failure: EXACT toast/request counts, first attempt vs retry distinguished ──
+// ── 4. Simulated save failure: EXACT dialog/request counts, first attempt vs retry distinguished ──
 log('=== 4. OSD simulated save failure + retry (exact counts) ===');
 await page.locator('table tbody tr').filter({ hasText: 'QTS-FLG-OSD-000001' }).click();
 await page.waitForTimeout(500);
@@ -134,16 +164,25 @@ check(putCount === 1, `OSD: exactly one PUT sent on the first (failing) attempt 
 check(await page.locator('[name="damageDescription"]').count() === 1, 'OSD: modal stays open after simulated save failure');
 check((await page.locator('[name="damageDescription"]').inputValue()) === 'SHOULD FAIL FIRST — retry test', 'OSD: input value preserved after failed save');
 check(await saveBtn.isEnabled(), 'OSD: Save button re-enabled after failure (not stuck disabled)');
-const toastsAfterFailure = await page.locator('[data-sonner-toast]').count();
-check(toastsAfterFailure === 1, `OSD: EXACTLY one error toast shown after the first failure (got ${toastsAfterFailure}, not just >=1)`);
-const toastText = await page.locator('[data-sonner-toast]').first().innerText();
-// Exact text, traced through the real code path: describeSaveError() for a 5xx NEVER echoes the
-// response body (saveErrors.ts's own stated rule — a 5xx body can carry a validation dump), so
-// "Simulated 500" (our fake body's detail string) never appears; it always resolves to
-// saveFlow.server, then presentOutcome's 'failed' case wraps it in saveFlow.failedKeep. Both
-// keys are read directly from context/LanguageContext.tsx's English strings, not guessed.
-const expectedFailToastText = 'Not saved — everything you entered is kept. Server error (HTTP 500). Try again later or contact an administrator.';
-check(toastText === expectedFailToastText, `OSD: the single toast's text matches the exact friendly message (got "${toastText}", expected "${expectedFailToastText}")`);
+// REFUSAL-DIALOG-2026-003: a failed save no longer shows the saveFlow.failedKeep sonner toast; it opens
+// the shared refusal dialog. Exact text, traced through utils/refusal.ts describeRefusal(): a 5xx NEVER
+// echoes the response body, so "Simulated 500" (our fake body's detail string) never appears; the title
+// is refusal.title.saveFailed, the message refusal.server, and (the OSD form stays open, keepsInput) the
+// note refusal.keptInputUnconfirmed — all read from context/LanguageContext.tsx's English strings.
+const dialogsAfterFailure = await page.locator('[data-testid="refusal-dialog"]').count();
+check(dialogsAfterFailure === 1, `OSD: EXACTLY one refusal dialog shown after the first failure (got ${dialogsAfterFailure})`);
+const errorToastsAfterFailure = await page.locator('[data-sonner-toast][data-type="error"]').count();
+check(errorToastsAfterFailure === 0, `OSD: no sonner error toast shown after the first failure (got ${errorToastsAfterFailure})`);
+const failDialog = await readRefusalDialog(page);
+const expectedFailTitle = 'Save failed';
+const expectedFailMessage = 'The server ran into a problem (HTTP 500). Try again later; if it keeps happening, contact an administrator.';
+const expectedFailNote = 'Could not confirm whether it was saved. What you entered is still here; reload the list to check before trying again.';
+check(failDialog?.title === expectedFailTitle, `OSD: the dialog title matches exactly (got "${failDialog?.title}", expected "${expectedFailTitle}")`);
+check(failDialog?.message === expectedFailMessage, `OSD: the dialog message matches the exact friendly message (got "${failDialog?.message}", expected "${expectedFailMessage}")`);
+check(failDialog?.note === expectedFailNote, `OSD: the dialog note is the 5xx kept-input line (got "${failDialog?.note}", expected "${expectedFailNote}")`);
+check(!(failDialog?.all ?? '').includes('Simulated 500'), 'OSD: the dialog does not echo the 5xx response body');
+await page.screenshot({ path: `${OUT}/osd-05-save-failure-dialog.png` });
+await closeRefusalDialog(page);
 await page.locator('[name="damageDescription"]').fill('RETRY SUCCEEDED — final value');
 putCount = 0;
 await saveBtn.click();
