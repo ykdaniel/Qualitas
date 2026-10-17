@@ -19,7 +19,7 @@ import { showRefusal } from '../../store/refusalStore';
 import { InspectionItem } from '../../types/itp';
 import { PHASES, EMPTY_ITEM } from '../../constants/itp';
 import { getNextRevision } from '../../utils/revision';
-import VPBadge, { VPOptions } from './VPBadge';
+import VPBadge, { VPOptions, VP_LEGEND_EXTRA } from './VPBadge';
 import { resolveItpRecordLink } from '../../utils/itpRecordLink';
 import { parseInspectionItems } from '../../utils/itpParser';
 import { missingRequiredItemFields, preferEnglishText } from '../../utils/itpItemValidation';
@@ -29,7 +29,7 @@ import './itp-print-global.css';
 
 
 const ITPDetail: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const itrList = useITRStore(state => state.itrList);
@@ -569,7 +569,7 @@ const ITPDetail: React.FC = () => {
                   <label className="flex items-center justify-center gap-2 text-xs font-bold text-indigo-800 uppercase mb-4 text-center normal-case">
                     <span className="uppercase">{t('itp.itemPanel.verificationPoints') || 'Verification Points'}</span>
                     <span
-                      title={t('itp.itemPanel.vpLegend') || ''}
+                      title={[t('itp.itemPanel.vpLegend'), VP_LEGEND_EXTRA[language]].filter(Boolean).join(' · ')}
                       className="inline-flex items-center justify-center w-[15px] h-[15px] rounded-full border border-indigo-300 text-indigo-500 text-[10px] font-bold leading-none cursor-help shrink-0"
                     >!</span>
                   </label>
