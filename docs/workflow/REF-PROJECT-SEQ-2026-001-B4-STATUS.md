@@ -5,7 +5,7 @@ ROUND: 1（2026-10-17）
 基準：開發與審查在 REFUSAL 2b-1 的 commit 247ee771 上（commit 4f089266）；2b＋ITP-VP-CODES 於 2026-10-17 15:52Z 上線後，依主要調度指示用 format-patch 重放到正式站 HEAD **1b37ce9d** 之上（3-way，無衝突；`db_migrations.py` 與 ITP 第 30 步同檔不同區塊，步驟順序與旗標名已核對），以 1b37ce9d 為父重新提交。
 
 ## RESULT
-- [x] DONE（待部署）：R1 PASS with notes（P3 已處理或列入上線前核對）；3.11 全套第 2 輪 2835 passed、0 failed（在 247ee771 上）；正式快照演練無變更；重放到 1b37ce9d 後相關測試重跑（見「重放」一節），最終樹的 3.11 全套由協調中心部署前執行。
+- [x] LIVE 2026-10-17 18:10Z（台灣 10-18 02:10），正式站 69edeac5（＝9749c2b4＋REFUSAL 文件 cherry-pick）：R1 PASS with notes（P3 已處理或列入上線前核對）；3.11 全套第 2 輪 2835 passed、0 failed（在 247ee771 上）；合併樹 3.11 2839 passed（協調中心）；正式快照演練無變更；上線實測 Migrations completed、0 ERROR、無 backfill 警告、qworkflow 仍 1 列、bundle 含兩個新代碼；對照表 63 筆已匯出。未做登入功能測試。
 
 ## 決定
 DECISIONS「第 4 批編號收尾」：D-B4-1 拒絕、D-B4-2 拿掉、D-B4-3 只拒絕 STD（主要調度 2026-10-17 依建議值決定，使用者已知）。
@@ -100,6 +100,7 @@ DECISIONS「第 4 批編號收尾」：D-B4-1 拒絕、D-B4-2 拿掉、D-B4-3 �
   1. B3 上線（10-14）到 B4 上線之間新建或改代碼的專案，是否有代碼等於舊承包商縮寫而計數落後：
      `SELECT p.id, p.code, UPPER(s.doc) AS doc, s.last_seq AS old_last, (SELECT last_seq FROM reference_sequences n WHERE n.project = p.id AND n.vendor = '*' AND n.doc = UPPER(s.doc)) AS new_last FROM projects p JOIN reference_sequences s ON s.vendor <> '*' AND UPPER(s.vendor) = UPPER(TRIM(p.code));`
      有 `new_last` 為 NULL 或小於 `old_last` 的列時，上線後把該專案的代碼改一次再改回，helper 會補上（本次演練的快照只有 HL，第 29 步已處理，預期 0 列）。
+     **上線前實跑結果（2026-10-17）**：8 列，7 列 new ≥ old；`doc=AUD` 那列 new_last 為 NULL 是這句 SQL 沒有把顯示代碼對應回類型——`AUD` 是 AUDIT 的顯示代碼，舊鍵 `(QTS, HL, AUD)=1` 對應的計數是 `(HL, '*', AUDIT)=5`，視為 AUDIT 即可；現行程式不讀不寫 `AUD` 鍵。
   2. 仍有 `project_id IS NULL` 的非範本單據：`SELECT 'itr', COUNT(*) FROM itr WHERE project_id IS NULL UNION ALL SELECT 'ncr', COUNT(*) FROM ncr WHERE project_id IS NULL UNION ALL SELECT 'noi', COUNT(*) FROM noi WHERE project_id IS NULL UNION ALL SELECT 'meeting_minutes', COUNT(*) FROM meeting_minutes WHERE project_id IS NULL UNION ALL SELECT 'audits', COUNT(*) FROM audits WHERE project_id IS NULL;`
      預期全部 0（B1／B2 的第 25、26 步已歸到唯一專案）。若不是 0，這些單據衍生 NCR／重新檢驗會回 400，要先歸到專案。
 - 上線後請主要調度對資料庫**複本或 `.backup`** 執行一次匯出：`python scripts/verification/export_itp_renumber_map.py <db copy> <csv>`，預期 63 筆。

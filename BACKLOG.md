@@ -2932,7 +2932,7 @@ Construction Engineer 核准欄位都還是 Pending——跟 `obsFormSchema.ts::
 
 **建議做法：** 「重新輸入密碼確認身分」失敗時，後端改回 400 或 403（可加代碼，例如 `REAUTH_FAILED`）；或讓攔截器對這類請求不做刷新重送。改完補一個瀏覽器檢查。
 
-## 59. 依專案編號的收尾（REF-PROJECT-SEQ-2026-001 B4）· FIXED，待部署 · 【優先度：低】
+## 59. 依專案編號的收尾（REF-PROJECT-SEQ-2026-001 B4）· FIXED，已於 2026-10-18 部署 · 【優先度：低】
 
 **Where:** `backend/core/utils.py`（取號）、`services/project_service.py`、`services/noi_service.py`、`db_migrations.py` 的 Q-WorkFlow 補建、`crud.py`、`scripts/verification/export_itp_renumber_map.py`。
 
@@ -2948,7 +2948,7 @@ Construction Engineer 核准欄位都還是 Pending——跟 `obsFormSchema.ts::
 
 （「命名規則存檔時 strip 前綴」原本也在清單，已由 NAMING-RULES-CLEANUP-2026-001（9da76d9f）完成。）
 
-**狀態：** 2026-10-17 完成（B4，父 247ee771）：R1 PASS with notes、3.11 全套 2835 passed；待主要調度部署，上線後補日期。
+**狀態：** 2026-10-17 完成（B4，父 247ee771，重放後 9749c2b4）：R1 PASS with notes、3.11 全套 2835 passed。**已於 2026-10-17 18:10Z（台灣 10-18 02:10）上線**，正式站 69edeac5；上線時 backfill 新增 0 列、無警告；改號對照表 63 筆已由協調中心匯出存 deploy-artifacts。上線前核對：`project_id IS NULL` 全 0；舊計數對照除 `AUD` 列外皆 new ≥ old——`(QTS, HL, AUD)` 是舊的顯示代碼別名鍵，不是 AUDIT 類型的計數，現行程式不讀不寫，對應的 `(HL, '*', AUDIT)` 已是 5 ≥ 1，視為 AUDIT 即可（低優先備註：helper 日後可加「顯示代碼別名 → 類型」對應）。REF-PROJECT-SEQ-2026-001 四批（B1–B4）全部結案。
 
 ---
 
