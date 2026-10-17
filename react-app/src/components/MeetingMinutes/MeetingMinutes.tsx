@@ -292,7 +292,13 @@ const MeetingMinutes: React.FC = () => {
   return (
     <div className={shellStyles.container}>
       {error && (
-        <div className={shellStyles.errorBanner}>{error}</div>
+        // list loads only (a refused save goes to the refusal dialog) — retry reloads the list, like NCR (REFUSAL-DIALOG-2026-003)
+        <div className={shellStyles.errorBanner}>
+          <span>{error}</span>
+          <button type="button" className={shellStyles.retryButton} onClick={() => refetch({ search: listSearch })}>
+            {t('common.retry')}
+          </button>
+        </div>
       )}
 
       <div className={shellStyles.chipGroup} style={{ marginBottom: 8 }}>

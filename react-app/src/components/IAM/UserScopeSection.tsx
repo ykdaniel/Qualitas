@@ -187,8 +187,7 @@ const UserScopeSection: React.FC<UserScopeSectionProps> = ({ userId, t, value, o
             setBaseline(scopeKey);
             toast.success(t('iam.scope.saved') || 'Data scope saved');
         } catch (err: any) {
-            if (err?.response?.data?.code) showRefusal(err, 'save');     // coded refusal (e.g. PROJECT_REQUIRED), in the user's language
-            else toast.error(err?.response?.data?.detail || t('iam.scope.saveFailed') || 'Failed to save scope');
+            showRefusal(err, 'save');     // coded (e.g. PROJECT_REQUIRED) or not: the refusal dialog (REFUSAL-DIALOG-2026-003)
         } finally {
             setSaving(false);
         }

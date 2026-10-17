@@ -11,6 +11,7 @@ import {
   buildRules, changedRules, exampleNumber, EXAMPLE_PROJECT, NamingRuleChange, NamingRuleValue, PageRule, prefixProblem, RuleDisplay, toPayload,
 } from './namingRules';
 import { useProjectStore } from '../../store/projectStore';
+import { showRefusal } from '../../store/refusalStore';
 import styles from './DocumentNamingRules.module.css';
 
 // How the page shows the doc types it knows, in page order (NAMING-RULES-CLEANUP-2026-001). Which rules exist and their
@@ -136,14 +137,10 @@ const DocumentNamingRules: React.FC = () => {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string }; status?: number }; message?: string };
-      const status = err.response?.status;
-      if (status === 403) {
-        setSaveError(t('common.permissionDenied') || '您沒有權限修改命名規則（需要 settings:manage:all）');
-      } else {
-        const msg = err.response?.data?.detail ?? err.message ?? '請確認後端已啟動且網路連線正常。';
-        setSaveError(`命名規則儲存失敗：${typeof msg === 'string' ? msg : JSON.stringify(msg)}`);
-      }
+      // A refused or failed save (403 PERMISSION_DENIED, a 400 / 422, a 5xx or network error): the refusal dialog, translated and
+      // never a raw body (REFUSAL-DIALOG-2026-003, the "save error i18n" handed over by NAMING-RULES-CLEANUP). The edits stay;
+      // the inline text below remains for this page's own checks before saving.
+      showRefusal(e, 'save', { keepsInput: true });
     } finally { setSaving(false); }
   };
 

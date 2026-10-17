@@ -12,6 +12,36 @@ const log = (...a) => console.log(new Date().toISOString(), ...a);
 let checks = 0;
 const check = (v, msg) => { if (!v) throw new Error(`FAILED: ${msg}`); checks++; log('PASS', msg); };
 
+// REFUSAL-DIALOG-2026-003: a failed save no longer shows a sonner toast; it opens the shared refusal
+// dialog (react-app/src/components/Shared/RefusalDialog.tsx). Reads its parts; null if it never shows.
+async function readRefusalDialog(p, timeout = 5000) {
+    const dlg = p.locator('[data-testid="refusal-dialog"]');
+    try { await dlg.waitFor({ state: 'visible', timeout }); } catch { return null; }
+    return dlg.evaluate((el) => {
+        const text = (n) => (n ? (n.textContent || '').trim() : '');
+        const msg = el.querySelector('#refusal-dialog-message');
+        const body = msg ? msg.parentElement : null;
+        const paras = body ? Array.from(body.querySelectorAll(':scope > p')) : [];
+        const original = paras.find((n) => n.getAttribute('lang') === 'en');
+        const note = paras.find((n) => n !== msg && n !== original && /note/i.test(n.className));
+        return {
+            title: text(el.querySelector('#refusal-dialog-title')),
+            message: text(msg),
+            items: body ? Array.from(body.querySelectorAll('li')).map(text) : [],
+            original: original ? text(original) : null,
+            note: note ? text(note) : null,
+            all: text(el),
+        };
+    });
+}
+// REFUSAL-DIALOG-2026-003: the dialog only closes on OK / × / Esc — close it so later steps are not blocked.
+async function closeRefusalDialog(p) {
+    const dlg = p.locator('[data-testid="refusal-dialog"]');
+    if (await dlg.count() === 0) return;
+    await dlg.getByRole('button', { name: 'OK', exact: true }).click();
+    await dlg.waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+}
+
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 page.setDefaultTimeout(15000);
@@ -71,7 +101,14 @@ check((await personNames()).includes('New Inspector') && /Person added\./.test(a
 await newRow().getByLabel('Name').fill('new inspector');
 await newRow().getByRole('button', { name: 'Add' }).click();
 await page.waitForTimeout(600);
-check(/already on this company/.test(await toasts()) && (await personNames()).filter(n => /new inspector/i.test(n)).length === 1, '1: the same name twice is refused with the reason');
+// REFUSAL-DIALOG-2026-003: the duplicate name is a coded refusal (DUPLICATE_NAME, docType personnel) shown in the
+// refusal dialog, not a toast; ContractorPersonnel's run() does not pass keepsInput, so there is no kept-input note.
+const dupDialog = await readRefusalDialog(page);
+check(dupDialog?.title === 'Cannot save' && dupDialog?.message === 'Person "new inspector" already exists. Use another name.'
+    && dupDialog?.note === null && (await personNames()).filter(n => /new inspector/i.test(n)).length === 1,
+    `1: the same name twice is refused with the reason in the refusal dialog (${JSON.stringify(dupDialog)})`);
+check(await page.locator('[data-sonner-toast][data-type="error"]').count() === 0, '1: … and no error toast');
+await closeRefusalDialog(page);
 await newRow().getByLabel('Name').fill('');
 const row = () => personnel().locator('tr[data-person="New Inspector"]');
 await row().getByRole('button', { name: 'Change person' }).click();
@@ -94,7 +131,15 @@ await page.waitForTimeout(500);
 await page.locator('tr', { hasText: 'TECO' }).first().getByTitle('Delete').click();
 await page.getByRole('button', { name: 'Delete' }).last().click();
 await page.waitForTimeout(800);
-check(/cannot be deleted\. Set it inactive instead\./.test(await toasts()), '1: deleting a company with people is refused, with the reason');
+// REFUSAL-DIALOG-2026-003: this deletes the COMPANY (people themselves are never deleted, only deactivated). Since
+// REFUSAL-DIALOG-2026-001 batch 1 a refused delete opens the refusal dialog (Contractors.tsx showRefusal(err, 'delete')),
+// so the old toast text was stale: the backend's coded CONTRACTOR_DELETE_HAS_PERSONNEL counts every person on the list,
+// inactive ones included — on a fresh seed 5 active + "Former Staff" + "New Inspector" (deactivated above) = 7. No note on a delete.
+const delDialog = await readRefusalDialog(page);
+check(delDialog?.title === 'Cannot delete'
+    && delDialog?.message === 'Contractor TECO has 7 people on its personnel list. Set it inactive instead of deleting it.'
+    && delDialog?.note === null, `1: deleting a company with people is refused, with the reason in the refusal dialog (${JSON.stringify(delDialog)})`);
+await closeRefusalDialog(page);
 check(await page.locator('tr', { hasText: 'TECO' }).count() > 0, '1: … and TECO is still there');
 
 // ═══ 2. Meeting attendees: company, then one of its people; position follows ═══

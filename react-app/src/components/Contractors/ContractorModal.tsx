@@ -1,10 +1,10 @@
-import { toast } from 'sonner';
 import { useDraftGuard } from '../Shared/LeaveGuard';
 import FormActions from '../Shared/FormActions';
 import actionStyles from '../Shared/FormActions.module.css';
 import React, { useState, useEffect } from 'react';
 import styles from './ContractorModal.module.css';
 import ContractorPersonnel from './ContractorPersonnel';
+import { showRefusal } from '../../store/refusalStore';
 
 interface ContractorModalProps {
   existingId: string | null;
@@ -38,7 +38,7 @@ const ContractorModal: React.FC<ContractorModalProps> = ({ existingId, initialDa
     if (saving) return;
     setSaving(true);
     try { await onSave(existingId, formData); }
-    catch { toast.error(t('common.saveFailed')); }
+    catch (err) { showRefusal(err, 'save', { keepsInput: true }); }      // refused or failed: the refusal dialog (REFUSAL-DIALOG-2026-003)
     finally { setSaving(false); }
   };
 

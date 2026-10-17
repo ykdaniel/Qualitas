@@ -19,7 +19,7 @@ import schemas
 from database import get_db
 from core.scope import Scope, get_scope, compute_scope, entity_in_scope, attachment_target, find_attachment_record, require_shared_template_write
 from core.attachment_access import (
-    ENTITY_PERMISSIONS, IMAGE_ONLY_CATEGORIES, is_km_image_path, lock_reason, lock_refusal, require_attachment_permission, validate_category,
+    ENTITY_PERMISSIONS, IMAGE_ONLY_CATEGORIES, is_km_image_path, lock_refusal, require_attachment_permission, validate_category,
 )
 from core.refusals import RefusalHTTPException
 from core.uploads import upload_root
@@ -241,9 +241,9 @@ async def upload_files(
     require_shared_template_write(target, scope)        # a shared ITP / Checklist template: system administrators only (B2)
 
     # ── The record's state may forbid changing its attachments ──
-    reason = lock_reason(db, entity_type, target, category)
-    if reason:
-        raise HTTPException(status_code=409, detail=reason)
+    locked = lock_refusal(db, entity_type, target, category)
+    if locked:      # coded like the delete below (ATTACHMENT_LOCKED), same English text (REFUSAL-DIALOG-2026-003)
+        raise RefusalHTTPException(409, locked[0], 'ATTACHMENT_LOCKED', locked[1])
 
     # In an isolated test process this raises unless the root is inside the run directory — before any file is created.
     root = upload_root()
@@ -304,10 +304,10 @@ async def upload_files(
         if target is None:
             db.rollback()
             raise HTTPException(status_code=404, detail="Attachment target not found")
-        reason = lock_reason(db, entity_type, target, category)
-        if reason:
+        locked = lock_refusal(db, entity_type, target, category)
+        if locked:
             db.rollback()
-            raise HTTPException(status_code=409, detail=reason)
+            raise RefusalHTTPException(409, locked[0], 'ATTACHMENT_LOCKED', locked[1])
 
     results: list[AttachmentResponse] = []
     written: list[str] = []

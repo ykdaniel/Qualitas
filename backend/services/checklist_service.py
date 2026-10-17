@@ -750,9 +750,11 @@ class ChecklistService:
                 if d[f] != getattr(db_checklist, f, None)
             } if is_already_locked else set()
             if changed_locked:
-                raise ValueError(
+                raise Refusal(
+                    "CHECKLIST_RESULTS_LOCKED",
                     "Cannot modify inspection results on a Pass/Fail Checklist — "
-                    "use Reopen (a status-only change back to Ongoing) first, then save the results."
+                    "use Reopen (a status-only change back to Ongoing) first, then save the results.",
+                    number=db_checklist.recordsNo, status=db_checklist.status,
                 )
 
             # Pass-integrity guard (2026-09-19): never trust a client-supplied
@@ -790,10 +792,12 @@ class ChecklistService:
                     else:
                         problems = []
                     if problems:
-                        raise ValueError(
+                        raise Refusal(
+                            "CHECKLIST_RESULTS_INCONSISTENT",
                             f"Cannot save Checklist '{db_checklist.recordsNo}' as "
                             f"{merged['status']}: " + "; ".join(problems) + ". "
-                            "Status and counts must follow the actual item results."
+                            "Status and counts must follow the actual item results.",
+                            number=db_checklist.recordsNo, status=merged['status'], problems=list(problems),
                         )
 
             # Historical-evidence marker (2026-09-19 business decision):

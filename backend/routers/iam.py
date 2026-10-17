@@ -3,7 +3,7 @@ from passlib.context import CryptContext
 
 import schemas
 from core.dependencies import RoleChecker, get_user_service
-from core.refusals import refusal_http
+from core.refusals import RefusalHTTPException, refusal_http
 from core.perms import ROLE_MANAGE, ROLE_VIEW, USER_MANAGE, USER_VIEW
 from services.user_service import UserService
 
@@ -184,7 +184,7 @@ def create_role(
 ):
     db_role = user_service.get_role_by_name(name=role.name)
     if db_role:
-        raise HTTPException(status_code=400, detail="Role already exists")
+        raise RefusalHTTPException(400, "Role already exists", "DUPLICATE_NAME", {"docType": "role", "name": role.name})
     return user_service.create_role(
         role=role, 
         current_user_id=current_user.id, 

@@ -49,7 +49,7 @@ def create_audit_template_route(
     try:
         return service.create_template(template, user_id=current_user.id, username=current_user.username)
     except AuditTemplateConflict as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise refusal_http(e, 409)
 
 
 @router.put("/templates/{template_id}", response_model=schemas.AuditTemplate)
@@ -62,7 +62,7 @@ def update_audit_template_route(
     try:
         updated = service.update_template(template_id, template, user_id=current_user.id, username=current_user.username)
     except AuditTemplateConflict as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise refusal_http(e, 409)
     if updated is None:
         raise HTTPException(status_code=404, detail="Audit template not found")
     return updated

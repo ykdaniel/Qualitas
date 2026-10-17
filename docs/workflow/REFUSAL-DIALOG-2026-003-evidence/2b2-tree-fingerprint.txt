@@ -1,0 +1,1 @@
+2b-2 freeze 2026-10-17T09:15:04Z: 52b01f19e66e66f5 (sha1, backend+react-app, excl node_modules/dist/__pycache__)

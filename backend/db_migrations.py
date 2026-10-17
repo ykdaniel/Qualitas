@@ -199,6 +199,11 @@ def run_migrations():
     # old counter so no number is ever handed out twice. Runs once (migration_flags), one transaction; best effort.
     _naming_rules_to_project_format()
 
+    # 30. The ITP verification-point code "Q" is retired (ITP-VP-CODES-2026-001, user's decision 2026-10-17): every Q in
+    # an ITP inspection plan's sub / teco / employer / hse becomes empty; other older codes are kept. One audit row per
+    # changed ITP. Runs once (migration_flags), one transaction; best effort.
+    _clear_itp_vp_q()
+
     logger.info("Migrations completed.")
 
 class MigrationError(RuntimeError):
@@ -2156,3 +2161,81 @@ def _repair_checklist_evidence_first_time_reliability():
                 )
     except Exception as e:
         logger.warning(f"Checklist evidence first-time-reliability repair skipped (safe to retry next start): {e}")
+
+
+ITP_VP_Q_CLEAR_FLAG = "itp_vp_q_cleared_v1"
+ITP_VP_ROLES = ("sub", "teco", "employer", "hse")
+
+
+def _q_cells(data):
+    """The (phase, item id, role) of every VP cell holding "Q" (any case, surrounding spaces) in a parsed ITP
+    detail_data — phases a / b / c only; anything that is not the expected shape is skipped, never guessed at."""
+    cells = []
+    if not isinstance(data, dict):
+        return cells
+    for phase in ("a", "b", "c"):
+        items = data.get(phase)
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            vp = item.get("vp") if isinstance(item, dict) else None
+            if not isinstance(vp, dict):
+                continue
+            for role in ITP_VP_ROLES:
+                value = vp.get(role)
+                if isinstance(value, str) and value.strip().upper() == "Q":
+                    cells.append((phase, item.get("id"), role))
+    return cells
+
+
+def _clear_itp_vp_q():
+    """Step 30 (ITP-VP-CODES-2026-001). The user retired the undefined VP code "Q" (2026-10-17: "Q 清成空白"); on
+    production it filled 1431 cells across 35 ITPs.
+
+    * Only VP cells holding "Q" (case and surrounding spaces ignored) in detail_data a / b / c are changed, to "".
+      Every other value — W/R, I, ■, □, ※, "-", N/A, text — and every other key is left exactly as it is; an ITP
+      without a Q, or whose detail_data is not valid JSON, is not rewritten at all.
+    * Each changed ITP writes one audit_logs row (action CLEAR_VP_Q) listing the cells, in the same transaction.
+    * Runs exactly once, tracked in migration_flags (the flag is written in the same transaction). Best effort: a
+      failure is logged, nothing is half-written, and the next start tries again.
+    """
+    from datetime import datetime, timezone
+    try:
+        with engine.connect() as conn:
+            if conn.execute(text("SELECT 1 FROM migration_flags WHERE flag_name = :f"), {"f": ITP_VP_Q_CLEAR_FLAG}).first():
+                return
+            now = datetime.now(timezone.utc).isoformat()
+            templates = cells_total = 0
+            for itp_id, ref, detail in conn.execute(text("SELECT id, referenceNo, detail_data FROM itp")).fetchall():
+                try:
+                    data = json.loads(detail) if isinstance(detail, str) else None
+                except ValueError:
+                    continue
+                cells = _q_cells(data)
+                if not cells:
+                    continue
+                for phase, item_id, role in cells:
+                    for item in data[phase]:
+                        if isinstance(item, dict) and item.get("id") == item_id and isinstance(item.get("vp"), dict):
+                            value = item["vp"].get(role)
+                            if isinstance(value, str) and value.strip().upper() == "Q":
+                                item["vp"][role] = ""
+                conn.execute(text("UPDATE itp SET detail_data = :d WHERE id = :i"),
+                             {"d": json.dumps(data, ensure_ascii=False), "i": itp_id})
+                listed = [{"phase": p, "id": i, "role": r} for p, i, r in cells]
+                conn.execute(text(
+                    "INSERT INTO audit_logs (timestamp, user_id, username, action, entity_type, entity_id, entity_name, "
+                    "old_value, new_value, reason) VALUES (:ts, NULL, 'system-migration', 'CLEAR_VP_Q', 'ITP', :i, :n, "
+                    ":old, :new, :reason)"),
+                    {"ts": now, "i": itp_id, "n": ref,
+                     "old": json.dumps({"vp_value": "Q", "cells": len(cells), "cell_list": listed}, ensure_ascii=False),
+                     "new": json.dumps({"vp_value": "", "cells": len(cells)}, ensure_ascii=False),
+                     "reason": "VP code Q retired (ITP-VP-CODES-2026-001, user's decision 2026-10-17)"})
+                templates += 1
+                cells_total += len(cells)
+            conn.execute(text("INSERT INTO migration_flags (flag_name, completed_at) VALUES (:f, :ts)"),
+                         {"f": ITP_VP_Q_CLEAR_FLAG, "ts": now})
+            conn.commit()
+            logger.info("ITP VP Q cleared: %d templates, %d cells", templates, cells_total)
+    except Exception as e:
+        logger.error("Could not clear ITP VP code Q: %s", e)

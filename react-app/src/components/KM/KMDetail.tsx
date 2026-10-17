@@ -14,6 +14,8 @@ import { injectAuthTokenIntoHtml } from '../../utils/authUrl';
 import { getAuthenticatedFileUrl } from '../../services/api';
 import { kmService } from '../../services/kmService';
 import styles from './KMDetail.module.css';
+import { toast } from 'sonner';
+import { showRefusal } from '../../store/refusalStore';
 
 /**
  * Single chapter body + its auto-generated section TOC.
@@ -114,7 +116,7 @@ export const KMDetail: React.FC<KMDetailProps> = ({ article, onClose, onEdit, on
         try {
             await kmService.exportDocx(article.id, article.title);
         } catch (e) {
-            alert('匯出失敗，請稍後再試');
+            toast.error('匯出失敗，請稍後再試');
         } finally {
             setIsExporting(false);
         }
@@ -130,9 +132,12 @@ export const KMDetail: React.FC<KMDetailProps> = ({ article, onClose, onEdit, on
             await fetchKMs();
             const updatedList = result.updated.map((u: any) => `${u.chapter_no} ${u.title}`).join('\n');
             const skippedList = result.skipped.length > 0 ? `\n\n未匹配章節：\n${result.skipped.join('\n')}` : '';
-            alert(`匯入完成！\n已更新 ${result.updated.length}/${result.total_sections} 個章節：\n${updatedList}${skippedList}`);
-        } catch (e: any) {
-            alert(`匯入失敗：${e?.response?.data?.detail || e?.message || '請確認檔案格式正確'}`);
+            toast.success('匯入完成！', {
+                description: <div style={{ whiteSpace: 'pre-line' }}>{`已更新 ${result.updated.length}/${result.total_sections} 個章節：\n${updatedList}${skippedList}`}</div>,
+                duration: 10000,
+            });
+        } catch (e) {
+            showRefusal(e, 'save');         // refused or failed import: the refusal dialog, never a raw detail in alert() (REFUSAL-DIALOG-2026-003)
         } finally {
             setIsImporting(false);
             if (importInputRef.current) importInputRef.current.value = '';

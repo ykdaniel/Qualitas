@@ -65,6 +65,8 @@ def create_osd(
         return osd_service.create_osd(osd_create=osd, user_id=current_user.id, username=current_user.username, scope=scope)
     except ScopeForbidden as e:
         raise refusal_http(e, 403)
+    except ValueError as e:     # a service refusal is a 400, never a 500 (REFUSAL-DIALOG-2026-003)
+        raise refusal_http(e)
 
 @router.put("/{osd_id}", response_model=schemas.OSD)
 def update_osd(
@@ -91,7 +93,10 @@ def delete_osd(
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(OSD_DELETE))
 ):
-    deleted = osd_service.delete_osd(osd_id=osd_id, user_id=current_user.id, username=current_user.username, scope=scope)
+    try:
+        deleted = osd_service.delete_osd(osd_id=osd_id, user_id=current_user.id, username=current_user.username, scope=scope)
+    except ValueError as e:     # a service refusal is a 400, never a 500 (REFUSAL-DIALOG-2026-003)
+        raise refusal_http(e)
     if not deleted:
         raise HTTPException(status_code=404, detail="OSD not found")
     return {"ok": True}

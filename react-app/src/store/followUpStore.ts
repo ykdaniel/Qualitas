@@ -73,30 +73,19 @@ export const useFollowUpStore = create<FollowUpState>((set, get) => ({
         await get().fetchFollowUps();
     },
 
+    // A refused or failed save goes to the caller, which shows it in the refusal dialog (REFUSAL-DIALOG-2026-003); `error` is for list loads only.
     addFollowUp: async (item) => {
-        try {
-            const response = await api.post('/followup/', withCurrentProject(item));
-            const newItem = response.data;
-            set((state) => ({ followUpList: [...state.followUpList, newItem] }));
-            return newItem;
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to add Follow-up Issue');
-            set({ error: msg });
-            throw error;
-        }
+        const response = await api.post('/followup/', withCurrentProject(item));
+        const newItem = response.data;
+        set((state) => ({ followUpList: [...state.followUpList, newItem] }));
+        return newItem;
     },
 
     updateFollowUp: async (id, updates) => {
-        try {
-            const response = await api.put(`/followup/${id}`, updates);
-            set((state) => ({
-                followUpList: state.followUpList.map(f => (f.id === id ? response.data : f)),
-            }));
-        } catch (error: any) {
-            const msg = getErrorMessage(error, 'Failed to update Follow-up Issue');
-            set({ error: msg });
-            throw error;
-        }
+        const response = await api.put(`/followup/${id}`, updates);
+        set((state) => ({
+            followUpList: state.followUpList.map(f => (f.id === id ? response.data : f)),
+        }));
     },
 
     deleteFollowUp: async (id) => {

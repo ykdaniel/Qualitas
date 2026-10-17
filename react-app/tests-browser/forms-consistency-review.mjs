@@ -42,6 +42,36 @@ const assertTrue = (cond, msg) => {
 
 const browser = await chromium.launch();
 
+// REFUSAL-DIALOG-2026-003: a failed save no longer shows a sonner toast; it opens the shared refusal
+// dialog (react-app/src/components/Shared/RefusalDialog.tsx). Reads its parts; null if it never shows.
+async function readRefusalDialog(p, timeout = 5000) {
+    const dlg = p.locator('[data-testid="refusal-dialog"]');
+    try { await dlg.waitFor({ state: 'visible', timeout }); } catch { return null; }
+    return dlg.evaluate((el) => {
+        const text = (n) => (n ? (n.textContent || '').trim() : '');
+        const msg = el.querySelector('#refusal-dialog-message');
+        const body = msg ? msg.parentElement : null;
+        const paras = body ? Array.from(body.querySelectorAll(':scope > p')) : [];
+        const original = paras.find((n) => n.getAttribute('lang') === 'en');
+        const note = paras.find((n) => n !== msg && n !== original && /note/i.test(n.className));
+        return {
+            title: text(el.querySelector('#refusal-dialog-title')),
+            message: text(msg),
+            items: body ? Array.from(body.querySelectorAll('li')).map(text) : [],
+            original: original ? text(original) : null,
+            note: note ? text(note) : null,
+            all: text(el),
+        };
+    });
+}
+// REFUSAL-DIALOG-2026-003: the dialog only closes on OK / × / Esc — close it so later steps are not blocked.
+async function closeRefusalDialog(p) {
+    const dlg = p.locator('[data-testid="refusal-dialog"]');
+    if (await dlg.count() === 0) return;
+    await dlg.getByRole('button', { name: 'OK', exact: true }).click();
+    await dlg.waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+}
+
 async function loginOnPage(page, username) {
     await page.addInitScript(() => localStorage.setItem('language', 'en'));
     await page.goto(`${BASE}/login`);
@@ -280,19 +310,25 @@ for (const mod of MODULES) {
     await page.waitForTimeout(900);
     await page.unroute(`**/api/${mod.key}/**`);
 
-    // Exact expected text: describeSaveError() never shows the raw response body for a
-    // 5xx (regardless of what the backend's `detail` field actually contains — the whole
-    // point is that it must NOT leak through), wrapped in the same saveFlow.failedKeep
-    // template NOI/NCR already used. All three modules must now produce this identical
-    // string for the identical failure shape (localStorage forces English, so this is a
-    // plain string comparison, not a loose "looks readable" heuristic).
-    const EXPECTED_500_TEXT = 'Not saved — everything you entered is kept. Server error (HTTP 500). Try again later or contact an administrator.';
-    const toastLocator = page.locator('[data-sonner-toast]').first();
-    const toastCount = await toastLocator.count();
-    const toastText = toastCount > 0 ? (await toastLocator.innerText()).trim() : '';
-    assertTrue(toastCount > 0, `[${mod.key}] a visible toast/error notification appears after the simulated failure`);
-    assertTrue(toastText === EXPECTED_500_TEXT, `[${mod.key}] the error notification shows the EXACT expected friendly text (expected "${EXPECTED_500_TEXT}", got "${toastText}")`);
-    assertTrue(!toastText.includes(RAW_DETAIL), `[${mod.key}] the error notification does NOT contain the raw backend detail string`);
+    // REFUSAL-DIALOG-2026-003: the failure now opens the shared refusal dialog instead of the
+    // old saveFlow.failedKeep sonner toast. describeRefusal() never shows the raw response body
+    // for a 5xx (regardless of what the backend's `detail` field contains — it must NOT leak
+    // through); the form stays open (keepsInput), so the 5xx "could not confirm" note follows.
+    // All three modules must produce these identical strings (localStorage forces English, so
+    // these are plain string comparisons, not a loose "looks readable" heuristic).
+    const EXPECTED_TITLE = 'Save failed';
+    const EXPECTED_500_TEXT = 'The server ran into a problem (HTTP 500). Try again later; if it keeps happening, contact an administrator.';
+    const EXPECTED_NOTE = 'Could not confirm whether it was saved. What you entered is still here; reload the list to check before trying again.';
+    const dialog = await readRefusalDialog(page);
+    assertTrue(dialog !== null, `[${mod.key}] the refusal dialog appears after the simulated failure`);
+    assertTrue(dialog?.title === EXPECTED_TITLE, `[${mod.key}] the refusal dialog title is EXACTLY "${EXPECTED_TITLE}" (got "${dialog?.title}")`);
+    assertTrue(dialog?.message === EXPECTED_500_TEXT, `[${mod.key}] the refusal dialog shows the EXACT expected friendly text (expected "${EXPECTED_500_TEXT}", got "${dialog?.message}")`);
+    assertTrue(dialog?.note === EXPECTED_NOTE, `[${mod.key}] the refusal dialog note is the 5xx kept-input line (expected "${EXPECTED_NOTE}", got "${dialog?.note}")`);
+    assertTrue(!(dialog?.all ?? '').includes(RAW_DETAIL), `[${mod.key}] the refusal dialog does NOT contain the raw backend detail string`);
+    const errorToastCount = await page.locator('[data-sonner-toast][data-type="error"]').count();
+    assertTrue(errorToastCount === 0, `[${mod.key}] no sonner error toast is shown for the failed save (got ${errorToastCount})`);
+    await page.screenshot({ path: `${OUT}/d-${mod.key}-save-failure-dialog.png` });
+    await closeRefusalDialog(page);
 
     const modalStillOpen = await page.locator('h2').filter({ hasText: /Edit/ }).count();
     const remarkValueAfterFailure = await remarkField.inputValue();

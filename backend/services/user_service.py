@@ -2,6 +2,7 @@ import unicodedata
 from datetime import date, datetime, timezone
 from typing import List, Optional
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from passlib.context import CryptContext
 import models
 import schemas
@@ -62,6 +63,14 @@ def _admin_like_name(name: Optional[str]) -> bool:
     the same one the seeder and every guard use); this only stops a non-Admin
     from creating or renaming a role into that neighbourhood."""
     return unicodedata.normalize("NFKC", name or "").strip().casefold() == "admin"
+
+
+def _role_clash(exc: Exception, name) -> Exception:
+    """roles.name is unique: renaming a role to a name another role already has used to fall through to a 500. Same answer as
+    the create check in routers/iam.py: 400 "Role already exists", code DUPLICATE_NAME (REFUSAL-DIALOG-2026-003)."""
+    if isinstance(exc, IntegrityError) and ("UNIQUE constraint failed: roles.name" in str(exc) or "ix_roles_name" in str(exc)):
+        return RefusalHTTPException(400, "Role already exists", "DUPLICATE_NAME", {"docType": "role", "name": name})
+    return exc
 
 
 class UserService:
@@ -199,9 +208,9 @@ class UserService:
         current_username: str = None
     ) -> models.User:
         if self.repo.get_by_email(user.email):
-            raise HTTPException(status_code=400, detail="Email already registered")
+            raise RefusalHTTPException(400, "Email already registered", "DUPLICATE_NAME", {"docType": "user", "field": "email", "name": user.email})
         if self.repo.get_by_username(user.username):
-            raise HTTPException(status_code=400, detail="Username already registered")
+            raise RefusalHTTPException(400, "Username already registered", "DUPLICATE_NAME", {"docType": "user", "field": "username", "name": user.username})
         company_name = (user.company_name or "").strip()
         if not company_name:
             raise HTTPException(status_code=400, detail=_COMPANY_REQUIRED)
@@ -309,11 +318,13 @@ class UserService:
             if "username" in update_dict:
                 other = self.repo.get_by_username(update_dict["username"])
                 if other and other.id != user_id:
-                    raise HTTPException(status_code=400, detail="Username already registered")
+                    raise RefusalHTTPException(400, "Username already registered", "DUPLICATE_NAME",
+                                               {"docType": "user", "field": "username", "name": update_dict["username"]})
             if "email" in update_dict:
                 other = self.repo.get_by_email(update_dict["email"])
                 if other and other.id != user_id:
-                    raise HTTPException(status_code=400, detail="Email already registered")
+                    raise RefusalHTTPException(400, "Email already registered", "DUPLICATE_NAME",
+                                               {"docType": "user", "field": "email", "name": update_dict["email"]})
 
             # Never let the LAST active admin stop being one (deactivated, or
             # moved to a non-admin role), whatever the path or the letter case
@@ -428,9 +439,9 @@ class UserService:
             self.repo.db.commit()
             self.repo.db.refresh(created_role)
             return created_role
-        except Exception:
+        except Exception as e:
             self.repo.db.rollback()
-            raise
+            raise _role_clash(e, role.name)
 
     def update_role(
         self,
@@ -500,9 +511,9 @@ class UserService:
             self.repo.db.commit()
             self.repo.db.refresh(updated_role)
             return updated_role
-        except Exception:
+        except Exception as e:
             self.repo.db.rollback()
-            raise
+            raise _role_clash(e, role_update.name)
 
     def delete_role(
         self,

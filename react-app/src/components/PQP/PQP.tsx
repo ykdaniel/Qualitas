@@ -18,6 +18,7 @@ import { useDebounce } from '../../hooks/useDebounce';
 import { useCreateGate } from '../../hooks/useCreateGate';
 import { uploadFiles, deleteFile } from '../../services/api';
 import { classifyDeleteResults } from '../../utils/attachmentOutcome';
+import { describeSaveError } from '../../utils/saveErrors';
 
 type StatusFilter = 'all' | 'notSubmit' | 'underReview' | 'approved' | 'reject' | 'reviseResubmit';
 
@@ -176,9 +177,9 @@ const PQP: React.FC = () => {
       try {
         await uploadFiles('pqp', targetId, pendingFiles);
         uploadedPending = true;
-      } catch (err: any) {
-        const detail = err?.response?.data?.detail || err?.message;
-        errors.push(`上傳附件：${detail || '上傳失敗'}`);
+      } catch (err) {
+        // the reason in words (a 5xx never shows its body) — REFUSAL-DIALOG-2026-003
+        errors.push(`上傳附件：${describeSaveError(err, t)}`);
       }
     }
 

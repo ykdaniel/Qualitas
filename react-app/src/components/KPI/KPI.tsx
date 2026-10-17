@@ -26,6 +26,7 @@ import styles from './KPI.module.css';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns, KPIItem } from './columns';
+import { showRefusal } from '../../store/refusalStore';
 
 const VENDOR_COLORS = [
   '#2563eb', '#c8753f', '#7a8f5a', '#b8945a', '#0ea5e9', '#059669',
@@ -85,8 +86,8 @@ const KPI: React.FC = () => {
         ncr_weight: Math.round(weights.ncr * 100),
       });
       toast.success(t('kpi.weightsSaved') || 'Weights saved');
-    } catch (err: any) {
-      toast.error(err?.response?.data?.detail || (err as Error)?.message || t('kpi.weightsSaveFailed') || 'Failed to save weights');
+    } catch (err) {
+      showRefusal(err, 'save');     // refused or failed: the refusal dialog, the weights stay on the page (REFUSAL-DIALOG-2026-003)
     } finally {
       setSavingWeights(false);
     }

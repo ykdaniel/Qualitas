@@ -45,12 +45,15 @@ def normalize_project_code(db, code, project_id: Optional[str] = None) -> str:
     return value
 
 
-def _code_clash(exc: Exception, code) -> Exception:
+def _code_clash(exc: Exception, code, name=None) -> Exception:
     """A create/update that lost a race for the same code hits the unique index (migration step 28): the same 400 as the
-    check above, not a 500 (B3 R1 P3-4). Any other error is returned unchanged."""
+    check above, not a 500 (B3 R1 P3-4). The same for the project name (projects.name is unique; it used to answer 500 —
+    REFUSAL-DIALOG-2026-003: 400 DUPLICATE_NAME). Any other error is returned unchanged."""
     if isinstance(exc, IntegrityError) and "ux_projects_code_upper" in str(exc):
         value = (code or "").strip().upper()
         return Refusal("PROJECT_CODE_DUPLICATE", f"Project code '{value}' is already used by another project.", projectCode=value)
+    if isinstance(exc, IntegrityError) and ("UNIQUE constraint failed: projects.name" in str(exc) or "ix_projects_name" in str(exc)):
+        return Refusal("DUPLICATE_NAME", f"A project named '{name}' already exists.", docType="project", name=name)
     return exc
 
 
@@ -87,7 +90,7 @@ class ProjectService:
         except Exception as e:
             self.repo.db.rollback()
             logger.error(f"Error creating Project: {e}", exc_info=True)
-            raise _code_clash(e, project_create.code)
+            raise _code_clash(e, project_create.code, project_create.name)
 
     def update_project(self, project_id: str, project_update: schemas.ProjectUpdate, user_id: int = None, username: str = None) -> Optional[models.Project]:
         try:
@@ -110,7 +113,7 @@ class ProjectService:
         except Exception as e:
             self.repo.db.rollback()
             logger.error(f"Error updating Project {project_id}: {e}", exc_info=True)
-            raise _code_clash(e, project_update.code)
+            raise _code_clash(e, project_update.code, project_update.name)
 
     def delete_project(self, project_id: str, user_id: int = None, username: str = None) -> bool:
         try:

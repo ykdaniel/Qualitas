@@ -8,6 +8,9 @@ import { useNavigate } from 'react-router-dom';
 import { ChecklistSnapshotModal } from './ChecklistSnapshotModal';
 import { useChecklistStore } from '../../store/checklistStore';
 import { showRefusal } from '../../store/refusalStore';
+import { SaveFollowUpBanner } from '../Shared/SaveFollowUpBanner';
+import { presentOutcome } from '../../utils/saveErrors';
+import { followUpOf, type FollowUp, type SaveOutcome } from '../../utils/saveFlow';
 import { ShieldCheck, ClipboardCheck, ArrowRight, AlertCircle, Info, Printer, FileText } from 'lucide-react';
 import { getNextRevision } from '../../utils/revision';
 import { useLanguage } from '../../context/LanguageContext';
@@ -87,14 +90,19 @@ export interface ITRDetailData {
     inspectionResult: string; // Pass / Fail / Conditional — drives Q-Workflow checkpoints 3 & 7
 }
 
+export type ITRSaveOutcome = SaveOutcome & { keptOpen?: true };
+
 export interface ITRDetailModalProps {
     itrId: string | null;
     existingData?: ITRDetailData;
     existingItem?: ITRItem;
     itrList: ITRItem[];
-    /** Resolves `{ keptOpen: true }` when the parent switched the modal over to the record it just created
-     *  (it stays open on it), so the modal must not close itself. */
-    onSave: (details: ITRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[], publishOnly?: boolean) => void | Promise<void | { keptOpen: true }>;
+    /** Resolves to the save outcome (REFUSAL-DIALOG-2026-003: the shared save chain). `keptOpen` means the parent switched the modal
+     *  over to the record it just created (it stays open on it), so the modal must not close itself. A Publish of an already
+     *  Approved ITR (`publishOnly`) resolves to nothing: the parent handles it. */
+    onSave: (details: ITRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[], publishOnly?: boolean) => Promise<ITRSaveOutcome | void>;
+    /** Retries only the unfinished file steps of the record already stored by this form. */
+    onRetryFiles?: (pendingUploads: PendingUploads[], deletedFileIds: string[]) => Promise<ITRSaveOutcome>;
     onClose: () => void;
     // Plain "close the modal, don't run onClose's deep-link back-navigation" —
     // used when this modal is about to navigate elsewhere itself (Raise
@@ -107,7 +115,7 @@ export interface ITRDetailModalProps {
     readOnly?: boolean;
 }
 
-export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingData, existingItem, itrList: _propItrList, onSave, onClose, onDismiss, onRevoked, readOnly = false }) => {
+export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingData, existingItem, itrList: _propItrList, onSave, onRetryFiles, onClose, onDismiss, onRevoked, readOnly = false }) => {
     const { t } = useLanguage();
     const { hasPermission } = useAuth();
     const { getActiveContractors } = useContractorsStore();
@@ -254,6 +262,10 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         { category: 'certificate', files: [] },
     ]);
     const [deletedFileIds, setDeletedFileIds] = useState<string[]>([]);
+    // REFUSAL-DIALOG-2026-003: bumped per category once its upload went through, so its FileAttachment reloads the stored list.
+    const [syncTokens, setSyncTokens] = useState<Record<string, number>>({});
+    // What is still owed after a "saved, but a file step failed" outcome (see SaveFollowUpBanner).
+    const [followUp, setFollowUp] = useState<FollowUp | null>(null);
 
     // Stored files live in the attachment table, so each FileAttachment below fetches its own list
     // (same as NCR). Passing the record's columns as `attachments` — an empty array for every upload,
@@ -534,19 +546,67 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
             toast.warning(t('itr.validation.noiRequired') || 'Please select an NOI Number.');
             return;
         }
+        // Same reason as handlePublish (user's decision 2026-10-17, review R1 P2-1): saving the status to Approved or Void locks the
+        // attachments, and the record is written before the files — pending file changes would then fail with no way to retry.
+        const lockingStatus = (formData.status === 'Approved' || formData.status === 'Void') && formData.status !== persistedStatus;
+        if (lockingStatus && (pendingUploads.some(p => p.files.length > 0) || deletedFileIds.length > 0)) {
+            toast.warning(t('itr.statusChangeNeedsSaveFirst'), { duration: 8000 });
+            return;
+        }
 
         try {
             setSaving(true);
-            const outcome = (await onSave(formData, pendingUploads, deletedFileIds)) as { keptOpen: true } | undefined;
-            leaveGuard.release();
-            if (!outcome?.keptOpen) onClose();
-        } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
-            // 錯誤已在父層 handleSaveITRDetails 以 toast 顯示，保持 modal 開啟
+            const outcome = await onSave(formData, pendingUploads, deletedFileIds);
+            if (outcome) applyOutcome(outcome, !existingItem);
+        } catch (err) {
+            showRefusal(err, 'save', { keepsInput: true });
         } finally { setSaving(false); }
+    };
+
+    // Shared by "Save" and "retry remaining files": trims what already went through, shows the ONE message, closes only when done
+    // (REFUSAL-DIALOG-2026-003, the same contract as NCR).
+    const applyOutcome = (outcome: ITRSaveOutcome, created: boolean) => {
+        if (outcome.status === 'saved-incomplete') {
+            // The record is stored. Drop what already went through so a retry only redoes the rest.
+            const done = new Set(outcome.uploadedCategories);
+            setPendingUploads(prev => prev.map(p => (done.has(p.category) ? { ...p, files: [] } : p)));
+            setDeletedFileIds(outcome.remainingDeletes);
+            setSyncTokens(prev => outcome.uploadedCategories.reduce((acc, c) => ({ ...acc, [c]: (acc[c] ?? 0) + 1 }), { ...prev }));
+            setFollowUp(prev => followUpOf(outcome, prev?.created ?? created));
+        } else if (outcome.status !== 'failed') {
+            setFollowUp(null);
+        }
+        const { close, notice, refusal } = presentOutcome(outcome, t);
+        if (refusal) showRefusal(refusal.error, 'save', { keepsInput: true });
+        if (notice) (notice.level === 'error' ? toast.error : toast.warning)(notice.text, { duration: 10000 });
+        if (close) {
+            leaveGuard.release();
+            if (!outcome.keptOpen) onClose();       // kept open: the parent re-keys this modal onto the record just created
+        }
+    };
+
+    // Retries only the unfinished file steps: the record itself is not written again.
+    const retryFiles = async () => {
+        if (!onRetryFiles || saving) return;
+        setSaving(true);
+        try {
+            applyOutcome(await onRetryFiles(pendingUploads, deletedFileIds), false);
+        } catch (err) {
+            showRefusal(err, 'save', { keepsInput: true });
+        } finally {
+            setSaving(false);
+        }
     };
 
     const handlePublish = () => {
         if (blockedByUnsavedChecklist()) return;
+        // Approving locks the ITR's attachments (server: 409 ATTACHMENT_LOCKED), and the save chain writes the record BEFORE it
+        // uploads or removes files — so files still pending here would all fail once it is Approved, with no way to retry.
+        // User's decision 2026-10-17 (Q1 a, same as OBS close): save the file changes first, publish in a second step.
+        if (pendingUploads.some(p => p.files.length > 0) || deletedFileIds.length > 0) {
+            toast.warning(t('itr.publishNeedsSaveFirst'), { duration: 8000 });
+            return;
+        }
         const nextRev = getNextRevision(formData.type || 'Rev0.0');
         setPublishConfirm({ show: true, nextRev });
     };
@@ -558,14 +618,18 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
             // publishOnly=true tells the parent to send ONLY type/status —
             // the backend rejects any other field on a locked (Approved)
             // ITR, so the rest of formData must not be included here.
-            await onSave({
+            const outcome = await onSave({
                 ...formData,
                 type: nextRev,
                 status: 'Approved'
             }, [], [], true);
-            // onClose is handled by parent (handleSaveITRDetails sets isEditModalOpen=false)
-        } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
-            // Error already shown by parent handleSaveITRDetails toast
+            // Closing is handled by the parent (handleSaveITRDetails closes the modal once it is stored). A first approval goes through the
+            // save chain with no files (they must be saved first, see handlePublish) and resolves to its outcome; only a refusal or a
+            // stale list is left to show here, exactly as before (REFUSAL-DIALOG-2026-002 showed both through the parent).
+            if (outcome && outcome.status === 'failed') showRefusal(outcome.error, 'save', { keepsInput: true });
+            else if (outcome && outcome.status === 'saved-reload-failed') toast.warning(t('saveFlow.savedReloadFailed'), { duration: 10000 });
+        } catch (err) {
+            showRefusal(err, 'save', { keepsInput: true });
         } finally { setSaving(false); }
     };
 
@@ -711,6 +775,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                     <button className={formStyles.closeButton} aria-label={t('common.close')} title={t('common.close')} onClick={requestClose}>×</button>
                 </div>
                 <div className={formStyles.modalBody}>
+                <SaveFollowUpBanner followUp={followUp} canEditFields={!readOnly} canRetry={!readOnly && !!onRetryFiles} busy={saving} onRetry={() => { void retryFiles(); }} />
                 <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minInlineSize: 'auto' }}>
                     {isLocked && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#fef9c3', border: '1px solid #fde047', borderRadius: '6px', padding: '8px 14px', marginBottom: '12px', color: '#854d0e', fontSize: '13px', fontWeight: 600 }}>
@@ -1193,7 +1258,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                         onDeleteExistingFile={handleDeleteExistingFile}
                                         entityType="itr"
                                         entityId={existingItem?.id}
-                                        category="defectPhoto"
+                                        category="defectPhoto" syncToken={syncTokens.defectPhoto}
                                         accept="image/*"
                                         id="defectPhoto"
                                         hideTitle
@@ -1211,7 +1276,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                         onDeleteExistingFile={handleDeleteExistingFile}
                                         entityType="itr"
                                         entityId={existingItem?.id}
-                                        category="improvementPhoto"
+                                        category="improvementPhoto" syncToken={syncTokens.improvementPhoto}
                                         accept="image/*"
                                         id="improvementPhoto"
                                         hideTitle
@@ -1234,7 +1299,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                 onDeleteExistingFile={handleDeleteExistingFile}
                                 entityType="itr"
                                 entityId={existingItem?.id}
-                                category="drawing"
+                                category="drawing" syncToken={syncTokens.drawing}
                                 id="drawing"
                                 hideTitle
                                 onPreview={handlePreview}
@@ -1254,7 +1319,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                 onDeleteExistingFile={handleDeleteExistingFile}
                                 entityType="itr"
                                 entityId={existingItem?.id}
-                                category="certificate"
+                                category="certificate" syncToken={syncTokens.certificate}
                                 id="certificate"
                                 hideTitle
                                 onPreview={handlePreview}
@@ -1274,7 +1339,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                 onDeleteExistingFile={handleDeleteExistingFile}
                                 entityType="itr"
                                 entityId={existingItem?.id}
-                                category="attachment"
+                                category="attachment" syncToken={syncTokens.attachment}
                                 id="attachment"
                                 hideTitle
                                 onPreview={handlePreview}

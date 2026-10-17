@@ -21,6 +21,55 @@ const log = (...a) => console.log(new Date().toISOString(), ...a);
 let checks = 0;
 const check = (v, msg) => { if (!v) throw new Error(`FAILED: ${msg}`); checks++; log('PASS', msg); };
 
+// REFUSAL-DIALOG-2026-003: a failed save no longer shows a sonner toast; it opens the shared refusal
+// dialog (react-app/src/components/Shared/RefusalDialog.tsx). Reads its parts; null if it never shows.
+async function readRefusalDialog(p, timeout = 5000) {
+    const dlg = p.locator('[data-testid="refusal-dialog"]');
+    try { await dlg.waitFor({ state: 'visible', timeout }); } catch { return null; }
+    return dlg.evaluate((el) => {
+        const text = (n) => (n ? (n.textContent || '').trim() : '');
+        const msg = el.querySelector('#refusal-dialog-message');
+        const body = msg ? msg.parentElement : null;
+        const paras = body ? Array.from(body.querySelectorAll(':scope > p')) : [];
+        const original = paras.find((n) => n.getAttribute('lang') === 'en');
+        const note = paras.find((n) => n !== msg && n !== original && /note/i.test(n.className));
+        return {
+            title: text(el.querySelector('#refusal-dialog-title')),
+            message: text(msg),
+            items: body ? Array.from(body.querySelectorAll('li')).map(text) : [],
+            original: original ? text(original) : null,
+            note: note ? text(note) : null,
+            all: text(el),
+        };
+    });
+}
+// REFUSAL-DIALOG-2026-003: the dialog only closes on OK / × / Esc — close it so later steps are not blocked.
+async function closeRefusalDialog(p) {
+    const dlg = p.locator('[data-testid="refusal-dialog"]');
+    if (await dlg.count() === 0) return;
+    await dlg.getByRole('button', { name: 'OK', exact: true }).click();
+    await dlg.waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+}
+// REFUSAL-DIALOG-2026-003: both forms simulate a PUT answered with HTTP 500 {"detail": "Simulated 500"}.
+// ContractorModal.tsx / ProjectModal.tsx now call showRefusal(err, 'save', { keepsInput: true }) instead of
+// toast.error(t('common.saveFailed')), so the expected dialog is the 5xx "Save failed" one (the body is never
+// shown) plus the 5xx kept-input note (English strings from context/LanguageContext.tsx).
+const EXPECTED_FAIL_TITLE = 'Save failed';
+const EXPECTED_FAIL_MESSAGE = 'The server ran into a problem (HTTP 500). Try again later; if it keeps happening, contact an administrator.';
+const EXPECTED_FAIL_NOTE = 'Could not confirm whether it was saved. What you entered is still here; reload the list to check before trying again.';
+async function checkSaveFailedDialog(label) {
+    const dialogCount = await page.locator('[data-testid="refusal-dialog"]').count();
+    check(dialogCount === 1, `${label}: EXACTLY one refusal dialog shown (got ${dialogCount})`);
+    const errorToasts = await page.locator('[data-sonner-toast][data-type="error"]').count();
+    check(errorToasts === 0, `${label}: no sonner error toast shown (got ${errorToasts})`);
+    const d = await readRefusalDialog(page);
+    check(d?.title === EXPECTED_FAIL_TITLE, `${label}: the dialog title matches exactly (got "${d?.title}", expected "${EXPECTED_FAIL_TITLE}")`);
+    check(d?.message === EXPECTED_FAIL_MESSAGE, `${label}: the dialog message matches the 5xx text (got "${d?.message}")`);
+    check(d?.note === EXPECTED_FAIL_NOTE, `${label}: the dialog note is the 5xx kept-input line (got "${d?.note}")`);
+    check(!(d?.all ?? '').includes('Simulated 500'), `${label}: the dialog does not echo the 5xx response body`);
+    await closeRefusalDialog(page);
+}
+
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 page.setDefaultTimeout(15000);
@@ -111,17 +160,12 @@ await scopeField().fill('SHOULD FAIL — contractor retry test');
 const saveBtn = page.getByRole('button', { name: /^Save$/ });
 await saveBtn.click();
 await page.waitForTimeout(1000);
-await page.screenshot({ path: `${OUT}/contractor-04-save-failure-toast.png` });
+await page.screenshot({ path: `${OUT}/contractor-04-save-failure-dialog.png` });
 check(await page.locator('[class*="modalForm"]').count() === 1, 'Contractor: modal stays open after simulated failure');
 check((await scopeField().inputValue()) === 'SHOULD FAIL — contractor retry test', 'Contractor: input preserved after failure');
 check(await saveBtn.isEnabled(), 'Contractor: Save button re-enabled after failure');
-const contractorFailToastCount = await page.locator('[data-sonner-toast]').count();
-check(contractorFailToastCount === 1, `Contractor: EXACTLY one error toast shown (got ${contractorFailToastCount}, not just >=1)`);
-const contractorFailToastText = await page.locator('[data-sonner-toast]').first().innerText();
-// ContractorModal.tsx's save catch is a bare `catch { toast.error(t('common.saveFailed')) }` —
-// it never reads the error at all, so the exact text is always this one fixed string regardless
-// of status code or response body (context/LanguageContext.tsx's English value).
-check(contractorFailToastText === 'Save Failed', `Contractor: the toast's exact text matches common.saveFailed (got "${contractorFailToastText}")`);
+// REFUSAL-DIALOG-2026-003: was one sonner toast 'Save Failed' (common.saveFailed); now the refusal dialog.
+await checkSaveFailedDialog('Contractor');
 await scopeField().fill('RETRY SUCCEEDED — contractor final');
 apiCalls.length = 0;
 await saveBtn.click();
@@ -218,15 +262,12 @@ await projectCodeField().fill('FAILCODE');
 const projSaveBtn = page.getByRole('button', { name: /Save Changes/i });
 await projSaveBtn.click();
 await page.waitForTimeout(1000);
-await page.screenshot({ path: `${OUT}/project-04-save-failure-toast.png` });
+await page.screenshot({ path: `${OUT}/project-04-save-failure-dialog.png` });
 check(await page.locator('[class*="modalForm"]').count() === 1, 'Project: modal stays open after simulated failure');
 check((await projectCodeField().inputValue()) === 'FAILCODE', 'Project: input preserved after failure');
 check(await projSaveBtn.isEnabled(), 'Project: Save button re-enabled after failure');
-const projectFailToastCount = await page.locator('[data-sonner-toast]').count();
-check(projectFailToastCount === 1, `Project: EXACTLY one error toast shown (got ${projectFailToastCount}, not just >=1)`);
-const projectFailToastText = await page.locator('[data-sonner-toast]').first().innerText();
-// Same shape as Contractor: ProjectModal.tsx's save catch is a bare `catch { toast.error(t('common.saveFailed')) }`.
-check(projectFailToastText === 'Save Failed', `Project: the toast's exact text matches common.saveFailed (got "${projectFailToastText}")`);
+// REFUSAL-DIALOG-2026-003: was one sonner toast 'Save Failed' (common.saveFailed); now the refusal dialog.
+await checkSaveFailedDialog('Project');
 await projectCodeField().fill('RETRYCODE');
 projApiCalls.length = 0;
 await projSaveBtn.click();

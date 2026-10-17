@@ -24,7 +24,6 @@ import { useNOIStore } from '../../store/noiStore';
 import { useITPStore } from '../../store/itpStore';
 import { useITRStore } from '../../store/itrStore';
 import { useContractorsStore } from '../../store/contractorsStore';
-import { getErrorMessage } from '../../utils/errorUtils';
 import { exportChecklistDocx } from '../../services/api';
 
 // --- ITP 資料庫定義 ---
@@ -290,9 +289,9 @@ const Checklist: React.FC = () => {
                                     : t('checklist.saveSuccessWithVersion', { version: String(version) })
                             );
                             setView('list');
-                        } catch (err: any) {
-                            const detail = getErrorMessage(err, t('common.saveFailed'));
-                            toast.error(detail);
+                        } catch (err) {
+                            // refused or failed: the refusal dialog, the editor keeps every entry (REFUSAL-DIALOG-2026-003)
+                            showRefusal(err, 'save', { keepsInput: true });
                         } finally {
                             setSaving(false);
                         }
@@ -318,9 +317,8 @@ const Checklist: React.FC = () => {
                             await updateRecord(editingRecord.id, { status: 'Ongoing' } as any);
                             const refreshed = records.find(r => r.id === editingRecord.id);
                             if (refreshed) setEditingRecord(refreshed);
-                        } catch (err: any) {
-                            const detail = getErrorMessage(err, t('common.saveFailed'));
-                            toast.error(detail);
+                        } catch (err) {
+                            showRefusal(err, 'save');       // a refused Reopen: the refusal dialog (REFUSAL-DIALOG-2026-003)
                         } finally {
                             setSaving(false);
                         }

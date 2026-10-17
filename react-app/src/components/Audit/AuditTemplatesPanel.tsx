@@ -6,6 +6,7 @@ import shellStyles from '../Shared/ModuleShell.module.css';
 import { useLeaveGuard } from '../Shared/LeaveGuard';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuditTemplateStore, AuditTemplate, AuditTemplateItem } from '../../store/auditTemplateStore';
+import { showRefusal } from '../../store/refusalStore';
 
 /**
  * The audit template library's management tab (AUDIT-TEMPLATES-2026-001), shown on the Audit page to holders of
@@ -102,8 +103,9 @@ export default function AuditTemplatesPanel({ onDirtyChange }: AuditTemplatesPan
             setDraft(next);
             setBaseline(comparable(next));
             toast.success(t('audit.templates.saved'));
-        } catch (err: any) {
-            toast.error(err?.status === 409 ? t('audit.templates.duplicateName') : t('audit.templates.saveFailed'));
+        } catch (err) {
+            // refused or failed (a duplicate name is 409 DUPLICATE_NAME now): the refusal dialog, the draft is kept (REFUSAL-DIALOG-2026-003)
+            showRefusal(err, 'save', { keepsInput: true });
         } finally {
             setSaving(false);
         }

@@ -15,9 +15,11 @@ import { useChecklistStore } from '../../store/checklistStore';
 import { checkITRChecklistReferences, generateDeleteMessage } from '../../utils/cascadeDelete';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
-import { ITRDetailModal, ITRDetailData, PendingUploads } from './ITRModals';
+import { ITRDetailModal, ITRDetailData, PendingUploads, type ITRSaveOutcome } from './ITRModals';
 import ConfirmModal from '../Shared/ConfirmModal';
 import { uploadFiles, deleteFile } from '../../services/api';
+import { describeSaveError } from '../../utils/saveErrors';
+import { runSaveFlow, sameWrite, type SaveOutcome } from '../../utils/saveFlow';
 import shellStyles from '../Shared/ModuleShell.module.css';
 
 type StatusFilter = 'all' | 'inProgress' | 'approved' | 'reject' | 'void' | 'overdue';
@@ -61,12 +63,17 @@ const ITR: React.FC = () => {
 
     const statistics = useITRStats(itrList);
 
+    // The last successful record write of the open modal (id + serialized payload) — see runSaveFlow / sameWrite.
+    const lastWriteRef = useRef<{ id: string; key: string } | null>(null);
+
     const handleAddNew = () => {
+        lastWriteRef.current = null;
         setCurrentItrId(null);
         setIsEditModalOpen(true);
     };
 
     const handleEdit = React.useCallback((id: string) => {
+        lastWriteRef.current = null;
         setCurrentItrId(id);
         setIsEditModalOpen(true);
     }, []);
@@ -119,7 +126,43 @@ const ITR: React.FC = () => {
         }
     };
 
-    const handleSaveITRDetails = async (details: ITRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[], publishOnly?: boolean) => {
+    const fileSteps = {
+        upload: (id: string, group: { category: string; files: File[] }) => uploadFiles('itr', id, group.files, group.category),
+        remove: deleteFile,
+        reload: async () => { await refetch(); return !useITRStore.getState().error; },
+        describe: (e: unknown) => describeSaveError(e, t),
+    };
+
+    // Once everything is stored: a new ITR stays open on the record just created (2026-10-10: checklists can only be linked to a
+    // saved ITR); the modal is keyed on the id, so it reopens fresh from the stored record. Existing ITRs close.
+    const settle = (outcome: SaveOutcome): ITRSaveOutcome => {
+        if (outcome.status !== 'saved' && outcome.status !== 'saved-reload-failed') return outcome;
+        const id = lastWriteRef.current?.id;
+        if (!currentItrId && id && useITRStore.getState().itrList.some(i => i.id === id)) {
+            const number = useITRStore.getState().itrList.find(i => i.id === id)?.documentNumber || '';
+            setCurrentItrId(id);
+            toast.success(t('itr.createdKeepOpen', { number }));
+            return { ...outcome, keptOpen: true };
+        }
+        setIsEditModalOpen(false);
+        setCurrentItrId(null);
+        return outcome;
+    };
+
+    // Retry of the unfinished file steps only: the record is stored already and is NOT written again.
+    const handleRetryITRFiles = async (pendingUploads: PendingUploads[], deletedFileIds: string[]): Promise<ITRSaveOutcome> => {
+        const id = lastWriteRef.current?.id;
+        if (!id) return { status: 'failed', message: t('common.saveFailed') };
+        return settle(await runSaveFlow({
+            writeRecord: async () => { throw new Error('a file retry never writes the record'); },
+            reuseId: id,
+            uploads: pendingUploads,
+            deletedFileIds,
+            ...fileSteps,
+        }));
+    };
+
+    const handleSaveITRDetails = async (details: ITRDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[], publishOnly?: boolean): Promise<ITRSaveOutcome | void> => {
         // Publish behaves differently depending on whether the ITR is ALREADY Approved:
         // - Already Approved (re-Publish to bump the revision): the backend locks every field but
         //   type/status/detail_data on a locked record and rejects anything else outright, so only
@@ -187,67 +230,26 @@ const ITR: React.FC = () => {
             }),
         };
 
-        try {
-            let targetId = currentItrId;
-            let createdNumber = '';
-            if (currentItrId) {
-                await updateITR(currentItrId, itemData);
-            } else {
-                const newITR = await addITR(itemData);
-                targetId = newITR.id;
-                createdNumber = newITR.documentNumber || '';
-            }
-
-            if (deletedFileIds && deletedFileIds.length > 0) {
-                for (const fileId of deletedFileIds) {
-                    try {
-                        await deleteFile(fileId);
-                    } catch (error) {
-                        console.error('Error deleting file:', fileId, error);
-                    }
+        // REFUSAL-DIALOG-2026-003 (user's decision 2026-10-17): the same save chain as NCR / OBS / NOI. A record that is stored while a
+        // file step failed keeps the modal open with the amber follow-up banner and a retry of only the leftover files; a refused or
+        // failed record write goes to the refusal dialog (the modal shows it). A new ITR whose record exists but whose files are not
+        // done yet stays on this (unkeyed-by-id) form so the pending files survive; the retry then targets the stored record.
+        const targetId = currentItrId ?? lastWriteRef.current?.id ?? null;
+        const outcome = await runSaveFlow({
+            writeRecord: async () => {
+                if (targetId) {
+                    await updateITR(targetId, itemData);
+                    return targetId;
                 }
-            }
-
-            if (pendingUploads && pendingUploads.length > 0) {
-                for (const uploadGroup of pendingUploads) {
-                    if (uploadGroup.files.length > 0) {
-                        try {
-                            await uploadFiles('itr', targetId as string, uploadGroup.files, uploadGroup.category);
-                        } catch (error) {
-                            console.error(`Error uploading files for category ${uploadGroup.category}:`, error);
-                            toast.error(`Failed to upload some files for ${uploadGroup.category}.`);
-                        }
-                    }
-                }
-            }
-
-            await refetch();
-
-            // A new ITR stays open on the record just created (2026-10-10): checklists can only be linked to a
-            // saved ITR, and closing here sent the user back to the list to find it before they could go on.
-            // The modal is keyed on the id, so it reopens fresh from the stored record. Existing ITRs still close.
-            if (!currentItrId && targetId && useITRStore.getState().itrList.some(i => i.id === targetId)) {
-                setCurrentItrId(targetId);
-                toast.success(t('itr.createdKeepOpen', { number: createdNumber }));
-                return { keptOpen: true as const };
-            }
-
-            setIsEditModalOpen(false);
-            setCurrentItrId(null);
-        } catch (error: any) {
-            // REFUSAL-DIALOG-2026-002: shown in the refusal dialog. It never shows a 5xx body, and for a 5xx or a network error
-            // (which does not prove the write never reached the server) it says it could not confirm the save, instead of "not
-            // saved" — what FORMS-CONSISTENCY-2026-004's itr.saveNotConfirmed wording used to say. The page banner is for list loads only.
-            showRefusal(error, 'save', { keepsInput: true });
-            // Re-throw (2026-09-19 fix): the modal's own handleSave awaits
-            // this onSave call and only closes on success — swallowing the
-            // error here made every failed save (e.g. approving without
-            // ITR_APPROVE, or a backend validation rejection) look
-            // successful to the modal, which then closed anyway and
-            // discarded the user's in-progress edits. Re-throwing lets the
-            // modal correctly keep itself open with the content intact.
-            throw error;
-        }
+                return (await addITR(itemData)).id;
+            },
+            reuseId: sameWrite(lastWriteRef.current, targetId, itemData) ? targetId : null,
+            uploads: pendingUploads,
+            deletedFileIds,
+            ...fileSteps,
+            onRecordSaved: (id) => { lastWriteRef.current = { id, key: JSON.stringify(itemData) }; },
+        });
+        return settle(outcome);
     };
 
     const chips: { id: StatusFilter; label: string; count: number }[] = [
@@ -393,6 +395,7 @@ const ITR: React.FC = () => {
                     existingItem={currentItrId ? itrList.find(i => i.id === currentItrId) : undefined}
                     itrList={itrList}
                     onSave={handleSaveITRDetails}
+                    onRetryFiles={handleRetryITRFiles}
                     onRevoked={async () => {
                         // Reload backend state, then close — reopening shows the
                         // fresh (no longer Approved) status, same as after a save.

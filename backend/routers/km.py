@@ -5,6 +5,7 @@ from fastapi.responses import StreamingResponse
 import schemas
 from core.dependencies import RoleChecker, get_km_service
 from core.perms import KM_CREATE, KM_DELETE, KM_UPDATE, KM_VIEW
+from core.refusals import refusal_http
 from services.km_service import KMService
 
 router = APIRouter(
@@ -45,7 +46,10 @@ def create_km_article(
     service: KMService = Depends(get_km_service),
     current_user: schemas.User = Depends(RoleChecker(KM_CREATE))
 ):
-    return service.create_article(article_create=article, author_id=current_user.id, user_id=current_user.id, username=current_user.username)
+    try:
+        return service.create_article(article_create=article, author_id=current_user.id, user_id=current_user.id, username=current_user.username)
+    except ValueError as e:     # a service refusal is a 400, never a 500 (REFUSAL-DIALOG-2026-003)
+        raise refusal_http(e)
 
 @router.put("/{id}", response_model=schemas.KMArticle)
 def update_km_article(
@@ -54,7 +58,10 @@ def update_km_article(
     service: KMService = Depends(get_km_service),
     current_user: schemas.User = Depends(RoleChecker(KM_UPDATE))
 ):
-    return service.update_article(article_id=id, article_update=article_update, user_id=current_user.id, username=current_user.username)
+    try:
+        return service.update_article(article_id=id, article_update=article_update, user_id=current_user.id, username=current_user.username)
+    except ValueError as e:     # the service answers its own 409 (VERSION_CONFLICT); anything it lets through is a 400, never a 500
+        raise refusal_http(e)
 
 @router.delete("/{id}")
 def delete_km_article(
@@ -62,7 +69,10 @@ def delete_km_article(
     service: KMService = Depends(get_km_service),
     current_user: schemas.User = Depends(RoleChecker(KM_DELETE))
 ):
-    return service.delete_article(article_id=id, user_id=current_user.id, username=current_user.username)
+    try:
+        return service.delete_article(article_id=id, user_id=current_user.id, username=current_user.username)
+    except ValueError as e:     # a service refusal is a 400, never a 500 (REFUSAL-DIALOG-2026-003)
+        raise refusal_http(e)
 
 @router.post("/upload-image")
 def upload_km_image(
