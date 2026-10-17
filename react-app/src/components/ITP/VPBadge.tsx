@@ -36,7 +36,7 @@ const styles: { [key: string]: string } = {
     S: "bg-violet-100 text-violet-700 border-violet-200 font-bold ring-1 ring-violet-200 shadow-sm",
     "N/A": "bg-slate-50 text-slate-500 border-slate-200 font-medium text-xs ring-1 ring-slate-200",
 };
-// Older codes still in the data (Q, ※, W/R, ■ …): muted, so they read as "not a standard code".
+// Older codes still in the data (※, W/R, I, ■ …): muted, so they read as "not a standard code".
 const LEGACY_STYLE = "bg-slate-100 text-slate-600 border-slate-200 font-medium ring-1 ring-slate-200";
 
 const VPBadge = ({ type, print: isPrint }: { type: string; print?: boolean }) => {

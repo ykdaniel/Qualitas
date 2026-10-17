@@ -105,3 +105,24 @@ def test_nothing_to_clear_still_marks_the_step_done(db_session):
     assert _audits(db) == []
     assert db.execute(text("SELECT 1 FROM migration_flags WHERE flag_name = :f"),
                       {"f": db_migrations.ITP_VP_Q_CLEAR_FLAG}).first() is not None
+
+
+def test_a_failure_part_way_leaves_nothing_written_and_the_next_start_retries(db_session):
+    db = db_session
+    _itp(db, "with-q", {"a": [_item("A1", "Q", "H", "W", "-")], "b": [], "c": []})
+    before = _detail(db, "with-q")
+    db.execute(text("ALTER TABLE audit_logs RENAME TO audit_logs_off"))   # the audit INSERT fails after the UPDATE
+    db.commit()
+    try:
+        _run(db)
+        assert _detail(db, "with-q") == before
+        assert db.execute(text("SELECT 1 FROM migration_flags WHERE flag_name = :f"),
+                          {"f": db_migrations.ITP_VP_Q_CLEAR_FLAG}).first() is None
+    finally:
+        db.execute(text("ALTER TABLE audit_logs_off RENAME TO audit_logs"))
+        db.commit()
+
+    _run(db)
+
+    assert json.loads(_detail(db, "with-q"))["a"][0]["vp"]["sub"] == ""
+    assert len(_audits(db)) == 1
