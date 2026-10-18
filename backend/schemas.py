@@ -140,6 +140,7 @@ class ITPCreate(ITPBase):
                 )
         return self
 class ITPDetailBody(BaseModel):
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at (never dumped into the record)
     a: list[Any] = []
     b: list[Any] = []
     c: list[Any] = []
@@ -148,6 +149,7 @@ class ITPDetailBody(BaseModel):
 
 class ITPUpdate(BaseModel):
     """ITP 更新用 schema，referenceNo 不可更新"""
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at (never dumped into the record)
     project_id: str | None = None
     vendor: str | None = None
     # referenceNo 不可更新（由後端自動產生，建立後不可變）
@@ -177,6 +179,7 @@ class ITPUpdate(BaseModel):
 
 class ITP(ITPBase):
     id: str
+    row_version: int | None = None              # optimistic lock: the stored version (core/concurrency.py)
     model_config = ConfigDict(from_attributes=True)
 
 # NCR
@@ -311,6 +314,7 @@ class NCRCreate(NCRBase):
         return validate_numeric_string(v)
 
 class NCRUpdate(BaseModel):
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at (never dumped into the record)
     project_id: str | None = None
     vendor: str | None = None
     # documentNumber 不可更新（由後端自動產生，建立後不可變）
@@ -423,6 +427,7 @@ class NCRUpdate(BaseModel):
 
 class NCR(NCRBase):
     id: str
+    row_version: int | None = None              # optimistic lock: the stored version (core/concurrency.py)
     model_config = ConfigDict(from_attributes=True)
 
     @computed_field
@@ -486,6 +491,7 @@ class NOICreate(NOIBase):
         return strict_dates.strict_date_input(v)
 
 class NOIUpdate(BaseModel):
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at (never dumped into the record)
     project_id: str | None = None
     package: str | None = None
     # referenceNo 不可更新（由後端自動產生，建立後不可變）
@@ -522,6 +528,7 @@ class NOIUpdate(BaseModel):
 
 class NOI(NOIBase):
     id: str
+    row_version: int | None = None              # optimistic lock: the stored version (core/concurrency.py)
     # READ only: preserve missing legacy references without breaking the whole
     # list. NOICreate retains its required string contract.
     itpNo: str | None = None
@@ -603,6 +610,7 @@ class ITRCreate(ITRBase):
 class ITRRevokeApproval(BaseModel):
     """Body for POST /itr/{id}/revoke-approval — the only sanctioned way
     to leave an Approved ITR (2026-09-19 approval-authority hardening)."""
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at (never dumped into the record)
     new_status: str
     reason: str
 
@@ -639,6 +647,7 @@ class ITRApprovalEventDetail(ITRApprovalEventSummary):
     snapshot_sha256_matches: bool | None = None   # recomputed now; a content-consistency check, NOT a signature
 
 class ITRUpdate(BaseModel):
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at (never dumped into the record)
     project_id: str | None = None
     vendor: str | None = None
     # documentNumber 不可更新（由後端自動產生，建立後不可變）
@@ -689,6 +698,7 @@ class ITRUpdate(BaseModel):
 
 class ITR(ITRBase):
     id: str
+    row_version: int | None = None              # optimistic lock: the stored version (core/concurrency.py)
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -727,6 +737,7 @@ class PQPCreate(PQPBase):
     updatedAt: str | None = ''
 
 class PQPUpdate(BaseModel):
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at (never dumped into the record)
     project_id: str | None = None
     # pqpNo 不可更新（由後端自動產生，建立後不可變）
     title: str | None = None
@@ -750,11 +761,13 @@ class PQPUpdate(BaseModel):
 
 class PQP(PQPBase):
     id: str
+    row_version: int | None = None              # optimistic lock: the stored version (core/concurrency.py)
     model_config = ConfigDict(from_attributes=True)
 
 
 class PQPPublish(BaseModel):
     """Request body for publishing a new PQP revision"""
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at (never dumped into the record)
     change_summary: str | None = None
 
 
@@ -882,6 +895,7 @@ class OBSCreate(OBSBase):
         return parse_obs_photo_order(v, strict=True)
 
 class OBSUpdate(BaseModel):
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at (never dumped into the record)
     project_id: str | None = None
     vendor: str | None = None
     # documentNumber 不可更新（由後端自動產生，建立後不可變）
@@ -946,6 +960,7 @@ class OBSUpdate(BaseModel):
 
 class OBS(OBSBase):
     id: str
+    row_version: int | None = None              # optimistic lock: the stored version (core/concurrency.py)
     model_config = ConfigDict(from_attributes=True)
 
     @computed_field
@@ -1003,6 +1018,7 @@ class OSDCreate(OSDBase):
 
 
 class OSDUpdate(BaseModel):
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at (never dumped into the record)
     project_id: str | None = None
     vendor: str | None = None
     # documentNumber 不可更新（由後端自動產生，建立後不可變）
@@ -1043,6 +1059,7 @@ class OSDUpdate(BaseModel):
 
 class OSD(OSDBase):
     id: str
+    row_version: int | None = None              # optimistic lock: the stored version (core/concurrency.py)
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -1086,6 +1103,7 @@ class MeetingMinutesCreate(MeetingMinutesBase):
 
 
 class MeetingMinutesUpdate(BaseModel):
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at (never dumped into the record)
     project_id: str | None = None
     vendor: str | None = None
     # documentNumber 不可更新（由後端自動產生，建立後不可變）
@@ -1116,6 +1134,7 @@ class MeetingMinutesUpdate(BaseModel):
 
 class MeetingMinutes(MeetingMinutesBase):
     id: str
+    row_version: int | None = None              # optimistic lock: the stored version (core/concurrency.py)
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -1135,6 +1154,7 @@ class ContractorCreate(ContractorBase):
     id: str | None = None
 
 class ContractorUpdate(BaseModel):
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at (never dumped into the record)
     package: str | None = None
     name: str | None = None
     abbreviation: str | None = None
@@ -1147,6 +1167,7 @@ class ContractorUpdate(BaseModel):
 
 class Contractor(ContractorBase):
     id: str
+    row_version: int | None = None              # optimistic lock: the stored version (core/concurrency.py)
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -1187,6 +1208,7 @@ class ContractorPersonnelCreate(BaseModel):
 
 
 class ContractorPersonnelUpdate(BaseModel):
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at (never dumped into the record)
     name: str | None = Field(default=None, max_length=120)
     position: str | None = Field(default=None, max_length=120)
     email: str | None = Field(default=None, max_length=200)
@@ -1203,6 +1225,7 @@ class ContractorPersonnelUpdate(BaseModel):
 
 class ContractorPersonnel(BaseModel):
     id: str
+    row_version: int | None = None              # optimistic lock: the stored version (core/concurrency.py)
     contractor_id: str
     name: str
     position: str | None = None
@@ -1242,6 +1265,7 @@ class ProjectCreate(ProjectBase):
     id: str | None = None
 
 class ProjectUpdate(BaseModel):
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at (never dumped into the record)
     model_config = ConfigDict(populate_by_name=True)
     name: str | None = None
     code: str | None = None
@@ -1251,6 +1275,7 @@ class ProjectUpdate(BaseModel):
 
 class Project(ProjectBase):
     id: str
+    row_version: int | None = None              # optimistic lock: the stored version (core/concurrency.py)
     created_at: str | None = None
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
@@ -1282,6 +1307,7 @@ class FollowUpCreate(FollowUpBase):
     id: str | None = None
 
 class FollowUpUpdate(BaseModel):
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at (never dumped into the record)
     project_id: str | None = None
     title: str | None = None
     description: str | None = None
@@ -1299,6 +1325,7 @@ class FollowUpUpdate(BaseModel):
 
 class FollowUp(FollowUpBase):
     id: str
+    row_version: int | None = None              # optimistic lock: the stored version (core/concurrency.py)
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -1338,6 +1365,7 @@ class RoleCreate(RoleBase):
     reason: str | None = None
 
 class RoleUpdate(BaseModel):
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at (never dumped into the record)
     name: str | None = None
     description: str | None = None
     permissions: list[str] | None = None
@@ -1345,6 +1373,7 @@ class RoleUpdate(BaseModel):
 
 class Role(RoleBase):
     id: int
+    row_version: int | None = None              # optimistic lock: the stored version (core/concurrency.py)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -1384,6 +1413,7 @@ class ChecklistCreate(ChecklistBase):
 
 class ChecklistUpdate(BaseModel):
     """Checklist 更新用 schema"""
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at (never dumped into the record)
     project_id: str | None = None
     recordsNo: str | None = None
     activity: str | None = None
@@ -1405,6 +1435,7 @@ class ChecklistUpdate(BaseModel):
 
 class Checklist(ChecklistBase):
     id: str
+    row_version: int | None = None              # optimistic lock: the stored version (core/concurrency.py)
     # Read-only provenance — never accepted on Create/Update, only ever set
     # server-side (version bumped on template edits, source_template_version
     # captured once at link_checklist time, evidence_recorded_at set once
@@ -1437,6 +1468,7 @@ class UserCreate(UserBase):
     project_ids: list[str] | None = None
 
 class UserUpdate(BaseModel):
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at (never dumped into the record)
     username: str | None = None
     email: EmailStr | None = None
     full_name: str | None = None
@@ -1448,6 +1480,7 @@ class UserUpdate(BaseModel):
 
 class User(UserBase):
     id: int
+    row_version: int | None = None              # optimistic lock: the stored version (core/concurrency.py)
     role_name: str | None = None
     permissions: list[str] = []
     created_at: str | None = None
@@ -1490,8 +1523,16 @@ class UserScope(BaseModel):
     an internal/admin user. Set project_ids (and optionally vendor_id) to confine
     an external owner/contractor login.
     """
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at (never dumped into the record)
     project_ids: list[str] = []
     vendor_id: str | None = None
+
+
+class UserScopeRead(BaseModel):
+    """A user's scope as read back, with the account's optimistic-lock version (the scope is saved under it)."""
+    project_ids: list[str] = []
+    vendor_id: str | None = None
+    row_version: int | None = None
 
 
 # --- Audit Schemas ---
@@ -1612,6 +1653,7 @@ class AuditCreate(AuditBase):
         return strict_dates.strict_date_input(v)
 
 class AuditUpdate(BaseModel):
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at (never dumped into the record)
     project_id: str | None = None
     # Accepted for compatibility (the wizard resends the whole record) but ignored: auditNo never changes after create.
     auditNo: str | None = None
@@ -1650,6 +1692,7 @@ class AuditUpdate(BaseModel):
 
 class Audit(AuditBase):
     id: str
+    row_version: int | None = None              # optimistic lock: the stored version (core/concurrency.py)
     vendor_id: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -1712,6 +1755,7 @@ class AuditTemplateCreate(BaseModel):
 
 
 class AuditTemplateUpdate(BaseModel):
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at (never dumped into the record)
     name: str | None = None
     description: str | None = None
     version: str | None = Field(None, max_length=50)
@@ -1726,6 +1770,7 @@ class AuditTemplateUpdate(BaseModel):
 
 class AuditTemplate(BaseModel):
     id: int
+    row_version: int | None = None              # optimistic lock: the stored version (core/concurrency.py)
     name: str
     description: str | None = ''
     version: str | None = ''
@@ -1877,6 +1922,7 @@ class FATCreate(FATBase):
     id: str | None = None
 
 class FATUpdate(BaseModel):
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at (never dumped into the record)
     project_id: str | None = None
     equipment: str | None = None
     supplier: str | None = None
@@ -1919,6 +1965,7 @@ class FAT(FATBase):
     are shown as stored instead of failing the whole list with 500. (A malformed detail_data / attachments value
     written outside the API still fails validation; the API never writes one.)"""
     id: str
+    row_version: int | None = None              # optimistic lock: the stored version (core/concurrency.py)
     equipment: str | None = None
     supplier: str | None = None
     startDate: str | None = None
@@ -2254,6 +2301,7 @@ class MaterialSubmittalCard(_MaterialCamel):
     overdue: bool = False
     created_at: str | None = None
     updated_at: str | None = None
+    row_version: int | None = None              # optimistic lock (rowVersion)
 
 
 class MaterialSubmittalDetail(MaterialSubmittalCard):
@@ -2287,6 +2335,7 @@ class MaterialApprovedItem(_MaterialCamel):
     # shelf view (M6): the first photo's stored path (served by /api/files/download/<path>, same checks) and the photo count
     cover_photo_path: str | None = None
     photo_count: int = 0
+    row_version: int | None = None              # optimistic lock: the submittal's version (rowVersion)
 
 
 class MaterialRegisterCreate(_MaterialInput):
@@ -2321,6 +2370,7 @@ class MaterialRegisterCreate(_MaterialInput):
 class MaterialRegisterUpdate(_MaterialInput):
     """Edit a registered material. Only the fields sent are changed; the project and the contractor cannot change
     (the record number carries the contractor's abbreviation). Result fields are kept as an appended correction entry."""
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock (rowVersion): the version this edit was read at
     name: str | None = None
     category: str | None = None
     brand: str | None = None

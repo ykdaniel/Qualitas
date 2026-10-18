@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session, joinedload
 
 import models
 import schemas
-from core.refusals import Refusal
 from core.utils import _reference_seq_lock, sanitize_pagination, sanitize_search_term
 
 
@@ -127,27 +126,19 @@ class KMRepository:
         self.db.refresh(db_article)
         return db_article
 
-    def update(self, db_article: models.KMArticle, update_data: dict, commit: bool = True) -> models.KMArticle:
+    def update(self, db_article: models.KMArticle, update_data: dict, new_version: int, commit: bool = True) -> models.KMArticle:
+        """`new_version` is the version_no the caller has already checked and incremented with
+        core.concurrency.claim_row_version (OPTIMISTIC-LOCK-2026-001); it is recorded on the history row."""
         if "attachments" in update_data and not isinstance(update_data["attachments"], str):
             update_data["attachments"] = json.dumps(update_data["attachments"])
 
         # Track change summary before removing it from update_data (as it's not in KMArticle)
         change_summary = update_data.pop("change_summary", None) or "Auto-saved version"
 
-        # Optimistic locking: verify version_no matches before updating
-        expected_version = update_data.pop("version_no", None)
-        if expected_version is not None and db_article.version_no != expected_version:
-            raise Refusal(
-                "VERSION_CONFLICT",
-                "This article has been modified by another user. Please refresh and try again.",
-                docType="KM", number=db_article.title,
-            )
+        # The version check and increment happened in the caller (one conditional UPDATE); never set version_no here.
+        update_data.pop("version_no", None)
 
         update_data["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        # Increment version_no
-        new_version = (db_article.version_no or 1) + 1
-        update_data["version_no"] = new_version
 
         for key, value in update_data.items():
             setattr(db_article, key, value)

@@ -42,6 +42,7 @@ class ITP(Base):
     vendor_ref = relationship("Contractor", back_populates="itps")
     nois = relationship("NOI", back_populates="itp_ref", cascade="save-update, merge",
                         passive_deletes=True)
+    row_version = Column(Integer, nullable=False, default=0, server_default="0")   # optimistic lock (core/concurrency.py)
 
     @property
     def vendor(self):
@@ -158,6 +159,7 @@ class NCR(Base):
     # Relationships
     vendor_ref = relationship("Contractor", back_populates="ncrs")
     noi_ref = relationship("NOI", back_populates="ncrs")
+    row_version = Column(Integer, nullable=False, default=0, server_default="0")   # optimistic lock (core/concurrency.py)
 
     @property
     def vendor(self):
@@ -196,6 +198,7 @@ class FollowUp(Base):
     # Relationships
     vendor_ref = relationship("Contractor", back_populates="followups")
     assignee = relationship("User", foreign_keys=[assignedToUserId])
+    row_version = Column(Integer, nullable=False, default=0, server_default="0")   # optimistic lock (core/concurrency.py)
 
     @property
     def vendor(self):
@@ -249,6 +252,7 @@ class NOI(Base):
         "QWorkflow", back_populates="noi_ref", uselist=False,
         cascade="all, delete-orphan", passive_deletes=True,
     )
+    row_version = Column(Integer, nullable=False, default=0, server_default="0")   # optimistic lock (core/concurrency.py)
 
     @property
     def contractor(self):
@@ -309,6 +313,7 @@ class ITR(Base):
     vendor_ref = relationship("Contractor", back_populates="itrs")
     noi_ref = relationship("NOI", back_populates="itrs")
     original_itr = relationship("ITR", remote_side=[id], foreign_keys=[originalItrId])
+    row_version = Column(Integer, nullable=False, default=0, server_default="0")   # optimistic lock (core/concurrency.py)
 
     @property
     def vendor(self):
@@ -394,6 +399,7 @@ class PQP(Base):
     vendor_ref = relationship("Contractor", back_populates="pqps")
     history = relationship("PQPHistory", back_populates="pqp", cascade="all, delete-orphan",
                           passive_deletes=True, order_by="PQPHistory.version_no.desc()")
+    row_version = Column(Integer, nullable=False, default=0, server_default="0")   # optimistic lock (core/concurrency.py)
 
     @property
     def vendor(self):
@@ -471,6 +477,7 @@ class OBS(Base):
 
     # Relationships
     vendor_ref = relationship("Contractor", back_populates="obss")
+    row_version = Column(Integer, nullable=False, default=0, server_default="0")   # optimistic lock (core/concurrency.py)
 
     @property
     def vendor(self):
@@ -519,6 +526,7 @@ class OSD(Base):
 
     # Relationships
     vendor_ref = relationship("Contractor", back_populates="osds")
+    row_version = Column(Integer, nullable=False, default=0, server_default="0")   # optimistic lock (core/concurrency.py)
 
     @property
     def vendor(self):
@@ -558,6 +566,7 @@ class MeetingMinutes(Base):
 
     # Relationships
     vendor_ref = relationship("Contractor", back_populates="meeting_minutes")
+    row_version = Column(Integer, nullable=False, default=0, server_default="0")   # optimistic lock (core/concurrency.py)
 
     @property
     def vendor(self):
@@ -602,6 +611,7 @@ class Contractor(Base):
                              cascade="save-update, merge", passive_deletes=True)
     meeting_minutes = relationship("MeetingMinutes", back_populates="vendor_ref",
                              cascade="save-update, merge", passive_deletes=True)
+    row_version = Column(Integer, nullable=False, default=0, server_default="0")   # optimistic lock (core/concurrency.py)
 
 
 class ContractorPersonnel(Base):
@@ -626,6 +636,7 @@ class ContractorPersonnel(Base):
         # one name per company, whatever the case (the service says so first; this stops two requests at once)
         Index("uq_contractor_personnel_name", "contractor_id", text("lower(name)"), unique=True),
     )
+    row_version = Column(Integer, nullable=False, default=0, server_default="0")   # optimistic lock (core/concurrency.py)
 
 
 class ItpRenumberMap(Base):
@@ -675,6 +686,7 @@ class Project(Base):
     fats = relationship("FAT", backref="project_ref", passive_deletes=True)
     pqps = relationship("PQP", backref="project_ref", passive_deletes=True)
     qworkflows = relationship("QWorkflow", backref="project_ref", passive_deletes=True)
+    row_version = Column(Integer, nullable=False, default=0, server_default="0")   # optimistic lock (core/concurrency.py)
 
 
 class DocumentNamingRule(Base):
@@ -735,6 +747,7 @@ class User(Base):
     # Relationships
     role = relationship("Role", backref="users")
     vendor_ref = relationship("Contractor")
+    row_version = Column(Integer, nullable=False, default=0, server_default="0")   # optimistic lock (core/concurrency.py)
 
     @property
     def role_name(self):
@@ -799,6 +812,7 @@ class Role(Base):
 
     # Relationships
     permissions_rel = relationship("Permission", secondary="role_permissions", backref="roles")
+    row_version = Column(Integer, nullable=False, default=0, server_default="0")   # optimistic lock (core/concurrency.py)
 
     @property
     def permissions(self):
@@ -835,6 +849,7 @@ class Audit(Base):
 
     # Relationships
     vendor_ref = relationship("Contractor")
+    row_version = Column(Integer, nullable=False, default=0, server_default="0")   # optimistic lock (core/concurrency.py)
 
 
 class AuditTemplate(Base):
@@ -852,6 +867,7 @@ class AuditTemplate(Base):
     items = Column(Text, nullable=True)  # JSON list of {id, no, clause, task}; id is a stable string key
     created_at = Column(String, nullable=True)
     updated_at = Column(String, nullable=True)
+    row_version = Column(Integer, nullable=False, default=0, server_default="0")   # optimistic lock (core/concurrency.py)
 
 
 class Checklist(Base):
@@ -946,6 +962,7 @@ class Checklist(Base):
     itr_ref = relationship("ITR", back_populates="checklists", foreign_keys=[itrId])
     template_ref = relationship("Checklist", remote_side=[id], foreign_keys=[template_id])
     vendor_ref = relationship("Contractor")
+    row_version = Column(Integer, nullable=False, default=0, server_default="0")   # optimistic lock (core/concurrency.py)
 
     @property
     def vendor_id(self):
@@ -1049,6 +1066,7 @@ class FAT(Base):
 
     # Relationships
     vendor_ref = relationship("Contractor", back_populates="fats")
+    row_version = Column(Integer, nullable=False, default=0, server_default="0")   # optimistic lock (core/concurrency.py)
 
     @property
     def supplier(self):
@@ -1190,6 +1208,7 @@ class MaterialSubmittal(Base):
     updated_at = Column(String, nullable=True)
     # M6 R2: the add-material form's request id; a repeated register request returns this record (NULLs never collide)
     client_request_id = Column(String, nullable=True)
+    row_version = Column(Integer, nullable=False, default=0, server_default="0")   # optimistic lock (core/concurrency.py)
 
 
 class MaterialSubmittalRevision(Base):

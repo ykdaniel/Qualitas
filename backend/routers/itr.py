@@ -105,6 +105,7 @@ def batch_update_itrs(
                 user_id=current_user.id,
                 username=current_user.username,
                 scope=scope,
+                warn_missing_version=False,     # a batch status change carries no version by design (OPTIMISTIC-LOCK-2026-001)
             )
             if db_itr is None:
                 failed.append({"id": itr_id, "error": "ITR not found"})
@@ -240,7 +241,7 @@ def revoke_itr_approval(
         db_itr = itr_service.revoke_itr_approval(
             itr_id=itr_id, new_status=body.new_status, reason=body.reason,
             user_id=current_user.id, username=current_user.username,
-            scope=scope,
+            scope=scope, expected_version=body.row_version,
         )
     except ScopeForbidden as e:
         raise refusal_http(e, 403)
@@ -253,6 +254,7 @@ def revoke_itr_approval(
 @router.post("/{itr_id}/create-ncr")
 def create_ncr_from_itr(
     itr_id: str,
+    row_version: Optional[int] = Query(None),      # optimistic lock: the ITR's version (the ITR gets the NCR number)
     itr_service: ITRService = Depends(get_itr_service),
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(NCR_CREATE)),
@@ -264,6 +266,7 @@ def create_ncr_from_itr(
             user_id=current_user.id,
             username=current_user.username,
             scope=scope,
+            expected_version=row_version,
         )
     except ValueError as e:
         raise refusal_http(e, 400)

@@ -15,6 +15,7 @@ from repositories.obs_repository import OBSRepository
 from core import strict_dates
 from core.attachment_access import obs_locked
 from core.refusals import Refusal
+from core.concurrency import claim_row_version
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
 from core.utils import (
     _json_serialize,
@@ -194,6 +195,11 @@ class OBSService:
             db_obs = self.repo.get_by_id(obs_id)
             if not db_obs or not record_in_scope(db_obs, scope):
                 return None
+
+            # Optimistic lock (OPTIMISTIC-LOCK-2026-001): the version this edit was read at, checked and incremented in one
+            # step (it also takes the write lock), then re-read.
+            claim_row_version(self.repo.db, db_obs, obs_update.row_version, doc_type="OBS",
+                              number=db_obs.documentNumber, refresh=True)
 
             if obs_update.status and not WorkflowEngine.validate_transition(
                 "OBS", db_obs.status, obs_update.status

@@ -14,6 +14,7 @@ import schemas
 from repositories.pqp_repository import PQPRepository
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
 from core.refusals import Refusal
+from core.concurrency import claim_row_version
 from core.utils import (
     _json_serialize,
     _resolve_vendor_id,
@@ -111,6 +112,11 @@ class PQPService:
             if not db_pqp or not record_in_scope(db_pqp, scope):
                 return None
 
+            # Optimistic lock (OPTIMISTIC-LOCK-2026-001): the version this edit was read at, checked and incremented in one
+            # step (it also takes the write lock), then re-read.
+            claim_row_version(self.repo.db, db_pqp, pqp_update.row_version, doc_type="PQP",
+                              number=db_pqp.pqpNo, refresh=True)
+
             if pqp_update.status and not WorkflowEngine.validate_transition(
                 "PQP",
                 self._normalize_pqp_status(db_pqp.status) or db_pqp.status,
@@ -176,12 +182,18 @@ class PQPService:
             raise e
 
     def publish_pqp(self, pqp_id: str, change_summary: str = None,
-                    user_id: int = None, username: str = None, scope=None) -> Optional[models.PQP]:
+                    user_id: int = None, username: str = None, scope=None,
+                    expected_version: Optional[int] = None) -> Optional[models.PQP]:
         """Publish a new revision: snapshot current version to history, then bump version"""
         try:
             db_pqp = self.repo.get_by_id(pqp_id)
             if not db_pqp or not record_in_scope(db_pqp, scope):
                 return None
+
+            # Optimistic lock (OPTIMISTIC-LOCK-2026-001): the version this edit was read at, checked and incremented in one
+            # step (it also takes the write lock), then re-read.
+            claim_row_version(self.repo.db, db_pqp, expected_version, doc_type="PQP",
+                              number=db_pqp.pqpNo, refresh=True)
 
             # Determine next version_no
             existing_history = (self.repo.db.query(models.PQPHistory)
@@ -231,6 +243,9 @@ class PQPService:
 
             self.repo.db.commit()
             return updated
+        except ValueError:
+            self.repo.db.rollback()             # a refusal (VERSION_CONFLICT), not an error
+            raise
         except Exception as e:
             self.repo.db.rollback()
             logger.error(f"Error publishing PQP {pqp_id}: {e}", exc_info=True)

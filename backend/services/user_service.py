@@ -15,6 +15,7 @@ from crud import log_audit  # Import existing audit logger to maintain legacy co
 from core.utils import log_audit as strict_log_audit
 from core import validators
 from core.refusals import Refusal, RefusalHTTPException, refusal_http
+from core.concurrency import claim_row_version
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -120,10 +121,11 @@ class UserService:
             .filter(models.UserProject.user_id == user_id)
             .all()
         )
-        return {"project_ids": [r[0] for r in rows], "vendor_id": user.vendor_id}
+        return {"project_ids": [r[0] for r in rows], "vendor_id": user.vendor_id, "row_version": user.row_version}
 
     def set_user_scope(self, user_id: int, project_ids: List[str], vendor_id: Optional[str],
-                       actor_id: int = None, actor_name: str = None) -> Optional[dict]:
+                       actor_id: int = None, actor_name: str = None,
+                       expected_version: Optional[int] = None) -> Optional[dict]:
         """Replace a user's project scope and contractor binding. Validates that
         referenced projects / contractor exist. Returns the new scope, or None if
         the user doesn't exist. Raises ValueError on unknown project/contractor."""
@@ -148,6 +150,10 @@ class UserService:
             ).first():
                 raise ValueError(f"Unknown contractor id: {vendor_id}")
 
+        # Optimistic lock (OPTIMISTIC-LOCK-2026-001): the scope is part of the account, so it uses the account's version
+        # (checked and incremented in one step, before the mapping rows are replaced).
+        claim_row_version(self.repo.db, user, expected_version, doc_type="user", number=user.username)
+
         # Replace the mapping rows.
         self.repo.db.query(models.UserProject).filter(
             models.UserProject.user_id == user_id
@@ -162,7 +168,7 @@ class UserService:
             new_value={"project_ids": project_ids, "vendor_id": user.vendor_id},
             user_id=actor_id, username=actor_name,
         )
-        return {"project_ids": project_ids, "vendor_id": user.vendor_id}
+        return {"project_ids": project_ids, "vendor_id": user.vendor_id, "row_version": user.row_version}
 
     @staticmethod
     def _user_audit_snapshot(user: models.User) -> dict:
@@ -347,6 +353,10 @@ class UserService:
             if not update_dict:
                 return db_user                   # nothing changed: no write, no audit row
 
+            # Optimistic lock (OPTIMISTIC-LOCK-2026-001): the version this edit was read at, checked and incremented in one
+            # step — after the no-change return above, which writes nothing.
+            claim_row_version(self.repo.db, db_user, user_update.row_version, doc_type="user", number=db_user.username)
+
             if hashed_password or (update_dict.get("is_active") is False and was_active):
                 # Reuse the existing session-invalidation mechanism: after a
                 # password reset, or a deactivation, every access/refresh token
@@ -380,6 +390,9 @@ class UserService:
             self.repo.db.commit()
             self.repo.db.refresh(updated_user)
             return updated_user
+        except Refusal as e:
+            self.repo.db.rollback()
+            raise refusal_http(e)                # VERSION_CONFLICT -> 409 (the route does not map service refusals)
         except Exception:
             self.repo.db.rollback()
             raise
@@ -488,6 +501,9 @@ class UserService:
                         detail="Cannot rename the Admin role: it would leave no active Admin user",
                     )
 
+            # Optimistic lock (OPTIMISTIC-LOCK-2026-001): checked and incremented in one step, before any change.
+            claim_row_version(self.repo.db, db_role, role_update.row_version, doc_type="role", number=db_role.name)
+
             old_val = self._role_audit_snapshot(db_role)      # captured BEFORE any change
 
             update_dict = {}
@@ -511,6 +527,9 @@ class UserService:
             self.repo.db.commit()
             self.repo.db.refresh(updated_role)
             return updated_role
+        except Refusal as e:
+            self.repo.db.rollback()
+            raise refusal_http(e)                # VERSION_CONFLICT -> 409 (the route does not map service refusals)
         except Exception as e:
             self.repo.db.rollback()
             raise _role_clash(e, role_update.name)

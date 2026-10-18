@@ -4,6 +4,8 @@ import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
 import { getProjectFilterParams, getCurrentProjectScopeId, withCurrentProject } from '../utils/projectFilter';
+import { withRowVersion } from '../utils/rowVersion';
+import type { RowVersioned } from '../utils/rowVersion';
 
 export interface Attendee {
     name: string;
@@ -58,7 +60,7 @@ export interface DiscussionLogEntry {
     highlight?: boolean;
 }
 
-export interface MeetingMinutesItem {
+export interface MeetingMinutesItem extends RowVersioned {
     id: string;
     vendor?: string;
     documentNumber: string;
@@ -92,7 +94,7 @@ interface MeetingMinutesState {
     fetchMeetingMinutes: (params?: FilterParams) => Promise<void>;
     refetch: (params?: FilterParams) => Promise<void>;
     addMeetingMinutes: (meeting: Omit<MeetingMinutesItem, 'id'>) => Promise<MeetingMinutesItem>;
-    updateMeetingMinutes: (id: string, meeting: Partial<MeetingMinutesItem>) => Promise<void>;
+    updateMeetingMinutes: (id: string, meeting: Partial<MeetingMinutesItem>, rowVersion?: number | null) => Promise<void>;   // rowVersion: sent only when given (utils/rowVersion.ts)
     deleteMeetingMinutes: (id: string) => Promise<void>;
     clearError: () => void;
     setError: (err: string | null) => void;
@@ -144,8 +146,8 @@ export const useMeetingMinutesStore = create<MeetingMinutesState>((set, get) => 
         return newMeeting;
     },
 
-    updateMeetingMinutes: async (id: string, updates: Partial<MeetingMinutesItem>) => {
-        const response = await api.put(`/meeting-minutes/${id}`, updates);
+    updateMeetingMinutes: async (id: string, updates: Partial<MeetingMinutesItem>, rowVersion) => {
+        const response = await api.put(`/meeting-minutes/${id}`, withRowVersion(updates, rowVersion));
         const updated = normalizeItem(response.data);
         set((state) => ({ meetingList: state.meetingList.map(m => m.id === id ? updated : m) }));
     },

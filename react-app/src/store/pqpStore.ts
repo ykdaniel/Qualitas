@@ -3,8 +3,10 @@ import api from '../services/api';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
 import { getProjectFilterParams, getCurrentProjectScopeId, withCurrentProject } from '../utils/projectFilter';
+import { withRowVersion } from '../utils/rowVersion';
+import type { RowVersioned } from '../utils/rowVersion';
 
-export interface PQPItem {
+export interface PQPItem extends RowVersioned {
     id: string;
     pqpNo: string;
     title: string;
@@ -39,8 +41,8 @@ interface PQPState {
     fetchPQPs: (params?: FilterParams) => Promise<void>;
     refetch: (params?: FilterParams) => Promise<void>;
     addPQP: (pqp: Omit<PQPItem, 'id'>) => Promise<PQPItem>;
-    updatePQP: (id: string, pqp: Partial<PQPItem>) => Promise<void>;
-    publishPQP: (id: string, changeSummary?: string) => Promise<PQPItem>;
+    updatePQP: (id: string, pqp: Partial<PQPItem>, rowVersion?: number | null) => Promise<void>;   // rowVersion: sent only when given (utils/rowVersion.ts)
+    publishPQP: (id: string, changeSummary?: string, rowVersion?: number | null) => Promise<PQPItem>;
     getHistory: (id: string) => Promise<PQPHistoryItem[]>;
     deletePQP: (id: string) => Promise<void>;
     clearError: () => void;
@@ -99,13 +101,13 @@ export const usePQPStore = create<PQPState>((set, get) => ({
         return newPQP;
     },
 
-    updatePQP: async (id: string, updates: Partial<PQPItem>) => {
-        const response = await api.put(`/pqp/${id}`, updates);
+    updatePQP: async (id: string, updates: Partial<PQPItem>, rowVersion) => {
+        const response = await api.put(`/pqp/${id}`, withRowVersion(updates, rowVersion));
         set((state) => ({ pqpList: state.pqpList.map(p => (p.id === id ? response.data : p)) }));
     },
 
-    publishPQP: async (id: string, changeSummary?: string) => {
-        const response = await api.post(`/pqp/${id}/publish`, { change_summary: changeSummary });
+    publishPQP: async (id: string, changeSummary?: string, rowVersion?: number | null) => {
+        const response = await api.post(`/pqp/${id}/publish`, withRowVersion({ change_summary: changeSummary }, rowVersion));
         const published = response.data;
         set((state) => ({ pqpList: state.pqpList.map(p => (p.id === id ? published : p)) }));
         return published;

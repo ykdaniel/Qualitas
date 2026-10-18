@@ -4,6 +4,8 @@ import { CheckCircle2, XCircle, BarChart3, TrendingUp, Search } from 'lucide-rea
 import { useContractorsStore } from '../../store/contractorsStore';
 import { usePQPStore } from '../../store/pqpStore';
 import { showRefusal } from '../../store/refusalStore';
+import { reloadAndReopen, useOpenSession, useRecordVersion } from '../../hooks/useRecordVersion';
+import { toast } from 'sonner';
 import type { PQPItem } from '../../store/pqpStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
@@ -58,10 +60,18 @@ const PQP: React.FC = () => {
 
   const statistics = usePQPStats(pqpList);
 
+  // The version the open form saves against (OPTIMISTIC-LOCK-2026-001): taken when it opens, moved on by each save that went through.
+  const recordVersion = useRecordVersion();
+  // Which opening of the form is current: keys the form (a fresh one per open) and guards a reload's late reopen (B2 R1 P1).
+  const openSession = useOpenSession();
+  const nextOpenSession = openSession.next;          // stable: what the open callbacks depend on
+
   const handleEdit = React.useCallback((id: string) => {
+    recordVersion.open(usePQPStore.getState().pqpList.find(item => item.id === id)?.row_version);
+    nextOpenSession();
     setCurrentPqpId(id);
     setIsEditModalOpen(true);
-  }, []);
+  }, [recordVersion, nextOpenSession]);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -97,9 +107,23 @@ const PQP: React.FC = () => {
   );
 
   const handleAddNew = () => {
+    recordVersion.open(null);
+    openSession.next();
     setCurrentPqpId('new');
     setIsEditModalOpen(true);
   };
+
+  // "Reload this record" after a 409 VERSION_CONFLICT (the refusal dialog has already confirmed that the form's changes are
+  // discarded): close the form, reload the list, open the record again with what is saved now.
+  const reloadRecord = () => reloadAndReopen(openSession, {
+    close: () => setIsEditModalOpen(false),
+    reload: () => refetch({ search: debouncedSearch }),
+    failed: () => !!usePQPStore.getState().error,
+    found: () => usePQPStore.getState().pqpList.some(item => item.id === currentPqpId),
+    reopen: () => handleEdit(currentPqpId as string),
+    forget: () => { setCurrentPqpId(null); openedViaDeepLinkRef.current = false; },
+    notify: (notice) => toast.warning(t(notice)),
+  });
 
   const handleSavePQPDetails = async (updates: Partial<PQPItem>, pendingFiles: File[], deletedFileIds: string[], _removedAttachments?: string[], skipRecordWrite?: boolean): Promise<SaveOutcome> => {
     const existingItem = currentPqpId && currentPqpId !== 'new' ? pqpList.find(item => item.id === currentPqpId) : undefined;
@@ -125,7 +149,8 @@ const PQP: React.FC = () => {
         const merged = { ...existingItem, ...updates, updatedAt: today };
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { id, pqpNo, ...payload } = merged;
-        await updatePQP(existingItem.id, payload);
+        await updatePQP(existingItem.id, payload, recordVersion.current());
+        recordVersion.saved(usePQPStore.getState().pqpList.find(item => item.id === existingItem.id)?.row_version);
       }
     } else {
       const createdPqp = await addPQP({
@@ -139,6 +164,7 @@ const PQP: React.FC = () => {
         attachments: updates.attachments || [],
       } as Omit<PQPItem, 'id'>);
       targetId = createdPqp.id;
+      recordVersion.saved(createdPqp.row_version);
       // The record now exists — switch the modal from "new" to "editing
       // this record" BEFORE touching attachments below, so that if the
       // attachment phase fails and the modal stays open, a retry updates
@@ -347,13 +373,15 @@ const PQP: React.FC = () => {
           : locked ? hasPermission('pqp:approve:all') : hasPermission('pqp:update:all');
         return (
         <PQPDetailModal
+            key={openSession.key}
           pqpId={currentPqpId}
           existingItem={editingItem}
           readOnly={!canEdit}
           canPublish={hasPermission('pqp:approve:all')}
           onSave={handleSavePQPDetails}
+          onReloadRecord={currentPqpId !== 'new' ? reloadRecord : undefined}
           onPublish={async (id, changeSummary) => {
-            await publishPQP(id, changeSummary);
+            await publishPQP(id, changeSummary, recordVersion.current());
             setIsEditModalOpen(false);
             setCurrentPqpId(null);
           }}

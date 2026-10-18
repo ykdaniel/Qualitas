@@ -6,6 +6,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useOBSStore } from '../../store/obsStore';
 import { showRefusal } from '../../store/refusalStore';
+import { reloadAndReopen, useOpenSession, useRecordVersion } from '../../hooks/useRecordVersion';
+import { toast } from 'sonner';
 import type { OBSItem as ContextOBSItem } from '../../store/obsStore';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import ConfirmModal from '../Shared/ConfirmModal';
@@ -66,6 +68,11 @@ const OBS: React.FC = () => {
   const statistics = useOBSStats(obsList);
   // The last successful record write of the open modal (id + serialized payload) — see runSaveFlow / sameWrite.
   const lastWriteRef = useRef<{ id: string; key: string } | null>(null);
+  // The version the open form saves against (OPTIMISTIC-LOCK-2026-001): taken when it opens, moved on by each save that went through.
+  const recordVersion = useRecordVersion();
+  // Which opening of the form is current: keys the form (a fresh one per open) and guards a reload's late reopen (B2 R1 P1).
+  const openSession = useOpenSession();
+  const nextOpenSession = openSession.next;          // stable: what the open callbacks depend on
 
 
 
@@ -73,9 +80,11 @@ const OBS: React.FC = () => {
 
   const handleEdit = React.useCallback((id: string) => {
     lastWriteRef.current = null;
+    recordVersion.open(useOBSStore.getState().obsList.find(item => item.id === id)?.row_version);
+    nextOpenSession();
     setCurrentObsId(id);
     setIsEditModalOpen(true);
-  }, []);
+  }, [recordVersion, nextOpenSession]);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -103,9 +112,23 @@ const OBS: React.FC = () => {
 
   const handleAddNew = () => {
     lastWriteRef.current = null;
+    recordVersion.open(null);
+    openSession.next();
     setCurrentObsId('new');
     setIsEditModalOpen(true);
   };
+
+  // "Reload this record" after a 409 VERSION_CONFLICT (the refusal dialog has already confirmed that the form's changes are
+  // discarded): close the form, reload the list, open the record again with what is saved now.
+  const reloadRecord = () => reloadAndReopen(openSession, {
+    close: () => setIsEditModalOpen(false),
+    reload: () => refetch({ search: debouncedSearch }),
+    failed: () => !!useOBSStore.getState().error,
+    found: () => useOBSStore.getState().obsList.some(item => item.id === currentObsId),
+    reopen: () => handleEdit(currentObsId as string),
+    forget: () => { setCurrentObsId(null); openedViaDeepLinkRef.current = false; },
+    notify: (notice) => toast.warning(t(notice)),
+  });
 
   const fileSteps = {
     upload: (id: string, group: { category: string; files: File[] }) => uploadFiles('obs', id, group.files, group.category),
@@ -166,8 +189,13 @@ const OBS: React.FC = () => {
     const currentId = currentObsId;
     const outcome = await runSaveFlow({
       writeRecord: async () => {
-        if (isNew) return (await addOBS(payload as Omit<ContextOBSItem, 'id'>)).id;
-        await updateOBS(currentId, payload);
+        if (isNew) {
+          const created = await addOBS(payload as Omit<ContextOBSItem, 'id'>);
+          recordVersion.saved(created.row_version);
+          return created.id;
+        }
+        await updateOBS(currentId, payload, recordVersion.current());
+        recordVersion.saved(useOBSStore.getState().obsList.find(item => item.id === currentId)?.row_version);
         return currentId;
       },
       reuseId: sameWrite(lastWriteRef.current, currentId, payload) ? currentId : null,
@@ -349,11 +377,13 @@ const OBS: React.FC = () => {
           : locked ? hasPermission('obs:approve:all') : hasPermission('obs:update:all');
         return (
           <OBSDetailModal
+            key={openSession.key}
             obsId={currentObsId}
             existingItem={editingItem}
             readOnly={!canEdit}
             onSave={handleSaveOBSDetails}
             onRetryFiles={handleRetryOBSFiles}
+            onReloadRecord={currentObsId !== 'new' ? reloadRecord : undefined}
             attachmentsAllowed={hasPermission('obs:update:all')}
             onClose={() => {
               lastWriteRef.current = null;

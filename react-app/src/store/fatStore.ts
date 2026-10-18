@@ -2,8 +2,10 @@ import { create } from 'zustand';
 import api from '../services/api';
 import { getErrorMessage } from '../utils/errorUtils';
 import { getProjectFilterParams, getCurrentProjectScopeId, withCurrentProject } from '../utils/projectFilter';
+import { rowVersionParams, withRowVersion } from '../utils/rowVersion';
+import type { RowVersioned } from '../utils/rowVersion';
 
-export interface FATItem {
+export interface FATItem extends RowVersioned {
     project_id?: string | null;
     id: string;
     equipment: string;
@@ -57,9 +59,9 @@ interface FATState {
     fetchFATs: () => Promise<void>;
     refetch: () => Promise<void>;
     addFAT: (fat: Omit<FATItem, 'id'>) => Promise<FATItem>;
-    updateFAT: (id: string, fat: Partial<FATItem>) => Promise<void>;
+    updateFAT: (id: string, fat: Partial<FATItem>, rowVersion?: number | null) => Promise<void>;   // rowVersion: sent only when given (utils/rowVersion.ts)
     deleteFAT: (id: string) => Promise<void>;
-    saveFATDetails: (fatId: string, details: FATDetailItem[]) => Promise<void>;
+    saveFATDetails: (fatId: string, details: FATDetailItem[], rowVersion?: number | null) => Promise<void>;
     clearError: () => void;
     setError: (err: string | null) => void;
 }
@@ -119,8 +121,8 @@ export const useFATStore = create<FATState>((set, get) => ({
         return newFAT;
     },
 
-    updateFAT: async (id, updates) => {
-        const response = await api.put(`/fat/${id}`, updates);
+    updateFAT: async (id, updates, rowVersion) => {
+        const response = await api.put(`/fat/${id}`, withRowVersion(updates, rowVersion));
         set((state) => ({
             fatList: state.fatList.map(f => (f.id === id ? response.data : f)),
         }));
@@ -137,12 +139,15 @@ export const useFATStore = create<FATState>((set, get) => ({
         }));
     },
 
-    saveFATDetails: async (fatId, details) => {
-        await api.put(`/fat/${fatId}/details`, details);
+    saveFATDetails: async (fatId, details, rowVersion) => {
+        // The list is the body, so the version goes in the query (utils/rowVersion.ts); the answer carries the new one.
+        const params = rowVersionParams(rowVersion);
+        const response = params ? await api.put(`/fat/${fatId}/details`, details, { params }) : await api.put(`/fat/${fatId}/details`, details);
+        const saved = response?.data as FATItem | undefined;
         set((state) => ({
             fatDetails: { ...state.fatDetails, [fatId]: details },
             fatList: state.fatList.map(f =>
-                f.id === fatId ? { ...f, hasDetails: details.length > 0 } : f
+                f.id === fatId ? { ...f, hasDetails: details.length > 0, row_version: saved?.row_version ?? f.row_version } : f
             ),
         }));
     },

@@ -7,6 +7,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useNOIStore } from '../../store/noiStore';
 import type { NOIItem } from '../../store/noiStore';
 import { showCodedRefusal, showRefusal } from '../../store/refusalStore';
+import { reloadAndReopen, useOpenSession, useRecordVersion } from '../../hooks/useRecordVersion';
+import { toast } from 'sonner';
 
 import { uploadFiles, deleteFile, getNoiDeleteCheck } from '../../services/api';
 import ConfirmModal from '../Shared/ConfirmModal';
@@ -116,11 +118,19 @@ const NOI: React.FC = () => {
 
   const statistics = useNOIStats(noiList);
 
+  // The version the open form saves against (OPTIMISTIC-LOCK-2026-001): taken when it opens, moved on by each save that went through.
+  const recordVersion = useRecordVersion();
+  // Which opening of the form is current: keys the form (a fresh one per open) and guards a reload's late reopen (B2 R1 P1).
+  const openSession = useOpenSession();
+  const nextOpenSession = openSession.next;          // stable: what the open callbacks depend on
+
   const handleEdit = React.useCallback((id: string) => {
     lastWriteRef.current = null;
+    recordVersion.open(useNOIStore.getState().noiList.find(item => item.id === id)?.row_version);
+    nextOpenSession();
     setCurrentNoiId(id);
     setIsModalOpen(true);
-  }, []);
+  }, [recordVersion, nextOpenSession]);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -148,9 +158,23 @@ const NOI: React.FC = () => {
 
   const handleAddNew = () => {
     lastWriteRef.current = null;
+    recordVersion.open(null);
+    openSession.next();
     setCurrentNoiId('new');
     setIsModalOpen(true);
   };
+
+  // "Reload this record" after a 409 VERSION_CONFLICT (the refusal dialog has already confirmed that the form's changes are
+  // discarded): close the form, reload the list, open the record again with what is saved now.
+  const reloadRecord = () => reloadAndReopen(openSession, {
+    close: () => setIsModalOpen(false),
+    reload: () => refetch({ search: debouncedSearch, status: statusFilter === 'all' ? undefined : statusFilter }),
+    failed: () => !!useNOIStore.getState().error,
+    found: () => useNOIStore.getState().noiList.some(item => item.id === currentNoiId),
+    reopen: () => handleEdit(currentNoiId as string),
+    forget: () => { setCurrentNoiId(null); openedViaDeepLinkRef.current = false; },
+    notify: (notice) => toast.warning(t(notice)),
+  });
 
   const fileSteps = {
     upload: (id: string, group: { category: string; files: File[] }) => uploadFiles('noi', id, group.files, group.category),
@@ -206,10 +230,13 @@ const NOI: React.FC = () => {
       const outcome = await runSaveFlow({
         writeRecord: async () => {
           if (existingItem) {
-            await updateNOI(currentId, updatedItem);
+            await updateNOI(currentId, updatedItem, recordVersion.current());
+            recordVersion.saved(useNOIStore.getState().noiList.find(item => item.id === currentId)?.row_version);
             return currentId;
           }
-          return (await addNOI(updatedItem))?.id ?? '';
+          const created = await addNOI(updatedItem);
+          recordVersion.saved(created?.row_version);
+          return created?.id ?? '';
         },
         reuseId: sameWrite(lastWriteRef.current, currentId, { ...updatedItem, id: '' }) ? currentId : null,
         uploads: pendingUploads && pendingUploads.length > 0 ? [{ category: 'attachment', files: pendingUploads }] : [],
@@ -420,6 +447,7 @@ const NOI: React.FC = () => {
           : locked ? hasPermission('noi:approve:all') : hasPermission('noi:update:all');
         return (
         <NOIDetailModal
+            key={openSession.key}
           noiId={currentNoiId}
           readOnly={!canEdit}
           existingData={currentNoiId ? noiDetails[currentNoiId] : undefined}
@@ -427,6 +455,7 @@ const NOI: React.FC = () => {
           noiList={noiList}
           onSave={handleSaveNOIDetails}
           onRetryFiles={handleRetryNOIFiles}
+          onReloadRecord={currentNoiId !== 'new' ? reloadRecord : undefined}
           attachmentsAllowed={hasPermission('noi:update:all')}
           onClose={() => {
             lastWriteRef.current = null;

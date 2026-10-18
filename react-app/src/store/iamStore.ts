@@ -18,6 +18,8 @@ export interface User {
      *  bound vendor for contractor-scoped users, else company_name; full name / typed text when
      *  there is no abbreviation). Read-only from the API. */
     display_company?: string | null;
+    /** Optimistic-lock version (OPTIMISTIC-LOCK-2026-001; utils/rowVersion.ts). */
+    row_version?: number | null;
 }
 
 export interface Role {
@@ -25,6 +27,7 @@ export interface Role {
     name: string;
     description: string;
     permissions: string[];
+    row_version?: number | null;
 }
 
 export interface Permission {
@@ -50,9 +53,9 @@ interface IAMState {
     refetch: () => Promise<void>;
     // NOTE: 接受任意 payload 物件，與 IAM 元件的呼叫方式一致
     createUser: (payload: any) => Promise<any>;
-    updateUser: (id: number, payload: any) => Promise<any>;
+    updateUser: (id: number, payload: any, rowVersion?: number | null) => Promise<any>;   // rowVersion: sent only when given
     createRole: (payload: any) => Promise<any>;
-    updateRole: (id: number, payload: any) => Promise<any>;
+    updateRole: (id: number, payload: any, rowVersion?: number | null) => Promise<any>;
     deleteRole: (id: number, reason?: string) => Promise<void>;
     clearError: () => void;
     setError: (err: string | null) => void;
@@ -84,6 +87,7 @@ export const useIAMStore = create<IAMState>((set, get) => ({
                 createdAt: (u as any).created_at || new Date().toISOString().split('T')[0],
                 company_name: u.company_name,
                 display_company: u.display_company,
+                row_version: u.row_version ?? null,
             }));
             set({ users: formattedUsers, loading: false });
         } catch (err: any) {
@@ -101,6 +105,7 @@ export const useIAMStore = create<IAMState>((set, get) => ({
                 name: r.name,
                 description: r.description || '',
                 permissions: Array.isArray(r.permissions) ? r.permissions : [],
+                row_version: r.row_version ?? null,
             }));
             set({ roles: formattedRoles, loading: false });
         } catch (err: any) {
@@ -140,12 +145,14 @@ export const useIAMStore = create<IAMState>((set, get) => ({
                 createdAt: (u as any).created_at || new Date().toISOString().split('T')[0],
                 company_name: u.company_name,
                 display_company: u.display_company,
+                row_version: u.row_version ?? null,
             }));
             const formattedRoles: Role[] = rolesData.map(r => ({
                 id: String(r.id),
                 name: r.name,
                 description: r.description || '',
                 permissions: Array.isArray(r.permissions) ? r.permissions : [],
+                row_version: r.row_version ?? null,
             }));
             set({ users: formattedUsers, roles: formattedRoles, loading: false });
         } catch (err: any) {
@@ -186,12 +193,13 @@ export const useIAMStore = create<IAMState>((set, get) => ({
             createdAt: (result as any).created_at || new Date().toISOString().split('T')[0],
             company_name: result.company_name,
             display_company: result.display_company,
+            row_version: result.row_version ?? null,
         };
         set((state) => ({ users: [...state.users, newUser] }));
         return result;
     },
 
-    updateUser: async (id: number, payload: any) => {
+    updateUser: async (id: number, payload: any, rowVersion?: number | null) => {
         const apiPayload: apiService.UpdateUserPayload = {};
         if (payload.name !== undefined) apiPayload.username = payload.name;
         if (payload.email !== undefined) apiPayload.email = payload.email;
@@ -201,7 +209,7 @@ export const useIAMStore = create<IAMState>((set, get) => ({
         if (payload.company_name !== undefined) apiPayload.company_name = payload.company_name;
         if (payload.reason) apiPayload.reason = payload.reason;
 
-        const result = await apiService.updateUser(id, apiPayload);
+        const result = await apiService.updateUser(id, apiPayload, rowVersion);
         const updatedUser: User = {
             id: String(result.id),
             name: result.full_name || result.username,
@@ -213,6 +221,7 @@ export const useIAMStore = create<IAMState>((set, get) => ({
             createdAt: (result as any).created_at || new Date().toISOString().split('T')[0],
             company_name: result.company_name,
             display_company: result.display_company,
+            row_version: result.row_version ?? null,
         };
         set((state) => ({
             users: state.users.map(u => (u.id === String(id) ? updatedUser : u)),
@@ -237,12 +246,13 @@ export const useIAMStore = create<IAMState>((set, get) => ({
             name: result.name,
             description: result.description || '',
             permissions: result.permissions,
+            row_version: result.row_version ?? null,
         };
         set((state) => ({ roles: [...state.roles, newRole] }));
         return result;
     },
 
-    updateRole: async (id: number, payload: any) => {
+    updateRole: async (id: number, payload: any, rowVersion?: number | null) => {
         const apiPayload: apiService.UpdateRolePayload = {};
         if (payload.name !== undefined) apiPayload.name = payload.name;
         if (payload.description !== undefined) apiPayload.description = payload.description;
@@ -250,13 +260,14 @@ export const useIAMStore = create<IAMState>((set, get) => ({
         // The role form requires a change reason; it must reach the backend so the audit entry keeps it.
         if (payload.reason !== undefined) apiPayload.reason = payload.reason;
 
-        const result = await apiService.updateRole(id, apiPayload);
+        const result = await apiService.updateRole(id, apiPayload, rowVersion);
         set((state) => ({
             roles: state.roles.map(r => (r.id === String(id) ? {
                 id: String(result.id),
                 name: result.name,
                 description: result.description || '',
                 permissions: result.permissions,
+                row_version: result.row_version ?? null,
             } : r)),
         }));
         return result;

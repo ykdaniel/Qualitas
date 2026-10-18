@@ -7,6 +7,7 @@ import { useLeaveGuard } from '../Shared/LeaveGuard';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuditTemplateStore, AuditTemplate, AuditTemplateItem } from '../../store/auditTemplateStore';
 import { showRefusal } from '../../store/refusalStore';
+import { reloadAndReopen, useOpenSession, useRecordVersion } from '../../hooks/useRecordVersion';
 
 /**
  * The audit template library's management tab (AUDIT-TEMPLATES-2026-001), shown on the Audit page to holders of
@@ -55,6 +56,18 @@ export default function AuditTemplatesPanel({ onDirtyChange }: AuditTemplatesPan
     const [saving, setSaving] = useState(false);
     const dirty = draft !== null && comparable(draft) !== baseline;
     const guard = useLeaveGuard(dirty, saving);
+    // OPTIMISTIC-LOCK-2026-001 B3a: the version the editor saves against — the template's, when it is opened; the version each
+    // save answered (the editor stays open). Tracked here because the draft (toDraft) carries no version. openSession guards a
+    // reload's late reopen against a template opened meanwhile.
+    const recordVersion = useRecordVersion();
+    const openSession = useOpenSession();
+    const show = (tpl: AuditTemplate | null) => {
+        const next = toDraft(tpl);
+        recordVersion.open(tpl?.row_version);
+        openSession.next();
+        setDraft(next);
+        setBaseline(comparable(next));
+    };
 
     useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
     useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
@@ -63,10 +76,18 @@ export default function AuditTemplatesPanel({ onDirtyChange }: AuditTemplatesPan
     const visible = useMemo(() => templates.filter(tpl => showInactive || tpl.is_active || tpl.id === draft?.id),
         [templates, showInactive, draft?.id]);
 
-    const open = (tpl: AuditTemplate | null) => guard.requestAction(() => {
-        const next = toDraft(tpl);
-        setDraft(next);
-        setBaseline(comparable(next));
+    const open = (tpl: AuditTemplate | null) => guard.requestAction(() => show(tpl));
+
+    // "Reload this record" after a 409 VERSION_CONFLICT (the refusal dialog has already confirmed that the draft's changes are
+    // discarded): reload the templates and show this one as it is saved now.
+    const reloadTemplate = (id: number) => reloadAndReopen(openSession, {
+        close: () => undefined,                      // the editor is part of the page: it is replaced when the reload is back
+        reload: () => fetchTemplates(),
+        failed: () => !!useAuditTemplateStore.getState().error,
+        found: () => useAuditTemplateStore.getState().templates.some(tpl => tpl.id === id),
+        reopen: () => show(useAuditTemplateStore.getState().templates.find(tpl => tpl.id === id) || null),
+        forget: () => { setDraft(null); setBaseline(null); },
+        notify: (notice) => toast.warning(t(notice)),
     });
 
     const setField = <K extends keyof Draft>(field: K, value: Draft[K]) => setDraft(d => (d ? { ...d, [field]: value } : d));
@@ -98,14 +119,16 @@ export default function AuditTemplatesPanel({ onDirtyChange }: AuditTemplatesPan
         };
         setSaving(true);
         try {
-            const saved = draft.id === null ? await createTemplate(payload) : await updateTemplate(draft.id, payload);
+            const saved = draft.id === null ? await createTemplate(payload) : await updateTemplate(draft.id, payload, recordVersion.current());
+            recordVersion.saved(saved.row_version);
             const next = toDraft(saved);
             setDraft(next);
             setBaseline(comparable(next));
             toast.success(t('audit.templates.saved'));
         } catch (err) {
             // refused or failed (a duplicate name is 409 DUPLICATE_NAME now): the refusal dialog, the draft is kept (REFUSAL-DIALOG-2026-003)
-            showRefusal(err, 'save', { keepsInput: true });
+            const id = draft.id;
+            showRefusal(err, 'save', { keepsInput: true, onReload: id !== null ? () => { void reloadTemplate(id); } : undefined });
         } finally {
             setSaving(false);
         }
@@ -117,7 +140,7 @@ export default function AuditTemplatesPanel({ onDirtyChange }: AuditTemplatesPan
         if (draft.id === null) {
             guard.requestAction(() => { setDraft(null); setBaseline(null); });
         } else {
-            guard.requestAction(() => { const next = toDraft(original); setDraft(next); setBaseline(comparable(next)); });
+            guard.requestAction(() => show(original));
         }
     };
 

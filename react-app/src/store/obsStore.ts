@@ -6,8 +6,10 @@ import { getErrorMessage } from '../utils/errorUtils';
 import { getProjectFilterParams, getCurrentProjectScopeId, withCurrentProject } from '../utils/projectFilter';
 
 import type { DateIssue } from '../utils/dateIssues';
+import { withRowVersion } from '../utils/rowVersion';
+import type { RowVersioned } from '../utils/rowVersion';
 
-export interface OBSItem {
+export interface OBSItem extends RowVersioned {
     id: string;
     /** Read-only: what is wrong with the stored dates (from the API; never sent back, never written). */
     date_issues?: DateIssue[];
@@ -63,7 +65,7 @@ interface OBSState {
     fetchOBSs: (params?: FilterParams) => Promise<void>;
     refetch: (params?: FilterParams) => Promise<void>;
     addOBS: (obs: Omit<OBSItem, 'id'>) => Promise<OBSItem>;
-    updateOBS: (id: string, obs: Partial<OBSItem>) => Promise<void>;
+    updateOBS: (id: string, obs: Partial<OBSItem>, rowVersion?: number | null) => Promise<void>;   // rowVersion: sent only when given (utils/rowVersion.ts)
     deleteOBS: (id: string) => Promise<void>;
     clearError: () => void;
     setError: (err: string | null) => void;
@@ -116,10 +118,10 @@ export const useOBSStore = create<OBSState>((set, get) => ({
         return newOBS;
     },
 
-    updateOBS: async (id: string, updates: Partial<OBSItem>) => {
+    updateOBS: async (id: string, updates: Partial<OBSItem>, rowVersion) => {
         // A failed add/update is not written to the list-level `error`: the record modal reports it itself, once. Writing it here
         // showed the same failure again as a page banner and made a failed save look like a failed list load.
-        const response = await api.put(`/obs/${id}`, updates);
+        const response = await api.put(`/obs/${id}`, withRowVersion(updates, rowVersion));
         const updated = normalizeItem(response.data);
         set((state) => ({ obsList: state.obsList.map(o => o.id === id ? updated : o) }));
     },

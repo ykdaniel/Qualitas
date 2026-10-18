@@ -250,21 +250,28 @@ def test_inactive_assignee(env):
 
 # ---- VERSION_CONFLICT ---------------------------------------------------------------------------------------------
 
-def test_stale_itr_version_stays_a_400(env):
-    _add(env, models.ITR(id='i1', documentNumber='ITR-1', status='In Progress', remark='old', detail_data=json.dumps({'_version': 3})))
-    body = _refused(env.login().put('/api/itr/i1', json={'remark': 'new', 'detail_data': json.dumps({'_version': 2})}), 400, 'VERSION_CONFLICT')
-    assert body['detail'] == ("Optimistic lock conflict: expected version 2, but current version is 3. "
-                              "Another user may have modified this record.")
+# OPTIMISTIC-LOCK-2026-001 (user's decision 2026-10-18): VERSION_CONFLICT is always 409 now (it was a 400 for the ITR) and
+# both carry the same English sentence. The ITR's old detail_data._version is still checked as before (against the stored
+# _version; migration step 31 also starts row_version there — set here by hand); KM's version_no is one conditional UPDATE.
+def test_stale_itr_version_is_a_409(env):
+    _add(env, models.ITR(id='i1', documentNumber='ITR-1', status='In Progress', remark='old', row_version=3,
+                         detail_data=json.dumps({'_version': 3})))
+    body = _refused(env.login().put('/api/itr/i1', json={'remark': 'new', 'detail_data': json.dumps({'_version': 2})}), 409, 'VERSION_CONFLICT')
+    assert body['detail'] == ("ITR ITR-1 was changed by someone else meanwhile (your version 2, stored version 3). "
+                              "Reload it, then make your change again.")
     assert body['params'] == {'docType': 'ITR', 'number': 'ITR-1'}
     assert _get(env, models.ITR, 'i1').remark == 'old'
+    assert _get(env, models.ITR, 'i1').row_version == 3
 
 
 def test_stale_km_version_stays_a_409(env):
     _add(env, models.KMArticle(id='k1', title='Welding', content='old', version_no=4))
     body = _refused(env.login().put('/api/km/k1', json={'content': 'new', 'version_no': 3}), 409, 'VERSION_CONFLICT')
-    assert body['detail'] == "This article has been modified by another user. Please refresh and try again."
+    assert body['detail'] == ("KM Welding was changed by someone else meanwhile (your version 3, stored version 4). "
+                              "Reload it, then make your change again.")
     assert body['params'] == {'docType': 'KM', 'number': 'Welding'}
     assert _get(env, models.KMArticle, 'k1').content == 'old'
+    assert _get(env, models.KMArticle, 'k1').version_no == 4
 
 
 # ---- uncoded and handler-less answers are unchanged ---------------------------------------------------------------

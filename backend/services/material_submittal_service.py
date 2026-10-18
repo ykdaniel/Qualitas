@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 import models
 import schemas
+from core.concurrency import claim_row_version
 from core.material_access import lock_material_submittal_for_write, project_visible
 from core.scope import Scope, record_in_scope
 from core.utils import begin_write_transaction, generate_reference_no, log_audit
@@ -90,7 +91,7 @@ class MaterialSubmittalService:
                     material_brand=latest.snap_brand if latest else None, material_model=latest.snap_model if latest else None,
                     submitted_date=latest.submitted_date if latest else None,
                     expected_reply_date=latest.expected_reply_date if latest else None, overdue=overdue,
-                    created_at=sub.created_at, updated_at=sub.updated_at)
+                    created_at=sub.created_at, updated_at=sub.updated_at, row_version=sub.row_version)
 
     def approved(self, project_id: str, scope: Scope, q=None, category=None, vendor_id=None, result=None, registered_from=None,
                  limit=200, offset=0) -> dict:
@@ -153,7 +154,7 @@ class MaterialSubmittalService:
                     name=rev.snap_name, category=rev.snap_category, brand=rev.snap_brand, model=rev.snap_model,
                     specification=rev.snap_specification, manufacturer=rev.snap_manufacturer,
                     supplier=rev.snap_supplier, spec_reference=rev.spec_reference,
-                    cover_photo_path=cover, photo_count=photo_count)
+                    cover_photo_path=cover, photo_count=photo_count, row_version=sub.row_version)
 
     def approved_one(self, submittal_id: str, scope: Scope) -> dict:
         sub = self._visible_submittal(submittal_id, scope)
@@ -408,7 +409,10 @@ class MaterialSubmittalService:
                     if wanted[k] != result_now[k]:
                         old[k], new[k] = result_now[k], wanted[k]
             if not new:
-                return
+                return                      # an unchanged save writes nothing (the version stays as it is)
+            # optimistic lock (OPTIMISTIC-LOCK-2026-001): the version the page read, checked and incremented in one step —
+            # only the version column; the pending changes above are written by the commit, or rolled back with a conflict
+            claim_row_version(self.db, sub, body.row_version, doc_type="Material", number=sub.document_number)
             sub.updated_at = _now()
             self.db.flush()
             log_audit(self.db, "UPDATE", "MaterialSubmittal", sub.id, sub.document_number, old_value=old, new_value=new,

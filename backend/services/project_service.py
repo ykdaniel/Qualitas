@@ -19,6 +19,7 @@ from repositories.project_repository import ProjectRepository
 from core import validators
 from core.constants import SHARED_CODE
 from core.refusals import Refusal
+from core.concurrency import claim_row_version
 from core.utils import continue_counters_from_legacy_abbreviation, log_audit
 
 logger = logging.getLogger(__name__)
@@ -114,6 +115,9 @@ class ProjectService:
             db_project = self.repo.get_by_id(project_id)
             if not db_project:
                 return None
+            # Optimistic lock (OPTIMISTIC-LOCK-2026-001): checked and incremented in one step (takes the write lock), re-read.
+            claim_row_version(self.repo.db, db_project, project_update.row_version, doc_type="project",
+                              number=db_project.name, refresh=True)
             old_val = {c.name: getattr(db_project, c.name) for c in db_project.__table__.columns}
             update_data = project_update.model_dump(exclude_unset=True)
             if "code" in update_data:
@@ -129,6 +133,9 @@ class ProjectService:
             )
             self.repo.db.commit()
             return updated
+        except Refusal:
+            self.repo.db.rollback()             # a refusal (VERSION_CONFLICT, PROJECT_CODE_*), not an error
+            raise
         except Exception as e:
             self.repo.db.rollback()
             logger.error(f"Error updating Project {project_id}: {e}", exc_info=True)

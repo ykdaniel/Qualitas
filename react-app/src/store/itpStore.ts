@@ -4,6 +4,8 @@ import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
 import { getProjectFilterParams, getCurrentProjectScopeId, withCurrentProject } from '../utils/projectFilter';
+import { withRowVersion } from '../utils/rowVersion';
+import type { RowVersioned } from '../utils/rowVersion';
 
 export interface ITPInspectionItem {
     id: string;
@@ -17,7 +19,7 @@ export interface ITPInspectionItem {
     checkpointClient: string;
 }
 
-export interface ITPItem {
+export interface ITPItem extends RowVersioned {
     project_id?: string | null;
     id: string;
     vendor: string;
@@ -58,8 +60,10 @@ interface ITPState {
     // Actions
     fetchITPs: (params?: FilterParams) => Promise<void>;
     addITP: (itp: Omit<ITPItem, 'id'>) => Promise<ITPItem>;
-    updateITP: (id: string, itp: Partial<ITPItem>) => Promise<void>;
-    updateITPDetail: (id: string, detail: any) => Promise<void>;
+    /** resolves to the saved ITP (with its new row_version); rowVersion: sent only when given (utils/rowVersion.ts) */
+    updateITP: (id: string, itp: Partial<ITPItem>, rowVersion?: number | null) => Promise<ITPItem>;
+    /** the inspection plan; resolves to the saved ITP (with its new row_version) */
+    updateITPDetail: (id: string, detail: any, rowVersion?: number | null) => Promise<ITPItem>;
     deleteITP: (id: string) => Promise<void>;
     refetch: (params?: FilterParams) => Promise<void>;
     clearError: () => void;
@@ -144,16 +148,22 @@ export const useITPStore = create<ITPState>((set, get) => ({
         return newITP;
     },
 
-    updateITP: async (id: string, updates: Partial<ITPItem>) => {
-        const response = await api.put(`/itp/${id}/`, updates);
+    updateITP: async (id: string, updates: Partial<ITPItem>, rowVersion) => {
+        const response = await api.put(`/itp/${id}/`, withRowVersion(updates, rowVersion));
         const updated = normalizeItem(response.data);
         set((state) => ({ itpList: state.itpList.map(item => item.id === id ? updated : item) }));
+        return updated;
     },
 
-    updateITPDetail: async (id: string, detail: any) => {
-        await api.put(`/itp/${id}/detail`, detail);
-        // Backend doesn't return the full ITP, so fetch again to keep state synced
-        await get().fetchITPs();
+    updateITPDetail: async (id: string, detail: any, rowVersion?: number | null) => {
+        // a non-object detail goes as it is (the server refuses it, as before) — never turned into an empty plan
+        const response = await api.put(`/itp/${id}/detail`, detail && typeof detail === 'object' && !Array.isArray(detail) ? withRowVersion(detail, rowVersion) : detail);
+        // The server answers the whole saved ITP (schemas.ITP, with its new row_version): take it, instead of re-fetching the
+        // list without the page's search — a re-fetch could be superseded or fail silently and leave the version behind
+        // (OPTIMISTIC-LOCK-2026-001 B3a).
+        const updated = normalizeItem(response.data);
+        set((state) => ({ itpList: state.itpList.map(item => item.id === id ? updated : item) }));
+        return updated;
     },
 
     deleteITP: async (id: string) => {

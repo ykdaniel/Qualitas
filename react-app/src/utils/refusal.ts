@@ -20,6 +20,11 @@ export type RefusalAction = 'delete' | 'save';
 export interface RefusalOptions {
     /** the form the user was filling in is still open with everything they typed (failed saves only) */
     keepsInput?: boolean;
+    /** OPTIMISTIC-LOCK-2026-001: how to reopen the record with its latest content. With a VERSION_CONFLICT the dialog then
+     *  offers "Reload this record" (after confirming that the changes in the form are discarded). */
+    onReload?: () => void;
+    /** false when nothing typed is lost by reloading (a list row's action): the reload then needs no confirmation. Default true. */
+    reloadDiscardsInput?: boolean;
 }
 
 export interface RefusalView {
@@ -106,6 +111,9 @@ const isFailure = (error: unknown): boolean => {
 };
 
 const codeOf = (error: unknown): unknown => (isAxiosError(error) ? (error.response?.data as { code?: unknown } | undefined)?.code : undefined);
+
+/** Someone else saved the record first (409 VERSION_CONFLICT, OPTIMISTIC-LOCK-2026-001). */
+export const isVersionConflict = (error: unknown): boolean => codeOf(error) === 'VERSION_CONFLICT';
 
 /** Locks: the record (or its results) cannot take the change at all — the note says the input is kept, but not "correct it and save
  *  again" (user's choice 2026-10-14; Checklist results locked counts as a lock, REFUSAL-DIALOG-2026-003). */

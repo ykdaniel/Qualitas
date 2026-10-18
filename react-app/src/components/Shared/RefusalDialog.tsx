@@ -1,15 +1,18 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRefusalStore } from '../../store/refusalStore';
-import { describeCoded, describeRefusal } from '../../utils/refusal';
+import { describeCoded, describeRefusal, isVersionConflict } from '../../utils/refusal';
 import actionStyles from './FormActions.module.css';
 import styles from './RefusalDialog.module.css';
 
 /**
  * "Cannot delete / Cannot save" dialog (REFUSAL-DIALOG-2026-001). Mounted once in App.tsx; opened with showRefusal().
  * It never closes by itself and a click on the backdrop does not close it: only "OK", × or Esc.
+ * A VERSION_CONFLICT whose page passed `onReload` also offers "Reload this record" (OPTIMISTIC-LOCK-2026-001): it first asks,
+ * inside this dialog, to confirm that the changes in the form are discarded; only then does it close and reload (a list row's
+ * action loses nothing typed and reloads at once: `reloadDiscardsInput: false`).
  */
 export default function RefusalDialog() {
     const current = useRefusalStore((s) => s.current);
@@ -17,10 +20,22 @@ export default function RefusalDialog() {
     const { t, language } = useLanguage();
     const okRef = useRef<HTMLButtonElement>(null);
     const dialogRef = useRef<HTMLDivElement>(null);
+    // the refusal (by id) whose "discard and reload" confirmation is showing: a newer refusal starts without it
+    const [confirmingFor, setConfirmingFor] = useState<number | null>(null);
+    const confirmingReload = !!current && confirmingFor === current.id;
+    const setConfirmingReload = (on: boolean) => setConfirmingFor(on && current ? current.id : null);
     const view = !current ? null : current.coded
         ? describeCoded(current.coded.code, current.coded.params, t, current.action)
         : describeRefusal(current.error, t, current.action, language, { keepsInput: current.keepsInput });
     const visible = view !== null;
+    const reload = current?.onReload
+        && (current.coded ? current.coded.code === 'VERSION_CONFLICT' : isVersionConflict(current.error))
+        ? current.onReload : undefined;
+
+    const confirmReload = () => {
+        close();
+        reload?.();
+    };
 
     useEffect(() => {
         if (!current) return;
@@ -36,7 +51,7 @@ export default function RefusalDialog() {
                 e.stopPropagation();
                 close();
             } else if (e.key === 'Tab') {
-                // keep the focus inside the dialog (it has only two buttons: × and OK)
+                // keep the focus inside the dialog (×, OK and, for a version conflict, the reload buttons)
                 const buttons = Array.from(dialogRef.current?.querySelectorAll('button') ?? []);
                 if (buttons.length === 0) return;
                 e.preventDefault();
@@ -80,11 +95,35 @@ export default function RefusalDialog() {
                     )}
                     {view.original && <p className={styles.original} lang="en">{view.original}</p>}
                     {view.note && <p className={styles.note}>{view.note}</p>}
+                    {reload && confirmingReload && (
+                        <p className={styles.reloadConfirm} role="status" data-testid="refusal-reload-confirm">{t('refusal.reloadConfirm')}</p>
+                    )}
                 </div>
                 <div className={styles.footer}>
-                    <button ref={okRef} type="button" className={actionStyles.primary} onClick={close}>
-                        {t('refusal.ok')}
-                    </button>
+                    {reload && confirmingReload ? (
+                        <>
+                            {/* keyed: new buttons (not the reused Reload / OK ones), so the confirm button really takes the focus */}
+                            <button key="reload-cancel" type="button" className={actionStyles.secondary} onClick={() => setConfirmingReload(false)}>
+                                {t('refusal.reloadCancel')}
+                            </button>
+                            <button key="reload-yes" type="button" className={actionStyles.primary} onClick={confirmReload}
+                                    data-testid="refusal-reload-yes" autoFocus>
+                                {t('refusal.reloadConfirmYes')}
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            {reload && (
+                                <button key="reload" type="button" className={actionStyles.secondary} data-testid="refusal-reload"
+                                        onClick={() => (current?.reloadDiscardsInput === false ? confirmReload() : setConfirmingReload(true))}>
+                                    {t('refusal.reload')}
+                                </button>
+                            )}
+                            <button key="ok" ref={okRef} type="button" className={actionStyles.primary} onClick={close}>
+                                {t('refusal.ok')}
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
         </div>,

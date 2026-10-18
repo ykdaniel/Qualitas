@@ -36,6 +36,8 @@ export interface ChecklistRecord {
     evidenceRecordedAtReliable?: boolean | null;
     evidenceHistoricalUnknown?: boolean | null;
     data: any;
+    /** Optimistic-lock version (OPTIMISTIC-LOCK-2026-001; utils/rowVersion.ts) — not the template's own `version`. */
+    row_version?: number | null;
 }
 
 // §17 hardening (2026-09-19, round 2): the backend evidence markers
@@ -124,6 +126,7 @@ const normalizeRecord = (r: api.ChecklistRecordApi): ChecklistRecord => ({
     evidenceRecordedAt: r.evidence_recorded_at ?? null,
     evidenceRecordedAtReliable: r.evidence_recorded_at_reliable ?? null,
     evidenceHistoricalUnknown: r.evidence_historical_unknown ?? null,
+    row_version: r.row_version ?? null,
     // Fallback includes items: [] (not just {}) — ChecklistEditor reads
     // formData.items unconditionally (e.g. the tab label's .length), so a
     // record with NULL/corrupt detail_data would otherwise crash the editor
@@ -143,7 +146,7 @@ interface ChecklistState {
     fetchRecords: (params?: FilterParams) => Promise<void>;
     refreshRecords: (params?: FilterParams) => Promise<void>;
     addRecord: (record: Omit<ChecklistRecord, 'id' | 'recordsNo'>) => Promise<ChecklistRecord>;
-    updateRecord: (id: string, updates: Partial<ChecklistRecord>) => Promise<ChecklistRecord>;
+    updateRecord: (id: string, updates: Partial<ChecklistRecord>, rowVersion?: number | null) => Promise<ChecklistRecord>;   // rowVersion: sent only when given
     deleteRecord: (id: string) => Promise<void>;
     clearError: () => void;
     setError: (err: string | null) => void;
@@ -215,7 +218,7 @@ export const useChecklistStore = create<ChecklistState>((set, get) => ({
         return newRecord;
     },
 
-    updateRecord: async (id, updates) => {
+    updateRecord: async (id, updates, rowVersion) => {
         // NOTE: 優雅地過濾掉 undefined 屬性，取代冗長的 14 行 if 判斷
         const { data: recordData, ...restUpdates } = updates;
         const payload: Record<string, any> = Object.fromEntries(
@@ -227,7 +230,7 @@ export const useChecklistStore = create<ChecklistState>((set, get) => ({
             payload.detail_data = JSON.stringify(recordData);
         }
 
-        const updatedApi = await api.updateChecklist(id, payload);
+        const updatedApi = await api.updateChecklist(id, payload, rowVersion);
         const updatedRecord = normalizeRecord(updatedApi);
         // NOTE: 本地記憶體直接替換該筆記錄，不影響使用者目前的搜尋/過濾狀態
         set((state) => ({

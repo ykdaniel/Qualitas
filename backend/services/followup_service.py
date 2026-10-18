@@ -12,6 +12,7 @@ import models
 import schemas
 from core.assignees import validate_new_assignee
 from core.refusals import Refusal
+from core.concurrency import claim_row_version
 from repositories.followup_repository import FollowUpRepository
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope, require_same_project
 
@@ -116,6 +117,11 @@ class FollowUpService:
             if not db_followup or not record_in_scope(db_followup, scope):
                 return None
 
+            # Optimistic lock (OPTIMISTIC-LOCK-2026-001): the version this edit was read at, checked and incremented in one
+            # step (it also takes the write lock), then re-read.
+            claim_row_version(self.repo.db, db_followup, followup_update.row_version, doc_type="FollowUp",
+                              number=db_followup.issueNo, refresh=True)
+
             # Workflow validation: Check status transition
             if followup_update.status and not WorkflowEngine.validate_transition(
                 "FollowUp", db_followup.status, followup_update.status
@@ -176,7 +182,11 @@ class FollowUpService:
             self.repo.db.commit()
 
             return updated
+        except ValueError:
+            self.repo.db.rollback()             # a refusal: releases the write lock the version claim took
+            raise
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error updating FollowUp {followup_id}: {e}", exc_info=True)
             raise e
 

@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 import models
 import schemas
 from core.refusals import Coded
+from core.concurrency import claim_row_version
 
 
 class AuditTemplateConflict(Coded, Exception):
@@ -140,6 +141,13 @@ class AuditTemplateService:
         new = self._snapshot(tpl)
         if new == old:
             return tpl
+        # Optimistic lock (OPTIMISTIC-LOCK-2026-001): checked and incremented in one step. After the no-change return
+        # above (which writes nothing); only the version column is touched, the pending field changes stay.
+        try:
+            claim_row_version(self.db, tpl, data.row_version, doc_type="AuditTemplate", number=tpl.name)
+        except Exception:
+            self.db.rollback()
+            raise
         tpl.updated_at = _now()
         self._log("UPDATE", tpl, old, new, user_id, username)
         self._commit(tpl.name)

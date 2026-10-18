@@ -57,6 +57,9 @@ def run_migrations():
 
     # 3. Add missing columns (NCR, NOI, ITP, etc.)
     _add_missing_columns()
+    # Step 31a runs here, not at step 31: later steps read these tables through the ORM, which selects row_version
+    # (OPTIMISTIC-LOCK-2026-001; add-if-missing only).
+    _add_row_version_columns()
 
     # 4. Create document_naming_rules
     _create_naming_rules_table()
@@ -204,6 +207,13 @@ def run_migrations():
     # changed ITP. Runs once (migration_flags), one transaction; best effort.
     _clear_itp_vp_q()
 
+    # 31. Optimistic lock (OPTIMISTIC-LOCK-2026-001, user's decision 2026-10-18): every editable table gets
+    # row_version INTEGER NOT NULL DEFAULT 0 (add-if-missing; material_submittals gets it in step 21's own schema code).
+    # The ITR's old version, kept in detail_data._version, is copied into the column once (migration_flags); a value
+    # that is not a non-negative integer counts as 0. KM articles keep their own version_no.
+    # (31a, the columns, already ran after step 3.)
+    _copy_itr_detail_version()
+
     logger.info("Migrations completed.")
 
 class MigrationError(RuntimeError):
@@ -331,7 +341,8 @@ _MATERIAL_DDL = (
         current_approved_rev_no INTEGER,
         current_approved_result VARCHAR,
         created_by VARCHAR, created_at VARCHAR, updated_at VARCHAR,
-        client_request_id VARCHAR
+        client_request_id VARCHAR,
+        row_version INTEGER NOT NULL DEFAULT 0
     )""",
     """CREATE TABLE IF NOT EXISTS material_submittal_revisions (
         id VARCHAR NOT NULL PRIMARY KEY,
@@ -479,6 +490,9 @@ def _create_material_submittal_schema():
             # nullable, no default: existing rows read NULL = "no request id"), BEFORE its unique index is created.
             if "client_request_id" not in {r[1] for r in conn.execute(text("PRAGMA table_info(material_submittals)")).fetchall()}:
                 conn.execute(text("ALTER TABLE material_submittals ADD COLUMN client_request_id VARCHAR"))
+            # OPTIMISTIC-LOCK-2026-001 step 31: the optimistic-lock version (existing rows start at 0).
+            if "row_version" not in {r[1] for r in conn.execute(text("PRAGMA table_info(material_submittals)")).fetchall()}:
+                conn.execute(text("ALTER TABLE material_submittals ADD COLUMN row_version INTEGER NOT NULL DEFAULT 0"))
             for name, table, columns, unique, where in MATERIAL_INDEXES:
                 stmt = f"CREATE {'UNIQUE ' if unique else ''}INDEX IF NOT EXISTS {name} ON {table} ({', '.join(columns)})"
                 if where:
@@ -2249,3 +2263,66 @@ def _clear_itp_vp_q():
             logger.info("ITP VP Q cleared: %d templates, %d cells", templates, cells_total)
     except Exception as e:
         logger.error("Could not clear ITP VP code Q: %s", e)
+
+
+ROW_VERSION_TABLES = (
+    "itp", "ncr", "followup", "noi", "itr", "pqp", "obs", "osd", "meeting_minutes", "contractors",
+    "contractor_personnel", "projects", "users", "roles", "audits", "audit_templates", "checklist", "fat",
+)
+ITR_VERSION_COPY_FLAG = "itr_detail_version_to_row_version_v1"
+
+
+def _add_row_version_columns():
+    """Step 31a (OPTIMISTIC-LOCK-2026-001). Add-if-missing only; existing rows read 0. Idempotent, no flag.
+    Every ORM read of these tables selects row_version, so a table that exists but still lacks the column afterwards
+    stops start-up (MigrationError) instead of answering 500 on every request. A table that does not exist is skipped
+    (create_all makes it with the column)."""
+    missing = []
+    with engine.connect() as conn:
+        for table in ROW_VERSION_TABLES:
+            _add_column_if_missing(conn, table, "row_version", "INTEGER NOT NULL DEFAULT 0")
+        conn.commit()
+        for table in ROW_VERSION_TABLES:
+            columns = {r[1] for r in conn.execute(text(f"PRAGMA table_info({table})")).fetchall()}
+            if columns and "row_version" not in columns:
+                missing.append(table)
+    if missing:
+        logger.error("STARTUP ABORTED: row_version could not be added to %s", ", ".join(missing))
+        raise MigrationError(f"row_version could not be added to: {', '.join(missing)} (OPTIMISTIC-LOCK-2026-001 step 31a)")
+
+
+def _itr_detail_version(detail):
+    """detail_data._version as a non-negative integer; anything else (no JSON, no key, text, a float, a bool, a
+    negative number) is 0."""
+    try:
+        data = json.loads(detail) if isinstance(detail, str) else None
+    except ValueError:
+        return 0
+    value = data.get("_version") if isinstance(data, dict) else None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return 0
+    return value
+
+
+def _copy_itr_detail_version():
+    """Step 31b (OPTIMISTIC-LOCK-2026-001). Each ITR's row_version starts at its detail_data._version (only where
+    that is a positive integer and row_version is still 0), so a page that still sends _version keeps matching.
+    Runs exactly once (migration_flags, same transaction). Best effort: a failure is logged, nothing is
+    half-written, and the next start tries again."""
+    from datetime import datetime, timezone
+    try:
+        with engine.connect() as conn:
+            if conn.execute(text("SELECT 1 FROM migration_flags WHERE flag_name = :f"), {"f": ITR_VERSION_COPY_FLAG}).first():
+                return
+            copied = 0
+            for itr_id, detail in conn.execute(text("SELECT id, detail_data FROM itr WHERE row_version = 0")).fetchall():
+                version = _itr_detail_version(detail)
+                if version > 0:
+                    conn.execute(text("UPDATE itr SET row_version = :v WHERE id = :i"), {"v": version, "i": itr_id})
+                    copied += 1
+            conn.execute(text("INSERT INTO migration_flags (flag_name, completed_at) VALUES (:f, :ts)"),
+                         {"f": ITR_VERSION_COPY_FLAG, "ts": datetime.now(timezone.utc).isoformat()})
+            conn.commit()
+            logger.info("ITR detail_data._version copied to row_version: %d ITRs", copied)
+    except Exception as e:
+        logger.error("Could not copy ITR detail_data._version to row_version: %s", e)

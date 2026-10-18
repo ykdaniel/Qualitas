@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import api from '../services/api';
 import { getErrorMessage } from '../utils/errorUtils';
+import { withRowVersion } from '../utils/rowVersion';
 
 // The audit template library (AUDIT-TEMPLATES-2026-001). In the wizard a template is an audit type; its questions are
 // COPIED into an audit when picked (each copy tagged templateId / templateItemId), so editing a template never changes
@@ -23,6 +24,7 @@ export interface AuditTemplate {
     items: AuditTemplateItem[];
     created_at?: string;
     updated_at?: string;
+    row_version?: number | null;     // optimistic lock (utils/rowVersion.ts)
 }
 
 export type AuditTemplateInput = Pick<AuditTemplate, 'name' | 'description' | 'version' | 'is_active' | 'items'>;
@@ -35,7 +37,7 @@ interface AuditTemplateState {
     error: string | null;
     fetchTemplates: () => Promise<void>;
     createTemplate: (data: AuditTemplateInput) => Promise<AuditTemplate>;
-    updateTemplate: (id: number, data: Partial<AuditTemplateInput>) => Promise<AuditTemplate>;
+    updateTemplate: (id: number, data: Partial<AuditTemplateInput>, rowVersion?: number | null) => Promise<AuditTemplate>;   // rowVersion: sent only when given
 }
 
 let templateFetchSeq = 0;
@@ -74,9 +76,9 @@ export const useAuditTemplateStore = create<AuditTemplateState>((set) => ({
         }
     },
 
-    updateTemplate: async (id, data) => {
+    updateTemplate: async (id, data, rowVersion) => {
         try {
-            const response = await api.put(`/audit/templates/${id}`, data);
+            const response = await api.put(`/audit/templates/${id}`, withRowVersion(data, rowVersion));
             set(state => ({ templates: upsert(state.templates, response.data) }));
             return response.data;
         } catch (err: any) {

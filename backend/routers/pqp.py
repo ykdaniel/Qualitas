@@ -123,6 +123,7 @@ def publish_pqp(
         db_pqp = pqp_service.publish_pqp(
             pqp_id=pqp_id,
             change_summary=body.change_summary,
+            expected_version=body.row_version,
             user_id=current_user.id,
             username=current_user.username,
             scope=scope,

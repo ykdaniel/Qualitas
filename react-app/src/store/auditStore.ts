@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import api from '../services/api';
 import { getErrorMessage } from '../utils/errorUtils';
 import { getProjectFilterParams, withCurrentProject } from '../utils/projectFilter';
+import { withRowVersion } from '../utils/rowVersion';
+import type { RowVersioned } from '../utils/rowVersion';
 
 // One row of the audit's daily schedule (AUDIT-AGENDA-2026-001); the backend validates and sorts them.
 export interface AuditAgendaEntry {
@@ -17,7 +19,7 @@ export interface AuditAgendaEntry {
     remarks: string;
 }
 
-export interface AuditItem {
+export interface AuditItem extends RowVersioned {
     id: string;
     project_id?: string | null;
     auditNo: string;
@@ -50,7 +52,7 @@ interface AuditState {
     fetchAudits: () => Promise<void>;
     refetch: () => Promise<void>;
     addAudit: (audit: Omit<AuditItem, 'id'>) => Promise<AuditItem>;
-    updateAudit: (id: string, audit: Partial<AuditItem>) => Promise<void>;
+    updateAudit: (id: string, audit: Partial<AuditItem>, rowVersion?: number | null) => Promise<void>;   // rowVersion: sent only when given (utils/rowVersion.ts)
     deleteAudit: (id: string) => Promise<void>;
     clearError: () => void;
     setError: (err: string | null) => void;
@@ -104,8 +106,8 @@ export const useAuditStore = create<AuditState>((set, get) => ({
         return newAudit;
     },
 
-    updateAudit: async (id, updates) => {
-        const response = await api.put(`/audit/${id}`, updates);
+    updateAudit: async (id, updates, rowVersion) => {
+        const response = await api.put(`/audit/${id}`, withRowVersion(updates, rowVersion));
         set((state) => ({
             auditList: state.auditList.map(a => (a.id === id ? response.data : a))
         }));

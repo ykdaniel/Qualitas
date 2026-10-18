@@ -28,6 +28,7 @@ from core.utils import (
 )
 from core.perms import ITR_APPROVE
 from core.refusals import Refusal
+from core.concurrency import claim_row_version
 from services.checklist_service import _instance_has_historical_evidence, blank_inspection_detail_data, pass_support_problems
 
 
@@ -357,7 +358,8 @@ class ITRService:
             )
 
     def update_itr(self, itr_id: str, itr_update: schemas.ITRUpdate,
-                   user_id: int = None, username: str = None, scope=None) -> Optional[models.ITR]:
+                   user_id: int = None, username: str = None, scope=None,
+                   warn_missing_version: bool = True) -> Optional[models.ITR]:
         """
         Update an existing ITR with validation
 
@@ -432,7 +434,9 @@ class ITRService:
             existing_detail = self._get_detail_data_dict(db_itr)
             db_version = existing_detail.get("_version", 0)
 
-            # The client may send _version inside detail_data (JSON string or dict)
+            # The client may send _version inside detail_data (JSON string or dict): the ITR's old version marker. Until
+            # the ITR form sends row_version (OPTIMISTIC-LOCK-2026-001 B4) it is checked exactly as before — against the
+            # stored _version, which only this update increments — so a page that echoes it behaves as it did.
             incoming_detail = d.get("detail_data")
             incoming_version = None
             if incoming_detail is not None:
@@ -444,14 +448,18 @@ class ITRService:
                 if isinstance(incoming_detail, dict):
                     incoming_version = incoming_detail.pop("_version", None)
 
-            if incoming_version is not None and incoming_version != db_version:
+            if itr_update.row_version is None and incoming_version is not None and incoming_version != db_version:
                 raise Refusal(
                     "VERSION_CONFLICT",
-                    f"Optimistic lock conflict: expected version {incoming_version}, "
-                    f"but current version is {db_version}. "
-                    f"Another user may have modified this record.",
+                    f"ITR {db_itr.documentNumber} was changed by someone else meanwhile (your version {incoming_version}, "
+                    f"stored version {db_version}). Reload it, then make your change again.",
                     docType="ITR", number=db_itr.documentNumber,
                 )
+
+            # Optimistic lock: row_version checked and incremented in one step (under the ITR write lock taken above). A
+            # batch status change carries no version by design and is not logged as a missing one.
+            claim_row_version(self.repo.db, db_itr, itr_update.row_version, doc_type="ITR", number=db_itr.documentNumber,
+                              warn_missing=warn_missing_version)
 
             # Workflow validation: Check status transition
             if itr_update.status and not WorkflowEngine.validate_transition(
@@ -553,8 +561,7 @@ class ITRService:
                 d['approvedBy'] = str(approver.id)
                 d['approvedAt'] = approved_at
 
-            # --- Increment _version in detail_data ---
-            # Merge incoming detail_data with the version bump
+            # --- Increment the old _version marker in detail_data (unchanged; see above) ---
             new_version = db_version + 1
             if isinstance(incoming_detail, dict):
                 merged_detail = {**existing_detail, **incoming_detail, "_version": new_version}
@@ -746,7 +753,8 @@ class ITRService:
         return snapshot
 
     def revoke_itr_approval(self, itr_id: str, new_status: str, reason: str,
-                            user_id: int = None, username: str = None, scope=None) -> Optional[models.ITR]:
+                            user_id: int = None, username: str = None, scope=None,
+                            expected_version: Optional[int] = None) -> Optional[models.ITR]:
         """
         The only sanctioned way to leave an Approved ITR (2026-09-19
         approval-authority hardening). update_itr refuses this transition
@@ -814,6 +822,9 @@ class ITRService:
             old_val = {c.name: getattr(db_itr, c.name) for c in db_itr.__table__.columns}
             checklist_snapshot = self._build_checklist_approval_snapshot(itr_id)
 
+            # Optimistic lock (OPTIMISTIC-LOCK-2026-001): row_version checked and incremented in one step (under the ITR
+            # write lock). The old detail_data._version marker is left as it is (only update_itr moves it).
+            claim_row_version(self.repo.db, db_itr, expected_version, doc_type="ITR", number=db_itr.documentNumber)
             db_itr.status = new_status
             self.repo.db.add(db_itr)
 
@@ -1234,7 +1245,7 @@ class ITRService:
 
     def create_ncr_from_itr(self, itr_id: str,
                             user_id: int = None, username: str = None,
-                            scope=None) -> Optional[models.NCR]:
+                            scope=None, expected_version: Optional[int] = None) -> Optional[models.NCR]:
         """
         Create an NCR from a failed or rejected ITR.
 
@@ -1299,6 +1310,10 @@ class ITRService:
                     f"ITR '{db_itr.documentNumber}' already has {named} raised from it. "
                     f"Continue with that NCR, or void it before raising a new one."
                 )
+
+            # Optimistic lock (OPTIMISTIC-LOCK-2026-001): the ITR is written below (ncrNumber), so its version is checked
+            # and incremented in one step (under the ITR write lock).
+            claim_row_version(self.repo.db, db_itr, expected_version, doc_type="ITR", number=db_itr.documentNumber)
 
             # Resolve vendor name for the NCR
             vendor_name = db_itr.vendor  # uses the @property

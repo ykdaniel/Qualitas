@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 
 import models
 from core.refusals import Refusal
+from core.concurrency import claim_row_version
 import schemas
 from repositories.meeting_minutes_repository import MeetingMinutesRepository
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
@@ -281,6 +282,11 @@ class MeetingMinutesService:
             if not db_meeting or not record_in_scope(db_meeting, scope):
                 return None
 
+            # Optimistic lock (OPTIMISTIC-LOCK-2026-001): the version this edit was read at, checked and incremented in one
+            # step (it also takes the write lock), then re-read.
+            claim_row_version(self.repo.db, db_meeting, meeting_update.row_version, doc_type="MeetingMinutes",
+                              number=db_meeting.documentNumber, refresh=True)
+
             if meeting_update.status and not WorkflowEngine.validate_transition(
                 "MeetingMinutes", db_meeting.status, meeting_update.status
             ):
@@ -351,8 +357,10 @@ class MeetingMinutesService:
 
             return updated
         except ValueError as e:
+            self.repo.db.rollback()             # a refusal: releases the write lock the version claim took
             raise e
         except Exception as e:
+            self.repo.db.rollback()
             logger.error(f"Error updating Meeting Minutes {meeting_id}: {e}", exc_info=True)
             raise e
 

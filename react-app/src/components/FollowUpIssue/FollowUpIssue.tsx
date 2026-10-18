@@ -7,6 +7,9 @@ import { Clock, CheckCircle2, BarChart3, Search, Printer } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { showRefusal } from '../../store/refusalStore';
+import { useFollowUpStore } from '../../store/followUpStore';
+import { reloadAndReopen, useOpenSession, useRecordVersion } from '../../hooks/useRecordVersion';
+import { toast } from 'sonner';
 import { useNCRStore } from '../../store/ncrStore';
 import { useOBSStore } from '../../store/obsStore';
 import { useNOIStore } from '../../store/noiStore';
@@ -69,6 +72,7 @@ interface FollowUpIssueItem {
   sourceModule?: string;  // 來源模組
   sourceReferenceNo?: string;  // 來源單號
   isExternal?: boolean;  // 標記是否來自其他模組（唯讀）
+  row_version?: number | null;  // optimistic lock (manual issues only; OPTIMISTIC-LOCK-2026-001)
 }
 
 const FollowUpIssue: React.FC = () => {
@@ -97,22 +101,25 @@ const FollowUpIssue: React.FC = () => {
   const fetchSeqRef = useRef(0);
   const dataScopeIdRef = useRef<string | null>(null);
 
-  const fetchManualIssues = async () => {
+  /** Resolves to the list it loaded, or null when the load failed (a superseded load resolves to its own, older answer). */
+  const fetchManualIssues = async (): Promise<FollowUpIssueItem[] | null> => {
     const seq = ++fetchSeqRef.current;
     const requestedScopeId = getCurrentProjectScopeId();
     setLoading(true);
     try {
       const res = await api.get('/followup/', { params: { ...getProjectFilterParams() } });
-      if (seq !== fetchSeqRef.current) return;
+      if (seq !== fetchSeqRef.current) return res.data;
       dataScopeIdRef.current = requestedScopeId;
       setManualIssues(res.data);
+      return res.data;
     } catch (err) {
-      if (seq !== fetchSeqRef.current) return;
+      if (seq !== fetchSeqRef.current) return null;
       console.error('Failed to fetch issues:', err);
       if (requestedScopeId !== dataScopeIdRef.current) {
         dataScopeIdRef.current = requestedScopeId;
         setManualIssues([]);
       }
+      return null;
     } finally {
       if (seq === fetchSeqRef.current) setLoading(false);
     }
@@ -294,23 +301,52 @@ const FollowUpIssue: React.FC = () => {
 
   const statistics = useFollowUpIssueStats(issues);
 
+  // OPTIMISTIC-LOCK-2026-001 B3a: the version the open form saves against (a manual issue's, taken when it opens) and which
+  // opening is current (keys the form; guards a reload's late reopen).
+  const recordVersion = useRecordVersion();
+  const openSession = useOpenSession();
+
   const handleEdit = (id: string) => {
+    recordVersion.open(manualIssues.find(m => m.id === id)?.row_version);
+    openSession.next();
     setCurrentIssueId(id);
     setIsEditModalOpen(true);
   };
 
-
-
   const handleAddNew = () => {
+    recordVersion.open(null);
+    openSession.next();
     setCurrentIssueId(null);
     setIsEditModalOpen(true);
+  };
+
+  // "Reload this record" after a 409 VERSION_CONFLICT (the refusal dialog has already confirmed that the form's changes are
+  // discarded): close the form, reload the issues, open this one again with what is saved now.
+  const reloadRecord = (id: string) => {
+    let loaded: FollowUpIssueItem[] | null = null;
+    return reloadAndReopen(openSession, {
+      close: () => setIsEditModalOpen(false),
+      reload: async () => { loaded = await fetchManualIssues(); },
+      failed: () => loaded === null,
+      found: () => !!loaded?.some(m => m.id === id),
+      reopen: () => {
+        recordVersion.open(loaded?.find(m => m.id === id)?.row_version);
+        openSession.next();
+        setCurrentIssueId(id);
+        setIsEditModalOpen(true);
+      },
+      forget: () => setCurrentIssueId(null),
+      notify: (notice) => toast.warning(t(notice)),
+    });
   };
 
   const handleSaveIssueDetails = async (updates: Partial<FollowUpIssueItem>) => {
     try {
       if (currentIssueId) {
-        // Update existing
-        await api.put(`/followup/${currentIssueId}`, updates);
+        // Update existing — with the version the form opened (the shared store also takes the answer)
+        const saved = await useFollowUpStore.getState().updateFollowUp(currentIssueId, updates as any, recordVersion.current());
+        // the page's own list takes the answer at once (its version), not only after the re-fetch below (B3a review R1 P3-5)
+        setManualIssues(prev => prev.map(m => (m.id === saved.id ? { ...m, ...(saved as Partial<FollowUpIssueItem>) } : m)));
       } else {
         // Create new
         const today = new Date().toISOString().split('T')[0];
@@ -329,7 +365,9 @@ const FollowUpIssue: React.FC = () => {
       console.error('Failed to save issue:', err);
       // A coded refusal (e.g. PROJECT_REQUIRED_FOR_CREATE, LINK_OTHER_PROJECT) shows its reason in the refusal dialog; the
       // form stays open so the entry is not lost.
-      showRefusal(err, 'save', { keepsInput: true });
+      const id = currentIssueId;
+      const manual = !!id && manualIssues.some(m => m.id === id);
+      showRefusal(err, 'save', { keepsInput: true, onReload: manual ? () => { void reloadRecord(id as string); } : undefined });
       throw err;
     }
   };
@@ -454,6 +492,7 @@ const FollowUpIssue: React.FC = () => {
 
       {isEditModalOpen && (
         <FollowUpIssueDetailModal
+          key={openSession.key}
           issueId={currentIssueId || 'new'}
           existingItem={currentIssueId ? issues.find(item => item.id === currentIssueId) : undefined}
           onSave={handleSaveIssueDetails}

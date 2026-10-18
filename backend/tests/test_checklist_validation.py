@@ -3,7 +3,7 @@ Test suite for Checklist reference validation
 """
 
 import pytest
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock, MagicMock, patch
 import models
 import schemas
 from services.checklist_service import ChecklistService
@@ -240,7 +240,9 @@ class TestChecklistReferenceValidation:
             noiNumber="NOI-INVALID"
         )
 
-        with pytest.raises(ValueError) as exc_info:
+        # The record here is a plain Mock, not a mapped row: the optimistic-lock claim (OPTIMISTIC-LOCK-2026-001, tested
+        # over HTTP in test_optimistic_lock_http.py) is stood in for, so the reference check is what this test exercises.
+        with patch('services.checklist_service.claim_row_version'), pytest.raises(ValueError) as exc_info:
             service.update_checklist("checklist-1", checklist_update)
 
         assert "not found" in str(exc_info.value).lower()

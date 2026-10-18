@@ -36,12 +36,14 @@ export interface OSDDetailModalProps {
     existingItem?: OSDItem;
     onSave: (details: OSDDetailData, pendingUploads: PendingUploads[], deletedFileIds: string[]) => Promise<SaveOutcome>;
     onClose: () => void;
+    /** Reopens the record with what is saved now: offered by the refusal dialog after a 409 VERSION_CONFLICT (OPTIMISTIC-LOCK-2026-001). */
+    onReloadRecord?: () => void;
     /** Open the form locked for viewing only — every field disabled, no Save.
      *  Driven by the caller from IAM permission + record status. */
     readOnly?: boolean;
 }
 
-export const OSDDetailModal: React.FC<OSDDetailModalProps> = ({ osdId: _osdId, existingItem, onSave, onClose, readOnly = false }) => {
+export const OSDDetailModal: React.FC<OSDDetailModalProps> = ({ osdId: _osdId, existingItem, onSave, onClose, onReloadRecord, readOnly = false }) => {
     const { t } = useLanguage();
     const { getActiveContractors } = useContractorsStore();
 
@@ -159,7 +161,7 @@ export const OSDDetailModal: React.FC<OSDDetailModalProps> = ({ osdId: _osdId, e
             return;
         }
         const { close, notice, refusal } = presentOutcome(outcome, t);
-        if (refusal) showRefusal(refusal.error, 'save', { keepsInput: true });
+        if (refusal) showRefusal(refusal.error, 'save', { keepsInput: true, onReload: onReloadRecord });
         if (notice) (notice.level === 'error' ? toast.error : toast.warning)(notice.text, { duration: 10000 });
         if (close) {
             leaveGuard.release();
@@ -184,7 +186,7 @@ export const OSDDetailModal: React.FC<OSDDetailModalProps> = ({ osdId: _osdId, e
         } catch (err) {
             // The save itself threw (not routed through runSaveFlow) — keep the modal open,
             // preserve input, one refusal dialog.
-            showRefusal(err, 'save', { keepsInput: true });
+            showRefusal(err, 'save', { keepsInput: true, onReload: onReloadRecord });
         } finally {
             setSaving(false);
         }

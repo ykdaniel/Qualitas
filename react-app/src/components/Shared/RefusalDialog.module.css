@@ -112,7 +112,20 @@
   background: #faf7f1;
   border-top: 1px solid rgba(184, 148, 90, 0.22);
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  gap: 8px;
+}
+
+/* "Reload this record": the confirmation that the changes in the form are discarded (OPTIMISTIC-LOCK-2026-001) */
+.reloadConfirm {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fdf3f2;
+  border: 1px solid rgba(180, 35, 24, 0.25);
+  color: #7a271a;
+  font-weight: 600;
 }
 
 @keyframes fadeIn {

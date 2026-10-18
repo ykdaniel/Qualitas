@@ -12,10 +12,12 @@ import { toast } from 'sonner';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import formStyles from '../Shared/FormShell.module.css';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useProjectStore } from '../../store/projectStore';
 import { listApproved, type ApprovedMaterial } from '../../services/materialApi';
 import { useDebounce } from '../../hooks/useDebounce';
+import { reloadAndReopen, useOpenSession } from '../../hooks/useRecordVersion';
 import { appendUnique, createListGuard, filterRowsLikeTable } from '../../utils/materialSubmittal';
 import { useMaterialText } from './materialText';
 import { Notice } from './parts';
@@ -59,6 +61,7 @@ const MaterialSubmittal: React.FC = () => {
 const ApprovedRegister: React.FC<{ projectId: string; canManage: boolean; vendors: { id: string; name: string }[] }>
     = ({ projectId, canManage, vendors }) => {
     const mt = useMaterialText();
+    const { t } = useLanguage();
     const [q, setQ] = useState('');
     const dq = useDebounce(q, 400);
     const [result, setResult] = useState<ResultChip>('');
@@ -123,6 +126,37 @@ const ApprovedRegister: React.FC<{ projectId: string; canManage: boolean; vendor
     const reloadNow = async (): Promise<boolean> => {
         setCountsToken((n) => n + 1);
         return loadFirst();
+    };
+
+    /** Which opening of the record views is current: keys the form (a fresh one per open) and guards a reload's late reopen
+     * (OPTIMISTIC-LOCK-2026-001 B2 R1 P1). Every way the user opens a record or the form starts a new one. */
+    const openSession = useOpenSession();
+    const openRecord = (m: ApprovedMaterial | null) => { openSession.next(); setOpened(m); };
+    const openForm = (item: ApprovedMaterial | null) => { openSession.next(); setDialog({ item }); };
+
+    /** "Reload this record" after a 409 VERSION_CONFLICT (the refusal dialog has already confirmed that the form's changes are
+     * discarded): close the form AND the record view (it shows the old content), reload the list, read this record again and
+     * open its form — unless the user opened something else meanwhile. */
+    const reloadRecord = async (submittalId: string, documentNumber: string) => {
+        let fresh: ApprovedMaterial | undefined;
+        let failed = false;
+        await reloadAndReopen(openSession, {
+            close: () => { setDialog(null); setOpened(null); },
+            reload: async () => {
+                try {
+                    if (!(await reloadNow())) failed = true;
+                    fresh = (await listApproved(projectId, { q: documentNumber, limit: 20 })).items.find((r) => r.submittalId === submittalId);
+                } catch (err) {
+                    console.error('Failed to reload the material record', err);
+                    failed = true;
+                }
+            },
+            failed: () => failed,
+            found: () => !!fresh,
+            reopen: () => { if (fresh) { setOpened(fresh); openForm(fresh); } },
+            forget: () => undefined,
+            notify: (notice) => toast.warning(t(notice)),
+        });
     };
 
     /** Excel of EVERY record matching the current search, chip AND column-header filters (R2, review R5) — fetched page by page
@@ -199,7 +233,7 @@ const ApprovedRegister: React.FC<{ projectId: string; canManage: boolean; vendor
                         {mt('exportExcel')}
                     </button>
                     {canManage && (
-                        <button type="button" className={shellStyles.addNewButton} onClick={() => setDialog({ item: null })} data-testid="register-new">
+                        <button type="button" className={shellStyles.addNewButton} onClick={() => openForm(null)} data-testid="register-new">
                             {mt('addNewMaterial')}
                         </button>
                     )}
@@ -208,9 +242,9 @@ const ApprovedRegister: React.FC<{ projectId: string; canManage: boolean; vendor
             {error && <Notice tone="error">{mt('loadFailed')} <button type="button" onClick={() => void loadFirst()}>{mt('retry')}</button></Notice>}
             <div className={shellStyles.content}>
                 <div data-testid="material-table" style={view === 'shelf' ? { display: 'none' } : undefined}>
-                    <DataTable columns={columns} data={rows} searchKey="" onRowClick={(m) => setOpened(m)} onColumnFiltersChange={setColumnFilters} />
+                    <DataTable columns={columns} data={rows} searchKey="" onRowClick={(m) => openRecord(m)} onColumnFiltersChange={setColumnFilters} />
                 </div>
-                {view === 'shelf' && <MaterialShelf rows={shelfRows} onOpen={(m) => setOpened(m)} />}
+                {view === 'shelf' && <MaterialShelf rows={shelfRows} onOpen={(m) => openRecord(m)} />}
                 {/* server paging: shown only while more rows exist than are loaded */}
                 {rows.length < total && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
@@ -221,11 +255,12 @@ const ApprovedRegister: React.FC<{ projectId: string; canManage: boolean; vendor
                 )}
             </div>
             {opened && !dialog && <ApprovedMaterialModal item={opened} canManage={canManage} onClose={() => setOpened(null)}
-                                                         onEdit={() => setDialog({ item: opened })} />}
-            {dialog && <RegisterDialog projectId={projectId} vendors={vendors} item={dialog.item}
+                                                         onEdit={() => openForm(opened)} />}
+            {dialog && <RegisterDialog key={openSession.key} projectId={projectId} vendors={vendors} item={dialog.item}
                                        onClose={() => setDialog(null)}
                                        onSaved={(saved) => { if (dialog.item) setOpened(saved); }}
-                                       onReload={reloadNow} />}
+                                       onReload={reloadNow}
+                                       onReloadRecord={reloadRecord} />}
         </>
     );
 };

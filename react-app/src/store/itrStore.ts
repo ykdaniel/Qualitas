@@ -4,8 +4,10 @@ import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
 import { getProjectFilterParams, getCurrentProjectScopeId, withCurrentProject } from '../utils/projectFilter';
+import { withRowVersion } from '../utils/rowVersion';
+import type { RowVersioned } from '../utils/rowVersion';
 
-export interface ITRItem {
+export interface ITRItem extends RowVersioned {
     id: string;
     vendor: string;
     documentNumber: string;
@@ -62,7 +64,7 @@ interface ITRState {
     fetchITRs: (params?: FilterParams) => Promise<void>;
     refetch: (params?: FilterParams) => Promise<void>;
     addITR: (itr: Omit<ITRItem, 'id'>) => Promise<ITRItem>;
-    updateITR: (id: string, itr: Partial<ITRItem>) => Promise<void>;
+    updateITR: (id: string, itr: Partial<ITRItem>, rowVersion?: number | null) => Promise<void>;   // rowVersion: sent only when given (utils/rowVersion.ts)
     deleteITR: (id: string) => Promise<void>;
     clearError: () => void;
     setError: (err: string | null) => void;
@@ -140,8 +142,8 @@ export const useITRStore = create<ITRState>((set, get) => ({
         return newITR;
     },
 
-    updateITR: async (id: string, updates: Partial<ITRItem>) => {
-        const payload = { ...updates } as any;
+    updateITR: async (id: string, updates: Partial<ITRItem>, rowVersion?: number | null) => {
+        const payload = withRowVersion(updates, rowVersion) as any;
         const { itrList } = get();
 
         // §17: checklists are standalone instance rows now, not packed into

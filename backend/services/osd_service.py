@@ -13,6 +13,7 @@ import schemas
 from repositories.osd_repository import OSDRepository
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
 from core.refusals import Refusal
+from core.concurrency import claim_row_version
 from core.utils import (
     _json_serialize,
     _resolve_vendor_id,
@@ -89,6 +90,11 @@ class OSDService:
             db_osd = self.repo.get_by_id(osd_id)
             if not db_osd or not record_in_scope(db_osd, scope):
                 return None
+
+            # Optimistic lock (OPTIMISTIC-LOCK-2026-001): the version this edit was read at, checked and incremented in one
+            # step (it also takes the write lock), then re-read.
+            claim_row_version(self.repo.db, db_osd, osd_update.row_version, doc_type="OSD",
+                              number=db_osd.documentNumber, refresh=True)
 
             if osd_update.status and not WorkflowEngine.validate_transition(
                 "OSD", db_osd.status, osd_update.status
