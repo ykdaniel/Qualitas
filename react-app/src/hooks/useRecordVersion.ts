@@ -91,3 +91,25 @@ export async function reloadAndReopen(session: OpenSession, steps: {
     }
     steps.reopen();
 }
+
+/**
+ * Runs a form's writes one after another (OPTIMISTIC-LOCK-2026-001 B3a): each write sends the version the previous one
+ * answered, so writes that can overlap (an ITP's items saved as they are applied, then Save) never refuse each other.
+ * A failed write does not stop the next one.
+ */
+export type SerialWrites = <T>(task: () => Promise<T>) => Promise<T>;
+
+export function createSerialWrites(): SerialWrites {
+    let tail: Promise<unknown> = Promise.resolve();
+    return <T,>(task: () => Promise<T>): Promise<T> => {
+        const run = tail.then(task, task);
+        tail = run.catch(() => undefined);
+        return run;
+    };
+}
+
+/** One SerialWrites for the life of the component. */
+export function useSerialWrites(): SerialWrites {
+    const [serial] = useState(createSerialWrites);
+    return serial;
+}

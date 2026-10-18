@@ -121,13 +121,15 @@ export interface ITPDetailModalProps {
     /** Returns whether the immediate detail-only write actually succeeded, so the persistent
      * save-status indicator can reflect the real outcome instead of assuming success. */
     onApplyItems?: (detailPayload: any) => Promise<boolean>;
+    /** Reopens the ITP with what is saved now: offered by the refusal dialog after a 409 VERSION_CONFLICT (OPTIMISTIC-LOCK-2026-001). */
+    onReloadRecord?: () => void;
     onClose: () => void;
     /** Tab shown when the window opens. 'plan' when returning from a Checklist that was opened
      * from this window's Inspection Plan tab (see utils/itpReturnLink). Default 'general'. */
     initialTab?: 'general' | 'plan';
 }
 
-export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingItem, defaultVendor, canApprove = false, canVoid = false, canCreate = false, canUpdate = false, canCreateChecklist = false, sharedTemplateReadOnly = false, onSave, onApplyItems, onClose, initialTab = 'general' }) => {
+export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingItem, defaultVendor, canApprove = false, canVoid = false, canCreate = false, canUpdate = false, canCreateChecklist = false, sharedTemplateReadOnly = false, onSave, onApplyItems, onReloadRecord, onClose, initialTab = 'general' }) => {
     // New record (no existingItem yet): editable only with itp:create:all. Existing record:
     // editable only with itp:update:all. Attachment controls are separate (see attachmentReadOnly
     // below) because upload/delete always requires itp:update:all, even for a brand-new record.
@@ -356,7 +358,7 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                 } else {
                     setMainStatus('failed');
                     setPlanStatus('failed');
-                    showRefusal(err, 'save', { keepsInput: true });
+                    showRefusal(err, 'save', { keepsInput: true, onReload: onReloadRecord });
                 }
             } finally {
                 setSaving(false);
@@ -434,7 +436,7 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
             } else {
                 setMainStatus('failed');
                 setPlanStatus('failed');
-                showRefusal(err, 'save');
+                showRefusal(err, 'save', { onReload: onReloadRecord });
             }
         } finally {
             setSaving(false);
@@ -916,7 +918,8 @@ export const ITPDetailModal: React.FC<ITPDetailModalProps> = ({ itpId, existingI
                                 ref={editorRef}
                                 items={advancedItems}
                                 onItemsChange={handleItemsChange}
-                                readOnly={formReadOnly}
+                                // also while saving: an item applied meanwhile would be written after the window closed (B3a R1 P2-2)
+                                readOnly={formReadOnly || saving}
                                 savesImmediately={!!(onApplyItems && itpId)}
                                 itpId={itpId}
                                 onViewRecord={() => {

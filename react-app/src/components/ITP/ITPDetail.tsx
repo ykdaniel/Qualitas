@@ -16,6 +16,8 @@ import { BackButton } from '../ui/BackButton';
 import { useLanguage } from '../../context/LanguageContext';
 import { toast } from 'sonner';
 import { showRefusal } from '../../store/refusalStore';
+import { useRecordVersion, useSerialWrites } from '../../hooks/useRecordVersion';
+import { withRowVersion } from '../../utils/rowVersion';
 import { InspectionItem } from '../../types/itp';
 import { PHASES, EMPTY_ITEM } from '../../constants/itp';
 import { getNextRevision } from '../../utils/revision';
@@ -47,6 +49,23 @@ const ITPDetail: React.FC = () => {
   const [itemSaves, setItemSaves] = useState(0);
   const [isPrinting, setIsPrinting] = useState(false);
   const [rev, setRev] = useState("");
+  // OPTIMISTIC-LOCK-2026-001 B3a: the version this page saves against (taken when the ITP loads, moved on by every write that
+  // went through); its writes run one after another — Save and Publish are two writes each, and item saves may overlap them —
+  // each with the version the previous one answered. "Reload this record" after a 409 loads the ITP again (loadToken).
+  const recordVersion = useRecordVersion();
+  const serialWrite = useSerialWrites();
+  const [loadToken, setLoadToken] = useState(0);
+  const reloadPage = () => setLoadToken(n => n + 1);
+  // the translator, read by the load below without being one of its dependencies: `t` is a new function on every render of
+  // the language provider, and a language switch must not reload the ITP over the user's edits (B3a review R2)
+  const tRef = React.useRef(t);
+  useEffect(() => { tRef.current = t; });
+  /** one versioned write; remembers the version the server answered */
+  const putVersioned = async (url: string, body: object) => {
+    const response = await api.put(url, withRowVersion(body, recordVersion.current()));
+    recordVersion.saved(response.data?.row_version);
+    return response;
+  };
   const draftKey = JSON.stringify({ items, workTitle });
   const [baseline, setBaseline] = useState<string | null>(null);
   useLeaveGuard(baseline !== null && draftKey !== baseline, saving || itemSaves > 0);
@@ -92,28 +111,30 @@ const ITPDetail: React.FC = () => {
 
     setSaving(true);
     try {
-      // 1. Update Revision & Title
-      await api.put(`/itp/${id}/`, {
-        description: workTitle,
-        rev: nextRev,
-        status: 'Approved' // Optional: set status to Approved on publish
-      });
-      setRev(nextRev); // Update local state immediately
+      await serialWrite(async () => {
+        // 1. Update Revision & Title
+        await putVersioned(`/itp/${id}/`, {
+          description: workTitle,
+          rev: nextRev,
+          status: 'Approved' // Optional: set status to Approved on publish
+        });
+        setRev(nextRev); // Update local state immediately
 
-      // 2. Update Details (same as save)
-      const payload = {
-        a: items.filter(i => i.phase === 'A').map(({ phase: _phase, ...rest }) => rest),
-        b: items.filter(i => i.phase === 'B').map(({ phase: _phase, ...rest }) => rest),
-        c: items.filter(i => i.phase === 'C').map(({ phase: _phase, ...rest }) => rest),
-        checklist: [],
-        self_inspection: null
-      };
-      await api.put(`/itp/${id}/detail`, payload);
+        // 2. Update Details (same as save), with the version the first write answered
+        const payload = {
+          a: items.filter(i => i.phase === 'A').map(({ phase: _phase, ...rest }) => rest),
+          b: items.filter(i => i.phase === 'B').map(({ phase: _phase, ...rest }) => rest),
+          c: items.filter(i => i.phase === 'C').map(({ phase: _phase, ...rest }) => rest),
+          checklist: [],
+          self_inspection: null
+        };
+        await putVersioned(`/itp/${id}/detail`, payload);
+      });
       setBaseline(draftKey);
       toast.success(`Published successfully as Revision ${nextRev}!`);
     } catch (error) {
       console.error("Failed to publish ITP:", error);
-      showRefusal(error, 'save');
+      showRefusal(error, 'save', { onReload: reloadPage });
     } finally {
       setSaving(false);
     }
@@ -144,7 +165,8 @@ const ITPDetail: React.FC = () => {
         const response = await api.get(`/itp/${id}/`);
         const data = response.data;
         if (data) {
-          if (data.description) setWorkTitle(data.description);
+          recordVersion.open(data.row_version);
+          setWorkTitle(data.description || '');   // also empty: a reload must not keep a discarded title edit
           if (data.referenceNo) setReferenceNo(data.referenceNo);
           if (data.rev) setRev(data.rev);
 
@@ -158,13 +180,15 @@ const ITPDetail: React.FC = () => {
         }
       } catch (error) {
         console.error("Failed to fetch ITP:", error);
+        // a "Reload this record" that failed: say so (the page still shows what the user agreed to discard)
+        if (loadToken > 0) toast.warning(tRef.current('refusal.reloadFailed'));
       } finally {
         setLoading(false);
       }
     };
 
     fetchITP();
-  }, [id]);
+  }, [id, loadToken, recordVersion]);
 
 
   // Save changes to backend
@@ -172,24 +196,26 @@ const ITPDetail: React.FC = () => {
     if (!id) return;
     setSaving(true);
     try {
-      // 1. Update Title (Description)
-      await api.put(`/itp/${id}/`, { description: workTitle });
+      await serialWrite(async () => {
+        // 1. Update Title (Description)
+        await putVersioned(`/itp/${id}/`, { description: workTitle });
 
-      // 2. Update Details
-      const payload = {
-        a: items.filter(i => i.phase === 'A').map(({ phase: _phase, ...rest }) => rest),
-        b: items.filter(i => i.phase === 'B').map(({ phase: _phase, ...rest }) => rest),
-        c: items.filter(i => i.phase === 'C').map(({ phase: _phase, ...rest }) => rest),
-        checklist: [],
-        self_inspection: null
-      };
+        // 2. Update Details, with the version the first write answered
+        const payload = {
+          a: items.filter(i => i.phase === 'A').map(({ phase: _phase, ...rest }) => rest),
+          b: items.filter(i => i.phase === 'B').map(({ phase: _phase, ...rest }) => rest),
+          c: items.filter(i => i.phase === 'C').map(({ phase: _phase, ...rest }) => rest),
+          checklist: [],
+          self_inspection: null
+        };
 
-      await api.put(`/itp/${id}/detail`, payload);
+        await putVersioned(`/itp/${id}/detail`, payload);
+      });
       setBaseline(draftKey);
       toast.success("Saved successfully!");
     } catch (error) {
       console.error("Failed to save ITP:", error);
-      showRefusal(error, 'save', { keepsInput: true });
+      showRefusal(error, 'save', { keepsInput: true, onReload: reloadPage });
     } finally {
       setSaving(false);
     }
@@ -203,18 +229,19 @@ const ITPDetail: React.FC = () => {
     if (!id || baseline === null) return;
     setItemSaves(n => n + 1);
     try {
-      await api.put(`/itp/${id}/detail`, {
+      // in turn with the page's other writes, with the version the previous one answered
+      await serialWrite(() => putVersioned(`/itp/${id}/detail`, {
         a: nextItems.filter(i => i.phase === 'A').map(({ phase: _phase, ...rest }) => rest),
         b: nextItems.filter(i => i.phase === 'B').map(({ phase: _phase, ...rest }) => rest),
         c: nextItems.filter(i => i.phase === 'C').map(({ phase: _phase, ...rest }) => rest),
         checklist: [],
         self_inspection: null
-      });
+      }));
       setBaseline(prev => JSON.stringify({ items: nextItems, workTitle: prev ? JSON.parse(prev).workTitle : workTitle }));
       toast.success(t('itp.saveStatusSaved') || 'Saved');
     } catch (error) {
       console.error("Failed to save ITP inspection plan:", error);
-      showRefusal(error, 'save');
+      showRefusal(error, 'save', { onReload: reloadPage });
     } finally {
       setItemSaves(n => n - 1);
     }

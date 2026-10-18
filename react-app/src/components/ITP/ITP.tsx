@@ -24,6 +24,8 @@ import { useCreateGate } from '../../hooks/useCreateGate';
 import { useITPStats } from '../../hooks/useITPStats';
 import { REOPEN_ITP_PARAM } from '../../utils/itpReturnLink';
 import { describeSaveError } from '../../utils/saveErrors';
+import { reloadAndReopen, useOpenSession, useRecordVersion, useSerialWrites } from '../../hooks/useRecordVersion';
+import { isVersionConflict } from '../../utils/refusal';
 
 type StatusFilter =
   | 'all'
@@ -86,11 +88,23 @@ const ITP: React.FC = () => {
   // Tab the edit window opens on: 'plan' only when returning from a Checklist (see the
   // ?reopenItp= effect below); every other open starts on General Information as before.
   const [modalInitialTab, setModalInitialTab] = useState<'general' | 'plan'>('general');
+  // OPTIMISTIC-LOCK-2026-001 B3a: the version the open form saves against (taken when it opens, moved on by every write that
+  // went through), which opening of the form is current (keys it; guards a reload's late reopen), and the form's writes run
+  // one after another (items saved as they are applied, then Save: each sends the version the previous one answered).
+  const recordVersion = useRecordVersion();
+  const openSession = useOpenSession();
+  const nextOpenSession = openSession.next;
+  const serialWrite = useSerialWrites();
+  // the open session of the window now showing: a queued write from an earlier window must not write or move the version
+  // (B3a review R1 P2-2)
+  const formSessionRef = useRef(0);
   const handleEdit = React.useCallback((id: string, tab: 'general' | 'plan' = 'general') => {
+    recordVersion.open(useITPStore.getState().itpList.find(item => item.id === id)?.row_version);
+    formSessionRef.current = nextOpenSession();
     setModalInitialTab(tab);
     setCurrentItpId(id);
     setIsEditModalOpen(true);
-  }, []);
+  }, [recordVersion, nextOpenSession]);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const deepLinkAppliedRef = useRef(false);
@@ -155,10 +169,24 @@ const ITP: React.FC = () => {
   const handleAddNew = () => {
     const activeContractors = getActiveContractors();
     setNewItpDefaultVendor(activeContractors.length > 0 ? activeContractors[0].name : '');
+    recordVersion.open(null);
+    formSessionRef.current = nextOpenSession();
     setModalInitialTab('general');
     setCurrentItpId(null);
     setIsEditModalOpen(true);
   };
+
+  // "Reload this record" after a 409 VERSION_CONFLICT (the refusal dialog has already confirmed that the form's changes are
+  // discarded): close the form, reload the list, open the ITP again (on the same tab) with what is saved now.
+  const reloadRecord = () => reloadAndReopen(openSession, {
+    close: () => setIsEditModalOpen(false),
+    reload: () => refetch({ search: debouncedSearch }),
+    failed: () => !!useITPStore.getState().error,
+    found: () => useITPStore.getState().itpList.some(item => item.id === currentItpId),
+    reopen: () => handleEdit(currentItpId as string, modalInitialTab),
+    forget: () => { setCurrentItpId(null); openedViaDeepLinkRef.current = false; },
+    notify: (notice) => toast.warning(t(notice)),
+  });
 
   const confirmDelete = React.useCallback((id: string) => {
     const itp = itpList.find(item => item.id === id);
@@ -334,6 +362,7 @@ const ITP: React.FC = () => {
 
       {isEditModalOpen && (
         <ITPDetailModal
+          key={openSession.key}
           itpId={currentItpId}
           existingItem={currentExistingItem}
           defaultVendor={newItpDefaultVendor}
@@ -345,14 +374,23 @@ const ITP: React.FC = () => {
           // Generate Checklist POSTs /checklist/, which only creates a shared Checklist template: system administrators only.
           canCreateChecklist={isAdmin && hasPermission('checklist:create:all')}
           initialTab={modalInitialTab}
+          onReloadRecord={currentItpId ? reloadRecord : undefined}
           onApplyItems={async (detailPayload) => {
             if (!currentItpId) return false; // guarded by the modal itself (itpId falsy skips the call), kept here too for safety
+            const id = currentItpId;
+            const mine = formSessionRef.current;
             try {
-              await updateITPDetail(currentItpId, detailPayload);
-              refetch();
+              // in turn with the form's other writes, with the version the previous one answered — and only while this
+              // window is still the one open (a write that outlived its window would move another window's version)
+              await serialWrite(async () => {
+                if (!openSession.isCurrent(mine)) return;
+                const saved = await updateITPDetail(id, detailPayload, recordVersion.current());
+                if (openSession.isCurrent(mine)) recordVersion.saved(saved.row_version);
+              });
               return true;
             } catch (error) {
-              showRefusal(error, 'save');           // nothing for a 401 (the API client is logging the user out)
+              // nothing for a 401 (the API client is logging the user out)
+              showRefusal(error, 'save', { onReload: reloadRecord });
               return false;
             }
           }}
@@ -363,63 +401,72 @@ const ITP: React.FC = () => {
             // subsequent step in this same call must use `workingId`, not `currentItpId`.
             let workingId = currentItpId;
 
-            if (!workingId) {
-              // Nothing exists on the backend yet — this is the record's first save. `details`
-              // is folded directly into the CREATE payload (schemas.ITPCreate.detail_data
-              // accepts it, stored as-is) rather than sent via a follow-up PUT /itp/{id}/detail —
-              // this is not just simpler, it is REQUIRED: that detail endpoint is gated on
-              // itp:update:all (confirmed via real isolated-backend testing), so a create-only
-              // account's inspection-plan items would otherwise be silently lost on first save.
-              // Folding it into the single POST means only itp:create:all is ever required to
-              // complete a brand-new record's full first save (main fields + plan), and the
-              // whole write is one atomic backend transaction — there is no "record created,
-              // detail failed" partial state possible for a new record at all.
-              const created = await addITP({ ...updates, detail_data: details } as Omit<ITPItem, 'id'>);
-              workingId = created.id;
-              setCurrentItpId(workingId);
-            } else if (!skipRecordWrite) {
-              // skipRecordWrite (set by ITPModals.tsx via isUnchangedSincePriorWrite: true when
-              // JSON.stringify({payload, detailPayload}) is string-equal to the last successfully
-              // written attempt's — a serialized-string comparison, not a semantic/deep-equality
-              // one, so key order or formatting differences would NOT be treated as "unchanged")
-              // — without this, retrying after an attachment-only failure re-sent the identical PUT
-              // and created a second, real audit_logs UPDATE/UPDATE_DETAIL pair every time,
-              // including for Publish (a confirmed duplicate-event bug: audit_logs rows went 0→2 on
-              // the first Publish, then 2→4 on a retry that changed nothing else). A genuinely
-              // changed payload produces a different serialized string, so it is never skipped.
-              await updateITP(workingId, updates);
-              if (details) {
-                try {
-                  await updateITPDetail(workingId, details);
-                } catch (detailErr: any) {
-                  // The main record IS already saved at this point — say so explicitly instead of
-                  // letting a generic "save failed"/network-error toast imply nothing was saved.
-                  // Thrown (not swallowed) so Phase 2 (attachments) below is never attempted this
-                  // round: nothing about the pending upload/delete queue is touched or reported as
-                  // done, and the modal stays open with isDirty still true (handleSave's own catch
-                  // never reaches applyOutcome/setIsEditModalOpen when onSave throws). A retry
-                  // resends both updateITP and updateITPDetail (skipRecordWrite's own key is never
-                  // recorded on a throw), so it also picks up any further edit made before the
-                  // retry, not just the detail write.
-                  //
-                  // Always uses the "unconfirmed" wording, never "not saved" — a response coming
-                  // back (detailErr.response set, e.g. a 4xx/5xx) proves the backend REPLIED, not
-                  // that it didn't write: services/itp_service.py::update_itp_detail commits, THEN
-                  // logs/returns, so a failure after that commit (e.g. while building the
-                  // response) would still reach the client as a 500 despite the write having
-                  // already landed. A network failure with no response at all is the same
-                  // "genuinely don't know" situation from the client's side. Distinguishing "the
-                  // endpoint provably rejected before writing" from "provably wrote, then failed"
-                  // would need auditing update_itp_detail's every failure path for exactly where
-                  // it can throw relative to its commit — not done this batch, so every failure
-                  // here is treated the same, conservative way. Never surfaces the raw underlying
-                  // error text (e.g. a bare "Network Error" or a raw 500 body) as if it were a
-                  // user-facing explanation.
-                  const label = t('itp.mainSavedDetailUnconfirmed') || "The main ITP record was saved; the inspection plan's save result could not be confirmed — please check and retry";
-                  throw new ItpMainSavedError(label);
+            // The record write and the plan write run in turn with any item saves still under way (serialWrite), each with
+            // the version the previous write answered (OPTIMISTIC-LOCK-2026-001 B3a).
+            await serialWrite(async () => {
+              if (!workingId) {
+                // Nothing exists on the backend yet — this is the record's first save. `details`
+                // is folded directly into the CREATE payload (schemas.ITPCreate.detail_data
+                // accepts it, stored as-is) rather than sent via a follow-up PUT /itp/{id}/detail —
+                // this is not just simpler, it is REQUIRED: that detail endpoint is gated on
+                // itp:update:all (confirmed via real isolated-backend testing), so a create-only
+                // account's inspection-plan items would otherwise be silently lost on first save.
+                // Folding it into the single POST means only itp:create:all is ever required to
+                // complete a brand-new record's full first save (main fields + plan), and the
+                // whole write is one atomic backend transaction — there is no "record created,
+                // detail failed" partial state possible for a new record at all.
+                const created = await addITP({ ...updates, detail_data: details } as Omit<ITPItem, 'id'>);
+                recordVersion.saved(created.row_version);
+                workingId = created.id;
+                setCurrentItpId(workingId);
+              } else if (!skipRecordWrite) {
+                // skipRecordWrite (set by ITPModals.tsx via isUnchangedSincePriorWrite: true when
+                // JSON.stringify({payload, detailPayload}) is string-equal to the last successfully
+                // written attempt's — a serialized-string comparison, not a semantic/deep-equality
+                // one, so key order or formatting differences would NOT be treated as "unchanged")
+                // — without this, retrying after an attachment-only failure re-sent the identical PUT
+                // and created a second, real audit_logs UPDATE/UPDATE_DETAIL pair every time,
+                // including for Publish (a confirmed duplicate-event bug: audit_logs rows went 0→2 on
+                // the first Publish, then 2→4 on a retry that changed nothing else). A genuinely
+                // changed payload produces a different serialized string, so it is never skipped.
+                const savedRecord = await updateITP(workingId, updates, recordVersion.current());
+                recordVersion.saved(savedRecord.row_version);
+                if (details) {
+                  try {
+                    const saved = await updateITPDetail(workingId, details, recordVersion.current());
+                    recordVersion.saved(saved.row_version);
+                  } catch (detailErr: any) {
+                    // someone else saved between the two writes: offer the reload too (the main record IS saved)
+                    if (isVersionConflict(detailErr)) showRefusal(detailErr, 'save', { keepsInput: true, onReload: reloadRecord });
+                    // The main record IS already saved at this point — say so explicitly instead of
+                    // letting a generic "save failed"/network-error toast imply nothing was saved.
+                    // Thrown (not swallowed) so Phase 2 (attachments) below is never attempted this
+                    // round: nothing about the pending upload/delete queue is touched or reported as
+                    // done, and the modal stays open with isDirty still true (handleSave's own catch
+                    // never reaches applyOutcome/setIsEditModalOpen when onSave throws). A retry
+                    // resends both updateITP and updateITPDetail (skipRecordWrite's own key is never
+                    // recorded on a throw), so it also picks up any further edit made before the
+                    // retry, not just the detail write.
+                    //
+                    // Always uses the "unconfirmed" wording, never "not saved" — a response coming
+                    // back (detailErr.response set, e.g. a 4xx/5xx) proves the backend REPLIED, not
+                    // that it didn't write: services/itp_service.py::update_itp_detail commits, THEN
+                    // logs/returns, so a failure after that commit (e.g. while building the
+                    // response) would still reach the client as a 500 despite the write having
+                    // already landed. A network failure with no response at all is the same
+                    // "genuinely don't know" situation from the client's side. Distinguishing "the
+                    // endpoint provably rejected before writing" from "provably wrote, then failed"
+                    // would need auditing update_itp_detail's every failure path for exactly where
+                    // it can throw relative to its commit — not done this batch, so every failure
+                    // here is treated the same, conservative way. Never surfaces the raw underlying
+                    // error text (e.g. a bare "Network Error" or a raw 500 body) as if it were a
+                    // user-facing explanation.
+                    const label = t('itp.mainSavedDetailUnconfirmed') || "The main ITP record was saved; the inspection plan's save result could not be confirmed — please check and retry";
+                    throw new ItpMainSavedError(label);
+                  }
                 }
               }
-            }
+            });
 
             // Phase 2: attachment housekeeping. The record's own fields are ALREADY saved by
             // this point — this never throws, it always returns a SaveOutcome describing
@@ -453,7 +500,7 @@ const ITP: React.FC = () => {
             // Reloading the list is a separate concern from whether the save itself succeeded —
             // its failure must not be reported as (or block) the save outcome above.
             try {
-              await refetch();
+              await refetch({ search: debouncedSearch });     // the list as the page shows it (with its search)
             } catch (err) {
               console.error('ITP list refetch after save failed:', err);
             }

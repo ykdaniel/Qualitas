@@ -14,6 +14,7 @@ import { createColumns } from './columns';
 import { useFATStore, deriveFATResult } from '../../store/fatStore';
 import type { FATItem, FATDetailItem } from '../../store/fatStore';
 import { showRefusal } from '../../store/refusalStore';
+import { reloadAndReopen, useOpenSession, useRecordVersion } from '../../hooks/useRecordVersion';
 import ReactDOM from 'react-dom';
 import FATPrintTemplate from './FATPrintTemplate';
 import './FAT.print.css';
@@ -100,7 +101,17 @@ const FAT: React.FC = () => {
 
   const statistics = useFATStats(filteredFatList);
 
+  // OPTIMISTIC-LOCK-2026-001 B3a: the version the open window saves against (the FAT's, taken when the edit or the details
+  // window opens) and which opening is current (keys the window; guards a reload's late reopen).
+  const recordVersion = useRecordVersion();
+  const openSession = useOpenSession();
+  const openFor = (id: string | null) => {
+    recordVersion.open(id ? useFATStore.getState().fatList.find(item => item.id === id)?.row_version : null);
+    openSession.next();
+  };
+
   const handleAddNew = () => {
+    openFor(null);
     setCurrentFatId(null);
     setIsEditModalOpen(true);
   };
@@ -112,7 +123,7 @@ const FAT: React.FC = () => {
   // always reach onClose(), even after a failed create/update).
   const handleSaveFATDetails = async (updates: Partial<FATItem>) => {
     if (currentFatId) {
-      await updateFAT(currentFatId, updates);
+      await updateFAT(currentFatId, updates, recordVersion.current());
     } else {
       const newItem: Omit<FATItem, 'id'> = {
         project_id: updates.project_id || undefined,
@@ -138,6 +149,7 @@ const FAT: React.FC = () => {
   };
 
   const handleAddDetails = (id: string) => {
+    openFor(id);
     setCurrentFatId(id);
     setIsDetailsEditModalOpen(true);
   };
@@ -147,16 +159,29 @@ const FAT: React.FC = () => {
   // details intact, instead of always reaching onClose() regardless of outcome.
   const handleSaveDetails = async (details: FATDetailItem[]) => {
     if (currentFatId) {
-      await saveFATDetails(currentFatId, details);
+      await saveFATDetails(currentFatId, details, recordVersion.current());
       setIsDetailsEditModalOpen(false);
       setCurrentFatId(null);
     }
   };
 
   const handleEdit = (id: string) => {
+    openFor(id);
     setCurrentFatId(id);
     setIsEditModalOpen(true);
   };
+
+  // "Reload this record" after a 409 VERSION_CONFLICT (the refusal dialog has already confirmed that the window's changes are
+  // discarded): close it, reload the list, open the same window (edit or details) again with what is saved now.
+  const reloadRecord = (id: string, which: 'edit' | 'details') => reloadAndReopen(openSession, {
+    close: () => { setIsEditModalOpen(false); setIsDetailsEditModalOpen(false); },
+    reload: () => fetchFATs(),
+    failed: () => !!useFATStore.getState().error,
+    found: () => useFATStore.getState().fatList.some(item => item.id === id),
+    reopen: () => (which === 'edit' ? handleEdit(id) : handleAddDetails(id)),
+    forget: () => setCurrentFatId(null),
+    notify: (notice) => toast.warning(t(notice)),
+  });
 
   const handleDeleteClick = (id: string) => {
     const fat = fatList.find(item => item.id === id);
@@ -280,9 +305,11 @@ const FAT: React.FC = () => {
 
       {isEditModalOpen && (
         <FATEditModal
+          key={openSession.key}
           fatId={currentFatId || 'new'}
           existingItem={currentFatId ? fatList.find(item => item.id === currentFatId) : undefined}
           onSave={handleSaveFATDetails}
+          onReloadRecord={currentFatId ? () => { void reloadRecord(currentFatId, 'edit'); } : undefined}
           onClose={() => {
             setIsEditModalOpen(false);
             setCurrentFatId(null);
@@ -293,9 +320,11 @@ const FAT: React.FC = () => {
 
       {isDetailsEditModalOpen && currentFatId && (
         <FATDetailModal
+          key={openSession.key}
           fatId={currentFatId}
           details={fatDetails[currentFatId] || []}
           onSave={handleSaveDetails}
+          onReloadRecord={() => { void reloadRecord(currentFatId, 'details'); }}
           onClose={() => {
             setIsDetailsEditModalOpen(false);
             setCurrentFatId(null);
@@ -334,10 +363,12 @@ interface FATDetailModalProps {
   details: FATDetailItem[];
   onSave: (details: FATDetailItem[]) => void;
   onClose: () => void;
+  /** Reopens the details with what is saved now: offered after a 409 VERSION_CONFLICT (OPTIMISTIC-LOCK-2026-001). */
+  onReloadRecord?: () => void;
   readOnly?: boolean;
 }
 
-const FATDetailModal: React.FC<FATDetailModalProps> = ({ fatId, details, onSave, onClose, readOnly = false }) => {
+const FATDetailModal: React.FC<FATDetailModalProps> = ({ fatId, details, onSave, onClose, onReloadRecord, readOnly = false }) => {
   const { t } = useLanguage();
   const [detailList, setDetailList] = useState<FATDetailItem[]>(details.length > 0 ? details : [{
     id: '1',
@@ -402,7 +433,7 @@ const FATDetailModal: React.FC<FATDetailModalProps> = ({ fatId, details, onSave,
       await onSave(detailList);
       onClose(); // only reached on success — detailList/modal are left untouched on any rejection
     } catch (err) {
-      showRefusal(err, 'save', { keepsInput: true });     // refused or failed: the refusal dialog, never axios's status text (REFUSAL-DIALOG-2026-003)
+      showRefusal(err, 'save', { keepsInput: true, onReload: onReloadRecord });     // refused or failed: the refusal dialog, never axios's status text (REFUSAL-DIALOG-2026-003)
     } finally {
       setSaving(false);
     }
@@ -572,9 +603,11 @@ interface FATEditModalProps {
   existingItem?: FATItem;
   onSave: (updates: Partial<FATItem>) => void;
   onClose: () => void;
+  /** Reopens the FAT with what is saved now: offered after a 409 VERSION_CONFLICT (OPTIMISTIC-LOCK-2026-001). */
+  onReloadRecord?: () => void;
   readOnly?: boolean;
 }
-const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem, onSave, onClose, readOnly = false }) => {
+const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem, onSave, onClose, onReloadRecord, readOnly = false }) => {
   const { t } = useLanguage();
   const { getActiveContractors } = useContractorsStore();
   const [formData, setFormData] = useState<Partial<FATItem>>({
@@ -618,7 +651,7 @@ const FATEditModal: React.FC<FATEditModalProps> = ({ fatId: _fatId, existingItem
       // a coded refusal (e.g. PROJECT_REQUIRED_FOR_CREATE) shows its reason in the refusal dialog
       // e.g. no supplier chosen / the chosen contractor no longer exists (FAT_SUPPLIER_*): shown in the user's language
       console.error('Failed to save FAT:', err);
-      showRefusal(err, 'save', { keepsInput: true });
+      showRefusal(err, 'save', { keepsInput: true, onReload: onReloadRecord });
     } finally {
       setSaving(false);
     }

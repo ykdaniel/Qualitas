@@ -96,8 +96,9 @@ interface AuditWizardProps {
   canUpdate?: boolean;
   onClose: () => void;
   onSaveSuccess: () => void;
-  /** Reopens the audit with what is saved now: offered by the refusal dialog after a 409 VERSION_CONFLICT (OPTIMISTIC-LOCK-2026-001). */
-  onReloadRecord?: () => void;
+  /** Reopens the audit (by id: one this wizard created has no id on the page) with what is saved now: offered by the refusal
+   *  dialog after a 409 VERSION_CONFLICT (OPTIMISTIC-LOCK-2026-001). */
+  onReloadRecord?: (id: string) => void;
 }
 
 export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly: readOnlyProp = false, canUpdate = true, onClose, onSaveSuccess, onReloadRecord }) => {
@@ -212,6 +213,8 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
   // next save into a create of a duplicate.
   const [openedId] = useState<string | null>(existingItem?.id ?? null);
   const recordId = openedId ?? createdId;
+  // the reload for the refusal dialog: this audit, once it has an id (also one created by this wizard — B2 review R1 P3-5)
+  const reloadThis = () => (recordId && onReloadRecord ? () => onReloadRecord(recordId) : undefined);
   const createdWithoutUpdate = createdId !== null && !canUpdate;
   const readOnly = readOnlyProp || createdWithoutUpdate
     || (savedStatus !== undefined && AUDIT_LOCKED_STATUSES.has(savedStatus));
@@ -576,7 +579,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     } catch (err) {
       // auditStore rethrows the axios error as is: the refusal dialog (REFUSAL-DIALOG-2026-002 D2) translates it; the wizard stays open
       console.error("草稿儲存失敗: ", err);
-      showRefusal(err, 'save', { keepsInput: true, onReload: onReloadRecord });
+      showRefusal(err, 'save', { keepsInput: true, onReload: reloadThis() });
     } finally {
       setIsDraftSaving(false);
     }
@@ -604,7 +607,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
       onSaveSuccess();
     } catch (err) {
       console.error("資料庫寫入失敗: ", err);
-      showRefusal(err, 'save', { keepsInput: true, onReload: onReloadRecord });
+      showRefusal(err, 'save', { keepsInput: true, onReload: reloadThis() });
     } finally {
       setIsSaving(false);
     }

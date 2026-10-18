@@ -10,6 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Plus, Printer, Info, MapPin, CheckCircle, AlertCircle, Trash2, User, Signature, History, Search, ArrowLeft, FileText } from 'lucide-react';
 import { useChecklistStore, ChecklistRecord, isTemplateHistoricallyProtected, isSharedChecklistTemplate } from '../../store/checklistStore';
 import { showRefusal } from '../../store/refusalStore';
+import { reloadAndReopen, useOpenSession, useRecordVersion } from '../../hooks/useRecordVersion';
 import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createColumns } from './columns';
 import ChecklistPrintTemplate from './ChecklistPrintTemplate';
@@ -84,6 +85,12 @@ const Checklist: React.FC = () => {
         refreshRecords({ search: debouncedSearch });
     }, [debouncedSearch, refreshRecords]);
 
+    // OPTIMISTIC-LOCK-2026-001 B3a: the version the open editor saves against (taken when it opens, moved on by every write that
+    // went through — Reopen keeps the editor open) and which opening is current (keys the editor; guards a reload's reopen).
+    const recordVersion = useRecordVersion();
+    const openSession = useOpenSession();
+    const nextOpenSession = openSession.next;
+
     // Deep-link: open a specific record via ?openId=<id-or-recordsNo>&from=<source>
     const [searchParams, setSearchParams] = useSearchParams();
     const fromSource = searchParams.get('from');
@@ -96,13 +103,16 @@ const Checklist: React.FC = () => {
         if (records.length === 0) return;
         const found = records.find(r => r.id === openId || r.recordsNo === openId);
         if (!found) return;
+        // an open like any other: with the record's version and a new open session (B3a review R1 P2-1)
+        recordVersion.open(found.row_version);
+        nextOpenSession();
         setEditingRecord(found);
         setView('editor');
         deepLinkAppliedRef.current = true;
         const next = new URLSearchParams(searchParams);
         next.delete('openId');
         setSearchParams(next, { replace: true });
-    }, [searchParams, records, setSearchParams]);
+    }, [searchParams, records, setSearchParams, recordVersion, nextOpenSession]);
 
     const returnItpId = searchParams.get(RETURN_ITP_PARAM);
     // Opened from an ITP edit window: Cancel goes back to that ITP, so it is labelled "Back to ITP"
@@ -168,16 +178,35 @@ const Checklist: React.FC = () => {
 
     // --- UI/UX for Activity Selection ---
     const handleAddNew = () => {
+        recordVersion.open(null);
+        nextOpenSession();
         setSelectedItpIndex(0);
         setEditingRecord(null);
         setView('editor');
     };
 
     const handleEdit = useCallback((record: ChecklistRecord) => {
+        recordVersion.open(record.row_version);
+        nextOpenSession();
         setEditingRecord(record);
         // Note: For editing, record data has precedence
         setView('editor');
-    }, []);
+    }, [recordVersion, nextOpenSession]);
+
+    // "Reload this record" after a 409 VERSION_CONFLICT (the refusal dialog has already confirmed that the editor's changes
+    // are discarded): back to the list, reload it, open the checklist again with what is saved now.
+    const reloadRecord = (id: string) => reloadAndReopen(openSession, {
+        close: () => setView('list'),
+        reload: () => refreshRecords({ search: debouncedSearch }),
+        failed: () => !!useChecklistStore.getState().error,
+        found: () => useChecklistStore.getState().records.some(r => r.id === id),
+        reopen: () => {
+            const fresh = useChecklistStore.getState().records.find(r => r.id === id);
+            if (fresh) handleEdit(fresh);
+        },
+        forget: () => setEditingRecord(null),
+        notify: (notice) => toast.warning(t(notice)),
+    });
 
     const handleDelete = useCallback(async (id: string) => {
         if (!window.confirm(t('common.confirmDelete'))) return;
@@ -244,6 +273,7 @@ const Checklist: React.FC = () => {
                 </>
             ) : (
                 <ChecklistEditor
+                    key={openSession.key}
                     record={editingRecord}
                     onCancel={handleBack}
                     backToItp={backToItp}
@@ -280,7 +310,7 @@ const Checklist: React.FC = () => {
                         setSaving(true);
                         try {
                             const saved = editingRecord
-                                ? await updateRecord(editingRecord.id, data)
+                                ? await updateRecord(editingRecord.id, data, recordVersion.current())
                                 : await addRecord(data);
                             const version = saved.version;
                             toast.success(
@@ -291,7 +321,8 @@ const Checklist: React.FC = () => {
                             setView('list');
                         } catch (err) {
                             // refused or failed: the refusal dialog, the editor keeps every entry (REFUSAL-DIALOG-2026-003)
-                            showRefusal(err, 'save', { keepsInput: true });
+                            const id = editingRecord?.id;
+                            showRefusal(err, 'save', { keepsInput: true, onReload: id ? () => { void reloadRecord(id); } : undefined });
                         } finally {
                             setSaving(false);
                         }
@@ -314,11 +345,16 @@ const Checklist: React.FC = () => {
                         if (!editingRecord) return;
                         setSaving(true);
                         try {
-                            await updateRecord(editingRecord.id, { status: 'Ongoing' } as any);
-                            const refreshed = records.find(r => r.id === editingRecord.id);
-                            if (refreshed) setEditingRecord(refreshed);
+                            // The saved record as the server answered it: its new status AND version (the editor stays open and
+                            // its next Save must send that version). Reading `records` here took the list from before the
+                            // Reopen (a stale closure) — the old status and version (fixed with OPTIMISTIC-LOCK-2026-001 B3a).
+                            const refreshed = await updateRecord(editingRecord.id, { status: 'Ongoing' } as any, recordVersion.current());
+                            recordVersion.saved(refreshed.row_version);
+                            setEditingRecord(refreshed);
                         } catch (err) {
-                            showRefusal(err, 'save');       // a refused Reopen: the refusal dialog (REFUSAL-DIALOG-2026-003)
+                            // a refused Reopen: the refusal dialog (REFUSAL-DIALOG-2026-003)
+                            const id = editingRecord.id;
+                            showRefusal(err, 'save', { onReload: () => { void reloadRecord(id); } });
                         } finally {
                             setSaving(false);
                         }

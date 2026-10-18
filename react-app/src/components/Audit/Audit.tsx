@@ -231,12 +231,13 @@ const Audit: React.FC = () => {
 
     // "Reload this record" after a 409 VERSION_CONFLICT (the refusal dialog has already confirmed that the wizard's changes are
     // discarded): close the wizard, reload the list, open the audit again with what is saved now.
-    const reloadRecord = () => reloadAndReopen(openSession, {
+    // `id`: from the wizard, so an audit it created itself (still "new" on this page) is found too
+    const reloadRecord = (id: string) => reloadAndReopen(openSession, {
         close: () => setIsEditModalOpen(false),
         reload: () => fetchAudits(),
         failed: () => !!useAuditStore.getState().error,
-        found: () => useAuditStore.getState().auditList.some(item => item.id === currentAuditId),
-        reopen: () => handleEdit(currentAuditId as string),
+        found: () => useAuditStore.getState().auditList.some(item => item.id === id),
+        reopen: () => handleEdit(id),
         forget: () => { setCurrentAuditId(null); openedViaDeepLinkRef.current = false; },
         notify: (notice) => toast.warning(t(notice)),
     });
@@ -377,7 +378,7 @@ const Audit: React.FC = () => {
                     canUpdate={hasPermission('audit:update:all')}
                     onClose={closeWizard}
                     onSaveSuccess={closeWizard}
-                    onReloadRecord={currentAuditId ? reloadRecord : undefined}
+                    onReloadRecord={(id) => { void reloadRecord(id); }}
                 />
             )}
 

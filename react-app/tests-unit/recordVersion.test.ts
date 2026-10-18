@@ -87,3 +87,43 @@ test('the reload wording exists in both languages', () => {
     }
     assert.match(src, /'refusal\.reload': '重新載入這筆'/);
 });
+
+test('serial writes (B3a): overlapping writes run one after another, each sees the version the previous one answered', async () => {
+    const { createSerialWrites } = await import('../src/hooks/useRecordVersion');
+    const serial = createSerialWrites();
+    const v = createRecordVersion();
+    v.open(5);
+    const sent: number[] = [];
+    let stored = 5;
+    const write = (delay: number, fail = false) => serial(async () => {
+        const mine = v.current();
+        sent.push(mine as number);
+        await new Promise(r => setTimeout(r, delay));
+        if (fail || mine !== stored) throw new Error('409');
+        stored += 1;
+        v.saved(stored);
+    });
+    // three item saves fired at once (the first one slow), then one that fails, then Save
+    const results = await Promise.allSettled([write(30), write(0), write(0, true), write(0)]);
+    assert.deepEqual(sent, [5, 6, 7, 7]);                     // never two writes with the same version in flight
+    assert.deepEqual(results.map(r => r.status), ['fulfilled', 'fulfilled', 'rejected', 'fulfilled']);
+    assert.equal(v.current(), 8);
+});
+
+test('itpStore.updateITPDetail (B3a): takes the saved ITP from the answer (new row_version) instead of re-fetching', async () => {
+    (globalThis as any).document ??= { cookie: '' };
+    (globalThis as any).window ??= { location: { pathname: '/itp', origin: 'http://localhost', href: '' } };
+    const { default: api } = await import('../src/services/api');
+    const { useITPStore } = await import('../src/store/itpStore');
+    const calls: string[] = [];
+    api.defaults.adapter = async (config) => {
+        calls.push(`${config.method} ${config.url}`);
+        return { data: { id: 'p1', referenceNo: 'ITP-1', detail_data: '{"a":[]}', row_version: 9 }, status: 200, statusText: 'OK', headers: {}, config };
+    };
+    useITPStore.setState({ itpList: [{ id: 'p1', row_version: 8 } as any, { id: 'p2', row_version: 1 } as any] });
+    const saved = await useITPStore.getState().updateITPDetail('p1', { a: [] }, 8);
+    assert.equal(saved.row_version, 9);
+    assert.deepEqual(calls, ['put /itp/p1/detail']);           // no list re-fetch (it dropped the page's search)
+    assert.equal(useITPStore.getState().itpList.find(i => i.id === 'p1')?.row_version, 9);
+    assert.equal(useITPStore.getState().itpList.find(i => i.id === 'p2')?.row_version, 1);
+});
