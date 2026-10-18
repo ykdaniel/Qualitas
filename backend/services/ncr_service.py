@@ -18,6 +18,7 @@ from repositories.ncr_repository import NCRRepository
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope, require_same_project
 from core import strict_dates
 from core.refusals import Coded, Refusal
+from core.concurrency import claim_row_version
 from core.validators import delete_referenced
 from core.perms import NCR_CLOSE
 from core.ncr_photo_evidence import ncr_photo_evidence, photo_list
@@ -384,8 +385,14 @@ class NCRService:
                 self.repo.db.rollback()
                 return None
 
+            # Optimistic lock (OPTIMISTIC-LOCK-2026-001): the version this edit was read at, checked and incremented in one
+            # step; then re-read, because the router may have loaded this NCR before the write lock was taken.
+            claim_row_version(self.repo.db, db_ncr, ncr_update.row_version, doc_type="NCR",
+                              number=db_ncr.documentNumber, refresh=True)
+
             # Entering Closed from any other status needs ncr:close:all (on top of the ncr:update:all the route already demanded). Judged on the
-            # STORED status, so a Closed record re-sent as Closed is not a closure; and before anything below can write, audit or number.
+            # STORED status — as re-read just above, under the write lock — so a Closed record re-sent as Closed is not a closure; and before
+            # anything below can write, audit or number (a refusal rolls the version claim back).
             if ncr_update.status == 'Closed' and db_ncr.status != 'Closed' and not _may_close(permissions):
                 raise NCRCloseNotPermitted()
 

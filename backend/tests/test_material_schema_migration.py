@@ -171,11 +171,15 @@ def test_model_indexes_match_the_migration_list(run_dir):
 def test_old_database_is_upgraded_without_touching_existing_data(old_backend, run_dir):
     db = old_database(old_backend, run_dir)
     old_project_cols = [r[1] for r in sql(db, "PRAGMA table_info(projects)")]
+    old_cols = {t: ", ".join(r[1] for r in sql(db, f"PRAGMA table_info({t})")) for t in ("contractors", "ncr")}
     before = business_rows(db)
     boot(db)
     assert index_defs(db) == EXPECTED_INDEXES
     after = business_rows(db)
-    assert after["contractors"] == before["contractors"] and after["ncr"] == before["ncr"]
+    # every existing column verbatim; start-up step 31 (OPTIMISTIC-LOCK-2026-001) adds row_version = 0 at the end
+    for t in ("contractors", "ncr"):
+        assert sql(db, f"SELECT {old_cols[t]} FROM {t} ORDER BY 1") == before[t]
+        assert sql(db, f"SELECT row_version FROM {t}") == [(0,)] * len(before[t])
     assert after["audit_logs"][:len(before["audit_logs"])] == before["audit_logs"]       # start-up may only append
     cols = ", ".join(old_project_cols)
     assert sql(db, f"SELECT {cols} FROM projects ORDER BY 1") == before["projects"]

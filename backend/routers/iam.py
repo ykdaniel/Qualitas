@@ -126,7 +126,7 @@ def delete_user(
     )
 
 # === User data-isolation scope (P0) ===
-@router.get("/users/{user_id}/scope", response_model=schemas.UserScope)
+@router.get("/users/{user_id}/scope", response_model=schemas.UserScopeRead)
 def read_user_scope(
     user_id: int,
     user_service: UserService = Depends(get_user_service),
@@ -137,7 +137,7 @@ def read_user_scope(
         raise HTTPException(status_code=404, detail="User not found")
     return scope
 
-@router.put("/users/{user_id}/scope", response_model=schemas.UserScope)
+@router.put("/users/{user_id}/scope", response_model=schemas.UserScopeRead)
 def set_user_scope(
     user_id: int,
     body: schemas.UserScope,
@@ -147,7 +147,7 @@ def set_user_scope(
     try:
         scope = user_service.set_user_scope(
             user_id, body.project_ids, body.vendor_id,
-            actor_id=current_user.id, actor_name=current_user.username,
+            actor_id=current_user.id, actor_name=current_user.username, expected_version=body.row_version,
         )
     except ValueError as e:
         raise refusal_http(e, 400)                      # coded when it is a Refusal (e.g. PROJECT_REQUIRED)

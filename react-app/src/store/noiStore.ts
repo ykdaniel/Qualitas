@@ -5,8 +5,10 @@ import { getErrorMessage } from '../utils/errorUtils';
 import { getProjectFilterParams, getCurrentProjectScopeId, withCurrentProject } from '../utils/projectFilter';
 
 import type { DateIssue } from '../utils/dateIssues';
+import { withRowVersion } from '../utils/rowVersion';
+import type { RowVersioned } from '../utils/rowVersion';
 
-export interface NOIItem {
+export interface NOIItem extends RowVersioned {
     id: string;
     /** Read-only: what is wrong with the stored dates (from the API; never sent back, never written). */
     date_issues?: DateIssue[];
@@ -41,7 +43,7 @@ interface NOIState {
     refetch: (params?: FilterParams) => Promise<void>;
     addNOI: (noi: Omit<NOIItem, 'id'>, id?: string) => Promise<NOIItem>;
     addBulkNOI: (nois: Omit<NOIItem, 'id'>[]) => Promise<NOIItem[]>;
-    updateNOI: (id: string, noi: Partial<NOIItem>) => Promise<void>;
+    updateNOI: (id: string, noi: Partial<NOIItem>, rowVersion?: number | null) => Promise<void>;   // rowVersion: sent only when given (utils/rowVersion.ts)
     deleteNOI: (id: string) => Promise<void>;
     clearError: () => void;
     setError: (err: string | null) => void;
@@ -102,10 +104,10 @@ export const useNOIStore = create<NOIState>((set, get) => ({
         return newNOIs;
     },
 
-    updateNOI: async (id: string, updates: Partial<NOIItem>) => {
+    updateNOI: async (id: string, updates: Partial<NOIItem>, rowVersion) => {
         // A failed add/update is not written to the list-level `error`: the record modal reports it itself, once. Writing it here
         // showed the same failure again as a page banner and made a failed save look like a failed list load.
-        const response = await api.put(`/noi/${id}/`, updates);
+        const response = await api.put(`/noi/${id}/`, withRowVersion(updates, rowVersion));
         set((state) => ({ noiList: state.noiList.map(n => n.id === id ? response.data : n) }));
     },
 

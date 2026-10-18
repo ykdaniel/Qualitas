@@ -17,6 +17,7 @@ from core.utils import log_audit
 from core import error_messages
 from core import validators
 from core.refusals import Refusal
+from core.concurrency import claim_row_version
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +142,10 @@ class ContractorService:
             db_contractor = self.repo.get_by_id(contractor_id)
             if not db_contractor:
                 return None
+            # Optimistic lock (OPTIMISTIC-LOCK-2026-001): the version this edit was read at, checked and incremented in one
+            # step (it also takes the write lock), then re-read.
+            claim_row_version(self.repo.db, db_contractor, contractor_update.row_version, doc_type="contractor",
+                              number=db_contractor.name, refresh=True)
 
             # Capture old values for audit
             old_val = {c.name: getattr(db_contractor, c.name) for c in db_contractor.__table__.columns}
@@ -160,6 +165,9 @@ class ContractorService:
 
             self.repo.db.commit()
             return updated
+        except Refusal:
+            self.repo.db.rollback()             # a refusal (VERSION_CONFLICT), not an error
+            raise
         except Exception as e:
             self.repo.db.rollback()
             logger.error(f"Error updating Contractor {contractor_id}: {e}", exc_info=True)
@@ -288,9 +296,16 @@ class ContractorService:
         person = self.repo.db.query(models.ContractorPersonnel).filter(models.ContractorPersonnel.id == personnel_id).first()
         if not person or not self._company_in_scope(person.contractor_id, scope):
             return None
-        patch = data.model_dump(exclude_unset=True)
-        if patch.get('name') is not None:
-            self._check_unique_name(person.contractor_id, patch['name'], exclude_id=person.id)
+        # Optimistic lock (OPTIMISTIC-LOCK-2026-001): checked and incremented in one step, before anything is changed; a
+        # refusal below is rolled back with it.
+        try:
+            claim_row_version(self.repo.db, person, data.row_version, doc_type="personnel", number=person.name, refresh=True)
+            patch = data.model_dump(exclude_unset=True)
+            if patch.get('name') is not None:
+                self._check_unique_name(person.contractor_id, patch['name'], exclude_id=person.id)
+        except Exception:
+            self.repo.db.rollback()
+            raise
         old = {k: getattr(person, k) for k in ('name', 'position', 'email', 'phone', 'is_active')}
         for key, value in patch.items():
             if key == 'is_active':

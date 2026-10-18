@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { FilterParams } from '../types/api';
+import { rowVersionParams, withRowVersion } from '../utils/rowVersion';
 
 const baseURL =
   (import.meta.env.VITE_API_BASE_URL as string | undefined) || '/api';
@@ -162,6 +163,8 @@ export interface Contractor {
   address: string;
   scope: string;
   status: 'Active' | 'Inactive' | 'active' | 'inactive';
+  /** Optimistic-lock version (OPTIMISTIC-LOCK-2026-001; utils/rowVersion.ts). */
+  row_version?: number | null;
 }
 
 export interface CreateContractorPayload {
@@ -246,9 +249,10 @@ export const createContractor = async (
 
 export const updateContractor = async (
   id: string,
-  data: UpdateContractorPayload
+  data: UpdateContractorPayload,
+  rowVersion?: number | null,
 ): Promise<Contractor> => {
-  const response = await api.put<Contractor>(`/contractors/${id}`, data);
+  const response = await api.put<Contractor>(`/contractors/${id}`, withRowVersion(data, rowVersion));
   return response.data;
 };
 
@@ -266,6 +270,8 @@ export interface ContractorPersonnelApi {
   email?: string | null;
   phone?: string | null;
   is_active: boolean;
+  /** Optimistic-lock version (OPTIMISTIC-LOCK-2026-001; utils/rowVersion.ts). */
+  row_version?: number | null;
 }
 
 /** The attendee picker's view: active people, name and position only (any signed-in user; scoped to the caller's company). */
@@ -290,8 +296,9 @@ export const createContractorPersonnel = async (
 
 export const updateContractorPersonnel = async (
   personnelId: string, data: { name?: string; position?: string; email?: string; phone?: string; is_active?: boolean },
+  rowVersion?: number | null,
 ): Promise<ContractorPersonnelApi> => {
-  const response = await api.put<ContractorPersonnelApi>(`/contractors/personnel/${personnelId}`, data);
+  const response = await api.put<ContractorPersonnelApi>(`/contractors/personnel/${personnelId}`, withRowVersion(data, rowVersion));
   return response.data;
 };
 
@@ -309,6 +316,8 @@ export interface ProjectApi {
   description: string | null;
   owner: string | null;
   created_at: string | null;
+  /** Optimistic-lock version (OPTIMISTIC-LOCK-2026-001; utils/rowVersion.ts). */
+  row_version?: number | null;
 }
 
 export interface CreateProjectPayload {
@@ -330,8 +339,8 @@ export const createProject = async (data: CreateProjectPayload): Promise<Project
   return response.data;
 };
 
-export const updateProject = async (id: string, data: UpdateProjectPayload): Promise<ProjectApi> => {
-  const response = await api.put<ProjectApi>(`/projects/${id}`, data);
+export const updateProject = async (id: string, data: UpdateProjectPayload, rowVersion?: number | null): Promise<ProjectApi> => {
+  const response = await api.put<ProjectApi>(`/projects/${id}`, withRowVersion(data, rowVersion));
   return response.data;
 };
 
@@ -367,6 +376,8 @@ export interface User {
   current_project_id?: string | null;
   /** "admin" | "working" | "choose" (pick a project first) | "relogin" | "non_member" (sees nothing). */
   project_status?: 'admin' | 'working' | 'choose' | 'relogin' | 'non_member';
+  /** Optimistic-lock version (OPTIMISTIC-LOCK-2026-001; utils/rowVersion.ts). */
+  row_version?: number | null;
 }
 
 /** A non-admin assigned to several projects picks the one this session works in (once; new tokens are set as cookies). */
@@ -379,6 +390,8 @@ export interface Role {
   name: string;
   description?: string;
   permissions: string[]; // List of permission codes
+  /** Optimistic-lock version (OPTIMISTIC-LOCK-2026-001; utils/rowVersion.ts). */
+  row_version?: number | null;
 }
 
 export interface Permission {
@@ -435,8 +448,8 @@ export const createUser = async (data: CreateUserPayload): Promise<User> => {
   return response.data;
 };
 
-export const updateUser = async (id: number, data: UpdateUserPayload): Promise<User> => {
-  const response = await api.put<User>(`/iam/users/${id}/`, data);
+export const updateUser = async (id: number, data: UpdateUserPayload, rowVersion?: number | null): Promise<User> => {
+  const response = await api.put<User>(`/iam/users/${id}/`, withRowVersion(data, rowVersion));
   return response.data;
 };
 
@@ -444,6 +457,8 @@ export const updateUser = async (id: number, data: UpdateUserPayload): Promise<U
 export interface UserScope {
   project_ids: string[];
   vendor_id: string | null;
+  /** The ACCOUNT's optimistic-lock version: the scope is saved under it (read back with the scope). */
+  row_version?: number | null;
 }
 
 export const getUserScope = async (id: number): Promise<UserScope> => {
@@ -451,8 +466,8 @@ export const getUserScope = async (id: number): Promise<UserScope> => {
   return response.data;
 };
 
-export const setUserScope = async (id: number, scope: UserScope): Promise<UserScope> => {
-  const response = await api.put<UserScope>(`/iam/users/${id}/scope`, scope);
+export const setUserScope = async (id: number, scope: UserScope, rowVersion?: number | null): Promise<UserScope> => {
+  const response = await api.put<UserScope>(`/iam/users/${id}/scope`, withRowVersion(scope, rowVersion));
   return response.data;
 };
 
@@ -471,8 +486,8 @@ export const createRole = async (data: CreateRolePayload): Promise<Role> => {
   return response.data;
 };
 
-export const updateRole = async (id: number, data: UpdateRolePayload): Promise<Role> => {
-  const response = await api.put<Role>(`/iam/roles/${id}/`, data);
+export const updateRole = async (id: number, data: UpdateRolePayload, rowVersion?: number | null): Promise<Role> => {
+  const response = await api.put<Role>(`/iam/roles/${id}/`, withRowVersion(data, rowVersion));
   return response.data;
 };
 
@@ -513,6 +528,8 @@ export interface ChecklistRecordApi {
   evidence_recorded_at?: string | null;
   evidence_recorded_at_reliable?: boolean | null;
   evidence_historical_unknown?: boolean | null;
+  /** Optimistic-lock version (OPTIMISTIC-LOCK-2026-001; utils/rowVersion.ts). */
+  row_version?: number | null;
 }
 
 export interface CreateChecklistPayload {
@@ -547,8 +564,8 @@ export const createChecklist = async (data: CreateChecklistPayload): Promise<Che
   return response.data;
 };
 
-export const updateChecklist = async (id: string, data: Partial<CreateChecklistPayload>): Promise<ChecklistRecordApi> => {
-  const response = await api.put<ChecklistRecordApi>(`/checklist/${id}/`, data);
+export const updateChecklist = async (id: string, data: Partial<CreateChecklistPayload>, rowVersion?: number | null): Promise<ChecklistRecordApi> => {
+  const response = await api.put<ChecklistRecordApi>(`/checklist/${id}/`, withRowVersion(data, rowVersion));
   return response.data;
 };
 
@@ -597,8 +614,10 @@ export const bulkCreateFollowUps = async (items: Record<string, unknown>[]): Pro
 
 // Auto-create an NCR from a failed/rejected ITR — backend pre-populates
 // vendor, NOI reference, location, etc. from the source ITR.
-export const createNcrFromItr = async (itrId: string): Promise<any> => {
-  const response = await api.post(`/itr/${itrId}/create-ncr`);
+export const createNcrFromItr = async (itrId: string, rowVersion?: number | null): Promise<any> => {
+  // the ITR gets the NCR number, so its version may be sent (query: this call has no body)
+  const params = rowVersionParams(rowVersion);
+  const response = params ? await api.post(`/itr/${itrId}/create-ncr`, undefined, { params }) : await api.post(`/itr/${itrId}/create-ncr`);
   return response.data;
 };
 
@@ -616,9 +635,10 @@ export const createReinspectionItr = async (itrId: string): Promise<any> => {
 export const revokeItrApproval = async (
   itrId: string,
   newStatus: 'In Progress' | 'Void',
-  reason: string
+  reason: string,
+  rowVersion?: number | null,
 ): Promise<any> => {
-  const response = await api.post(`/itr/${itrId}/revoke-approval`, { new_status: newStatus, reason });
+  const response = await api.post(`/itr/${itrId}/revoke-approval`, withRowVersion({ new_status: newStatus, reason }, rowVersion));
   return response.data;
 };
 

@@ -42,6 +42,8 @@ export interface ApprovedMaterial {
     /** shelf view: the first photo's stored path (served by /api/files/download/<path>) and how many photos there are */
     coverPhotoPath?: string | null;
     photoCount?: number;
+    /** the submittal's optimistic-lock version (OPTIMISTIC-LOCK-2026-001); send it back as rowVersion */
+    rowVersion?: number | null;
 }
 /** Register an ALREADY externally approved material in one step (M6, DECISIONS 材料：只作為核准材料登錄簿). */
 export interface RegisterPayload {
@@ -62,9 +64,15 @@ export interface RegisterPayload {
 }
 export const registerMaterial = async (body: RegisterPayload) =>
     (await api.post<ApprovedMaterial>('/material-submittals/register', body)).data;
-/** Only the fields sent change; the project and the contractor cannot change. */
-export const updateRegistered = async (submittalId: string, body: Partial<Omit<RegisterPayload, 'projectId' | 'vendorId'>>) =>
-    (await api.put<ApprovedMaterial>(`/material-submittals/${submittalId}/register`, body)).data;
+/** Only the fields sent change; the project and the contractor cannot change. `rowVersion` (the version the record was read
+ * at) is sent only when given: this API is camelCase, so it is not utils/rowVersion's row_version. */
+export const updateRegistered = async (submittalId: string, body: Partial<Omit<RegisterPayload, 'projectId' | 'vendorId'>>,
+                                       rowVersion?: number | null) => {
+    const sent: Record<string, unknown> = { ...body };
+    delete sent.rowVersion;
+    if (typeof rowVersion === 'number') sent.rowVersion = rowVersion;
+    return (await api.put<ApprovedMaterial>(`/material-submittals/${submittalId}/register`, sent)).data;
+};
 export const listApproved = async (projectId: string, params: { q?: string; category?: string; vendorId?: string; result?: 'Approved' | 'ApprovedWithComments'; registeredFrom?: string; limit?: number; offset?: number } = {}) =>
     (await api.get<Page<ApprovedMaterial>>('/material-submittals/approved', { params: { projectId, ...params } })).data;
 

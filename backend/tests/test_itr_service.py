@@ -7,7 +7,12 @@ import schemas
 
 @pytest.fixture
 def mock_repo():
-    return MagicMock()
+    repo = MagicMock()
+    # The optimistic-lock claim (core/concurrency.py) runs a conditional UPDATE and reads the new version back: one row
+    # matched, the record now at version 1 (OPTIMISTIC-LOCK-2026-001).
+    repo.db.execute.return_value.rowcount = 1
+    repo.db.execute.return_value.scalar.return_value = 1
+    return repo
 
 @pytest.fixture
 def itr_service(mock_repo):

@@ -11,6 +11,7 @@ from core import error_messages
 from core import validators
 from core.perms import ITP_APPROVE, ITP_VOID, PermissionDenied
 from core.refusals import Refusal
+from core.concurrency import claim_row_version
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +126,11 @@ class ITPService:
                 elif itp_update.status == "Void":
                     _require_itp_permission(user_permissions, ITP_VOID)
 
+            # Optimistic lock (OPTIMISTIC-LOCK-2026-001): the version this edit was read at, checked and incremented in one
+            # step (it also takes the write lock), then re-read.
+            claim_row_version(self.repo.db, db_itp, itp_update.row_version, doc_type="ITP",
+                              number=db_itp.referenceNo, refresh=True)
+
             # State transition check
             if itp_update.status and not WorkflowEngine.validate_transition("ITP", db_itp.status, itp_update.status):
                 raise Refusal("INVALID_TRANSITION", error_messages.invalid_status_transition("ITP", db_itp.status, itp_update.status),
@@ -186,12 +192,17 @@ class ITPService:
             logger.error(f"Error deleting ITP {itp_id}: {e}", exc_info=True)
             raise e
 
-    def update_itp_detail(self, itp_id: str, detail_body: dict, user_id: int = None, username: str = None, scope=None) -> Optional[models.ITP]:
+    def update_itp_detail(self, itp_id: str, detail_body: dict, user_id: int = None, username: str = None, scope=None,
+                          expected_version: Optional[int] = None) -> Optional[models.ITP]:
         try:
             db_itp = self.repo.get_by_id(itp_id)
             if not db_itp or not record_in_scope(db_itp, scope):
                 return None
             require_shared_template_write(db_itp, scope)     # shared templates: system administrators only (D18, B2)
+            # Optimistic lock (OPTIMISTIC-LOCK-2026-001): the version this edit was read at, checked and incremented in one
+            # step (it also takes the write lock), then re-read.
+            claim_row_version(self.repo.db, db_itp, expected_version, doc_type="ITP",
+                              number=db_itp.referenceNo, refresh=True)
             
             import json
             old_val = db_itp.detail_data
@@ -210,6 +221,9 @@ class ITPService:
             self.repo.db.commit()
 
             return updated_itp
+        except ValueError:
+            self.repo.db.rollback()             # a refusal (VERSION_CONFLICT), not an error
+            raise
         except Exception as e:
             self.repo.db.rollback()
             logger.error(f"Error updating ITP detail {itp_id}: {e}", exc_info=True)

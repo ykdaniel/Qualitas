@@ -15,6 +15,7 @@ import schemas
 from repositories.audit_repository import AuditRepository
 from core import strict_dates
 from core.refusals import Refusal
+from core.concurrency import claim_row_version
 from core.scope import ScopeForbidden, record_in_scope, enforce_create_scope, enforce_update_scope
 from core.utils import begin_write_transaction, generate_reference_no, WorkflowEngine
 from sqlalchemy.exc import IntegrityError
@@ -309,6 +310,10 @@ class AuditService:
 
         db = self.repo.db
         try:
+            # Optimistic lock (OPTIMISTIC-LOCK-2026-001): the version this edit was read at, checked and incremented in one
+            # step (it also takes the write lock). Here, after the Closed / Void check, because an unchanged resave of a
+            # locked audit writes nothing and returns above.
+            claim_row_version(db, db_audit, audit.row_version, doc_type="Audit", number=db_audit.auditNo)
             # Re-resolve vendor_id if contractor changed
             if "contractor" in update_data:
                 processed_data["vendor_id"] = self._resolve_vendor_id(update_data["contractor"])

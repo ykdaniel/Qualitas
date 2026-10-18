@@ -16,6 +16,7 @@ export interface Project {
     description: string;
     owner: string;
     created_at: string | null;
+    row_version?: number | null;     // optimistic lock (utils/rowVersion.ts)
 }
 
 const mapApiToInternal = (data: ProjectApi): Project => ({
@@ -25,6 +26,7 @@ const mapApiToInternal = (data: ProjectApi): Project => ({
     description: data.description || '',
     owner: data.owner || '',
     created_at: data.created_at || null,
+    row_version: data.row_version ?? null,
 });
 
 const CURRENT_PROJECT_KEY = 'qualitas_current_project';
@@ -52,7 +54,7 @@ interface ProjectState {
     fetchProjects: () => Promise<void>;
     setCurrentProject: (project: Project | null) => void;
     addProject: (data: CreateProjectPayload) => Promise<void>;
-    updateProject: (id: string, data: UpdateProjectPayload) => Promise<void>;
+    updateProject: (id: string, data: UpdateProjectPayload, rowVersion?: number | null) => Promise<void>;
     deleteProject: (id: string) => Promise<void>;
 }
 
@@ -81,8 +83,8 @@ export const useProjectStore = create<ProjectState>((set, _get) => ({
         set(state => ({ projectList: [...state.projectList, mapApiToInternal(newProject)] }));
     },
 
-    updateProject: async (id, data) => {
-        const updated = await updateProjectApi(id, data);
+    updateProject: async (id, data, rowVersion) => {
+        const updated = await updateProjectApi(id, data, rowVersion);
         set(state => ({
             projectList: state.projectList.map(p => p.id === id ? mapApiToInternal(updated) : p),
         }));

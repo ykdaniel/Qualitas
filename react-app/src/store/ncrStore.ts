@@ -6,8 +6,10 @@ import { getErrorMessage } from '../utils/errorUtils';
 import { getProjectFilterParams, getCurrentProjectScopeId, withCurrentProject } from '../utils/projectFilter';
 
 import type { DateIssue } from '../utils/dateIssues';
+import { withRowVersion } from '../utils/rowVersion';
+import type { RowVersioned } from '../utils/rowVersion';
 
-export interface NCRItem {
+export interface NCRItem extends RowVersioned {
     id: string;
     /** Read-only: what is wrong with the stored dates (from the API; never sent back, never written). */
     date_issues?: DateIssue[];
@@ -108,7 +110,7 @@ interface NCRState {
     // Actions
     fetchNCRs: (params?: FilterParams) => Promise<void>;
     addNCR: (ncr: Omit<NCRItem, 'id'>) => Promise<NCRItem>;
-    updateNCR: (id: string, ncr: Partial<NCRItem>) => Promise<void>;
+    updateNCR: (id: string, ncr: Partial<NCRItem>, rowVersion?: number | null) => Promise<void>;   // rowVersion: sent only when given (utils/rowVersion.ts)
     deleteNCR: (id: string) => Promise<void>;
     refetch: (params?: FilterParams) => Promise<void>;
     clearError: () => void;
@@ -162,10 +164,10 @@ export const useNCRStore = create<NCRState>((set, get) => ({
         return newNCR;
     },
 
-    updateNCR: async (id: string, updates: Partial<NCRItem>) => {
+    updateNCR: async (id: string, updates: Partial<NCRItem>, rowVersion) => {
         // A failed add/update is not written to the list-level `error`: the record modal reports it itself, once. Writing it here
         // showed the same failure again as a page banner and made a failed save look like a failed list load.
-        const response = await api.put(`/ncr/${id}/`, updates);
+        const response = await api.put(`/ncr/${id}/`, withRowVersion(updates, rowVersion));
         const updated = normalizeItem(response.data);
         set((state) => ({ ncrList: state.ncrList.map(n => n.id === id ? updated : n) }));
     },

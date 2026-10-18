@@ -2,8 +2,10 @@ import { create } from 'zustand';
 import api from '../services/api';
 import { getErrorMessage } from '../utils/errorUtils';
 import { getProjectFilterParams, getCurrentProjectScopeId, withCurrentProject } from '../utils/projectFilter';
+import { withRowVersion } from '../utils/rowVersion';
+import type { RowVersioned } from '../utils/rowVersion';
 
-export interface FollowUpIssueItem {
+export interface FollowUpIssueItem extends RowVersioned {
     id: string;
     issueNo: string;
     title: string;
@@ -29,7 +31,7 @@ interface FollowUpState {
     fetchFollowUps: () => Promise<void>;
     refetch: () => Promise<void>;
     addFollowUp: (item: Partial<FollowUpIssueItem>) => Promise<FollowUpIssueItem>;
-    updateFollowUp: (id: string, item: Partial<FollowUpIssueItem>) => Promise<void>;
+    updateFollowUp: (id: string, item: Partial<FollowUpIssueItem>, rowVersion?: number | null) => Promise<void>;   // rowVersion: sent only when given (utils/rowVersion.ts)
     deleteFollowUp: (id: string) => Promise<void>;
     clearError: () => void;
     setError: (err: string | null) => void;
@@ -81,8 +83,8 @@ export const useFollowUpStore = create<FollowUpState>((set, get) => ({
         return newItem;
     },
 
-    updateFollowUp: async (id, updates) => {
-        const response = await api.put(`/followup/${id}`, updates);
+    updateFollowUp: async (id, updates, rowVersion) => {
+        const response = await api.put(`/followup/${id}`, withRowVersion(updates, rowVersion));
         set((state) => ({
             followUpList: state.followUpList.map(f => (f.id === id ? response.data : f)),
         }));

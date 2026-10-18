@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from core.refusals import refusal_http
+from core.refusals import Refusal, refusal_http
 from fastapi.responses import StreamingResponse
 
 import schemas
@@ -63,6 +63,8 @@ def update_audit_template_route(
         updated = service.update_template(template_id, template, user_id=current_user.id, username=current_user.username)
     except AuditTemplateConflict as e:
         raise refusal_http(e, 409)
+    except Refusal as e:                # VERSION_CONFLICT (409, OPTIMISTIC-LOCK-2026-001)
+        raise refusal_http(e)
     if updated is None:
         raise HTTPException(status_code=404, detail="Audit template not found")
     return updated

@@ -20,6 +20,7 @@ from core.material_access import refuse_vendor_scope
 from core.perms import MATERIAL_MANAGE, MATERIAL_VIEW
 from core.scope import Scope
 from database import get_db
+from core.refusals import Refusal, refusal_http
 from services.material_submittal_service import BadRequest, Conflict, MaterialSubmittalService, NotVisible
 
 router = APIRouter(prefix="/material-submittals", tags=["material-submittals"], responses={404: {"description": "Not found"}})
@@ -34,6 +35,8 @@ def _call(fn, *args):
         raise HTTPException(status_code=409, detail=str(e) or "Conflict")
     except BadRequest as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Refusal as e:             # VERSION_CONFLICT (409, OPTIMISTIC-LOCK-2026-001)
+        raise refusal_http(e, 400)
 
 
 # ── approved-material register (M6, DECISIONS 材料：只作為核准材料登錄簿) ──────────────────────────────────────

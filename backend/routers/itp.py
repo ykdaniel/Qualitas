@@ -161,7 +161,8 @@ def update_itp_detail(
     current_user: schemas.User = Depends(RoleChecker(ITP_UPDATE))
 ):
     try:
-        db_itp = itp_service.update_itp_detail(itp_id=itp_id, detail_body=body.dict(), user_id=current_user.id, username=current_user.username, scope=scope)
+        db_itp = itp_service.update_itp_detail(itp_id=itp_id, detail_body=body.dict(), user_id=current_user.id, username=current_user.username, scope=scope,
+                                                 expected_version=body.row_version)
     except ScopeForbidden as e:
         raise refusal_http(e, 403)
     except ValueError as e:     # a service refusal is a 400, never a 500 (REFUSAL-DIALOG-2026-003)

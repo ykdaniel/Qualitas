@@ -21,6 +21,7 @@ export interface Contractor {
     phone: string;
     address: string;
     status: 'active' | 'inactive';
+    row_version?: number | null;     // optimistic lock (utils/rowVersion.ts)
 }
 
 // What every module's pickers / filters / lists use (GET /contractors/options): no contact details, served to any
@@ -57,6 +58,7 @@ const mapApiToInternal = (data: ApiContractor): Contractor => ({
     phone: data.phone,
     address: data.address,
     status: isActiveStatus(data.status) ? 'active' : 'inactive',
+    row_version: data.row_version ?? null,
 });
 
 // NOTE: 將前端 Contractor 介面轉換為 API payload 結構
@@ -83,7 +85,7 @@ interface ContractorsState {
     fetchContractors: () => Promise<void>;
     fetchOptions: () => Promise<void>;
     addContractor: (contractor: Omit<Contractor, 'id'>) => Promise<void>;
-    updateContractor: (id: string, contractor: Partial<Contractor>) => Promise<void>;
+    updateContractor: (id: string, contractor: Partial<Contractor>, rowVersion?: number | null) => Promise<void>;
     deleteContractor: (id: string) => Promise<void>;
     getActiveContractors: () => ContractorOption[];
     clearError: () => void;
@@ -127,14 +129,14 @@ export const useContractorsStore = create<ContractorsState>((set, get) => ({
         void get().fetchOptions();  // keep every module's pickers in step with the management page
     },
 
-    updateContractor: async (id, updates) => {
+    updateContractor: async (id, updates, rowVersion) => {
         const { contractors } = get();
         const current = contractors.find(c => c.id === id);
         if (!current) return;
 
         const merged = { ...current, ...updates };
         const payload = mapInternalToApi(merged);
-        const updated = await updateContractorApi(id, payload);
+        const updated = await updateContractorApi(id, payload, rowVersion);
         set((state) => ({
             contractors: state.contractors.map(c => (c.id === id ? mapApiToInternal(updated) : c)),
         }));

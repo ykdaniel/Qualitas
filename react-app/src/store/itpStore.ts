@@ -4,6 +4,8 @@ import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
 import { getProjectFilterParams, getCurrentProjectScopeId, withCurrentProject } from '../utils/projectFilter';
+import { withRowVersion } from '../utils/rowVersion';
+import type { RowVersioned } from '../utils/rowVersion';
 
 export interface ITPInspectionItem {
     id: string;
@@ -17,7 +19,7 @@ export interface ITPInspectionItem {
     checkpointClient: string;
 }
 
-export interface ITPItem {
+export interface ITPItem extends RowVersioned {
     project_id?: string | null;
     id: string;
     vendor: string;
@@ -58,8 +60,8 @@ interface ITPState {
     // Actions
     fetchITPs: (params?: FilterParams) => Promise<void>;
     addITP: (itp: Omit<ITPItem, 'id'>) => Promise<ITPItem>;
-    updateITP: (id: string, itp: Partial<ITPItem>) => Promise<void>;
-    updateITPDetail: (id: string, detail: any) => Promise<void>;
+    updateITP: (id: string, itp: Partial<ITPItem>, rowVersion?: number | null) => Promise<void>;   // rowVersion: sent only when given (utils/rowVersion.ts)
+    updateITPDetail: (id: string, detail: any, rowVersion?: number | null) => Promise<void>;
     deleteITP: (id: string) => Promise<void>;
     refetch: (params?: FilterParams) => Promise<void>;
     clearError: () => void;
@@ -144,14 +146,15 @@ export const useITPStore = create<ITPState>((set, get) => ({
         return newITP;
     },
 
-    updateITP: async (id: string, updates: Partial<ITPItem>) => {
-        const response = await api.put(`/itp/${id}/`, updates);
+    updateITP: async (id: string, updates: Partial<ITPItem>, rowVersion) => {
+        const response = await api.put(`/itp/${id}/`, withRowVersion(updates, rowVersion));
         const updated = normalizeItem(response.data);
         set((state) => ({ itpList: state.itpList.map(item => item.id === id ? updated : item) }));
     },
 
-    updateITPDetail: async (id: string, detail: any) => {
-        await api.put(`/itp/${id}/detail`, detail);
+    updateITPDetail: async (id: string, detail: any, rowVersion?: number | null) => {
+        // a non-object detail goes as it is (the server refuses it, as before) — never turned into an empty plan
+        await api.put(`/itp/${id}/detail`, detail && typeof detail === 'object' && !Array.isArray(detail) ? withRowVersion(detail, rowVersion) : detail);
         // Backend doesn't return the full ITP, so fetch again to keep state synced
         await get().fetchITPs();
     },

@@ -179,7 +179,8 @@ def test_start_up_adds_the_table_to_an_existing_database(tmp_path):
     assert 'contractor_personnel' not in inspect(engine).get_table_names()
     models.create_all_except_migration_owned(bind=engine)          # what start-up (main.py) runs
     names = {c['name'] for c in inspect(engine).get_columns('contractor_personnel')}
-    assert names == {'id', 'contractor_id', 'name', 'position', 'email', 'phone', 'is_active', 'created_at', 'updated_at'}
+    assert names == {'id', 'contractor_id', 'name', 'position', 'email', 'phone', 'is_active', 'created_at', 'updated_at',
+                     'row_version'}                             # optimistic lock (OPTIMISTIC-LOCK-2026-001)
     with engine.connect() as conn:
         indexes = {r[0] for r in conn.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='contractor_personnel'")}
     assert {'ix_contractor_personnel_contractor_active', 'uq_contractor_personnel_name'} <= indexes

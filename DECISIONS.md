@@ -368,6 +368,20 @@ Result 的既有操作方式比拆開成縱向區塊更直覺）。
 影響範圍：後端 core/utils.py、services/project_service.py、services/noi_service.py、db_migrations.py 的 Q-WorkFlow 補建；前端只新增兩個拒絕代碼的文字。
 依據：主要調度 2026-10-17 轉述。
 
+### 存檔的樂觀鎖：row_version（OPTIMISTIC-LOCK-2026-001，2026-10-18）
+日期：2026-10-18
+決策：
+1. 使用者可編輯的單據與主檔都加整數欄位 `row_version`（預設 0）。存檔時用條件式 UPDATE（`WHERE id=? AND row_version=?`）比對並加 1。對不上就回 409，代碼 `VERSION_CONFLICT`。
+   - KM 沿用既有的 `version_no`。
+   - ITR 的 `row_version` 啟動時從 `detail_data._version` 帶入。還沒送 row_version 的 ITR 頁面送來的舊 `_version` 照原樣檢查，B4 改完後在 B5 移除。
+2. 狀態轉換、發行、撤回、開 NCR、計畫或明細的寫入、KM 匯入、帳號範圍等次要寫入，一律加 1；有帶版本時一併比對。登入、2FA 等系統寫入不加；附件上傳、刪除不動母單。
+3. 沒帶版本的請求先放行（照樣加 1，記一筆 warning log）。所有前端都改完後再收緊為必須帶版本（第 5 批）。
+4. 409 之後，共用的拒絕彈窗提供「重新載入這筆」（按下前先確認會捨棄這次的修改）。不做「載入最新並保留輸入」。
+5. 命名規則與 KPI 權重不在範圍內。
+理由：兩人同時編輯同一筆時，後存的會直接蓋掉前者，系統沒有任何提示（BACKLOG #3）。既有的 updated_at 多半由前端送值或精度不足，不能拿來當版本。
+影響範圍：見 docs/workflow/OPTIMISTIC-LOCK-2026-001-DESIGN.md 第 5 節，分 B1（後端＋store）、B2／B3（各模組視窗）、B4（ITR 視窗）、B5（收緊）。
+依據：使用者 2026-10-18 經協調中心轉述：「樂觀鎖五個決定都照建議值」。
+
 ## 尚未決策（不得當成已核准規則）
 
 - ITR 核准是否須額外檢查 Inspection Result。

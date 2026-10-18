@@ -4,8 +4,10 @@ import { parseJsonFields } from '../utils/normalizeApiItem';
 import { FilterParams } from '../types/api';
 import { getErrorMessage } from '../utils/errorUtils';
 import { getProjectFilterParams, getCurrentProjectScopeId, withCurrentProject } from '../utils/projectFilter';
+import { withRowVersion } from '../utils/rowVersion';
+import type { RowVersioned } from '../utils/rowVersion';
 
-export interface OSDItem {
+export interface OSDItem extends RowVersioned {
     id: string;
     vendor: string;
     documentNumber: string;
@@ -47,7 +49,7 @@ interface OSDState {
     fetchOSDs: (params?: FilterParams) => Promise<void>;
     refetch: (params?: FilterParams) => Promise<void>;
     addOSD: (osd: Omit<OSDItem, 'id'>) => Promise<OSDItem>;
-    updateOSD: (id: string, osd: Partial<OSDItem>) => Promise<void>;
+    updateOSD: (id: string, osd: Partial<OSDItem>, rowVersion?: number | null) => Promise<void>;   // rowVersion: sent only when given (utils/rowVersion.ts)
     deleteOSD: (id: string) => Promise<void>;
     clearError: () => void;
     setError: (err: string | null) => void;
@@ -99,8 +101,8 @@ export const useOSDStore = create<OSDState>((set, get) => ({
         return newOSD;
     },
 
-    updateOSD: async (id: string, updates: Partial<OSDItem>) => {
-        const response = await api.put(`/osd/${id}`, updates);
+    updateOSD: async (id: string, updates: Partial<OSDItem>, rowVersion) => {
+        const response = await api.put(`/osd/${id}`, withRowVersion(updates, rowVersion));
         const updated = normalizeItem(response.data);
         set((state) => ({ osdList: state.osdList.map(o => o.id === id ? updated : o) }));
     },

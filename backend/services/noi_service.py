@@ -27,6 +27,7 @@ from core.utils import (
 from core import error_messages
 from core import validators
 from core.refusals import Refusal
+from core.concurrency import claim_row_version
 
 logger = logging.getLogger(__name__)
 
@@ -237,6 +238,11 @@ class NOIService:
             db_noi = self.repo.get_by_id(noi_id)
             if not db_noi or not record_in_scope(db_noi, scope):
                 return None
+
+            # Optimistic lock (OPTIMISTIC-LOCK-2026-001): the version this edit was read at, checked and incremented in one
+            # step (it also takes the write lock), then re-read.
+            claim_row_version(self.repo.db, db_noi, noi_update.row_version, doc_type="NOI",
+                              number=db_noi.referenceNo, refresh=True)
 
             # Workflow validation: Check status transition
             if noi_update.status and not WorkflowEngine.validate_transition(

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 import schemas
@@ -112,6 +112,7 @@ def delete_fat(
 def update_fat_detail(
     fat_id: str,
     details: list[schemas.FATDetailItem],
+    row_version: int | None = Query(None),      # optimistic lock: the body is the list itself, so the version is a query parameter
     fat_service: FATService = Depends(get_fat_service),
     scope: Scope = Depends(get_scope),
     current_user: schemas.User = Depends(RoleChecker(FAT_UPDATE))
@@ -121,7 +122,7 @@ def update_fat_detail(
         db_fat = fat_service.update_fat_detail(
             fat_id=fat_id, details=details_data,
             user_id=current_user.id, username=current_user.username,
-            scope=scope,
+            scope=scope, expected_version=row_version,
         )
     except ScopeForbidden as e:
         raise refusal_http(e, 403)

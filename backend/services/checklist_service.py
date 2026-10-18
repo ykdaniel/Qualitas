@@ -27,6 +27,7 @@ from core.utils import (
 )
 from core import validators
 from core.refusals import Refusal, RefusalHTTPException
+from core.concurrency import claim_row_version
 
 logger = logging.getLogger(__name__)
 
@@ -626,6 +627,11 @@ class ChecklistService:
                 if not reload_locked(self.repo.db, db_checklist):
                     self.repo.db.rollback()
                     return None                    # its ITR (and with it this instance) was deleted by a request that held the lock first
+
+            # Optimistic lock (OPTIMISTIC-LOCK-2026-001): the version this edit was read at, checked and incremented in one
+            # step (it also takes the write lock when there is no ITR lock), then re-read.
+            claim_row_version(self.repo.db, db_checklist, checklist_update.row_version, doc_type="Checklist",
+                              number=db_checklist.recordsNo, refresh=True)
 
             # Workflow validation: Check status transition
             if checklist_update.status and not WorkflowEngine.validate_transition(

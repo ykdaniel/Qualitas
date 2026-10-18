@@ -1,0 +1,13 @@
+A reads: 0 | B reads: 0
+A PUT description='from A', row_version=0: HTTP 200 {"row_version": 1, "description": "from A"}
+B PUT description='from B', row_version=0: HTTP 409 {"code": "VERSION_CONFLICT", "params": {"docType": "NCR", "number": "OLB1-NCR-000001"}, "detail": "NCR OLB1-NCR-000001 was changed by someone else meanwhile (your version 0, stored version 1). Reload it, then make your change again."}
+stored: HTTP 200 {"row_version": 1, "description": "from A"}
+-- simultaneous: A and B both send row_version=1 at the same moment --
+A PUT row_version=1: HTTP 200 {"row_version": 2, "description": "race A"}
+B PUT row_version=1: HTTP 409 {"code": "VERSION_CONFLICT", "params": {"docType": "NCR", "number": "OLB1-NCR-000001"}, "detail": "NCR OLB1-NCR-000001 was changed by someone else meanwhile (your version 1, stored version 2). Reload it, then make your change again."}
+statuses: [200, 409]
+stored: HTTP 200 {"row_version": 2, "description": "race A"}
+-- an older page that sends no version --
+A PUT description='no version' (no row_version): HTTP 200 {"row_version": 3, "description": "no version"}
+--- server log (row_version lines) ---
+row_version missing: ncr olb1-ncr-1

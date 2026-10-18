@@ -1,0 +1,296 @@
+# start 2026-10-18T04:27:00Z tree=/private/tmp/claude-501/-Users-nook-Documents-Qualitas--claude-worktrees-epic-franklin-b7c5b5/67acf187-9649-434c-855c-468f5e2cceee/scratchpad/ol-b1 head=6f68c768 staged=/Users/nook/.qualitas-py311.I2A2rw
+Python 3.11.17
+pip_exit=0
+........................................................................ [  2%]
+........................................................................ [  4%]
+........................................................................ [  7%]
+........................................................................ [  9%]
+........................................................................ [ 12%]
+........................................................................ [ 14%]
+........................................................................ [ 17%]
+..............................s......................................... [ 19%]
+........................................................................ [ 22%]
+........................................................................ [ 24%]
+.........................................F.....................F........ [ 27%]
+........................................................................ [ 29%]
+........................................................................ [ 32%]
+........................................................................ [ 34%]
+........................................................................ [ 37%]
+........................................................................ [ 39%]
+........................................................................ [ 42%]
+........................................................................ [ 44%]
+........................................................................ [ 47%]
+..................................................ss.................... [ 49%]
+........................................................................ [ 52%]
+............................F........................................... [ 54%]
+........................................................................ [ 57%]
+........................................................................ [ 59%]
+......s.ss...s......sssssssss......F.................................... [ 62%]
+........................................................................ [ 64%]
+........................................................................ [ 67%]
+........................................................................ [ 69%]
+........................................................................ [ 72%]
+........................................................................ [ 74%]
+........................................................................ [ 77%]
+........................................................................ [ 79%]
+........................................................................ [ 82%]
+........................................................................ [ 84%]
+........................................................................ [ 87%]
+........................................................................ [ 89%]
+........................................................................ [ 92%]
+........................................................................ [ 94%]
+........................................................................ [ 97%]
+...........s............................................................ [ 99%]
+.............                                                            [100%]
+=================================== FAILURES ===================================
+_ TestChecklistReferenceValidation.test_update_checklist_with_invalid_references _
+
+self = <test_checklist_validation.TestChecklistReferenceValidation object at 0xece039bff4d0>
+
+    def test_update_checklist_with_invalid_references(self):
+        """Updating Checklist with invalid references should fail"""
+        mock_repo = Mock()
+        mock_db = Mock()
+        mock_repo.db = mock_db
+    
+        # Mock existing checklist
+        mock_checklist = Mock()
+        mock_checklist.id = "checklist-1"
+        mock_checklist.status = "Ongoing"
+        mock_checklist.__table__ = Mock()
+        mock_checklist.__table__.columns = []
+        mock_repo.get_by_id.return_value = mock_checklist
+    
+        # Mock reference not found
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+    
+        service = ChecklistService(mock_repo)
+    
+        # Test updating with invalid NOI
+        checklist_update = schemas.ChecklistUpdate(
+            noiNumber="NOI-INVALID"
+        )
+    
+        with pytest.raises(ValueError) as exc_info:
+>           service.update_checklist("checklist-1", checklist_update)
+
+tests/test_checklist_validation.py:244: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+services/checklist_service.py:889: in update_checklist
+    raise e
+services/checklist_service.py:633: in update_checklist
+    claim_row_version(self.repo.db, db_checklist, checklist_update.row_version, doc_type="Checklist",
+core/concurrency.py:52: in claim_row_version
+    table, pk_col, pk_value, version_col, version_attr = _target(obj, column)
+                                                         ^^^^^^^^^^^^^^^^^^^^
+core/concurrency.py:34: in _target
+    mapper = obj.__mapper__
+             ^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <Mock name='mock.get_by_id()' id='260447395152464'>, name = '__mapper__'
+
+    def __getattr__(self, name):
+        if name in {'_mock_methods', '_mock_unsafe'}:
+            raise AttributeError(name)
+        elif self._mock_methods is not None:
+            if name not in self._mock_methods or name in _all_magics:
+                raise AttributeError("Mock object has no attribute %r" % name)
+        elif _is_magic(name):
+>           raise AttributeError(name)
+E           AttributeError: __mapper__
+
+/usr/local/lib/python3.11/unittest/mock.py:655: AttributeError
+------------------------------ Captured log call -------------------------------
+ERROR    services.checklist_service:checklist_service.py:888 Error updating Checklist checklist-1: __mapper__
+Traceback (most recent call last):
+  File "/q/backend/services/checklist_service.py", line 633, in update_checklist
+    claim_row_version(self.repo.db, db_checklist, checklist_update.row_version, doc_type="Checklist",
+  File "/q/backend/core/concurrency.py", line 52, in claim_row_version
+    table, pk_col, pk_value, version_col, version_attr = _target(obj, column)
+                                                         ^^^^^^^^^^^^^^^^^^^^
+  File "/q/backend/core/concurrency.py", line 34, in _target
+    mapper = obj.__mapper__
+             ^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/unittest/mock.py", line 655, in __getattr__
+    raise AttributeError(name)
+AttributeError: __mapper__
+_____________ test_start_up_adds_the_table_to_an_existing_database _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_start_up_adds_the_table_t0')
+
+    def test_start_up_adds_the_table_to_an_existing_database(tmp_path):
+        engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}")
+        Base.metadata.create_all(engine, tables=[t for t in Base.metadata.sorted_tables if t.name != 'contractor_personnel'])
+        assert 'contractor_personnel' not in inspect(engine).get_table_names()
+        models.create_all_except_migration_owned(bind=engine)          # what start-up (main.py) runs
+        names = {c['name'] for c in inspect(engine).get_columns('contractor_personnel')}
+>       assert names == {'id', 'contractor_id', 'name', 'position', 'email', 'phone', 'is_active', 'created_at', 'updated_at'}
+E       AssertionError: assert {'contractor_..., 'name', ...} == {'contractor_..., 'name', ...}
+E         
+E         Extra items in the left set:
+E         'row_version'
+E         Use -v to get more diff
+
+tests/test_contractor_personnel_http.py:182: AssertionError
+_ test_an_old_database_without_the_table_gets_it_and_keeps_every_existing_row __
+
+db_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_an_old_database_without_t0/mig.db')
+
+    def test_an_old_database_without_the_table_gets_it_and_keeps_every_existing_row(db_path):
+        _boot(db_path)                                                  # build a complete schema
+        _seed_business_rows(db_path)
+        _sql(db_path, f"DROP TABLE {TABLE}")                            # = a database from before this feature
+        assert _table_sql(db_path) is None
+        before = _business_data(db_path)
+    
+        _boot(db_path)
+        assert _table_sql(db_path) is not None and _has_index(db_path)
+        assert _events(db_path) == []                                   # nothing backfilled: history stays unknown
+        assert _business_data(db_path) == before                       # ITR / Checklist / audit / users / roles: verbatim
+>       assert before["itr"][0][0] == "itr-old"                         # (and the rows were really there to compare)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert 0 == 'itr-old'
+
+tests/test_itr_approval_events_migration.py:98: AssertionError
+_____ test_edit_changes_material_fields_in_place_and_keeps_an_audit_record _____
+
+env = namespace(c={'admin': <starlette.testclient.TestClient object at 0xece020171950>, 'manager': <starlette.testclient.Tes...e), app=<fastapi.applications.FastAPI object at 0xece031108f50>, login=<function env.<locals>.login at 0xece03894f2e0>)
+
+    def test_edit_changes_material_fields_in_place_and_keeps_an_audit_record(env):
+        sid = ok(register(env))["submittalId"]
+        out = ok(edit(env, sid, model="FS-300", supplier="Supplier X", specReference="Spec 07 84 13"))
+        assert (out["model"], out["supplier"], out["specReference"], out["revNo"]) == ("FS-300", "Supplier X", "Spec 07 84 13", 0)
+        d = ok(env.c["admin"].get(f"/api/material-submittals/{sid}"))
+        with env.Session() as db:
+            assert db.get(models.Material, d["materialId"]).model == "FS-300"                 # the material master follows
+            logs = db.query(models.AuditLog).filter_by(entity_type="MaterialSubmittal", entity_id=sid, action="UPDATE").all()
+            assert len(logs) == 1 and "FS-200" in (logs[0].old_value or "") and "FS-300" in (logs[0].new_value or "")
+        assert len(rev(d, 0)["resultEntries"]) == 1                                           # result untouched: no extra entry
+        before = snapshot(env)
+        ok(edit(env, sid, model="FS-300"))                                                     # same value: nothing written
+>       assert snapshot(env) == before
+E       AssertionError: assert {'materials':...', ...)], ...} == {'materials':...', ...)], ...}
+E         
+E         Omitting 7 identical items, use -vv to show
+E         Differing items:
+E         {'material_submittals': [('2', '03be86a1-1122-4574-83eb-5e124204e264', 'P1', 'V1', '92f09c53-8ef3-4aad-9cfd-9ae1ea26f89f', 'QTS-RKS-P1-MSA-000001', ...)]} != {'material_submittals': [('1', '03be86a1-1122-4574-83eb-5e124204e264', 'P1', 'V1', '92f09c53-8ef3-4aad-9cfd-9ae1ea26f89f', 'QTS-RKS-P1-MSA-000001', ...)]}
+E         Use -v to get more diff
+
+tests/test_material_submittals_http.py:265: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  core.concurrency:concurrency.py:58 row_version missing: material_submittals 03be86a1-1122-4574-83eb-5e124204e264
+WARNING  core.concurrency:concurrency.py:58 row_version missing: material_submittals 03be86a1-1122-4574-83eb-5e124204e264
+=============================== warnings summary ===============================
+../../usr/local/lib/python3.11/site-packages/starlette/testclient.py:31
+  /usr/local/lib/python3.11/site-packages/starlette/testclient.py:31: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+../../usr/local/lib/python3.11/site-packages/passlib/utils/__init__.py:854
+  /usr/local/lib/python3.11/site-packages/passlib/utils/__init__.py:854: DeprecationWarning: 'crypt' is deprecated and slated for removal in Python 3.13
+    from crypt import crypt as _crypt
+
+tests/test_active_assignee_http.py: 11 warnings
+tests/test_attachment_authorization_http.py: 463 warnings
+tests/test_attachment_hardening_http.py: 274 warnings
+tests/test_audit_agenda_http.py: 9 warnings
+tests/test_audit_contractor_scope_http.py: 2 warnings
+tests/test_audit_export_docx_http.py: 13 warnings
+tests/test_audit_hardening_http.py: 33 warnings
+tests/test_audit_templates_http.py: 22 warnings
+tests/test_audit_void_lock_http.py: 5 warnings
+tests/test_checklist_export_docx_http.py: 6 warnings
+tests/test_checklist_na_reason_http.py: 68 warnings
+tests/test_checklist_pass_integrity_http.py: 191 warnings
+tests/test_checklist_reopen_http.py: 20 warnings
+tests/test_checklist_status_rule_http.py: 251 warnings
+tests/test_contractor_options_http.py: 10 warnings
+tests/test_contractor_personnel_http.py: 7 warnings
+tests/test_date_write_guard_http.py: 143 warnings
+tests/test_docx_path_guard_http.py: 2 warnings
+tests/test_fat_supplier_null.py: 80 warnings
+tests/test_file_list_route_http.py: 6 warnings
+tests/test_iam_admin_role_boundary_http.py: 123 warnings
+tests/test_iam_admin_takeover_http.py: 177 warnings
+tests/test_iam_role_audit_http.py: 13 warnings
+tests/test_iam_user_security_http.py: 121 warnings
+tests/test_itp_checklist_km_project_audit_http.py: 69 warnings
+tests/test_itr_approval_events_http.py: 102 warnings
+tests/test_itr_approval_history_api_http.py: 58 warnings
+tests/test_itr_checklist_http_e2e.py: 4 warnings
+tests/test_itr_history_preservation_http.py: 35 warnings
+tests/test_itr_integrity_guards_http.py: 33 warnings
+tests/test_itr_revoke_approval_acceptance.py: 33 warnings
+tests/test_itr_state_protection_http.py: 92 warnings
+tests/test_itr_write_paths_atomic_http.py: 84 warnings
+tests/test_material_submittals_http.py: 193 warnings
+tests/test_materials_http.py: 85 warnings
+tests/test_meeting_minutes_carry_forward_http.py: 4 warnings
+tests/test_meeting_minutes_export_docx_http.py: 13 warnings
+tests/test_meeting_minutes_rev_http.py: 3 warnings
+tests/test_ncr_audit_atomic_http.py: 26 warnings
+tests/test_ncr_audit_delete_http.py: 17 warnings
+tests/test_ncr_close_permission_http.py: 25 warnings
+tests/test_ncr_closed_creation_http.py: 30 warnings
+tests/test_ncr_closure_photos_http.py: 34 warnings
+tests/test_ncr_late_closure_http.py: 32 warnings
+tests/test_noi_audit_delete_update_http.py: 16 warnings
+tests/test_noi_contractor_lock_http.py: 15 warnings
+tests/test_noi_create_atomic_http.py: 20 warnings
+tests/test_noi_delete_http.py: 10 warnings
+tests/test_noi_legacy_itp_read_http.py: 3 warnings
+tests/test_noi_qworkflow_backfill_rule_http.py: 11 warnings
+tests/test_optimistic_lock_http.py: 50 warnings
+tests/test_ref_project_seq_b1_http.py: 20 warnings
+tests/test_ref_project_seq_b2_http.py: 24 warnings
+tests/test_ref_project_seq_b3_http.py: 37 warnings
+tests/test_ref_project_seq_b4_http.py: 7 warnings
+tests/test_refusal_codes_http.py: 28 warnings
+tests/test_refusal_dialog_2026_002_http.py: 18 warnings
+tests/test_refusal_dialog_2026_003_http.py: 33 warnings
+tests/test_remaining_audit_paths_http.py: 82 warnings
+tests/test_reviewed_audit_paths_http.py: 40 warnings
+tests/test_scope_instance_contractor_http.py: 81 warnings
+tests/test_user_company_label_http.py: 33 warnings
+tests/test_workflow_photo_evidence_http.py: 27 warnings
+tests/test_workflow_project_filter_http.py: 6 warnings
+  /usr/local/lib/python3.11/site-packages/httpx/_client.py:690: DeprecationWarning: The 'app' shortcut is now deprecated. Use the explicit style 'transport=WSGITransport(app=...)' instead.
+    warnings.warn(message, DeprecationWarning)
+
+tests/test_checklist_template_cleanup.py::test_seeded_checklist_is_a_clean_template
+tests/test_checklist_template_cleanup.py::test_seeded_checklist_is_a_clean_template
+  /q/backend/crud.py:238: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.14/migration/
+    new_value=role.dict(exclude={"reason"}),
+
+tests/test_checklist_template_cleanup.py::test_seeded_checklist_is_a_clean_template
+  /q/backend/crud.py:153: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.14/migration/
+    new_value=user.dict(exclude={"password"}),
+
+tests/test_optimistic_lock_http.py::test_itp_plan_and_fat_details_check_and_increment
+tests/test_optimistic_lock_http.py::test_itp_plan_and_fat_details_check_and_increment
+tests/test_ref_project_seq_b2_http.py::test_every_write_to_a_shared_itp_or_checklist_template_is_admin_only
+tests/test_refusal_dialog_2026_003_http.py::test_a_service_value_error_is_a_plain_400_not_a_500[update_itp_detail]
+  /q/backend/routers/itp.py:164: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.14/migration/
+    db_itp = itp_service.update_itp_detail(itp_id=itp_id, detail_body=body.dict(), user_id=current_user.id, username=current_user.username, scope=scope,
+
+tests/test_remaining_audit_paths_http.py::test_durable_audit_and_one_commit[fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_call-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_call-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_object-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_object-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_flush-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[audit_flush-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[commit-fat-details]
+tests/test_remaining_audit_paths_http.py::test_failure_restores_record_history_and_audit[commit-fat-details]
+  /q/backend/routers/fat.py:120: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.14/migration/
+    details_data = [item.dict() for item in details]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_checklist_validation.py::TestChecklistReferenceValidation::test_update_checklist_with_invalid_references
+FAILED tests/test_contractor_personnel_http.py::test_start_up_adds_the_table_to_an_existing_database
+FAILED tests/test_itr_approval_events_migration.py::test_an_old_database_without_the_table_gets_it_and_keeps_every_existing_row
+FAILED tests/test_material_submittals_http.py::test_edit_changes_material_fields_in_place_and_keeps_an_audit_record
+4 failed, 2872 passed, 17 skipped, 3601 warnings in 3437.91s (0:57:17)
+pytest_exit=1
+# end 2026-10-18T05:24:38Z
