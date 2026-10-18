@@ -53,10 +53,12 @@ export interface PQPDetailModalProps {
     canPublish?: boolean;
     onSave: (updates: Partial<PQPItem>, pendingFiles: File[], deletedFileIds: string[], removedAttachments?: string[], skipRecordWrite?: boolean) => Promise<SaveOutcome>;
     onPublish?: (id: string, changeSummary?: string) => Promise<void>;
+    /** Reopens the record with what is saved now: offered by the refusal dialog after a 409 VERSION_CONFLICT (OPTIMISTIC-LOCK-2026-001). */
+    onReloadRecord?: () => void;
     onClose: () => void;
 }
 
-export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, existingItem, readOnly = false, canPublish = true, onSave, onPublish, onClose }) => {
+export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, existingItem, readOnly = false, canPublish = true, onSave, onPublish, onReloadRecord, onClose }) => {
     const { t } = useLanguage();
     const { getActiveContractors } = useContractorsStore();
     const VERSION_OPTIONS = ['Rev1.0', 'Rev2.0', 'Rev3.0', 'Rev4.0'];
@@ -185,7 +187,7 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
         } catch (err) {
             // the record itself was not saved: the refusal dialog (REFUSAL-DIALOG-2026-002 D2); saveError stays for the
             // two notices that are not refusals (save before publishing, record saved but attachments unfinished)
-            showRefusal(err, 'save', { keepsInput: true });
+            showRefusal(err, 'save', { keepsInput: true, onReload: onReloadRecord });
         } finally {
             setSaving(false);
         }
@@ -229,7 +231,7 @@ export const PQPDetailModal: React.FC<PQPDetailModalProps> = ({ pqpId: _pqpId, e
             leaveGuard.release();
             onClose();
         } catch (err) {
-            showRefusal(err, 'save');
+            showRefusal(err, 'save', { onReload: onReloadRecord });
         } finally {
             setSaving(false);
         }

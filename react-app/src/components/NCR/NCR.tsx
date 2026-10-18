@@ -20,6 +20,8 @@ import { useNCRStats } from '../../hooks/useNCRStats';
 import { runSaveFlow, sameWrite, SaveOutcome } from '../../utils/saveFlow';
 import { describeSaveError } from '../../utils/saveErrors';
 import { showRefusal } from '../../store/refusalStore';
+import { reloadAndReopen, useOpenSession, useRecordVersion } from '../../hooks/useRecordVersion';
+import { toast } from 'sonner';
 
 type StatusFilter = 'all' | 'open' | 'inProgress' | 'resolved' | 'closed' | 'void';
 
@@ -62,12 +64,19 @@ const NCR: React.FC = () => {
   const statistics = useNCRStats(ncrList);
   // The last successful record write of the open modal (id + serialized payload) — see runSaveFlow / sameWrite.
   const lastWriteRef = useRef<{ id: string; key: string } | null>(null);
+  // The version the open form saves against (OPTIMISTIC-LOCK-2026-001): taken when it opens, moved on by each save that went through.
+  const recordVersion = useRecordVersion();
+  // Which opening of the form is current: keys the form (a fresh one per open) and guards a reload's late reopen (B2 R1 P1).
+  const openSession = useOpenSession();
+  const nextOpenSession = openSession.next;          // stable: what the open callbacks depend on
 
   const handleEdit = React.useCallback((id: string) => {
     lastWriteRef.current = null;
+    recordVersion.open(useNCRStore.getState().ncrList.find(item => item.id === id)?.row_version);
+    nextOpenSession();
     setCurrentNcrId(id);
     setIsEditModalOpen(true);
-  }, []);
+  }, [recordVersion, nextOpenSession]);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -95,9 +104,23 @@ const NCR: React.FC = () => {
 
   const handleAddNew = () => {
     lastWriteRef.current = null;
+    recordVersion.open(null);
+    openSession.next();
     setCurrentNcrId('new');
     setIsEditModalOpen(true);
   };
+
+  // "Reload this record" after a 409 VERSION_CONFLICT (the refusal dialog has already confirmed that the form's changes are
+  // discarded): close the form, reload the list, open the record again with what is saved now.
+  const reloadRecord = () => reloadAndReopen(openSession, {
+    close: () => setIsEditModalOpen(false),
+    reload: () => refetch({ search: debouncedSearch }),
+    failed: () => !!useNCRStore.getState().error,
+    found: () => useNCRStore.getState().ncrList.some(item => item.id === currentNcrId),
+    reopen: () => handleEdit(currentNcrId as string),
+    forget: () => { setCurrentNcrId(null); openedViaDeepLinkRef.current = false; },
+    notify: (notice) => toast.warning(t(notice)),
+  });
 
   const fileSteps = {
     upload: (id: string, group: { category: string; files: File[] }) => uploadFiles('ncr', id, group.files, group.category),
@@ -218,10 +241,13 @@ const NCR: React.FC = () => {
       const outcome = await runSaveFlow({
         writeRecord: async () => {
           if (existingItem) {
-            await updateNCR(currentNcrId, updatedItem);
+            await updateNCR(currentNcrId, updatedItem, recordVersion.current());
+            recordVersion.saved(useNCRStore.getState().ncrList.find(item => item.id === currentNcrId)?.row_version);
             return currentNcrId;
           }
-          return (await addNCR(updatedItem as Omit<NCRItem, 'id'>)).id;
+          const created = await addNCR(updatedItem as Omit<NCRItem, 'id'>);
+          recordVersion.saved(created.row_version);
+          return created.id;
         },
         reuseId: sameWrite(lastWriteRef.current, currentNcrId, updatedItem) ? currentNcrId : null,
         uploads: pendingUploads,
@@ -413,11 +439,13 @@ const NCR: React.FC = () => {
           : locked ? hasPermission('ncr:close:all') : hasPermission('ncr:update:all');
         return (
           <NCRDetailModal
+            key={openSession.key}
             ncrId={currentNcrId}
             existingItem={editingItem}
             readOnly={!canEdit}
             onSave={handleSaveNCRDetails}
             onRetryFiles={handleRetryNCRFiles}
+            onReloadRecord={currentNcrId !== 'new' ? reloadRecord : undefined}
             attachmentsAllowed={hasPermission('ncr:update:all')}
             onClose={() => {
               lastWriteRef.current = null;

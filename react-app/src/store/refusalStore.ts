@@ -16,6 +16,10 @@ interface RefusalEntry {
     coded?: { code: string; params: Record<string, unknown> };
     /** a failed save whose form is still open with the user's input (adds the "input kept" line) */
     keepsInput?: boolean;
+    /** reopens the record with its latest content; offered for a VERSION_CONFLICT (OPTIMISTIC-LOCK-2026-001) */
+    onReload?: () => void;
+    /** false: reloading loses nothing typed (a list row's action), so it needs no confirmation */
+    reloadDiscardsInput?: boolean;
 }
 
 interface RefusalState {
@@ -35,10 +39,13 @@ export const useRefusalStore = create<RefusalState>((set) => ({
 /**
  * Show a refused or failed delete / save in the dialog. Not for 401: the API client is already logging the user out.
  * Pass `{ keepsInput: true }` only when the form stays open with everything the user typed (REFUSAL-DIALOG-2026-002 D3).
+ * Pass `onReload` where the record can be reopened with its latest content: a VERSION_CONFLICT then offers "Reload this record".
  */
 export function showRefusal(error: unknown, action: RefusalAction, options: RefusalOptions = {}): void {
     if (getErrorStatusCode(error) === 401) return;
-    useRefusalStore.getState().show({ error, action, keepsInput: options.keepsInput });
+    useRefusalStore.getState().show({
+        error, action, keepsInput: options.keepsInput, onReload: options.onReload, reloadDiscardsInput: options.reloadDiscardsInput,
+    });
 }
 
 /** Show a refusal the page already knows about (same codes and wording as the backend's coded refusals). */

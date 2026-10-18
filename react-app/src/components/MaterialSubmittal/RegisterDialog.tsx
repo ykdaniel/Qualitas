@@ -74,7 +74,9 @@ const RegisterDialog: React.FC<{
     onSaved: (item: ApprovedMaterial) => void;
     /** re-reads the list; false = the reload failed */
     onReload: () => Promise<boolean>;
-}> = ({ projectId, vendors, item, onClose, onSaved, onReload }) => {
+    /** reopens this record as it is saved now: offered by the refusal dialog after a 409 VERSION_CONFLICT (OPTIMISTIC-LOCK-2026-001) */
+    onReloadRecord?: (submittalId: string, documentNumber: string) => void;
+}> = ({ projectId, vendors, item, onClose, onSaved, onReload, onReloadRecord }) => {
     const mt = useMaterialText();
     const { t } = useLanguage();
     const editing = !!item;
@@ -123,7 +125,8 @@ const RegisterDialog: React.FC<{
         const before = normalised(fromItem(current));
         const changes = Object.fromEntries((Object.keys(n) as (keyof FormValues)[])
             .filter((k) => k !== 'vendorId' && n[k] !== before[k]).map((k) => [k, n[k]]));
-        if (Object.keys(changes).length) current = await updateRegistered(current.submittalId, changes);
+        // the version of the record as this form last knew it: opened, or answered by its own last write (OPTIMISTIC-LOCK-2026-001)
+        if (Object.keys(changes).length) current = await updateRegistered(current.submittalId, changes, current.rowVersion);
         written.current = current;
         return current.revisionId;                // attachments of a registered material live on its approved revision
     };
@@ -142,7 +145,9 @@ const RegisterDialog: React.FC<{
             return;
         }
         const { close, notice, refusal } = presentOutcome(outcome, t);
-        if (refusal) showRefusal(refusal.error, 'save', { keepsInput: true });
+        const known = target();
+        const reloadThis = known && onReloadRecord ? () => onReloadRecord(known.submittalId, known.documentNumber) : undefined;
+        if (refusal) showRefusal(refusal.error, 'save', { keepsInput: true, onReload: reloadThis });
         if (notice) (notice.level === 'error' ? toast.error : toast.warning)(notice.text, { duration: 10000 });
         if (close && written.current) {
             leaveGuard.release();

@@ -5,6 +5,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useOSDStore } from '../../store/osdStore';
 import { showRefusal } from '../../store/refusalStore';
+import { reloadAndReopen, useOpenSession, useRecordVersion } from '../../hooks/useRecordVersion';
+import { toast } from 'sonner';
 import type { OSDItem as ContextOSDItem } from '../../store/osdStore';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import ConfirmModal from '../Shared/ConfirmModal';
@@ -63,15 +65,37 @@ const OSD: React.FC = () => {
 
   const statistics = useOSDStats(osdList);
 
+  // The version the open form saves against (OPTIMISTIC-LOCK-2026-001): taken when it opens, moved on by each save that went through.
+  const recordVersion = useRecordVersion();
+  // Which opening of the form is current: keys the form (a fresh one per open) and guards a reload's late reopen (B2 R1 P1).
+  const openSession = useOpenSession();
+  const nextOpenSession = openSession.next;          // stable: what the open callbacks depend on
+
   const handleEdit = React.useCallback((id: string) => {
+    recordVersion.open(useOSDStore.getState().osdList.find(item => item.id === id)?.row_version);
+    nextOpenSession();
     setCurrentOsdId(id);
     setIsEditModalOpen(true);
-  }, []);
+  }, [recordVersion, nextOpenSession]);
 
   const handleAddNew = () => {
+    recordVersion.open(null);
+    openSession.next();
     setCurrentOsdId('new');
     setIsEditModalOpen(true);
   };
+
+  // "Reload this record" after a 409 VERSION_CONFLICT (the refusal dialog has already confirmed that the form's changes are
+  // discarded): close the form, reload the list, open the record again with what is saved now.
+  const reloadRecord = () => reloadAndReopen(openSession, {
+    close: () => setIsEditModalOpen(false),
+    reload: () => refetch({ search: debouncedSearch }),
+    failed: () => !!useOSDStore.getState().error,
+    found: () => useOSDStore.getState().osdList.some(item => item.id === currentOsdId),
+    reopen: () => handleEdit(currentOsdId as string),
+    forget: () => { setCurrentOsdId(null); },
+    notify: (notice) => toast.warning(t(notice)),
+  });
 
   // Uses the shared runSaveFlow contract (utils/saveFlow.ts — already relied on by NCR/OBS/NOI)
   // instead of a hand-rolled try/catch: the record write is a single, separately-failable step,
@@ -120,9 +144,11 @@ const OSD: React.FC = () => {
         // from the promoted id and takes the update branch below instead.
         if (isNew) {
           const createdOsd = await addOSD(payload as Omit<ContextOSDItem, 'id'>);
+          recordVersion.saved(createdOsd.row_version);
           return createdOsd.id;
         }
-        await updateOSD(currentOsdId, payload);
+        await updateOSD(currentOsdId, payload, recordVersion.current());
+        recordVersion.saved(useOSDStore.getState().osdList.find(item => item.id === currentOsdId)?.row_version);
         return currentOsdId;
       },
       uploads: pendingUploads,
@@ -305,10 +331,12 @@ const OSD: React.FC = () => {
           : locked ? hasPermission('osd:create:all') : hasPermission('osd:update:all');
         return (
           <OSDDetailModal
+            key={openSession.key}
             osdId={currentOsdId}
             existingItem={editingItem}
             readOnly={!canEdit}
             onSave={handleSaveOSDDetails}
+            onReloadRecord={currentOsdId !== 'new' ? reloadRecord : undefined}
             onClose={() => {
               setIsEditModalOpen(false);
               setCurrentOsdId(null);

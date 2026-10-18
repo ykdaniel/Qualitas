@@ -6,6 +6,9 @@ import { useAuth } from '../../context/AuthContext';
 import { useContractorsStore } from '../../store/contractorsStore';
 import { useMeetingMinutesStore } from '../../store/meetingMinutesStore';
 import { showRefusal } from '../../store/refusalStore';
+import { isVersionConflict } from '../../utils/refusal';
+import { reloadAndReopen, useOpenSession, useRecordVersion } from '../../hooks/useRecordVersion';
+import { toast } from 'sonner';
 import type { MeetingMinutesItem as ContextMeetingMinutesItem } from '../../store/meetingMinutesStore';
 import shellStyles from '../Shared/ModuleShell.module.css';
 import ConfirmModal from '../Shared/ConfirmModal';
@@ -57,6 +60,12 @@ const MeetingMinutes: React.FC = () => {
     lastWriteRef.current = null;
     setCreatedHereId(null);
   };
+  // The version the open form saves against (OPTIMISTIC-LOCK-2026-001): taken when it opens, moved on by each write that went
+  // through — including the second write of one save (the deferred Published / Void status) and the form's Void button.
+  const recordVersion = useRecordVersion();
+  // Which opening of the form is current: keys the form (a fresh one per open) and guards a reload's late reopen (B2 R1 P1).
+  const openSession = useOpenSession();
+  const nextOpenSession = openSession.next;          // stable: what the open callbacks depend on
 
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null; message: string }>({
     isOpen: false,
@@ -99,9 +108,11 @@ const MeetingMinutes: React.FC = () => {
 
   const handleEdit = React.useCallback((id: string) => {
     // No save state to reset: every way the modal closes runs resetSaveState.
+    recordVersion.open(useMeetingMinutesStore.getState().meetingList.find(item => item.id === id)?.row_version);
+    nextOpenSession();
     setCurrentMeetingId(id);
     setIsEditModalOpen(true);
-  }, []);
+  }, [recordVersion, nextOpenSession]);
 
   // ?openId= deep-link support (e.g. clicking through from a Follow Up
   // Issues action item back to the meeting that produced it) — same
@@ -127,9 +138,24 @@ const MeetingMinutes: React.FC = () => {
 
   const handleAddNew = () => {
     resetSaveState();
+    recordVersion.open(null);
+    openSession.next();
     setCurrentMeetingId('new');
     setIsEditModalOpen(true);
   };
+
+  // "Reload this record" after a 409 VERSION_CONFLICT (the refusal dialog has already confirmed that the form's changes are
+  // discarded): close the form, reload the list, open the meeting again with what is saved now.
+  // `id`: the meeting to reopen — given when this render still says 'new' (a meeting created by the same save, B2 R2 P3).
+  const reloadRecord = (id: string | null = currentMeetingId) => reloadAndReopen(openSession, {
+    close: () => { resetSaveState(); setIsEditModalOpen(false); },
+    reload: () => refetch({ search: listSearch }),
+    failed: () => !!useMeetingMinutesStore.getState().error,
+    found: () => useMeetingMinutesStore.getState().meetingList.some(item => item.id === id),
+    reopen: () => handleEdit(id as string),
+    forget: () => { setCurrentMeetingId(null); openedViaDeepLinkRef.current = false; },
+    notify: (notice) => toast.warning(t(notice)),
+  });
 
   // Write the meeting, upload its attachments, then set a Published/Void status — see
   // MeetingSaveResult. Built on the shared runSaveFlow contract (utils/saveFlow.ts, as NCR/OBS/NOI/OSD): once the
@@ -168,9 +194,11 @@ const MeetingMinutes: React.FC = () => {
         if (isNew) {
           const created = await addMeetingMinutes(payload as Omit<ContextMeetingMinutesItem, 'id'>);
           documentNumber = created.documentNumber;
+          recordVersion.saved(created.row_version);
           return created.id;
         }
-        await updateMeetingMinutes(currentId, payload);
+        await updateMeetingMinutes(currentId, payload, recordVersion.current());
+        recordVersion.saved(useMeetingMinutesStore.getState().meetingList.find(m => m.id === currentId)?.row_version);
         return currentId;
       },
       reuseId: sameWrite(lastWriteRef.current, currentId, payload) ? currentId : null,
@@ -207,9 +235,14 @@ const MeetingMinutes: React.FC = () => {
 
     if (deferStatus && unfinished.length === 0) {
       try {
-        await updateMeetingMinutes(id, { status: targetStatus });
+        // the second write of this save: the version the first one answered
+        await updateMeetingMinutes(id, { status: targetStatus }, recordVersion.current());
+        recordVersion.saved(useMeetingMinutesStore.getState().meetingList.find(m => m.id === id)?.row_version);
         lastWriteRef.current = null;
       } catch (e) {
+        // Someone else changed the meeting in between: saving again would send the same stale version for ever — offer the
+        // reload (the record and its attachments ARE saved; only the status step is left).
+        if (isVersionConflict(e)) showRefusal(e, 'save', { keepsInput: true, onReload: () => { void reloadRecord(id); } });
         unfinished.push(t('meetingMinutes.stepStatus', { status: t(`meetingMinutes.status${targetStatus}`), message: describe(e) }));
       }
     } else if (deferStatus) {
@@ -229,7 +262,7 @@ const MeetingMinutes: React.FC = () => {
   // The form's Void button (Published records): the status alone, like the list row's quick-void.
   const handleVoidFromModal = async () => {
     if (!currentMeetingId || currentMeetingId === 'new') return;
-    await updateMeetingMinutes(currentMeetingId, { status: 'Void' });
+    await updateMeetingMinutes(currentMeetingId, { status: 'Void' }, recordVersion.current());
     setIsEditModalOpen(false);
     setCurrentMeetingId(null);
     resetSaveState();
@@ -273,10 +306,13 @@ const MeetingMinutes: React.FC = () => {
   const handleVoid = async () => {
     if (voidModal.id) {
       try {
-        await updateMeetingMinutes(voidModal.id, { status: 'Void' });
+        // the version of the row the user clicked (a list loaded before someone else's change is refused, 409)
+        const row = meetingList.find(m => m.id === voidModal.id);
+        await updateMeetingMinutes(voidModal.id, { status: 'Void' }, row?.row_version);
       } catch (err) {
         console.error('Failed to void Meeting Minutes:', err);
-        showRefusal(err, 'save');
+        // nothing typed to lose: "Reload" just reloads the list (OPTIMISTIC-LOCK-2026-001)
+        showRefusal(err, 'save', { onReload: () => { void refetch({ search: listSearch }); }, reloadDiscardsInput: false });
       }
       setVoidModal({ isOpen: false, id: null, message: '' });
     }
@@ -431,11 +467,13 @@ const MeetingMinutes: React.FC = () => {
             : hasPermission('meeting:update:all');
         return (
           <MeetingMinutesDetailModal
+            key={openSession.key}
             meetingId={currentMeetingId}
             existingItem={editingItem}
             readOnly={!canEdit}
             onSave={handleSaveMeetingDetails}
             onVoid={handleVoidFromModal}
+            onReloadRecord={currentMeetingId !== 'new' ? () => { void reloadRecord(); } : undefined}
             onClose={() => {
               resetSaveState();
               if (openedViaDeepLinkRef.current) {

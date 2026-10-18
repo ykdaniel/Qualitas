@@ -72,6 +72,8 @@ export interface MeetingMinutesDetailModalProps {
     onSave: (details: MeetingMinutesDetailData, pendingFiles: File[]) => Promise<MeetingSaveResult>;
     /** Voids the (Published) record: sends the status change alone — the record is locked, so resending its fields is refused. */
     onVoid?: () => Promise<void>;
+    /** Reopens the meeting with what is saved now: offered by the refusal dialog after a 409 VERSION_CONFLICT (OPTIMISTIC-LOCK-2026-001). */
+    onReloadRecord?: () => void;
     onClose: () => void;
     /** Plain close, skipping onClose's deep-link navigate(-1) — used after
      * spawning a new occurrence so that navigate() to the new record isn't
@@ -79,7 +81,7 @@ export interface MeetingMinutesDetailModalProps {
     onDismiss?: () => void;
 }
 
-export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps> = ({ existingItem, readOnly = false, onSave, onVoid, onClose, onDismiss }) => {
+export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps> = ({ existingItem, readOnly = false, onSave, onVoid, onReloadRecord, onClose, onDismiss }) => {
     const { t, language } = useLanguage();
     const { hasPermission } = useAuth();
     const { getActiveContractors } = useContractorsStore();
@@ -192,7 +194,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
                 pendingFiles,
             );
             if (result.status === 'failed') {
-                showRefusal(result.error, 'save', { keepsInput: true });
+                showRefusal(result.error, 'save', { keepsInput: true, onReload: onReloadRecord });
             } else if (result.status === 'saved-incomplete') {
                 // The meeting exists now: keep only what is left, so Save finishes it without redoing anything.
                 if (result.attachmentsUploaded) {
@@ -205,7 +207,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
             }
             // 'saved': the page closes the modal.
         } catch (err) {
-            showRefusal(err, 'save', { keepsInput: true });
+            showRefusal(err, 'save', { keepsInput: true, onReload: onReloadRecord });
         } finally {
             setSaving(false);
         }
@@ -225,7 +227,7 @@ export const MeetingMinutesDetailModal: React.FC<MeetingMinutesDetailModalProps>
         try {
             await onVoid();
         } catch (err) {
-            showRefusal(err, 'save');
+            showRefusal(err, 'save', { onReload: onReloadRecord });
         } finally {
             setSaving(false);
         }

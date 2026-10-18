@@ -42,6 +42,8 @@ export interface NOIDetailModalProps {
     /** Retries only the unfinished file steps of a record that is already stored (never writes the record). */
     onRetryFiles?: (pendingFiles: File[], deletedFileIds: string[]) => Promise<SaveOutcome>;
     onClose: () => void;
+    /** Reopens the record with what is saved now: offered by the refusal dialog after a 409 VERSION_CONFLICT (OPTIMISTIC-LOCK-2026-001). */
+    onReloadRecord?: () => void;
     onPrint?: (data: NOIDetailData) => void;
 }
 
@@ -53,7 +55,7 @@ const CONTACT_FIELD_LABEL_KEY: Record<ContactField, string> = {
     email: 'contractors.email',
 };
 
-export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, readOnly = false, existingData, existingItem, noiList: _noiList, onSave, onRetryFiles, onClose, onPrint, attachmentsAllowed = true }) => {
+export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, readOnly = false, existingData, existingItem, noiList: _noiList, onSave, onRetryFiles, onClose, onReloadRecord, onPrint, attachmentsAllowed = true }) => {
     const { t } = useLanguage();
     const { getActiveContractors } = useContractorsStore();
     const itpList = useITPStore(state => state.itpList);
@@ -317,7 +319,7 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
             setFollowUp(null);
         }
         const { close, notice, refusal } = presentOutcome(outcome, t);
-        if (refusal) showRefusal(refusal.error, 'save', { keepsInput: true });
+        if (refusal) showRefusal(refusal.error, 'save', { keepsInput: true, onReload: onReloadRecord });
         if (notice) (notice.level === 'error' ? toast.error : toast.warning)(notice.text, { duration: 10000 });
         if (close) { leaveGuard.release(); onClose(); }
     };
@@ -360,7 +362,7 @@ export const NOIDetailModal: React.FC<NOIDetailModalProps> = ({ noiId: _noiId, r
             }, existingItem, NOI_DATE_FIELDS);
             applyOutcome(await onSave(dataToSave, pendingFiles, deletedFileIds), !existingItem);
         } catch (err) {
-            showRefusal(err, 'save', { keepsInput: true });
+            showRefusal(err, 'save', { keepsInput: true, onReload: onReloadRecord });
         } finally {
             setSaving(false);
         }

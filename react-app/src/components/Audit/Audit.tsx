@@ -18,6 +18,8 @@ import ScheduleMatrix from './ScheduleMatrix';
 import AuditTemplatesPanel from './AuditTemplatesPanel';
 import { Search, Plus } from 'lucide-react';
 import { useCreateGate } from '../../hooks/useCreateGate';
+import { reloadAndReopen, useOpenSession } from '../../hooks/useRecordVersion';
+import { toast } from 'sonner';
 
 // Rows shown in the schedule (all of them when a vendor is selected).
 const SCHEDULE_VENDOR_LIMIT = 5;
@@ -192,15 +194,20 @@ const Audit: React.FC = () => {
     }, [vendorStats, selectedVendorFilter, activeContractors, auditList, pastUnfinishedVendors]);
 
     // Actions
+    // Which opening of the wizard is current: keys it (a fresh wizard per open) and guards a reload's late reopen (B2 R1 P1).
+    const openSession = useOpenSession();
+    const nextOpenSession = openSession.next;      // stable: what the open callbacks depend on
     const handleAddNew = useCallback(() => {
+        nextOpenSession();
         setCurrentAuditId(null);
         setIsEditModalOpen(true);
-    }, []);
+    }, [nextOpenSession]);
 
     const handleEdit = useCallback((id: string) => {
+        nextOpenSession();
         setCurrentAuditId(id);
         setIsEditModalOpen(true);
-    }, []);
+    }, [nextOpenSession]);
 
     // ?openId=<id or auditNo> (e.g. from Follow Up Issues) opens that audit once the list has it —
     // same pattern as NOI/NCR/ITR. Closing a deep-linked audit goes back to where the user came from.
@@ -221,6 +228,18 @@ const Audit: React.FC = () => {
         next.delete('openId');
         setSearchParams(next, { replace: true });
     }, [searchParams, auditList, handleEdit, setSearchParams]);
+
+    // "Reload this record" after a 409 VERSION_CONFLICT (the refusal dialog has already confirmed that the wizard's changes are
+    // discarded): close the wizard, reload the list, open the audit again with what is saved now.
+    const reloadRecord = () => reloadAndReopen(openSession, {
+        close: () => setIsEditModalOpen(false),
+        reload: () => fetchAudits(),
+        failed: () => !!useAuditStore.getState().error,
+        found: () => useAuditStore.getState().auditList.some(item => item.id === currentAuditId),
+        reopen: () => handleEdit(currentAuditId as string),
+        forget: () => { setCurrentAuditId(null); openedViaDeepLinkRef.current = false; },
+        notify: (notice) => toast.warning(t(notice)),
+    });
 
     const closeWizard = () => {
         setIsEditModalOpen(false);
@@ -347,6 +366,7 @@ const Audit: React.FC = () => {
             {/* Edit / Detail Wizard Modal */}
             {isEditModalOpen && (
                 <AuditWizard
+                    key={openSession.key}
                     existingItem={currentAuditId ? auditList.find(item => item.id === currentAuditId) : undefined}
                     // Closed / Void are true dead ends (WorkflowEngine's "Closed": [] /
                     // "Void": []) — the wizard locks those itself from the record's
@@ -357,6 +377,7 @@ const Audit: React.FC = () => {
                     canUpdate={hasPermission('audit:update:all')}
                     onClose={closeWizard}
                     onSaveSuccess={closeWizard}
+                    onReloadRecord={currentAuditId ? reloadRecord : undefined}
                 />
             )}
 

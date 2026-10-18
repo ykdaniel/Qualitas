@@ -17,6 +17,7 @@ import { useContractorsStore } from '../../store/contractorsStore';
 import { useProjectStore } from '../../store/projectStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { showRefusal } from '../../store/refusalStore';
+import { useRecordVersion } from '../../hooks/useRecordVersion';
 import { checkDateOrder } from '../../utils/dateValidation';
 import { exportAuditDocx } from '../../services/api';
 import AuditPrintTemplate, { AuditPrintKind, AuditPrintData, auditProgress } from './AuditPrintTemplate';
@@ -95,11 +96,16 @@ interface AuditWizardProps {
   canUpdate?: boolean;
   onClose: () => void;
   onSaveSuccess: () => void;
+  /** Reopens the audit with what is saved now: offered by the refusal dialog after a 409 VERSION_CONFLICT (OPTIMISTIC-LOCK-2026-001). */
+  onReloadRecord?: () => void;
 }
 
-export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly: readOnlyProp = false, canUpdate = true, onClose, onSaveSuccess }) => {
+export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly: readOnlyProp = false, canUpdate = true, onClose, onSaveSuccess, onReloadRecord }) => {
   const { t } = useLanguage();
   const { addAudit, updateAudit, loading } = useAuditStore();
+  // The version this wizard saves against (OPTIMISTIC-LOCK-2026-001): the record's, once, when the wizard opens; moved on by every
+  // save that went through — "Save draft" keeps the wizard open and may be pressed again.
+  const recordVersion = useRecordVersion(existingItem?.row_version);
   // Same source as the Audit page: the shared contractor picker list (status already normalised).
   const contractorOptions = useContractorsStore(state => state.options);
   const activeContractors = useMemo(() => contractorOptions.filter(c => c.status === 'active'), [contractorOptions]);
@@ -544,10 +550,12 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     try {
       const updates = prepareAuditData(formData.status);
       if (recordId) {
-        await updateAudit(recordId, updates);
+        await updateAudit(recordId, updates, recordVersion.current());
+        recordVersion.saved(useAuditStore.getState().auditList.find(a => a.id === recordId)?.row_version);
         setSavedStatus(updates.status);
       } else {
         const created = await addAudit(updates);
+        recordVersion.saved(created.row_version);
         setCreatedId(created.id);
         setAuditNo(created.auditNo);
         setSavedStatus(created.status);
@@ -568,7 +576,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     } catch (err) {
       // auditStore rethrows the axios error as is: the refusal dialog (REFUSAL-DIALOG-2026-002 D2) translates it; the wizard stays open
       console.error("草稿儲存失敗: ", err);
-      showRefusal(err, 'save', { keepsInput: true });
+      showRefusal(err, 'save', { keepsInput: true, onReload: onReloadRecord });
     } finally {
       setIsDraftSaving(false);
     }
@@ -583,9 +591,11 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
     try {
       const updates = prepareAuditData(formData.status);
       if (recordId) {
-        await updateAudit(recordId, updates);
+        await updateAudit(recordId, updates, recordVersion.current());
+        recordVersion.saved(useAuditStore.getState().auditList.find(a => a.id === recordId)?.row_version);
       } else {
         const created = await addAudit(updates);
+        recordVersion.saved(created.row_version);
         setCreatedId(created.id);
         setAuditNo(created.auditNo);
       }
@@ -594,7 +604,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({ existingItem, readOnly
       onSaveSuccess();
     } catch (err) {
       console.error("資料庫寫入失敗: ", err);
-      showRefusal(err, 'save', { keepsInput: true });
+      showRefusal(err, 'save', { keepsInput: true, onReload: onReloadRecord });
     } finally {
       setIsSaving(false);
     }

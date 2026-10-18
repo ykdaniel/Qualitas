@@ -47,6 +47,8 @@ export interface OBSDetailModalProps {
     /** Retries only the unfinished file steps of a record that is already stored (never writes the record). */
     onRetryFiles?: (pendingUploads: PendingUploads[], deletedFileIds: string[]) => Promise<SaveOutcome>;
     onClose: () => void;
+    /** Reopens the record with what is saved now: offered by the refusal dialog after a 409 VERSION_CONFLICT (OPTIMISTIC-LOCK-2026-001). */
+    onReloadRecord?: () => void;
     /** Open the form locked for viewing only — every field disabled, no Save.
      *  Driven by the caller from IAM permission + record status. */
     readOnly?: boolean;
@@ -54,7 +56,7 @@ export interface OBSDetailModalProps {
     attachmentsAllowed?: boolean;
 }
 
-export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, existingItem, onSave, onRetryFiles, onClose, readOnly = false, attachmentsAllowed = true }) => {
+export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, existingItem, onSave, onRetryFiles, onClose, onReloadRecord, readOnly = false, attachmentsAllowed = true }) => {
     const { t } = useLanguage();
     const { user: currentUser } = useAuth();
     const { getActiveContractors } = useContractorsStore();
@@ -270,7 +272,7 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
             setFollowUp(null);
         }
         const { close, notice, refusal } = presentOutcome(outcome, t);
-        if (refusal) showRefusal(refusal.error, 'save', { keepsInput: true });
+        if (refusal) showRefusal(refusal.error, 'save', { keepsInput: true, onReload: onReloadRecord });
         if (notice) (notice.level === 'error' ? toast.error : toast.warning)(notice.text, { duration: 10000 });
         if (close) { leaveGuard.release(); onClose(); }
     };
@@ -336,7 +338,7 @@ export const OBSDetailModal: React.FC<OBSDetailModalProps> = ({ obsId: _obsId, e
             const outcome = await onSave(preserveHistoricalDates({ ...values, status: finalStatus, closeoutDate, qualityEngineerApprovalDate, constructionEngineerApprovalDate }, existingItem, OBS_DATE_FIELDS), uploadGroups(), deletedFileIds);
             applyOutcome(outcome, !existingItem);
         } catch (err) {
-            showRefusal(err, 'save', { keepsInput: true });
+            showRefusal(err, 'save', { keepsInput: true, onReload: onReloadRecord });
         } finally {
             setSaving(false);
         }
