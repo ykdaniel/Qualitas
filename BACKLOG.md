@@ -2961,3 +2961,21 @@ Construction Engineer 核准欄位都還是 Pending——跟 `obsFormSchema.ts::
 **問題：** 腳本用 CSS module 類名裡的 "note"（例如 `_note_<hash>`）找提示行。開發伺服器下可以用；打包後如果類名只剩雜湊，就找不到提示行，腳本會誤判。
 
 **建議做法：** 在提示行加上 `data-refusal-note`（標題和訊息已經有 id，可以比照），8 支腳本改用這個屬性來找。
+
+## 61. KM 改為受控文件登錄：公司文件／範本與專案文件（KM-DOCS-2026-001）· IN PROGRESS · 【優先度：高】
+
+**Where:** 後端 `models.py`（documents／document_versions／document_references）、`db_migrations.py` 第 33 步、`core/document_text.py`、`core/scope.py`、`core/attachment_access.py`、`routers/file_router.py`、`core/utils.py`、`routers/settings.py`、`repositories/document_repository.py`、`services/document_service.py`、`routers/documents.py`、`scripts/migrate_km_articles_to_documents.py`；前端（D2 起）`components/KM/`、新「專案文件」入口。設計：`docs/workflow/KM-DOCS-2026-001-DESIGN.md`。
+
+**Found:** 2026-10-18，KM 討論工作階段；使用者同日決定走文件登錄，取代原本的「中英分欄」（KM-BILINGUAL-2026-001，A-1 程式已完成於 commit 74d85e60／f965b6fb 但作廢保留、不部署）與「狀態語意」（KM-STATUS-2026-001，未開工）。
+
+**問題：** 程序文件在 Word 撰寫、審核、簽核；現行 KM 把 Word 轉成富文本再轉回 Word，排版流失、中英靠 `<br>` 配對、匯入匯出兩條路不一致、搜尋在前端、Draft／Archived 沒有行為。
+
+**決定（DECISIONS「KM 改為受控文件登錄」）：** 一套登錄機制兩層共用（公司文件 km:*／專案文件 document:*）；文件不轉換，Word 原稿＋PDF 發行版原樣儲存，只抽 Word 文字供搜尋；版次 append-only、現行／核准需 PDF；PQP 範本放 KM、PQP 模組套用專案資料產生（D3）。
+
+**子項：**
+- **D1 後端登錄核心** · DONE（待審查、待部署）2026-10-18：三表（migration_owned，第 33 步 IF NOT EXISTS）、版次／狀態流程、Word 抽文字＋LIKE 搜尋、公司編號沿用 QTS-KM- 計數器、五條專案文件命名規則（PLN／DWG／SPC／CER／APR）、附件接線（entity_type `document_version`，PDF 上限 `DOCUMENT_PDF_MAX_MB`=50）、引用表與 API、既有 KM 文章遷移腳本（只產 Word＋草稿版次，**本批不執行**）。前端 0 檔。
+- **D2 公司文件前端**：登錄清單＋詳情（PDF 內嵌、版次、新版次上傳）、舊 KM 文章唯讀入口；執行遷移腳本（PDF 依使用者 Q5 的選擇：瀏覽器列印另存／Word 另存／系統產生）。等樂觀鎖 B3b 提交後。
+- **D3 範本與 PQP 套用**、**D4 專案文件入口與其他類型**、**D5 跨模組引用呼叫端**（ITP／NCR／Checklist 選文件；relationships 加 `document` 節點）、收尾（移除富文本編輯器與匯入匯出轉換碍）。
+- 併入本條的原路線圖項目：**KM-SEARCH**（搜尋後端化，D1 已以 LIKE 完成於 documents；舊 km_articles 不再投資）、**KM-XREF**（跨模組引用＝D5）。
+
+**待使用者確認（2026-10-18 已交主要調度）：** Q5 遷移 PDF 來源（A 系統產／B 人工／C 暫不遷移）；專案文件四個新權限碾；公司文件單一前綴；登錄型類型由 update 權限直接核准；範本僅管理員；作廢須理由；刪除限草稿且無引用；引用預設指向現行版。D1 依主要調度裁定值實作，使用者改口再調。

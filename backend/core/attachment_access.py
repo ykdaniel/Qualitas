@@ -57,6 +57,9 @@ ENTITY_PERMISSIONS = {
     "km": (perms.KM_VIEW, perms.KM_UPDATE),
     "contractor": (perms.CONTRACTOR_VIEW, perms.CONTRACTOR_MANAGE),
     "material_rev": (perms.MATERIAL_VIEW, perms.MATERIAL_MANAGE),
+    # KM-DOCS-2026-001 D1: the Word / PDF of a controlled document version. The generic /api/files paths use the project-document
+    # codes; company documents (km:*) read and write their files through /api/documents/... which checks per record.
+    "document_version": (perms.DOCUMENT_VIEW, perms.DOCUMENT_UPDATE),
 }
 
 # Per-CATEGORY upload / delete permission — only for the entity types listed here (MATERIAL-SUBMITTAL M2, spec §3.4):
@@ -94,6 +97,8 @@ _UNCONDITIONAL_LOCKED_STATUSES = {
     "meeting": {"Published", "Void"},
     "itr": {"Approved", "Void"},          # Approved: services/itr_service.py; Void: the same records are frozen for their checklists (checklist_service)
     "material_rev": {"Approved", "ApprovedWithComments", "ReviseAndResubmit", "Rejected"},   # a result is recorded: all frozen
+    # KM-DOCS D1: once a version is current / approved (or beyond) its files are the issued record; a new version is the only way on
+    "document_version": {"current", "approved", "superseded", "archived", "void"},
 }
 _LOCKED_CATEGORIES = {
     ("ncr", "Closed"): {"improvementPhoto"},
@@ -125,6 +130,7 @@ ALLOWED_CATEGORIES = {
     # no front end sends a category for these; the API default is the only value accepted
     "audit": {"attachment"}, "fat": {"attachment"}, "followup": {"attachment"}, "checklist": {"attachment"}, "km": {"attachment"}, "contractor": {"attachment"},
     "material_rev": MATERIAL_SUBMISSION_CATEGORIES | {"replyDocument"},
+    "document_version": {"word", "pdf"},
 }
 
 
@@ -142,6 +148,18 @@ _KM_IMAGE_PATH = re.compile(r"^km/km_(?:[0-9a-f]{32}\.[A-Za-z0-9]{1,5}|[0-9a-f]{
 
 def is_km_image_path(file_path: str) -> bool:
     return bool(_KM_IMAGE_PATH.match((file_path or "").replace("\\", "/")))
+
+
+def permission_entity_type(db: Session, entity_type: str, entity_id: str) -> str:
+    """The entity type whose permission pair governs this attachment. A controlled-document version of the COMPANY layer is
+    governed by km:* (like KM articles), a project-layer one by document:* (KM-DOCS-2026-001 D1, R1 P1-1); every other type is
+    itself. Looks the version up by id; an unknown id keeps the generic type (the caller's existence check answers 404)."""
+    etype = (entity_type or "").lower()
+    if etype == "document_version" and entity_id:
+        version = db.query(models.DocumentVersion.scope).filter(models.DocumentVersion.id == entity_id).first()
+        if version is not None and version[0] == "company":
+            return "km"
+    return etype
 
 
 def permission_codes(user) -> set:

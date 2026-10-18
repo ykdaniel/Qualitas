@@ -29,6 +29,12 @@ DEFAULT_NAMING_RULES = [
     {"doc_type": "osd", "prefix": "QTS-RKS-[PROJECT]-OSD-", "sequence_digits": 6},
     {"doc_type": "meeting", "prefix": "QTS-RKS-[PROJECT]-MOM-", "sequence_digits": 6},
     {"doc_type": "msa", "prefix": "QTS-RKS-[PROJECT]-MSA-", "sequence_digits": 6},
+    # KM-DOCS-2026-001 D1: project documents of the controlled-document register (pqp keeps its rule above)
+    {"doc_type": "plan", "prefix": "QTS-RKS-[PROJECT]-PLN-", "sequence_digits": 6},
+    {"doc_type": "drawing", "prefix": "QTS-RKS-[PROJECT]-DWG-", "sequence_digits": 6},
+    {"doc_type": "spec", "prefix": "QTS-RKS-[PROJECT]-SPC-", "sequence_digits": 6},
+    {"doc_type": "certificate", "prefix": "QTS-RKS-[PROJECT]-CER-", "sequence_digits": 6},
+    {"doc_type": "approval", "prefix": "QTS-RKS-[PROJECT]-APR-", "sequence_digits": 6},
 ]
 
 router = APIRouter(prefix="/settings", tags=["Settings"])

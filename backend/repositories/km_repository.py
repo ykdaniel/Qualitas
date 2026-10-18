@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 
 import models
 import schemas
-from core.utils import _reference_seq_lock, sanitize_pagination, sanitize_search_term
+from core.utils import generate_company_doc_no, sanitize_pagination, sanitize_search_term
 
 
 class KMRepository:
@@ -14,33 +14,8 @@ class KMRepository:
         self.db = db
 
     def get_next_km_no(self) -> str:
-        rule = self.db.query(models.DocumentNamingRule).filter(models.DocumentNamingRule.doc_type == "km").first()
-        prefix = rule.prefix if rule else "QTS-KM-"
-        digits = rule.sequence_digits if rule else 6
-
-        with _reference_seq_lock:
-            seq_record = self.db.query(models.ReferenceSequence).filter(
-                models.ReferenceSequence.project == "QTS",
-                models.ReferenceSequence.vendor == "SYS",
-                models.ReferenceSequence.doc == "km"
-            ).with_for_update().first()
-
-            if seq_record:
-                seq_record.last_seq += 1
-                next_seq = seq_record.last_seq
-            else:
-                next_seq = 1
-                seq_record = models.ReferenceSequence(
-                    project="QTS",
-                    vendor="SYS",
-                    doc="km",
-                    last_seq=next_seq
-                )
-                self.db.add(seq_record)
-
-            self.db.flush()
-
-        return f"{prefix}{str(next_seq).zfill(digits)}"
+        # The counter is shared with the company layer of the controlled-document register (KM-DOCS-2026-001 D1).
+        return generate_company_doc_no(self.db)
 
     def get_all(self, skip: int = 0, limit: int = 10000, category: str | None = None, search: str | None = None) -> list[models.KMArticle]:
         # KM articles include child chapters — need a high default limit

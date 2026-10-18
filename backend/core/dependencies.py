@@ -25,6 +25,7 @@ from repositories.contractor_repository import ContractorRepository
 from repositories.audit_repository import AuditRepository
 from repositories.fat_repository import FATRepository
 from repositories.kpi_repository import KPIRepository
+from repositories.document_repository import DocumentRepository
 
 # Services
 from services.user_service import UserService
@@ -46,6 +47,7 @@ from services.fat_service import FATService
 from services.kpi_service import KPIService
 from services.related_service import RelatedService
 from services.workflow_service import WorkflowService
+from services.document_service import DocumentService
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +82,10 @@ def get_pqp_service(db: Session = Depends(get_db)) -> PQPService:
 def get_obs_service(db: Session = Depends(get_db)) -> OBSService:
     repo = OBSRepository(db)
     return OBSService(repo)
+
+def get_document_service(db: Session = Depends(get_db)) -> DocumentService:
+    return DocumentService(DocumentRepository(db))
+
 
 def get_osd_service(db: Session = Depends(get_db)) -> OSDService:
     repo = OSDRepository(db)

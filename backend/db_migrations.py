@@ -214,6 +214,11 @@ def run_migrations():
     # (31a, the columns, already ran after step 3.)
     _copy_itr_detail_version()
 
+    # 33. Controlled-document register (KM-DOCS-2026-001 D1, user's decisions 2026-10-18): documents / document_versions /
+    # document_references, created IF NOT EXISTS with their indexes (migration_owned, like the material tables); add-if-missing
+    # for later columns; nothing is dropped or rewritten. Idempotent, no flag. Fails start-up when the result does not match.
+    _create_document_registry_schema()
+
     logger.info("Migrations completed.")
 
 class MigrationError(RuntimeError):
@@ -2268,6 +2273,7 @@ def _clear_itp_vp_q():
 ROW_VERSION_TABLES = (
     "itp", "ncr", "followup", "noi", "itr", "pqp", "obs", "osd", "meeting_minutes", "contractors",
     "contractor_personnel", "projects", "users", "roles", "audits", "audit_templates", "checklist", "fat",
+    "documents",     # KM-DOCS-2026-001 D1 (the table itself is created by step 33 with the column; listed so a hand-made table gets it too)
 )
 ITR_VERSION_COPY_FLAG = "itr_detail_version_to_row_version_v1"
 
@@ -2326,3 +2332,59 @@ def _copy_itr_detail_version():
             logger.info("ITR detail_data._version copied to row_version: %d ITRs", copied)
     except Exception as e:
         logger.error("Could not copy ITR detail_data._version to row_version: %s", e)
+
+# ---- Step 33: controlled-document register (KM-DOCS-2026-001 D1) ----------------------------------------------------------------
+DOCUMENT_REGISTRY_TABLES = ("documents", "document_versions", "document_references")
+
+
+def _document_registry_problems(conn):
+    """Columns the application writes that the existing tables lack (type / nullability are not re-checked: SQLite's ALTER cannot
+    fix them, and the models' create path is the same DDL) — mirrors the material register's verification at the level D1 needs."""
+    import models as _models
+    problems = []
+    for table in DOCUMENT_REGISTRY_TABLES:
+        existing = {r[1] for r in conn.execute(text(f"PRAGMA table_info({table})")).fetchall()}
+        if not existing:
+            problems.append(f"table {table} missing")
+            continue
+        wanted = {c.name for c in _models.Base.metadata.tables[table].columns}
+        for col in sorted(wanted - existing):
+            problems.append(f"{table}.{col} missing")
+    return problems
+
+
+def _create_document_registry_schema():
+    """Step 33. CREATE TABLE / INDEX IF NOT EXISTS from the models' own DDL, then add-if-missing for any column a later batch adds
+    (TEXT / INTEGER / BOOLEAN defaults as the model declares). Never drops or rewrites. MigrationError on a mismatch."""
+    import models as _models
+    from sqlalchemy.schema import CreateIndex, CreateTable
+    try:
+        if engine.dialect.name != "sqlite":
+            raise MigrationError(f"document register schema migration supports SQLite only, not {engine.dialect.name}")
+        with engine.connect() as conn:
+            for table in DOCUMENT_REGISTRY_TABLES:
+                tbl = _models.Base.metadata.tables[table]
+                existing = {r[1] for r in conn.execute(text(f"PRAGMA table_info({table})")).fetchall()}
+                if not existing:
+                    conn.execute(text(str(CreateTable(tbl, if_not_exists=True).compile(engine))))
+                else:
+                    for col in tbl.columns:
+                        if col.name not in existing:
+                            type_def = col.type.compile(engine.dialect)
+                            if col.server_default is not None:
+                                type_def += f" NOT NULL DEFAULT {col.server_default.arg}"
+                            _add_column_if_missing(conn, table, col.name, type_def)
+                for idx in tbl.indexes:
+                    conn.execute(text(str(CreateIndex(idx, if_not_exists=True).compile(engine))))
+            conn.commit()
+            problems = _document_registry_problems(conn)
+        if problems:
+            raise MigrationError("document register schema does not match what the application needs: " + "; ".join(problems)
+                                 + ". Nothing was dropped or rewritten; fix the listed objects by hand, then start again.")
+    except MigrationError as e:
+        logger.error("STARTUP ABORTED: %s", e)
+        raise
+    except Exception as e:
+        logger.error("STARTUP ABORTED: document register schema could not be created or verified: %s", e)
+        raise MigrationError(f"document register schema could not be created or verified ({type(e).__name__}: {e})") from e
+

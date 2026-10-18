@@ -26,6 +26,7 @@ from routers import (
     auth,
     checklist,
     contractors,
+    documents,
     fat,
     file_router,
     followup,
@@ -245,7 +246,7 @@ for router in [
     settings_router,
     iam,
     itp, ncr, noi, itr, pqp, obs, osd, meeting_minutes, contractors, followup, audit, checklist, kpi, file_router, fat, km, projects, workflow,
-    materials, material_submittals,
+    materials, material_submittals, documents,
 ]:
     api.include_router(router.router)
 

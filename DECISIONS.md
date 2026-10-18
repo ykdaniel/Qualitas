@@ -382,10 +382,27 @@ Result 的既有操作方式比拆開成縱向區塊更直覺）。
 影響範圍：見 docs/workflow/OPTIMISTIC-LOCK-2026-001-DESIGN.md 第 5 節，分 B1（後端＋store）、B2／B3（各模組視窗）、B4（ITR 視窗）、B5（收緊）。
 依據：使用者 2026-10-18 經協調中心轉述：「樂觀鎖五個決定都照建議值」。
 
+### KM 改為受控文件登錄：公司文件／範本與專案文件（KM-DOCS-2026-001，2026-10-18）
+日期：2026-10-18
+決策（使用者於「主要調度」決定方向與 Q1–Q6；D1 的 8 項細節由主要調度依建議值裁定，已交使用者確認，使用者改口再更新）：
+1. KM 不再是站內富文本編輯，改為受控文件登錄：公司文件（程序書、標準、定義、指引、範本）與專案文件（PQP、施工計畫、圖說、合約規範、證明、核准函）共用一套 `documents`／`document_versions`／`document_references` 表；文件不轉換，Word 原稿與 PDF 發行版原樣儲存，只抽 Word 文字供搜尋（Q4 先 LIKE）。
+2. PQP 維持 `pqp` 表（Q1），本批拒絕以 `doc_type='pqp'` 建立登錄列；範本放 KM，PQP 由範本套用八個佔位符產生（Q2，D3 實作）；類型照設計 §3.3，專案文件的承包商選填（Q3）。
+3. 公司文件沿用 KM 的 `QTS-KM-######` 與同一計數器；專案文件依各類型命名規則 `QTS-RKS-[PROJECT]-PLN／DWG／SPC／CER／APR-`，第一筆編號有測試。
+4. 專案文件新增權限 `document:view/create/update/approve:all`（管理員自動擁有）；公司文件沿用 `km:*`；範本只有系統管理員可建立或改版。
+5. 版次 append-only；設為現行（公司）或核准（專案）前必須有 PDF；同一文件同時只有一個現行／核准版，新版核准時舊版自動 superseded；已發行版次及其檔案唯讀。送審型（施工計畫、日後 PQP）走草稿→送審→核准，需 approve 權限；登錄型（圖說、規範、證明、核准函）由 update 權限直接核准。作廢須填理由。
+6. 封存、作廢、已核准的文件只允許改 tags，其餘欄位須開新版次；刪除只限從未發行、無引用的草稿，且為軟刪除。
+7. 跨模組引用預設指向現行版並記錄建立時的版次號；可選擇固定版次。
+8. 既有 KM 文章（正式站 1 本草稿書／26 章／0 附件）以一次性腳本遷移為公司文件草稿版次（Word 由現有匯出產生）；**PDF 來源（Q5）待使用者在 A 系統產生／B 人工匯出／C 暫不遷移中決定**，遷移不在 D1 執行。`km_articles` 保留唯讀。
+9. 本決策取代 2026-10-18 同日稍早的「KM 章節內文中英分欄」（KM-BILINGUAL-2026-001，A-1 程式作廢保留於 commit 74d85e60）與「KM 文章狀態的行為」（KM-STATUS-2026-001，未開工）；兩者未寫入本檔、未部署。
+理由：程序文件的原稿是 Word，審核簽核以 Word／PDF 為單位；富文本雙向轉換造成排版流失與兩套原稿；受控文件清冊是品質體系慣例。
+影響範圍：後端 models、schemas、db_migrations（第 33 步）、core/perms、core/scope（公司層文件對所有專案可見）、core/attachment_access、routers/file_router、core/utils、routers/settings、新 repositories/services/routers documents、scripts/migrate_km_articles_to_documents.py；前端 D2 起。
+依據：使用者 2026-10-18 於「主要調度」決定方向與 Q1–Q6（原話「KM-DOCS 草案 6 個問題先照建議值」）；D1 八點由主要調度 2026-10-18 裁定、已交使用者確認。
+
 ## 尚未決策（不得當成已核准規則）
 
 - ITR 核准是否須額外檢查 Inspection Result。
 - PQP 與 ITP／NOI／ITR 是否新增前置關卡。
 - Approved with comments 是否限制後續作業，以及 NOI／Generate Checklist 是否要求 ITP 已核准。
+- KM-DOCS Q5：既有 KM 文章遷移時 PDF 由系統產生（需新增 LibreOffice 等依賴）、人工匯出，或暫不遷移。
 
 翻譯與 NCR 照片 UX 目前延期屬任務排程，不是永久禁止；後續 TASK 應沿用使用者當時指示。

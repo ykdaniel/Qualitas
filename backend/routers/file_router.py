@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 import schemas
 from database import get_db
 from core.scope import Scope, get_scope, compute_scope, entity_in_scope, attachment_target, find_attachment_record, require_shared_template_write
+from core.attachment_access import permission_entity_type
 from core.attachment_access import (
     ENTITY_PERMISSIONS, IMAGE_ONLY_CATEGORIES, is_km_image_path, lock_refusal, require_attachment_permission, validate_category,
 )
@@ -90,7 +91,7 @@ router = APIRouter(prefix="/files", tags=["files"])
 # The upload root is core.uploads.upload_root(): backend/uploads unless QUALITAS_UPLOAD_ROOT says otherwise (mandatory, and confined to the
 # run directory, in an isolated test process). It is read on every request — there is no module-level constant to import.
 _VALID_ENTITY_TYPES = {"itp", "ncr", "noi", "itr", "pqp", "obs", "osd", "fat",
-                       "audit", "checklist", "followup", "km", "contractor", "meeting", "material_rev"}
+                       "audit", "checklist", "followup", "km", "contractor", "meeting", "material_rev", "document_version"}
 
 # 允許的 MIME 類型白名單
 ALLOWED_MIME_PREFIXES = ("image/", "application/pdf", "application/msword",
@@ -99,6 +100,16 @@ ALLOWED_MIME_PREFIXES = ("image/", "application/pdf", "application/msword",
 
 MAX_FILE_SIZE_MB = 20
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+
+
+def max_upload_bytes(entity_type: str, category: str | None) -> tuple[int, int]:
+    """(limit in bytes, limit in MB) for one upload. The issued PDF of a controlled document may be larger than the general limit
+    (KM-DOCS-2026-001 D1, DOCUMENT_PDF_MAX_MB, default 50); everything else keeps MAX_FILE_SIZE_MB."""
+    if entity_type == "document_version" and category == "pdf":
+        from core.config import settings
+        mb = int(getattr(settings, "DOCUMENT_PDF_MAX_MB", 50))
+        return mb * 1024 * 1024, mb
+    return MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_MB
 
 # Magic-byte signatures for common file types
 _MAGIC_SIGNATURES: list[tuple[bytes, str]] = [
@@ -114,6 +125,14 @@ _MAGIC_SIGNATURES: list[tuple[bytes, str]] = [
     (b"RIFF", "image/webp"),                     # WEBP (RIFF container)
     (b"BM", "image/bmp"),
 ]
+
+
+# python:3.11-slim (the production image) ships no system MIME database, so `mimetypes` does not know the Office containers there and
+# a real .docx uploaded through this router was stored as "application/zip". Register them once (KM-DOCS-2026-001 D1, R1 follow-up).
+for _ext, _mime in ((".docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+                    (".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+                    (".pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation")):
+    mimetypes.add_type(_mime, _ext)
 
 
 def _detect_mime_from_content(content: bytes) -> str | None:
@@ -229,7 +248,7 @@ async def upload_files(
         )
 
     # ── Permission on the record type first (a 403 says nothing about which records exist) ──
-    require_attachment_permission(current_user, entity_type, "update", category)
+    require_attachment_permission(current_user, permission_entity_type(db, entity_type, entity_id), "update", category)
 
     # ── The category must be one this record type really uses (exact match: no empty value, no unknown value, no case variant) ──
     validate_category(entity_type, category)
@@ -250,13 +269,14 @@ async def upload_files(
 
     # ── Validate EVERY file before writing ANY of them ──
     prepared: list[tuple[UploadFile, bytes, str]] = []
+    limit_bytes, limit_mb = max_upload_bytes(entity_type, category)
     for file in files:
         # 驗證檔案大小
         content = await file.read()
-        if len(content) > MAX_FILE_SIZE_BYTES:
+        if len(content) > limit_bytes:
             raise HTTPException(
                 status_code=400,
-                detail=f"File '{file.filename}' exceeds {MAX_FILE_SIZE_MB}MB limit"
+                detail=f"File '{file.filename}' exceeds {limit_mb}MB limit"
             )
 
         # 初步驗證 client-supplied MIME 類型
@@ -369,7 +389,7 @@ def get_entity_files(
     """查詢指定實體的所有附件"""
     if entity_type not in _VALID_ENTITY_TYPES:
         raise HTTPException(status_code=400, detail=f"Unknown entity_type '{entity_type}'")
-    require_attachment_permission(current_user, entity_type, "view")
+    require_attachment_permission(current_user, permission_entity_type(db, entity_type, entity_id), "view")
     # P0 data isolation: don't expose attachments for a parent the caller can't see.
     if not entity_in_scope(db, entity_type, entity_id, scope):
         return []
@@ -400,7 +420,7 @@ def get_file(
     ).first()
     if not attachment or not entity_in_scope(db, attachment.entity_type, attachment.entity_id, scope):
         raise HTTPException(status_code=404, detail="Attachment not found")
-    require_attachment_permission(current_user, attachment.entity_type, "view")
+    require_attachment_permission(current_user, permission_entity_type(db, attachment.entity_type, attachment.entity_id), "view")
     return _to_response(attachment, request)
 
 
@@ -419,7 +439,7 @@ def delete_file(
     if not attachment or not entity_in_scope(db, attachment.entity_type, attachment.entity_id, scope):
         raise HTTPException(status_code=404, detail="Attachment not found")
 
-    require_attachment_permission(current_user, attachment.entity_type, "update", attachment.category)
+    require_attachment_permission(current_user, permission_entity_type(db, attachment.entity_type, attachment.entity_id), "update", attachment.category)
     if attachment.entity_type == "material_rev":
         # Same lock as submit / result (spec §4.4), then decide on fresh data.
         try:
@@ -519,7 +539,7 @@ async def serve_upload(
     # embedded in its articles without rows, under a naming scheme only its own upload code produces (see is_km_image_path); those need
     # km:view:all. Every other row-less file (an orphan, a stray, another module's leftover) is 404 for everybody.
     if att is not None:
-        require_attachment_permission(current_user, att.entity_type, "view")
+        require_attachment_permission(current_user, permission_entity_type(db, att.entity_type, att.entity_id), "view")
     elif is_km_image_path(file_path):
         require_attachment_permission(current_user, "km", "view")
     else:

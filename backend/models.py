@@ -1122,6 +1122,110 @@ class KMArticleHistory(Base):
     author = relationship("User")
 
 
+# ─── Controlled documents (KM-DOCS-2026-001 D1): company documents / templates and project documents ─────────────────
+# One register for both layers (DESIGN §3.1). The Word / PDF files are attachment rows (entity_type='document_version');
+# the documents themselves are never converted — only Word text is extracted for search. All three tables are
+# migration_owned: db_migrations._create_document_registry_schema() creates them (CREATE IF NOT EXISTS), start-up
+# create_all skips them. Status strings are lower case: company draft / current / archived; project draft / submitted /
+# approved / superseded / void (services/document_service.py owns the transitions).
+
+class Document(Base):
+    __tablename__ = "documents"
+    __table_args__ = (
+        Index("ix_documents_scope_status", "scope", "status"),
+        Index("ix_documents_project_id", "project_id"),
+        Index("ix_documents_doc_type", "doc_type"),
+        Index("ux_documents_doc_no", "doc_no", unique=True),
+        Index("ux_documents_source_km_article", "source_km_article_id", unique=True),
+        {"info": {"migration_owned": True}},
+    )
+
+    id = Column(String, primary_key=True)
+    doc_no = Column(String, nullable=False)                      # QTS-KM-###### (company) or the doc_type's project rule
+    scope = Column(String, nullable=False)                       # 'company' | 'project'
+    project_id = Column(String, ForeignKey("projects.id"), nullable=True)      # required when scope='project' (service)
+    vendor_id = Column(String, ForeignKey("contractors.id"), nullable=True)    # optional (Q3)
+    doc_type = Column(String, nullable=False)                    # procedure / standard / definition / guideline / template / plan / drawing / spec / certificate / approval (pqp: D3)
+    title_zh = Column(String, nullable=False)
+    title_en = Column(String, nullable=True)
+    category = Column(String, nullable=True)
+    tags = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="draft")
+    current_version_id = Column(String, nullable=True)           # cache of the current / approved version (no FK on purpose, like material_submittals)
+    effective_date = Column(String, nullable=True)
+    owner_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    is_template = Column(Boolean, nullable=False, default=False, server_default="0")
+    template_fields = Column(Text, nullable=True)                # JSON list of placeholders (D3 reads it)
+    source_km_article_id = Column(String, nullable=True)         # set by scripts/migrate_km_articles_to_documents.py (idempotency)
+    created_by_user_id = Column(Integer, nullable=True)
+    created_at = Column(String, nullable=True)
+    updated_at = Column(String, nullable=True)
+    row_version = Column(Integer, nullable=False, default=0, server_default="0")   # optimistic lock (core/concurrency.py)
+    is_deleted = Column(Boolean, nullable=False, default=False, server_default="0")
+
+    versions = relationship("DocumentVersion", back_populates="document", order_by="DocumentVersion.version_no")
+    references = relationship("DocumentReference", back_populates="document")
+    owner = relationship("User", foreign_keys=[owner_user_id])
+
+
+class DocumentVersion(Base):
+    __tablename__ = "document_versions"
+    __table_args__ = (
+        Index("ux_document_versions_document_no", "document_id", "version_no", unique=True),
+        Index("ix_document_versions_project_id", "project_id"),
+        {"info": {"migration_owned": True}},
+    )
+
+    id = Column(String, primary_key=True)
+    document_id = Column(String, ForeignKey("documents.id"), nullable=False)
+    # snapshot of the document's layer / project / contractor so attachment scope checks need no join (core/scope.py)
+    scope = Column(String, nullable=False)
+    project_id = Column(String, nullable=True)
+    vendor_id = Column(String, nullable=True)
+    version_no = Column(Integer, nullable=False)
+    version_label = Column(String, nullable=False)               # 'Rev1.0' by default
+    status = Column(String, nullable=False, default="draft")     # this version's own state (draft / submitted / current / approved / superseded / archived / void)
+    change_summary = Column(Text, nullable=True)
+    word_attachment_id = Column(String, nullable=True)           # attachments.id (entity_type='document_version', category='word')
+    pdf_attachment_id = Column(String, nullable=True)            # attachments.id (category='pdf')
+    extracted_text = Column(Text, nullable=True)                 # Word text for search; NULL when only a PDF was given (Q4)
+    extracted_at = Column(String, nullable=True)
+    source_template_document_id = Column(String, nullable=True)  # D3: made from this template
+    source_template_version_id = Column(String, nullable=True)
+    submitted_at = Column(String, nullable=True)
+    approved_at = Column(String, nullable=True)
+    approved_by_user_id = Column(Integer, nullable=True)
+    void_reason = Column(Text, nullable=True)
+    created_by_user_id = Column(Integer, nullable=True)          # who made THIS version (the history author)
+    created_at = Column(String, nullable=True)
+
+    document = relationship("Document", back_populates="versions")
+
+
+class DocumentReference(Base):
+    """A record of another module cites a document (optionally a section). version_id NULL = the current version
+    (pinned_version_no remembers which version it was when the reference was made) — KM-DOCS D1 decision 6."""
+    __tablename__ = "document_references"
+    __table_args__ = (
+        Index("ix_document_references_source", "from_type", "from_id"),
+        Index("ix_document_references_document", "document_id"),
+        Index("ux_document_references_unique", "from_type", "from_id", "document_id", "section_ref", unique=True),
+        {"info": {"migration_owned": True}},
+    )
+
+    id = Column(String, primary_key=True)
+    from_type = Column(String, nullable=False)                   # itp / itp_item / ncr / checklist / checklist_item / pqp / ...
+    from_id = Column(String, nullable=False)
+    document_id = Column(String, ForeignKey("documents.id"), nullable=False)
+    version_id = Column(String, nullable=True)
+    pinned_version_no = Column(Integer, nullable=True)
+    section_ref = Column(String, nullable=False, default="", server_default="")
+    created_by_user_id = Column(Integer, nullable=True)
+    created_at = Column(String, nullable=True)
+
+    document = relationship("Document", back_populates="references")
+
+
 class QWorkflow(Base):
     """Q-WorkFlow — the canonical cross-module progress tracker.
 
