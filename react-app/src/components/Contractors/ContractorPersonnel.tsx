@@ -33,22 +33,44 @@ const ContractorPersonnel: React.FC<Props> = ({ contractorId }) => {
     const [showInactive, setShowInactive] = useState(false);
     const [loading, setLoading] = useState(true);
     const [draft, setDraft] = useState<Draft>(EMPTY);
-    const [editing, setEditing] = useState<{ id: string } & Draft | null>(null);
+    // the row being edited, with the version it was read at (OPTIMISTIC-LOCK-2026-001 B3b)
+    const [editing, setEditing] = useState<{ id: string; row_version?: number | null } & Draft | null>(null);
     const [busy, setBusy] = useState(false);
 
-    const load = useCallback(async () => {
+    /** Resolves to the list it loaded, or null when the load failed. */
+    const load = useCallback(async (): Promise<ContractorPersonnelApi[] | null> => {
         try {
-            setPeople(await getContractorPersonnel(contractorId, true));
+            const list = await getContractorPersonnel(contractorId, true);
+            setPeople(list);
+            return list;
         } catch (err) {
             console.error('Loading the personnel list failed:', err);
             toast.error(t('contractors.personnel.loadFailed'));
+            return null;
         } finally {
             setLoading(false);
         }
     }, [contractorId, t]);
+
+    const startEditing = (p: ContractorPersonnelApi) =>
+        setEditing({ id: p.id, row_version: p.row_version, name: p.name, position: p.position || '', email: p.email || '', phone: p.phone || '' });
+    // "Reload this record" after a 409 VERSION_CONFLICT: reload the list; an edited row starts again from what is saved now
+    // (the dialog has already confirmed that its changes are discarded).
+    const reloadAfterConflict = async (editedId?: string) => {
+        const list = await load();
+        if (!editedId) return;
+        const fresh = list?.find(p => p.id === editedId);
+        // only if that row is still the one being edited (the user may have started on another meanwhile), and only if it is
+        // still shown — a person made inactive meanwhile would be edited in a hidden row (B3b review R1 P3-3, P3-4)
+        setEditing(prev => {
+            if (prev?.id !== editedId) return prev;
+            if (!fresh || (!fresh.is_active && !showInactive)) return null;
+            return { id: fresh.id, row_version: fresh.row_version, name: fresh.name, position: fresh.position || '', email: fresh.email || '', phone: fresh.phone || '' };
+        });
+    };
     useEffect(() => { void load(); }, [load]);
 
-    const run = async (action: () => Promise<unknown>, done: string) => {
+    const run = async (action: () => Promise<unknown>, done: string, reload?: { editedId?: string }) => {
         if (busy) return false;
         setBusy(true);
         try {
@@ -58,7 +80,12 @@ const ContractorPersonnel: React.FC<Props> = ({ contractorId }) => {
             return true;
         } catch (err) {
             console.error('Saving the personnel list failed:', err);
-            showRefusal(err, 'save');           // e.g. DUPLICATE_NAME, in the user's language (REFUSAL-DIALOG-2026-003)
+            // e.g. DUPLICATE_NAME, in the user's language (REFUSAL-DIALOG-2026-003); a version conflict offers the reload — a row
+            // being edited asks first (its changes are discarded), a list action reloads at once
+            showRefusal(err, 'save', reload ? {
+                onReload: () => { void reloadAfterConflict(reload.editedId); },
+                reloadDiscardsInput: !!reload.editedId,
+            } : undefined);
             return false;
         } finally {
             setBusy(false);
@@ -77,12 +104,12 @@ const ContractorPersonnel: React.FC<Props> = ({ contractorId }) => {
             toast.error(t('contractors.personnel.nameRequired'));
             return;
         }
-        const { id, ...data } = editing;
-        if (await run(() => updateContractorPersonnel(id, data), t('contractors.personnel.saved'))) setEditing(null);
+        const { id, row_version: rowVersion, ...data } = editing;
+        if (await run(() => updateContractorPersonnel(id, data, rowVersion), t('contractors.personnel.saved'), { editedId: id })) setEditing(null);
     };
     const setActive = (p: ContractorPersonnelApi, active: boolean) =>
-        run(() => updateContractorPersonnel(p.id, { is_active: active }),
-            active ? t('contractors.personnel.reactivated') : t('contractors.personnel.deactivated'));
+        run(() => updateContractorPersonnel(p.id, { is_active: active }, p.row_version),     // the row's version as listed
+            active ? t('contractors.personnel.reactivated') : t('contractors.personnel.deactivated'), {});
     const escCancel = (ev: React.KeyboardEvent) => {
         if (ev.key === 'Escape' && !ev.nativeEvent.isComposing) {
             ev.preventDefault();
@@ -148,7 +175,7 @@ const ContractorPersonnel: React.FC<Props> = ({ contractorId }) => {
                                     <td style={cell}>
                                         <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                                             <button type="button" style={iconBtn} aria-label={t('contractors.personnel.edit')} title={t('contractors.personnel.edit')} disabled={!!editing}
-                                                onClick={() => setEditing({ id: p.id, name: p.name, position: p.position || '', email: p.email || '', phone: p.phone || '' })}><Pencil size={14} /></button>
+                                                onClick={() => startEditing(p)}><Pencil size={14} /></button>
                                             <button type="button" style={textBtn} disabled={busy} onClick={() => setActive(p, !p.is_active)}>
                                                 {p.is_active ? t('contractors.personnel.deactivate') : t('contractors.personnel.reactivate')}
                                             </button>

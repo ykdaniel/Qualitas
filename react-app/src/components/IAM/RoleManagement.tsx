@@ -7,6 +7,8 @@ import { useIAMStore, Role } from '../../store/iamStore';
 import { showRefusal } from '../../store/refusalStore';
 import DeleteAuditModal from './DeleteAuditModal';
 import RoleModal from './RoleModal';
+import { reloadAndReopen, useOpenSession, useRecordVersion } from '../../hooks/useRecordVersion';
+import { toast } from 'sonner';
 import styles from './IAM.module.css';
 import { Plus } from 'lucide-react';
 
@@ -24,6 +26,9 @@ const RoleManagement: React.FC<RoleManagementProps> = ({ searchQuery, tabsCompon
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingRole, setEditingRole] = useState<Role | null>(null);
+    // OPTIMISTIC-LOCK-2026-001 B3b: the role's version (taken when the window opens) and which opening is current.
+    const recordVersion = useRecordVersion();
+    const openSession = useOpenSession();
 
     const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null }>({
         isOpen: false,
@@ -39,13 +44,37 @@ const RoleManagement: React.FC<RoleManagementProps> = ({ searchQuery, tabsCompon
     }, [roles, deferredQuery]);
 
     const handleEdit = (role: Role) => {
+        recordVersion.open(role.row_version);
+        openSession.next();
         setEditingRole(role);
         setIsModalOpen(true);
     };
 
+    const handleAddNew = () => {
+        recordVersion.open(null);
+        openSession.next();
+        setEditingRole(null);
+        setIsModalOpen(true);
+    };
+
+    // "Reload this record" after a 409 VERSION_CONFLICT (the refusal dialog has already confirmed that the form's changes are
+    // discarded): close the window, reload the roles, open this role again with what is saved now.
+    const reloadRecord = (id: string) => reloadAndReopen(openSession, {
+        close: () => setIsModalOpen(false),
+        reload: () => useIAMStore.getState().fetchRoles(),
+        failed: () => !!useIAMStore.getState().error,
+        found: () => useIAMStore.getState().roles.some(r => r.id === id),
+        reopen: () => {
+            const fresh = useIAMStore.getState().roles.find(r => r.id === id);
+            if (fresh) handleEdit(fresh);
+        },
+        forget: () => setEditingRole(null),
+        notify: (notice) => toast.warning(t(notice)),
+    });
+
     const handleSave = async (validationData: any, isUpdate: boolean, id?: number) => {
         if (isUpdate && id) {
-            await updateRole(id, validationData);
+            await updateRole(id, validationData, recordVersion.current());
         } else {
             await createRole(validationData);
         }
@@ -74,7 +103,7 @@ const RoleManagement: React.FC<RoleManagementProps> = ({ searchQuery, tabsCompon
                 {tabsComponent}
                 <div className={styles.actionsBox}>
                     {hasPermission('iam:role:manage') && (
-                        <button className={styles.addNewButton} onClick={() => { setEditingRole(null); setIsModalOpen(true); }}>
+                        <button className={styles.addNewButton} onClick={handleAddNew}>
                             <Plus size={18} />
                             {t('iam.addRole')}
                         </button>
@@ -98,7 +127,9 @@ const RoleManagement: React.FC<RoleManagementProps> = ({ searchQuery, tabsCompon
 
             {isModalOpen && (
                 <RoleModal
+                    key={openSession.key}
                     existingRole={editingRole}
+                    onReloadRecord={editingRole ? () => { void reloadRecord(editingRole.id); } : undefined}
                     readOnly={!hasPermission('iam:role:manage')}
                     permissions={permissions}
                     onSave={handleSave}

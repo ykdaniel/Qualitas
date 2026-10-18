@@ -60,3 +60,9 @@
 - 帳號 olb2_reviewer，密碼由開預覽的工作階段處理，不寫在文件裡。
 - 自測用掉的資料已重設：會議記錄 1 回到 Published，會議記錄 2 回到 Draft；NCR、Audit 的版本已經增加，不影響操作。
 - 檢查表：docs/workflow/OPTIMISTIC-LOCK-2026-001-B2-PREVIEW-CHECKLIST.md。
+
+
+## 上線紀錄
+- **2026-10-18 08:53Z（台灣 16:53）**：B1＋B2＋B3a 與 ATTACH-SECTION-UX 一起上線，正式站＝e651f87a（協調中心「主要調度」通知）。
+- 遷移：18 張表加上 row_version；ITR 從 `_version` 帶入 1 筆；0 個 ERROR。
+- 前端 bundle：index-DBcZOuF1.js。

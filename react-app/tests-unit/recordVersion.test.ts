@@ -127,3 +127,50 @@ test('itpStore.updateITPDetail (B3a): takes the saved ITP from the answer (new r
     assert.equal(useITPStore.getState().itpList.find(i => i.id === 'p1')?.row_version, 9);
     assert.equal(useITPStore.getState().itpList.find(i => i.id === 'p2')?.row_version, 1);
 });
+
+test('B3b stores: scope save writes the account version back; a working load clears an old error; KM errors stay axios errors', async () => {
+    (globalThis as any).document ??= { cookie: '' };
+    (globalThis as any).window ??= { location: { pathname: '/iam', origin: 'http://localhost', href: '' } };
+    (globalThis as any).localStorage ??= { getItem: () => null, setItem: () => undefined, removeItem: () => undefined };
+    const { default: api } = await import('../src/services/api');
+    const { useIAMStore } = await import('../src/store/iamStore');
+    const { useContractorsStore } = await import('../src/store/contractorsStore');
+    const { useProjectStore } = await import('../src/store/projectStore');
+    const { useKMStore } = await import('../src/store/kmStore');
+    const sent: any[] = [];
+    let reply: (config: any) => any = () => ({ status: 200, data: {} });
+    api.defaults.adapter = async (config) => {
+        let data = config.data;
+        if (typeof data === 'string') { try { data = JSON.parse(data); } catch { /* keep */ } }
+        sent.push({ method: config.method, url: config.url, data });
+        const r = reply(config);
+        if (r.status >= 400) {
+            const err: any = new Error('Request failed'); err.isAxiosError = true; err.response = { status: r.status, data: r.data }; err.config = config;
+            throw err;
+        }
+        return { data: r.data, status: r.status, statusText: 'OK', headers: {}, config };
+    };
+
+    // IAM: the scope save sends the account's version and the answered one replaces it in the user list
+    useIAMStore.setState({ users: [{ id: '7', row_version: 3 } as any, { id: '8', row_version: 1 } as any] });
+    reply = () => ({ status: 200, data: { project_ids: ['P1'], vendor_id: null, row_version: 4 } });
+    const saved = await useIAMStore.getState().saveUserScope(7, { project_ids: ['P1'], vendor_id: null }, 3);
+    assert.equal(saved.row_version, 4);
+    assert.deepEqual(sent.at(-1)?.data, { project_ids: ['P1'], vendor_id: null, row_version: 3 });
+    assert.equal(useIAMStore.getState().users.find(u => u.id === '7')?.row_version, 4);
+    assert.equal(useIAMStore.getState().users.find(u => u.id === '8')?.row_version, 1);
+
+    // contractors / projects: a load that works clears the error of an earlier failed one
+    useContractorsStore.setState({ error: 'Failed to fetch contractors' });
+    reply = () => ({ status: 200, data: [] });
+    await useContractorsStore.getState().fetchContractors();
+    assert.equal(useContractorsStore.getState().error, null);
+    useProjectStore.setState({ error: 'Failed to fetch projects' });
+    await useProjectStore.getState().fetchProjects();
+    assert.equal(useProjectStore.getState().error, null);
+
+    // KM: a refused update reaches the caller as the axios error (status and code intact), not a bare Error
+    reply = () => ({ status: 409, data: { code: 'VERSION_CONFLICT', detail: 'changed', params: { docType: 'KM', number: 'x' } } });
+    await assert.rejects(useKMStore.getState().updateKM('k1', { content: 'c', version_no: 1 } as any),
+        (err: any) => err.isAxiosError === true && err.response?.status === 409 && err.response?.data?.code === 'VERSION_CONFLICT');
+});

@@ -5,6 +5,8 @@ import { DataTable } from '@/components/Shared/DataTable/DataTable';
 import { createUserColumns } from './columns';
 import { useIAMStore, User } from '../../store/iamStore';
 import UserModal from './UserModal';
+import { reloadAndReopen, useOpenSession, useRecordVersion } from '../../hooks/useRecordVersion';
+import { toast } from 'sonner';
 import styles from './IAM.module.css';
 import { Plus } from 'lucide-react';
 
@@ -24,6 +26,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ searchQuery, tabsCompon
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
+    // OPTIMISTIC-LOCK-2026-001 B3b: the account's version, shared by the form and its scope section (both saves move the same
+    // row_version and the window stays open between them), and which opening is current (keys the window; guards a reload).
+    const recordVersion = useRecordVersion();
+    const openSession = useOpenSession();
 
     const filteredUsers = useMemo(() => {
         const query = deferredQuery.toLowerCase();
@@ -36,16 +42,44 @@ const UserManagement: React.FC<UserManagementProps> = ({ searchQuery, tabsCompon
     }, [users, deferredQuery]);
 
     const handleEdit = (user: User) => {
+        recordVersion.open(user.row_version);
+        openSession.next();
         setEditingUser(user);
         setIsModalOpen(true);
     };
 
+    const handleAddNew = () => {
+        recordVersion.open(null);
+        openSession.next();
+        setEditingUser(null);
+        setIsModalOpen(true);
+    };
+
+    // "Reload this record" after a 409 VERSION_CONFLICT (the refusal dialog has already confirmed that the form's changes are
+    // discarded): close the window, reload the users, open this account again with what is saved now.
+    const reloadRecord = (id: string) => reloadAndReopen(openSession, {
+        close: () => setIsModalOpen(false),
+        reload: () => useIAMStore.getState().fetchUsers(),
+        failed: () => !!useIAMStore.getState().error,
+        found: () => useIAMStore.getState().users.some(u => u.id === id),
+        reopen: () => {
+            const fresh = useIAMStore.getState().users.find(u => u.id === id);
+            if (fresh) handleEdit(fresh);
+        },
+        forget: () => setEditingUser(null),
+        notify: (notice) => toast.warning(t(notice)),
+    });
+
     const handleSave = async (validationData: any, isUpdate: boolean, id?: number): Promise<number | void> => {
+        // the answer's version belongs to the window that saved: never to one opened after it (B3b review R1 P2-1)
+        const mine = openSession.key;
         if (isUpdate && id) {
-            await updateUser(id, validationData);
+            const result = await updateUser(id, validationData, recordVersion.current());
+            if (openSession.isCurrent(mine)) recordVersion.saved(result?.row_version);
             return id;
         } else {
             const result = await createUser(validationData);
+            if (openSession.isCurrent(mine)) recordVersion.saved(result?.row_version);
             return result?.id != null ? Number(result.id) : undefined;
         }
     };
@@ -56,7 +90,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ searchQuery, tabsCompon
                 {tabsComponent}
                 <div className={styles.actionsBox}>
                     {hasPermission('iam:user:manage') && (
-                        <button className={styles.addNewButton} onClick={() => { setEditingUser(null); setIsModalOpen(true); }}>
+                        <button className={styles.addNewButton} onClick={handleAddNew}>
                             <Plus size={18} />
                             {t('iam.addUser')}
                         </button>
@@ -80,7 +114,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ searchQuery, tabsCompon
 
             {isModalOpen && (
                 <UserModal
+                    key={openSession.key}
                     existingUser={editingUser}
+                    recordVersion={recordVersion}
+                    onReloadRecord={editingUser ? () => { void reloadRecord(editingUser.id); } : undefined}
                     readOnly={!hasPermission('iam:user:manage') || (!!editingUser && isAdminName(editingUser.role) && !viewerIsAdmin)}
                     canManageRoles={hasPermission('iam:role:manage')}
                     canSetPassword={viewerIsAdmin}

@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { kmService } from '../services/kmService';
 import { KMArticle, KMArticleCreate, KMArticleUpdate } from '../types/km';
-import { getErrorMessage } from '../utils/errorUtils';
 
 interface KMState {
     kmList: KMArticle[];
@@ -36,23 +35,17 @@ export const useKMStore = create<KMState>((set, _get) => ({
     },
 
     addKM: async (data: KMArticleCreate) => {
-        try {
-            const newKM = await kmService.create(data);
-            set((state) => ({ kmList: [newKM, ...state.kmList] }));
-        } catch (err: any) {
-            throw new Error(getErrorMessage(err, 'Failed to add KM article'));
-        }
+        // a failed add / update goes to the caller as the axios error itself, so the refusal dialog sees its status and code
+        // (a new Error kept only the text: a 409 VERSION_CONFLICT could not be recognised — OPTIMISTIC-LOCK-2026-001 B3b)
+        const newKM = await kmService.create(data);
+        set((state) => ({ kmList: [newKM, ...state.kmList] }));
     },
 
     updateKM: async (id: string, data: KMArticleUpdate) => {
-        try {
-            const updatedKM = await kmService.update(id, data);
-            set((state) => ({
-                kmList: state.kmList.map((km) => (km.id === id ? updatedKM : km)),
-            }));
-        } catch (err: any) {
-            throw new Error(getErrorMessage(err, 'Failed to update KM article'));
-        }
+        const updatedKM = await kmService.update(id, data);
+        set((state) => ({
+            kmList: state.kmList.map((km) => (km.id === id ? updatedKM : km)),
+        }));
     },
 
     deleteKM: async (id: string) => {

@@ -22,9 +22,11 @@ interface ProjectModalProps {
   existing?: Project;
   onSave: (data: Omit<Project, 'id' | 'created_at'>) => Promise<void>;
   onClose: () => void;
+  /** Reopens the project with what is saved now: offered after a 409 VERSION_CONFLICT (OPTIMISTIC-LOCK-2026-001) */
+  onReloadRecord?: () => void;
 }
 
-const ProjectModal: React.FC<ProjectModalProps> = ({ existing, onSave, onClose }) => {
+const ProjectModal: React.FC<ProjectModalProps> = ({ existing, onSave, onClose, onReloadRecord }) => {
   const initialForm = useMemo(() => ({
     name: existing?.name || '',
     code: existing?.code || '',
@@ -48,7 +50,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ existing, onSave, onClose }
     catch (err: any) {
       // refused or failed (e.g. PROJECT_CODE_DUPLICATE, DUPLICATE_NAME): the refusal dialog, the form keeps the input (REFUSAL-DIALOG-2026-003)
       console.error('Saving the project failed:', err);
-      showRefusal(err, 'save', { keepsInput: true });
+      showRefusal(err, 'save', { keepsInput: true, onReload: onReloadRecord });
     }
     finally { setSaving(false); }
   };

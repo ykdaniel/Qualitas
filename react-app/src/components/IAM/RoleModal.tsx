@@ -25,9 +25,11 @@ interface RoleModalProps {
     onClose: () => void;
     t: (key: string) => string;
     loading: boolean;
+    /** Reopens the role with what is saved now: offered after a 409 VERSION_CONFLICT (OPTIMISTIC-LOCK-2026-001) */
+    onReloadRecord?: () => void;
 }
 
-const RoleModal: React.FC<RoleModalProps> = ({ existingRole, readOnly = false, permissions, onSave, onClose, t, loading }) => {
+const RoleModal: React.FC<RoleModalProps> = ({ existingRole, readOnly = false, permissions, onSave, onClose, t, loading, onReloadRecord }) => {
     const [isClosing, setIsClosing] = useState(false);
 
     const initialForm = useMemo(() => ({
@@ -48,8 +50,10 @@ const RoleModal: React.FC<RoleModalProps> = ({ existingRole, readOnly = false, p
         }, {} as Record<string, typeof permissions>);
     }, [permissions]);
 
+    // this window's own save in flight: no second submit, no closing until it is answered (B3b review R1 P3-1)
+    const [saving, setSaving] = useState(false);
     const leaveGuard = useDraftGuard(form, loading, !readOnly);
-    const handleClose = () => leaveGuard.requestClose(() => {
+    const handleClose = () => saving ? undefined : leaveGuard.requestClose(() => {
         setIsClosing(true);
         setTimeout(() => onClose(), 250);
     });
@@ -65,6 +69,8 @@ const RoleModal: React.FC<RoleModalProps> = ({ existingRole, readOnly = false, p
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (saving || loading) return;
+        setSaving(true);
         try {
             roleSchema.parse(form);
             await onSave(form, !!existingRole, existingRole ? parseInt(existingRole.id) : undefined);
@@ -83,9 +89,11 @@ const RoleModal: React.FC<RoleModalProps> = ({ existingRole, readOnly = false, p
                 }
             } else {
                 // A refused or failed request (e.g. "Role already exists" → DUPLICATE_NAME): the refusal dialog (REFUSAL-DIALOG-2026-003)
-                if (isAxiosError(err)) showRefusal(err, 'save', { keepsInput: true });
+                if (isAxiosError(err)) showRefusal(err, 'save', { keepsInput: true, onReload: onReloadRecord });
                 else toast.error(getErrorMessage(err, "An error occurred"));
             }
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -156,12 +164,12 @@ const RoleModal: React.FC<RoleModalProps> = ({ existingRole, readOnly = false, p
 
                     <FormActions
                         cancel={<>
-                            <button className={actionStyles.secondary} type="button" onClick={handleClose} disabled={loading}>{t('common.cancel')}</button>
+                            <button className={actionStyles.secondary} type="button" onClick={handleClose} disabled={loading || saving}>{t('common.cancel')}</button>
                         </>}
                         primary={<>
                             {!readOnly && (
-                                <button className={actionStyles.primary} type="submit" disabled={loading}>
-                                    {loading ? (t('common.saving') || 'Saving...') : (existingRole ? t('common.save') : t('common.add'))}
+                                <button className={actionStyles.primary} type="submit" disabled={loading || saving}>
+                                    {loading || saving ? (t('common.saving') || 'Saving...') : (existingRole ? t('common.save') : t('common.add'))}
                                 </button>
                             )}
                         </>}

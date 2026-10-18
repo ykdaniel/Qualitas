@@ -88,3 +88,9 @@
 - **沒有在瀏覽器裡操作**：B1 不動畫面，依協調中心要求 3 改用 HTTP 示範。
 - **舊資料的寫入**：沒有對正式站資料副本跑過遷移。31a 只補缺的欄位；31b 只讀 ITR 的 detail_data，只寫 row_version。
 - **系統連帶寫入不加版本**：啟動遷移、附件、登入、2FA。這是 DESIGN 的設計。
+
+
+## 上線紀錄
+- **2026-10-18 08:53Z（台灣 16:53）**：B1＋B2＋B3a 與 ATTACH-SECTION-UX 一起上線，正式站＝e651f87a（協調中心「主要調度」通知）。
+- 遷移：18 張表加上 row_version；ITR 從 `_version` 帶入 1 筆；0 個 ERROR。
+- 前端 bundle：index-DBcZOuF1.js。
