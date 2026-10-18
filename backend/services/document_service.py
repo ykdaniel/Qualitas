@@ -184,7 +184,7 @@ class DocumentService:
             if not fields.get("project_id"):
                 raise Refusal("PROJECT_REQUIRED", "A project document needs a project", docType=data.doc_type)
             if fields.get("vendor_id") and self.repo.db.get(models.Contractor, fields["vendor_id"]) is None:
-                raise Refusal("REFERENCE_NOT_FOUND", f"Contractor '{fields['vendor_id']}' does not exist", docType="Contractor", number=fields["vendor_id"])
+                raise Refusal("REFERENCE_NOT_FOUND", f"Contractor '{fields['vendor_id']}' does not exist", docType="Contractor", field="vendor_id", value=fields["vendor_id"])
         if fields.get("template_fields") is not None:
             fields["template_fields"] = json.dumps(fields["template_fields"])
         db = self.repo.db
@@ -226,7 +226,7 @@ class DocumentService:
         else:
             enforce_update_scope(update, data_scope)
             if update.get("vendor_id") and self.repo.db.get(models.Contractor, update["vendor_id"]) is None:
-                raise Refusal("REFERENCE_NOT_FOUND", f"Contractor '{update['vendor_id']}' does not exist", docType="Contractor", number=update["vendor_id"])
+                raise Refusal("REFERENCE_NOT_FOUND", f"Contractor '{update['vendor_id']}' does not exist", docType="Contractor", field="vendor_id", value=update["vendor_id"])
         if "template_fields" in update and update["template_fields"] is not None:
             update["template_fields"] = json.dumps(update["template_fields"])
         old = {k: getattr(doc, k) for k in update}
@@ -341,7 +341,7 @@ class DocumentService:
                 att = self.repo.attachment(att_id)
                 if att is None or att.entity_type != "document_version" or att.entity_id != version.id or att.category != kind:
                     raise Refusal("REFERENCE_NOT_FOUND", f"Attachment '{att_id}' is not a {kind} file of this version",
-                                  docType="Attachment", number=att_id)
+                                  docType="Attachment", field=f"{kind}_attachment_id", value=att_id)
                 # the generic upload only applies the broad allow-list; the issued record must really be a PDF / a Word file (R1 P2-2),
                 # judged from the stored bytes (the generic path's guessed MIME is "application/zip" for a .docx on python:3.11-slim)
                 try:

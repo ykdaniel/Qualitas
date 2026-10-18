@@ -5,7 +5,7 @@ ROUND: 1（2026-10-18）
 基準：e651f87a（樂觀鎖 B3a；backend 與 b8fb529e 相同），detached worktree，未推送、未部署。
 
 ## RESULT
-- [x] 後端登錄核心完成：三表（migration_owned，第 33 步 IF NOT EXISTS＋add-if-missing）、文件／版次／引用 API、狀態流程、Word 抽文字＋LIKE 搜尋、公司／專案編號、附件接線、審計。前端 0 檔。
+- [x] 後端登錄核心完成：三表（migration_owned，第 33 步 IF NOT EXISTS＋add-if-missing）、文件／版次／引用 API、狀態流程、Word 抽文字＋LIKE 搜尋、公司／專案編號、附件接線、審計。前端僅補丁 commit 的 2 檔（翻譯鍵與 PARAMS）。
 - [x] 本機 Python 3.14：新測試 4 檔 21 項（test_documents_http 13、test_document_text 3、test_km_articles_migration_script 3、demo 腳本另計）＋受影響既有套件（B3／B4 編號、樂觀鎖、seeder、refusal 2b、KM、scope、material）通過；附件授權套件矩陣補 `document_version` 後重跑 **280 passed**（原 269＋新類型 11 個參數化案例）。
 - [x] **3.11 全套 PASS：2905 passed／17 skipped／0 failed**（第 2 輪，最終樹，11:12–12:13Z，docker python:3.11-slim，`docs/workflow/py311-full-suite.sh`），輸出 `KM-DOCS-2026-001-D1-evidence/py311-full-d1.txt`（sha256 前 16 碼 8c15e07acd04f924）。第 1 輪 2900 passed／5 failed 的輸出留存為 `py311-full-d1-round1-5failed.txt`（根因與修正見下節）；3.11 容器單跑文件＋附件套件 293 passed（`py311-documents-attachments-after-mime-fix.txt`）。
 - [x] 獨立審查 R1（獨立代理人，唯讀）：**REVISE** 1 P1＋3 P2＋3 P3 → 全部修正或說明（見 REVIEW）；修正後 test_documents_http 13 passed（含新增的公司層 /api/files 權限與 PNG-as-PDF 斷言）。R2（同一代理人，唯讀複核 eec26502）**PASS with notes**：七項皆確認、295 passed；備註 N-1／N-2 不阻擋（見 REVIEW）。修正後受影響套件重跑（附件授權、B3 編號、KM 上傳安全、refusal 2b、抽文字、遷移腳本）**354 passed**。
@@ -46,6 +46,11 @@ DECISIONS「KM 改為受控文件登錄」（本批新增一條，含 Q1–Q6、
 ### 測試
 - 新增：`tests/test_documents_http.py`（13：編號與計數器共用、類型／層檢查、scope 必填與專案範圍、範本管理員、版次上傳與型別檢查、/api/files 補綁、公司流程、專案送審核准作廢、登錄型直接核准、搜尋、樂觀鎖、軟刪除、引用）、`tests/test_document_text.py`（3）、`tests/test_km_articles_migration_script.py`（3）。
 - 依設計改變：`tests/test_ref_project_seq_b3_http.py`（規則數 13→18、14→19；審計 10→15、13→18）、`tests/test_attachment_authorization_http.py`（矩陣與種子加 `document_version`／`dv-1`，類別 pdf）。
+
+### 前端（補丁 commit，主要調度候選核對發現）
+- `context/LanguageContext.tsx`（CRLF 保留，+12／−0）：新區段「KM-DOCS-2026-001 D1」en／zh 各 5 鍵——`refusal.code.DOC_TYPE_INVALID`（{docType}{scope}）、`DOC_TYPE_RESERVED`、`DOCUMENT_PDF_REQUIRED`（{docType}{number}{version}）、`REASON_REQUIRED`（{docType}{number}）、`REFERENCE_IN_USE`（{docType}{number}{count}）。
+- `tests-unit/refusal.test.ts`：PARAMS 加同五個代碼。`npm test` 231/231（原 230/231）、`tsc` 0。
+- 順帶（後端 3 行）：`document_service.py` 的三處 `REFERENCE_NOT_FOUND` 改送 `field`／`value`（原送 `number`，與既有 wording `{docType} {value}` 不符）；test_documents_http 13 passed；其餘後端未動，3.11 指紋沿用 8c15e07acd04f924（主要調度決定是否重跑）。
 
 ### 文件
 - `BACKLOG.md` #61（KM-DOCS，含 D1–D5 子項、KM-SEARCH／KM-XREF 併入、待使用者確認清單）。
