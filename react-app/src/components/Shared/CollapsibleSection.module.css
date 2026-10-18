@@ -1,0 +1,155 @@
+/* CollapsibleSection (ATTACH-SECTION-UX-2026-001). The card itself is FormShell's .formSection; this file
+   only styles the header row, so a closed section is a single row with no leftover title spacing. */
+
+.collapsedCard {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: calc(100% + 16px);
+  margin: -6px -8px;
+  padding: 6px 8px;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  transition: background-color 0.15s ease;
+}
+
+.header:hover {
+  background-color: rgba(184, 148, 90, 0.1);
+}
+
+.header:focus-visible {
+  outline: 2px solid #b8945a;
+  outline-offset: 2px;
+}
+
+/* Open: the original section-title look (bottom rule + spacing before the content). */
+.headerOpen {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(184, 148, 90, 0.22);
+  border-radius: 8px 8px 0 0;
+}
+
+.title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #2d2a24;
+}
+
+.title::before {
+  content: '';
+  flex: none;
+  width: 3px;
+  height: 18px;
+  background: linear-gradient(180deg, #b8945a 0%, #8a6a3a 100%);
+  border-radius: 2px;
+}
+
+.titleEmpty {
+  color: #9a948a;
+}
+
+.count {
+  font-weight: 600;
+  color: #8a6a3a;
+}
+
+.titleEmpty .count {
+  color: #b5afa5;
+}
+
+.unsaved {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: #b45309;
+  background: #fff4e5;
+  border: 1px solid #f5d0a0;
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex: none;
+  color: #8a6a3a;
+}
+
+.toggleText {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.chevron {
+  transition: transform 0.15s ease;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+/* One-line preview while closed: thumbnails or file names, then "+n". */
+.summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  min-width: 0;
+}
+
+.thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid rgba(184, 148, 90, 0.3);
+  background: #f7f4ef;
+}
+
+.fileName {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #4a463f;
+  background: #f7f4ef;
+  border: 1px solid rgba(184, 148, 90, 0.25);
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+
+.more {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8a6a3a;
+}
+
+@media (max-width: 480px) {
+  .toggleText {
+    display: none;
+  }
+
+  .fileName {
+    max-width: 140px;
+  }
+}

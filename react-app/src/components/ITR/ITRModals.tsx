@@ -36,11 +36,14 @@ import {
     createReinspectionItr,
     revokeItrApproval,
     exportItrDocx,
+    getEntityFiles,
+    getAuthenticatedFileUrl,
     type ChecklistRecordApi,
 } from '../../services/api';
 import FileAttachment from '../Shared/FileAttachment';
 import ImagePreviewOverlay from '../Shared/ImagePreviewOverlay';
 import { CollapsibleSection } from '../Shared/CollapsibleSection';
+import sectionStyles from '../Shared/CollapsibleSection.module.css';
 import RelatedDocuments from '../ui/RelatedDocuments';
 import ConfirmModal from '../Shared/ConfirmModal';
 import { itemCounts, summarizeItems, ongoingProgress, isNaPending, failuresSoFar, classifyResult } from '../../utils/checklistResult';
@@ -114,6 +117,20 @@ export interface ITRDetailModalProps {
     onRevoked?: () => void | Promise<void>;
     readOnly?: boolean;
 }
+
+// The four collapsible attachment sections (ATTACH-SECTION-UX-2026-001): which upload categories each holds,
+// and which ITR column still carries that category's legacy (string) entries.
+type AttachSection = 'photos' | 'drawings' | 'certificates' | 'attachments';
+const ATTACH_SECTIONS: AttachSection[] = ['photos', 'drawings', 'certificates', 'attachments'];
+const SECTION_CATEGORIES: Record<AttachSection, { category: string; legacyField: 'defectPhotos' | 'improvementPhotos' | 'drawings' | 'certificates' | 'attachments' }[]> = {
+    photos: [{ category: 'defectPhoto', legacyField: 'defectPhotos' }, { category: 'improvementPhoto', legacyField: 'improvementPhotos' }],
+    drawings: [{ category: 'drawing', legacyField: 'drawings' }],
+    certificates: [{ category: 'certificate', legacyField: 'certificates' }],
+    attachments: [{ category: 'attachment', legacyField: 'attachments' }],
+};
+const SUMMARY_ITEMS = 3;
+const isImageFile = (f: AttachmentInfo) =>
+    !!f.mime_type?.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp)$/i.test(f.file_name || f.file_url || '');
 
 export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingData, existingItem, itrList: _propItrList, onSave, onRetryFiles, onClose, onDismiss, onRevoked, readOnly = false }) => {
     const { t } = useLanguage();
@@ -297,6 +314,81 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
     }, [persistedItrId]);
 
     useEffect(() => { refreshInstances(); }, [refreshInstances]);
+
+    // Attachment section headers (ATTACH-SECTION-UX-2026-001). Every stored file of this ITR, so each section can
+    // show its count and, while closed, a preview — each FileAttachment still loads its own list when opened.
+    // Reloaded once an upload went through (syncTokens). null = not known yet; a failed load shows no count
+    // rather than a misleading 0.
+    const [storedFiles, setStoredFiles] = useState<AttachmentInfo[] | null>(null);
+    const [storedFilesFailed, setStoredFilesFailed] = useState(false);
+    useEffect(() => {
+        if (!persistedItrId) return;
+        let live = true;
+        getEntityFiles('itr', persistedItrId)
+            .then(files => { if (live) { setStoredFiles(files); setStoredFilesFailed(false); } })
+            .catch(err => {
+                console.error('Failed to load ITR attachments for the section headers', err);
+                if (live) { setStoredFiles(null); setStoredFilesFailed(true); }   // never show an outdated count
+            });
+        return () => { live = false; };
+    }, [persistedItrId, syncTokens]);
+
+    // Which sections are open — kept here so it survives the print preview (which replaces the whole form).
+    // A new ITR opens with Defect / Improvement Photos only; an existing one opens the sections that hold
+    // something, decided once its files are known. A section the user toggled keeps the user's choice.
+    const [openSections, setOpenSections] = useState<Partial<Record<AttachSection, boolean>>>(
+        () => (existingItem ? {} : { photos: true }));
+    const legacyFilesOf = useCallback((s: AttachSection) =>
+        SECTION_CATEGORIES[s].flatMap(c => (formData[c.legacyField] || []).filter((a): a is string => typeof a === 'string')),
+    [formData]);
+    const storedFilesOf = useCallback((s: AttachSection) => {
+        const cats = SECTION_CATEGORIES[s].map(c => c.category);
+        return (storedFiles || []).filter(f => cats.includes(f.category) && !deletedFileIds.includes(f.id));
+    }, [storedFiles, deletedFileIds]);
+    useEffect(() => {
+        if (!existingItem || (storedFiles === null && !storedFilesFailed)) return;
+        setOpenSections(prev => {
+            const missing = ATTACH_SECTIONS.filter(s => prev[s] === undefined);
+            if (missing.length === 0) return prev;                     // runs on every form edit: no re-render then
+            const next = { ...prev };
+            for (const s of missing) next[s] = storedFilesOf(s).length + legacyFilesOf(s).length > 0;
+            return next;
+        });
+    }, [existingItem, storedFiles, storedFilesFailed, storedFilesOf, legacyFilesOf]);
+    const sectionProps = (s: AttachSection, kind: 'photo' | 'file') => {
+        const stored = storedFilesOf(s);
+        const legacy = legacyFilesOf(s);
+        const known = !existingItem || storedFiles !== null;
+        const cats = SECTION_CATEGORIES[s].map(c => c.category);
+        const pending = pendingUploads.filter(p => cats.includes(p.category)).reduce((n, p) => n + p.files.length, 0);
+        const removing = (storedFiles || []).filter(f => cats.includes(f.category) && deletedFileIds.includes(f.id)).length;
+        const items = [
+            ...stored.map(f => ({ key: f.id, src: getAuthenticatedFileUrl(f.file_url), name: f.file_name, image: isImageFile(f) })),
+            ...legacy.map((src, i) => ({
+                key: `legacy-${i}`, src, name: src.startsWith('data:') ? '' : (src.split('/').pop() || ''),
+                // the photo columns only ever held images, and FileAttachment shows them as such
+                image: kind === 'photo' || src.startsWith('data:image/') || /\.(png|jpe?g|gif|webp|bmp)$/i.test(src),
+            })),
+        ];
+        const shown = items.slice(0, SUMMARY_ITEMS);
+        const summary = items.length > 0 ? (
+            <>
+                {shown.map(item => (kind === 'photo' && item.image
+                    ? <img key={item.key} src={item.src} alt={item.name} loading="lazy" className={sectionStyles.thumb} />
+                    : <span key={item.key} className={sectionStyles.fileName} title={item.name}>{item.name || t('common.attachments')}</span>))}
+                {items.length > SUMMARY_ITEMS && <span className={sectionStyles.more}>+{items.length - SUMMARY_ITEMS}</span>}
+            </>
+        ) : null;
+        return {
+            expanded: openSections[s] ?? false,
+            onToggle: (next: boolean) => setOpenSections(prev => ({ ...prev, [s]: next })),
+            count: known ? items.length : null,
+            unsavedLabel: pending + removing > 0 ? t('itr.attach.unsaved', { n: pending + removing }) : undefined,
+            summary,
+            expandLabel: t('itr.attach.expand'),
+            collapseLabel: t('itr.attach.collapse'),
+        };
+    };
 
     // Parse an instance's stored items (detail_data JSON) for the editor.
     const parseInstance = (inst: ChecklistRecordApi) => {
@@ -1241,10 +1333,13 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                             section starts open only when this ITR already has content in it,
                             closed otherwise, so empty upload sections don't take up permanent
                             vertical space between the Checklist/Quality Assessment the user is
-                            actually filling in and the ones below. */}
+                            actually filling in and the ones below. ATTACH-SECTION-UX-2026-001:
+                            "content" now counts the stored files too (it used to look only at the
+                            legacy columns, so sections with uploads started closed), and each header
+                            shows a count, an unsaved marker and, while closed, a preview. */}
                         <CollapsibleSection
                             title={<>{t('itr.photo.defect')} / {t('itr.photo.improvement')}</>}
-                            defaultExpanded={(formData.defectPhotos?.length || 0) > 0 || (formData.improvementPhotos?.length || 0) > 0}
+                            {...sectionProps('photos', 'photo')}
                         >
                             <div className={styles.photoSectionContainer}>
                                 <div className={styles.photoSection}>
@@ -1288,7 +1383,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
 
                         <CollapsibleSection
                             title={t('itr.sectionDrawings') || 'Latest Drawings'}
-                            defaultExpanded={(formData.drawings?.length || 0) > 0}
+                            {...sectionProps('drawings', 'file')}
                         >
                             <FileAttachment
                                 legacyAttachments={legacyStrings(formData.drawings)}
@@ -1308,7 +1403,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
 
                         <CollapsibleSection
                             title={t('itr.sectionCertificates') || 'Calibration Certificates'}
-                            defaultExpanded={(formData.certificates?.length || 0) > 0}
+                            {...sectionProps('certificates', 'file')}
                         >
                             <FileAttachment
                                 legacyAttachments={legacyStrings(formData.certificates)}
@@ -1328,7 +1423,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
 
                         <CollapsibleSection
                             title={t('common.attachments')}
-                            defaultExpanded={(formData.attachments?.length || 0) > 0}
+                            {...sectionProps('attachments', 'file')}
                         >
                             <FileAttachment
                                 legacyAttachments={legacyStrings(formData.attachments)}
