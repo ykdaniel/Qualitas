@@ -8,7 +8,7 @@ ROUND: 1（2026-10-18）
 - [x] 後端登錄核心完成：三表（migration_owned，第 33 步 IF NOT EXISTS＋add-if-missing）、文件／版次／引用 API、狀態流程、Word 抽文字＋LIKE 搜尋、公司／專案編號、附件接線、審計。前端 0 檔。
 - [x] 本機 Python 3.14：新測試 4 檔 21 項（test_documents_http 13、test_document_text 3、test_km_articles_migration_script 3、demo 腳本另計）＋受影響既有套件（B3／B4 編號、樂觀鎖、seeder、refusal 2b、KM、scope、material）通過；附件授權套件矩陣補 `document_version` 後重跑 **280 passed**（原 269＋新類型 11 個參數化案例）。
 - [x] **3.11 全套 PASS：2905 passed／17 skipped／0 failed**（第 2 輪，最終樹，11:12–12:13Z，docker python:3.11-slim，`docs/workflow/py311-full-suite.sh`），輸出 `KM-DOCS-2026-001-D1-evidence/py311-full-d1.txt`（sha256 前 16 碼 8c15e07acd04f924）。第 1 輪 2900 passed／5 failed 的輸出留存為 `py311-full-d1-round1-5failed.txt`（根因與修正見下節）；3.11 容器單跑文件＋附件套件 293 passed（`py311-documents-attachments-after-mime-fix.txt`）。
-- [x] 獨立審查 R1（獨立代理人，唯讀）：**REVISE** 1 P1＋3 P2＋3 P3 → 全部修正或說明（見 REVIEW）；修正後 test_documents_http 13 passed（含新增的公司層 /api/files 權限與 PNG-as-PDF 斷言）。待 R1 複核或主要調度認可。修正後受影響套件重跑（附件授權、B3 編號、KM 上傳安全、refusal 2b、抽文字、遷移腳本）**354 passed**。
+- [x] 獨立審查 R1（獨立代理人，唯讀）：**REVISE** 1 P1＋3 P2＋3 P3 → 全部修正或說明（見 REVIEW）；修正後 test_documents_http 13 passed（含新增的公司層 /api/files 權限與 PNG-as-PDF 斷言）。R2（同一代理人，唯讀複核 eec26502）**PASS with notes**：七項皆確認、295 passed；備註 N-1／N-2 不阻擋（見 REVIEW）。修正後受影響套件重跑（附件授權、B3 編號、KM 上傳安全、refusal 2b、抽文字、遷移腳本）**354 passed**。
 - [x] API 示範紀錄：`docs/workflow/KM-DOCS-2026-001-D1-evidence/api-demo.md`（建立公司／專案文件 → 上傳版次（Word＋PDF）→ 無 PDF 版次設現行被拒 400 → 設現行 → 搜尋命中片段 → 引用＋由來源查 → 已發行版次檔案鎖 409 → 封存後改欄位 409 → 刪除已發行 409 → 專案文件送審／核准 → 下載 PDF → 詳情）。產生腳本 `backend/scripts/verification/km_docs_d1_api_demo.py`（throw-away DB）。
 - [ ] 既有 KM 文章遷移：**本批不執行**（主要調度指示；Q5 PDF 來源待使用者）。腳本已完成並有測試。
 

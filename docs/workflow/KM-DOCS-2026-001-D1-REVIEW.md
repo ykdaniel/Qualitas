@@ -2,7 +2,7 @@
 
 TASK_ID: KM-DOCS-2026-001-D1
 ROUND: 1（2026-10-18，獨立審查代理人，唯讀；worktree km-d1，基準 e651f87a）
-判定：**REVISE → 已修正，待 R1 複核或主要調度認可**
+判定：R1 **REVISE** → 修正後 R2 **PASS with notes**（2026-10-18，同一獨立審查代理人，唯讀複核 eec26502）
 
 ## R1 發現與處置
 | # | 發現 | 處置 |
@@ -21,3 +21,9 @@ ROUND: 1（2026-10-18，獨立審查代理人，唯讀；worktree km-d1，基準
 
 ## 修正後驗證
 - `tests/test_documents_http.py` 13 passed（含新增斷言）；受影響套件重跑 354 passed；3.11 全套第 2 輪 2905 passed／0 failed（第 1 輪 5 failed 為 3.11-slim 的 MIME 資料庫問題，已修，見 STATUS）。
+
+## R2 複核（commit eec26502）
+- 七項逐項確認：P1-1 `permission_entity_type` 覆蓋 file_router 五個端點（upload／by-entity／get／delete／download），鎖與類別仍用原型別，全 repo 無其他讀取 document_version 附件的路徑；P2-1 兩處寫鎖＋refresh 在狀態判斷前且同一 try；P2-2 檔頭判定、plain text 命名 .docx 仍被拒、PNG 標 pdf 綁定 400；P2-3 只捕 IntegrityError，重查不到即重抛；P3-1 require 先於狀態；P3-2 文件化可接受；P2-4／P3-3 維持 D5／D2 待辦。
+- 測試：test_documents_http＋test_attachment_authorization_http＋test_km_upload_security **295 passed**（本機）。
+- 備註（不阻擋）：N-1 upload 權限判定多一筆 DocumentVersion 查詢，不存在 id 由 document:* 判 → 無權的 km 使用者得 403 而非 404（不洩漏存在性）；N-2 任何 ZIP 容器都被視為 .docx（與 R1 前相同，抽不出文字則 searchable=false），更嚴可檢查 `word/document.xml`，列為日後選項；N-3 審查時看到的未提交協調文件已全部在 eec26502 內。
+
