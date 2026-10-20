@@ -1,0 +1,409 @@
+/* Controlled-document register (KM-DOCS-2026-001 D2). Page frame comes from Shared/ModuleShell.module.css; these are the parts
+   that module has no class for: the detail layout, the PDF frame, the version list and the small badges. */
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.header h1 {
+    margin: 0 0 4px;
+    font-size: 1.5rem;
+    color: #0f172a;
+}
+
+.subtitle {
+    margin: 0;
+    color: #64748b;
+    font-size: 0.9rem;
+    max-width: 720px;
+}
+
+.headerLinks {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.linkButton {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    color: #334155;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.linkButton:hover {
+    background: #f8fafc;
+    color: #0f172a;
+}
+
+.filterSelect {
+    padding: 8px 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fff;
+    font-size: 0.875rem;
+    color: #334155;
+}
+
+.checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.875rem;
+    color: #475569;
+    white-space: nowrap;
+}
+
+.snippet {
+    color: #64748b;
+    font-size: 0.78rem;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 420px;
+}
+
+.titleCell {
+    font-weight: 500;
+    color: #0f172a;
+}
+
+.titleEn {
+    color: #64748b;
+    font-size: 0.8rem;
+    font-weight: 400;
+}
+
+.pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: #e0f2fe;
+    color: #0369a1;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.pillTemplate {
+    background: #fef3c7;
+    color: #92400e;
+    margin-left: 6px;
+}
+
+.pillMuted {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.legacyBanner {
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    color: #78350f;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.9rem;
+}
+
+/* ---- detail ---- */
+
+.detailTop {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+
+.actionRow {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.hero {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+}
+
+.heroMeta {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+    color: #64748b;
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+}
+
+.hero h1 {
+    margin: 0;
+    font-size: 1.35rem;
+    color: #0f172a;
+}
+
+.heroEn {
+    margin: 2px 0 0;
+    color: #64748b;
+    font-size: 0.95rem;
+}
+
+.tagRow {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.tag {
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #f1f5f9;
+    color: #475569;
+    font-size: 0.75rem;
+    border: 1px solid #e2e8f0;
+}
+
+.layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 16px;
+    align-items: start;
+}
+
+@media (max-width: 1100px) {
+    .layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+.pdfCard {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    /* follows the window (U2): the header and hero above take roughly 230px */
+    height: calc(100vh - 250px);
+    min-height: 520px;
+}
+
+.pdfToolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+    font-size: 0.85rem;
+    color: #334155;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.pdfFrame {
+    flex: 1;
+    width: 100%;
+    border: 0;
+    background: #525659;
+}
+
+.emptyState {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 32px;
+    color: #475569;
+    gap: 10px;
+}
+
+.emptyState h3 {
+    margin: 0;
+    color: #0f172a;
+    font-size: 1.05rem;
+}
+
+.emptyState p {
+    margin: 0;
+    max-width: 440px;
+    font-size: 0.9rem;
+}
+
+.sideCard {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+}
+
+.sideCard h3 {
+    margin: 0 0 10px;
+    font-size: 0.95rem;
+    color: #0f172a;
+}
+
+.versionList {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.versionItem {
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.85rem;
+}
+
+.versionItemCurrent {
+    border-color: #86efac;
+    background: #f0fdf4;
+}
+
+.versionHead {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.versionLabel {
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.versionMeta {
+    color: #64748b;
+    font-size: 0.78rem;
+    margin-top: 2px;
+}
+
+.versionSummary {
+    margin-top: 4px;
+    color: #334155;
+}
+
+.versionFiles {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+.smallButton {
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 0.78rem;
+    cursor: pointer;
+}
+
+.smallButton:hover:not(:disabled) {
+    background: #f1f5f9;
+}
+
+.smallButton:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.smallButtonPrimary {
+    background: #0f766e;
+    border-color: #0f766e;
+    color: #fff;
+}
+
+.smallButtonPrimary:hover:not(:disabled) {
+    background: #115e59;
+}
+
+.refList {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 0.85rem;
+    color: #334155;
+}
+
+.refList li {
+    padding: 4px 0;
+    border-bottom: 1px dashed #e2e8f0;
+}
+
+.muted {
+    color: #64748b;
+    font-size: 0.85rem;
+}
+
+.fileRow {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.fileName {
+    font-size: 0.8rem;
+    color: #475569;
+}
+
+.fieldError {
+    color: #dc2626;
+    font-size: 12px;
+    margin: 4px 0 0;
+}
+
+.hint {
+    color: #64748b;
+    font-size: 0.8rem;
+    margin: 4px 0 0;
+}
+
+.versionChoice {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.versionChoice label {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.versionChoice label.disabled,
+.disabled {
+    color: #94a3b8;
+    cursor: not-allowed;
+}

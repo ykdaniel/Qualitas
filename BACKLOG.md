@@ -2974,7 +2974,7 @@ Construction Engineer 核准欄位都還是 Pending——跟 `obsFormSchema.ts::
 
 **子項：**
 - **D1 後端登錄核心** · DONE（待審查、待部署）2026-10-18：三表（migration_owned，第 33 步 IF NOT EXISTS）、版次／狀態流程、Word 抽文字＋LIKE 搜尋、公司編號沿用 QTS-KM- 計數器、五條專案文件命名規則（PLN／DWG／SPC／CER／APR）、附件接線（entity_type `document_version`，PDF 上限 `DOCUMENT_PDF_MAX_MB`=50）、引用表與 API、既有 KM 文章遷移腳本（只產 Word＋草稿版次，**本批不執行**）。前端 0 檔。
-- **D2 公司文件前端**：登錄清單＋詳情（PDF 內嵌、版次、新版次上傳）、舊 KM 文章唯讀入口；執行遷移腳本（PDF 依使用者 Q5 的選擇：瀏覽器列印另存／Word 另存／系統產生）。等樂觀鎖 B3b 提交後。
+- **D2 公司文件前端** · DONE（待審查、待部署）2026-10-20：`/km` 改為文件登錄清單（類型／狀態篩選、後端搜尋＋命中片段）、`/km/:id` 詳情（現行版 PDF 內嵌、三種空狀態、版次歷史與下載、設為現行、封存只可改標籤、刪除草稿）、`/km/legacy` 舊知識庫唯讀；後端 0 檔、LanguageContext 0 鍵（文案在 `Documents/documentsText.ts`）。**遷移腳本仍未執行**（Q5 待使用者）。
 - **D3 範本與 PQP 套用**、**D4 專案文件入口與其他類型**、**D5 跨模組引用呼叫端**（ITP／NCR／Checklist 選文件；relationships 加 `document` 節點）、收尾（移除富文本編輯器與匯入匯出轉換碍）。
 - 併入本條的原路線圖項目：**KM-SEARCH**（搜尋後端化，D1 已以 LIKE 完成於 documents；舊 km_articles 不再投資）、**KM-XREF**（跨模組引用＝D5）。
 
