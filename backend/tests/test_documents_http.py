@@ -438,3 +438,36 @@ def test_references_point_at_the_current_version_remember_the_version_no_and_ded
     assert viewer.delete(f"/api/documents/references/{ref['id']}").status_code == 403       # not theirs, no update permission
     assert w.delete(f"/api/documents/references/{ref['id']}").status_code == 200
     assert _audit(env, "DocumentReference", ref["id"]) == [("CREATE", env.ids["writer"], "writer"), ("DELETE", env.ids["writer"], "writer")]
+
+
+# ---- BACKLOG #65: deleting a template is for system administrators only -------------------------------------------------------
+
+def test_only_an_admin_deletes_a_template_draft_and_ordinary_drafts_stay_deletable(env):
+    admin, w = env.login("admin"), env.login("writer")           # writer holds km:delete:all (like the production QA_MANAGER role)
+    template = _create(admin, doc_type="template", title_zh="PQP 範本", template_fields=["project_name"])
+    r = w.delete(f"/api/documents/{template['id']}")
+    assert r.status_code == 403 and r.json()["code"] == "SHARED_TEMPLATE_ADMIN_ONLY"
+    assert "delete" in r.json()["detail"]
+    with env.Session() as db:
+        assert db.get(models.Document, template["id"]).is_deleted is False                      # nothing deleted
+    assert _audit(env, "Document", template["id"], "DELETE") == []                              # and nothing audited
+    assert admin.delete(f"/api/documents/{template['id']}").json() == {"ok": True}             # the administrator may
+    assert _audit(env, "Document", template["id"], "DELETE") == [("DELETE", env.ids["admin"], "admin")]
+    ordinary = _create(w, title_zh="一般草稿")
+    assert w.delete(f"/api/documents/{ordinary['id']}").json() == {"ok": True}                 # non-templates unchanged
+
+
+def test_only_an_admin_binds_files_to_a_template_version(env):
+    admin, w = env.login("admin"), env.login("writer")           # writer: km:update:all, not an administrator
+    template = _create(admin, doc_type="template", title_zh="PQP 範本")
+    v = _version(admin, template["id"], word=docx_bytes("{{project_name}}")).json()
+    up = w.post("/api/files/upload", data={"entity_type": "document_version", "entity_id": v["id"], "category": "pdf"},
+                files={"files": ("x.pdf", PDF, "application/pdf")})
+    assert up.status_code == 200, up.text                        # the generic upload only needs km:update on a company version
+    r = w.patch(f"/api/documents/{template['id']}/versions/{v['id']}/files", params={"pdf_attachment_id": up.json()[0]["id"]})
+    assert r.status_code == 403 and r.json()["code"] == "SHARED_TEMPLATE_ADMIN_ONLY"
+    with env.Session() as db:
+        assert db.get(models.DocumentVersion, v["id"]).pdf_attachment_id is None          # the template's version is unchanged
+    r = admin.patch(f"/api/documents/{template['id']}/versions/{v['id']}/files", params={"pdf_attachment_id": up.json()[0]["id"]})
+    assert r.status_code == 200 and r.json()["pdf_file_name"] == "x.pdf"
+

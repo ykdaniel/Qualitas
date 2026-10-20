@@ -112,7 +112,8 @@ const DocumentDetail: React.FC = () => {
     const locked = doc.status === 'archived';
     const current = doc.versions.find((v) => v.id === doc.current_version_id) ?? null;
     const canSetCurrent = editable && !locked && doc.versions.some((v) => v.status === 'draft' && v.pdf_attachment_id);
-    const canDeleteDraft = canDelete && doc.status === 'draft' && !doc.versions.some((v) => v.status !== 'draft');
+    // a template is deleted by a system administrator only, like every other template write (BACKLOG #65; backend SHARED_TEMPLATE_ADMIN_ONLY)
+    const canDeleteDraft = canDelete && doc.status === 'draft' && !doc.versions.some((v) => v.status !== 'draft') && !(doc.is_template && !isAdmin);
     const versionsDesc = [...doc.versions].sort((a, b) => b.version_no - a.version_no);
 
     return (
@@ -133,7 +134,7 @@ const DocumentDetail: React.FC = () => {
                 <div className={styles.heroMeta}>
                     <span style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>{doc.doc_no}</span>
                     <span className={styles.pill}>{labelOf(dt, 'type', doc.doc_type)}</span>
-                    {doc.is_template && <span className={`${styles.pill} ${styles.pillTemplate}`}>{dt('template')}</span>}
+                    {doc.is_template && doc.doc_type !== 'template' && <span className={`${styles.pill} ${styles.pillTemplate}`}>{dt('template')}</span>}
                     <StatusBadge status={doc.status} label={labelOf(dt, 'status', doc.status)} />
                     {doc.effective_date && <span>{dt('effectiveDate')}：{doc.effective_date}</span>}
                     {current && <span>{dt('currentVersion')}：{current.version_label}</span>}

@@ -2,7 +2,7 @@
   {
     "name": "register lists the company documents (archived hidden by default)",
     "ok": true,
-    "detail": "QTS-KM-000002, QTS-KM-000001"
+    "detail": "QTS-KM-000004, QTS-KM-000003, QTS-KM-000002, QTS-KM-000001"
   },
   {
     "name": "legacy link is in the header",
@@ -17,7 +17,7 @@
   {
     "name": "current version PDF is shown inline from a blob URL",
     "ok": true,
-    "detail": "blob:http://127.0.0.1:3390/9c6"
+    "detail": "blob:http://127.0.0.1:3390/e31"
   },
   {
     "name": "a Word-only draft offers Set current disabled",
@@ -26,6 +26,11 @@
   },
   {
     "name": "QTS-KM-000002: empty state or PDF as expected",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "QTS-KM-000003: empty state or PDF as expected",
     "ok": true,
     "detail": ""
   },

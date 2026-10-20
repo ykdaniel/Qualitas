@@ -30,7 +30,7 @@ export const createDocumentColumns = (dt: T, showSnippet: boolean): ColumnDef<Do
             <div>
                 <div className={styles.titleCell}>
                     {row.original.title_zh}
-                    {row.original.is_template && <span className={`${styles.pill} ${styles.pillTemplate}`}>{dt('template')}</span>}
+                    {row.original.is_template && row.original.doc_type !== 'template' && <span className={`${styles.pill} ${styles.pillTemplate}`}>{dt('template')}</span>}
                 </div>
                 {row.original.title_en && <div className={styles.titleEn}>{row.original.title_en}</div>}
                 {showSnippet && row.original.snippet && (

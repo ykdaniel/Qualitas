@@ -2979,3 +2979,17 @@ Construction Engineer 核准欄位都還是 Pending——跟 `obsFormSchema.ts::
 - 併入本條的原路線圖項目：**KM-SEARCH**（搜尋後端化，D1 已以 LIKE 完成於 documents；舊 km_articles 不再投資）、**KM-XREF**（跨模組引用＝D5）。
 
 **待使用者確認（2026-10-18 已交主要調度）：** Q5 遷移 PDF 來源（A 系統產／B 人工／C 暫不遷移）；專案文件四個新權限碾；公司文件單一前綴；登錄型類型由 update 權限直接核准；範本僅管理員；作廢須理由；刪除限草稿且無引用；引用預設指向現行版。D1 依主要調度裁定值實作，使用者改口再調。
+
+## 65. 範本文件的刪除與補綁檔案未限系統管理員（KM-DOCS-2026-001 D2）· FIXED（待部署）2026-10-20 · 【優先度：高】
+
+（編號由主要調度指定；#62–#64 屬其他批次。）
+
+**Where:** `backend/services/document_service.py` 的 `delete_document`、`bind_files`；`react-app/src/components/Documents/DocumentDetail.tsx` 的 `canDeleteDraft`。
+
+**Found:** 2026-10-20，GPT 獨立審看 D2 預覽（H-005）建議 REVISE，主要調度複核屬實：正式站非管理員角色 QA_MANAGER 持有 `km:delete:all`，可刪除範本草稿。D2 #65 修正的 R1 審查另發現同類缺口：持 `km:update:all` 的非管理員可經 `/api/files/upload`＋`PATCH /api/documents/{id}/versions/{vid}/files` 替換範本草稿版次的 Word／PDF。
+
+**問題：** 範本的建立、修改、新增版次、狀態轉換都限系統管理員（D18），但刪除與補綁檔案沒有同樣的檢查。
+
+**修正：** 兩個方法在權限檢查之後、狀態與寫入之前加 `doc.is_template and not is_admin_user(user)` → 403 `SHARED_TEMPLATE_ADMIN_ONLY`（與其他範本寫入同一個 helper，英文訊息改為 "create, change or delete"）；前端非管理員在範本上不顯示「刪除草稿」。測試：非管理員刪範本 → 拒絕、資料與稽核都不變；管理員可刪；非管理員刪一般草稿照舊；非管理員補綁範本檔案 → 拒絕、版次不變；管理員可綁。使用者決定（2026-10-20，於主要調度）：「D2 先補修範本刪除限管理員（後端檢查＋測試＋前端隱藏）再上線」。
+
+**未改：** 前端拒絕文案 `refusal.code.SHARED_TEMPLATE_ADMIN_ONLY` 中英仍寫「新增或修改」，未提刪除（LanguageContext 依協調規則只加不改；非管理員看不到刪除按鈕，只有過期頁面或直接打 API 才會看到）。

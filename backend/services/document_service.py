@@ -74,8 +74,8 @@ def word_or_pdf_mime(content: bytes, filename: str, kind: str) -> str:
 
 
 def _admin_only() -> RefusalHTTPException:
-    """Templates are shared company assets: only a system administrator creates or changes one (D18, as for ITP templates)."""
-    return RefusalHTTPException(403, "Only a system administrator can create or change a template document.", "SHARED_TEMPLATE_ADMIN_ONLY")
+    """Templates are shared company assets: only a system administrator creates, changes or deletes one (D18, as for ITP templates)."""
+    return RefusalHTTPException(403, "Only a system administrator can create, change or delete a template document.", "SHARED_TEMPLATE_ADMIN_ONLY")
 
 
 def _label(doc: models.Document) -> str:
@@ -327,6 +327,8 @@ class DocumentService:
         if doc is None or version is None or version.document_id != doc.id:
             raise HTTPException(status_code=404, detail="Document version not found")
         self.require(user, doc.scope, "update")
+        if doc.is_template and not is_admin_user(user):
+            raise _admin_only()                     # binding a file changes the template's content (BACKLOG #65 R1 note 1)
         db = self.repo.db
         try:
             begin_write_transaction(db)
@@ -537,6 +539,10 @@ class DocumentService:
         if doc is None:
             raise HTTPException(status_code=404, detail="Document not found")
         self.require(user, doc.scope, "delete")
+        if doc.is_template and not is_admin_user(user):
+            # a template is a shared company asset: only a system administrator creates, changes or deletes one (D18; BACKLOG #65 —
+            # km:delete alone, e.g. the QA_MANAGER role, must not remove it). After the permission check, before any state check.
+            raise _admin_only()
         if doc.status != "draft" or any(v.status in ISSUED_VERSION_STATUSES for v in doc.versions):
             raise Refusal("RECORD_LOCKED", f"Document {_label(doc)} is {doc.status}: only a draft that was never issued can be deleted; "
                           "archive or void it instead", docType="Document", number=_label(doc), status=doc.status)
