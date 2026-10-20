@@ -334,7 +334,7 @@ def test_an_ordinary_update_is_atomic_with_its_audit_too(env):
     st = _state(env, itr_id)
     (a,) = [a for a in st["audits"] if a["action"] == "UPDATE"]                # previously lost; now committed with the change
     assert a["username"] == "acc_editor" and st["itr"]["subject"] == "New subject"
-    assert json.loads(st["itr"]["detail_data"])["_version"] == 1              # exactly one version bump, from the one successful update
+    assert st["itr"]["row_version"] == before["itr"]["row_version"] + 1       # exactly one version bump, from the one successful update
 
 
 # ── 5. revoke / reopen / edit / re-approve: every snapshot keeps its own state ──

@@ -47,7 +47,7 @@ class KMService:
             raise
 
     def update_article(self, article_id: str, article_update: schemas.KMArticleUpdate, user_id: int = None, username: str = None,
-                       warn_missing_version: bool = True):
+                       version_exempt: bool = False):
         db_article = self.repo.get_by_id(article_id)
         if not db_article:
             raise HTTPException(status_code=404, detail="KM Article not found")
@@ -57,10 +57,10 @@ class KMService:
         try:
             # Optimistic lock (OPTIMISTIC-LOCK-2026-001): KM's version_no is its row version — checked and incremented in
             # one conditional UPDATE (the old check-then-write let two concurrent saves of one version both pass). A legacy
-            # NULL counts as 1. A Word import carries no version by design (warn_missing_version=False).
+            # NULL counts as 1. A Word import carries no version by design (version_exempt=True).
             new_version = claim_row_version(self.repo.db, db_article, update_data.pop("version_no", None), doc_type="KM",
                                             number=db_article.title, column="version_no", null_as=1, refresh=True,
-                                            warn_missing=warn_missing_version)
+                                            exempt=version_exempt)
             updated = self.repo.update(db_article, update_data, new_version, commit=False)
             log_audit(
                 self.repo.db, "UPDATE", "KMArticle", article_id, updated.title,
@@ -581,7 +581,7 @@ class KMService:
                 for sec in sections
             )
             update_data = schemas.KMArticleUpdate(content=combined_html)
-            self.update_article(root.id, update_data, warn_missing_version=False)
+            self.update_article(root.id, update_data, version_exempt=True)
             updated.append({'chapter_no': None, 'title': root.title})
         else:
             for sec in sections:
@@ -616,7 +616,7 @@ class KMService:
                     continue
 
                 update_data = schemas.KMArticleUpdate(content=content_html)
-                self.update_article(matched_ch.id, update_data, warn_missing_version=False)
+                self.update_article(matched_ch.id, update_data, version_exempt=True)
                 updated.append({'chapter_no': matched_no, 'title': matched_ch.title})
 
         return {

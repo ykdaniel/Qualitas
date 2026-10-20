@@ -70,12 +70,13 @@
 - **router**：`VERSION_CONFLICT` 一律回 **409**（ITR 目前是 400，要改；前端兩種都能處理）。
 - **NCR**：router 會先讀一次，造成 identity map 裡的資料過時，claim 之後要 `refresh`。
 - **KM**：`version_no` 就是它的 row_version，改用 claim 的方式，補上原本的競態，import-docx 也要加 1。
-- **ITR**：`_version` 改成欄位，啟動時從 detail_data 帶入一次。detail_data 裡的 `_version` 仍然接受一段時間，相容舊前端。
+- **ITR**：`_version` 改成欄位，啟動時從 detail_data 帶入一次。detail_data 裡的 `_version` 仍然接受一段時間，相容舊前端。B5 移除舊的 `_version` 檢查，但伺服器仍剝除收到的 `_version`（已核准 ITR 的 detail_data 保護依賴這一步）。
 
 ## 3. 對既有呼叫端的影響
 - **沒有帶版本的請求**（舊前端、腳本、批次更新）。**建議分兩段收緊**：
-  1. 第一段：沒帶版本就**放行並 bump**，同時記一筆 warning log（`optimistic-lock: <docType> <id> saved without row_version`），方便看出還有哪些地方沒改。
+  1. 第一段：沒帶版本就**放行並 bump**，同時記一筆 warning log（`row_version missing: <table> <id>`），方便看出還有哪些地方沒改。
   2. 第二段：所有前端都改完、log 一段時間沒有新的 warning 之後，Update 改為**必須**帶版本。批次更新、系統寫入除外。
+  - **（2026-10-20 定案）** 第二段用設定 `ROW_VERSION_REQUIRED`（預設關）。開啟時回 400 `VERSION_REQUIRED`。觀察 3 天 log 為零後，由 GPT 在 NAS 打開。次要寫入（revoke、publish、create-ncr、document transition、帳號範圍、FAT／ITP 明細）一併強制。ITR 批次更新與 KM 匯入明確豁免（BACKLOG #64 記日後移除批次更新）。
 - **批次更新**（ITR batch-update）：照舊不比對，但會 bump。也可以讓每筆各自帶版本，建議先不做。
 - **狀態轉換的專用端點**（revoke、publish、create-ncr）：建議**接受選填的 `row_version`**，有帶就比對，一律 bump。前端從開著的表單呼叫時就帶上。
 - **附件上傳或刪除**：不用改（不動母單的列）。但「先存記錄、再傳檔案」的 saveFlow 要用第一次寫入**回傳的新版本**，「重試檔案」不寫記錄、不帶版本。
@@ -95,18 +96,18 @@
 | **B2 視窗第一組** | NCR、OBS、NOI、OSD、會議記錄（含同一次存檔的第二次寫入）、材料、PQP（不再覆寫 updatedAt）、Audit 精靈：送出 row_version，存完不關的視窗更新版本；加上第 4 節選定的彈窗行為 | 約 16 個前端檔 |
 | **B3 視窗第二組** | ITP（清單視窗＋ITPDetail 頁＋計畫寫入）、Checklist（範本編輯器＋ITR 快照面板）、FAT（編輯＋details）、FollowUp、KM（改用新的衝突處理、409 後的處理）、主檔類（承包商、專案、人員、IAM 帳號與角色、稽核範本） | 約 20 個前端檔 |
 | **B4 ITR 視窗** | ITR 改送 row_version（含發行、撤回、開 NCR）。**等 ATTACH-SECTION-UX 提交後再碰 ITRModals.tsx**，動之前依規定先把範圍交給使用者確認 | 約 3 個檔 |
-| **B5 收緊** | warning log 一段時間沒有新的之後，Update 改為必須帶版本 | 小 |
+| **B5 收緊** | 設定開關 `ROW_VERSION_REQUIRED`＋400 `VERSION_REQUIRED`＋中英翻譯；拿掉 ITR 舊 `_version` 檢查（保留剝除）；刪除死碼 ContractorsContext／IAMContext；conftest 預設關＋開啟狀態的專門測試 | 後端約 6 個檔、前端約 4 個檔、測試 4～5 個檔 |
 | （另議）| 命名規則（整份規則一次替換）、KPI 權重：只有管理者會改，併發機會低，**建議不做或最後做** | — |
 
 ## 6. 測試策略
 - **後端 HTTP（每個模組一組，可以參數化）**：
   - 兩個 client 先讀到 row_version＝N，A 帶 N 存檔成功（變成 N+1），B 帶 N 存檔得到 **409 VERSION_CONFLICT**（code、params、英文句都要檢查），而且資料**沒有被改**。
   - 帶正確版本的連續存檔都成功，版本每次加 1。
-  - 沒帶版本時放行，版本加 1，並寫 warning log（用 caplog 斷言）。
+  - 沒帶版本：開關關閉時放行＋加 1＋warning（用 caplog 斷言）；開啟時 400 `VERSION_REQUIRED`、資料不變（兩種都測）。
   - 次要寫入（revoke、publish、create-ncr、ITP／FAT details、KM import、user scope）都會加 1；附件上傳、刪除不會。
 - **原子性**（防止「兩個請求都通過」）：用兩個獨立 session 連同一個 SQLite 檔。A 執行 `claim_row_version` 還沒 commit 時，B 也 claim：B 會等寫入鎖；A commit 之後 B 的條件式 UPDATE 影響 0 列，得到 VERSION_CONFLICT。用 `threading.Barrier` 讓兩個請求同時對同一筆 update 也可以，但上面的兩段式寫法結果確定、不會時好時壞，建議用它。
 - **前端單元測試**：store 保留並回寫 row_version；saveFlow 的第二次寫入用新版本；彈窗的「重新載入」（如果選 (ii)）。
-- **全套**：3.11 全套。既有測試大多不帶版本，在「沒帶版本就放行」的規則下應該照樣通過；B5 收緊時再調整。
+- **全套**：3.11 全套。既有測試大多不帶版本，在「沒帶版本就放行」的規則下應該照樣通過；B5 用 conftest 預設關閉開關，既有測試不用改。
 
 ## 7. 請使用者決定
 1. **方案**：(b) `row_version`（建議），或 (a) updated_at。

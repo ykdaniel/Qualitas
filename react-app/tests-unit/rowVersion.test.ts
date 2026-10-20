@@ -51,7 +51,7 @@ test('a store save sends no version unless the caller gives one, and keeps the v
     assert.equal(last().data.row_version, 8);
 });
 
-test('the ITR store sends row_version only when given (the old detail_data._version echo is unchanged)', async () => {
+test('the ITR store sends row_version only when given (the old detail_data._version it still echoes is stripped by the server, B5)', async () => {
     useITRStore.setState({ itrList: [{ id: 'x1', detail_data: JSON.stringify({ _version: 4 }), row_version: 4 } as any] });
     await useITRStore.getState().updateITR('x1', { remark: 'r', row_version: 4, detail_data: '{}' } as any);
     assert.equal('row_version' in last().data, false);

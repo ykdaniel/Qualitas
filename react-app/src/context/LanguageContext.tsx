@@ -661,6 +661,7 @@ const translations: Record<Language, Record<string, string>> = {
     'refusal.code.REFERENCE_NOT_FOUND': '{docType} {value} was not found. Check the number.',
     'refusal.code.ASSIGNEE_UNAVAILABLE': 'The assignee does not exist or has been deactivated. Choose an active user.',
     'refusal.code.VERSION_CONFLICT': '{docType} {number} was changed by someone else meanwhile. Reload it, then make your change again.',
+    'refusal.code.VERSION_REQUIRED': '{docType} {number} was not saved: the data on this page is out of date. Refresh the page, then save again.',
     // REFUSAL-DIALOG-2026-003: duplicates, meeting Rev, module codes
     'refusal.code.DUPLICATE_NAME': '{docType} "{name}" already exists. Use another name.',
     'refusal.code.DUPLICATE_NAME.email': 'The e-mail {name} is already used by another account.',
@@ -3151,6 +3152,7 @@ const translations: Record<Language, Record<string, string>> = {
     'refusal.code.REFERENCE_NOT_FOUND': '找不到 {docType} {value}，請確認編號是否正確。',
     'refusal.code.ASSIGNEE_UNAVAILABLE': '指派對象不存在或已停用，請選擇啟用中的使用者。',
     'refusal.code.VERSION_CONFLICT': '{docType} {number} 已被其他人修改。請重新載入後再修改一次。',
+    'refusal.code.VERSION_REQUIRED': '{docType} {number} 沒有存檔：這個頁面的資料版本太舊，請重新整理頁面後再存一次。',
     'refusal.code.DUPLICATE_NAME': '{docType}「{name}」已經存在，請改用其他名稱。',
     'refusal.code.DUPLICATE_NAME.email': 'Email {name} 已經被其他帳號使用。',
     'refusal.code.DUPLICATE_NAME.username': '帳號 {name} 已經被其他帳號使用。',
