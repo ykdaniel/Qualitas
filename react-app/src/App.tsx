@@ -19,6 +19,9 @@ const ITPDetail = React.lazy(() => import('./components/ITP/ITPDetail'));
 const NOI = React.lazy(() => import('./components/NOI/NOI'));
 const Contractors = React.lazy(() => import('./components/Contractors/Contractors'));
 const KM = React.lazy(() => import('./components/KM/KM'));
+// KM-DOCS-2026-001 D2: the KM entry is the controlled-document register; the old articles stay reachable read-only
+const DocumentsRegister = React.lazy(() => import('./components/Documents/DocumentsRegister'));
+const DocumentDetail = React.lazy(() => import('./components/Documents/DocumentDetail'));
 const OBS = React.lazy(() => import('./components/OBS/OBS'));
 const NCR = React.lazy(() => import('./components/NCR/NCR'));
 const ITR = React.lazy(() => import('./components/ITR/ITR'));
@@ -88,7 +91,9 @@ const router = createBrowserRouter(createRoutesFromElements(
             <Route path="/itp/:id" element={<ITPDetail />} />
             <Route path="/noi" element={<NOI />} />
             <Route path="/contractors" element={<Contractors />} />
-            <Route path="/km" element={<KM />} />
+            <Route path="/km" element={<DocumentsRegister />} />
+            <Route path="/km/legacy" element={<KM readOnly />} />
+            <Route path="/km/:documentId" element={<DocumentDetail />} />
             <Route path="/osd" element={<OSD />} />
             <Route path="/materials" element={<MaterialSubmittal />} />
             {/* old address of the material page (before M6) keeps working */}

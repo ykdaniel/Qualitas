@@ -2974,8 +2974,53 @@ Construction Engineer 核准欄位都還是 Pending——跟 `obsFormSchema.ts::
 
 **子項：**
 - **D1 後端登錄核心** · DONE（待審查、待部署）2026-10-18：三表（migration_owned，第 33 步 IF NOT EXISTS）、版次／狀態流程、Word 抽文字＋LIKE 搜尋、公司編號沿用 QTS-KM- 計數器、五條專案文件命名規則（PLN／DWG／SPC／CER／APR）、附件接線（entity_type `document_version`，PDF 上限 `DOCUMENT_PDF_MAX_MB`=50）、引用表與 API、既有 KM 文章遷移腳本（只產 Word＋草稿版次，**本批不執行**）。前端 0 檔。
-- **D2 公司文件前端**：登錄清單＋詳情（PDF 內嵌、版次、新版次上傳）、舊 KM 文章唯讀入口；執行遷移腳本（PDF 依使用者 Q5 的選擇：瀏覽器列印另存／Word 另存／系統產生）。等樂觀鎖 B3b 提交後。
+- **D2 公司文件前端** · DONE，已於 2026-10-20 部署（正式站 378e6cf1，含 #65）：`/km` 改為文件登錄清單（類型／狀態篩選、後端搜尋＋命中片段）、`/km/:id` 詳情（現行版 PDF 內嵌、三種空狀態、版次歷史與下載、設為現行、封存只可改標籤、刪除草稿）、`/km/legacy` 舊知識庫唯讀；後端 0 檔、LanguageContext 0 鍵（文案在 `Documents/documentsText.ts`）。**遷移腳本仍未執行**（Q5 待使用者）。
 - **D3 範本與 PQP 套用**、**D4 專案文件入口與其他類型**、**D5 跨模組引用呼叫端**（ITP／NCR／Checklist 選文件；relationships 加 `document` 節點）、收尾（移除富文本編輯器與匯入匯出轉換碍）。
 - 併入本條的原路線圖項目：**KM-SEARCH**（搜尋後端化，D1 已以 LIKE 完成於 documents；舊 km_articles 不再投資）、**KM-XREF**（跨模組引用＝D5）。
 
 **待使用者確認（2026-10-18 已交主要調度）：** Q5 遷移 PDF 來源（A 系統產／B 人工／C 暫不遷移）；專案文件四個新權限碾；公司文件單一前綴；登錄型類型由 update 權限直接核准；範本僅管理員；作廢須理由；刪除限草稿且無引用；引用預設指向現行版。D1 依主要調度裁定值實作，使用者改口再調。
+
+## 62. ITR 裡 Checklist 面板的 Remark 存檔後消失 · NOT STARTED · 【優先度：低】
+
+**Where:** `react-app/src/components/ITR/ChecklistSnapshotModal.tsx`（Remark 欄，`formData.remarks`）、`react-app/src/components/ITR/ITRModals.tsx` `saveInstance`；後端 `models.Checklist`／`schemas.Checklist`。
+
+**Found:** 2026-10-18，OPTIMISTIC-LOCK-2026-001 B4 隔離預覽自測（608c14c4 就是這樣，不是 B4 造成）。
+
+**問題：** ITR 底下 Checklist 面板的 Remark 欄可以輸入，但 `saveInstance` 只送 status／location／date／detail_data／passCount／failCount，從來沒有送 `remarks`；後端 Checklist 也沒有 remark 欄位。使用者輸入的備註存檔後就消失，沒有任何提示。Checklist 頁（`Checklist.tsx` 的 remarks 欄）和列印（`ChecklistPrintTemplate.tsx`）也讀寫 `formData.remarks`，需一併確認那邊是否同樣沒有存下來。
+
+**建議做法：** 先請使用者決定 Remark 要不要保存：要保存 → 放進 detail_data（不需要 migration）或新增欄位，面板與 Checklist 頁都送出、列印讀同一處；不保存 → 把輸入欄拿掉或改唯讀，避免使用者以為存了。
+
+## 63. ITR Checklist 面板存檔後馬上再展開同一列，輸入的內容會被收起丟掉 · NOT STARTED · 【優先度：低】
+
+**Where:** `react-app/src/components/ITR/ChecklistSnapshotModal.tsx` `handleSave`（`await onSave(payload)` 之後才 `onClose()`）、`react-app/src/components/ITR/ITRModals.tsx` `saveInstance`（最後 `await refreshInstances()`）。
+
+**Found:** 2026-10-18，OPTIMISTIC-LOCK-2026-001 B4 獨立審查 R2 新觀察（B4 之前的順序就是這樣，不是 B4 造成）。
+
+**問題：** 面板存檔會先收起面板，再等 Checklist 清單重抓。這一個 GET 期間若使用者又展開同一列並開始輸入，重抓回來時舊面板的 `onClose()` 會把剛打開的面板收起，那段時間輸入的內容就丟了。
+
+**建議做法：** `saveInstance` 不再等 `refreshInstances()`（B4 已把存好的那筆立刻放進清單，重抓可以不等）；或 `onClose` 只在目前展開的仍是同一個面板時才收起。
+
+## 65. 範本文件的刪除與補綁檔案未限系統管理員（KM-DOCS-2026-001 D2）· FIXED，已於 2026-10-20 部署（正式站 378e6cf1）· 【優先度：高】
+
+（編號由主要調度指定；#62–#64 屬其他批次。）
+
+**Where:** `backend/services/document_service.py` 的 `delete_document`、`bind_files`；`react-app/src/components/Documents/DocumentDetail.tsx` 的 `canDeleteDraft`。
+
+**Found:** 2026-10-20，GPT 獨立審看 D2 預覽（H-005）建議 REVISE，主要調度複核屬實：正式站非管理員角色 QA_MANAGER 持有 `km:delete:all`，可刪除範本草稿。D2 #65 修正的 R1 審查另發現同類缺口：持 `km:update:all` 的非管理員可經 `/api/files/upload`＋`PATCH /api/documents/{id}/versions/{vid}/files` 替換範本草稿版次的 Word／PDF。
+
+**問題：** 範本的建立、修改、新增版次、狀態轉換都限系統管理員（D18），但刪除與補綁檔案沒有同樣的檢查。
+
+**修正：** 兩個方法在權限檢查之後、狀態與寫入之前加 `doc.is_template and not is_admin_user(user)` → 403 `SHARED_TEMPLATE_ADMIN_ONLY`（與其他範本寫入同一個 helper，英文訊息改為 "create, change or delete"）；前端非管理員在範本上不顯示「刪除草稿」。測試：非管理員刪範本 → 拒絕、資料與稽核都不變；管理員可刪；非管理員刪一般草稿照舊；非管理員補綁範本檔案 → 拒絕、版次不變；管理員可綁。使用者決定（2026-10-20，於主要調度）：「D2 先補修範本刪除限管理員（後端檢查＋測試＋前端隱藏）再上線」。
+
+**未改：** 前端拒絕文案 `refusal.code.SHARED_TEMPLATE_ADMIN_ONLY` 中英仍寫「新增或修改」，未提刪除（LanguageContext 依協調規則只加不改；非管理員看不到刪除按鈕，只有過期頁面或直接打 API 才會看到）。
+
+## 66. 範本限管理員的拒絕文案沒有提到「刪除」· NOT STARTED · 【優先度：低】
+
+**Where:** `react-app/src/context/LanguageContext.tsx` 的 `refusal.code.SHARED_TEMPLATE_ADMIN_ONLY`（en／zh 各一）；同一段文案也被 `components/Checklist/Checklist.tsx` 的 tooltip 共用。
+
+**Found:** 2026-10-20，BACKLOG #65 的 R1 審查備註 2。
+
+**問題：** #65 之後，後端對範本的刪除與補綁檔案也回 `SHARED_TEMPLATE_ADMIN_ONLY`，英文 detail 已改為 "create, change or delete"；但前端拒絕對話框的中英文案仍只寫「新增或修改」。非管理員看不到刪除按鈕，只有頁面過期或直接呼叫 API 才會看到，影響小。
+
+**建議做法：** 中英文案改為「只有系統管理員可以新增、修改或刪除」／"…can create, change or delete it."，並確認 Checklist tooltip 共用時仍通順。改的是既有鍵，需協調中心排在不與其他批次的 LanguageContext 修改衝突的時點。
+

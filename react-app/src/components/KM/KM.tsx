@@ -9,6 +9,8 @@ import { KMModal } from './KMModals';
 import { KMDetail } from './KMDetail';
 import ConfirmModal from '../Shared/ConfirmModal';
 import styles from './KM.module.css';
+import { Link } from 'react-router-dom';
+import { documentsText } from '../Documents/documentsText';
 
 /** Strip HTML tags to get plain text for search matching — DOMParser
  *  rather than a naive regex/innerHTML so embedded onerror handlers etc.
@@ -18,13 +20,15 @@ function stripHtmlForSearch(html: string): string {
   return doc.body.textContent || '';
 }
 
-const KM: React.FC = () => {
-  const { t } = useLanguage();
+/** `readOnly`: the legacy knowledge base after KM-DOCS-2026-001 D2 — articles can be viewed, printed and exported, never
+ *  created, edited, imported or deleted; a banner points to the Document Register (the backend write paths stay as they are). */
+const KM: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) => {
+  const { t, language } = useLanguage();
   const { hasPermission } = useAuth();
   const canView = hasPermission('km:view:all');
-  const canCreate = hasPermission('km:create:all');
-  const canUpdate = hasPermission('km:update:all');
-  const canDelete = hasPermission('km:delete:all');
+  const canCreate = !readOnly && hasPermission('km:create:all');
+  const canUpdate = !readOnly && hasPermission('km:update:all');
+  const canDelete = !readOnly && hasPermission('km:delete:all');
   const { kmList, loading, error, accessDenied, fetchKMs, deleteKM } = useKMStore();
 
   const [deleting, setDeleting] = useState(false);
@@ -139,6 +143,12 @@ const KM: React.FC = () => {
 
   return (
     <div className={`${styles.container} ${currentView === 'detail' ? styles.detailMode : ''}`}>
+      {readOnly && currentView === 'list' && (
+        <div className="no-print" role="status" data-testid="km-legacy-banner" style={{ background: '#fffbeb', border: '1px solid #fcd34d', color: '#78350f', borderRadius: 10, padding: '10px 14px', marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, fontSize: '0.9rem' }}>
+          <span>{documentsText(language, 'legacyBanner')}</span>
+          <Link to="/km" style={{ whiteSpace: 'nowrap', color: '#78350f', fontWeight: 600 }}>{documentsText(language, 'backToRegister')}</Link>
+        </div>
+      )}
       {currentView === 'list' ? (
         <>
           <div className={styles.header}>

@@ -1,7 +1,7 @@
 import { useDraftGuard } from '../Shared/LeaveGuard';
 import FormActions from '../Shared/FormActions';
 import actionStyles from '../Shared/FormActions.module.css';
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -48,6 +48,7 @@ import RelatedDocuments from '../ui/RelatedDocuments';
 import ConfirmModal from '../Shared/ConfirmModal';
 import { itemCounts, summarizeItems, ongoingProgress, isNaPending, failuresSoFar, classifyResult } from '../../utils/checklistResult';
 import styles from './ITR.module.css';
+import type { RecordVersion } from '../../hooks/useRecordVersion';
 
 import formStyles from '../Shared/FormShell.module.css';
 export interface PendingUploads {
@@ -116,6 +117,10 @@ export interface ITRDetailModalProps {
     // backend state (refetch) and close/reopen this modal against it.
     onRevoked?: () => void | Promise<void>;
     readOnly?: boolean;
+    /** The ITR's version this form works against (OPTIMISTIC-LOCK-2026-001 B4): revoke and Raise NCR send it too */
+    recordVersion?: RecordVersion;
+    /** Reopens the ITR with what is saved now: offered by the refusal dialog after a 409 VERSION_CONFLICT */
+    onReloadRecord?: () => void;
 }
 
 // The four collapsible attachment sections (ATTACH-SECTION-UX-2026-001): which upload categories each holds,
@@ -132,7 +137,7 @@ const SUMMARY_ITEMS = 3;
 const isImageFile = (f: AttachmentInfo) =>
     !!f.mime_type?.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp)$/i.test(f.file_name || f.file_url || '');
 
-export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingData, existingItem, itrList: _propItrList, onSave, onRetryFiles, onClose, onDismiss, onRevoked, readOnly = false }) => {
+export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingData, existingItem, itrList: _propItrList, onSave, onRetryFiles, onClose, onDismiss, onRevoked, readOnly = false, recordVersion, onReloadRecord }) => {
     const { t } = useLanguage();
     const { hasPermission } = useAuth();
     const { getActiveContractors } = useContractorsStore();
@@ -306,12 +311,41 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
     const [panelDirty, setPanelDirty] = useState(false);
     const [exportingDocx, setExportingDocx] = useState(false);
 
-    const refreshInstances = useCallback(async () => {
-        if (!persistedItrId) { setInstances([]); return; }
+    /** Resolves to the instances it loaded, or null when the load failed (the list then stays as it was). */
+    const refreshInstances = useCallback(async (): Promise<ChecklistRecordApi[] | null> => {
+        if (!persistedItrId) { setInstances([]); return []; }
         try {
-            setInstances(await getChecklists({ itrId: persistedItrId } as any));
-        } catch { /* non-fatal: list just stays as-is */ }
+            const list = await getChecklists({ itrId: persistedItrId } as any);
+            setInstances(list);
+            return list;
+        } catch { return null; /* non-fatal: list just stays as-is */ }
     }, [persistedItrId]);
+
+    // OPTIMISTIC-LOCK-2026-001 B4: each checklist panel saves against the version its checklist had when the panel was opened
+    // (not one a later list refresh brought in — that would hand a stale panel a newer version), and `panelSession` remounts
+    // the open panel after "Reload this record".
+    const panelVersions = useRef<Record<string, number | null>>({});
+    const [panelSession, setPanelSession] = useState(0);
+    // which panel is open now, for a reload that comes back after the user has opened or closed another one
+    const expandedRef = useRef<string | null>(null);
+    useEffect(() => { expandedRef.current = expandedInstanceId; }, [expandedInstanceId]);
+    const openPanel = (record: ChecklistRecordApi) => {
+        panelVersions.current[record.id] = record.row_version ?? null;
+        setExpandedInstanceId(record.id);
+    };
+    // "Reload this record" for a checklist panel after a 409 (the dialog has already confirmed that its changes are
+    // discarded): reload the checklists and open the panel again on what is saved now — unless the user has meanwhile
+    // closed it or opened another checklist, which is left as it is.
+    const reloadInstance = async (instanceId: string) => {
+        const list = await refreshInstances();
+        if (expandedRef.current !== instanceId) return;
+        const fresh = list?.find(c => c.id === instanceId);
+        if (!list) { toast.warning(t('refusal.reloadFailed')); return; }
+        if (!fresh) { setExpandedInstanceId(null); toast.warning(t('refusal.reloadGone')); return; }
+        panelVersions.current[instanceId] = fresh.row_version ?? null;
+        setPanelSession(n => n + 1);
+        setExpandedInstanceId(instanceId);
+    };
 
     useEffect(() => { refreshInstances(); }, [refreshInstances]);
 
@@ -423,14 +457,17 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         const { passCount, failCount } = itemCounts(items);
         // A failure is left to throw: the snapshot panel stays open with every entry (including any N/A reasons)
         // intact instead of closing, and shows the refusal dialog (REFUSAL-DIALOG-2026-002).
-        await updateChecklist(instanceId, {
+        const saved = await updateChecklist(instanceId, {
             status: snap.status,
             location: snap.location,
             date: snap.date,
             detail_data: JSON.stringify({ ...(snap.data || {}), items }),
             passCount,
             failCount,
-        });
+        }, panelVersions.current[instanceId]);
+        // the saved row (with its new version) goes into the list at once, so opening this panel again before the
+        // reload below lands — or when that reload fails — never saves against the version this save replaced
+        setInstances(prev => prev.map(c => c.id === saved.id ? saved : c));
         setExpandedInstanceId(null);
         await refreshInstances();
     };
@@ -442,9 +479,12 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
     // request rejects (the panel stays locked and shows why); the panel only
     // unlocks once the reloaded backend state actually says Ongoing.
     const reopenInstance = async (instanceId: string): Promise<{ reloaded: boolean }> => {
-        await updateChecklist(instanceId, { status: 'Ongoing' });
+        await updateChecklist(instanceId, { status: 'Ongoing' }, panelVersions.current[instanceId]);
         try {
-            setInstances(await getChecklists({ itrId: persistedItrId } as any));
+            const list = await getChecklists({ itrId: persistedItrId } as any);
+            setInstances(list);
+            // the panel remounts on the new status (its key) with the reloaded data: its next Save sends that version
+            panelVersions.current[instanceId] = list.find(c => c.id === instanceId)?.row_version ?? null;
         } catch {
             toast.warning(t('checklist.reopen.reloadFailed'));
             return { reloaded: false };
@@ -651,7 +691,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
             const outcome = await onSave(formData, pendingUploads, deletedFileIds);
             if (outcome) applyOutcome(outcome, !existingItem);
         } catch (err) {
-            showRefusal(err, 'save', { keepsInput: true });
+            showRefusal(err, 'save', { keepsInput: true, onReload: onReloadRecord });
         } finally { setSaving(false); }
     };
 
@@ -669,7 +709,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
             setFollowUp(null);
         }
         const { close, notice, refusal } = presentOutcome(outcome, t);
-        if (refusal) showRefusal(refusal.error, 'save', { keepsInput: true });
+        if (refusal) showRefusal(refusal.error, 'save', { keepsInput: true, onReload: onReloadRecord });
         if (notice) (notice.level === 'error' ? toast.error : toast.warning)(notice.text, { duration: 10000 });
         if (close) {
             leaveGuard.release();
@@ -718,10 +758,10 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
             // Closing is handled by the parent (handleSaveITRDetails closes the modal once it is stored). A first approval goes through the
             // save chain with no files (they must be saved first, see handlePublish) and resolves to its outcome; only a refusal or a
             // stale list is left to show here, exactly as before (REFUSAL-DIALOG-2026-002 showed both through the parent).
-            if (outcome && outcome.status === 'failed') showRefusal(outcome.error, 'save', { keepsInput: true });
+            if (outcome && outcome.status === 'failed') showRefusal(outcome.error, 'save', { keepsInput: true, onReload: onReloadRecord });
             else if (outcome && outcome.status === 'saved-reload-failed') toast.warning(t('saveFlow.savedReloadFailed'), { duration: 10000 });
         } catch (err) {
-            showRefusal(err, 'save', { keepsInput: true });
+            showRefusal(err, 'save', { keepsInput: true, onReload: onReloadRecord });
         } finally { setSaving(false); }
     };
 
@@ -746,9 +786,9 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         setRevoking(true);
         setRevokeError(null);
         try {
-            await revokeItrApproval(existingItem.id, 'In Progress', reason);
+            await revokeItrApproval(existingItem.id, 'In Progress', reason, recordVersion?.current());
         } catch (e) {
-            showRefusal(e, 'save');
+            showRefusal(e, 'save', { onReload: onReloadRecord });
             setRevoking(false);
             return; // dialog stays open with the reason intact
         }
@@ -770,7 +810,8 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
         if (blockedByUnsavedChecklist('itr.checklistUnsavedAction')) return;
         setSpawning('ncr');
         try {
-            const ncr = await createNcrFromItr(existingItem.id);
+            // the ITR gets the NCR number, so its version goes along (the window closes and leaves for the NCR right after)
+            const ncr = await createNcrFromItr(existingItem.id, recordVersion?.current());
             toast.success(t('itr.ncrCreated') || `NCR ${ncr.documentNumber} created`);
             await useNCRStore.getState().refetch();
             // Use onDismiss (plain close), not onClose — onClose runs a
@@ -781,7 +822,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
             (onDismiss || onClose)();
             navigate(`/ncr?openId=${ncr.id}`);
         } catch (err) {
-            showRefusal(err, 'save');
+            showRefusal(err, 'save', { onReload: onReloadRecord });
         } finally {
             setSpawning(null);
         }
@@ -1107,7 +1148,8 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                                     className="group flex items-center justify-between p-3 hover:bg-slate-50 transition-all cursor-pointer"
                                                     onClick={() => {
                                                         if (blockedByUnsavedChecklist('itr.checklistUnsavedAction')) return;
-                                                        setExpandedInstanceId(expanded ? null : record.id);
+                                                        if (expanded) setExpandedInstanceId(null);
+                                                        else openPanel(record);
                                                     }}
                                                 >
                                                     <div className="flex flex-col gap-1">
@@ -1173,7 +1215,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                                         <ChecklistSnapshotModal
                                                             // Remount when the stored status changes (Reopen) so the
                                                             // panel is rebuilt from the freshly loaded backend data.
-                                                            key={`${record.id}:${record.status}`}
+                                                            key={`${record.id}:${record.status}:${panelSession}`}
                                                             inline
                                                             isOpen={true}
                                                             readOnly={isLocked}
@@ -1184,6 +1226,7 @@ export const ITRDetailModal: React.FC<ITRDetailModalProps> = ({ itrId, existingD
                                                             initialData={parseInstance(record)}
                                                             onClose={() => setExpandedInstanceId(null)}
                                                             onSave={(snap) => saveInstance(record.id, snap)}
+                                                            onReload={() => { void reloadInstance(record.id); }}
                                                             onDirtyChange={setPanelDirty}
                                                         />
                                                     </div>

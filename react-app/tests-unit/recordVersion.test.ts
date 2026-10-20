@@ -174,3 +174,21 @@ test('B3b stores: scope save writes the account version back; a working load cle
     await assert.rejects(useKMStore.getState().updateKM('k1', { content: 'c', version_no: 1 } as any),
         (err: any) => err.isAxiosError === true && err.response?.status === 409 && err.response?.data?.code === 'VERSION_CONFLICT');
 });
+
+test('itrStore.updateITR (B4): resolves to the saved ITR with its new row_version, sent only when given', async () => {
+    (globalThis as any).document ??= { cookie: '' };
+    (globalThis as any).window ??= { location: { pathname: '/itr', origin: 'http://localhost', href: '' } };
+    const { default: api } = await import('../src/services/api');
+    const { useITRStore } = await import('../src/store/itrStore');
+    const sent: any[] = [];
+    api.defaults.adapter = async (config) => {
+        const data = typeof config.data === 'string' ? JSON.parse(config.data) : config.data;
+        sent.push(data);
+        return { data: { id: 'i1', documentNumber: 'ITR-1', ...data, row_version: 6 }, status: 200, statusText: 'OK', headers: {}, config };
+    };
+    useITRStore.setState({ itrList: [{ id: 'i1', row_version: 5 } as any] });
+    const saved = await useITRStore.getState().updateITR('i1', { remark: 'r', row_version: 2 } as any, 5);
+    assert.equal(sent.at(-1)?.row_version, 5);                     // the explicit version, not the one inside the payload
+    assert.equal(saved.row_version, 6);
+    assert.equal(useITRStore.getState().itrList[0].row_version, 6);
+});
