@@ -119,12 +119,14 @@ export const isVersionConflict = (error: unknown): boolean => codeOf(error) === 
  *  again" (user's choice 2026-10-14; Checklist results locked counts as a lock, REFUSAL-DIALOG-2026-003). */
 const LOCK_CODES = new Set(['RECORD_LOCKED', 'CHECKLIST_RESULTS_LOCKED']);
 
-/** "Correct it and save again" would be wrong advice: the record is gone (404), or it changed meanwhile (VERSION_CONFLICT, which
- *  says to reload first) — saving the kept input again cannot succeed, so no note (review R1 P2). */
+/** "Correct it and save again" would be wrong advice: the record is gone (404), it changed meanwhile (VERSION_CONFLICT, which
+ *  says to reload first), or the page itself is out of date (VERSION_REQUIRED, OPTIMISTIC-LOCK-2026-001 B5: it sent no record
+ *  version and says to refresh the page) — saving the kept input again cannot succeed, so no note (review R1 P2). */
+const NOT_CORRECTABLE_CODES = new Set(['VERSION_CONFLICT', 'VERSION_REQUIRED']);
 const correctable = (error: unknown): boolean => {
     if (!isAxiosError(error)) return true;
     if (error.response?.status === 404) return false;
-    return codeOf(error) !== 'VERSION_CONFLICT';
+    return !NOT_CORRECTABLE_CODES.has(codeOf(error) as string);
 };
 
 export function describeRefusal(error: unknown, t: Translate, action: RefusalAction, language: 'en' | 'zh', options: RefusalOptions = {}): RefusalView | null {

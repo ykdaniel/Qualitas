@@ -251,12 +251,13 @@ def test_inactive_assignee(env):
 # ---- VERSION_CONFLICT ---------------------------------------------------------------------------------------------
 
 # OPTIMISTIC-LOCK-2026-001 (user's decision 2026-10-18): VERSION_CONFLICT is always 409 now (it was a 400 for the ITR) and
-# both carry the same English sentence. The ITR's old detail_data._version is still checked as before (against the stored
-# _version; migration step 31 also starts row_version there — set here by hand); KM's version_no is one conditional UPDATE.
+# both carry the same English sentence. The ITR is checked on row_version (its old detail_data._version is no longer
+# checked since B5); KM's version_no is one conditional UPDATE.
 def test_stale_itr_version_is_a_409(env):
     _add(env, models.ITR(id='i1', documentNumber='ITR-1', status='In Progress', remark='old', row_version=3,
                          detail_data=json.dumps({'_version': 3})))
-    body = _refused(env.login().put('/api/itr/i1', json={'remark': 'new', 'detail_data': json.dumps({'_version': 2})}), 409, 'VERSION_CONFLICT')
+    body = _refused(env.login().put('/api/itr/i1', json={'remark': 'new', 'row_version': 2,
+                                                          'detail_data': json.dumps({'_version': 3})}), 409, 'VERSION_CONFLICT')
     assert body['detail'] == ("ITR ITR-1 was changed by someone else meanwhile (your version 2, stored version 3). "
                               "Reload it, then make your change again.")
     assert body['params'] == {'docType': 'ITR', 'number': 'ITR-1'}

@@ -70,6 +70,7 @@ def isolated_env(db_path, root, extra: Optional[dict] = None) -> dict:
     check_upload_root(upload_root, str(root))          # attachments too: never the project's uploads/ folder
     env = {k: os.environ[k] for k in _PASS_THROUGH if k in os.environ}
     env["PYTHONPATH"] = str(BACKEND)
+    env["ROW_VERSION_REQUIRED"] = "false"               # as conftest (OPTIMISTIC-LOCK-2026-001 B5): a developer's .env cannot flip a child
     env.update(extra or {})                             # per-test settings (INITIAL_ADMIN_PASSWORD, ENVIRONMENT, ...)
     env.update({                                        # the isolation variables always win
         "DATABASE_URL": url,

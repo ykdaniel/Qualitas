@@ -8,6 +8,11 @@ import hashlib
 import os
 from pathlib import Path
 
+# OPTIMISTIC-LOCK-2026-001 B5 (DECISIONS 存檔的樂觀鎖 #6): the suites run with the record version optional, as production
+# does until the flag is switched on; the dedicated tests in test_optimistic_lock_http.py turn ROW_VERSION_REQUIRED on
+# themselves. Set before anything imports core.config, so a developer's backend/.env cannot flip the whole suite.
+os.environ["ROW_VERSION_REQUIRED"] = "false"
+
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker

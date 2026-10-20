@@ -49,11 +49,13 @@ class RefusalHTTPException(HTTPException):
 
 def refusal_http(exc: Exception, status_code: int = 400) -> HTTPException:
     """The HTTP form of a service refusal: coded when it carries a code (a Refusal, a ScopeForbidden), else the plain
-    `HTTPException(status, str(e))`. VERSION_CONFLICT is always 409, whatever the router's usual status
-    (OPTIMISTIC-LOCK-2026-001)."""
+    `HTTPException(status, str(e))`. VERSION_CONFLICT is always 409 and VERSION_REQUIRED always 400, whatever the
+    router's usual status (OPTIMISTIC-LOCK-2026-001)."""
     if isinstance(exc, Coded):
         if exc.code == 'VERSION_CONFLICT':
             status_code = 409
+        elif exc.code == 'VERSION_REQUIRED':
+            status_code = 400
         return RefusalHTTPException(status_code, str(exc), exc.code, exc.params)
     return HTTPException(status_code=status_code, detail=str(exc))
 

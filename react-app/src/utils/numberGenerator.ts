@@ -2,7 +2,7 @@ import { Contractor } from '../store/contractorsStore';
 
 /**
  * 統一的編號生成工具函數
- * 從 ContractorsContext 獲取 abbreviation，如果沒有則使用備用邏輯
+ * 從承包商清單（contractorsStore 傳入的 contractors）取得 abbreviation，如果沒有則使用備用邏輯
  */
 export const getContractorAbbreviation = (
   contractorName: string,
@@ -10,7 +10,7 @@ export const getContractorAbbreviation = (
 ): string => {
   if (!contractorName) return 'XXX';
 
-  // First, try to get abbreviation from ContractorsContext
+  // First, try to get abbreviation from the contractors list passed in (contractorsStore)
   const contractor = contractors.find(c => c.name === contractorName);
   if (contractor && contractor.abbreviation) {
     return contractor.abbreviation.toUpperCase();

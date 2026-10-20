@@ -105,7 +105,7 @@ def batch_update_itrs(
                 user_id=current_user.id,
                 username=current_user.username,
                 scope=scope,
-                warn_missing_version=False,     # a batch status change carries no version by design (OPTIMISTIC-LOCK-2026-001)
+                version_exempt=True,     # a batch status change carries no version by design (OPTIMISTIC-LOCK-2026-001; BACKLOG #64)
             )
             if db_itr is None:
                 failed.append({"id": itr_id, "error": "ITR not found"})

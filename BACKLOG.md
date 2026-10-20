@@ -1099,7 +1099,8 @@ short, expand to fill. Reads/prints as a single ITR inspection report.
 
 - Standalone checklists not under an ITR (NOI/ITP only) keep their own basic
   columns; only ITR-instances defer to the NOI.
-- `detail_data` on ITR keeps only `_version` (optimistic lock) after migration.
+- `detail_data` on ITR keeps only `_version` (optimistic lock) after migration. (2026-10-20: `_version` is no longer read
+  or moved — row_version replaced it, OPTIMISTIC-LOCK-2026-001 B5; the server only strips it from input.)
 - Frontend still on raw `useState` (no `itrFormSchema.ts`); fold the RHF+zod
   migration into step 4 for parity with NCR/OBS.
 
@@ -2999,6 +3000,16 @@ Construction Engineer 核准欄位都還是 Pending——跟 `obsFormSchema.ts::
 **問題：** 面板存檔會先收起面板，再等 Checklist 清單重抓。這一個 GET 期間若使用者又展開同一列並開始輸入，重抓回來時舊面板的 `onClose()` 會把剛打開的面板收起，那段時間輸入的內容就丟了。
 
 **建議做法：** `saveInstance` 不再等 `refreshInstances()`（B4 已把存好的那筆立刻放進清單，重抓可以不等）；或 `onClose` 只在目前展開的仍是同一個面板時才收起。
+
+## 64. ITR 批次更新端點沒有呼叫端，改成每筆帶版本或移除 · NOT STARTED · 【優先度：低】
+
+**Where:** `backend/routers/itr.py` `POST /api/itr/batch-update`（`batch_update_itrs`）、`services/itr_service.py` `update_itr(..., version_exempt=True)`。
+
+**Found:** 2026-10-20，OPTIMISTIC-LOCK-2026-001 B5 盤點。
+
+**問題：** 前端沒有任何地方呼叫這個端點；B5 讓它豁免版本檢查（不比對、照樣加 1）。留著會是一條繞過樂觀鎖的寫入路徑。
+
+**建議做法：** 確認沒有外部腳本在用之後，直接移除；如果要保留，改成每筆各自帶 `row_version`。
 
 ## 65. 範本文件的刪除與補綁檔案未限系統管理員（KM-DOCS-2026-001 D2）· FIXED，已於 2026-10-20 部署（正式站 378e6cf1）· 【優先度：高】
 

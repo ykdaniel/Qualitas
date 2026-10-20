@@ -4,9 +4,14 @@ Every editable record answers its `row_version` (KM: `version_no`; material: `ro
 was read at:
 - two clients read version N; the first save wins (N+1), the second is 409 VERSION_CONFLICT {docType, number} and writes
   nothing;
-- a save without a version is still accepted and still increments, logged "row_version missing: <table> <id>";
-- secondary writes (ITP plan, FAT details, PQP publish, ITR revoke / create-ncr, user scope) check a version when sent and
-  always increment; an ITR batch status change increments without the log; an attachment upload does not touch the record;
+- a save without a version: while ROW_VERSION_REQUIRED is off (the default, and the suites' setting — conftest) it is
+  still accepted and still increments, logged "row_version missing: <table> <id>"; once it is on (B5) it is a 400
+  VERSION_REQUIRED {docType, number} and writes nothing — for every save and every secondary write;
+- secondary writes (ITP plan, FAT details, PQP publish, ITR revoke / create-ncr, user scope, document transition) check a
+  version when sent and always increment; an ITR batch status change and a KM Word import are exempt (increment, never
+  checked, logged or refused); an attachment upload does not touch the record;
+- the ITR's old detail_data._version marker is stripped on input and no longer checked (B5) — an Approved ITR's Publish
+  that echoes it is still accepted;
 - the check and the increment are one statement: two sessions claiming the same version cannot both pass;
 - migration step 31: the column is added to an older table, the ITR's detail_data._version is copied once (a value that
   is not a non-negative integer counts as 0).
@@ -30,12 +35,13 @@ import models
 from project_membership import TEST_PROJECT_ID, bind
 from core import perms
 from core.concurrency import bump_row_version, claim_row_version
+from core.config import settings
 from core.refusals import Refusal, RefusalHTTPException, refusal_exception_handler, refusal_http
 from core.security import get_password_hash
 from database import Base, get_db
 
 ROUTERS = ['auth', 'ncr', 'noi', 'itr', 'itp', 'pqp', 'obs', 'osd', 'meeting_minutes', 'km', 'fat', 'checklist', 'audit',
-           'followup', 'contractors', 'projects', 'iam', 'material_submittals', 'file_router']
+           'followup', 'contractors', 'projects', 'iam', 'material_submittals', 'file_router', 'documents']
 CODES = sorted({p['code'] for p in perms.ALL_PERMISSIONS})
 
 
@@ -338,7 +344,7 @@ def test_itr_revoke_and_create_ncr_check_and_increment(env):
     r = c.post('/api/itr/i2/revoke-approval', json={'new_status': 'In Progress', 'reason': 'r', 'row_version': 4})
     assert r.status_code == 200, r.text
     assert r.json()['row_version'] == 5
-    assert json.loads(_stored(env, models.ITR, 'i2')[1].detail_data)['_version'] == 4      # the old marker is not moved
+    assert json.loads(_stored(env, models.ITR, 'i2')[1].detail_data)['_version'] == 4      # the old marker: no longer read or moved
 
     stale = c.post('/api/itr/i3/create-ncr?row_version=7')
     assert stale.status_code == 409 and stale.json()['code'] == 'VERSION_CONFLICT'
@@ -350,33 +356,51 @@ def test_itr_revoke_and_create_ncr_check_and_increment(env):
     assert version == 1 and row.ncrNumber
 
 
-def test_itr_old_detail_version_is_checked_exactly_as_before(env, caplog):
-    """Until the ITR form sends row_version (B4), the _version it echoes inside detail_data is checked against the stored
-    _version, which only an ITR update moves — so a revoke or a raised NCR (which move row_version) does not turn the
-    form's next save into a conflict."""
+def test_itr_old_detail_version_is_stripped_and_no_longer_checked(env, caplog):
+    """B5: row_version replaced the ITR's old detail_data._version marker. The page still echoes the stored detail_data, so
+    the marker is stripped on input (never compared, never moved, never stored from the request); a stored one stays as
+    it is."""
     _add(env, models.ITR(id='i4', documentNumber='ITR-4', status='In Progress', remark='old', row_version=2,
-                         detail_data=json.dumps({'_version': 2})))
+                         detail_data=json.dumps({'_version': 2, 'note': 'kept'})))
     c = env.login()
     with caplog.at_level(logging.WARNING, logger='core.concurrency'):
-        r = c.put('/api/itr/i4', json={'remark': 'new', 'detail_data': json.dumps({'_version': 2})})
-    assert r.status_code == 200, r.text
-    assert (r.json()['row_version'], json.loads(r.json()['detail_data'])['_version']) == (3, 3)
-    assert "row_version missing: itr i4" in caplog.messages     # counted for B5: the page sent no row_version
-    stale = c.put('/api/itr/i4', json={'remark': 'stale', 'detail_data': json.dumps({'_version': 2})})
+        r = c.put('/api/itr/i4', json={'remark': 'new', 'detail_data': json.dumps({'_version': 99, 'extra': 'x'})})
+    assert r.status_code == 200, r.text                      # a stale or made-up marker is no conflict any more
+    assert r.json()['row_version'] == 3
+    assert json.loads(r.json()['detail_data']) == {'_version': 2, 'note': 'kept', 'extra': 'x'}
+    assert "row_version missing: itr i4" in caplog.messages
+    stale = c.put('/api/itr/i4', json={'remark': 'stale', 'row_version': 2, 'detail_data': json.dumps({'_version': 3})})
     assert stale.status_code == 409 and stale.json()['code'] == 'VERSION_CONFLICT'
-    assert stale.json()['detail'] == ("ITR ITR-4 was changed by someone else meanwhile (your version 2, stored version 3). "
-                                      "Reload it, then make your change again.")
-    with env.Session() as db:                                 # a secondary write moved row_version only
-        bump_row_version(db, db.get(models.ITR, 'i4'))
-        db.commit()
-    after = c.put('/api/itr/i4', json={'remark': 'after', 'detail_data': json.dumps({'_version': 3})})
-    assert after.status_code == 200, after.text
-    assert (after.json()['row_version'], json.loads(after.json()['detail_data'])['_version']) == (5, 4)
-    both = c.put('/api/itr/i4', json={'remark': 'mine', 'row_version': 5, 'detail_data': json.dumps({'_version': 1})})
-    assert both.status_code == 200, both.text                 # row_version, when sent, replaces the old marker's check
-    stale_row = c.put('/api/itr/i4', json={'remark': 'x', 'row_version': 5, 'detail_data': json.dumps({'_version': 5})})
-    assert stale_row.status_code == 409
+    plain = c.put('/api/itr/i4', json={'remark': 'mine', 'row_version': 3})
+    assert plain.status_code == 200, plain.text               # no detail_data sent: the stored one is left as it is
+    assert json.loads(_stored(env, models.ITR, 'i4')[1].detail_data) == {'_version': 2, 'note': 'kept', 'extra': 'x'}
     assert _stored(env, models.ITR, 'i4')[1].remark == 'mine'
+
+
+@pytest.mark.parametrize('required', [False, True], ids=['flag-off', 'flag-on'])
+def test_an_approved_itr_publish_that_echoes_the_old_marker_is_accepted(env, monkeypatch, required):
+    """The trap B5 must not fall into: the Approved-ITR lock accepts detail_data only when nothing is left after the
+    `_version` strip. A page republishing an Approved ITR resends detail_data carrying `_version`; that must still pass."""
+    monkeypatch.setattr(settings, 'ROW_VERSION_REQUIRED', required)
+    _add(env, models.ITR(id='i6', documentNumber='ITR-6', status='Approved', type='Inspection', row_version=4,
+                         detail_data=json.dumps({'_version': 4})))
+    c = env.login()
+    r = c.put('/api/itr/i6', json={'type': 'Inspection', 'status': 'Approved', 'row_version': 4,
+                                   'detail_data': json.dumps({'_version': 4})})
+    assert r.status_code == 200, r.text
+    assert r.json()['row_version'] == 5
+    smuggled = c.put('/api/itr/i6', json={'status': 'Approved', 'row_version': 5,
+                                          'detail_data': json.dumps({'_version': 5, 'note': 'changed'})})
+    assert smuggled.status_code == 400, smuggled.text         # anything besides the marker is still refused
+    assert 'Cannot modify detail_data content on an Approved ITR' in smuggled.json()['detail']
+    assert _stored(env, models.ITR, 'i6')[0] == 5
+
+
+def test_a_reinspection_starts_with_an_empty_detail_data(env):
+    _add(env, models.ITR(id='i7', documentNumber='ITR-7', status='Reject', inspectionResult='Fail', vendor_id='v1'))
+    r = env.login().post('/api/itr/i7/re-inspect')
+    assert r.status_code == 200, r.text
+    assert json.loads(_stored(env, models.ITR, r.json()['id'])[1].detail_data) == {}      # no old `_version` marker any more
 
 
 def test_itr_batch_increments_without_the_missing_version_log(env, caplog):
@@ -533,3 +557,131 @@ def test_migration_stops_start_up_when_the_column_cannot_be_added(tmp_path, monk
     with pytest.raises(db_migrations.MigrationError, match='ncr'):
         db_migrations._add_row_version_columns()
     engine.dispose()
+
+
+# ---- B5: ROW_VERSION_REQUIRED on --------------------------------------------------------------------------------------------
+
+@pytest.fixture
+def required(monkeypatch):
+    """The flag as production will have it once switched on (backend/.env ROW_VERSION_REQUIRED=true)."""
+    monkeypatch.setattr(settings, 'ROW_VERSION_REQUIRED', True)
+
+
+def _assert_version_required(r, doc_type, number):
+    assert r.status_code == 400, r.text
+    body = r.json()
+    assert body['code'] == 'VERSION_REQUIRED'
+    assert body['params'] == {'docType': doc_type, 'number': number}
+    assert body['detail'] == (f"{doc_type} {number} was not saved: this page sent no record version. "
+                              "Refresh the page, then save again.")
+
+
+@pytest.mark.parametrize('case', CASES, ids=[c[0] for c in CASES])
+def test_flag_on_a_save_without_a_version_is_refused_and_writes_nothing(env, required, caplog, case):
+    _name, model, table, pk_of, url_of, field, doc_type, number = case
+    _seed_basic(env)
+    pk = pk_of(env)
+    c = env.login()
+    _, before = _stored(env, model, pk)
+    old = getattr(before, field)
+    with caplog.at_level(logging.WARNING, logger='core.concurrency'):
+        r = c.put(url_of(pk), json={field: 'no version'})
+    _assert_version_required(r, doc_type, number)
+    version, row = _stored(env, model, pk)
+    assert (version, getattr(row, field)) == (0, old)
+    ok = c.put(url_of(pk), json={field: 'with version', 'row_version': 0})
+    assert ok.status_code == 200, ok.text
+    assert ok.json()['row_version'] == 1
+
+
+def test_flag_on_km_and_material_without_a_version_are_refused(env, required):
+    _seed_basic(env)
+    c = env.login()
+    _assert_version_required(c.put('/api/km/k1', json={'content': 'no version'}), 'KM', 'Welding')     # 400, not KM's usual 409
+    version, row = _stored(env, models.KMArticle, 'k1', 'version_no')
+    assert (version, row.content) == (1, 'old')
+    sid = _register_material(env, c)
+    r = c.put(f'/api/material-submittals/{sid}/register', json={'brand': 'D'})
+    assert r.status_code == 400 and r.json()['code'] == 'VERSION_REQUIRED', r.text
+    assert c.get(f'/api/material-submittals/{sid}').json()['rowVersion'] == 0
+
+
+def test_flag_on_secondary_writes_without_a_version_are_refused(env, required):
+    _seed_basic(env)
+    _add(env, models.ITR(id='i2', documentNumber='ITR-2', status='Approved', row_version=4),
+         models.ITR(id='i3', documentNumber='ITR-3', status='In Progress', inspectionResult='Fail'))
+    with env.Session() as db:
+        db.add(models.Document(id='doc1', doc_no='QTS-KM-000001', scope='company', doc_type='procedure', title_zh='焊接程序書',
+                               status='archived'))
+        db.commit()
+    uid = _id_of(env, models.User, username='target')
+    c = env.login()
+
+    _assert_version_required(c.put('/api/itp/p1/detail', json={'a': [], 'b': [], 'c': []}), 'ITP', 'ITP-1')
+    _assert_version_required(c.put('/api/fat/t1/details', json=[]), 'FAT', 'Pump')
+    _assert_version_required(c.post('/api/pqp/q1/publish', json={'change_summary': 'x'}), 'PQP', 'PQP-1')
+    _assert_version_required(c.post('/api/itr/i2/revoke-approval', json={'new_status': 'In Progress', 'reason': 'r'}),
+                             'ITR', 'ITR-2')
+    _assert_version_required(c.post('/api/itr/i3/create-ncr'), 'ITR', 'ITR-3')
+    _assert_version_required(c.put(f'/api/iam/users/{uid}/scope', json={'project_ids': ['PX'], 'vendor_id': None}),
+                             'user', 'target')
+    r = c.post('/api/documents/doc1/transition', json={'to': 'draft'})
+    assert r.status_code == 400 and r.json()['code'] == 'VERSION_REQUIRED', r.text      # 400, not the register's usual 409
+    r = c.patch('/api/documents/doc1', json={'tags': 'weld'})
+    assert r.status_code == 400 and r.json()['code'] == 'VERSION_REQUIRED', r.text
+
+    assert _stored(env, models.ITP, 'p1')[0] == 0
+    assert _stored(env, models.FAT, 't1')[0] == 0
+    assert _stored(env, models.PQP, 'q1')[1].status == 'Draft'
+    assert (_stored(env, models.ITR, 'i2')[0], _stored(env, models.ITR, 'i2')[1].status) == (4, 'Approved')
+    assert _stored(env, models.ITR, 'i3')[0] == 0
+    with env.Session() as db:
+        assert db.query(models.NCR).filter(models.NCR.id != 'n1').count() == 0       # no NCR raised
+        assert db.get(models.User, uid).row_version == 0
+        doc = db.get(models.Document, 'doc1')
+        assert (doc.status, doc.tags, doc.row_version) == ('archived', None, 0)
+
+    assert c.post('/api/itr/i2/revoke-approval', json={'new_status': 'In Progress', 'reason': 'r', 'row_version': 4}).status_code == 200
+    assert c.post('/api/documents/doc1/transition', json={'to': 'draft', 'row_version': 0}).status_code == 200
+
+
+def test_flag_on_the_exempt_writes_still_pass(env, required, monkeypatch, caplog):
+    """The ITR batch status change (BACKLOG #64) and the KM Word import carry no version by design."""
+    _add(env, models.ITR(id='i5', documentNumber='ITR-5', status='In Progress'))
+    _seed_basic(env)
+    c = env.login()
+    with caplog.at_level(logging.WARNING, logger='core.concurrency'):
+        r = c.post('/api/itr/batch-update', json={'ids': ['i5'], 'status': 'Reject'})
+        assert r.status_code == 200 and r.json()['updated'] == ['i5'], r.text
+        assert _stored(env, models.ITR, 'i5')[0] == 1
+
+        import services.km_service as km_service
+
+        def fake_pandoc(args, **kwargs):                       # no pandoc needed: the converted HTML is written directly
+            with open(args[args.index('-o') + 1], 'w', encoding='utf-8') as f:
+                f.write('<html><body><h2>Scope</h2><p>imported</p></body></html>')
+            return SimpleNamespace(returncode=0, stderr='')
+        monkeypatch.setattr(km_service.subprocess, 'run', fake_pandoc)
+        r = c.post('/api/km/k1/import-docx', files={'file': ('k.docx', b'PK fake docx', 'application/octet-stream')})
+        assert r.status_code == 200, r.text
+    version, row = _stored(env, models.KMArticle, 'k1', 'version_no')
+    assert version == 2 and 'imported' in row.content
+    assert not [m for m in caplog.messages if m.startswith('row_version missing')]
+
+
+def test_flag_on_bump_and_exempt_claims_are_never_refused(env, required):
+    _add(env, models.NCR(id='n7', documentNumber='NCR-7', status='Open', row_version=2))
+    with env.Session() as db:
+        ncr = db.get(models.NCR, 'n7')
+        assert bump_row_version(db, ncr) == 3
+        assert claim_row_version(db, ncr, None, doc_type='NCR', number='NCR-7', exempt=True) == 4
+        with pytest.raises(Refusal) as refused:
+            claim_row_version(db, ncr, None, doc_type='NCR', number='NCR-7')
+        assert refused.value.code == 'VERSION_REQUIRED'
+        db.commit()
+    assert _stored(env, models.NCR, 'n7')[0] == 4
+
+
+def test_refusal_http_fixes_version_required_at_400():
+    assert refusal_http(Refusal('VERSION_REQUIRED', 'x', docType='KM', number='K'), 409).status_code == 400
+    assert refusal_http(Refusal('VERSION_CONFLICT', 'x', docType='KM', number='K'), 400).status_code == 409

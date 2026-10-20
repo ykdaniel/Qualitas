@@ -197,6 +197,7 @@ test('every refusal code the backend raises has its wording in both languages', 
         REFERENCE_NOT_FOUND: ['docType', 'field', 'value'],
         ASSIGNEE_UNAVAILABLE: ['field'],
         VERSION_CONFLICT: ['docType', 'number'],
+        VERSION_REQUIRED: ['docType', 'number'],         // OPTIMISTIC-LOCK-2026-001 B5 (core/concurrency.py)
         // KM-DOCS-2026-001 D1: controlled-document register (services/document_service.py)
         DOC_TYPE_INVALID: ['docType', 'scope'],
         DOC_TYPE_RESERVED: ['docType'],
@@ -232,4 +233,14 @@ test('every refusal code the backend raises has its wording in both languages', 
     // and both languages have exactly the same refusal.* keys
     const keys = (lang: 'en' | 'zh') => Object.keys(DICTS[lang]).filter((k) => k.startsWith('refusal.')).sort();
     assert.deepEqual(keys('zh'), keys('en'));
+});
+
+test('OPTIMISTIC-LOCK-2026-001 B5: a save the server refused for carrying no version says to refresh the page — no "correct it" note', () => {
+    const err = axiosErr(400, { detail: 'x', code: 'VERSION_REQUIRED', params: { docType: 'ITR', number: 'ITR-1' } });
+    const zhView = describeRefusal(err, zh, 'save', 'zh', { keepsInput: true })!;
+    assert.equal(zhView.message, 'ITR ITR-1 沒有存檔：這個頁面的資料版本太舊，請重新整理頁面後再存一次。');
+    assert.equal(zhView.note, undefined);
+    const enView = describeRefusal(err, en, 'save', 'en', { keepsInput: true })!;
+    assert.equal(enView.message, 'ITR ITR-1 was not saved: the data on this page is out of date. Refresh the page, then save again.');
+    assert.equal(enView.note, undefined);
 });

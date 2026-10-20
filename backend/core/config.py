@@ -66,5 +66,10 @@ class Settings:
     # Debug
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
 
+    # Optimistic lock (OPTIMISTIC-LOCK-2026-001 B5): when true, a save that sends no record version is refused with
+    # 400 VERSION_REQUIRED instead of being accepted and logged as "row_version missing". Off by default; it is switched
+    # on in the deployment's backend/.env only after the production log shows no missing versions (DECISIONS).
+    ROW_VERSION_REQUIRED: bool = os.getenv("ROW_VERSION_REQUIRED", "false").lower() == "true"
+
 settings = Settings()
 

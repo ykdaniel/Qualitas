@@ -46,3 +46,6 @@
 **順手發現（既有問題，不在本批）→ 已寫成 BACKLOG #62：** ITR 裡 Checklist 面板的 Remark 欄可以輸入，但 `ITRModals.tsx` `saveInstance` 從來沒把 `remarks` 送出（608c14c4 就是這樣；後端 Checklist 也沒有 remark 欄位），所以輸入的備註存檔後會消失。
 
 **R2 新觀察（既有問題）→ 已寫成 BACKLOG #63：** 面板存檔後在清單重抓回來前再展開同一列，舊面板的 `onClose()` 會把它收起，那一個 GET 期間的輸入會丟（B4 之前就這樣，見 B4-REVIEW.md R2）。
+
+## 上線紀錄
+- **2026-10-20 14:12Z（台灣 22:12）**：B4 上線，正式站＝378e6cf1（協調中心「主要調度」通知；378e6cf1 是 B4 43c1db23 在最終候選上的重放，B4 的檔案內容相同，已比對；同批含 KM-DOCS D2 與 BACKLOG #65）。

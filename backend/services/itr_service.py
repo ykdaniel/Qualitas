@@ -359,7 +359,7 @@ class ITRService:
 
     def update_itr(self, itr_id: str, itr_update: schemas.ITRUpdate,
                    user_id: int = None, username: str = None, scope=None,
-                   warn_missing_version: bool = True) -> Optional[models.ITR]:
+                   version_exempt: bool = False) -> Optional[models.ITR]:
         """
         Update an existing ITR with validation
 
@@ -367,7 +367,8 @@ class ITRService:
         - Validates status transitions using WorkflowEngine
         - Validates approval prerequisites (checklists)
         - Auto-sets closeoutDate on approval
-        - Optimistic locking via _version in detail_data
+        - Optimistic locking via row_version (core/concurrency.py); version_exempt=True only for the batch status
+          change, which carries no version by design
         - Maps vendor name to vendor_id
         - Serializes JSON fields
         - Logs audit trail
@@ -403,7 +404,6 @@ class ITRService:
                 self.repo.db.rollback()
                 return None                                    # deleted by a request that held the lock first
 
-            # --- Optimistic locking via _version in detail_data ---
             d = itr_update.model_dump(exclude_unset=True)
 
             # Approval identity is the system's to record. A client can neither
@@ -432,13 +432,13 @@ class ITRService:
                 raise ValueError("ITR status cannot be empty.")
 
             existing_detail = self._get_detail_data_dict(db_itr)
-            db_version = existing_detail.get("_version", 0)
 
-            # The client may send _version inside detail_data (JSON string or dict): the ITR's old version marker. Until
-            # the ITR form sends row_version (OPTIMISTIC-LOCK-2026-001 B4) it is checked exactly as before — against the
-            # stored _version, which only this update increments — so a page that echoes it behaves as it did.
+            # detail_data may come as a JSON string or a dict. The page resends the stored detail_data, which still
+            # carries the ITR's old version marker `_version` (no longer checked or moved since OPTIMISTIC-LOCK-2026-001
+            # B5 — row_version replaced it). It MUST still be stripped here: the Approved-ITR lock below accepts
+            # detail_data only when nothing is left after this strip, so without it every save of an Approved ITR
+            # would be refused.
             incoming_detail = d.get("detail_data")
-            incoming_version = None
             if incoming_detail is not None:
                 if isinstance(incoming_detail, str):
                     try:
@@ -446,20 +446,12 @@ class ITRService:
                     except (json.JSONDecodeError, TypeError):
                         incoming_detail = None
                 if isinstance(incoming_detail, dict):
-                    incoming_version = incoming_detail.pop("_version", None)
-
-            if itr_update.row_version is None and incoming_version is not None and incoming_version != db_version:
-                raise Refusal(
-                    "VERSION_CONFLICT",
-                    f"ITR {db_itr.documentNumber} was changed by someone else meanwhile (your version {incoming_version}, "
-                    f"stored version {db_version}). Reload it, then make your change again.",
-                    docType="ITR", number=db_itr.documentNumber,
-                )
+                    incoming_detail.pop("_version", None)
 
             # Optimistic lock: row_version checked and incremented in one step (under the ITR write lock taken above). A
-            # batch status change carries no version by design and is not logged as a missing one.
+            # batch status change carries no version by design (version_exempt).
             claim_row_version(self.repo.db, db_itr, itr_update.row_version, doc_type="ITR", number=db_itr.documentNumber,
-                              warn_missing=warn_missing_version)
+                              exempt=version_exempt)
 
             # Workflow validation: Check status transition
             if itr_update.status and not WorkflowEngine.validate_transition(
@@ -520,17 +512,16 @@ class ITRService:
                         f"Blocked fields: {', '.join(sorted(blocked))}. "
                         f"Use Publish to create a new revision."
                     )
-                # detail_data on an Approved ITR may only carry the
-                # optimistic-lock version bump — nothing else. Without
-                # this, an Approved record's `detail_data` field being in
-                # the allowlist above (needed so the version counter can
-                # still increment) would otherwise let arbitrary business
-                # data be smuggled into a "locked" record via that one
-                # still-writable field.
+                # detail_data on an Approved ITR is accepted only as the
+                # page's echo of the old `_version` marker (stripped above)
+                # — nothing else. It stays in the allowlist so a page that
+                # resends it with a Publish is not refused; without this
+                # check arbitrary business data could be smuggled into a
+                # "locked" record via that one still-writable field.
                 if isinstance(incoming_detail, dict) and incoming_detail:
                     raise ValueError(
                         "Cannot modify detail_data content on an Approved ITR — "
-                        "only its internal version counter may change."
+                        "it is locked; use Publish to create a new revision."
                     )
 
             # Capture old values for audit
@@ -561,13 +552,13 @@ class ITRService:
                 d['approvedBy'] = str(approver.id)
                 d['approvedAt'] = approved_at
 
-            # --- Increment the old _version marker in detail_data (unchanged; see above) ---
-            new_version = db_version + 1
+            # --- detail_data: merged over the stored one when the page sent it; otherwise left as it is ---
+            # (an unreadable or null detail_data keeps the stored one, as before). A stored `_version` key stays
+            # untouched — harmless, no longer read (B5).
             if isinstance(incoming_detail, dict):
-                merged_detail = {**existing_detail, **incoming_detail, "_version": new_version}
+                d['detail_data'] = json.dumps({**existing_detail, **incoming_detail}, ensure_ascii=False)
             else:
-                merged_detail = {**existing_detail, "_version": new_version}
-            d['detail_data'] = json.dumps(merged_detail, ensure_ascii=False)
+                d.pop('detail_data', None)
 
             # Update the record — flushed, NOT committed: the commit below covers
             # the row, the approval event and the audit entry together.
@@ -823,7 +814,7 @@ class ITRService:
             checklist_snapshot = self._build_checklist_approval_snapshot(itr_id)
 
             # Optimistic lock (OPTIMISTIC-LOCK-2026-001): row_version checked and incremented in one step (under the ITR
-            # write lock). The old detail_data._version marker is left as it is (only update_itr moves it).
+            # write lock). The old detail_data._version marker is no longer read or moved (B5).
             claim_row_version(self.repo.db, db_itr, expected_version, doc_type="ITR", number=db_itr.documentNumber)
             db_itr.status = new_status
             self.repo.db.add(db_itr)
@@ -1476,8 +1467,8 @@ class ITRService:
                 "discipline": db_itr.discipline,
                 "type": db_itr.type,
                 "foundLocation": db_itr.foundLocation,
-                # Initialize detail_data with _version for optimistic locking
-                "detail_data": json.dumps({"_version": 0}, ensure_ascii=False),
+                # An empty detail_data: the optimistic lock is row_version now (OPTIMISTIC-LOCK-2026-001 B5)
+                "detail_data": json.dumps({}, ensure_ascii=False),
             }
 
             db_new_itr = models.ITR(**new_itr_data)
