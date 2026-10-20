@@ -174,12 +174,17 @@ def apply_scope(query, model, scope: Optional[Scope]):
     if scope.project_ids is not None:
         in_project = model.project_id.in_(scope.project_ids)
         shared = shared_template_clause(model)
+        if shared is None:
+            shared = company_wide_clause(model)
         query = query.filter(in_project if shared is None else or_(in_project, shared))
     if scope.vendor_id is not None:
         vattr = vendor_attr(model)
         if vattr is not None:
             shared = shared_template_clause(model)
             own = vattr == scope.vendor_id
+            company = company_wide_clause(model)
+            if company is not None:
+                own = or_(own, company)
             # a shared template that names no contractor is for every contractor (B2: a contractor account must be able
             # to cite a generic template); one that names a contractor stays that contractor's
             query = query.filter(own if shared is None else or_(own, and_(shared, vattr.is_(None))))
@@ -247,12 +252,24 @@ def enforce_update_scope(data: dict, scope: Optional[Scope], vendor_field: str =
             raise ScopeForbidden("cannot reassign record to another contractor", "reassignContractor")
 
 
+def is_company_wide(record) -> bool:
+    """A company-layer controlled document (or one of its versions) is shared by every project and contractor
+    (KM-DOCS-2026-001 D1, like KM articles, D9); who may WRITE it is the document service's km:* check, not this."""
+    return isinstance(record, (models.Document, models.DocumentVersion)) and getattr(record, "scope", None) == "company"
+
+
+def company_wide_clause(model):
+    if model in (models.Document, models.DocumentVersion):
+        return model.scope == "company"
+    return None
+
+
 def record_in_scope(record, scope: Optional[Scope]) -> bool:
     """True if a single fetched record is visible to the scope. Used to turn
     out-of-scope get/update/delete into a 404 (don't leak existence)."""
     if record is None:
         return False
-    if scope is None or scope.unrestricted:
+    if scope is None or scope.unrestricted or is_company_wide(record):
         return True
     if scope.project_ids is not None and getattr(record, "project_id", None) not in scope.project_ids \
             and not is_shared_template(record):
@@ -273,6 +290,7 @@ _ENTITY_MODELS = {
     "followup": models.FollowUp, "audit": models.Audit, "checklist": models.Checklist,
     "meeting": models.MeetingMinutes,
     "material_rev": models.MaterialSubmittalRevision,   # carries its submittal's project_id / vendor_id (spec §3.2)
+    "document_version": models.DocumentVersion,         # carries its document's scope / project_id / vendor_id (KM-DOCS D1); company-wide when scope='company'
 }
 
 

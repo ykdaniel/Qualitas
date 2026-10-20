@@ -22,6 +22,8 @@ import { createColumns, createProjectColumns } from './columns';
 import { Search, Plus } from 'lucide-react';
 import ContractorModal from './ContractorModal';
 import ProjectModal from './ProjectModal';
+import { reloadAndReopen, useOpenSession, useRecordVersion } from '../../hooks/useRecordVersion';
+import { toast } from 'sonner';
 
 const Contractors: React.FC = () => {
     const { t } = useLanguage();
@@ -65,6 +67,13 @@ const Contractors: React.FC = () => {
         isOpen: false, id: null,
     });
 
+    // OPTIMISTIC-LOCK-2026-001 B3b: each window's version (taken when it opens) and which opening is current (keys the window;
+    // guards a reload's late reopen) — a contractor and a project are different records.
+    const contractorVersion = useRecordVersion();
+    const contractorSession = useOpenSession();
+    const projectVersion = useRecordVersion();
+    const projectSession = useOpenSession();
+
     useEffect(() => {
         fetchProjects();
     }, [fetchProjects]);
@@ -92,7 +101,7 @@ const Contractors: React.FC = () => {
 
     const handleContractorSave = async (id: string | null, data: any) => {
         if (id) {
-            await updateContractor(id, data);
+            await updateContractor(id, data, contractorVersion.current());
         } else {
             await addContractor(data);
         }
@@ -100,6 +109,8 @@ const Contractors: React.FC = () => {
     };
 
     const handleEdit = (contractor: Contractor) => {
+        contractorVersion.open(contractor.row_version);
+        contractorSession.next();
         setEditingId(contractor.id);
         setFormData({
             package: contractor.package || '', name: contractor.name,
@@ -110,6 +121,38 @@ const Contractors: React.FC = () => {
         });
         setIsModalOpen(true);
     };
+
+    // "Reload this record" after a 409 VERSION_CONFLICT (the refusal dialog has already confirmed that the form's changes are
+    // discarded): close the window, reload the list, open the contractor / project again with what is saved now.
+    const reloadContractor = (id: string) => reloadAndReopen(contractorSession, {
+        close: () => setIsModalOpen(false),
+        reload: () => useContractorsStore.getState().fetchContractors(),
+        failed: () => !!useContractorsStore.getState().error,
+        found: () => useContractorsStore.getState().contractors.some(c => c.id === id),
+        reopen: () => {
+            const fresh = useContractorsStore.getState().contractors.find(c => c.id === id);
+            if (fresh) handleEdit(fresh);
+        },
+        forget: () => setEditingId(null),
+        notify: (notice) => toast.warning(t(notice)),
+    });
+
+    const openProject = (project: Project | undefined) => {
+        projectVersion.open(project?.row_version);
+        projectSession.next();
+        setEditingProject(project);
+        setIsProjectModalOpen(true);
+    };
+
+    const reloadProject = (id: string) => reloadAndReopen(projectSession, {
+        close: () => setIsProjectModalOpen(false),
+        reload: () => useProjectStore.getState().fetchProjects(),
+        failed: () => !!useProjectStore.getState().error,
+        found: () => useProjectStore.getState().projectList.some(p => p.id === id),
+        reopen: () => openProject(useProjectStore.getState().projectList.find(p => p.id === id)),
+        forget: () => setEditingProject(undefined),
+        notify: (notice) => toast.warning(t(notice)),
+    });
 
     const handleDeleteClick = (id: string) => {
         const contractor = contractors.find(c => c.id === id);
@@ -135,7 +178,7 @@ const Contractors: React.FC = () => {
     // ── Project handlers ─────────────────────────────────────────────────────
     const handleProjectSave = async (data: Omit<Project, 'id' | 'created_at'>) => {
         if (editingProject) {
-            await updateProject(editingProject.id, data);
+            await updateProject(editingProject.id, data, projectVersion.current());
         } else {
             await addProject(data);
         }
@@ -208,6 +251,8 @@ const Contractors: React.FC = () => {
                         {hasPermission('contractors:manage:all') && (
                             activeTab === 'contractors' ? (
                                 <button className={styles.addNewButton} onClick={() => {
+                                    contractorVersion.open(null);
+                                    contractorSession.next();
                                     setEditingId(null);
                                     setFormData({ package: '', name: '', abbreviation: '', scope: '', contactPerson: '', email: '', phone: '', address: '', status: 'active' });
                                     setIsModalOpen(true);
@@ -216,7 +261,7 @@ const Contractors: React.FC = () => {
                                     {t('contractors.addContractor')}
                                 </button>
                             ) : (
-                                <button className={`${styles.addNewButton} ${styles.blueBtn}`} onClick={() => { setEditingProject(undefined); setIsProjectModalOpen(true); }}>
+                                <button className={`${styles.addNewButton} ${styles.blueBtn}`} onClick={() => openProject(undefined)}>
                                     <Plus size={18} />
                                     Add Project
                                 </button>
@@ -251,7 +296,7 @@ const Contractors: React.FC = () => {
                                 searchKey="name"
                                 searchPlaceholder="Search projects inline..."
                                 getRowId={(row: Project) => row.id}
-                                onRowClick={(row: Project) => { setEditingProject(row); setIsProjectModalOpen(true); }}
+                                onRowClick={(row: Project) => openProject(row)}
                             />
                         </div>
                     )}
@@ -281,9 +326,11 @@ const Contractors: React.FC = () => {
 
             {isModalOpen && (
                 <ContractorModal 
+                    key={contractorSession.key}
                     existingId={editingId}
                     initialData={formData}
                     onSave={handleContractorSave}
+                    onReloadRecord={editingId ? () => { void reloadContractor(editingId); } : undefined}
                     onClose={() => setIsModalOpen(false)}
                     t={t}
                 />
@@ -291,8 +338,10 @@ const Contractors: React.FC = () => {
 
             {isProjectModalOpen && (
                 <ProjectModal
+                    key={projectSession.key}
                     existing={editingProject}
                     onSave={handleProjectSave}
+                    onReloadRecord={editingProject ? () => { void reloadProject(editingProject.id); } : undefined}
                     onClose={() => setIsProjectModalOpen(false)}
                 />
             )}

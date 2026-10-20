@@ -461,7 +461,9 @@ def _resolve_vendor_id(db: Session, vendor_name: str) -> Optional[str]:
 
 # The type part of a number when no naming rule names one (the defaults of routers/settings.DEFAULT_NAMING_RULES).
 _DOC_LABELS = {"ITP": "ITP", "NOI": "NOI", "ITR": "ITR", "NCR": "NCR", "OBS": "OBS", "PQP": "PQP", "FOLLOWUP": "FUI",
-               "FAT": "FAT", "AUDIT": "AUD", "CHECKLIST": "CHK", "OSD": "OSD", "MEETING": "MOM", "MSA": "MSA"}
+               "FAT": "FAT", "AUDIT": "AUD", "CHECKLIST": "CHK", "OSD": "OSD", "MEETING": "MOM", "MSA": "MSA",
+               # controlled project documents (KM-DOCS-2026-001 D1) — the same labels as their DEFAULT_NAMING_RULES
+               "PLAN": "PLN", "DRAWING": "DWG", "SPEC": "SPC", "CERTIFICATE": "CER", "APPROVAL": "APR"}
 # Numbered without a project: a shared template's number uses SHARED_CODE. Every other type must belong to a project
 # before it gets a number (REF-PROJECT-SEQ-2026-001 B4, D-B4-1: QWORKFLOW included).
 SHARED_TEMPLATE_TYPES = frozenset({"ITP", "CHECKLIST"})
@@ -543,6 +545,29 @@ def generate_reference_no(db: Session, vendor_name: str, doc_type: str, project_
     seq_key, prefix, digits = _reference_format(db, doc_type, project_id)
     with _reference_seq_lock:
         return f"{prefix}{str(_next_sequence(db, doc_type, seq_key, prefix, take=True)).zfill(digits)}"
+
+
+def generate_company_doc_no(db: Session) -> str:
+    """The next company-wide document number: QTS-KM-###### by default (naming rule `km`, the one type exempt from the
+    [PROJECT] format), counter (QTS, SYS, km). Shared by KM articles and the company layer of the controlled-document
+    register (KM-DOCS-2026-001 D1, decision 3), so the two never collide. Not routed through _reference_format: a
+    company document has no project and is not a shared template. The caller holds the write lock (begin_write_transaction)
+    where two requests may race; `_reference_seq_lock` serialises callers within one process."""
+    rule = db.query(DocumentNamingRule).filter(DocumentNamingRule.doc_type == "km").first()
+    prefix = rule.prefix if rule else "QTS-KM-"
+    digits = rule.sequence_digits if rule else 6
+    with _reference_seq_lock:
+        seq_record = db.query(ReferenceSequence).filter(
+            ReferenceSequence.project == "QTS", ReferenceSequence.vendor == "SYS", ReferenceSequence.doc == "km",
+        ).with_for_update().first()
+        if seq_record:
+            seq_record.last_seq += 1
+            next_seq = seq_record.last_seq
+        else:
+            next_seq = 1
+            db.add(ReferenceSequence(project="QTS", vendor="SYS", doc="km", last_seq=next_seq))
+        db.flush()
+    return f"{prefix}{str(next_seq).zfill(digits)}"
 
 
 def preview_reference_no(db: Session, doc_type: str, project_id: Optional[str]) -> str:

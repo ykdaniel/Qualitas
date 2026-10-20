@@ -21,10 +21,12 @@ interface ContractorModalProps {
   };
   onSave: (id: string | null, data: any) => Promise<void>;
   onClose: () => void;
+  /** Reopens the contractor with what is saved now: offered after a 409 VERSION_CONFLICT (OPTIMISTIC-LOCK-2026-001) */
+  onReloadRecord?: () => void;
   t: (key: string) => string;
 }
 
-const ContractorModal: React.FC<ContractorModalProps> = ({ existingId, initialData, onSave, onClose, t }) => {
+const ContractorModal: React.FC<ContractorModalProps> = ({ existingId, initialData, onSave, onClose, onReloadRecord, t }) => {
   const [formData, setFormData] = useState(initialData);
   const [isClosing, setIsClosing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -38,7 +40,7 @@ const ContractorModal: React.FC<ContractorModalProps> = ({ existingId, initialDa
     if (saving) return;
     setSaving(true);
     try { await onSave(existingId, formData); }
-    catch (err) { showRefusal(err, 'save', { keepsInput: true }); }      // refused or failed: the refusal dialog (REFUSAL-DIALOG-2026-003)
+    catch (err) { showRefusal(err, 'save', { keepsInput: true, onReload: onReloadRecord }); }      // refused or failed: the refusal dialog (REFUSAL-DIALOG-2026-003)
     finally { setSaving(false); }
   };
 

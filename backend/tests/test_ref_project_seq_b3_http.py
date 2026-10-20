@@ -281,7 +281,7 @@ def test_a_naming_rule_needs_project_and_refuses_abbrev_km_is_exempt(env):
 
 def test_the_default_naming_rules_are_the_project_format():
     from routers.settings import DEFAULT_NAMING_RULES
-    assert len(DEFAULT_NAMING_RULES) == 13
+    assert len(DEFAULT_NAMING_RULES) == 18        # 13 numbered modules + 5 controlled project-document types (KM-DOCS-2026-001 D1)
     assert all(r["prefix"].startswith("QTS-RKS-[PROJECT]-") and "[ABBREV]" not in r["prefix"] for r in DEFAULT_NAMING_RULES)
     assert {r["doc_type"] for r in DEFAULT_NAMING_RULES} >= {"meeting", "msa"}
 
@@ -301,18 +301,19 @@ def test_migration_29_rewrites_old_rules_fills_in_missing_ones_and_continues_old
         rules = {r.doc_type: r.prefix for r in db.query(models.DocumentNamingRule).all()}
         assert rules["ncr"] == "QTS-RKS-[PROJECT]-NCR-" and rules["followup"] == "QTS-RKS-[PROJECT]-FUI-"
         assert rules["km"] == "QTS-KM-"                                         # exempt, untouched
-        assert len(rules) == 14 and rules["msa"] == "QTS-RKS-[PROJECT]-MSA-"      # all 13 + km
+        assert len(rules) == 19 and rules["msa"] == "QTS-RKS-[PROJECT]-MSA-"      # all 13 + km + 5 controlled project-document types (KM-DOCS D1)
+        assert rules["plan"] == "QTS-RKS-[PROJECT]-PLN-"
         audits = db.query(models.AuditLog).filter_by(entity_type="NamingRule").all()
         assert {a.entity_id for a in audits if a.action == "UPDATE"} == {"ncr", "noi", "followup"}
         assert json.loads(next(a for a in audits if a.entity_id == "ncr").old_value) == {"prefix": "QTS-RKS-[ABBREV]-NCR-"}
-        assert len([a for a in audits if a.action == "CREATE"]) == 10
+        assert len([a for a in audits if a.action == "CREATE"]) == 15        # 10 missing module rules + 5 controlled project-document types (KM-DOCS D1)
         seq = {(s.project, s.doc): s.last_seq for s in db.query(models.ReferenceSequence).filter_by(vendor="*")}
         assert seq == {("PA", "NCR"): 12, ("PB", "FOLLOWUP"): 5}                  # V1's counter has other text: not carried
     finally:
         db.close()
     assert env.login("solo").post("/api/ncr/", json=_ncr()).json()["documentNumber"] == "QTS-RKS-PA-NCR-000013"
     db_migrations._naming_rules_to_project_format()                             # runs once
-    assert _scalar(env, "SELECT COUNT(*) FROM audit_logs WHERE entity_type = 'NamingRule'") == 13
+    assert _scalar(env, "SELECT COUNT(*) FROM audit_logs WHERE entity_type = 'NamingRule'") == 18        # 3 rewrites + 15 inserts (KM-DOCS D1 added 5 types)
 
 
 # ══ migration 27: shared ITPs to STD, external numbers kept ════════════════════════════════════════════

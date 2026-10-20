@@ -2074,6 +2074,146 @@ class KMArticleHistory(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# ─── Controlled documents (KM-DOCS-2026-001 D1) ───────────────────────────────────────────────────────────────────────
+DOCUMENT_SCOPES = ("company", "project")
+COMPANY_DOC_TYPES = ("procedure", "standard", "definition", "guideline", "template")
+PROJECT_DOC_TYPES = ("pqp", "plan", "drawing", "spec", "certificate", "approval")
+# project document types that go through submit → approve; the others are registered only (DESIGN §3.3)
+PROJECT_APPROVAL_DOC_TYPES = ("pqp", "plan")
+
+
+class DocumentCreate(BaseModel):
+    scope: str
+    doc_type: str
+    title_zh: constr(strip_whitespace=True, min_length=1)
+    title_en: str | None = None
+    category: str | None = None
+    tags: str | None = None
+    project_id: str | None = None
+    vendor_id: str | None = None
+    effective_date: str | None = None
+    owner_user_id: int | None = None
+    is_template: bool = False
+    template_fields: list[str] | None = None
+    external_doc_no: str | None = None      # reserved: not stored in D1 (doc_no is always generated)
+
+    @field_validator("scope")
+    @classmethod
+    def _scope(cls, v):
+        if v not in DOCUMENT_SCOPES:
+            raise ValueError(f"scope must be one of {', '.join(DOCUMENT_SCOPES)}")
+        return v
+
+
+class DocumentUpdate(BaseModel):
+    title_zh: constr(strip_whitespace=True, min_length=1) | None = None
+    title_en: str | None = None
+    category: str | None = None
+    tags: str | None = None
+    vendor_id: str | None = None
+    effective_date: str | None = None
+    owner_user_id: int | None = None
+    template_fields: list[str] | None = None
+    row_version: int | None = Field(default=None, exclude=True)   # optimistic lock: the version this edit was read at
+
+
+class DocumentTransition(BaseModel):
+    to: str                                   # company: current | archived | draft ; project: submitted | approved | void | draft
+    version_id: str | None = None             # the version being set current / submitted / approved (default: latest)
+    reason: str | None = None                 # required for void
+    row_version: int | None = Field(default=None, exclude=True)
+
+
+class DocumentReferenceCreate(BaseModel):
+    from_type: constr(strip_whitespace=True, min_length=1)
+    from_id: constr(strip_whitespace=True, min_length=1)
+    document_id: str
+    section_ref: str | None = ""
+    pin_version: bool = False                 # True: point at the current version for ever (version_id set)
+
+
+class DocumentReferenceOut(BaseModel):
+    id: str
+    from_type: str
+    from_id: str
+    document_id: str
+    version_id: str | None = None
+    pinned_version_no: int | None = None
+    section_ref: str = ""
+    created_by_user_id: int | None = None
+    created_at: str | None = None
+    doc_no: str | None = None
+    title_zh: str | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DocumentVersionOut(BaseModel):
+    id: str
+    document_id: str
+    version_no: int
+    version_label: str
+    status: str
+    change_summary: str | None = None
+    word_attachment_id: str | None = None
+    pdf_attachment_id: str | None = None
+    word_file_name: str | None = None
+    pdf_file_name: str | None = None
+    searchable: bool = False
+    source_template_document_id: str | None = None
+    source_template_version_id: str | None = None
+    submitted_at: str | None = None
+    approved_at: str | None = None
+    approved_by_user_id: int | None = None
+    void_reason: str | None = None
+    created_by_user_id: int | None = None
+    created_at: str | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DocumentOut(BaseModel):
+    id: str
+    doc_no: str
+    scope: str
+    project_id: str | None = None
+    vendor_id: str | None = None
+    doc_type: str
+    title_zh: str
+    title_en: str | None = None
+    category: str | None = None
+    tags: str | None = None
+    status: str
+    current_version_id: str | None = None
+    effective_date: str | None = None
+    owner_user_id: int | None = None
+    is_template: bool = False
+    template_fields: list[str] | None = None
+    source_km_article_id: str | None = None
+    created_by_user_id: int | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    row_version: int | None = None
+    current_version: DocumentVersionOut | None = None
+    latest_version_no: int = 0
+    snippet: str | None = None                # search hit context (list with q=)
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("template_fields", mode="before")
+    @classmethod
+    def _fields(cls, v):
+        if isinstance(v, str):
+            try:
+                data = json.loads(v)
+                return data if isinstance(data, list) else None
+            except Exception:
+                return None
+        return v
+
+
+class DocumentDetailOut(DocumentOut):
+    versions: list[DocumentVersionOut] = []
+    references: list[DocumentReferenceOut] = []
+
+
 # ─── Cross-module workflow: RelatedDocuments (Phase 1 PR1) ────────────
 # Response schema for `GET /{module}/{id}/related`. One flat entry per
 # discovered document, ordered by BFS level. See RelatedService for the

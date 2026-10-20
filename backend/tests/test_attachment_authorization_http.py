@@ -134,10 +134,11 @@ def _mk(db, model, rid, **kw):
 # One record per attachment entity type, in their default (open) state, for the permission matrix.
 MATRIX = {"itp": "itp-1", "ncr": "ncr-a", "noi": "noi-1", "itr": "itr-1", "pqp": "pqp-1", "obs": "obs-a", "osd": "osd-1", "fat": "fat-1",
           "audit": "audit-1", "checklist": "chk-1", "followup": "fu-1", "meeting": "mtg-1", "km": "km-1", "contractor": "C1",
-          "material_rev": "msr-1"}
+          "material_rev": "msr-1", "document_version": "dv-1"}
 # The category the generic matrix uses for a type. `attachment` everywhere, except a material revision, which has no `attachment`
 # category (spec §3.4); `catalogue` is one of its submission categories, governed by `material:manage:all` while the revision is a Draft.
-MATRIX_CATEGORY = {"material_rev": "catalogue"}
+# A controlled-document version has only `word` / `pdf` (KM-DOCS-2026-001 D1); `pdf` is governed by document:update while it is a draft.
+MATRIX_CATEGORY = {"material_rev": "catalogue", "document_version": "pdf"}
 
 
 def _seed_matrix_records(db):
@@ -156,6 +157,11 @@ def _seed_matrix_records(db):
                                     latest_rev_no=0, latest_status="Draft"))
     db.add(models.MaterialSubmittalRevision(id="msr-1", submittal_id="ms-1", project_id="P-A", vendor_id="C1", rev_no=0,
                                             status="Draft", snap_name="Material"))
+    # a project-layer controlled document (KM-DOCS-2026-001 D1): the version carries the document's scope / project / contractor
+    db.add(models.Document(id="doc-1", doc_no="QTS-RKS-PA-DWG-000001", scope="project", project_id="P-A", vendor_id="C1",
+                           doc_type="drawing", title_zh="Drawing", status="draft"))
+    db.add(models.DocumentVersion(id="dv-1", document_id="doc-1", scope="project", project_id="P-A", vendor_id="C1", version_no=1,
+                                  version_label="Rev1.0", status="draft"))
 
 
 def up(client, etype, eid, files=(("a.txt", b"hello", "text/plain"),), category=None):

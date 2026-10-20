@@ -806,8 +806,11 @@ export const KMModal: React.FC<KMModalProps> = ({ id, existingData, focusChapter
         } catch (err: any) {
             // the main article stored but a chapter not: a part left undone, not a refusal of the save — its own message.
             // Otherwise the save was refused or failed: the refusal dialog (REFUSAL-DIALOG-2026-003; e.g. the 409 VERSION_CONFLICT).
+            // A 409 on the main article offers "Reload this record": this window reads the article again (its own retry path,
+            // setLoadAttempt), after the dialog has confirmed that the changes are discarded (OPTIMISTIC-LOCK-2026-001 B3b; the
+            // window itself is to be replaced by KM-DOCS D2, so chapter conflicts keep their message).
             if (mainSaved) toast.error(t('km.chaptersSaveUnconfirmed'));
-            else showRefusal(err, 'save', { keepsInput: true });
+            else showRefusal(err, 'save', { keepsInput: true, onReload: id ? () => setLoadAttempt(n => n + 1) : undefined });
         } finally {
             saveInFlight.current = false;
             setSaving(false);

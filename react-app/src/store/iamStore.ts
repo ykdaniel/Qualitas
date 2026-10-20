@@ -54,6 +54,9 @@ interface IAMState {
     // NOTE: 接受任意 payload 物件，與 IAM 元件的呼叫方式一致
     createUser: (payload: any) => Promise<any>;
     updateUser: (id: number, payload: any, rowVersion?: number | null) => Promise<any>;   // rowVersion: sent only when given
+    /** Saves an account's project / contractor scope under the ACCOUNT's version and writes the new version back to the list
+     *  (the scope moves the same row_version as the account itself — OPTIMISTIC-LOCK-2026-001 B3b). */
+    saveUserScope: (id: number, scope: apiService.UserScope, rowVersion?: number | null) => Promise<apiService.UserScope>;
     createRole: (payload: any) => Promise<any>;
     updateRole: (id: number, payload: any, rowVersion?: number | null) => Promise<any>;
     deleteRole: (id: number, reason?: string) => Promise<void>;
@@ -227,6 +230,16 @@ export const useIAMStore = create<IAMState>((set, get) => ({
             users: state.users.map(u => (u.id === String(id) ? updatedUser : u)),
         }));
         return result;
+    },
+
+    saveUserScope: async (id: number, scope: apiService.UserScope, rowVersion?: number | null) => {
+        const saved = await apiService.setUserScope(id, scope, rowVersion);
+        if (typeof saved.row_version === 'number') {
+            set((state) => ({
+                users: state.users.map(u => (u.id === String(id) ? { ...u, row_version: saved.row_version } : u)),
+            }));
+        }
+        return saved;
     },
 
     // No deleteUser: accounts are deactivated (Status = Inactive), never deleted —

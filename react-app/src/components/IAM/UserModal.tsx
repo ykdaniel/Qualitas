@@ -7,7 +7,8 @@ import { z } from 'zod';
 import { Role, User } from '../../store/iamStore';
 import { useContractorsStore } from '../../store/contractorsStore';
 import UserScopeSection, { type ScopeValue } from './UserScopeSection';
-import { setUserScope } from '../../services/api';
+import { useIAMStore } from '../../store/iamStore';
+import type { RecordVersion } from '../../hooks/useRecordVersion';
 import { getErrorMessage } from '../../utils/errorUtils';
 import styles from './UserModal.module.css';
 import { showRefusal } from '../../store/refusalStore';
@@ -37,9 +38,13 @@ interface UserModalProps {
     onClose: () => void;
     t: (key: string) => string;
     loading: boolean;
+    /** The account's version, shared by this form and its scope section (OPTIMISTIC-LOCK-2026-001 B3b) */
+    recordVersion?: RecordVersion;
+    /** Reopens the account with what is saved now: offered after a 409 VERSION_CONFLICT */
+    onReloadRecord?: () => void;
 }
 
-const UserModal: React.FC<UserModalProps> = ({ existingUser, readOnly = false, canManageRoles = false, canSetPassword = false, adminAccountLocked = false, roles, onSave, onClose, t, loading }) => {
+const UserModal: React.FC<UserModalProps> = ({ existingUser, readOnly = false, canManageRoles = false, canSetPassword = false, adminAccountLocked = false, roles, onSave, onClose, t, loading, recordVersion, onReloadRecord }) => {
     const [isClosing, setIsClosing] = useState(false);
     const [resetPassword, setResetPassword] = useState(false);
     // Create mode only: scope chosen before the user exists, persisted post-create.
@@ -70,15 +75,25 @@ const UserModal: React.FC<UserModalProps> = ({ existingUser, readOnly = false, c
     }), [existingUser, roles, canManageRoles]);
 
     const [form, setForm] = useState(initialForm);
+    // This window's own save in flight (the store's `loading` is for list loads only): it blocks closing, leaving and a second
+    // submit, so a save never outlives its window and never moves another account's version (B3b review R1 P2-1), and the
+    // scope section's save waits for it (both send the account's version — P3-2).
+    const [saving, setSaving] = useState(false);
+    const [scopeSaving, setScopeSaving] = useState(false);
+    const busy = loading || saving || scopeSaving;
 
-    const leaveGuard = useDraftGuard({ form, pendingScope, resetPassword }, loading, !readOnly && !adminAccountLocked);
-    const handleClose = () => leaveGuard.requestClose(() => {
+    // (the guard is not told about this window's own save: after the save it may ask about unsaved scope changes, and a
+    // guard still marked busy from that render would refuse to ask; closing during the save is stopped in handleClose)
+    const leaveGuard = useDraftGuard({ form, pendingScope, resetPassword }, loading || scopeSaving, !readOnly && !adminAccountLocked);
+    const handleClose = () => saving ? undefined : leaveGuard.requestClose(() => {
         setIsClosing(true);
         setTimeout(() => onClose(), 250);
     }, true);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (busy) return;
+        setSaving(true);
         try {
             const selectedRole = roles.find(r => r.name === form.role);
             if (form.role && !selectedRole) throw new Error("Please select a valid role");
@@ -116,7 +131,9 @@ const UserModal: React.FC<UserModalProps> = ({ existingUser, readOnly = false, c
             // Create flow: the projects were saved with the account; a contractor binding is saved now that it exists.
             if (!existingUser && !!pendingScope.vendor_id && typeof savedId === 'number') {
                 try {
-                    await setUserScope(savedId, pendingScope);
+                    // the second write of this save: with the version the account's creation answered
+                    const saved = await useIAMStore.getState().saveUserScope(savedId, pendingScope, recordVersion?.current());
+                    recordVersion?.saved(saved.row_version);
                 } catch (scopeErr: any) {
                     // the account IS created: not a refusal of this save, a part left undone — said as such, with the reason in words
                     toast.error(t('iam.scope.createdButScopeFailed'), { description: describeSaveError(scopeErr, t), duration: 10000 });
@@ -145,9 +162,11 @@ const UserModal: React.FC<UserModalProps> = ({ existingUser, readOnly = false, c
             } else {
                 // A refused or failed request: the refusal dialog (e.g. DUPLICATE_NAME for the e-mail, in the user's language;
                 // REFUSAL-DIALOG-2026-003). A check of this form itself (role, company, project, password match) stays a toast.
-                if (isAxiosError(err)) showRefusal(err, 'save', { keepsInput: true });
+                if (isAxiosError(err)) showRefusal(err, 'save', { keepsInput: true, onReload: existingUser ? onReloadRecord : undefined });
                 else toast.error(getErrorMessage(err, "An error occurred"));
             }
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -269,7 +288,8 @@ const UserModal: React.FC<UserModalProps> = ({ existingUser, readOnly = false, c
 
                         <div className={`${styles.formGroup} ${styles.fullWidth}`}>
                             {existingUser ? (
-                                <UserScopeSection userId={parseInt(existingUser.id)} t={t} />
+                                <UserScopeSection userId={parseInt(existingUser.id)} t={t} recordVersion={recordVersion}
+                                                  onReloadRecord={onReloadRecord} busy={saving} onSavingChange={setScopeSaving} />
                             ) : (
                                 <UserScopeSection t={t} value={pendingScope} onChange={setPendingScope} />
                             )}
@@ -279,12 +299,12 @@ const UserModal: React.FC<UserModalProps> = ({ existingUser, readOnly = false, c
 
                     <FormActions
                         cancel={<>
-                            <button className={actionStyles.secondary} type="button" onClick={handleClose} disabled={loading}>{t('common.cancel')}</button>
+                            <button className={actionStyles.secondary} type="button" onClick={handleClose} disabled={busy}>{t('common.cancel')}</button>
                         </>}
                         primary={<>
                             {!readOnly && (
-                                <button className={actionStyles.primary} type="submit" disabled={loading}>
-                                    {loading ? (t('common.saving') || 'Saving...') : (existingUser ? t('common.save') : t('common.add'))}
+                                <button className={actionStyles.primary} type="submit" disabled={busy}>
+                                    {loading || saving ? (t('common.saving') || 'Saving...') : (existingUser ? t('common.save') : t('common.add'))}
                                 </button>
                             )}
                         </>}

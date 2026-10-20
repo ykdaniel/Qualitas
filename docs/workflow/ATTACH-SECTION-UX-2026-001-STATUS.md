@@ -42,3 +42,11 @@ ITR 視窗的 4 個附件區（缺失／改善照片、最新圖面、校正證�
 - 開發基準 247ee771；依序重放到 1b37ce9d、69edeac5，都以 3-way 乾淨套用。
 - 提交父為 6f68c768（使用臨時 index，不推送、不動 ref）。
 - sidecar patch sha256 73123cf9…a7f1。
+
+## 上線紀錄
+- 2026-10-18 08:53Z（台灣 16:53）由主要調度部署，與樂觀鎖 B1 同一次。aa3b0a31 重放為 27839efd，正式站為 e651f87a。
+- 對外核對（本工作階段，唯讀）：
+  - 正式站入口頁載入 `assets/index-DBcZOuF1.js`（200），與主要調度回報的 bundle 相同。
+  - 線上 ITR chunk `ITR-BjoM1ilL.js` 含本批新增的 `itr.attach.unsaved`、`itr.attach.expand`、`itr.attach.collapse`，代表新程式已在線上。
+  - 未核對：登入後的實際畫面（附件區收起摘要、數量、「n 項未儲存」）。請使用者強制重新整理（Cmd+Shift+R）後，打開一筆有附件的 ITR 看一次；這個操作不會建立資料。
+- 任務結案。

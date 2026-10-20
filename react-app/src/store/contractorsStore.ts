@@ -105,7 +105,8 @@ export const useContractorsStore = create<ContractorsState>((set, get) => ({
     fetchContractors: async () => {
         try {
             const data = await getContractors();
-            set({ contractors: data.map(mapApiToInternal) });
+            // a load that worked clears an earlier failure (a "failed" check read it as failed for ever — B3b)
+            set({ contractors: data.map(mapApiToInternal), error: null });
         } catch (err: any) {
             set({ error: getErrorMessage(err, 'Failed to fetch contractors') });
         }

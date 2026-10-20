@@ -47,6 +47,7 @@ class Settings:
 
     # File Upload
     MAX_UPLOAD_SIZE_MB: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))
+    DOCUMENT_PDF_MAX_MB: int = int(os.getenv("DOCUMENT_PDF_MAX_MB", "50"))   # KM-DOCS-2026-001: issued PDFs of controlled documents
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "uploads")
 
     # Email (郵件服務設定 - 用於通知功能)

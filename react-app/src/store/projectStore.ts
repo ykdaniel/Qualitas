@@ -71,7 +71,8 @@ export const useProjectStore = create<ProjectState>((set, _get) => ({
     fetchProjects: async () => {
         try {
             const data = await getProjects();
-            set({ projectList: data.map(mapApiToInternal) });
+            // a load that worked clears an earlier failure (a "failed" check read it as failed for ever — B3b)
+            set({ projectList: data.map(mapApiToInternal), error: null });
         } catch (err: any) {
             set({ error: err?.message || 'Failed to fetch projects' });
         }

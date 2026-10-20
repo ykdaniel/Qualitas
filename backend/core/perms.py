@@ -102,6 +102,12 @@ KM_CREATE = "km:create:all"
 KM_UPDATE = "km:update:all"
 KM_DELETE = "km:delete:all"
 
+# Controlled project documents (KM-DOCS-2026-001 D1; company documents keep km:*)
+DOCUMENT_VIEW = "document:view:all"
+DOCUMENT_CREATE = "document:create:all"
+DOCUMENT_UPDATE = "document:update:all"
+DOCUMENT_APPROVE = "document:approve:all"
+
 # Administrative (IAM)
 USER_MANAGE = "iam:user:manage"
 USER_VIEW = "iam:user:view"
@@ -191,6 +197,10 @@ ALL_PERMISSIONS = [
     {"code": KM_CREATE, "description": "建立知識庫文章"},
     {"code": KM_UPDATE, "description": "更新知識庫文章"},
     {"code": KM_DELETE, "description": "刪除知識庫文章"},
+    {"code": DOCUMENT_VIEW, "description": "查看專案文件"},
+    {"code": DOCUMENT_CREATE, "description": "建立專案文件"},
+    {"code": DOCUMENT_UPDATE, "description": "更新專案文件（新版次、送審）"},
+    {"code": DOCUMENT_APPROVE, "description": "核准／作廢專案文件"},
 
     {"code": USER_VIEW, "description": "查看使用者"},
     {"code": USER_MANAGE, "description": "管理使用者 (增刪改)"},

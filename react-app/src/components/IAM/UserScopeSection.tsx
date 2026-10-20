@@ -5,9 +5,11 @@ import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { showRefusal } from '../../store/refusalStore';
 import {
-    getProjects, getContractors, getUserScope, setUserScope,
+    getProjects, getContractors, getUserScope,
     type ProjectApi, type Contractor,
 } from '../../services/api';
+import { useIAMStore } from '../../store/iamStore';
+import type { RecordVersion } from '../../hooks/useRecordVersion';
 
 export interface ScopeValue {
     project_ids: string[];
@@ -22,6 +24,15 @@ interface UserScopeSectionProps {
      *  the parent persists the scope after the user is created. */
     value?: ScopeValue;
     onChange?: (value: ScopeValue) => void;
+    /** Edit mode: the ACCOUNT's version, shared with the account form — both saves move the same row_version
+     *  (OPTIMISTIC-LOCK-2026-001 B3b) */
+    recordVersion?: RecordVersion;
+    /** Reopens the account with what is saved now: offered after a 409 VERSION_CONFLICT */
+    onReloadRecord?: () => void;
+    /** the account form is saving: both saves send the same version, so they never run at once (B3b review R1 P3-2) */
+    busy?: boolean;
+    /** tells the account form while this section is saving */
+    onSavingChange?: (saving: boolean) => void;
 }
 
 /**
@@ -32,7 +43,7 @@ interface UserScopeSectionProps {
  *   stores the selection and saves it once the new user exists.
  * Empty projects + no contractor ⇒ full access.
  */
-const UserScopeSection: React.FC<UserScopeSectionProps> = ({ userId, t, value, onChange }) => {
+const UserScopeSection: React.FC<UserScopeSectionProps> = ({ userId, t, value, onChange, recordVersion, onReloadRecord, busy = false, onSavingChange }) => {
     const isEdit = userId != null;
     const [projects, setProjects] = useState<ProjectApi[]>([]);
     const [contractors, setContractors] = useState<Contractor[]>([]);
@@ -177,19 +188,23 @@ const UserScopeSection: React.FC<UserScopeSectionProps> = ({ userId, t, value, o
         // checked here independently of the button's own `disabled`, and independently of
         // `loading` (which currently also hides the button entirely while true, but this check
         // does not rely on that to hold).
-        if (scopeError || !scopeLoaded) return;
+        if (scopeError || !scopeLoaded || busy || saving) return;
         setSaving(true);
+        onSavingChange?.(true);
         try {
-            await setUserScope(userId, {
+            // under the account's version; the answer's version is the account's from now on (also in the user list)
+            const saved = await useIAMStore.getState().saveUserScope(userId!, {
                 project_ids: Array.from(selected),
                 vendor_id: vendorId || null,
-            });
+            }, recordVersion?.current());
+            recordVersion?.saved(saved.row_version);
             setBaseline(scopeKey);
             toast.success(t('iam.scope.saved') || 'Data scope saved');
         } catch (err: any) {
-            showRefusal(err, 'save');     // coded (e.g. PROJECT_REQUIRED) or not: the refusal dialog (REFUSAL-DIALOG-2026-003)
+            showRefusal(err, 'save', { onReload: onReloadRecord });     // coded (e.g. PROJECT_REQUIRED) or not: the refusal dialog (REFUSAL-DIALOG-2026-003)
         } finally {
             setSaving(false);
+            onSavingChange?.(false);
         }
     };
 
@@ -286,7 +301,7 @@ const UserScopeSection: React.FC<UserScopeSectionProps> = ({ userId, t, value, o
             </div>
             {isEdit && (
                 <FormActions primary={
-                    <button className={actionStyles.primary} type="button" onClick={handleSave} disabled={saving || scopeError || !scopeLoaded}>
+                    <button className={actionStyles.primary} type="button" onClick={handleSave} disabled={saving || busy || scopeError || !scopeLoaded}>
                         {saving ? (t('common.saving') || 'Saving...') : (t('iam.scope.save') || 'Save scope')}
                     </button>
                 } />

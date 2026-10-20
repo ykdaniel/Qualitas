@@ -197,6 +197,12 @@ test('every refusal code the backend raises has its wording in both languages', 
         REFERENCE_NOT_FOUND: ['docType', 'field', 'value'],
         ASSIGNEE_UNAVAILABLE: ['field'],
         VERSION_CONFLICT: ['docType', 'number'],
+        // KM-DOCS-2026-001 D1: controlled-document register (services/document_service.py)
+        DOC_TYPE_INVALID: ['docType', 'scope'],
+        DOC_TYPE_RESERVED: ['docType'],
+        DOCUMENT_PDF_REQUIRED: ['docType', 'number', 'version'],
+        REASON_REQUIRED: ['docType', 'number'],
+        REFERENCE_IN_USE: ['docType', 'number', 'count'],
         // REFUSAL-DIALOG-2026-003: duplicates, meeting Rev, module codes
         DUPLICATE_NAME: ['docType', 'name', 'field'],
         MEETING_REV_DUPLICATE: ['number', 'rev'],
