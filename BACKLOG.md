@@ -2980,6 +2980,26 @@ Construction Engineer 核准欄位都還是 Pending——跟 `obsFormSchema.ts::
 
 **待使用者確認（2026-10-18 已交主要調度）：** Q5 遷移 PDF 來源（A 系統產／B 人工／C 暫不遷移）；專案文件四個新權限碾；公司文件單一前綴；登錄型類型由 update 權限直接核准；範本僅管理員；作廢須理由；刪除限草稿且無引用；引用預設指向現行版。D1 依主要調度裁定值實作，使用者改口再調。
 
+## 62. ITR 裡 Checklist 面板的 Remark 存檔後消失 · NOT STARTED · 【優先度：低】
+
+**Where:** `react-app/src/components/ITR/ChecklistSnapshotModal.tsx`（Remark 欄，`formData.remarks`）、`react-app/src/components/ITR/ITRModals.tsx` `saveInstance`；後端 `models.Checklist`／`schemas.Checklist`。
+
+**Found:** 2026-10-18，OPTIMISTIC-LOCK-2026-001 B4 隔離預覽自測（608c14c4 就是這樣，不是 B4 造成）。
+
+**問題：** ITR 底下 Checklist 面板的 Remark 欄可以輸入，但 `saveInstance` 只送 status／location／date／detail_data／passCount／failCount，從來沒有送 `remarks`；後端 Checklist 也沒有 remark 欄位。使用者輸入的備註存檔後就消失，沒有任何提示。Checklist 頁（`Checklist.tsx` 的 remarks 欄）和列印（`ChecklistPrintTemplate.tsx`）也讀寫 `formData.remarks`，需一併確認那邊是否同樣沒有存下來。
+
+**建議做法：** 先請使用者決定 Remark 要不要保存：要保存 → 放進 detail_data（不需要 migration）或新增欄位，面板與 Checklist 頁都送出、列印讀同一處；不保存 → 把輸入欄拿掉或改唯讀，避免使用者以為存了。
+
+## 63. ITR Checklist 面板存檔後馬上再展開同一列，輸入的內容會被收起丟掉 · NOT STARTED · 【優先度：低】
+
+**Where:** `react-app/src/components/ITR/ChecklistSnapshotModal.tsx` `handleSave`（`await onSave(payload)` 之後才 `onClose()`）、`react-app/src/components/ITR/ITRModals.tsx` `saveInstance`（最後 `await refreshInstances()`）。
+
+**Found:** 2026-10-18，OPTIMISTIC-LOCK-2026-001 B4 獨立審查 R2 新觀察（B4 之前的順序就是這樣，不是 B4 造成）。
+
+**問題：** 面板存檔會先收起面板，再等 Checklist 清單重抓。這一個 GET 期間若使用者又展開同一列並開始輸入，重抓回來時舊面板的 `onClose()` 會把剛打開的面板收起，那段時間輸入的內容就丟了。
+
+**建議做法：** `saveInstance` 不再等 `refreshInstances()`（B4 已把存好的那筆立刻放進清單，重抓可以不等）；或 `onClose` 只在目前展開的仍是同一個面板時才收起。
+
 ## 65. 範本文件的刪除與補綁檔案未限系統管理員（KM-DOCS-2026-001 D2）· FIXED（待部署）2026-10-20 · 【優先度：高】
 
 （編號由主要調度指定；#62–#64 屬其他批次。）

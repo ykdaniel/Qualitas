@@ -41,6 +41,9 @@ interface ChecklistSnapshotModalProps {
     inline?: boolean;
     /** Reports whether the panel holds unsaved edits, so the parent ITR can refuse to Save/Publish over them. */
     onDirtyChange?: (dirty: boolean) => void;
+    /** Reopens this checklist with what is saved now: offered by the refusal dialog after a 409 VERSION_CONFLICT
+     *  (OPTIMISTIC-LOCK-2026-001 B4) */
+    onReload?: () => void;
 }
 
 export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
@@ -54,7 +57,8 @@ export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
     canReopen = false,
     onReopen,
     inline = false,
-    onDirtyChange
+    onDirtyChange,
+    onReload
 }) => {
     const { t } = useLanguage();
     // Local state for the snapshot being edited. A read-only snapshot (ITR Approved/Void) opens
@@ -106,7 +110,7 @@ export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
             const outcome = await onReopen();
             if (outcome && outcome.reloaded === false) setReopenStale(true);   // reopened, but NOT unlocked until reloaded
         } catch (e) {
-            showRefusal(e, 'save');            // REFUSAL-DIALOG-2026-002: the panel stays locked
+            showRefusal(e, 'save', { onReload, reloadDiscardsInput: false });   // REFUSAL-DIALOG-2026-002: the panel stays locked (nothing typed to lose)
         } finally {
             setReopening(false);
             setConfirmingReopen(false);
@@ -154,7 +158,7 @@ export const ChecklistSnapshotModal: React.FC<ChecklistSnapshotModalProps> = ({
             onClose();
         } catch (e) {
             // refused or failed: the refusal dialog (REFUSAL-DIALOG-2026-002); the panel stays open with every entry
-            showRefusal(e, 'save', { keepsInput: true });
+            showRefusal(e, 'save', { keepsInput: true, onReload });
         } finally {
             setSaving(false);
         }

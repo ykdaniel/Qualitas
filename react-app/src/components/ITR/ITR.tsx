@@ -20,6 +20,7 @@ import ConfirmModal from '../Shared/ConfirmModal';
 import { uploadFiles, deleteFile } from '../../services/api';
 import { describeSaveError } from '../../utils/saveErrors';
 import { runSaveFlow, sameWrite, type SaveOutcome } from '../../utils/saveFlow';
+import { reloadAndReopen, useOpenSession, useRecordVersion } from '../../hooks/useRecordVersion';
 import shellStyles from '../Shared/ModuleShell.module.css';
 
 type StatusFilter = 'all' | 'inProgress' | 'approved' | 'reject' | 'void' | 'overdue';
@@ -65,18 +66,40 @@ const ITR: React.FC = () => {
 
     // The last successful record write of the open modal (id + serialized payload) — see runSaveFlow / sameWrite.
     const lastWriteRef = useRef<{ id: string; key: string } | null>(null);
+    // OPTIMISTIC-LOCK-2026-001 B4: the version the open form saves against (taken when it opens, moved on by every write that
+    // went through — a new ITR stays open on the record it created) and which opening is current (keys the form with the id;
+    // guards a reload's late reopen and an answer that comes back after its window).
+    const recordVersion = useRecordVersion();
+    const openSession = useOpenSession();
+    const nextOpenSession = openSession.next;
 
     const handleAddNew = () => {
         lastWriteRef.current = null;
+        recordVersion.open(null);
+        nextOpenSession();
         setCurrentItrId(null);
         setIsEditModalOpen(true);
     };
 
     const handleEdit = React.useCallback((id: string) => {
         lastWriteRef.current = null;
+        recordVersion.open(useITRStore.getState().itrList.find(item => item.id === id)?.row_version);
+        nextOpenSession();
         setCurrentItrId(id);
         setIsEditModalOpen(true);
-    }, []);
+    }, [recordVersion, nextOpenSession]);
+
+    // "Reload this record" after a 409 VERSION_CONFLICT (the refusal dialog has already confirmed that the form's changes are
+    // discarded): close the form, reload the list, open the ITR again with what is saved now.
+    const reloadRecord = (id: string) => reloadAndReopen(openSession, {
+        close: () => setIsEditModalOpen(false),
+        reload: () => refetch({ search: debouncedSearch }),
+        failed: () => !!useITRStore.getState().error,
+        found: () => useITRStore.getState().itrList.some(item => item.id === id),
+        reopen: () => handleEdit(id),
+        forget: () => { setCurrentItrId(null); openedViaDeepLinkRef.current = false; },
+        notify: (notice) => toast.warning(t(notice)),
+    });
 
     const [searchParams, setSearchParams] = useSearchParams();
     const deepLinkAppliedRef = useRef(false);
@@ -180,11 +203,12 @@ const ITR: React.FC = () => {
         if (publishOnly && currentPersistedStatus === 'Approved') {
             if (!currentItrId) return;
             try {
-                await updateITR(currentItrId, { type: details.type, status: details.status });
+                await updateITR(currentItrId, { type: details.type, status: details.status }, recordVersion.current());
                 setIsEditModalOpen(false);
             } catch (error) {
                 console.error('Error publishing ITR:', error);
-                showRefusal(error, 'save');
+                const id = currentItrId;
+                showRefusal(error, 'save', { onReload: () => { void reloadRecord(id); } });
             }
             return;
         }
@@ -235,13 +259,17 @@ const ITR: React.FC = () => {
         // failed record write goes to the refusal dialog (the modal shows it). A new ITR whose record exists but whose files are not
         // done yet stays on this (unkeyed-by-id) form so the pending files survive; the retry then targets the stored record.
         const targetId = currentItrId ?? lastWriteRef.current?.id ?? null;
+        const mine = openSession.key;             // the answer's version belongs to this window only
         const outcome = await runSaveFlow({
             writeRecord: async () => {
                 if (targetId) {
-                    await updateITR(targetId, itemData);
+                    const saved = await updateITR(targetId, itemData, recordVersion.current());
+                    if (openSession.isCurrent(mine)) recordVersion.saved(saved.row_version);
                     return targetId;
                 }
-                return (await addITR(itemData)).id;
+                const created = await addITR(itemData);
+                if (openSession.isCurrent(mine)) recordVersion.saved(created.row_version);
+                return created.id;
             },
             reuseId: sameWrite(lastWriteRef.current, targetId, itemData) ? targetId : null,
             uploads: pendingUploads,
@@ -390,7 +418,9 @@ const ITR: React.FC = () => {
 
             {isEditModalOpen && (
                 <ITRDetailModal
-                    key={currentItrId || 'new'}
+                    key={`${currentItrId || 'new'}:${openSession.key}`}
+                    recordVersion={recordVersion}
+                    onReloadRecord={currentItrId ? () => { void reloadRecord(currentItrId); } : undefined}
                     itrId={currentItrId || 'new'}
                     existingItem={currentItrId ? itrList.find(i => i.id === currentItrId) : undefined}
                     itrList={itrList}

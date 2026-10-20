@@ -64,7 +64,8 @@ interface ITRState {
     fetchITRs: (params?: FilterParams) => Promise<void>;
     refetch: (params?: FilterParams) => Promise<void>;
     addITR: (itr: Omit<ITRItem, 'id'>) => Promise<ITRItem>;
-    updateITR: (id: string, itr: Partial<ITRItem>, rowVersion?: number | null) => Promise<void>;   // rowVersion: sent only when given (utils/rowVersion.ts)
+    /** resolves to the saved ITR (with its new row_version); rowVersion: sent only when given (utils/rowVersion.ts) */
+    updateITR: (id: string, itr: Partial<ITRItem>, rowVersion?: number | null) => Promise<ITRItem>;
     deleteITR: (id: string) => Promise<void>;
     clearError: () => void;
     setError: (err: string | null) => void;
@@ -181,6 +182,7 @@ export const useITRStore = create<ITRState>((set, get) => ({
         const response = await api.put(`/itr/${id}`, payload);
         const updated = normalizeItem(response.data);
         set((state) => ({ itrList: state.itrList.map(i => i.id === id ? updated : i) }));
+        return updated;
     },
 
     deleteITR: async (id: string) => {
