@@ -5,11 +5,12 @@ ROUND: 1（2026-10-20；本輪中途依使用者指示改用 Opus 5.5 接續）
 基準：608c14c4（D1＋B3b 已上線）＋ 057d2898（D1 上線紀錄，docs-only）。detached worktree km-d2，未推送、未部署。
 
 ## RESULT
+- [x] **LIVE 2026-10-20 14:12Z（台灣 22:12）**：D2 c46a984d＋#65 7d3dcee8 與樂觀鎖 B4 同批，正式站＝**378e6cf1**；GPT 驗證啟動 0 ERROR、documents 0 列、前端 bundle＝候選（主要調度回報）。隔離預覽 3390／8390 已關閉，worktree km-d2 已清除。遷移腳本仍未執行（Q5 待使用者）。
 - [x] 公司文件前端入口完成：`/km` 文件登錄清單、`/km/:documentId` 詳情、`/km/legacy` 舊知識庫唯讀。後端 **0 檔**、LanguageContext **0 鍵**。
 - [x] `tsc` 0、eslint 0（新／改檔）、單元測試 **239 passed**（含新增 documentsText／documentsApi 兩檔）、`vite build` 成功。
 - [x] R1 **REVISE**（1 P1、3 P2、6 P3）→ 全部修正或列後續 → R2 **PASS**（見 REVIEW）。
 - [x] 隔離環境預覽（isolated_stack，backend 8390／vite 3390）：瀏覽器核對腳本 **10/10**（`tests-browser/km-docs-d2-register.mjs`，輸出 `KM-DOCS-2026-001-D2-evidence/register-check.json`＋截圖）；另手動實測設為現行、封存後只改標籤、409 重新載入後重開。
-- [ ] 使用者預覽確認：待主要調度轉交（URL／帳號／檢查表見下）。
+- [x] 預覽已交主要調度轉使用者；上線依使用者「D2 先補修範本刪除限管理員再上線」完成 #65 後進行。
 - [ ] 遷移腳本：仍不執行（Q5 待使用者）。
 - 3.11：見下節 BACKLOG #65（後端有改，已重跑）。
 

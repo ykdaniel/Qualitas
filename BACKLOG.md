@@ -2974,7 +2974,7 @@ Construction Engineer 核准欄位都還是 Pending——跟 `obsFormSchema.ts::
 
 **子項：**
 - **D1 後端登錄核心** · DONE（待審查、待部署）2026-10-18：三表（migration_owned，第 33 步 IF NOT EXISTS）、版次／狀態流程、Word 抽文字＋LIKE 搜尋、公司編號沿用 QTS-KM- 計數器、五條專案文件命名規則（PLN／DWG／SPC／CER／APR）、附件接線（entity_type `document_version`，PDF 上限 `DOCUMENT_PDF_MAX_MB`=50）、引用表與 API、既有 KM 文章遷移腳本（只產 Word＋草稿版次，**本批不執行**）。前端 0 檔。
-- **D2 公司文件前端** · DONE（待審查、待部署）2026-10-20：`/km` 改為文件登錄清單（類型／狀態篩選、後端搜尋＋命中片段）、`/km/:id` 詳情（現行版 PDF 內嵌、三種空狀態、版次歷史與下載、設為現行、封存只可改標籤、刪除草稿）、`/km/legacy` 舊知識庫唯讀；後端 0 檔、LanguageContext 0 鍵（文案在 `Documents/documentsText.ts`）。**遷移腳本仍未執行**（Q5 待使用者）。
+- **D2 公司文件前端** · DONE，已於 2026-10-20 部署（正式站 378e6cf1，含 #65）：`/km` 改為文件登錄清單（類型／狀態篩選、後端搜尋＋命中片段）、`/km/:id` 詳情（現行版 PDF 內嵌、三種空狀態、版次歷史與下載、設為現行、封存只可改標籤、刪除草稿）、`/km/legacy` 舊知識庫唯讀；後端 0 檔、LanguageContext 0 鍵（文案在 `Documents/documentsText.ts`）。**遷移腳本仍未執行**（Q5 待使用者）。
 - **D3 範本與 PQP 套用**、**D4 專案文件入口與其他類型**、**D5 跨模組引用呼叫端**（ITP／NCR／Checklist 選文件；relationships 加 `document` 節點）、收尾（移除富文本編輯器與匯入匯出轉換碍）。
 - 併入本條的原路線圖項目：**KM-SEARCH**（搜尋後端化，D1 已以 LIKE 完成於 documents；舊 km_articles 不再投資）、**KM-XREF**（跨模組引用＝D5）。
 
@@ -3000,7 +3000,7 @@ Construction Engineer 核准欄位都還是 Pending——跟 `obsFormSchema.ts::
 
 **建議做法：** `saveInstance` 不再等 `refreshInstances()`（B4 已把存好的那筆立刻放進清單，重抓可以不等）；或 `onClose` 只在目前展開的仍是同一個面板時才收起。
 
-## 65. 範本文件的刪除與補綁檔案未限系統管理員（KM-DOCS-2026-001 D2）· FIXED（待部署）2026-10-20 · 【優先度：高】
+## 65. 範本文件的刪除與補綁檔案未限系統管理員（KM-DOCS-2026-001 D2）· FIXED，已於 2026-10-20 部署（正式站 378e6cf1）· 【優先度：高】
 
 （編號由主要調度指定；#62–#64 屬其他批次。）
 
@@ -3013,3 +3013,14 @@ Construction Engineer 核准欄位都還是 Pending——跟 `obsFormSchema.ts::
 **修正：** 兩個方法在權限檢查之後、狀態與寫入之前加 `doc.is_template and not is_admin_user(user)` → 403 `SHARED_TEMPLATE_ADMIN_ONLY`（與其他範本寫入同一個 helper，英文訊息改為 "create, change or delete"）；前端非管理員在範本上不顯示「刪除草稿」。測試：非管理員刪範本 → 拒絕、資料與稽核都不變；管理員可刪；非管理員刪一般草稿照舊；非管理員補綁範本檔案 → 拒絕、版次不變；管理員可綁。使用者決定（2026-10-20，於主要調度）：「D2 先補修範本刪除限管理員（後端檢查＋測試＋前端隱藏）再上線」。
 
 **未改：** 前端拒絕文案 `refusal.code.SHARED_TEMPLATE_ADMIN_ONLY` 中英仍寫「新增或修改」，未提刪除（LanguageContext 依協調規則只加不改；非管理員看不到刪除按鈕，只有過期頁面或直接打 API 才會看到）。
+
+## 66. 範本限管理員的拒絕文案沒有提到「刪除」· NOT STARTED · 【優先度：低】
+
+**Where:** `react-app/src/context/LanguageContext.tsx` 的 `refusal.code.SHARED_TEMPLATE_ADMIN_ONLY`（en／zh 各一）；同一段文案也被 `components/Checklist/Checklist.tsx` 的 tooltip 共用。
+
+**Found:** 2026-10-20，BACKLOG #65 的 R1 審查備註 2。
+
+**問題：** #65 之後，後端對範本的刪除與補綁檔案也回 `SHARED_TEMPLATE_ADMIN_ONLY`，英文 detail 已改為 "create, change or delete"；但前端拒絕對話框的中英文案仍只寫「新增或修改」。非管理員看不到刪除按鈕，只有頁面過期或直接呼叫 API 才會看到，影響小。
+
+**建議做法：** 中英文案改為「只有系統管理員可以新增、修改或刪除」／"…can create, change or delete it."，並確認 Checklist tooltip 共用時仍通順。改的是既有鍵，需協調中心排在不與其他批次的 LanguageContext 修改衝突的時點。
+
